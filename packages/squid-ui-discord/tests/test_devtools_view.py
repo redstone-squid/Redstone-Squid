@@ -194,7 +194,7 @@ class TestDetail:
         assert_within_limits(view)
 
     async def test_a_registry_key_labels_its_root(self) -> None:
-        registry = squid_ui_discord.SessionRegistry()
+        registry = squid_ui_discord.SessionManager()
         subject = MessageRoot(Subject(), access=Everyone())
         await registry.open(subject, delivered_to(squid_ui_discord.testing.fake_message()), key=("editor", 7))
 

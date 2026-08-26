@@ -15,7 +15,7 @@ import squid_ui_discord as sd
 from squid.accounts.application import AccountService
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, Account, AccountConsent, AccountIdentity, IdentityProvider
 from squid.bot.consent import NOT_ASKED, ensure_consented_account, prompt_for_consent, request_consent
-from squid_ui_discord import Everyone, SessionKey, SessionRegistry
+from squid_ui_discord import Everyone, SessionKey, SessionManager
 from squid_ui_discord.sessions import Opened
 from squid_ui_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 from tests.helpers.discord import make_layout_bot
@@ -172,15 +172,15 @@ async def test_a_second_prompt_is_refused_while_the_first_is_open() -> None:
 
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(lambda: _collect(outcomes, prompt_for_consent(ctx, user_id=USER_ID)))
-        while not ctx.bot.message_roots.get(key):
+        while not ctx.bot.sessions.get(key):
             await anyio.sleep(0)
-        first = ctx.bot.message_roots.get(key)
+        first = ctx.bot.sessions.get(key)
 
         second = await prompt_for_consent(ctx, user_id=USER_ID)
 
         assert second is NOT_ASKED
-        assert ctx.bot.message_roots.get(key) == first  # the one being awaited is the one that stands
-        await ctx.bot.message_roots.close(key, disable=False)
+        assert ctx.bot.sessions.get(key) == first  # the one being awaited is the one that stands
+        await ctx.bot.sessions.close(key, disable=False)
 
     assert outcomes == [None]
 
@@ -194,7 +194,7 @@ async def test_a_closing_parent_ends_the_wait_instead_of_stranding_it() -> None:
     """
     ctx = make_context()
     parent = sd.MessageRoot(_Blank(), access=Everyone(), timeout=None)
-    parent_opened = await ctx.bot.message_roots.open(parent, delivered_to(fake_message()))
+    parent_opened = await ctx.bot.sessions.open(parent, delivered_to(fake_message()))
     assert isinstance(parent_opened, Opened)
     outcomes: list[Any] = []
 
@@ -260,7 +260,7 @@ def _clicked(client: Any, *, message_id: int) -> Any:
     return interaction
 
 
-def _prompt_of(registry: SessionRegistry, panel: sd.MessageRoot) -> sd.MessageRoot | None:
+def _prompt_of(registry: SessionManager, panel: sd.MessageRoot) -> sd.MessageRoot | None:
     """The notice attached to `panel`'s session, which is where `parent=` puts it."""
     session = registry.session_for(panel)
     assert session is not None
@@ -276,7 +276,7 @@ async def test_asking_for_consent_from_a_handler_leaves_the_panel_free() -> None
     press ends and the panel goes on working.
     """
     bot = make_layout_bot()
-    registry = bot.message_roots
+    registry = bot.sessions
     panel = _Gate()
     message_root = sd.MessageRoot(panel, access=Everyone(), timeout=None)
     assert isinstance(await registry.open(message_root, delivered_to(fake_message())), Opened)
@@ -297,7 +297,7 @@ async def test_asking_for_consent_from_a_handler_leaves_the_panel_free() -> None
 async def test_the_prompt_carries_the_answer_back_to_the_panel() -> None:
     """The work the press was about runs from the prompt's own press, not from the panel's."""
     bot = make_layout_bot()
-    registry = bot.message_roots
+    registry = bot.sessions
     panel = _Gate()
     message_root = sd.MessageRoot(panel, access=Everyone(), timeout=None)
     assert isinstance(await registry.open(message_root, delivered_to(fake_message())), Opened)

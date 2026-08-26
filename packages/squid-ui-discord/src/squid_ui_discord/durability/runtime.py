@@ -19,15 +19,15 @@ from squid_storage import ClaimToken, DurableSessionStore, SessionRecord
 from squid_ui_discord.delivery import Abandoned, Delivered, Destination
 from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.sessions import (
-    DEFAULT_SESSION_POLICY,
+    DEFAULT_ADMISSION,
+    AdmissionSpec,
     MembershipResult,
     Opened,
     Rejected,
     RejectionReason,
     Session,
     SessionKey,
-    SessionPolicy,
-    SessionRegistry,
+    SessionManager,
     SessionSnapshot,
 )
 
@@ -211,7 +211,7 @@ class DurableSessionRuntime:
     def __init__(
         self,
         *,
-        sessions: SessionRegistry,
+        sessions: SessionManager,
         components: ComponentRegistry,
         store: DurableSessionStore,
         frontend: DurableFrontend,
@@ -295,7 +295,7 @@ class DurableSessionRuntime:
         *,
         recipe: str,
         key: SessionKey,
-        policy: SessionPolicy = DEFAULT_SESSION_POLICY,
+        admission: AdmissionSpec = DEFAULT_ADMISSION,
         actor_id: int | None = None,
         expires_at: float | None = None,
         capacity: int | None = None,
@@ -382,7 +382,7 @@ class DurableSessionRuntime:
                     message_root,
                     destination,
                     key=key,
-                    policy=policy,
+                    admission=admission,
                     actor_id=actor_id,
                     snapshot=snapshot,
                     remote_occupants=remote,

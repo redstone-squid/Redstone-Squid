@@ -248,7 +248,7 @@ class SearchResultsView(sl.Component):
         self.closed = True
         await event.finish()
 
-    def mount(self, *, source: sd.host.HostSource) -> sd.MessageRoot:
+    def mount(self, *, source: sd.runtime.RuntimeSource) -> sd.MessageRoot:
         """Create the mount used by the command transport."""
         return create_message_root(
             self, source=source, access=sd.Owner(self._author_id), locale=self.locale, timeout=180

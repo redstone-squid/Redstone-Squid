@@ -3474,7 +3474,7 @@ class TestLoading:
     async def test_a_component_embedded_mid_session_loads_before_the_edit(self):
         log: list[str] = []
 
-        class Opener(Component):
+        class OpenContext(Component):
             open: bool = state(default=False)
 
             def __init__(self) -> None:
@@ -3489,7 +3489,7 @@ class TestLoading:
             async def reveal(self, event: PressEvent) -> None:
                 self.open = True
 
-        message_root = MessageRoot(Opener(), access=Everyone(), timeout=None)
+        message_root = MessageRoot(OpenContext(), access=Everyone(), timeout=None)
         await message_root.send(delivered_to(fake_message()))
         assert log == []
 

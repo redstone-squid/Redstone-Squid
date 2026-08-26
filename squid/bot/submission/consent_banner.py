@@ -5,10 +5,10 @@ from typing import TYPE_CHECKING, override
 
 from discord import Interaction, TextChannel
 
-import squid_ui_discord as sd
 import squid_ui as sl
+import squid_ui_discord as sd
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
-from squid.bot.consent import CONSENT_SCREEN, ConsentPrompt
+from squid.bot.consent import CONSENT_SESSION_SPEC, ConsentPrompt
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.routes.build_log_consents import build_log_consent, build_log_consents
 from squid.bot.ui import (
@@ -83,7 +83,7 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
         locale=locale,
         timeout=120,
     )
-    opened = await CONSENT_SCREEN.respond(
+    opened = await CONSENT_SESSION_SPEC.respond(
         component,
         interaction,
         wait=True,

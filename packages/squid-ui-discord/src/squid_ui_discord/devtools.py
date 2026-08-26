@@ -40,7 +40,7 @@ from squid_ui_discord.live import find
 from squid_ui_discord.message_root import MessageRootSnapshot, current_message_root
 from squid_ui_discord.message_root_scheduler import MessageRootScheduler, MessageRootSchedulerSnapshot
 from squid_ui_discord.routing import routers
-from squid_ui_discord.sessions import SessionRegistry
+from squid_ui_discord.sessions import SessionManager
 
 if TYPE_CHECKING:
     # Annotation only; see the note in operations.py about the `durable` extra.
@@ -63,7 +63,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
     def __init__(
         self,
         check: DevToolsCheck[BotT] = _owner_only,
-        registry: SessionRegistry | None = None,
+        registry: SessionManager | None = None,
         *,
         profiler: Profiler | None = None,
         scheduler: MessageRootScheduler | None = None,

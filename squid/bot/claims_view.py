@@ -204,7 +204,7 @@ class ClaimReviewComponent(sl.Component):
         self.closed = True
         await event.finish()
 
-    def mount(self, *, source: sd.host.HostSource) -> sd.MessageRoot:
+    def mount(self, *, source: sd.runtime.RuntimeSource) -> sd.MessageRoot:
         return create_message_root(
             self,
             source=source,

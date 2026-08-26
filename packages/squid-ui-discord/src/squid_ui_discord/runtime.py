@@ -8,10 +8,10 @@ process global to stand in for the lookup this module now offers.
 
 :func:`install` performs the assembly once — registry, challenge runner, dialog presenter,
 and optionally a scheduler — and records the result against the client. Anything carrying that
-client reaches it again through :meth:`LayoutHost.of`. The client-keyed weak table is the
+client reaches it again through :meth:`ClientRuntime.of`. The client-keyed weak table is the
 same shape :mod:`squid_ui_discord.routing` already uses for installed routers.
 
-Nothing here starts a task. `LayoutHost.run()` is offered for a host that wants one job, and
+Nothing here starts a task. `ClientRuntime.run()` is offered for a host that wants one job, and
 declined by a host that wants per-job health granularity; either way the host supervises it.
 """
 
@@ -31,16 +31,16 @@ from squid_ui_discord.delivery import Replyable
 from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_options import MessageRootDefaults, MessageRootOptions
 from squid_ui_discord.message_root_scheduler import MessageRootScheduler
-from squid_ui_discord.sessions import SessionRegistry
+from squid_ui_discord.sessions import SessionManager
 
-type HostSource = discord.Client | discord.Interaction[Any] | Replyable
+type RuntimeSource = discord.Client | discord.Interaction[Any] | Replyable
 """Anything an installation can be found from: the client, or something carrying one."""
 
-_INSTALLED: weakref.WeakKeyDictionary[Any, LayoutHost[Any]] = weakref.WeakKeyDictionary()
+_INSTALLED: weakref.WeakKeyDictionary[Any, ClientRuntime[Any]] = weakref.WeakKeyDictionary()
 """Hosts installed per client, so a second `install` on one client can be refused."""
 
 
-class LayoutHostMissing(LookupError):
+class ClientRuntimeMissing(LookupError):
     """Nothing was installed on the client this source names.
 
     A wiring bug rather than a runtime condition: every reachable path from a click runs
@@ -49,7 +49,7 @@ class LayoutHostMissing(LookupError):
     """
 
 
-def _candidates(source: HostSource) -> Iterator[Any]:
+def _candidates(source: RuntimeSource) -> Iterator[Any]:
     """The client `source` might be, then the ones it might carry.
 
     Duck-typed rather than isinstance-dispatched so a test double reaches its own
@@ -63,7 +63,7 @@ def _candidates(source: HostSource) -> Iterator[Any]:
             yield carried
 
 
-class LayoutHost[ClientT: discord.Client]:
+class ClientRuntime[ClientT: discord.Client]:
     """The Discord runtime installed on one client; `close()` ends it.
 
     Holds the objects whose construction is circular — the session registry, the challenge
@@ -76,12 +76,12 @@ class LayoutHost[ClientT: discord.Client]:
         self,
         client: ClientT,
         *,
-        message_roots: SessionRegistry,
+        sessions: SessionManager,
         challenges: ChallengeRunner,
         scheduler: MessageRootScheduler | None,
     ) -> None:
         self.client = client
-        self.message_roots = message_roots
+        self.sessions = sessions
         self.challenges = challenges
         self.scheduler = scheduler
 
@@ -92,11 +92,11 @@ class LayoutHost[ClientT: discord.Client]:
         The registry's own defaults, not a copy: a mount opened through `mounts.open` and one
         built here are wired the same way, which is the whole reason this lookup exists.
         """
-        return self.message_roots.defaults
+        return self.sessions.defaults
 
     @defaults.setter
     def defaults(self, defaults: MessageRootDefaults) -> None:
-        self.message_roots.defaults = defaults
+        self.sessions.defaults = defaults
 
     def mount(
         self, component: Component, *, access: AccessPolicy, **overrides: Unpack[MessageRootOptions]
@@ -129,30 +129,30 @@ class LayoutHost[ClientT: discord.Client]:
         that owns the job is the thing entitled to end it.
         """
         try:
-            await self.message_roots.close_all()
+            await self.sessions.close_all()
         finally:
             if _INSTALLED.get(self.client) is self:
                 del _INSTALLED[self.client]
 
     @classmethod
-    def of(cls, source: HostSource) -> LayoutHost[Any]:
+    def of(cls, source: RuntimeSource) -> ClientRuntime[Any]:
         """The host installed on the client `source` names.
 
         Raises:
-            LayoutHostMissing: Nothing was installed on it.
+            ClientRuntimeMissing: Nothing was installed on it.
         """
         for candidate in _candidates(source):
             try:
-                host = _INSTALLED.get(candidate)
+                runtime = _INSTALLED.get(candidate)
             except TypeError:
                 # Unhashable, or not weak-referenceable: it was never a key here.
                 continue
-            if host is not None:
-                return host
+            if runtime is not None:
+                return runtime
         message = (
             f"no layout host is installed on this {type(source).__name__}; call sd.install(client) once at startup"
         )
-        raise LayoutHostMissing(message)
+        raise ClientRuntimeMissing(message)
 
 
 def install[ClientT: discord.Client](
@@ -161,7 +161,7 @@ def install[ClientT: discord.Client](
     defaults: MessageRootDefaults = MessageRootDefaults(),  # noqa: B008  # frozen value
     bus: TopicBus | None = None,
     profiler: Profiler | None = None,
-) -> LayoutHost[ClientT]:
+) -> ClientRuntime[ClientT]:
     """Assemble the Discord runtime for `client` and record it against the client.
 
     `bus` is what makes a scheduler: with one, mounts refresh from topics and shared state, and
@@ -179,14 +179,14 @@ def install[ClientT: discord.Client](
     scheduler = None if bus is None else MessageRootScheduler(bus, profiler=profiler)
     if scheduler is not None:
         defaults = defaults.replace(scheduler=scheduler)
-    message_roots = SessionRegistry(defaults=defaults)
+    sessions = SessionManager(defaults=defaults)
     challenges = ChallengeRunner()
     # The knot install exists to tie: the presenter needs the registry and the runner, and
     # the registry needs the presenter to hand every mount it opens.
-    message_roots.defaults = message_roots.defaults.replace(challenge=DialogPresenter(message_roots, challenges))
-    host = LayoutHost(client, message_roots=message_roots, challenges=challenges, scheduler=scheduler)
-    _INSTALLED[client] = host
-    return host
+    sessions.defaults = sessions.defaults.replace(challenge=DialogPresenter(sessions, challenges))
+    runtime = ClientRuntime(client, sessions=sessions, challenges=challenges, scheduler=scheduler)
+    _INSTALLED[client] = runtime
+    return runtime
 
 
-__all__ = ["HostSource", "LayoutHost", "LayoutHostMissing", "install"]
+__all__ = ["ClientRuntime", "ClientRuntimeMissing", "RuntimeSource", "install"]

@@ -119,8 +119,8 @@ class SessionSnapshot:
         attributed to attached mounts, and the opener are all reasons to treat a session as
         somebody's. A policy that wants only one of them reads that field directly.
         """
-        opener = frozenset() if self.actor_id is None else frozenset({self.actor_id})
-        return self.members | self.attachment_actors | opener
+        open_context = frozenset() if self.actor_id is None else frozenset({self.actor_id})
+        return self.members | self.attachment_actors | open_context
 
     @property
     def remaining_capacity(self) -> int | None:
@@ -158,7 +158,7 @@ type BeforeRegistration = Callable[[Session, Delivered, tuple[SessionSnapshot, .
 
 
 @dataclass(frozen=True, slots=True)
-class OpeningRequest:
+class AdmissionRequest:
     """The context a collision or protection policy uses to judge replacement."""
 
     key: Hashable
@@ -187,14 +187,14 @@ type CollisionDecision = Replace | Refuse
 class CollisionPolicy(Protocol):
     """Asynchronously select exact replacement victims from immutable snapshots."""
 
-    async def select(self, request: OpeningRequest, occupants: tuple[SessionSnapshot, ...]) -> CollisionDecision: ...
+    async def select(self, request: AdmissionRequest, occupants: tuple[SessionSnapshot, ...]) -> CollisionDecision: ...
 
 
 @dataclass(frozen=True, slots=True)
 class Reject:
     """Reject any open that would exceed the key's limit."""
 
-    async def select(self, request: OpeningRequest, occupants: tuple[SessionSnapshot, ...]) -> CollisionDecision:
+    async def select(self, request: AdmissionRequest, occupants: tuple[SessionSnapshot, ...]) -> CollisionDecision:
         return Refuse()
 
 
@@ -202,21 +202,21 @@ class Reject:
 class ReplaceOldest:
     """Retire the oldest occupants needed to admit the newcomer."""
 
-    async def select(self, request: OpeningRequest, occupants: tuple[SessionSnapshot, ...]) -> CollisionDecision:
+    async def select(self, request: AdmissionRequest, occupants: tuple[SessionSnapshot, ...]) -> CollisionDecision:
         return Replace(occupants[: request.required_victims])
 
 
 class ReplacementPolicy(Protocol):
     """Asynchronously decide whether one immutable collision victim may be retired."""
 
-    async def permits(self, request: OpeningRequest, victim: SessionSnapshot) -> bool: ...
+    async def permits(self, request: AdmissionRequest, victim: SessionSnapshot) -> bool: ...
 
 
 @dataclass(frozen=True, slots=True)
 class ProtectCrossUserAttachments:
     """Keep sessions that another participant or attachment actor is using."""
 
-    async def permits(self, request: OpeningRequest, victim: SessionSnapshot) -> bool:
+    async def permits(self, request: AdmissionRequest, victim: SessionSnapshot) -> bool:
         actor_id = request.actor_id
         others = victim.participants if actor_id is None else victim.participants - {actor_id}
         allowed = not others
@@ -230,12 +230,12 @@ class ProtectCrossUserAttachments:
 class Unprotected:
     """Allow every collision-selected replacement."""
 
-    async def permits(self, request: OpeningRequest, victim: SessionSnapshot) -> bool:
+    async def permits(self, request: AdmissionRequest, victim: SessionSnapshot) -> bool:
         return True
 
 
 @dataclass(frozen=True, slots=True)
-class SessionPolicy:
+class AdmissionSpec:
     """Cardinality, collision, and replacement protection for one open."""
 
     limit: int | None = 1
@@ -248,7 +248,7 @@ class SessionPolicy:
             raise ValueError(message)
 
 
-DEFAULT_SESSION_POLICY = SessionPolicy()
+DEFAULT_ADMISSION = AdmissionSpec()
 
 
 class MembershipStatus(StrEnum):
@@ -315,7 +315,7 @@ class Session:
 
     def __init__(
         self,
-        registry: SessionRegistry,
+        manager: SessionManager,
         root: MessageRoot,
         *,
         key: Hashable | None,
@@ -340,7 +340,7 @@ class Session:
             raise ValueError(message)
         self.key = key
         self.root = root
-        self._registry = registry
+        self._manager = manager
         self._graph: dict[MessageRoot, _Membership] = {root: _Membership(parent=None, actor=actor_id)}
         # The opener is the initial member: a semantic default that makes their presence
         # explicit, not an authorization decision. Recovery supplies the stored set instead.
@@ -474,7 +474,7 @@ class Session:
             if isinstance(result, Abandoned):
                 return result
             self._graph[message_root] = _Membership(parent=parent, actor=actor_id)
-            self._registry._index_root(self, message_root)
+            self._manager._index_root(self, message_root)
             message_root.on_finish(self._message_root_finished)
             return Opened(self)
 
@@ -501,7 +501,7 @@ class Session:
         # Outside the lifecycle lock and before it, because a quota spans sessions: this one
         # cannot answer for the others. Every path that admits a member takes it first, so
         # one user's concurrent joins serialize while unrelated users never contend.
-        async with self._registry._member_lock(user_id), self._lifecycle_lock:
+        async with self._manager._member_lock(user_id), self._lifecycle_lock:
             if (dead := self._membership_refusal(user_id, expect)) is not None:
                 return dead
             if user_id in self._members:
@@ -548,7 +548,7 @@ class Session:
         """
         if self._quota is None:
             return False
-        held = self._registry.sessions_for_member(user_id, domain=self._domain, excluding=excluding)
+        held = self._manager.sessions_for_member(user_id, domain=self._domain, excluding=excluding)
         return len(held) >= self._quota
 
     def _membership(self, user_id: int, status: MembershipStatus) -> MembershipResult:
@@ -563,12 +563,12 @@ class Session:
             try:
                 await self._finish_roots(self._depth_first(self.root), disable=disable)
             finally:
-                self._registry._forget(self)
+                self._manager._forget(self)
                 self._closed = True
                 self._finishing = False
 
     def _activate(self) -> None:
-        self._registry._index_root(self, self.root)
+        self._manager._index_root(self, self.root)
         self.root.on_finish(self._message_root_finished)
 
     def _attach_existing(self, message_root: MessageRoot, *, parent: MessageRoot, actor_id: int | None) -> None:
@@ -577,7 +577,7 @@ class Session:
             message = "recovered attachment parent is not in the session"
             raise ValueError(message)
         self._graph[message_root] = _Membership(parent=parent, actor=actor_id)
-        self._registry._index_root(self, message_root)
+        self._manager._index_root(self, message_root)
         message_root.on_finish(self._message_root_finished)
 
     async def _message_root_finished(self, message_root: MessageRoot) -> None:
@@ -593,7 +593,7 @@ class Session:
                         candidate for candidate in self._depth_first(self.root) if candidate is not message_root
                     )
                     await self._finish_roots(descendants)
-                    self._registry._forget(self)
+                    self._manager._forget(self)
                     self._closed = True
                     return
                 branch = self._depth_first(message_root)
@@ -625,7 +625,7 @@ class Session:
         for message_root in branch:
             # The registry is a separate owner of the same mount, so its index is dropped
             # separately rather than folded into the membership record.
-            self._registry._unindex_root(self, message_root)
+            self._manager._unindex_root(self, message_root)
             self._graph.pop(message_root, None)
 
 
@@ -635,7 +635,7 @@ def _resolve_victims(selected: tuple[SessionSnapshot, ...], occupants: tuple[Ses
     return tuple(by_id[victim.id] for victim in selected if victim.id in by_id)
 
 
-class SessionRegistry:
+class SessionManager:
     """The live logical sessions owned by this process."""
 
     def __init__(self, defaults: MessageRootDefaults = MessageRootDefaults()) -> None:  # noqa: B008  # frozen value
@@ -652,7 +652,7 @@ class SessionRegistry:
         destination: Destination,
         *,
         key: Hashable | None = None,
-        policy: SessionPolicy = DEFAULT_SESSION_POLICY,
+        admission: AdmissionSpec = DEFAULT_ADMISSION,
         actor_id: int | None = None,
         durable: bool = False,
         local: bool = True,
@@ -669,7 +669,7 @@ class SessionRegistry:
         this session rather than of the key contest, so it is not part of ``policy``.
         """
         if not isinstance(message_root, MessageRoot):
-            message = "SessionRegistry.open requires a MessageRoot; use MessageRootDefaults.mount or ScreenSpec.open"
+            message = "SessionManager.open requires a MessageRoot; use MessageRootDefaults.mount or SessionSpec.open"
             raise TypeError(message)
 
         if key is None:
@@ -677,7 +677,7 @@ class SessionRegistry:
                 message_root,
                 destination,
                 key=None,
-                policy=policy,
+                admission=admission,
                 actor_id=actor_id,
                 durable=durable,
                 local=local,
@@ -694,7 +694,7 @@ class SessionRegistry:
                 message_root,
                 destination,
                 key=key,
-                policy=policy,
+                admission=admission,
                 actor_id=actor_id,
                 durable=durable,
                 local=local,
@@ -713,7 +713,7 @@ class SessionRegistry:
         destination: Destination,
         *,
         key: SessionKey,
-        policy: SessionPolicy,
+        admission: AdmissionSpec,
         actor_id: int | None,
         snapshot: SessionSnapshot,
         remote_occupants: tuple[SessionSnapshot, ...],
@@ -733,7 +733,7 @@ class SessionRegistry:
                 message_root,
                 destination,
                 key=key,
-                policy=policy,
+                admission=admission,
                 actor_id=actor_id,
                 durable=True,
                 local=True,
@@ -842,7 +842,7 @@ class SessionRegistry:
         destination: Destination,
         *,
         key: Hashable | None,
-        policy: SessionPolicy,
+        admission: AdmissionSpec,
         actor_id: int | None,
         durable: bool,
         local: bool,
@@ -873,10 +873,10 @@ class SessionRegistry:
         )
         victims: tuple[Session, ...] = ()
         selected: tuple[SessionSnapshot, ...] = ()
-        if key is not None and policy.limit is not None and len(snapshots) >= policy.limit:
-            required = len(snapshots) + 1 - policy.limit
-            request = OpeningRequest(key, newcomer.snapshot, actor_id, required)
-            decision = await policy.collision.select(request, snapshots)
+        if key is not None and admission.limit is not None and len(snapshots) >= admission.limit:
+            required = len(snapshots) + 1 - admission.limit
+            request = AdmissionRequest(key, newcomer.snapshot, actor_id, required)
+            decision = await admission.collision.select(request, snapshots)
             if isinstance(decision, Refuse):
                 return Rejected(snapshots, decision.reason)
             selected = decision.victims
@@ -890,7 +890,7 @@ class SessionRegistry:
                 message = "collision policy must select the exact required occupants"
                 raise ValueError(message)
             for victim in selected:
-                if not await policy.replacement.permits(request, victim):
+                if not await admission.replacement.permits(request, victim):
                     return Rejected(snapshots, RejectionReason.PROTECTED)
 
         # Advisory: the authoritative check is under the member lock below, but refusing

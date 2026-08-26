@@ -111,7 +111,9 @@ class BuildInfoComponent(sl.Component):
             locale=self.locale,
         ).send(interaction, ephemeral=self._ephemeral, parent=sd.responder(event).message_root)
 
-    def mount(self, *, source: sd.host.HostSource, scheduler: sd.MessageRootScheduler | None = None) -> sd.MessageRoot:
+    def mount(
+        self, *, source: sd.runtime.RuntimeSource, scheduler: sd.MessageRootScheduler | None = None
+    ) -> sd.MessageRoot:
         return create_message_root(
             self,
             source=source,

@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from squid.voting.application import VoteService
 
 SESSION_SECONDS = 300
-SETTINGS_SCREEN = sd.ScreenSpec("settings", scope=sd.Scope.USER_GUILD, options={"timeout": SESSION_SECONDS})
+SETTINGS_SESSION_SPEC = sd.SessionSpec("settings", scope=sd.ScopeKind.USER_GUILD, options={"timeout": SESSION_SECONDS})
 
 FOLLOW_DISCORD = "-"
 """The locale select's "no override" value; an empty select value is not sendable."""

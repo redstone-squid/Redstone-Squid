@@ -31,7 +31,6 @@ from squid_ui_discord import (
     fragments,
     grids,
     guards,
-    host,
     inspection,
     live,
     message_root,
@@ -40,7 +39,8 @@ from squid_ui_discord import (
     renderer,
     roles,
     routing,
-    screens,
+    runtime,
+    session_specs,
     sessions,
     target,
     targets,
@@ -81,11 +81,6 @@ from squid_ui_discord.delivery import (
 )
 from squid_ui_discord.fragments import contribute
 from squid_ui_discord.grids import button_grid
-from squid_ui_discord.host import (
-    LayoutHost,
-    LayoutHostMissing,
-    install,
-)
 from squid_ui_discord.live import message_roots
 from squid_ui_discord.managed import (
     ErrorObserver,
@@ -114,7 +109,7 @@ from squid_ui_discord.message_root_scheduler import (
     MessageRootScheduler,
     MessageRootSchedulerSnapshot,
 )
-from squid_ui_discord.navigation import Navigator
+from squid_ui_discord.navigation import StackNavigator
 from squid_ui_discord.presentation import (
     DiscordMode,
     DiscordModeError,
@@ -139,10 +134,15 @@ from squid_ui_discord.roles import (
     RolesUpdated,
     RoleTransitionResult,
 )
-from squid_ui_discord.screens import Opener, Scope, ScreenOptionsResolver, ScreenSpec
+from squid_ui_discord.runtime import (
+    ClientRuntime,
+    ClientRuntimeMissing,
+    install,
+)
+from squid_ui_discord.session_specs import MessageRootOptionsResolver, OpenContext, ScopeKind, SessionSpec
 from squid_ui_discord.sessions import (
     SessionKey,
-    SessionRegistry,
+    SessionManager,
 )
 from squid_ui_discord.target import (
     DISCORD_V1_DPY27,
@@ -190,6 +190,8 @@ __all__ = [
     "ChallengeRequest",
     "ChallengeRunner",
     "ChallengeSupervisor",
+    "ClientRuntime",
+    "ClientRuntimeMissing",
     "Composition",
     "Destination",
     "DialogPresenter",
@@ -200,8 +202,6 @@ __all__ = [
     "ErrorRenderer",
     "Everyone",
     "ExistingLayoutError",
-    "LayoutHost",
-    "LayoutHostMissing",
     "LimitViolationError",
     "ManagedDelivery",
     "ManagedError",
@@ -209,10 +209,10 @@ __all__ = [
     "MessageRootDefaults",
     "MessageRootFactory",
     "MessageRootOptions",
+    "MessageRootOptionsResolver",
     "MessageRootScheduler",
     "MessageRootSchedulerSnapshot",
-    "Navigator",
-    "Opener",
+    "OpenContext",
     "Owner",
     "PauseUpdates",
     "RenewEphemeral",
@@ -228,11 +228,11 @@ __all__ = [
     "RoleTransitionResult",
     "RolesUnchanged",
     "RolesUpdated",
-    "Scope",
-    "ScreenOptionsResolver",
-    "ScreenSpec",
+    "ScopeKind",
     "SessionKey",
-    "SessionRegistry",
+    "SessionManager",
+    "SessionSpec",
+    "StackNavigator",
     "SuccessRenderer",
     "Users",
     "Work",
@@ -258,7 +258,6 @@ __all__ = [
     "fragments",
     "grids",
     "guards",
-    "host",
     "inspection",
     "install",
     "limits",
@@ -280,8 +279,9 @@ __all__ = [
     "roles",
     "routing",
     "run_managed_result",
-    "screens",
+    "runtime",
     "send_to",
+    "session_specs",
     "sessions",
     "target",
     "targets",

@@ -148,7 +148,7 @@ def adopt(
         discard_timeout: Accept that an overridden `on_timeout` will never run.
 
     Returns:
-        A `Component` that composes like any other -- mount it, put it in a `ScreenSpec`, or embed
+        A `Component` that composes like any other -- mount it, put it in a `SessionSpec`, or embed
         it in a larger Squid screen with `self.boundary(child, key=...)`.
 
     Raises:
@@ -743,7 +743,7 @@ class _ProxyResponse:
             shown = "None" if view is None else type(view).__name__
             message = (
                 f"edit_message(view={shown}) would replace the adopted view with a different screen; "
-                "push one with squid_ui_discord.Navigator, or end this one with responder(event).finish()"
+                "push one with squid_ui_discord.StackNavigator, or end this one with responder(event).finish()"
             )
             raise AdoptionError(message)
         self._proxy.flush_requested = True

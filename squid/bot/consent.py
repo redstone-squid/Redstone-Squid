@@ -23,12 +23,12 @@ from squid.bot.i18n import t
 from squid.bot.ui import CardField, localization_for, text_layout
 from squid.bot.utils.sentinel import Sentinel
 from squid.core.i18n import _, ntranslate
-from squid_ui_discord import Opener, ScreenSpec
-from squid_ui_discord.sessions import Opened, Reject, Rejected, SessionPolicy
+from squid_ui_discord import OpenContext, SessionSpec
+from squid_ui_discord.sessions import AdmissionSpec, Opened, Reject, Rejected
 
-CONSENT_SCREEN = ScreenSpec(
+CONSENT_SESSION_SPEC = SessionSpec(
     "consent",
-    policy=SessionPolicy(collision=Reject()),
+    admission=AdmissionSpec(collision=Reject()),
     options={"timeout": 120},
 )
 
@@ -295,19 +295,19 @@ async def _open_prompt(
     """Put the prompt on screen, telling the reader why not when it could not be opened."""
     options: sd.MessageRootOptions = {"localization": localization_for(locale), "timeout": timeout}
     if parent is None:
-        opened = await CONSENT_SCREEN.open(
+        opened = await CONSENT_SESSION_SPEC.open(
             component,
             _destination(target),
             sessions=target,
-            opener=Opener(user_id),
+            open_context=OpenContext(user_id),
             **options,
         )
     else:
-        opened = await CONSENT_SCREEN.attach(
+        opened = await CONSENT_SESSION_SPEC.attach(
             component,
             _destination(target),
             sessions=target,
-            opener=Opener(user_id),
+            open_context=OpenContext(user_id),
             parent=parent,
             **options,
         )

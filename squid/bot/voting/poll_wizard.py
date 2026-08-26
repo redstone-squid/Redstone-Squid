@@ -35,7 +35,7 @@ DURATION_PRESETS: tuple[tuple[str, int], ...] = (
     ("7 days", 7 * 86400),
 )
 CUSTOM_DURATION = "custom"
-POLL_SCREEN = sd.ScreenSpec("poll-wizard", scope=sd.Scope.USER_GUILD, options={"timeout": 900})
+POLL_SESSION_SPEC = sd.SessionSpec("poll-wizard", scope=sd.ScopeKind.USER_GUILD, options={"timeout": 900})
 
 VISIBILITY_CHOICES: tuple[tuple[VoteVisibility, str, str], ...] = (
     (
@@ -201,10 +201,10 @@ async def present_poll_form(
             allow_network=allow_network,
         )
         scheduler = getattr(form_interaction.client, "layout_scheduler", None)
-        await POLL_SCREEN.respond(
+        await POLL_SESSION_SPEC.respond(
             component,
             form_interaction,
-            sessions=form_interaction.client.message_roots,
+            sessions=form_interaction.client.sessions,
             wait=True,
             scheduler=scheduler,
             expiry=sd.RenewEphemeral() if scheduler is not None else sd.PauseUpdates(),
