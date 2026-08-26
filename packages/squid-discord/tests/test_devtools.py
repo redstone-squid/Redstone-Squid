@@ -10,14 +10,14 @@ import discord
 import pytest
 
 import squid_discord
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import Everyone, Mount, Owner, live
 from squid_discord.devtools import DevTools
 from squid_discord.devtools_runtime import DevToolsRuntime
 from squid_discord.routing import Router
 from squid_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
-from squid_layouts.primitives import Button, Heading, Row
-from squid_layouts.profiling import MemoryProfiler, OperationKind
+from squid_ui.primitives import Button, Heading, Row
+from squid_ui.profiling import MemoryProfiler, OperationKind
 from squid_reactivity import ActionLedger, OperationEventSnapshot, add_action_result_sink, transaction
 
 
@@ -94,7 +94,7 @@ class TestMountCommands:
         assert live.mounts()[0].snapshot().access == Owner(1)
 
     @pytest.mark.parametrize(("command", "expected"), (("dump_plan", "logical"), ("dump_metrics", "cache:")))
-    async def test_snapshot_reports_render_with_squid_layouts(self, command: str, expected: str) -> None:
+    async def test_snapshot_reports_render_with_squid_ui(self, command: str, expected: str) -> None:
         subject = Mount(Subject(), access=Everyone())
         await subject.send(delivered_to(fake_message()))
         ctx = make_context()

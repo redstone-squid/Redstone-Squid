@@ -6,9 +6,9 @@ from squid_discord.classic_renderer import ClassicRenderer
 from squid_discord.presentation import DiscordPresentation
 from squid_discord.renderer import V2Renderer
 from squid_discord.target import classic, v2
-from squid_layouts import fallback, scene
-from squid_layouts.html import Renderer as HtmlRenderer
-from squid_layouts.planning import (
+from squid_ui import fallback, scene
+from squid_ui.html import Renderer as HtmlRenderer
+from squid_ui.planning import (
     AdapterProfile,
     ClassicTarget,
     ComponentsV2Target,
@@ -22,11 +22,11 @@ from squid_layouts.planning import (
     components_v2_target,
     plan,
 )
-from squid_layouts.planning.limits import ClassicLimits, V2Limits
-from squid_layouts.primitives import Card, Panel, Text, Variants
-from squid_layouts.renderer import Renderer
-from squid_layouts.scene.model import PlanResult
-from squid_layouts.semantic import FallbackContent
+from squid_ui.planning.limits import ClassicLimits, V2Limits
+from squid_ui.primitives import Card, Panel, Text, Variants
+from squid_ui.renderer import Renderer
+from squid_ui.scene.model import PlanResult
+from squid_ui.semantic import FallbackContent
 
 
 class Portable(Renderable[DiscordTarget]):

@@ -12,27 +12,27 @@ from squid_discord.adapter import require_discord_py_target
 from squid_discord.presentation import DiscordModeError, DiscordPresentation
 from squid_discord.renderer import V2Renderer, Wire
 from squid_discord.target import DISCORD_V2_DPY27, Target
-from squid_layouts import scene
-from squid_layouts.assets import Asset
-from squid_layouts.chrome import DEFAULT_CHROME, Chrome
-from squid_layouts.document import DocumentLike
-from squid_layouts.palette import DEFAULT_PALETTE, Palette
-from squid_layouts.planning.adapter import AdapterCapability
-from squid_layouts.planning.cache import PlanCache, PlanMemo
-from squid_layouts.planning.limits import V2Limits
-from squid_layouts.planning.navigation import PlannedNav
-from squid_layouts.planning.planner import EMPTY_RESERVATION
-from squid_layouts.planning.planner import plan as plan_document
-from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET
-from squid_layouts.planning.target import ResourceCost
-from squid_layouts.profiling import OperationRecorder, SpanRecorder
-from squid_layouts.runtime.component import Component
-from squid_layouts.runtime.presentation import PresentationSession
-from squid_layouts.scene.model import PlanResult
-from squid_layouts.semantic import LayoutNode
-from squid_layouts.sources import Position
-from squid_layouts.target_types import ComponentsV2Target, DiscordPyAdapter
-from squid_layouts.text import NEUTRAL, Localization
+from squid_ui import scene
+from squid_ui.assets import Asset
+from squid_ui.chrome import DEFAULT_CHROME, Chrome
+from squid_ui.document import DocumentLike
+from squid_ui.palette import DEFAULT_PALETTE, Palette
+from squid_ui.planning.adapter import AdapterCapability
+from squid_ui.planning.cache import PlanCache, PlanMemo
+from squid_ui.planning.limits import V2Limits
+from squid_ui.planning.navigation import PlannedNav
+from squid_ui.planning.planner import EMPTY_RESERVATION
+from squid_ui.planning.planner import plan as plan_document
+from squid_ui.planning.search import DEFAULT_SEARCH_BUDGET
+from squid_ui.planning.target import ResourceCost
+from squid_ui.profiling import OperationRecorder, SpanRecorder
+from squid_ui.runtime.component import Component
+from squid_ui.runtime.presentation import PresentationSession
+from squid_ui.scene.model import PlanResult
+from squid_ui.semantic import LayoutNode
+from squid_ui.sources import Position
+from squid_ui.target_types import ComponentsV2Target, DiscordPyAdapter
+from squid_ui.text import NEUTRAL, Localization
 
 logger = logging.getLogger(__name__)
 

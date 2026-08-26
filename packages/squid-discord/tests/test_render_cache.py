@@ -10,14 +10,14 @@ from squid_discord.classic_renderer import ClassicRenderer
 from squid_discord.render_cache import RenderProgramCache
 from squid_discord.renderer import StaticView, V2Renderer
 from squid_discord.testing import delivered_to, fake_message
-from squid_layouts import Component, state
-from squid_layouts.document import Document
-from squid_layouts.interactions import ActionBinding
-from squid_layouts.planning.planner import plan
-from squid_layouts.primitives import Text
-from squid_layouts.scene import ClassicMessage, Codec, Embed
-from squid_layouts.scene import Document as SceneDocument
-from squid_layouts.semantic import Action, Actions
+from squid_ui import Component, state
+from squid_ui.document import Document
+from squid_ui.interactions import ActionBinding
+from squid_ui.planning.planner import plan
+from squid_ui.primitives import Text
+from squid_ui.scene import ClassicMessage, Codec, Embed
+from squid_ui.scene import Document as SceneDocument
+from squid_ui.semantic import Action, Actions
 
 
 def _text_plan(value: str):

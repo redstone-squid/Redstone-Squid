@@ -17,7 +17,7 @@ from squid_discord.roles import (
 )
 from squid_discord.routing import Router
 from squid_discord.testing import fake_interaction
-from squid_layouts.primitives.nodes import ActionGroup, RoutedButton, RoutedSelect, Variants
+from squid_ui.primitives.nodes import ActionGroup, RoutedButton, RoutedSelect, Variants
 
 
 class FakeRole:

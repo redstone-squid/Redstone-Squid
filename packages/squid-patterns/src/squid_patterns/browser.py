@@ -4,16 +4,16 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
-from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME
-from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.factories import action, actions, bullet, bullets, choice, choices, controlled, heading, note, stack
-from squid_layouts.interactions import ActionEvent
-from squid_layouts.planning.navigation import NAV_FACTORY_CONTEXT, NavigationContext, NavigationState, default_nav
-from squid_layouts.runtime.component import Component, RenderResult
-from squid_layouts.runtime.reactivity import state
-from squid_layouts.runtime.resources import Failed, Pending, Ready, resource
-from squid_layouts.semantic import Action, ActionDisplay, ChoiceEvent, LayoutNode, Link
-from squid_layouts.sources import (
+from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
+from squid_ui.errors import LayoutInvariantError
+from squid_ui.factories import action, actions, bullet, bullets, choice, choices, controlled, heading, note, stack
+from squid_ui.interactions import ActionEvent
+from squid_ui.planning.navigation import NAV_FACTORY_CONTEXT, NavigationContext, NavigationState, default_nav
+from squid_ui.runtime.component import Component, RenderResult
+from squid_ui.runtime.reactivity import state
+from squid_ui.runtime.resources import Failed, Pending, Ready, resource
+from squid_ui.semantic import Action, ActionDisplay, ChoiceEvent, LayoutNode, Link
+from squid_ui.sources import (
     ORIGIN,
     CountPrecision,
     LoadedWindow,
@@ -22,7 +22,7 @@ from squid_layouts.sources import (
     WindowSource,
     window_footer,
 )
-from squid_layouts.text import TextLike
+from squid_ui.text import TextLike
 from squid_patterns._content import ContentLike, normalize_content, render_content, require_key
 
 type BrowserDetail[ItemT] = Callable[[ItemT], ContentLike | Component]

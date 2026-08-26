@@ -4,7 +4,7 @@ import discord
 import pytest
 
 import squid_discord
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import (
     V2_LIMITS as LIMITS,
 )

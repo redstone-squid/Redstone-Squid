@@ -42,7 +42,7 @@ arch, OS and ABI separately.
    `DiscordLimits`) into `build_modal(..., limits: V2Limits)` / `build_form_modal`
    (`modal.py:443,465`). It works only because modal caps happen to live on the base class — nothing
    says so, and nothing would catch it if that stopped being true.
-3. **An unsatisfiable protocol.** `Renderer[OutputT]` (`squid_layouts/renderer.py`) declares
+3. **An unsatisfiable protocol.** `Renderer[OutputT]` (`squid_ui/renderer.py`) declares
    `draw(self, scene: SceneDocument, ...)`, while `V2Renderer.draw` narrows to
    `SceneDocument[SceneComponentsV2]` (`renderer.py:108-114`). Parameters are contravariant, so
    **neither Discord renderer can satisfy the protocol**; it is declared and structurally dead.
@@ -83,7 +83,7 @@ confined to the two packages and their tests, and there are no live durable snap
 ## The shape
 
 ```python
-# squid_layouts/planning/dialect.py — axis 1: the protocol
+# squid_ui/planning/dialect.py — axis 1: the protocol
 class TargetDialect[LimitsT: DiscordLimits, BodyT: SceneBody, ModeT](Protocol):
     id: str
     version: int
@@ -99,7 +99,7 @@ class TargetDialect[LimitsT: DiscordLimits, BodyT: SceneBody, ModeT](Protocol):
     def body(self, children: Sequence[Realized], bindings: SceneBindings) -> BodyT: ...
 
 
-# squid_layouts/planning/target.py — the product
+# squid_ui/planning/target.py — the product
 @dataclass(frozen=True, slots=True)
 class Target[LimitsT: DiscordLimits, BodyT: SceneBody, ModeT, AdapterT]:
     dialect: TargetDialect[LimitsT, BodyT, ModeT]
@@ -216,7 +216,7 @@ class DiscordLimits:                       # abstract; message-wide budgets live
 
 ## 3. `Target` is the product
 
-- Rename `TargetProfile` to `Target` in `squid_layouts.planning`; it becomes the only such class.
+- Rename `TargetProfile` to `Target` in `squid_ui.planning`; it becomes the only such class.
 - Fields collapse to the four above; the rest become derived properties.
 - Delete `squid_discord.Target` (`squid-discord/src/squid_discord/target.py:31-88`) — its only job
   was two classmethods plus `_from`, an eleven-field manual copy that silently drops any new base
@@ -312,7 +312,7 @@ types that merely share words with this vocabulary; they are untouched and unrel
 
 1. **Baseline first.** These packages have known pre-existing failures and a hang in `test_lookup`,
    so record a pre-change run before attributing anything:
-   `uv run pytest packages/squid-layouts/tests packages/squid-discord/tests --no-cov -q`.
+   `uv run pytest packages/squid-ui/tests packages/squid-discord/tests --no-cov -q`.
    Same for `just typecheck` — the tree is not at zero Pyrefly errors, so diff against a pre-change
    run and read only the files you touched.
 2. **0 proves itself**: the new `sl.paged` + classic test fails before and passes after.

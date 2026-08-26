@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, cast
 import discord
 
 import squid_discord as sd
-import squid_layouts as sl
+import squid_ui as sl
 from squid.bot._types import GuildMessageable
 from squid.voting.domain import (
     MAX_POLL_DURATION_SECONDS,

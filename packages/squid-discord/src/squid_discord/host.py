@@ -29,9 +29,9 @@ from squid_discord.delivery import Replyable
 from squid_discord.mount import Mount
 from squid_discord.scheduler import MountScheduler
 from squid_discord.sessions import SessionRegistry
-from squid_layouts.profiling import Profiler
-from squid_layouts.runtime.component import Component
-from squid_layouts.runtime.topics import TopicBus
+from squid_ui.profiling import Profiler
+from squid_ui.runtime.component import Component
+from squid_ui.runtime.topics import TopicBus
 
 type HostSource = discord.Client | discord.Interaction[Any] | Replyable
 """Anything an installation can be found from: the client, or something carrying one."""

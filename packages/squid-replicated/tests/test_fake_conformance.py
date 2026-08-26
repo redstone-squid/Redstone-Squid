@@ -8,7 +8,7 @@ import weakref
 
 import pytest
 
-from squid_layouts.runtime import History
+from squid_ui.runtime import History
 from squid_reactivity import (
     ActionCommit,
     ActionLedger,

@@ -1,7 +1,7 @@
 """Squid takes over an *unsent* discord.py view.
 
 A live view — one that has been sent and will edit its own message — stays rejected, and
-`docs/plans/squid-layouts-redesign/90-deferred.md` records why: two writers on one message make
+`docs/plans/squid-ui-redesign/90-deferred.md` records why: two writers on one message make
 budget measurement unsound. An unsent view claims nothing. It is items and callbacks that have
 not met Discord, so Squid can translate the items into its own exact primitives, become the
 sole writer, and keep the legacy object as a model plus a set of handlers. Renderer ownership,
@@ -23,14 +23,14 @@ import discord
 
 from squid_discord.actions import ActionResponder, responder, selected_entities
 from squid_discord.mount import _CHANNEL_TYPES
-from squid_layouts.assets import Asset, StoredAsset
-from squid_layouts.document import Document
-from squid_layouts.emoji import Emoji, normalize_emoji
-from squid_layouts.entity import EntityKind, EntityRef, EntityType
-from squid_layouts.errors import LayoutError
-from squid_layouts.interactions import EntitySelectionEvent, PressEvent, SelectionEvent, Visibility
-from squid_layouts.primitives.constraints import Never
-from squid_layouts.primitives.nodes import (
+from squid_ui.assets import Asset, StoredAsset
+from squid_ui.document import Document
+from squid_ui.emoji import Emoji, normalize_emoji
+from squid_ui.entity import EntityKind, EntityRef, EntityType
+from squid_ui.errors import LayoutError
+from squid_ui.interactions import EntitySelectionEvent, PressEvent, SelectionEvent, Visibility
+from squid_ui.primitives.constraints import Never
+from squid_ui.primitives.nodes import (
     Button,
     EntitySelect,
     File,
@@ -48,10 +48,10 @@ from squid_layouts.primitives.nodes import (
     Text,
     Thumbnail,
 )
-from squid_layouts.primitives.styles import ActionStyle
-from squid_layouts.runtime.component import Component
-from squid_layouts.runtime.reactivity import state
-from squid_layouts.target_types import ComponentsV2Target
+from squid_ui.primitives.styles import ActionStyle
+from squid_ui.runtime.component import Component
+from squid_ui.runtime.reactivity import state
+from squid_ui.target_types import ComponentsV2Target
 
 type Item = discord.ui.Item[Any]
 type KeyFactory = Callable[[Item], str]

@@ -5,9 +5,9 @@ from typing import cast
 
 import pytest
 
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import DISCORD_V2_DPY27
-from squid_layouts.semantic import SemanticNode
+from squid_ui.semantic import SemanticNode
 
 
 async def _noop(_event) -> None: ...

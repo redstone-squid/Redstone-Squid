@@ -20,8 +20,8 @@ from typing import Any
 import discord
 
 from squid_discord.attachments import files_for
-from squid_layouts.assets import Asset
-from squid_layouts.errors import LayoutError
+from squid_ui.assets import Asset
+from squid_ui.errors import LayoutError
 
 type AnyView = discord.ui.View | discord.ui.LayoutView
 

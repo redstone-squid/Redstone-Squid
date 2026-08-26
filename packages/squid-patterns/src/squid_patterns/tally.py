@@ -1,5 +1,5 @@
 """Host-owned tally declarations."""
 
-from squid_layouts.tallies import TallyOption
+from squid_ui.tallies import TallyOption
 
 __all__ = ["TallyOption"]

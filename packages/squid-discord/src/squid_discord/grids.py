@@ -2,10 +2,10 @@
 
 from collections.abc import Awaitable, Callable
 
-from squid_layouts.grids import GridCell, validate_grid
-from squid_layouts.interactions import PressEvent, SelectionEvent
-from squid_layouts.palette import Tone
-from squid_layouts.primitives import ActionStyle, Button, Row
+from squid_ui.grids import GridCell, validate_grid
+from squid_ui.interactions import PressEvent, SelectionEvent
+from squid_ui.palette import Tone
+from squid_ui.primitives import ActionStyle, Button, Row
 
 
 def _style(tone: Tone) -> ActionStyle:

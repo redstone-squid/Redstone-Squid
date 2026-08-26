@@ -140,15 +140,15 @@ from squid_discord.target import (
 
 # `target.v2()` and `target.classic()` are deliberately not promoted here: `classic` at this
 # level already names the classic-composition submodule, and one name may not mean two things.
-from squid_layouts.errors import (
+from squid_ui.errors import (
     ExistingLayoutError,
     LimitViolationError,
 )
-from squid_layouts.planning import limits as limits
-from squid_layouts.planning import navigation as navigation_controls
-from squid_layouts.planning.limits import LIMITS as V2_LIMITS
-from squid_layouts.planning.planner import EMPTY_RESERVATION
-from squid_layouts.planning.target import ResourceCost
+from squid_ui.planning import limits as limits
+from squid_ui.planning import navigation as navigation_controls
+from squid_ui.planning.limits import LIMITS as V2_LIMITS
+from squid_ui.planning.planner import EMPTY_RESERVATION
+from squid_ui.planning.target import ResourceCost
 
 _LAZY_NAMESPACES = frozenset({"durability"})
 """Namespaces imported on first use rather than by the bundle above.

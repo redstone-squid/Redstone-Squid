@@ -9,15 +9,15 @@ from squid_discord import DISCORD_V2_DPY27
 from squid_discord import V2_LIMITS as LIMITS
 from squid_discord.renderer import V2Renderer
 from squid_discord.target import NativeItem
-from squid_layouts import Document, scene, zoned_timestamp
-from squid_layouts.document import Asset, InlineAsset
-from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
-from squid_layouts.planning import plan
-from squid_layouts.planning.adapter import AdapterProfile
-from squid_layouts.planning.discord import components_v2_target
-from squid_layouts.planning.limits import V2Limits
-from squid_layouts.planning.types import DiscordAdapter
-from squid_layouts.primitives import (
+from squid_ui import Document, scene, zoned_timestamp
+from squid_ui.document import Asset, InlineAsset
+from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
+from squid_ui.planning import plan
+from squid_ui.planning.adapter import AdapterProfile
+from squid_ui.planning.discord import components_v2_target
+from squid_ui.planning.limits import V2Limits
+from squid_ui.planning.types import DiscordAdapter
+from squid_ui.primitives import (
     ActionGroup,
     Button,
     Code,
@@ -32,9 +32,9 @@ from squid_layouts.primitives import (
     Variant,
     Variants,
 )
-from squid_layouts.sources import Position
-from squid_layouts.temporal import ZonedDateTime
-from squid_layouts.text import Localization, Message
+from squid_ui.sources import Position
+from squid_ui.temporal import ZonedDateTime
+from squid_ui.text import Localization, Message
 
 
 def _target(name: str, *, capabilities: frozenset[str] = frozenset(), limits: V2Limits = LIMITS):

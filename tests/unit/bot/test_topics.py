@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 import anyio
 
 import squid_discord as sd
-import squid_layouts as sl
+import squid_ui as sl
 from squid.bot.app import RedstoneSquid
 from squid.topics import resource_topic
 from squid_discord import Everyone

@@ -15,7 +15,7 @@ from discord import app_commands
 from discord.ext.commands import Context
 
 import squid_discord as sd
-import squid_layouts as sl
+import squid_ui as sl
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.ui import render_presentation, reply_presentation, send_component, text_layout

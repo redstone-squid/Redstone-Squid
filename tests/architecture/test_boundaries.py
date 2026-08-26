@@ -7,18 +7,18 @@ from pytest_archon import archrule
 
 from squid.core.extract import deferred_msgid
 
-# Roots for the AST scans that state repo-wide invariants. The squid-layouts workspace member
+# Roots for the AST scans that state repo-wide invariants. The squid-ui workspace member
 # is held to the same rules as squid itself.
 SCAN_ROOTS = (
     Path("squid"),
     Path("packages/squid-reactivity/src"),
-    Path("packages/squid-layouts/src"),
+    Path("packages/squid-ui/src"),
     Path("packages/squid-discord/src"),
     Path("packages/squid-patterns/src"),
     Path("packages/squid-replicated/src"),
 )
 
-COMPILER_PASS_ROOT = Path("packages/squid-layouts/src/squid_layouts/planning")
+COMPILER_PASS_ROOT = Path("packages/squid-ui/src/squid_ui/planning")
 
 
 def _scanned_files() -> list[Path]:
@@ -39,8 +39,8 @@ def test_compiler_pass_packages_are_not_facades() -> None:
 def test_removed_compiler_pass_modules_have_no_compatibility_surface() -> None:
     """The former monolith paths stay deleted rather than becoming forwarding shims."""
     removed = {
-        "squid_layouts.planning.adaptation",
-        "squid_layouts.planning.measurement",
+        "squid_ui.planning.adaptation",
+        "squid_ui.planning.measurement",
     }
     assert [name for name in removed if (COMPILER_PASS_ROOT / f"{name.rpartition('.')[2]}.py").exists()] == []
 
@@ -61,8 +61,8 @@ def test_removed_compiler_pass_modules_have_no_compatibility_surface() -> None:
 def test_layouts_package_stays_standalone() -> None:
     """The UI framework package must remain publishable: no host-project or adapter imports."""
     (
-        archrule("squid-layouts stays independent from the host application")
-        .match("squid_layouts*")
+        archrule("squid-ui stays independent from the host application")
+        .match("squid_ui*")
         .should_not_import("squid")
         .should_not_import("squid.*")
         .should_not_import("sqlalchemy*")
@@ -70,7 +70,7 @@ def test_layouts_package_stays_standalone() -> None:
         .should_not_import("nucleation*")
         .should_not_import("squid_discord*")
         .should_not_import("squid_patterns*")
-        .check("squid_layouts", only_direct_imports=True)
+        .check("squid_ui", only_direct_imports=True)
     )
 
 
@@ -128,7 +128,7 @@ def test_patterns_package_is_transport_free() -> None:
 
 def test_only_the_bot_transport_uses_the_ui_packages() -> None:
     """Presentation is `squid.bot`'s business; no other layer may reach for a UI package."""
-    for package in ("squid_layouts*", "squid_discord*", "squid_patterns*"):
+    for package in ("squid_ui*", "squid_discord*", "squid_patterns*"):
         (
             archrule(f"{package} is a Discord presentation concern")
             .match("squid*")
@@ -143,7 +143,7 @@ def test_layouts_package_carries_no_translation_markers() -> None:
     drop out of the catalogue. All user-facing text must enter through Chrome, pre-translated."""
     violations = [
         f"{path}:{node.lineno}"
-        for path in Path("packages/squid-layouts/src").rglob("*.py")
+        for path in Path("packages/squid-ui/src").rglob("*.py")
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_"
     ]
@@ -563,7 +563,7 @@ def test_the_engine_needs_no_transport_install() -> None:
     that sit above the engine: nothing here may import them, in a function body or under
     TYPE_CHECKING, which is where a back-edge would hide from a plain dependency check.
     """
-    root = Path("packages/squid-layouts/src/squid_layouts")
+    root = Path("packages/squid-ui/src/squid_ui")
     blocked = {"anyio", "discord", "squid_stores", "squid_discord", "squid_patterns"}
     violations: list[str] = []
     for path in root.rglob("*.py"):

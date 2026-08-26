@@ -7,20 +7,20 @@ import anyio
 import discord
 import pytest
 
-import squid_layouts as sl
+import squid_ui as sl
 import squid_patterns as sp
 from squid_discord import Everyone, Mount, delivery
 from squid_discord.challenges import ChallengeRunner, DialogPresenter
 from squid_discord.mount import ChallengeRequest
 from squid_discord.sessions import SessionRegistry
 from squid_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
-from squid_layouts import ActionEvent, Component, state
-from squid_layouts import form as sl_form
-from squid_layouts.forms import FormSpec, TextField
-from squid_layouts.guards import Challenge, ChallengeResolver, GuardDecision, GuardLedger, approvals
-from squid_layouts.interactions import ActionMode
-from squid_layouts.profiling import DispatchDisposition, MemoryProfiler, OperationKind
-from squid_layouts.runtime.reactivity import readonly_transaction, transaction
+from squid_ui import ActionEvent, Component, state
+from squid_ui import form as sl_form
+from squid_ui.forms import FormSpec, TextField
+from squid_ui.guards import Challenge, ChallengeResolver, GuardDecision, GuardLedger, approvals
+from squid_ui.interactions import ActionMode
+from squid_ui.profiling import DispatchDisposition, MemoryProfiler, OperationKind
+from squid_ui.runtime.reactivity import readonly_transaction, transaction
 
 
 class _Panel(Component):

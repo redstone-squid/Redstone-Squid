@@ -50,7 +50,7 @@ from squid.runtime import (
 )
 from squid.topics import TopicPublisher, open_topic_bridge, resource_topic
 from squid_discord import install
-from squid_layouts.profiling import MemoryProfiler
+from squid_ui.profiling import MemoryProfiler
 from squid_reactivity import LocalTopicBus
 from squid_stores import PostgresTopicBridge
 

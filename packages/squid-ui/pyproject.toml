@@ -1,0 +1,18 @@
+[project]
+name = "squid-ui"
+version = "0.1.0"
+description = "Declarative, limits-aware UI planning with a portable HTML renderer"
+requires-python = ">=3.14"
+license = "MIT"
+dependencies = ["squid-reactivity"]
+
+[build-system]
+requires = ["uv_build>=0.11,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv]
+# uv's default cache key for a path dependency is the mtime of pyproject.toml plus the module
+# root directory -- neither of which changes when a module is added under src/squid_ui/.
+# Docker builds with a persistent uv cache mount therefore reinstalled the skeleton wheel long
+# after the package grew. Key on the sources themselves instead.
+cache-keys = [{ file = "pyproject.toml" }, { file = "src/**/*" }]

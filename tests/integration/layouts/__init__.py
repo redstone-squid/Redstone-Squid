@@ -1,1 +1,1 @@
-"""squid-layouts persistence integration tests."""
+"""squid-ui persistence integration tests."""

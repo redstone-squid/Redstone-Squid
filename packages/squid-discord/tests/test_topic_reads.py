@@ -12,13 +12,13 @@ from typing import Any
 import anyio
 import discord
 
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import Everyone, Mount, MountScheduler
 from squid_discord.delivery import DeliveryResult, handle_for
 from squid_discord.testing import delivered_to, fake_message
-from squid_layouts import Component, resource, state
-from squid_layouts.primitives import Text
-from squid_layouts.runtime import LocalTopicBus, PendingMode, Topic
+from squid_ui import Component, resource, state
+from squid_ui.primitives import Text
+from squid_ui.runtime import LocalTopicBus, PendingMode, Topic
 
 BUILD = Topic("build", "1")
 OTHER = Topic("build", "2")
@@ -281,7 +281,7 @@ def test_a_topic_nobody_watches_holds_no_cell() -> None:
 
 def test_watching_a_topic_installs_no_commit_precondition() -> None:
     """A watch is not an observation: nothing writes a topic, so nothing can lose an update."""
-    from squid_layouts.runtime.reactivity import _CURRENT, _Transaction
+    from squid_ui.runtime.reactivity import _CURRENT, _Transaction
 
     with sl.runtime.transaction():
         sl.runtime.watch(BUILD)

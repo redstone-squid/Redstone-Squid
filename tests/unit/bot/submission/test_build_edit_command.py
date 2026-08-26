@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 
 import discord
 
-import squid_layouts as sl
+import squid_ui as sl
 from squid.bot.submission.edit import BuildEditCommands
 from squid.bot.submission.ui.views import BuildEditComponent
 from squid.builds.domain import DoorBuild, OtherBuild, Status

@@ -1,6 +1,6 @@
 """Interactive Components V2 rendering for stored error reports.
 
-The browser is a mounted squid-layouts component: the list ↔ detail switch is a state change,
+The browser is a mounted squid-ui component: the list ↔ detail switch is a state change,
 the traceback pages through the engine's budget solver (which replaced the hand-tuned
 PAGE_CHARS constant), and author lock, expiry, and error routing belong to the mount.
 """
@@ -11,7 +11,7 @@ from collections.abc import Sequence
 
 import discord
 
-import squid_layouts as sl
+import squid_ui as sl
 from squid.bot.ui import CHROME, L
 from squid.diagnostics.domain import ErrorReport
 

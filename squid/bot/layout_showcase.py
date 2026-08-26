@@ -1,4 +1,4 @@
-"""Public interactive showcase for the squid-layouts engine."""
+"""Public interactive showcase for the squid-ui engine."""
 
 import asyncio
 from collections.abc import Awaitable, Callable, Iterable, Sequence
@@ -11,7 +11,7 @@ from discord.ext import commands
 from discord.ext.commands import Cog, Context, guild_only
 
 import squid_discord as sd
-import squid_layouts as sl
+import squid_ui as sl
 import squid_patterns as sp
 from squid.bot.i18n import resolve_locale
 from squid.bot.ui import (
@@ -389,7 +389,7 @@ class LayoutShowcase(sl.Component):
         )
         header = sl.primitives.Panel(
             (
-                sl.primitives.Heading(L(t"squid-layouts engine showcase")),
+                sl.primitives.Heading(L(t"squid-ui engine showcase")),
                 sl.primitives.Text(self.status),
                 *controls,
             ),
@@ -1310,7 +1310,7 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         section: DemoSection = "pagination",
         entries: app_commands.Range[int, 20, 200] = 100,
     ) -> None:
-        """Open an interactive showcase of squid-layouts."""
+        """Open an interactive showcase of squid-ui."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
         await send_component(
             ctx,

@@ -10,7 +10,7 @@ from discord.ext import commands
 
 import squid.bot.submission.search as search_module
 import squid_discord as sd
-import squid_layouts as sl
+import squid_ui as sl
 from squid.bot.submission.search import SearchCog, SearchTarget
 from squid.builds.domain import OtherBuild
 from squid.core.errors import ValidationError

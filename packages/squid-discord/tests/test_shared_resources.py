@@ -11,10 +11,10 @@ import anyio
 import discord
 import pytest
 
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import Everyone, Mount, MountScheduler
 from squid_discord.testing import delivered_to, fake_message
-from squid_layouts.runtime.shared import describe
+from squid_ui.runtime.shared import describe
 
 
 class Prefs(sl.runtime.Shared[int]):
