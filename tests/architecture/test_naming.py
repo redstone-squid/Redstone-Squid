@@ -2,7 +2,7 @@
 
 Lifetime is carried by verbs, not by nouns. The public surface has 93 distinct class-name
 suffixes and 60 of them are used exactly once, so a closed noun vocabulary would have to
-reject `Component`, `Mount`, `Screen` and `Destination` or grow until it was not a
+reject `Component`, `Mount`, `ScreenSpec` and `Destination` or grow until it was not a
 vocabulary. What nouns owe instead is consistency, which needs no dictionary: one meaning
 per word. The verbs are where a small closed set genuinely fits.
 """
@@ -62,11 +62,6 @@ SAME_CONCEPT_TWO_LAYERS = {
     # Parallel settled-state vocabularies for the two async primitives.
     "Failed",
     "Pending",
-    # `sl.forms.X` is the field form of the node named `sl.X`; the namespace disambiguates
-    # and reading `forms.Text` as "a text field" is what plan 58's namespacing is for.
-    "Choice",
-    "Text",
-    "Time",
     # `sl.scene.X` is what `sl.X` lowers to. The `Scene` prefix that used to keep these
     # apart repeated the import path and said nothing else, so it was dropped; the pairing
     # is the whole point, and `sl.scene` is the namespace that disambiguates.
@@ -85,7 +80,9 @@ SAME_CONCEPT_TWO_LAYERS = {
     "RoutedButton",
     "RoutedSelect",
     "Row",
+    "Text",
     "Thumbnail",
+    "Time",
     "ZonedTime",
 }
 """Shared names that are deliberate: the same concept at two layers, or a namespaced form."""
@@ -96,18 +93,13 @@ UNRELATED_CONCEPTS_SHARING_A_WORD = {
     # redo, compensation. Two senses of "action": the thing a person did, and the unit of work
     # that records it. Unrelated.
     "ActionKind",
-    # `semantic.Destination(key, label, available)` is one option in a navigation control;
-    # `delivery.Destination` is how a mount's message gets created. Unrelated.
-    "Destination",
-    # `semantic.Progress(value, label, maximum)` is a progress bar; `operations.Progress`
-    # is the capability an operation reports through. Unrelated.
-    "Progress",
 }
 """Real collisions, recorded rather than renamed.
 
-Both are in the authoring vocabulary, so renaming either is a public API decision with
-taste in it rather than a mechanical fix. Listed here so the rule stays enforceable and
-neither is forgotten before the package is published.
+`Destination` and `Progress` used to be here. Both were settled by renaming the semantic
+node and leaving the load-bearing word alone: `semantic.Destination` is `NavOption` beside
+`delivery.Destination`, and `semantic.Progress` is `ProgressBar` beside the capability an
+operation reports through.
 """
 
 
