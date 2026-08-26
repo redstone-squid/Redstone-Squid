@@ -30,6 +30,7 @@ from squid_replication import (
     ReplicationChangeToken,
     ReplicationResyncRequiredError,
     ReplicationUpdate,
+    UnsupportedReplicationContainerError,
 )
 from squid_replication import (
     Replica as _Replica,
@@ -74,6 +75,13 @@ def test_staging_reads_its_branch_without_mutating_canonical_state() -> None:
         assert seen == [0]
 
     assert votes.value == 2
+
+
+def test_reference_backend_refuses_container_classes_it_cannot_merge() -> None:
+    document = Replica("a").open("project")
+
+    with pytest.raises(UnsupportedReplicationContainerError, match="does not support 'text'"):
+        document.text("title")
 
 
 def test_failed_mixed_cell_counter_set_action_changes_nothing() -> None:
