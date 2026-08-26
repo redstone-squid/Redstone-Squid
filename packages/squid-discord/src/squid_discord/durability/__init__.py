@@ -188,7 +188,7 @@ class DurableMountCodec:
 
 
 class MountStateCodec:
-    """Canonical JSON codec for the current pre-release mount state shape."""
+    """Canonical JSON codec for mount state protocol 1."""
 
     protocol = 1
 
