@@ -414,6 +414,15 @@ class PlanSeverity(StrEnum):
     WARNING = "warning"
 
 
+class PlanReuse(StrEnum):
+    """How much prior planner work produced this result."""
+
+    MISS = "miss"
+    EXACT = "exact"
+    STRUCTURAL = "structural"
+    INCREMENTAL = "incremental"
+
+
 @dataclass(frozen=True, slots=True)
 class PlanEvent:
     code: str
@@ -438,6 +447,7 @@ class PlanMetrics:
     states_explored: int = 0
     """`measure()` calls the search spent, across strategies, fallbacks, and ladder rungs."""
     cache_hit: bool = False
+    reuse: PlanReuse = PlanReuse.MISS
     search_fallback: bool = False
 
 

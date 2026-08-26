@@ -5,7 +5,7 @@ from time import perf_counter
 
 from squid_discord import DISCORD_V2_DPY27, compose
 from squid_layouts import Palette, fallback, scene
-from squid_layouts.planning import PlanCache, plan
+from squid_layouts.planning import PlanCache, PlanMemo, plan
 from squid_layouts.planning.adapter import AdapterProfile
 from squid_layouts.planning.cache import CachedPlan
 from squid_layouts.planning.discord import components_v2_target
@@ -124,7 +124,7 @@ def test_cache_hit_reuses_every_decision_without_measuring(monkeypatch) -> None:
     hit = plan(document, target=DISCORD_V2_DPY27, cache=cache)
 
     assert attempts == miss.metrics.states_explored == 2
-    assert hit.metrics == replace(miss.metrics, cache_hit=True)
+    assert hit.metrics == replace(miss.metrics, cache_hit=True, reuse=scene.PlanReuse.STRUCTURAL)
     assert hit.scene is miss.scene
 
 
@@ -226,6 +226,23 @@ def test_a_cache_hit_stages_the_same_session_writes_as_a_miss() -> None:
     assert hit.metrics.cache_hit
     assert hit.session_updates == miss.session_updates
     assert hit.session_updates
+
+
+def test_exact_memo_skips_cache_key_lowering_and_binding_collection(monkeypatch) -> None:
+    import squid_layouts.planning.planner as planner_module
+
+    document = Actions((Action("run", "Run", _first),), key="tools")
+    session = PresentationSession()
+    memo = PlanMemo()
+    first = plan(document, target=DISCORD_V2_DPY27, session=session, cache=PlanCache(), memo=memo)
+
+    monkeypatch.setattr(planner_module, "_plan_cache_key", _never_measured)
+    monkeypatch.setattr(planner_module, "lower_semantics", _never_measured)
+    exact = plan(document, target=DISCORD_V2_DPY27, session=session, cache=PlanCache(), memo=memo)
+
+    assert exact.scene is first.scene
+    assert exact.bindings is first.bindings
+    assert exact.metrics.reuse is scene.PlanReuse.EXACT
 
 
 def test_plan_cache_separates_locales() -> None:

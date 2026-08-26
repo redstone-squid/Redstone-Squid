@@ -1,6 +1,7 @@
 """The verified discord.py adapter profile and boundary checks."""
 
 from collections.abc import Mapping
+from functools import cache
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any, cast
 
@@ -47,6 +48,16 @@ DISCORD_PY_27_ADAPTER = AdapterProfile(
 )
 
 
+@cache
+def _installed_discord_py() -> Version:
+    return Version(version("discord.py"))
+
+
+@cache
+def _version_range(expression: str) -> SpecifierSet:
+    return SpecifierSet(expression)
+
+
 def discord_py_adapter_profile(
     name: str,
     version_expression: str,
@@ -70,8 +81,8 @@ def require_discord_py_capability(profile: AdapterProfile[DiscordPyAdapter], cap
         message = f"adapter profile {profile.name!r} cannot {operation}; it lacks {capability!r}"
         raise LayoutInvariantError(message)
     try:
-        installed = Version(version("discord.py"))
-        applicable = SpecifierSet(profile.version_expression)
+        installed = _installed_discord_py()
+        applicable = _version_range(profile.version_expression)
     except (PackageNotFoundError, InvalidVersion, InvalidSpecifier) as error:
         message = f"cannot verify discord.py for adapter profile {profile.name!r}: {error}"
         raise LayoutInvariantError(message) from error
