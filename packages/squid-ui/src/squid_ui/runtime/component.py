@@ -12,7 +12,7 @@ root component is attached to a MessageRoot; children reach it through their par
 
 from collections.abc import Callable, Sequence
 from contextvars import ContextVar
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any, Protocol
 
 from squid_reactivity.core import (
@@ -133,6 +133,7 @@ class ComponentTree:
     discarded costs at most one spurious refresh, while a missed subscription is a stale panel
     until someone clicks it.
     """
+    _topology: object = field(default_factory=object, compare=False, repr=False)
 
 
 @dataclass(slots=True)
@@ -163,6 +164,7 @@ class _ExpandedSubtree:
     async_bindings: tuple[AsyncBinding, ...]
     observations: tuple[Address, ...]
     child_splices: dict[str, _NodeSplice]
+    topology: object = field(default_factory=object)
 
 
 @dataclass(frozen=True, slots=True)
@@ -514,7 +516,9 @@ def render_component_tree(
             (),
             spliced.async_bindings,
             spliced.observations,
+            spliced.topology,
         )
+    complete = not deferred and (root_subtree := subtree_cache.get("$")) is not None
     return ComponentTree(
         nodes,
         components,
@@ -523,6 +527,7 @@ def render_component_tree(
         tuple(deferred),
         unique_async_bindings(observed_bindings),
         tuple(dict.fromkeys(observed_addresses)),
+        root_subtree.topology if complete else object(),
     )
 
 
@@ -593,6 +598,7 @@ def _splice_dirty_subtrees(
                 parent.async_bindings,
                 parent.observations,
                 parent.child_splices,
+                parent.topology,
             )
             subtree_cache[parent_path] = parent
             child_path = parent_path
