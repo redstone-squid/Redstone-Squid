@@ -253,7 +253,13 @@ class V2Limits(DiscordLimits):
 class ClassicLimits(DiscordLimits):
     """Hard limits for a pre-Components-V2 message: content, embeds, and action rows."""
 
-    embeds: EmbedLimits | None = EMBED_LIMITS
+    embeds: EmbedLimits = EMBED_LIMITS
+    """Narrowed from the base's optional: a classic message always has embeds.
+
+    Plan 71 made `DiscordLimits.embeds` optional so a mode without embeds could say so and
+    every read would be guarded. The classic path is the mode that always has them, and
+    saying so here is what spares its own code seven `is None` checks that can never fire.
+    """
 
     # Message-wide budgets.
     content: int = 2000
