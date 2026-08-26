@@ -38,8 +38,10 @@ def test_the_adapter_namespace_exposes_its_surface() -> None:
     assert squid_discord.SessionKey
     assert squid_discord.sessions.SessionPolicy
     assert squid_discord.ScreenSpec
-    assert squid_discord.screens.Scope
-    assert squid_discord.screens.Opener
+    assert squid_discord.Navigator
+    assert squid_discord.Opener
+    assert squid_discord.Scope
+    assert squid_discord.ScreenOptionsResolver
     assert squid_discord.presentation.DiscordPresentation
     assert squid_discord.DiscordMode.COMPONENTS_V2
     assert squid_discord.DiscordModeError
@@ -53,7 +55,7 @@ def test_the_adapter_namespace_exposes_its_surface() -> None:
     assert squid_discord.durability.DiscordFrontend
     assert not hasattr(squid_discord.durability, "MountManager")
     assert squid_discord.MountScheduler.follow
-    for removed in ("SessionPolicy", "Opener", "Scope", "Router", "V2Renderer", "ClassicRenderer", "AuditReport"):
+    for removed in ("SessionPolicy", "Router", "V2Renderer", "ClassicRenderer", "AuditReport"):
         assert removed not in squid_discord.__all__ and not hasattr(squid_discord, removed)
 
 

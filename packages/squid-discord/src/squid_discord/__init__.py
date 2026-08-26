@@ -99,6 +99,7 @@ from squid_discord.mount import (
     RenewEphemeral,
     owned_mount,
 )
+from squid_discord.navigation import Navigator
 from squid_discord.presentation import (
     DiscordMode,
     DiscordModeError,
@@ -127,7 +128,7 @@ from squid_discord.scheduler import (
     MountScheduler,
     MountSchedulerSnapshot,
 )
-from squid_discord.screens import ScreenSpec
+from squid_discord.screens import Opener, Scope, ScreenOptionsResolver, ScreenSpec
 from squid_discord.sessions import (
     SessionKey,
     SessionRegistry,
@@ -211,6 +212,8 @@ __all__ = [
     "MountOptions",
     "MountScheduler",
     "MountSchedulerSnapshot",
+    "Navigator",
+    "Opener",
     "Owner",
     "PauseUpdates",
     "RenewEphemeral",
@@ -226,7 +229,9 @@ __all__ = [
     "RoleTransitionResult",
     "RolesUnchanged",
     "RolesUpdated",
+    "ScreenOptionsResolver",
     "ScreenSpec",
+    "Scope",
     "SessionKey",
     "SessionRegistry",
     "SuccessRenderer",

@@ -10,7 +10,6 @@ import discord
 import squid_discord as sd
 import squid_layouts as sl
 from squid.bot._types import GuildMessageable
-from squid.bot.ui import create_mount
 from squid.voting.domain import (
     MAX_POLL_DURATION_SECONDS,
     MIN_POLL_DURATION_SECONDS,
@@ -20,7 +19,6 @@ from squid.voting.domain import (
     VoteVisibility,
 )
 from squid.voting.errors import InvalidVoteConfigurationError
-from squid_discord import SessionKey
 
 if TYPE_CHECKING:
     from squid.bot.voting.publisher import PollPublisher
@@ -37,6 +35,7 @@ DURATION_PRESETS: tuple[tuple[str, int], ...] = (
     ("7 days", 7 * 86400),
 )
 CUSTOM_DURATION = "custom"
+POLL_SCREEN = sd.ScreenSpec("poll-wizard", scope=sd.Scope.USER_GUILD, options={"timeout": 900})
 
 VISIBILITY_CHOICES: tuple[tuple[VoteVisibility, str, str], ...] = (
     (
@@ -196,19 +195,19 @@ async def present_poll_form(
             return
         component = PollConfirmationComponent(
             publisher,
-            form_interaction.user.id,
             author_account_id,
             edited,
             options,
             allow_network=allow_network,
         )
-        await form_interaction.client.mounts.open(
-            component.mount(
-                source=form_interaction, scheduler=getattr(form_interaction.client, "layout_scheduler", None)
-            ),
-            sd.respond_to(form_interaction, ephemeral=True, wait=True),
-            key=SessionKey.user_guild("poll-wizard", form_interaction.user.id, form_interaction.guild.id),
-            actor_id=form_interaction.user.id,
+        scheduler = getattr(form_interaction.client, "layout_scheduler", None)
+        await POLL_SCREEN.respond(
+            component,
+            form_interaction,
+            sessions=form_interaction.client.mounts,
+            wait=True,
+            scheduler=scheduler,
+            expiry=sd.RenewEphemeral() if scheduler is not None else sd.PauseUpdates(),
         )
 
     modal = sd.modal.build_form_modal(poll_form(draft), on_submit=submitted)
@@ -224,22 +223,17 @@ class PollConfirmationComponent(sl.Component):
     def __init__(
         self,
         publisher: PollPublisher,
-        owner_id: int,
         author_account_id: int,
         draft: PollDraft,
         options: tuple[VoteOption, ...],
         *,
         allow_network: bool = False,
-        timeout: float = 900,
     ) -> None:
         self.publisher = publisher
-        self.owner_id = owner_id
         self.author_account_id = author_account_id
         self.draft = draft
         self.options = options
         self.allow_network = allow_network
-        self._timeout = timeout
-        self._mount: sd.Mount | None = None
 
     def render(self) -> tuple[sl.LayoutNode, ...]:
         if self.published:
@@ -400,14 +394,3 @@ class PollConfirmationComponent(sl.Component):
 
     def _scope_label(self) -> str:
         return next(label for value, label, _ in SCOPE_CHOICES if value is self.draft.scope)
-
-    def mount(self, *, source: sd.host.HostSource, scheduler: sd.MountScheduler | None = None) -> sd.Mount:
-        self._mount = create_mount(
-            self,
-            source=source,
-            access=sd.Owner(self.owner_id),
-            timeout=self._timeout,
-            scheduler=scheduler,
-            expiry=sd.RenewEphemeral() if scheduler is not None else sd.PauseUpdates(),
-        )
-        return self._mount

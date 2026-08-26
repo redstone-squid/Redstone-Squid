@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 CHALLENGE_SCREEN = ScreenSpec("challenge")
 """Owner-only by default, so only the actor who was asked can answer.
 
-Its session key rarely decides anything: a challenge is opened with `parent=`, so it attaches
+Its session key rarely decides anything: a challenge uses the strict attachment entry point, so it attaches
 to the panel's own session and dies with it.
 """
 
@@ -145,7 +145,7 @@ class DialogPresenter:
     async def present(self, request: ChallengeRequest) -> None:
         """Open the dialog through the interaction that asked, and return."""
         resolver: ChallengeResolver = _Resolver(request, self.supervisor)
-        await self.screen.open(
+        await self.screen.attach(
             request.challenge.ask(resolver),
             respond_to(request.interaction, ephemeral=True, wait=True),
             sessions=self.sessions,
