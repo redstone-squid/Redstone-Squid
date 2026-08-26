@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from squid_layouts.entity import EntityRef
 from squid_layouts.text import TextLike
-from squid_reactive.actions import ActionContext
+from squid_reactivity.actions import ActionContext
 
 if TYPE_CHECKING:
     from squid_layouts.forms import FormIssue, FormLike, SubmitHandler

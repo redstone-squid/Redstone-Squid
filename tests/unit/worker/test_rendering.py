@@ -15,7 +15,7 @@ from squid.schematics.application.queries import (
     SkippedRender,
 )
 from squid.worker.rendering import SchematicRenderProjector
-from squid_reactive import Topic
+from squid_reactivity import Topic
 
 PNG = b"\x89PNG\r\n\x1a\npreview"
 RECIPE_HASH = "a" * 64

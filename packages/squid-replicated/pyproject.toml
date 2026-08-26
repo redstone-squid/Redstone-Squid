@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Optional replicated-state adapters for Squid"
 requires-python = ">=3.14"
 license = "MIT"
-dependencies = ["squid-reactive"]
+dependencies = ["squid-reactivity"]
 
 [project.optional-dependencies]
 loro = ["loro==1.13.2"]

@@ -1,10 +1,10 @@
 """Compatibility exports for reactive resources.
 
 New code that does not need the layout frontend can import this optional layer from
-``squid_reactive.resources`` directly.
+``squid_reactivity.resources`` directly.
 """
 
-from squid_reactive.resources import (
+from squid_reactivity.resources import (
     AsyncBinding,
     AtomicResource,
     AtomicResourceStatus,

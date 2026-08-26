@@ -1,5 +1,5 @@
 [project]
-name = "squid-reactive"
+name = "squid-reactivity"
 version = "0.1.0"
 description = "Dependency-free transactional reactive state for Python"
 requires-python = ">=3.14"

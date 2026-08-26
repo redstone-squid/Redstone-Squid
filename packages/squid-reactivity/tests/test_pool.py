@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from squid_reactive import LocalTopicBus, Shared, SharedPool, TopicBus, state
+from squid_reactivity import LocalTopicBus, Shared, SharedPool, TopicBus, state
 
 
 @dataclass(frozen=True, slots=True)

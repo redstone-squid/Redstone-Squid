@@ -1,6 +1,6 @@
 """Public resource vocabulary supplied by the reactive runtime."""
 
-from squid_reactive.resources import (
+from squid_reactivity.resources import (
     AtomicResource,
     AtomicResourceStatus,
     Failed,

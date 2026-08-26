@@ -1,6 +1,6 @@
 """Frontend-neutral exports for the standalone reactive runtime."""
 
-from squid_reactive.actions import (
+from squid_reactivity.actions import (
     ActionCommit,
     ActionContext,
     ActionKind,
@@ -10,7 +10,7 @@ from squid_reactive.actions import (
     Aftermath,
     RollbackReason,
 )
-from squid_reactive.core import (
+from squid_reactivity.core import (
     _CURRENT,
     ActionParticipant,
     CellPatch,

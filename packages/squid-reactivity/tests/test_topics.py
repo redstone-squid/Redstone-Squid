@@ -5,8 +5,8 @@ from collections.abc import Callable
 
 import pytest
 
-from squid_reactive import LocalTopicBus, SubscriptionReconciler, Topic, TopicBus, observe_reads, watch
-from squid_reactive.topics import Address
+from squid_reactivity import LocalTopicBus, SubscriptionReconciler, Topic, TopicBus, observe_reads, watch
+from squid_reactivity.topics import Address
 
 BUILD = Topic("build", "1")
 OTHER = Topic("build", "2")

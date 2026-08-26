@@ -20,7 +20,7 @@ pure actions.
 ## 1. Already shipped
 
 Each row is the mechanism the survey named and the thing in the tree that is it. `core.py`,
-`resources.py` and `operations.py` are under `packages/squid-reactive/src/squid_reactive/`.
+`resources.py` and `operations.py` are under `packages/squid-reactivity/src/squid_reactivity/`.
 
 | Survey's finding | In the tree | Evidence |
 |---|---|---|
@@ -38,7 +38,7 @@ Each row is the mechanism the survey named and the thing in the tree that is it.
 | Dioxus: signal reads tracked *through* `await` inside a resource | `_CONSUMER` is a `ContextVar` set around the loader await, so reads before and after an `await` both land in that generation's read set | `resources.py:533`–`resources.py:541` |
 | Dioxus: invalidation cancels the old future | `_new_generation` cancels the superseded load's scope | `resources.py:578`, seam at `resources.py:122` |
 | Jane Street Incremental: demand-driven, only observed nodes are necessary | Pull model throughout — a computed nobody reads is never evaluated, and no source holds a back-edge to its readers | `core.py:1614` docstring, [32](32-demand-driven.md) |
-| Missionary: structured cancellation and an ownership hierarchy | Deliberately *not* in `squid-reactive` (`dependencies = []`); the task-group hierarchy is `squid-layouts`' mount lifetime | `resources.py:78` |
+| Missionary: structured cancellation and an ownership hierarchy | Deliberately *not* in `squid-reactivity` (`dependencies = []`); the task-group hierarchy is `squid-layouts`' mount lifetime | `resources.py:78` |
 | TanStack DB: optimistic overlay distinct from the remote write | `Resource.replace` stages through a participant; the remote half is an `operation` | `resources.py:434`, plan 48 |
 | TanStack DB: explicit transaction lifecycle states | `Pending`/`Ready`/`Failed` for resources, `Pending`/`Succeeded`/`Failed`/`Cancelled` for operations | `resources.py:145`, `operations.py:48` |
 | Compose merge policies for commutative writes (counter, set union) | `ReplicatedCounter.increment` and `ReplicatedSet.add`/`discard`, staged into the same action | `squid-replicated/document.py:362`, `:376` |
@@ -69,7 +69,7 @@ solved. That is a *narrower* position than Compose's, not a bolder one.
 rule Squid should adopt."** No. The shipped contract is deliberately weaker and should stay
 weaker: a loader is safe to run zero, one, or many times, and its result is discarded if
 superseded (`resources.py:129`). Cancellation is an *optional* host-installed seam on top of
-that, because `squid-reactive` is dependency-free and anyio is where CLAUDE.md puts cancellation.
+that, because `squid-reactivity` is dependency-free and anyio is where CLAUDE.md puts cancellation.
 Promoting "may be dropped at any await" to the rule would retroactively make every loader that
 is not cancel-safe illegal, in exchange for nothing — the capability is already available to a
 host that wants it. Adopt Dioxus's mechanism, which is done; reject its contract.
@@ -172,8 +172,8 @@ explicit refusal with a semantics question at every `with`.
 
 | Action | Where |
 |---|---|
-| **Do:** add a glitch-freedom test — two computeds over one cell, asserted consistent across a commit that moves it, and across a rollback | `packages/squid-reactive/tests/` |
-| **Do:** fix 90's stale entry — "abandoning a superseded resource load" shipped in `34d56b52`, exactly as that entry predicted (seam in `squid-reactive`, cancellation installed by `sl.discord`) | [90-deferred.md](90-deferred.md) |
+| **Do:** add a glitch-freedom test — two computeds over one cell, asserted consistent across a commit that moves it, and across a rollback | `packages/squid-reactivity/tests/` |
+| **Do:** fix 90's stale entry — "abandoning a superseded resource load" shipped in `34d56b52`, exactly as that entry predicted (seam in `squid-reactivity`, cancellation installed by `sl.discord`) | [90-deferred.md](90-deferred.md) |
 | **File:** durability tiers, with the measurement as the removal condition | §3.1 |
 | **File:** differential dataflow over collections, with the condition | §3.3 |
 | **Reject:** `merge=` on `state()`, nested transactions, and "dropped at any await" as a contract | §2, §3.2, §3.4 |
@@ -372,8 +372,8 @@ Agreed, and worth recording that the instrumentation for it is already built rat
 the next thing to design. `_checkpoint` places named deterministic pause points through the whole
 commit path — `commit.before_validation`, `transaction.close_staging`,
 `commit.after_participant_prepare`, `aftermath.before_hook` (`core.py:203`) — and
-`InterleavingHarness` (`squid_reactive.testing`) drives them, so an adversarial schedule is
-written as `schedule.at("commit.before_validation", ...)`. `packages/squid-reactive/tests/
+`InterleavingHarness` (`squid_reactivity.testing`) drives them, so an adversarial schedule is
+written as `schedule.at("commit.before_validation", ...)`. `packages/squid-reactivity/tests/
 test_interleaving.py` already reproduces write skew and A→B→A lineage movement on demand.
 
 What is missing is not a harness. It is volume, and a workload contended enough to produce the

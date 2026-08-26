@@ -109,7 +109,7 @@ from squid_layouts.semantic import Status
 from squid_layouts.sources import Position
 from squid_layouts.target_types import DiscordPyAdapter
 from squid_layouts.text import NEUTRAL, Localization, TextLike, resolve_text
-from squid_reactive.actions import ActionContext, ActorRef
+from squid_reactivity.actions import ActionContext, ActorRef
 
 logger = logging.getLogger(__name__)
 
@@ -1946,7 +1946,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
 
         Both discovery paths funnel through here -- `_stage_loaded`'s atomic tier and
         `_settle_visible`'s progress passes -- so one installation covers both policies.
-        `squid_reactive` owns the supersession, this owns the cancellation, and only
+        `squid_reactivity` owns the supersession, this owns the cancellation, and only
         resources take it: an operation execution shares `AsyncBinding` but is never
         implicitly restarted, and the scope lives inside `Resource._loaded`.
         """
