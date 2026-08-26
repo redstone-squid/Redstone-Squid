@@ -34,7 +34,7 @@ Each row is the mechanism the survey named and the thing in the tree that is it.
 | Salsa revisions: per-input change versions plus a database-wide revision | Per-cell `version` plus the global `_EPOCH`; a node settled in the current epoch skips walking its sources | `core.py:394`, `core.py:1636` |
 | Salsa backdating: a recompute producing an equal value does not propagate | `_Derived.settle` bumps its version only when the new value differs | `core.py:1656` |
 | Salsa dynamic tracked dependencies, no declared lists | `_CONSUMER` records what the last run read, so a conditional dependency is exact | `core.py:1646`, `computed` at `core.py:1699` |
-| Glimmer autotracking and `@cached` getters | `computed` — the same thing, arrived at independently and already credited to the same lineage in [41](../completed/squid-ui-redesign/41-reactivity-cells.md) | `core.py:1699` |
+| Glimmer autotracking and `@cached` getters | `computed` — the same thing, arrived at independently and already credited to the same lineage in [41](../completed/squid-layouts-redesign/41-reactivity-cells.md) | `core.py:1699` |
 | Dioxus: signal reads tracked *through* `await` inside a resource | `_CONSUMER` is a `ContextVar` set around the loader await, so reads before and after an `await` both land in that generation's read set | `resources.py:533`–`resources.py:541` |
 | Dioxus: invalidation cancels the old future | `_new_generation` cancels the superseded load's scope | `resources.py:578`, seam at `resources.py:122` |
 | Jane Street Incremental: demand-driven, only observed nodes are necessary | Pull model throughout — a computed nobody reads is never evaluated, and no source holds a back-edge to its readers | `core.py:1614` docstring, [32](32-demand-driven.md) |
@@ -223,7 +223,7 @@ facto, since `_Cell`, `_Derived` and `Resource` all answer `settle() -> int`, ca
 are walked structurally by `Observation.addresses()` (`core.py:1756`). A `TableView` would join by
 implementing those two members. So this needs no preparatory seam either. The "do not teach
 `state()` about collections" half is also the standing position, for the same reason [41
-](../completed/squid-ui-redesign/41-reactivity-cells.md) rejected deep proxies over `dict`/`list`/`set`.
+](../completed/squid-layouts-redesign/41-reactivity-cells.md) rejected deep proxies over `dict`/`list`/`set`.
 
 **CRDT/local-first as a third tier — `State` / `Shared` / `Replicated`, each implementing one
 observation/version interface, "a remarkably clean extension point".** Shipped, and it is the
