@@ -102,7 +102,9 @@ frontend-neutrally, and only one of them should exist.
 | `Policy` | an **injected decision-maker** — a protocol or callable | `AccessPolicy`, `CollisionPolicy` |
 | `Mode` | an **enum** naming one of a fixed set of behaviours | `DiscordMode` |
 | `Limits` | hard numeric ceilings imposed by an external system | `V2Limits` |
-| `Profile` | a named bundle of capabilities and limits for one target | `TargetProfile` |
+| `Profile` | a named bundle of verified behaviour for one library | `AdapterProfile` |
+| `Dialect` | one protocol: what a legal message of it is | `V2Dialect`, `ClassicDialect` |
+| `Target` | the product of a dialect and an adapter, named by its triple | `Target` |
 
 `Policy` currently covers both halves and that is its whole problem: `AccessPolicy` and
 `CollisionPolicy` are protocols you inject, while `CommitPolicy`, `PendingPolicy`,
