@@ -196,7 +196,7 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
             yield context
 
     def _emit(self, status: str, error: BaseException | None = None) -> None:
-        summary = None if error is None else DEFAULT_REDACTION.exception(ExceptionReport.capture(error))
+        report = None if error is None else DEFAULT_REDACTION.redact_exception(ExceptionReport.capture(error))
         emit_causal_event(
             OperationEventSnapshot(
                 str(self.context.execution_id),
@@ -205,7 +205,7 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
                 self.context.name,
                 status,
                 datetime.now(UTC),
-                summary,
+                report,
             )
         )
 

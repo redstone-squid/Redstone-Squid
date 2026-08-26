@@ -40,7 +40,7 @@ class Projection(sl.Component):
                 return sl.paragraph("loading")
 
 
-async def _drain_reactor(scheduler: sd.MountScheduler) -> None:
+async def _drain_scheduler(scheduler: sd.MountScheduler) -> None:
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(scheduler.run)
         await asyncio.wait_for(scheduler._queue.join(), timeout=1)
@@ -69,7 +69,7 @@ async def test_one_resource_publish_refreshes_two_panels_without_second_post_wri
     source = "after"
 
     await RedstoneSquid.refresh_posts(bot, "build", "42")
-    await _drain_reactor(scheduler)
+    await _drain_scheduler(scheduler)
 
     assert all("after" in str(message.edit.await_args.kwargs["view"].to_components()) for message in messages)
     reconciler.reconcile.assert_awaited_once_with("build", "42", 7)

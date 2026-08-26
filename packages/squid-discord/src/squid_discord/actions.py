@@ -60,9 +60,9 @@ class ActionResponder:
         record: History | None = None,
     ) -> None:
         """Present a portable form and route its submission back through this mount."""
-        spec, handler, default_policy = bind_form(form, on_submit)
-        selected_policy = mode or default_policy
-        modal = self._form_modal(spec, key, handler, selected_policy, self.mount.generation, label, record)
+        spec, handler, default_mode = bind_form(form, on_submit)
+        selected_mode = mode or default_mode
+        modal = self._form_modal(spec, key, handler, selected_mode, self.mount.generation, label, record)
         if self.interaction.response.is_done():
             message = "Discord modals must be the interaction's initial response"
             raise RuntimeError(message)

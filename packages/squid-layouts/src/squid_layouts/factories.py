@@ -324,12 +324,12 @@ def form(
     ``guard`` gates the press that opens the form; the submission that follows completes an
     already-admitted press and is not checked again.
     """
-    resolved, handler, default_policy = bind_form(spec, on_submit)
-    selected_policy = mode or default_policy
-    if record is not None and selected_policy is ActionMode.PARALLEL_READ:
+    resolved, handler, default_mode = bind_form(spec, on_submit)
+    selected_mode = mode or default_mode
+    if record is not None and selected_mode is ActionMode.PARALLEL_READ:
         message = "a parallel-read form submission changes nothing, so it has nothing to record"
         raise ValueError(message)
-    return FormTrigger(key, _text(label), resolved, handler, selected_policy, tone, emphasis, guard, record)
+    return FormTrigger(key, _text(label), resolved, handler, selected_mode, tone, emphasis, guard, record)
 
 
 def item(label: ItemLabel, *children: ChildLike, key: str, summary: TextValue | None = None) -> Item:

@@ -154,7 +154,7 @@ class _IdleScheduler:
             self.on_wait()
 
 
-async def test_wait_idle_reaches_a_fixed_point_when_bus_schedules_reactor() -> None:
+async def test_wait_idle_reaches_a_fixed_point_when_bus_schedules_scheduler() -> None:
     bus = _IdleQueue()
     scheduler = _IdleScheduler()
     bus.queued = 1
@@ -178,12 +178,12 @@ async def test_wait_idle_reaches_a_fixed_point_when_reactor_publishes_to_bus() -
     scheduler = _IdleScheduler()
     scheduler.queued = 1
 
-    def reactor_delivery() -> None:
+    def scheduler_delivery() -> None:
         scheduler.on_wait = None
         scheduler.queued = 0
         bus.queued = 1
 
-    scheduler.on_wait = reactor_delivery
+    scheduler.on_wait = scheduler_delivery
 
     runtime = DevToolsRuntime(bus=bus, scheduler=scheduler)  # type: ignore[arg-type]
 
