@@ -322,7 +322,7 @@ class _ClassicConverter:
                                     min_values=child.min_values,
                                     max_values=child.max_values,
                                     disabled=child.disabled,
-                                    policy=child.policy,
+                                    mode=child.mode,
                                 ),
                             )
                         )
@@ -340,7 +340,7 @@ class _ClassicConverter:
                                     min_values=child.min_values,
                                     max_values=child.max_values,
                                     disabled=child.disabled,
-                                    policy=child.policy,
+                                    mode=child.mode,
                                 ),
                             )
                         )

@@ -27,7 +27,7 @@ from squid_layouts.entity import ChannelType, EntityRef, EntityType
 from squid_layouts.forms import FormLike, SubmitHandler, bind_form
 from squid_layouts.grids import GridCell
 from squid_layouts.guards import Guard
-from squid_layouts.interactions import ActionPolicy, BusySpec, PressHandler, SelectionEvent
+from squid_layouts.interactions import ActionMode, BusySpec, PressHandler, SelectionEvent
 from squid_layouts.palette import INHERIT, Accent, Palette
 from squid_layouts.rosters import RosterPlacement
 from squid_layouts.semantic import (
@@ -313,7 +313,7 @@ def form(
     *,
     key: str,
     on_submit: SubmitHandler | None = None,
-    policy: ActionPolicy | None = None,
+    mode: ActionMode | None = None,
     tone: Tone = Tone.NEUTRAL,
     emphasis: Emphasis = Emphasis.NORMAL,
     guard: Guard | None = None,
@@ -325,8 +325,8 @@ def form(
     already-admitted press and is not checked again.
     """
     resolved, handler, default_policy = bind_form(spec, on_submit)
-    selected_policy = policy or default_policy
-    if record is not None and selected_policy is ActionPolicy.PARALLEL_READ:
+    selected_policy = mode or default_policy
+    if record is not None and selected_policy is ActionMode.PARALLEL_READ:
         message = "a parallel-read form submission changes nothing, so it has nothing to record"
         raise ValueError(message)
     return FormTrigger(key, _text(label), resolved, handler, selected_policy, tone, emphasis, guard, record)
@@ -615,7 +615,7 @@ def action(
     emphasis: Emphasis = Emphasis.NORMAL,
     available: bool = True,
     allow_grouping: bool | None = None,
-    policy: ActionPolicy = ActionPolicy.EXCLUSIVE,
+    mode: ActionMode = ActionMode.EXCLUSIVE,
     guard: Guard | None = None,
     busy: BusySpec | None = None,
     record: History | None = None,
@@ -630,10 +630,10 @@ def action(
     A world-changing action records one explicit `CompensationSpec`; doing so under
     ``record=`` raises `HistoryError` rather than making two entries.
     """
-    if record is not None and policy is ActionPolicy.PARALLEL_READ:
+    if record is not None and mode is ActionMode.PARALLEL_READ:
         message = "a parallel-read action changes nothing, so it has nothing to record"
         raise ValueError(message)
-    return Action(key, _text(label), on_trigger, tone, emphasis, available, allow_grouping, policy, guard, busy, record)
+    return Action(key, _text(label), on_trigger, tone, emphasis, available, allow_grouping, mode, guard, busy, record)
 
 
 def toggle(

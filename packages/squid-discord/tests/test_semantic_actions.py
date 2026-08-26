@@ -7,7 +7,7 @@ import pytest
 from squid_discord import DISCORD_V2_DPY27
 from squid_layouts import fallback, scene, truncate
 from squid_layouts.document import Asset, InlineAsset
-from squid_layouts.interactions import ActionEvent, ActionPolicy
+from squid_layouts.interactions import ActionEvent, ActionMode
 from squid_layouts.planning import plan
 from squid_layouts.primitives import Lines, Paginate, Panel, Sep, Text, Variant, Variants, alts
 from squid_layouts.runtime import PresentationSession, apply_updates
@@ -84,7 +84,7 @@ def test_strong_actions_and_links_remain_direct_unless_grouping_is_granted() -> 
 
 
 def test_grouped_route_keeps_the_selected_actions_policy_and_handler() -> None:
-    action = Action("read", "Read", _act, policy=ActionPolicy.PARALLEL_READ)
+    action = Action("read", "Read", _act, mode=ActionMode.PARALLEL_READ)
     result = plan(Actions((action,), key="demo", display=ActionDisplay.GROUPED), target=DISCORD_V2_DPY27)
     select = next(node for node in result.scene.components_v2.children if isinstance(node, scene.Select))
 
@@ -93,7 +93,7 @@ def test_grouped_route_keeps_the_selected_actions_policy_and_handler() -> None:
     assert routed is not None
     assert routed.key == "read"
     assert routed.handler is _act
-    assert routed.policy is ActionPolicy.PARALLEL_READ
+    assert routed.mode is ActionMode.PARALLEL_READ
 
 
 def test_actions_choose_a_global_fit_instead_of_root_pagination() -> None:

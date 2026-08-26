@@ -233,7 +233,7 @@ stored cursors and are clamped by the same policy as planner-owned lists. The cu
 `Agreement` deliberately sits beside the pure pattern catalogue rather than inside it. Its
 transition is actor-keyed, so it is a mounted component with two explicitly non-persistent
 state cells (`approved` and `resolved`). Participant display names are host data, actor identity
-comes from the event, and `ActionPolicy.EXCLUSIVE` serializes approval and withdrawal. Discord
+comes from the event, and `ActionMode.EXCLUSIVE` serializes approval and withdrawal. Discord
 hosts should mount it under `sd.Users(...)`; the component repeats membership validation
 as a frontend-neutral safety boundary and calls its resolution hook once at the threshold.
 
@@ -395,7 +395,7 @@ dependency set and a committed write to any of it re-pends the resource at the n
 resource whose loader has not run -- one holding a `.replace(value)` result -- presumes it
 reads every field its component declares, and narrows to the truth after its first real load.
 Render observation keeps hidden resources lazy. The default explicit policy commits the
-`Pending` branch before settling it; `PendingPolicy.ATOMIC` settles the same state machine before
+`Pending` branch before settling it; `PendingMode.ATOMIC` settles the same state machine before
 delivery. Siblings settle concurrently under the frontend's task group, and newly revealed resources
 are discovered on the next bounded render pass. `.reload()` is awaited sugar over the same transition;
 `.replace(value)` publishes an authoritative local result.

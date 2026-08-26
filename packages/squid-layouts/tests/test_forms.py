@@ -9,7 +9,7 @@ import pytest
 
 import squid_layouts as sl
 from squid_layouts import scene
-from squid_layouts.interactions import ActionPolicy
+from squid_layouts.interactions import ActionMode
 from squid_layouts.planning.adapter import AdapterProfile
 from squid_layouts.planning.discord import components_v2_target
 from squid_layouts.planning.limits import LIMITS, V2Limits
@@ -64,7 +64,7 @@ def test_parallel_read_form_cannot_declare_history_recording() -> None:
             "Inspect",
             ProfileForm(),
             key="inspect",
-            policy=ActionPolicy.PARALLEL_READ,
+            mode=ActionMode.PARALLEL_READ,
             record=stack,
         )
 
@@ -195,8 +195,8 @@ def test_datetime_field_interprets_ordinary_local_time_in_iana_zone() -> None:
 @pytest.mark.parametrize(
     ("policy", "expected"),
     [
-        (sl.forms.AmbiguousTimePolicy.EARLIER, datetime(2026, 11, 1, 5, 30, tzinfo=UTC)),
-        (sl.forms.AmbiguousTimePolicy.LATER, datetime(2026, 11, 1, 6, 30, tzinfo=UTC)),
+        (sl.forms.AmbiguousTimeMode.EARLIER, datetime(2026, 11, 1, 5, 30, tzinfo=UTC)),
+        (sl.forms.AmbiguousTimeMode.LATER, datetime(2026, 11, 1, 6, 30, tzinfo=UTC)),
     ],
 )
 def test_datetime_field_resolves_ambiguous_local_time_by_instant(policy, expected) -> None:
@@ -226,7 +226,7 @@ async def test_datetime_field_rejects_nonexistent_local_time_by_default() -> Non
 def test_datetime_field_shifts_nonexistent_local_time_by_the_gap(zone, raw, expected) -> None:
     field = sl.forms.DateTimeField(
         timezone=ZoneInfo(zone),
-        nonexistent=sl.forms.NonexistentTimePolicy.SHIFT_FORWARD,
+        nonexistent=sl.forms.NonexistentTimeMode.SHIFT_FORWARD,
     )
 
     value = field.parse(raw)
@@ -251,7 +251,7 @@ def test_datetime_field_applies_bounds_to_ambiguous_instants() -> None:
     field = sl.forms.DateTimeField(
         timezone=zone,
         minimum=minimum,
-        ambiguous=sl.forms.AmbiguousTimePolicy.EARLIER,
+        ambiguous=sl.forms.AmbiguousTimeMode.EARLIER,
     )
 
     with pytest.raises(sl.forms.FormValueError, match="on or after"):
@@ -280,11 +280,11 @@ async def test_zoned_datetime_field_rejects_ambiguous_and_nonexistent_input_by_d
 def test_zoned_datetime_field_resolves_local_time_with_policies() -> None:
     overlap = sl.forms.ZonedDateTimeField(
         timezone="America/New_York",
-        ambiguous=sl.forms.AmbiguousTimePolicy.LATER,
+        ambiguous=sl.forms.AmbiguousTimeMode.LATER,
     ).parse("2026-11-01 01:30")
     gap = sl.forms.ZonedDateTimeField(
         timezone="America/New_York",
-        nonexistent=sl.forms.NonexistentTimePolicy.SHIFT_FORWARD,
+        nonexistent=sl.forms.NonexistentTimeMode.SHIFT_FORWARD,
     ).parse("2026-03-08 02:30")
 
     assert overlap is not None
@@ -394,7 +394,7 @@ def test_form_trigger_plans_as_content_with_a_submission_binding() -> None:
     assert isinstance(row, scene.Row)
     assert isinstance(row.items[0], scene.Button)
     assert row.items[0].action == "edit"
-    assert result.bindings["edit"].policy is sl.interactions.ActionPolicy.EXCLUSIVE
+    assert result.bindings["edit"].mode is sl.interactions.ActionMode.EXCLUSIVE
 
 
 @dataclass(frozen=True, slots=True)

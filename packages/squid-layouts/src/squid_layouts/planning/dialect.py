@@ -86,7 +86,7 @@ class SceneBindings:
         self.bindings[key] = ActionBinding(
             key=key,
             handler=handler,
-            policy=node.policy,
+            mode=node.mode,
             routes=routes,
             guard=guard,
             busy=busy,
@@ -122,7 +122,7 @@ class SceneBindings:
                     style=node.style,
                     emoji=node.emoji,
                     disabled=node.disabled,
-                    policy=node.policy,
+                    mode=node.mode,
                 )
             case RawItem(factory=factory, kind=kind, version=version, payload=payload):
                 resource = f"native:{path}"

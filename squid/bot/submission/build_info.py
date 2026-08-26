@@ -45,7 +45,7 @@ class BuildInfoComponent(sl.Component):
         self._timeout = timeout
         self._access = access if access is not None else sd.Everyone()
 
-    @sl.resource(pending=sl.resources.PendingPolicy.ATOMIC)
+    @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
     async def projection(self) -> Projection:
         """The build and its rendered card, reloaded whenever the build's topic is published.
 

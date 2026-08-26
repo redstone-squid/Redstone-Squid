@@ -321,7 +321,7 @@ later — no ambient context at all.
 But every consumer it names — editing forms, settings dialogs, previews, optimistic UI — is
 already served one layer up, by staged-versus-committed values in the pattern library:
 `MultiChoiceState(staged, committed)` (`patterns/multichoice.py:52`), `EditorState`'s per-section
-`committed` slot (`patterns/editor.py:35`), the shared `CommitPolicy` (`patterns/commit.py`), and
+`committed` slot (`patterns/editor.py:35`), the shared `CommitMode` (`patterns/commit.py`), and
 `Resource.replace` for the optimistic case. Those three do not need base-version conflict
 detection, because a staged value there never races anything: it is component state, private to
 one mount, and the *only* writer is the person looking at it.

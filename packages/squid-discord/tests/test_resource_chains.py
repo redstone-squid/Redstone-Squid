@@ -26,13 +26,13 @@ class Chain(sl.Component):
         self.node_loads = 0
         self.seen: list[str] = []
 
-    @sl.resource(pending=sl.resources.PendingPolicy.ATOMIC)
+    @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
     async def build(self) -> str:
         self.build_loads += 1
         sl.runtime.watch(TOPIC)
         return self.source
 
-    @sl.resource(pending=sl.resources.PendingPolicy.ATOMIC)
+    @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
     async def node(self) -> str:
         self.node_loads += 1
         value = await self.build
@@ -199,11 +199,11 @@ async def test_two_independent_resources_still_settle_together() -> None:
     """Nothing about chaining serialises a tier that has no chain in it."""
 
     class Pair(sl.Component):
-        @sl.resource(pending=sl.resources.PendingPolicy.ATOMIC)
+        @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
         async def left(self) -> str:
             return "L"
 
-        @sl.resource(pending=sl.resources.PendingPolicy.ATOMIC)
+        @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
         async def right(self) -> str:
             return "R"
 

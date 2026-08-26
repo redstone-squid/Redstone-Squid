@@ -10,7 +10,7 @@ from squid_layouts import scene
 from squid_layouts.document import Asset, Document, InlineAsset, as_document
 from squid_layouts.emoji import Emoji
 from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.interactions import ActionPolicy
+from squid_layouts.interactions import ActionMode
 from squid_layouts.primitives.nodes import Text
 from squid_layouts.primitives.styles import ActionStyle
 
@@ -29,7 +29,7 @@ def _scene() -> scene.Document:
                         scene.ZonedTime("2026-08-22T14:30:00+00:00", "America/New_York", "Starts: "),
                         scene.Row(
                             (
-                                scene.Button("Save", "form.save", ActionStyle.SUCCESS, policy=ActionPolicy.EXCLUSIVE),
+                                scene.Button("Save", "form.save", ActionStyle.SUCCESS, mode=ActionMode.EXCLUSIVE),
                                 scene.Link("Docs", "https://example.invalid"),
                             )
                         ),
@@ -190,7 +190,7 @@ def _classic_scene() -> scene.Document:
             rows=(
                 scene.ClassicRow(
                     (
-                        scene.Button("Save", "form.save", ActionStyle.SUCCESS, policy=ActionPolicy.EXCLUSIVE),
+                        scene.Button("Save", "form.save", ActionStyle.SUCCESS, mode=ActionMode.EXCLUSIVE),
                         scene.Link("Docs", "https://example.invalid"),
                     )
                 ),

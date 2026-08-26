@@ -6,7 +6,7 @@ from enum import StrEnum
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
-class AmbiguousTimePolicy(StrEnum):
+class AmbiguousTimeMode(StrEnum):
     """How a repeated local time maps to one of its two instants."""
 
     REJECT = "reject"
@@ -14,7 +14,7 @@ class AmbiguousTimePolicy(StrEnum):
     LATER = "later"
 
 
-class NonexistentTimePolicy(StrEnum):
+class NonexistentTimeMode(StrEnum):
     """How a local time skipped by an offset transition is handled."""
 
     REJECT = "reject"
@@ -67,20 +67,20 @@ def timezone_from_name(name: str) -> ZoneInfo:
 def resolve_local_datetime(
     value: datetime,
     timezone: tzinfo,
-    ambiguous: AmbiguousTimePolicy,
-    nonexistent: NonexistentTimePolicy,
+    ambiguous: AmbiguousTimeMode,
+    nonexistent: NonexistentTimeMode,
 ) -> datetime:
     """Resolve a naive wall time to one aware instant under explicit policies."""
     valid, resolved = _local_mapping(value, timezone)
     if valid:
         if len(valid) == 1:
             return valid[0]
-        if ambiguous is AmbiguousTimePolicy.REJECT:
+        if ambiguous is AmbiguousTimeMode.REJECT:
             raise AmbiguousLocalTimeError
         key = lambda candidate: candidate.astimezone(UTC)
-        return min(valid, key=key) if ambiguous is AmbiguousTimePolicy.EARLIER else max(valid, key=key)
+        return min(valid, key=key) if ambiguous is AmbiguousTimeMode.EARLIER else max(valid, key=key)
 
-    if nonexistent is NonexistentTimePolicy.REJECT:
+    if nonexistent is NonexistentTimeMode.REJECT:
         raise NonexistentLocalTimeError
     shifted = tuple(localized for localized in resolved if localized.replace(tzinfo=None) > value)
     if not shifted:
@@ -124,10 +124,10 @@ def _zone(name: str) -> ZoneInfo:
 
 __all__ = [
     "AmbiguousLocalTimeError",
-    "AmbiguousTimePolicy",
+    "AmbiguousTimeMode",
     "InvalidTimezoneOffsetError",
     "NonexistentLocalTimeError",
-    "NonexistentTimePolicy",
+    "NonexistentTimeMode",
     "ZonedDateTime",
     "resolve_local_datetime",
     "resolve_offset_datetime",

@@ -11,7 +11,7 @@ from squid_layouts.sources import Position
 from squid_layouts.text import TextLike
 from squid_patterns._content import display_text, require_key
 from squid_patterns._paging import window
-from squid_patterns.commit import CommitPolicy
+from squid_patterns.commit import CommitMode
 from squid_patterns.shells import ComponentShell, PatternControls, PatternEvent
 
 
@@ -72,7 +72,7 @@ class MultiChoicePanel:
         minimum: int = 0,
         maximum: int | None = None,
         window_size: int = 25,
-        commit: CommitPolicy = CommitPolicy.EXPLICIT,
+        commit: CommitMode = CommitMode.EXPLICIT,
     ) -> None:
         self.key = require_key(key, name="MultiChoicePanel.key")
         self.title = title
@@ -189,7 +189,7 @@ class MultiChoicePanel:
         values: tuple[str, ...] = (),
         submitted: Mapping[str, object] | None = None,
     ) -> MultiChoiceState:
-        if action == "apply" and self.commit is CommitPolicy.EXPLICIT:
+        if action == "apply" and self.commit is CommitMode.EXPLICIT:
             return state if self.errors(state) else MultiChoiceState(state.staged, state.staged, state.pages)
         if action == "modal" and submitted is not None:
             raw = submitted.get("selection", ())
@@ -222,12 +222,12 @@ class MultiChoicePanel:
         return self._commit_valid(MultiChoiceState(self._ordered(staged), state.committed, state.pages))
 
     def _commit_valid(self, state: MultiChoiceState) -> MultiChoiceState:
-        if self.commit is CommitPolicy.EXPLICIT or self.errors(state):
+        if self.commit is CommitMode.EXPLICIT or self.errors(state):
             return state
         return MultiChoiceState(state.staged, state.staged, state.pages)
 
     def _summary(self, state: MultiChoiceState) -> str:
-        selected = state.committed if self.commit is CommitPolicy.IMMEDIATE else state.staged
+        selected = state.committed if self.commit is CommitMode.IMMEDIATE else state.staged
         labels = [display_text(self._choices[key].label) for key in selected if key in self._choices]
         return f"{len(selected)} selected" + (f": {', '.join(labels)}" if labels else "")
 
@@ -339,7 +339,7 @@ class MultiChoicePanel:
                     key=f"{self.key}.commit",
                     display=ActionDisplay.INDIVIDUAL,
                 )
-                if self.commit is CommitPolicy.EXPLICIT
+                if self.commit is CommitMode.EXPLICIT
                 else None
             ),
         )

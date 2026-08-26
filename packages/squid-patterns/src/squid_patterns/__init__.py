@@ -9,7 +9,7 @@ from squid_patterns.collection import (
     CollectionEntry,
     CollectionState,
 )
-from squid_patterns.commit import CommitPolicy
+from squid_patterns.commit import CommitMode
 from squid_patterns.decision import Decision, DecisionHandler, DecisionOption, DecisionState, confirm
 from squid_patterns.editor import (
     Editor,
@@ -75,7 +75,7 @@ __all__ = [
     "CollectionEditor",
     "CollectionEntry",
     "CollectionState",
-    "CommitPolicy",
+    "CommitMode",
     "ComponentShell",
     "Decision",
     "DecisionHandler",

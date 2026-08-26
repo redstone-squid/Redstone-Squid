@@ -34,7 +34,7 @@ class Catalog(sl.runtime.Shared[int]):
         super().__init__(bus, scope)
         self._loads = 0
 
-    @sl.resource(pending=sl.resources.PendingPolicy.ATOMIC)
+    @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
     async def entries(self) -> str:
         self._loads += 1
         return f"{self.key}#{self._loads}"
