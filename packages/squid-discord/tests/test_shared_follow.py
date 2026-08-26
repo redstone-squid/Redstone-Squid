@@ -152,6 +152,72 @@ async def test_two_mounts_react_once_each_to_one_commit() -> None:
     assert refreshes == {mounts[0].id: 1, mounts[1].id: 1}
 
 
+async def test_backdated_scheduled_refresh_skips_render_planning_and_drawing(monkeypatch) -> None:
+    bus = LocalTopicBus()
+    scheduler = MountScheduler(bus)
+    workspace = Workspace(bus, Member(1))
+
+    class Parity(Component):
+        def __init__(self) -> None:
+            self.renders = 0
+
+        @sl.computed
+        def even(self) -> bool:
+            return (workspace.selected or 0) % 2 == 0
+
+        def render(self) -> Text:
+            self.renders += 1
+            return Text(str(self.even))
+
+    component = Parity()
+    mount = Mount(component, access=Everyone(), scheduler=scheduler, timeout=None)
+    message: Any = fake_message()
+    await mount.send(delivered_to(message))
+    issued = mount._issued
+
+    def unexpected(*_args, **_kwargs):
+        message = "a backdated scheduled refresh must reuse the committed owner plan"
+        raise AssertionError(message)
+
+    monkeypatch.setattr(mount, "_plan_tree", unexpected)
+    monkeypatch.setattr(mount, "_renderer", unexpected)
+
+    with transaction():
+        workspace.selected = 2
+    await drain(scheduler, bus)
+
+    assert component.renders == 1
+    assert mount._issued == issued
+    assert message.edit.await_count == 0
+    assert scheduler.snapshot().unchanged == 1
+
+
+async def test_explicit_scheduler_request_resamples_opaque_component_inputs() -> None:
+    bus = LocalTopicBus()
+    scheduler = MountScheduler(bus)
+
+    class Opaque(Component):
+        def __init__(self) -> None:
+            self.value = "first"
+            self.renders = 0
+
+        def render(self) -> Text:
+            self.renders += 1
+            return Text(self.value)
+
+    component = Opaque()
+    mount = Mount(component, access=Everyone(), scheduler=scheduler, timeout=None)
+    message: Any = fake_message()
+    await mount.send(delivered_to(message))
+    component.value = "second"
+
+    scheduler.schedule(mount)
+    await drain(scheduler, bus)
+
+    assert component.renders == 2
+    assert "second" in str(message.edit.await_args.kwargs["view"].to_components())
+
+
 async def test_a_dropped_conditional_read_stops_refreshing() -> None:
     bus = LocalTopicBus()
     scheduler = MountScheduler(bus)

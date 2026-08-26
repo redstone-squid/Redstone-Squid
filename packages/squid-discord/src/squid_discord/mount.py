@@ -15,6 +15,7 @@ import time
 import weakref
 from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager, nullcontext
+from contextvars import ContextVar
 from dataclasses import dataclass, fields, is_dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -256,6 +257,13 @@ class Scheduler(Protocol):
     """Anything that can absorb out-of-band refresh requests (see `MountScheduler`)."""
 
     def schedule(self, mount: Mount) -> None: ...
+
+
+@runtime_checkable
+class ReactiveScheduler(Protocol):
+    """A scheduler that can preserve the component attribution of a bus change."""
+
+    def schedule_reactive(self, mount: Mount, address: Address) -> None: ...
 
 
 type ResumedPress = Callable[[], Awaitable[None]]
@@ -657,6 +665,23 @@ class _PlannedCandidate:
 type _ApplicationCandidate = _Candidate | _PlannedCandidate
 
 
+@dataclass(frozen=True, slots=True)
+class _PlanEnvironment:
+    """Every mutable owner input not carried by a component tree."""
+
+    target: object
+    chrome: Chrome
+    localization: Localization
+    palette: Palette
+    strict: bool
+    nav: NavFactory
+    status: TextLike | None
+    presentation_revision: int
+
+
+_SCHEDULED_REFRESH: ContextVar[object | None] = ContextVar("squid_discord_scheduled_refresh", default=None)
+
+
 def _drawn(candidate: _ApplicationCandidate) -> _Candidate:
     if not isinstance(candidate, _Candidate):
         message = "an undrawn preflight candidate did not match the live scene"
@@ -1008,13 +1033,17 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
 
         mount_ref = weakref.ref(self, collected)
 
-        def refresh(_address: Address) -> None:
+        def refresh(address: Address) -> None:
             if (current := mount_ref()) is None:
                 if reconciler_ref is not None and (reconciler := reconciler_ref()) is not None:
                     reconciler.close()
                 return
             if current.scheduler is not None:
-                current.scheduler.schedule(current)
+                if isinstance(current.scheduler, ReactiveScheduler):
+                    current.scheduler.schedule_reactive(current, address)
+                else:
+                    current.runtime.invalidate_address(address)
+                    current.scheduler.schedule(current)
 
         self._subscriptions = SubscriptionReconciler(topic_bus, refresh)
         reconciler_ref = weakref.ref(self._subscriptions)
@@ -1055,6 +1084,8 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         self._hooks_fired = False
         self._assets: tuple[Asset, ...] = ()
         self._plan: PlanResult | None = None
+        self._planned_tree: ComponentTree | None = None
+        self._planned_environment: _PlanEnvironment | None = None
         self._document_tree: ComponentTree | None = None
         self._document_status: TextLike | None = None
         self._document: Document | None = None
@@ -1303,6 +1334,18 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         self._document = document
         return document
 
+    def _plan_environment(self) -> _PlanEnvironment:
+        return _PlanEnvironment(
+            self.target,
+            self._chrome,
+            self.localization,
+            self.palette,
+            self.strict,
+            self.nav,
+            self.status,
+            self.presentation.revision,
+        )
+
     def _plan_tree(self, tree: ComponentTree, profile: OperationRecorder | None) -> _PlannedCandidate:
         """Plan one complete component tree without constructing Discord objects."""
         context = profile.span("planner") if profile is not None else nullcontext(None)
@@ -1442,6 +1485,23 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
     ) -> _ApplicationCandidate:
         """Plan first, returning an undrawn candidate only when the live scene already matches."""
         self._stage_observations(tree)
+        if (
+            tree is self._planned_tree
+            and self._plan is not None
+            and self._lifecycle is MountLifecycle.ACTIVE
+            and self._planned_environment == self._plan_environment()
+        ):
+            if profile is not None:
+                profile.increment("planner.owner_hits")
+            return _PlannedCandidate(
+                self._plan,
+                tree,
+                dict(self._handlers),
+                self._form_bindings,
+                self.runtime.revision,
+                self._assets,
+                (),
+            )
         try:
             planned = self._plan_tree(tree, profile)
         except BaseException:
@@ -1546,8 +1606,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         watched = self._subscriptions.watched
         if not watched:
             return
-        if any(address in watched for address in commit.patches.addresses()):
-            self.runtime.invalidate()
+        self.runtime.invalidate_addresses(address for address in commit.patches.addresses() if address in watched)
 
     def _composer(self) -> Callable[..., Composition[Any]]:
         """Which composition this mount's target uses."""
@@ -1621,7 +1680,8 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         half, kept here for the visible half.
         """
         if candidate.settled:
-            message = f"mount {self.id}: candidate generation {candidate.generation} already settled, cannot {ending}"
+            generation = candidate.generation if isinstance(candidate, _Candidate) else "undrawn"
+            message = f"mount {self.id}: candidate generation {generation} already settled, cannot {ending}"
             raise LayoutInvariantError(message)
         candidate.settled = True
 
@@ -1639,6 +1699,8 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         self._handlers = candidate.handlers
         self._form_bindings = candidate.form_bindings
         self._plan = candidate.plan
+        self._planned_tree = candidate.tree
+        self._planned_environment = self._plan_environment()
         self._dirty = self.runtime.dirty
         self._pending = None
 
@@ -1803,6 +1865,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         disabled: bool = False,
         profile: OperationRecorder | None = None,
         preflight: bool = False,
+        reuse_committed: bool = False,
     ) -> _ApplicationCandidate:
         """Stage a candidate whose components and atomic resources are settled.
 
@@ -1827,10 +1890,10 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                         await self._load_all((root,))
                 continue
             if profile is None:
-                tree = self.runtime.render(defer=_needs_load)
+                tree = self.runtime.render(defer=_needs_load, reuse_committed=reuse_committed)
             else:
                 with profile.span("runtime_render", attributes={"pass": pass_index}):
-                    tree = self.runtime.render(defer=_needs_load)
+                    tree = self.runtime.render(defer=_needs_load, reuse_committed=reuse_committed)
             if tree.deferred:
                 if profile is None:
                     await self._load_all(tree.deferred)
@@ -3115,9 +3178,22 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         """
         if interaction is not None:
             return await self._refresh_through(interaction, profile=profile)
-        return await self._refresh_now(links=links)
+        return await self._refresh_now(links=links, reuse_committed=_SCHEDULED_REFRESH.get() is self)
 
-    async def _refresh_now(self, *, links: Sequence[TraceLink] = ()) -> PresentationStatus:
+    @contextmanager
+    def _scheduled_delivery(self) -> Iterator[None]:
+        token = _SCHEDULED_REFRESH.set(self)
+        try:
+            yield
+        finally:
+            _SCHEDULED_REFRESH.reset(token)
+
+    async def _refresh_now(
+        self,
+        *,
+        links: Sequence[TraceLink] = (),
+        reuse_committed: bool = False,
+    ) -> PresentationStatus:
         component = type(self.component)
         name = f"{component.__module__}.{component.__qualname__}"
         with self.profiler.operation(
@@ -3141,7 +3217,11 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     self._dirty = True
                     profile.set_result(TraceResult(TraceStatus.ABANDONED, presentation=PresentationStatus.ABANDONED))
                     return PresentationStatus.ABANDONED
-                candidate = await self._stage_loaded(profile=profile, preflight=True)
+                candidate = await self._stage_loaded(
+                    profile=profile,
+                    preflight=True,
+                    reuse_committed=reuse_committed,
+                )
                 if self._same_as_live(candidate):
                     with profile.span("suppress"):
                         self._suppress(candidate, profile)

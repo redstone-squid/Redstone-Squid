@@ -146,6 +146,20 @@ class MountScheduler:
         """Enqueue a refresh while coalescing requests for the same mount."""
         if mount.finished:
             return
+        mount.invalidate()
+        self._enqueue(mount)
+
+    def schedule_reactive(self, mount: Mount, address: Address) -> None:
+        """Enqueue a refresh attributed to one bus address."""
+        if mount.finished:
+            return
+        mount.runtime.invalidate_address(address)
+        self._enqueue(mount)
+
+    def _enqueue(self, mount: Mount) -> None:
+        """Enqueue an already invalidated mount while coalescing requests."""
+        if mount.finished:
+            return
         self._scheduled += 1
         triggered = self._monotonic()
         link = self.profiler.capture_link()
@@ -239,7 +253,7 @@ class MountScheduler:
             if (current := mount_ref()) is None:
                 unfollow()
                 return
-            self.schedule(current)
+            self.schedule_reactive(current, topic)
 
         unsubscribers.extend(self.bus.subscribe(topic, refresh) for topic in topics)
         self._followed[mount] = self._followed.get(mount, 0) + 1
@@ -290,7 +304,8 @@ class MountScheduler:
                     operation.increment("scheduler.cause_links_omitted", causes.omitted_links)
                     link = self.profiler.capture_link()
                     try:
-                        status = await mount.refresh(links=() if link is None else (link,))
+                        with mount._scheduled_delivery():
+                            status = await mount.refresh(links=() if link is None else (link,))
                         if status is PresentationStatus.UNCHANGED:
                             self._unchanged += 1
                     finally:
