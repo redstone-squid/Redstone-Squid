@@ -275,7 +275,7 @@ class MountScheduler:
                 delivery_started = self._monotonic()
                 trace_started = causes.first_triggered if causes.first_triggered is not None else delivery_started
                 with self.profiler.operation(
-                    OperationKind.REACTOR_DELIVERY,
+                    OperationKind.SCHEDULER_DELIVERY,
                     name="refresh",
                     links=causes.links,
                     started=trace_started,

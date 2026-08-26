@@ -51,7 +51,7 @@ def deny(reason: TextLike | None = None, *, retry_after: float | None = None) ->
     """Refuse a press, optionally with wording and a delay.
 
     `reason` wins over `retry_after` when both are given: explicit author wording beats
-    generated wording, and the delay is then advisory metadata for a host reading verdicts.
+    generated wording, and the delay is then advisory metadata for a host reading decisions.
     """
     return GuardDecision(False, reason, retry_after)  # noqa: FBT003
 
@@ -104,7 +104,7 @@ class _Staged:
     A pass that ends in a challenge must record nothing: `squid_patterns.guards.confirm`
     belongs last in a chain, so it is exactly the guard whose non-admit decision would
     otherwise spend every earlier one, and the actor who cancelled would be the one paying
-    the cooldown. Buffering sits here rather than at the verdict because a guard may write
+    the cooldown. Buffering sits here rather than at the decision because a guard may write
     and then deny in the same call. The challenge mechanism is this module's; the one guard
     that raises a rendered question lives beside the shells it renders.
 

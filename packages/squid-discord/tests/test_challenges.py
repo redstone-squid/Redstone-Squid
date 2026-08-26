@@ -410,9 +410,9 @@ class TestComposition:
 
         guard = sl.guards.all_of(sl.guards.when(lambda event: False, reason="No."), Asking())
 
-        outcome = await guard.admit(_event(), GuardLedger().for_action("go"))
+        result = await guard.admit(_event(), GuardLedger().for_action("go"))
 
-        assert isinstance(outcome, GuardDecision) and not outcome.allowed
+        assert isinstance(result, GuardDecision) and not result.allowed
         assert not asked
 
     async def test_any_of_returns_a_question_rather_than_counting_it_as_a_no(self):
@@ -425,9 +425,9 @@ class TestComposition:
 
         guard = sl.guards.any_of(sl.guards.when(lambda event: False, reason="No."), Asking())
 
-        outcome = await guard.admit(_event(), GuardLedger().for_action("go"))
+        result = await guard.admit(_event(), GuardLedger().for_action("go"))
 
-        assert isinstance(outcome, Challenge)
+        assert isinstance(result, Challenge)
 
     async def test_any_of_still_reports_its_last_denial(self):
         guard = sl.guards.any_of(
@@ -435,10 +435,10 @@ class TestComposition:
             sl.guards.when(lambda event: False, reason="Second."),
         )
 
-        outcome = await guard.admit(_event(), GuardLedger().for_action("go"))
+        result = await guard.admit(_event(), GuardLedger().for_action("go"))
 
-        assert isinstance(outcome, GuardDecision)
-        assert outcome.reason == "Second."
+        assert isinstance(result, GuardDecision)
+        assert result.reason == "Second."
 
     async def test_two_questions_in_one_chain_converge(self):
         panel, mount, presenter = _panel(sl.guards.all_of(sp.guards.confirm("First?"), sp.guards.confirm("Second?")))

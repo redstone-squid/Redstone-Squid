@@ -240,7 +240,7 @@ class SessionPolicy:
 
     limit: int | None = 1
     collision: CollisionPolicy = field(default_factory=ReplaceOldest)
-    protect: ReplacementPolicy = field(default_factory=ProtectCrossUserAttachments)
+    replacement: ReplacementPolicy = field(default_factory=ProtectCrossUserAttachments)
 
     def __post_init__(self) -> None:
         if self.limit is not None and self.limit <= 0:
@@ -881,16 +881,16 @@ class SessionRegistry:
                 return Rejected(snapshots, decision.reason)
             selected = decision.victims
             victims = _resolve_victims(selected, occupants)
-            summary_ids = {occupant.id for occupant in snapshots}
+            snapshot_ids = {occupant.id for occupant in snapshots}
             if (
                 len(selected) != required
                 or len({victim.id for victim in selected}) != len(selected)
-                or any(victim.id not in summary_ids for victim in selected)
+                or any(victim.id not in snapshot_ids for victim in selected)
             ):
                 message = "collision policy must select the exact required occupants"
                 raise ValueError(message)
             for victim in selected:
-                if not await policy.protect.permits(request, victim):
+                if not await policy.replacement.permits(request, victim):
                     return Rejected(snapshots, RejectionReason.PROTECTED)
 
         # Advisory: the authoritative check is under the member lock below, but refusing

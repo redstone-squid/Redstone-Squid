@@ -22,7 +22,7 @@ class Empty(Component):
         return []
 
 
-async def _drain_reactor(scheduler: MountScheduler) -> None:
+async def _drain_scheduler(scheduler: MountScheduler) -> None:
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(scheduler.run)
         await asyncio.wait_for(scheduler._queue.join(), timeout=1)
@@ -119,14 +119,14 @@ async def test_reactor_profile_includes_coalesced_wait_and_links_refresh() -> No
         scheduler.schedule(mount)
     monotonic += 2.0
 
-    await _drain_reactor(scheduler)
+    await _drain_scheduler(scheduler)
 
     snapshot = profiler.snapshot()
     producer = next(trace for trace in snapshot.recent if trace.name == "save")
     delivery = snapshot.slow[0]
     queue_wait = next(span for span in delivery.spans if span.name == "queue_wait")
     freshness = next(span for span in delivery.spans if span.name == "freshness")
-    assert delivery.operation is OperationKind.REACTOR_DELIVERY
+    assert delivery.operation is OperationKind.SCHEDULER_DELIVERY
     assert delivery.duration == pytest.approx(2.5)
     assert delivery.links[0].trace_id == producer.trace_id
     assert dict((attribute.key, attribute.value) for attribute in queue_wait.attributes)["triggers"] == 2
@@ -172,7 +172,7 @@ async def test_expiry_sweep_flushes_pause_chrome_once_and_renewal_rearms_it() ->
     assert mount in scheduler._watched
 
     scheduler._sweep_once()
-    await _drain_reactor(scheduler)
+    await _drain_scheduler(scheduler)
 
     written = interaction.response.edit_message.await_args.kwargs["view"]
     assert "Live updates paused" in str(written.to_components())

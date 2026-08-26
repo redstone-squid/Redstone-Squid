@@ -222,7 +222,7 @@ def make_layout_bot(**attributes: Any) -> Any:
     client.__dict__.update(
         layout_host=host,
         mounts=host.mounts,
-        layout_reactor=host.scheduler,
+        layout_scheduler=host.scheduler,
         layout_challenges=host.challenges,
     )
     return client

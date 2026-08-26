@@ -613,7 +613,7 @@ class Resource[ValueT](AsyncBinding):
         error: BaseException | None = None,
     ) -> None:
         generation_id, cause, root_action_id = generation
-        exception = None if error is None else DEFAULT_REDACTION.exception(ExceptionReport.capture(error))
+        exception = None if error is None else DEFAULT_REDACTION.redact_exception(ExceptionReport.capture(error))
         emit_causal_event(
             ResourceEventSnapshot(
                 str(generation_id),

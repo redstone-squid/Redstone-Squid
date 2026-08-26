@@ -366,7 +366,7 @@ async def test_remote_summaries_participate_in_distributed_cardinality() -> None
                 delivered_to(fake_message(message_id=2)),
                 recipe="counter",
                 key=SessionKey.user("counter", 7),
-                policy=SessionPolicy(protect=Unprotected()),
+                policy=SessionPolicy(replacement=Unprotected()),
                 actor_id=7,
             )
             assert isinstance(result, Opened)

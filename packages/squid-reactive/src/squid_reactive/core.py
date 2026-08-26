@@ -42,7 +42,7 @@ from squid_reactive.actions import (
     current_action,
     current_causality,
     emit_aftermath_failure,
-    emit_outcome,
+    emit_result,
     in_aftermath,
     next_commit_sequence,
 )
@@ -674,7 +674,7 @@ class _Transaction:
     rollback_hooks: list[tuple[object | None, Callable[[ActionRollback, Aftermath], None]]] = field(
         default_factory=list
     )
-    outcome_hooks: list[tuple[object | None, Callable[[ActionResult, Aftermath], None]]] = field(default_factory=list)
+    result_hooks: list[tuple[object | None, Callable[[ActionResult, Aftermath], None]]] = field(default_factory=list)
     context: ActionContext = field(default_factory=ActionContext.create)
     participants: dict[object, ActionParticipant[Any]] = field(default_factory=dict)
     applied: bool = False
@@ -999,9 +999,9 @@ class _Transaction:
             try:
                 participant.abort(values.get(id(participant)), cause)
             except Exception as error:
-                summary = ExceptionReport.capture(error)
-                failures.append(summary)
-                self.cleanup_errors.append(summary)
+                report = ExceptionReport.capture(error)
+                failures.append(report)
+                self.cleanup_errors.append(report)
                 _log.exception("a transaction participant failed to abort")
         self.restore()
         return tuple(failures)
@@ -1071,26 +1071,26 @@ def _rollback_reason(error: BaseException, *, during_commit: bool) -> RollbackRe
 
 
 def _notify_hooks(
-    outcome: ActionResult,
+    result: ActionResult,
     hooks: Sequence[tuple[object | None, Callable[[Any, Aftermath], None]]],
 ) -> None:
     if not hooks:
         return
-    aftermath = Aftermath(outcome)
+    aftermath = Aftermath(result)
     with aftermath_callback():
         for _, callback in hooks:
             _checkpoint("aftermath.before_hook")
             try:
-                result = callback(outcome, aftermath)
-                if inspect.isawaitable(result):
-                    if inspect.iscoroutine(result):
-                        result.close()
+                callback_result = callback(result, aftermath)
+                if inspect.isawaitable(callback_result):
+                    if inspect.iscoroutine(callback_result):
+                        callback_result.close()
                     message = "action aftermath hooks must be synchronous; start an operation instead"
                     raise TypeError(message)  # noqa: TRY301
             except Exception as error:
                 _log.exception("an action aftermath hook failed")
                 emit_aftermath_failure(
-                    outcome,
+                    result,
                     "hook",
                     getattr(callback, "__qualname__", type(callback).__qualname__),
                     error,
@@ -1098,9 +1098,9 @@ def _notify_hooks(
 
 
 def _emit_commit(current: _Transaction, commit: ActionCommit) -> None:
-    emit_outcome(commit)
+    emit_result(commit)
     _notify_hooks(commit, current.commit_hooks)
-    _notify_hooks(commit, current.outcome_hooks)
+    _notify_hooks(commit, current.result_hooks)
 
 
 def _emit_rollback(current: _Transaction, error: BaseException, *, during_commit: bool) -> ActionRollback:
@@ -1117,15 +1117,15 @@ def _emit_rollback(current: _Transaction, error: BaseException, *, during_commit
         ChangeReport(len(current.writes), len(current.participants)),
         cleanup_errors,
     )
-    emit_outcome(rollback)
+    emit_result(rollback)
     _notify_hooks(rollback, current.rollback_hooks)
-    _notify_hooks(rollback, current.outcome_hooks)
+    _notify_hooks(rollback, current.result_hooks)
     return rollback
 
 
 @contextmanager
 def transaction(*, action_context: ActionContext | None = None) -> Iterator[None]:
-    """Commit one identified action atomically or emit one immutable rollback outcome."""
+    """Commit one identified action atomically or emit one immutable rollback result."""
     outer = _CURRENT.get()
     if outer is not None:
         # Checked at the `with`, not at the first write inside it, so a task that inherited
@@ -1169,7 +1169,7 @@ def transaction(*, action_context: ActionContext | None = None) -> Iterator[None
                     current.commit_record,
                     tags=frozenset({RollbackReason.FRAMEWORK_INTEGRITY_FAILURE.value}),
                 )
-                emit_outcome(integrity_commit)
+                emit_result(integrity_commit)
                 message = f"an infallible transaction adapter failed after the commit point: {error}"
                 raise FrameworkIntegrityError(message) from error
             else:
@@ -1258,8 +1258,8 @@ def on_action_rollback(callback: Callable[[ActionRollback, Aftermath], None], *,
 
 
 def on_action_result(callback: Callable[[ActionResult, Aftermath], None], *, key: object | None = None) -> None:
-    """Run a failure-isolated callback after either terminal outcome."""
-    _add_action_hook("outcome", callback, key=key)
+    """Run a failure-isolated callback after either terminal result."""
+    _add_action_hook("result", callback, key=key)
 
 
 def _add_action_hook(kind: str, callback: Callable[..., None], *, key: object | None) -> None:
@@ -1278,7 +1278,7 @@ def _add_action_hook(kind: str, callback: Callable[..., None], *, key: object | 
     hooks = {
         "commit": current.commit_hooks,
         "rollback": current.rollback_hooks,
-        "outcome": current.outcome_hooks,
+        "result": current.result_hooks,
     }[kind]
     hooks.append((key, callback))
 
@@ -1310,13 +1310,13 @@ def action_participant(key: object) -> ActionParticipant[Any] | None:
 
 
 def has_action_hook(key: object) -> bool:
-    """Whether `key` already registered any outcome hook for the action in flight."""
+    """Whether `key` already registered any result hook for the action in flight."""
     current = _CURRENT.get()
     if current is None:
         return False
     return any(
         registered is key
-        for hooks in (current.commit_hooks, current.rollback_hooks, current.outcome_hooks)
+        for hooks in (current.commit_hooks, current.rollback_hooks, current.result_hooks)
         for registered, _ in hooks
     )
 

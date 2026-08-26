@@ -14,14 +14,14 @@ async def test_setup_adds_the_generic_cog_with_the_host_registry() -> None:
     registry = SessionRegistry()
     profiler = MemoryProfiler()
     scheduler = MountScheduler(profiler=profiler)
-    bot = SimpleNamespace(mounts=registry, layout_reactor=scheduler, add_cog=AsyncMock())
+    bot = SimpleNamespace(mounts=registry, layout_scheduler=scheduler, add_cog=AsyncMock())
 
     await setup(cast(Any, bot))
 
     cog = bot.add_cog.await_args.args[0]
     assert isinstance(cog, DevTools)
     assert cog._registry is registry
-    assert cog._reactor is scheduler
+    assert cog._scheduler is scheduler
     assert cog._profiler is profiler
 
 

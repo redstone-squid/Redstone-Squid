@@ -204,7 +204,7 @@ async def present_poll_form(
         )
         await form_interaction.client.mounts.open(
             component.mount(
-                source=form_interaction, scheduler=getattr(form_interaction.client, "layout_reactor", None)
+                source=form_interaction, scheduler=getattr(form_interaction.client, "layout_scheduler", None)
             ),
             sd.respond_to(form_interaction, ephemeral=True, wait=True),
             key=SessionKey.user_guild("poll-wizard", form_interaction.user.id, form_interaction.guild.id),

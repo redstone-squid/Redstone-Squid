@@ -79,7 +79,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
             profiler=profiler,
         )
         self._registry = self._runtime.sessions
-        self._reactor = self._runtime.scheduler
+        self._scheduler = self._runtime.scheduler
         self._bus = self._runtime.bus
         self._profiler = self._runtime.profiler
         self._action_ledger = action_ledger or ActionLedger(limit=200)
@@ -151,7 +151,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         """Show queue pressure and subscriber registrations."""
         snapshot = self._runtime.snapshot()
         lines = [
-            f"scheduler  {_reactor_text(snapshot.scheduler)}",
+            f"scheduler  {_scheduler_text(snapshot.scheduler)}",
             f"topics   {_topics_text(snapshot.topics)}",
         ]
         if snapshot.topics is not None:
@@ -477,7 +477,7 @@ def _causal_event_text(event: CausalEventSnapshot) -> str:
             )
 
 
-def _reactor_text(snapshot: MountSchedulerSnapshot | None) -> str:
+def _scheduler_text(snapshot: MountSchedulerSnapshot | None) -> str:
     if snapshot is None:
         return "unconfigured"
     return f"queued={snapshot.queued} in_flight={snapshot.in_flight} failed={snapshot.failed}"
