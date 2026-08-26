@@ -45,7 +45,7 @@ MAX_LISTED = 25
 """A select holds 25 options, and only a long merge history reaches even a handful."""
 
 
-class AccountPanel(sl.Component):
+class AccountPanel(sl.Component[sl.ComponentsV2Target]):
     """A mounted account workspace with semantic identity actions."""
 
     selected_id: int | None = sl.state(None)
@@ -101,7 +101,7 @@ class AccountPanel(sl.Component):
     def page_hidden(self) -> bool:
         return self._profile.hidden
 
-    def render(self) -> tuple[sl.LayoutNode, ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self.closed:
             return (sl.section(sl.heading(t(self.locale, _("Account controls closed")))),)
         if self._profile_editor is not None:
@@ -120,7 +120,7 @@ class AccountPanel(sl.Component):
         footer = self._footer()
         media = own_profile_avatar(self._profile, self._identities)
         extra_media = media[1:]
-        nodes: list[sl.LayoutNode] = [
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
             sl.section(
                 sl.heading(self._profile.display_name or t(self.locale, _("Your account"))),
                 # The bio is the card's shock absorber: truncate lets it give up characters
@@ -341,7 +341,7 @@ class AccountPanel(sl.Component):
             return (sl.forms.FormError(error.localized_public_detail(self.locale)),)
         return ()
 
-    def _profile_preview(self, values: sp.EditorValues) -> sl.LayoutNode:
+    def _profile_preview(self, values: sp.EditorValues) -> sl.LayoutNode[sl.ComponentsV2Target]:
         draft = self._raw_profile_update(values).apply(self._profile)
         fields = tuple(sl.field(field.name, field.value) for field in own_profile_fields(draft, self.locale))
         return sl.section(

@@ -71,7 +71,7 @@ class SettingsCapabilities:
     edit_voting: bool
 
 
-class SettingsPanel(sl.Component):
+class SettingsPanel(sl.Component[sl.ComponentsV2Target]):
     """A semantic, mount-owned settings workspace."""
 
     history: sl.runtime.History = sl.runtime.history(limit=10)
@@ -155,18 +155,18 @@ class SettingsPanel(sl.Component):
         self.confirming_reset = False
         self.page = "voting"
 
-    def render(self) -> Sequence[sl.LayoutNode]:
+    def render(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         if self.page == "voting":
             return self._voting_nodes()
         return self._server_nodes()
 
-    def _server_nodes(self) -> Sequence[sl.LayoutNode]:
+    def _server_nodes(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         description = (
             L(t"Change as many as you like; an emptied picker clears that setting.")
             if self._capabilities.edit_server
             else None
         )
-        children: list[sl.LayoutNode] = [
+        children: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
             sl.section(
                 sl.heading(L(t"Server settings")),
                 description and sl.truncate(sl.paragraph(description)),
@@ -226,9 +226,9 @@ class SettingsPanel(sl.Component):
         children.append(sl.action_controls(*actions, key="server-actions"))
         return children
 
-    def _voting_nodes(self) -> Sequence[sl.LayoutNode]:
+    def _voting_nodes(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         scope_note = self._scope_note()
-        children: list[sl.LayoutNode] = [
+        children: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
             sl.section(
                 sl.heading(L("Voting — {kind}", kind=L(KIND_LABELS[self.kind]))),
                 sl.fields(*(sl.field(field.name, field.value) for field in self._voting_fields())),

@@ -128,6 +128,12 @@ from squid_ui.semantic import (
     truncate,
     unbreakable,
 )
+from squid_ui.target_types import (
+    ClassicTarget,
+    ComponentsV2Target,
+    DiscordTarget,
+    Renderable,
+)
 from squid_ui.text import (
     TextLike,
     md,
@@ -139,9 +145,12 @@ __all__ = [
     "ActionEvent",
     "ChildLike",
     "ChoiceEvent",
+    "ClassicTarget",
     "Component",
+    "ComponentsV2Target",
     "Conditional",
     "ContextKey",
+    "DiscordTarget",
     "Document",
     "DocumentLike",
     "EntityEvent",
@@ -152,6 +161,7 @@ __all__ = [
     "Palette",
     "PaletteRegistry",
     "PressEvent",
+    "Renderable",
     "ScaleEvent",
     "SelectionEvent",
     "SubmitEvent",

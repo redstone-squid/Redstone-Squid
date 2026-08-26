@@ -24,7 +24,7 @@ def primary_emoji(snapshot: VoteSessionSnapshot, choice: VoteChoice, guild_id: i
 
 
 def render_build_review(
-    card: sl.LayoutNode,
+    card: sl.LayoutNode[sl.ComponentsV2Target],
     snapshot: VoteSessionSnapshot,
     guild_id: int | None,
 ) -> sd.message_payload.MessagePayload:
@@ -62,7 +62,7 @@ def render_build_review(
     # Panel, so splice into its own children instead of nesting a second container — one
     # accent-coloured box, and the vote text is solved in the same pass as the card's fields.
     if isinstance(card, sl.semantic.Section):
-        post: sl.LayoutNode = dataclasses.replace(card, children=(*card.children, *state))
+        post: sl.LayoutNode[sl.ComponentsV2Target] = dataclasses.replace(card, children=(*card.children, *state))
     elif isinstance(card, sl.primitives.Panel):
         post = sl.primitives.Panel(children=(*card.children, *state), accent=card.accent)
     else:
@@ -134,14 +134,14 @@ def render_generic_poll(
 def _generic_poll_nodes(
     snapshot: VoteSessionSnapshot,
     voter_discord_ids: Mapping[int, int],
-) -> list[sl.LayoutNode]:
+) -> list[sl.LayoutNode[sl.ComponentsV2Target]]:
     """Build the semantic content for a generic poll without its controls."""
     poll = snapshot.poll
     assert poll is not None
     closed = snapshot.status is VoteStatus.CLOSED
     show_totals = poll.visibility != "anonymous_hidden" or closed
     options = snapshot.options_for_guild(poll.guild_id or 0)
-    nodes: list[sl.LayoutNode] = [sl.heading(sl.plain(poll.question))]
+    nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [sl.heading(sl.plain(poll.question))]
 
     if show_totals:
         raw = snapshot.raw_tallies()

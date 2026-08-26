@@ -14,11 +14,11 @@ from squid.topics import resource_topic
 if TYPE_CHECKING:
     from squid.builds.domain import Build
 
-type Projection = tuple[Build, sl.LayoutNode]
+type Projection = tuple[Build, sl.LayoutNode[sl.ComponentsV2Target]]
 type Refresh = Callable[[int], Awaitable[Projection | None]]
 
 
-class BuildInfoComponent(sl.Component):
+class BuildInfoComponent(sl.Component[sl.ComponentsV2Target]):
     """Show a rendered build card with an edit action at a native-form boundary.
 
     Given a `refresh`, the card stays current: the resource below watches the build's topic,
@@ -29,7 +29,7 @@ class BuildInfoComponent(sl.Component):
     def __init__(
         self,
         build: Build,
-        node: sl.LayoutNode,
+        node: sl.LayoutNode[sl.ComponentsV2Target],
         *,
         refresh: Refresh | None = None,
         locale: str | None = None,
@@ -85,7 +85,7 @@ class BuildInfoComponent(sl.Component):
         message = "build info has not loaded yet"
         raise sl.resources.ResourceNotReadyError(message)
 
-    def render(self) -> tuple[sl.LayoutNode, ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if not isinstance(self.projection.status, sl.resources.Ready) and self.projection.status.previous is None:
             return (sl.status(t(self.locale, _("Loading build."))),)
         build, node = self._current()

@@ -9,26 +9,28 @@ their parent rather than through a mount reference the navigator hands out.
 
 from squid_ui.chrome import CHROME_CONTEXT
 from squid_ui.interactions import PressEvent
-from squid_ui.primitives.nodes import Button, Node, Row
+from squid_ui.primitives.nodes import Button, Row
 from squid_ui.primitives.styles import ActionStyle
 from squid_ui.runtime.component import Component
+from squid_ui.semantic import LayoutNode
+from squid_ui.target_types import ComponentsV2Target
 
 
-class StackNavigator(Component):
+class StackNavigator[ModeT: ComponentsV2Target = ComponentsV2Target](Component[ModeT]):
     """A component that shows one child at a time and owns the navigation controls."""
 
-    def __init__(self, root: Component) -> None:
-        self._stack: list[Component] = [root]
+    def __init__(self, root: Component[ModeT]) -> None:
+        self._stack: list[Component[ModeT]] = [root]
 
     @property
-    def current(self) -> Component:
+    def current(self) -> Component[ModeT]:
         return self._stack[-1]
 
     @property
     def depth(self) -> int:
         return len(self._stack)
 
-    def push(self, child: Component) -> None:
+    def push(self, child: Component[ModeT]) -> None:
         """Show ``child``, with Back leading to the current screen."""
         self._stack.append(child)
         self.invalidate()
@@ -43,7 +45,7 @@ class StackNavigator(Component):
             del self._stack[1:]
             self.invalidate()
 
-    def render(self) -> list[Node]:
+    def render(self) -> list[LayoutNode[ComponentsV2Target]]:
         # Keyed by depth: each screen owns its control namespace, so pushing the same child
         # class twice does not make the two copies share handlers.
         nodes: list = [self.boundary(self.current, key=f"s{self.depth - 1}")]

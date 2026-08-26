@@ -26,6 +26,7 @@ from squid_ui.planning.limits import LIMITS, V2Limits
 from squid_ui.planning.planner import EMPTY_RESERVATION
 from squid_ui.planning.target import ResourceCost
 from squid_ui.scene.model import PlanReport, PlanResult
+from squid_ui.target_types import ComponentsV2Target
 from squid_ui.text import NEUTRAL, Localization
 from squid_ui_discord.attachments import files_for
 from squid_ui_discord.inspection import MessageReservation, audit, cost, measure
@@ -183,7 +184,7 @@ class Fragment:
 
 
 def fragment(
-    document: DocumentLike,
+    document: DocumentLike[ComponentsV2Target],
     *,
     alongside: discord.ui.LayoutView | None = None,
     reserve: ResourceCost = EMPTY_RESERVATION,
@@ -233,7 +234,7 @@ def fragment(
 
 
 def contribute(
-    document: DocumentLike,
+    document: DocumentLike[ComponentsV2Target],
     *,
     to: discord.ui.LayoutView,
     followed_by: Sequence[discord.ui.Item[Any]] = (),

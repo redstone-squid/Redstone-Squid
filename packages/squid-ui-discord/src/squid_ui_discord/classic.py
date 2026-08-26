@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 
 
 def render_message(
-    rendered: DocumentLike,
+    rendered: DocumentLike[ClassicTarget],
     *,
     wire: Wire | None = None,
     renderer: ClassicRenderer | None = None,
@@ -109,7 +109,7 @@ def render_message(
 
 
 def render_static(
-    nodes: DocumentLike | Component,
+    nodes: DocumentLike[ClassicTarget] | Component[ClassicTarget],
     *,
     target: Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, DiscordPyAdapter] = DISCORD_V1_DPY27,
     chrome: Chrome = DEFAULT_CHROME,
@@ -188,7 +188,7 @@ def measure_host(
 
 
 def contribute(
-    document: DocumentLike,
+    document: DocumentLike[ClassicTarget],
     *,
     to: MessagePayload,
     followed_by: Sequence[discord.Embed] = (),

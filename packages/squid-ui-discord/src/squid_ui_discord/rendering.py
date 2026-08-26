@@ -82,7 +82,7 @@ class RenderedMessage[ViewT: (discord.ui.LayoutView, discord.ui.View | None), Bo
 
 
 def render_message(
-    rendered: DocumentLike,
+    rendered: DocumentLike[ComponentsV2Target],
     *,
     wire: Wire | None = None,
     renderer: V2Renderer | None = None,
@@ -136,7 +136,7 @@ def render_message(
 
 
 def render_static(
-    nodes: DocumentLike | Component,
+    nodes: DocumentLike[ComponentsV2Target] | Component[ComponentsV2Target],
     *,
     target: Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, DiscordPyAdapter] = DISCORD_V2_DPY27,
     chrome: Chrome = DEFAULT_CHROME,
@@ -158,7 +158,7 @@ def render_static(
 
 
 def render_item(
-    node: LayoutNode,
+    node: LayoutNode[ComponentsV2Target],
     *,
     target: Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, DiscordPyAdapter] = DISCORD_V2_DPY27,
     chrome: Chrome = DEFAULT_CHROME,
