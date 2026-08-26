@@ -9,7 +9,7 @@ import discord
 import squid_discord as sd
 import squid_layouts as sl
 from squid.bot.i18n import t
-from squid.bot.ui import CardField, L, create_mount, localization_for
+from squid.bot.ui import CardField, L, localization_for
 from squid.bot.utils.permissions import allows
 from squid.core.i18n import SUPPORTED_LOCALES, _
 from squid.permissions.domain import PermissionNode
@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from squid.voting.application import VoteService
 
 SESSION_SECONDS = 300
+SETTINGS_SCREEN = sd.ScreenSpec("settings", scope=sd.Scope.USER_GUILD, options={"timeout": SESSION_SECONDS})
 
 FOLLOW_DISCORD = "-"
 """The locale select's "no override" value; an empty select value is not sendable."""
@@ -93,7 +94,6 @@ class SettingsPanel(sl.Component):
         settings: SettingsService,
         votes: VoteService,
         guild: discord.Guild,
-        author_id: int,
         capabilities: SettingsCapabilities,
         locale: str | None = None,
         owner_guild_id: int | None = None,
@@ -101,11 +101,9 @@ class SettingsPanel(sl.Component):
         self._settings = settings
         self._votes = votes
         self._guild = guild
-        self._author_id = author_id
         self._capabilities = capabilities
         self.locale = locale
         self._owner_guild_id = owner_guild_id
-        self._mount: sd.Mount | None = None
 
     @property
     def shows_server(self) -> bool:
@@ -297,7 +295,10 @@ class SettingsPanel(sl.Component):
     async def _locale_changed(self, event: sl.ChoiceEvent) -> None:
         if not await self._may_event(event, SETTINGS_SERVER_EDIT):
             return
-        await self.set_locale(None if event.selected[0] == FOLLOW_DISCORD else event.selected[0])
+        await self.set_locale(
+            None if event.selected[0] == FOLLOW_DISCORD else event.selected[0],
+            mount=sd.responder(event).mount,
+        )
 
     async def _kind_changed(self, event: sl.ChoiceEvent) -> None:
         await self.open_voting(VoteKind(event.selected[0]))
@@ -456,20 +457,20 @@ class SettingsPanel(sl.Component):
         else:
             await self._settings.set_channel(self._guild.id, setting, channel_id)
 
-    async def set_locale(self, locale: str | None) -> None:
+    async def set_locale(self, locale: str | None, *, mount: sd.Mount) -> None:
         previous_override, previous_locale = self._locale_override, self.locale
-        await self._write_locale(locale, locale or previous_locale)
+        await self._write_locale(locale, locale or previous_locale, mount)
         self._locale_override = locale
         self.locale = locale or self.locale
         self.history.record(
             L(t"Changed the bot language"),
             compensate=sl.runtime.CompensationSpec(
-                lambda _key: self._write_locale(previous_override, previous_locale),
+                lambda _key: self._write_locale(previous_override, previous_locale, mount),
                 lambda commit: f"settings:{self._guild.id}:locale:{commit.context.action_id}",
             ),
         )
 
-    async def _write_locale(self, override: str | None, effective: str | None) -> None:
+    async def _write_locale(self, override: str | None, effective: str | None, mount: sd.Mount) -> None:
         """The stored locale and the mount's, neither of which is component state.
 
         Both halves of the effective locale are captured at the call site rather than read
@@ -477,8 +478,7 @@ class SettingsPanel(sl.Component):
         `_locale_override` -- so reading them here would see the values being reversed.
         """
         await self._settings.set_locale(self._guild.id, override)
-        if self._mount is not None:
-            self._mount.localize(localization_for(effective))
+        mount.localize(localization_for(effective))
 
     async def set_weight(self, role_id: int, multiplier: float | None) -> None:
         if multiplier is None:
@@ -543,14 +543,3 @@ class SettingsPanel(sl.Component):
         if self.kind is not VoteKind.BUILD or self._owner_guild_id in (None, self._guild.id):
             return None
         return L(t"Build reviews are weighted by the network's own server, so these multipliers do not apply here.")
-
-    def mount(self, *, source: sd.host.HostSource) -> sd.Mount:
-        """Create the production mount with author lock and shared error handling."""
-        self._mount = create_mount(
-            self,
-            source=source,
-            access=sd.Owner(self._author_id),
-            locale=self.locale,
-            timeout=SESSION_SECONDS,
-        )
-        return self._mount

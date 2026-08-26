@@ -23,8 +23,7 @@ from squid.bot.i18n import t
 from squid.bot.ui import CardField, localization_for, text_layout
 from squid.bot.utils.sentinel import Sentinel
 from squid.core.i18n import _, ntranslate
-from squid_discord import ScreenSpec
-from squid_discord.screens import Opener
+from squid_discord import Opener, ScreenSpec
 from squid_discord.sessions import Opened, Reject, Rejected, SessionPolicy
 
 CONSENT_SCREEN = ScreenSpec(
@@ -295,15 +294,24 @@ async def _open_prompt(
     parent: sd.Mount | None,
 ) -> bool:
     """Put the prompt on screen, telling the reader why not when it could not be opened."""
-    opened = await CONSENT_SCREEN.open(
-        component,
-        _destination(target),
-        sessions=target,
-        opener=Opener(user_id),
-        parent=parent,
-        localization=localization_for(locale),
-        timeout=timeout,
-    )
+    options: sd.MountOptions = {"localization": localization_for(locale), "timeout": timeout}
+    if parent is None:
+        opened = await CONSENT_SCREEN.open(
+            component,
+            _destination(target),
+            sessions=target,
+            opener=Opener(user_id),
+            **options,
+        )
+    else:
+        opened = await CONSENT_SCREEN.attach(
+            component,
+            _destination(target),
+            sessions=target,
+            opener=Opener(user_id),
+            parent=parent,
+            **options,
+        )
     if isinstance(opened, Rejected):
         await _send(
             target, text_layout(t(locale, _("You already have a consent prompt open. Please answer that one.")))

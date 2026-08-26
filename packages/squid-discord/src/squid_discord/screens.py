@@ -1,6 +1,6 @@
 """Reusable per-open policy for Discord screens."""
 
-from collections.abc import Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from types import MappingProxyType
@@ -17,6 +17,8 @@ from squid_discord.sessions import (
     GlobalScope,
     GuildScope,
     OpenResult,
+    Rejected,
+    RejectionReason,
     SessionKey,
     SessionPolicy,
     SessionRegistry,
@@ -123,6 +125,9 @@ def _registry(source: SessionRegistry | HostSource) -> SessionRegistry:
     return LayoutHost.of(source).mounts
 
 
+type ScreenOptionsResolver = Callable[[Opener], Awaitable[MountOptions]]
+
+
 @dataclass(frozen=True, slots=True)
 class ScreenSpec:
     """Per-open session policy shared by every opening of one logical screen."""
@@ -150,6 +155,7 @@ class ScreenSpec:
     """
     access: Callable[[Opener], AccessPolicy] = _owner
     options: Mapping[str, object] = field(default_factory=dict)
+    resolve_options: ScreenOptionsResolver | None = None
 
     def __post_init__(self) -> None:
         """Snapshot mount options into a read-only mapping."""
@@ -159,6 +165,10 @@ class ScreenSpec:
         """Derive this screen's session key from an opener."""
         return SessionKey(self.name, self.scope.resolve(opener))
 
+    async def _mount_options(self, opener: Opener, overrides: MountOptions) -> MountOptions:
+        resolved = {} if self.resolve_options is None else await self.resolve_options(opener)
+        return cast(MountOptions, {**self.options, **resolved, **overrides})
+
     async def open(
         self,
         component: Component,
@@ -166,21 +176,17 @@ class ScreenSpec:
         *,
         sessions: SessionRegistry | HostSource,
         opener: Opener,
-        parent: Mount | None = None,
         **overrides: Unpack[MountOptions],
     ) -> OpenResult:
-        """Construct and open or attach a mount using this screen's policy.
+        """Construct and open a root mount using this screen's policy.
 
         `sessions` is the registry, or anything an installed host can be found from -- the
         interaction or command context the opening came from will do, which is what spares a
         caller holding neither from dispatching over the two invocation surfaces itself.
         """
         sessions = _registry(sessions)
-        options = cast(MountOptions, {**self.options, **overrides})
+        options = await self._mount_options(opener, overrides)
         mount = sessions.defaults.mount(component, access=self.access(opener), **options)
-        parent_session = None if parent is None else sessions.session_for(parent)
-        if parent_session is not None:
-            return await parent_session.attach(mount, destination, actor_id=opener.user_id, parent=parent)
         return await sessions.open(
             mount,
             destination,
@@ -192,13 +198,31 @@ class ScreenSpec:
             domain=self.domain,
         )
 
+    async def attach(
+        self,
+        component: Component,
+        destination: Destination,
+        *,
+        sessions: SessionRegistry | HostSource,
+        opener: Opener,
+        parent: Mount,
+        **overrides: Unpack[MountOptions],
+    ) -> OpenResult:
+        """Construct and attach a mount below one known live parent."""
+        sessions = _registry(sessions)
+        parent_session = sessions.session_for(parent)
+        if parent_session is None:
+            return Rejected((), RejectionReason.SESSION_FINISHED)
+        options = await self._mount_options(opener, overrides)
+        mount = sessions.defaults.mount(component, access=self.access(opener), **options)
+        return await parent_session.attach(mount, destination, actor_id=opener.user_id, parent=parent)
+
     async def respond(
         self,
         component: Component,
         interaction: discord.Interaction[Any],
         *,
         sessions: SessionRegistry | HostSource | None = None,
-        parent: Mount | None = None,
         ephemeral: bool = True,
         wait: bool = False,
         **overrides: Unpack[MountOptions],
@@ -209,6 +233,26 @@ class ScreenSpec:
         client. Name one only to reach a registry that is not this client's.
         """
         return await self.open(
+            component,
+            respond_to(interaction, ephemeral=ephemeral, wait=wait),
+            sessions=interaction if sessions is None else sessions,
+            opener=Opener.of(interaction),
+            **overrides,
+        )
+
+    async def respond_attached(
+        self,
+        component: Component,
+        interaction: discord.Interaction[Any],
+        *,
+        parent: Mount,
+        sessions: SessionRegistry | HostSource | None = None,
+        ephemeral: bool = True,
+        wait: bool = False,
+        **overrides: Unpack[MountOptions],
+    ) -> OpenResult:
+        """Attach this screen as an interaction response below a live parent."""
+        return await self.attach(
             component,
             respond_to(interaction, ephemeral=ephemeral, wait=wait),
             sessions=interaction if sessions is None else sessions,
