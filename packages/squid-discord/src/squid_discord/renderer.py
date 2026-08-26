@@ -12,11 +12,11 @@ from squid_discord.attachments import attachment_assets
 from squid_discord.conformance import LimitViolationError, conform
 from squid_discord.emoji import discord_emoji
 from squid_discord.presentation import DiscordPresentation
-from squid_discord.target import V2_TARGET
+from squid_discord.target import DISCORD_V2_DPY27
 from squid_layouts.assets import Asset, StoredAsset
 from squid_layouts.errors import DrawInvariantError
 from squid_layouts.interactions import ActionBinding
-from squid_layouts.planning.adapter import ADAPTER_RENDER_V2, AdapterProfile
+from squid_layouts.planning.adapter import AdapterCapability, AdapterProfile
 from squid_layouts.planning.limits import LIMITS, V2Limits
 from squid_layouts.scene.codec import SceneCodec
 from squid_layouts.scene.model import (
@@ -100,7 +100,7 @@ class V2Renderer:
         view_factory: ViewFactory = StaticView,
         adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
     ) -> None:
-        require_discord_py_capability(adapter, ADAPTER_RENDER_V2, "render Components V2")
+        require_discord_py_capability(adapter, AdapterCapability.RENDER_V2, "render Components V2")
         self.limits = limits
         self.audit = audit
         self.view_factory = view_factory
@@ -133,7 +133,7 @@ class V2Renderer:
         if scene.protocol != SceneCodec.protocol:
             message = f"V2Renderer cannot draw scene protocol {scene.protocol}"
             raise DrawInvariantError(message)
-        if scene.target != V2_TARGET.id:
+        if scene.target != DISCORD_V2_DPY27.id:
             message = f"V2Renderer cannot draw target {scene.target!r}"
             raise DrawInvariantError(message)
         if scene.target_version != 1:

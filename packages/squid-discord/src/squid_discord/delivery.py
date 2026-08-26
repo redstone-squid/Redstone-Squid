@@ -31,7 +31,7 @@ import discord
 from squid_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
 from squid_discord.presentation import DiscordMode, DiscordPresentation, mode_of
 from squid_layouts.errors import LayoutError, LimitViolationError
-from squid_layouts.planning.adapter import ADAPTER_INTERACTION_DELIVERY, AdapterProfile
+from squid_layouts.planning.adapter import AdapterCapability, AdapterProfile
 from squid_layouts.planning.limits import LIMITS
 from squid_layouts.target_types import DiscordPyAdapter
 
@@ -442,7 +442,7 @@ def reply_to(
     ping someone *and* be readable in the notification, so this has to be reachable — but a
     UI library that pings by default would eventually ping a whole server by accident.
     """
-    require_discord_py_capability(adapter, ADAPTER_INTERACTION_DELIVERY, "deliver a command reply")
+    require_discord_py_capability(adapter, AdapterCapability.INTERACTION_DELIVERY, "deliver a command reply")
     mentions = no_mentions() if allowed_mentions is None else allowed_mentions
 
     async def send(presentation: DiscordPresentation) -> DeliveryReceipt:
@@ -530,7 +530,7 @@ def respond_to(
     remains writable through `@original` without fetching it. Mentions stay off unless asked
     for; see `reply_to` for why that default is not negotiable.
     """
-    require_discord_py_capability(adapter, ADAPTER_INTERACTION_DELIVERY, "deliver an interaction response")
+    require_discord_py_capability(adapter, AdapterCapability.INTERACTION_DELIVERY, "deliver an interaction response")
     mentions = no_mentions() if allowed_mentions is None else allowed_mentions
 
     async def send(presentation: DiscordPresentation) -> DeliveryReceipt:

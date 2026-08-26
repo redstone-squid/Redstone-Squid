@@ -89,7 +89,7 @@ def test_roster_uses_active_chrome_and_renders_routed_slots() -> None:
     )
     result = sl.planning.plan(
         node,
-        target=squid_discord.V2_TARGET,
+        target=squid_discord.DISCORD_V2_DPY27,
         chrome=Chrome(
             waitlist="Queue", full="No seats", slot_count=lambda count, capacity: f"Seats {count}/{capacity}"
         ),
@@ -110,7 +110,7 @@ async def test_mounted_roster_delivers_one_portable_slot_key() -> None:
 
     result = sl.planning.plan(
         sl.roster(sp.place_roster((), SLOTS), key="raid", on_join=join),
-        target=squid_discord.V2_TARGET,
+        target=squid_discord.DISCORD_V2_DPY27,
     )
     button = next(item for item in _walk(result.scene.body) if isinstance(item, SceneButton))
     await result.bindings[button.action].handler(

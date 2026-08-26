@@ -9,7 +9,6 @@ from urllib.parse import urlsplit
 
 from squid_layouts.assets import Asset, InlineAsset, StoredAsset
 from squid_layouts.errors import DrawInvariantError
-from squid_layouts.planning.discord import V2_TARGET_ID
 from squid_layouts.scene.codec import SceneCodec
 from squid_layouts.scene.model import (
     PlanResult,
@@ -84,12 +83,13 @@ class Renderer:
         if scene.protocol != SceneCodec.protocol:
             message = f"Renderer cannot draw scene protocol {scene.protocol}"
             raise DrawInvariantError(message)
-        if scene.target != V2_TARGET_ID or scene.target_version != 1:
-            message = f"Renderer cannot preview target {scene.target!r} version {scene.target_version}"
+        if scene.target_version != 1:
+            message = f"Renderer cannot preview target version {scene.target_version}"
             raise DrawInvariantError(message)
         if not isinstance(scene.body, SceneComponentsV2):
-            # Explicit rather than duck-typed: this preview draws a component tree, and a
-            # classic message is content and embeds with no tree to walk.
+            # The real gate, and both stricter and more honest than a target id: what this
+            # preview can draw is a component tree, not a name. A classic message is content
+            # and embeds with no tree to walk.
             message = f"HTML preview cannot draw a {type(scene.body).__name__} body"
             raise DrawInvariantError(message)
         pager_data = json.dumps(
@@ -132,8 +132,9 @@ class Renderer:
         resolve_file: FileResolver,
     ) -> str:
         match node:
-            case SceneText(content=content, dialect=dialect):
-                return f'<div class="squid-text" data-squid-dialect="{dialect.value}">{escape(content)}</div>'
+            case SceneText(content=content, markup=markup):
+                # The HTML attribute keeps its name for the same reason the JSON key does.
+                return f'<div class="squid-text" data-squid-dialect="{markup.value}">{escape(content)}</div>'
             case SceneTime(instant=instant, style=style, prefix=prefix):
                 return (
                     f'<div class="squid-text">{escape(prefix or "")}'

@@ -8,7 +8,6 @@ from squid_layouts.target_types import (
     DiscordPyAdapter,
     DiscordTarget,
     Renderable,
-    TargetRequirements,
 )
 
 __all__ = [
@@ -19,5 +18,4 @@ __all__ = [
     "DiscordPyAdapter",
     "DiscordTarget",
     "Renderable",
-    "TargetRequirements",
 ]

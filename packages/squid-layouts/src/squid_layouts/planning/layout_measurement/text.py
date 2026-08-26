@@ -3,10 +3,10 @@
 from dataclasses import dataclass, replace
 
 from squid_layouts.errors import LayoutInvariantError
+from squid_layouts.planning.adapter import ResourceCost
 from squid_layouts.planning.breaking import BreakItem, balanced_breaks
 from squid_layouts.planning.layout_measurement.model import RText
 from squid_layouts.planning.limits import ELLIPSIS, TEXT_AXES, Axis
-from squid_layouts.planning.target import ResourceCost
 from squid_layouts.primitives.constraints import Never, Overflow
 from squid_layouts.primitives.nodes import Code, Footer, Heading, Lines, Node, Text
 

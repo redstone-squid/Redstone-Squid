@@ -11,12 +11,12 @@ import discord
 from squid_discord.adapter import require_discord_py_target
 from squid_discord.presentation import DiscordModeError, DiscordPresentation
 from squid_discord.renderer import V2Renderer, Wire
-from squid_discord.target import V2_TARGET, Target
+from squid_discord.target import DISCORD_V2_DPY27, Target
 from squid_layouts.assets import Asset
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.document import DocumentLike
 from squid_layouts.palette import DEFAULT_PALETTE, Palette
-from squid_layouts.planning.adapter import ADAPTER_RENDER_V2
+from squid_layouts.planning.adapter import AdapterCapability
 from squid_layouts.planning.cache import PlanCache
 from squid_layouts.planning.limits import V2Limits
 from squid_layouts.planning.navigation import PlannedNav
@@ -34,14 +34,6 @@ from squid_layouts.target_types import ComponentsV2Target, DiscordPyAdapter
 from squid_layouts.text import NEUTRAL, Localization
 
 logger = logging.getLogger(__name__)
-
-
-def _v2_limits(target: Target) -> V2Limits:
-    """A Components V2 target's limits. Anything else does not belong in this module."""
-    if not isinstance(target.limits, V2Limits):
-        message = f"squid_discord.compose plans Components V2; {target.id!r} is not a V2 target"
-        raise DiscordModeError(message)
-    return target.limits
 
 
 @contextmanager
@@ -93,7 +85,7 @@ def compose(
     *,
     wire: Wire | None = None,
     renderer: V2Renderer | None = None,
-    target: Target[ComponentsV2Target, DiscordPyAdapter, SceneComponentsV2] = V2_TARGET,
+    target: Target[V2Limits, SceneComponentsV2, ComponentsV2Target, DiscordPyAdapter] = DISCORD_V2_DPY27,
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,
@@ -107,7 +99,7 @@ def compose(
     profile: OperationRecorder | None = None,
 ) -> Composition[discord.ui.LayoutView, SceneComponentsV2]:
     """Plan a logical document, then draw its resolved Components V2 scene."""
-    adapter = require_discord_py_target(target, ADAPTER_RENDER_V2, "compose Components V2")
+    adapter = require_discord_py_target(target, AdapterCapability.RENDER_V2, "compose Components V2")
     with _span(profile, "planner") as planner_span:
         result = plan_document(
             rendered,
@@ -132,7 +124,7 @@ def compose(
             profile.increment("planner.cache_hits", int(result.metrics.cache_hit))
             profile.increment("planner.search_fallbacks", int(result.metrics.search_fallback))
             profile.increment("planner.states_explored", result.metrics.states_explored)
-    drawer = renderer if renderer is not None else V2Renderer(limits=_v2_limits(target), adapter=adapter)
+    drawer = renderer if renderer is not None else V2Renderer(limits=target.limits, adapter=adapter)
     with _span(profile, "renderer"):
         presentation = drawer.draw(result.scene, plan=result, wire=wire)
     if result.report.events:
@@ -143,7 +135,7 @@ def compose(
 def render_static(
     nodes: DocumentLike | Component,
     *,
-    target: Target[ComponentsV2Target, DiscordPyAdapter, SceneComponentsV2] = V2_TARGET,
+    target: Target[V2Limits, SceneComponentsV2, ComponentsV2Target, DiscordPyAdapter] = DISCORD_V2_DPY27,
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,
@@ -165,7 +157,7 @@ def render_static(
 def render_item(
     node: LayoutNode,
     *,
-    target: Target[ComponentsV2Target, DiscordPyAdapter, SceneComponentsV2] = V2_TARGET,
+    target: Target[V2Limits, SceneComponentsV2, ComponentsV2Target, DiscordPyAdapter] = DISCORD_V2_DPY27,
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,

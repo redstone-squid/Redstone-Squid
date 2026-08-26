@@ -35,7 +35,7 @@ from squid_discord.composition import Composition, compose
 from squid_discord.emoji import discord_emoji
 from squid_discord.presentation import DiscordMode, DiscordPresentation
 from squid_discord.renderer import V2Renderer
-from squid_discord.target import V2_TARGET, Target
+from squid_discord.target import DISCORD_V2_DPY27, Target
 from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME, LOCALIZATION_CONTEXT, Chrome, localize_chrome
 from squid_layouts.document import Asset, Document
 from squid_layouts.entity import ChannelType, EntityKind, EntityRef, EntityType
@@ -59,12 +59,9 @@ from squid_layouts.interactions import (
 )
 from squid_layouts.palette import DEFAULT_PALETTE, Palette
 from squid_layouts.planning.adapter import (
-    ADAPTER_DISPATCH,
-    ADAPTER_INTERACTION_DELIVERY,
-    ADAPTER_RENDER_CLASSIC,
-    ADAPTER_RENDER_V2,
+    AdapterCapability,
 )
-from squid_layouts.planning.limits import LIMITS, ClassicLimits, DiscordLimits, V2Limits
+from squid_layouts.planning.discord import CLASSIC_TARGET_ID, V2_TARGET_ID
 from squid_layouts.planning.navigation import (
     NAV_FACTORY_CONTEXT,
     NavFactory,
@@ -119,6 +116,56 @@ from squid_layouts.text import NEUTRAL, Localization, TextLike, resolve_text
 from squid_reactive.actions import ActionContext, ActorRef
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class _DiscordBinding:
+    """Everything a Discord dialect decides about a mount, in one value.
+
+    The target decides the composition, the renderer, the view factory, and the message
+    mode — and nothing else. Keying on the dialect id says so once, in place of four
+    branches that each re-derived the answer from a limits subclass. `DiscordMode` keeps its
+    own job of describing an *observed* message through `mode_of`; it is no longer inferred.
+    """
+
+    composer: Callable[..., Composition[Any]]
+    mode: DiscordMode
+    render_capability: str
+    renderer: Callable[[Mount[Any, Any], float | None], V2Renderer | ClassicRenderer]
+
+
+_BINDINGS: dict[str, _DiscordBinding] = {
+    V2_TARGET_ID: _DiscordBinding(
+        composer=compose,
+        mode=DiscordMode.COMPONENTS_V2,
+        render_capability=AdapterCapability.RENDER_V2,
+        renderer=lambda mount, timeout: V2Renderer(
+            limits=mount.limits,
+            view_factory=lambda: MountedView(mount, timeout),
+        ),
+    ),
+    CLASSIC_TARGET_ID: _DiscordBinding(
+        composer=classic_compose,
+        mode=DiscordMode.CLASSIC,
+        render_capability=AdapterCapability.RENDER_CLASSIC,
+        renderer=lambda mount, timeout: ClassicRenderer(
+            limits=mount.limits,
+            view_factory=lambda: ClassicMountedView(mount, timeout),
+            always_view=True,
+        ),
+    ),
+}
+
+
+def _binding_for(target: Target[Any, Any, Any, Any]) -> _DiscordBinding:
+    binding = _BINDINGS.get(target.dialect.id)
+    if binding is None:
+        known = ", ".join(sorted(_BINDINGS))
+        message = f"squid_discord cannot mount dialect {target.dialect.id!r} (known: {known})"
+        raise LayoutInvariantError(message)
+    return binding
+
+
 _NOOP_PROFILER = NoOpProfiler()
 
 _MAX_LOAD_PASSES = 16
@@ -816,7 +863,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         component: Component[ModeT],
         *,
         access: AccessPolicy,
-        target: Target[ModeT, AdapterT, Any] = V2_TARGET,  # type: ignore[assignment]
+        target: Target[Any, Any, ModeT, AdapterT] = DISCORD_V2_DPY27,  # type: ignore[assignment]
         chrome: Chrome = DEFAULT_CHROME,
         localization: Localization = NEUTRAL,
         palette: Palette = DEFAULT_PALETTE,
@@ -871,12 +918,12 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         A mount has one target: changing it means opening a replacement mount, not swapping
         a live mount's renderer out from under its action bindings.
         """
-        self.limits = target.limits if isinstance(target.limits, DiscordLimits) else LIMITS
-        self.mode = DiscordMode.CLASSIC if isinstance(self.limits, ClassicLimits) else DiscordMode.COMPONENTS_V2
-        render_capability = ADAPTER_RENDER_CLASSIC if self.mode is DiscordMode.CLASSIC else ADAPTER_RENDER_V2
-        require_discord_py_target(target, render_capability, "mount this message mode")
-        require_discord_py_target(target, ADAPTER_DISPATCH, "dispatch mounted interactions")
-        require_discord_py_target(target, ADAPTER_INTERACTION_DELIVERY, "deliver mounted interactions")
+        self.limits = target.limits
+        self._binding = _binding_for(target)
+        self.mode = self._binding.mode
+        require_discord_py_target(target, self._binding.render_capability, "mount this message mode")
+        require_discord_py_target(target, AdapterCapability.DISPATCH, "dispatch mounted interactions")
+        require_discord_py_target(target, AdapterCapability.INTERACTION_DELIVERY, "deliver mounted interactions")
         """Which kind of Discord message this mount owns, for its whole life."""
         self.strict = strict
         self.timeout = timeout
@@ -1372,25 +1419,11 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             self.runtime.invalidate()
 
     def _composer(self) -> Callable[..., Composition[Any]]:
-        """Which composition this mount's target uses. One of exactly four target-owned choices.
-
-        The target decides the dialect, the renderer, the view factory, and the message mode
-        — and nothing else. Every other branch in this file would be a shared operation that
-        has not been extracted yet.
-        """
-        return classic_compose if self.mode is DiscordMode.CLASSIC else compose
+        """Which composition this mount's target uses."""
+        return self._binding.composer
 
     def _renderer(self, timeout: float | None) -> V2Renderer | ClassicRenderer:
-        if self.mode is DiscordMode.CLASSIC:
-            return ClassicRenderer(
-                limits=cast(ClassicLimits, self.limits),
-                view_factory=lambda: ClassicMountedView(self, timeout),
-                always_view=True,
-            )
-        return V2Renderer(
-            limits=cast(V2Limits, self.limits),
-            view_factory=lambda: MountedView(self, timeout),
-        )
+        return self._binding.renderer(self, timeout)
 
     def _chrome_text(self, text: TextLike) -> str:
         return resolve_text(text, self.localization).content

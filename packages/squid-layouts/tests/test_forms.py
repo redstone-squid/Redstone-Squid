@@ -8,11 +8,21 @@ from zoneinfo import ZoneInfo
 import pytest
 
 import squid_layouts as sl
-from squid_layouts.capabilities import Capability
 from squid_layouts.interactions import ActionPolicy
-from squid_layouts.planning.limits import LIMITS
-from squid_layouts.planning.target import TargetProfile
+from squid_layouts.planning.adapter import AdapterProfile
+from squid_layouts.planning.discord import components_v2_target
+from squid_layouts.planning.limits import LIMITS, V2Limits
+from squid_layouts.planning.types import DiscordAdapter
 from squid_layouts.scene.model import SceneButton, SceneRow
+
+
+def _target(name: str, *, capabilities: frozenset[str] = frozenset(), limits: V2Limits = LIMITS):
+    """A V2 target whose adapter supplies exactly `capabilities` and no extensions.
+
+    Capabilities that are not Discord protocol facts belong to the adapter axis, which is
+    what lets a test vary them without inventing a dialect.
+    """
+    return components_v2_target(AdapterProfile(DiscordAdapter, name, ">=1", capabilities=capabilities), limits=limits)
 
 
 class ProfileForm(sl.forms.Form):
@@ -375,7 +385,7 @@ async def _submitted(event: sl.SubmitEvent) -> None: ...
 
 
 def test_form_trigger_plans_as_content_with_a_submission_binding() -> None:
-    target = TargetProfile("html", 1, frozenset({Capability.FORMS_MODAL}), limits=LIMITS)
+    target = _target("html")
     spec = sl.forms.FormSpec("Edit", (sl.forms.TextField(key="name", label="Name"),))
 
     result = sl.planning.plan(sl.form("Edit", spec, key="edit", on_submit=_submitted), target=target)
@@ -396,7 +406,7 @@ class NativeOnlyField(sl.forms.ExtensionField[str]):
 
 
 def test_extension_field_without_a_fallback_is_a_planning_error() -> None:
-    target = TargetProfile("html", 1, frozenset({Capability.FORMS_MODAL}), limits=LIMITS)
+    target = _target("html")
     spec = sl.forms.FormSpec("Native", (NativeOnlyField(key="native", label="Native"),))
 
     with pytest.raises(sl.errors.LayoutInvariantError, match=r"forms\.native-only"):
@@ -404,7 +414,7 @@ def test_extension_field_without_a_fallback_is_a_planning_error() -> None:
 
 
 def test_extension_field_uses_its_portable_fallback() -> None:
-    target = TargetProfile("html", 1, frozenset({Capability.FORMS_MODAL}), limits=LIMITS)
+    target = _target("html")
     spec = sl.forms.FormSpec(
         "Native",
         (

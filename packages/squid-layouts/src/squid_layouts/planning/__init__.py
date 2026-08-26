@@ -2,6 +2,7 @@
 
 from squid_layouts.planning.adapter import AdapterProfile
 from squid_layouts.planning.cache import PlanCache
+from squid_layouts.planning.dialect import TargetDialect
 from squid_layouts.planning.discord import (
     CLASSIC_PROTOCOL_CAPABILITIES,
     V2_PROTOCOL_CAPABILITIES,
@@ -29,7 +30,7 @@ from squid_layouts.planning.search import (
     choose_strategy,
     iter_assignments,
 )
-from squid_layouts.planning.target import PreparedExtension, ResourceCost, TargetProfile
+from squid_layouts.planning.target import PreparedExtension, ResourceCost, Target
 from squid_layouts.planning.types import (
     ClassicTarget,
     ComponentsV2Target,
@@ -38,7 +39,6 @@ from squid_layouts.planning.types import (
     DiscordPyAdapter,
     DiscordTarget,
     Renderable,
-    TargetRequirements,
 )
 from squid_layouts.sources import POSITION_POLICY, Position, PositionPolicy
 
@@ -68,8 +68,8 @@ __all__ = [
     "StrategyAssignment",
     "StrategyAxis",
     "StrategyCandidate",
-    "TargetProfile",
-    "TargetRequirements",
+    "Target",
+    "TargetDialect",
     "choose_strategy",
     "classic_target",
     "components_v2_target",

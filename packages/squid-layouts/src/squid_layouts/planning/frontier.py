@@ -9,6 +9,7 @@ can canonicalize, price, and step decisions without re-deriving the traversal ea
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
 
+from squid_layouts.planning.adapter import ResourceCost
 from squid_layouts.planning.degradation import DegradationEffect, DegradationProfile
 from squid_layouts.planning.layout_measurement.costing import component_count, prune
 from squid_layouts.planning.layout_measurement.diagnostics import (
@@ -19,7 +20,6 @@ from squid_layouts.planning.layout_measurement.diagnostics import (
 )
 from squid_layouts.planning.layout_measurement.realization import Builder
 from squid_layouts.planning.limits import Axis, DiscordLimits
-from squid_layouts.planning.target import ResourceCost
 from squid_layouts.primitives.nodes import Break, Budget, Card, Fidelity, Node, Panel, Variants
 
 type VariantPath = tuple[int | str, ...]

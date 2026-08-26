@@ -47,7 +47,7 @@ from squid_layouts.scene.model import (
     SceneZonedTime,
 )
 from squid_layouts.scene.schema import SCENE_SCHEMA
-from squid_layouts.text import TextDialect
+from squid_layouts.text import Markup
 
 
 class SceneCodecError(ValueError):
@@ -287,8 +287,9 @@ def _media_from_dict(raw: Any) -> SceneEmbedMedia | None:
 
 def _node_to_dict(node: SceneNode | SceneLink | ScenePremiumButton | SceneButton | SceneRoutedButton) -> dict[str, Any]:
     match node:
-        case SceneText(content=content, dialect=dialect):
-            return {"kind": SceneText.KIND, "content": content, "dialect": dialect.value}
+        case SceneText(content=content, markup=markup):
+            # The JSON key stays "dialect": the Python name moved, the wire format did not.
+            return {"kind": SceneText.KIND, "content": content, "dialect": markup.value}
         case SceneTime(instant=instant, style=style, prefix=prefix):
             return {"kind": SceneTime.KIND, "instant": instant, "style": style, "prefix": prefix}
         case SceneZonedTime(instant=instant, timezone=timezone, prefix=prefix):
@@ -449,7 +450,7 @@ def _node_from_dict(
     kind = _string(raw, "kind")
     match kind:
         case SceneText.KIND:
-            return SceneText(_string(raw, "content"), TextDialect(_string(raw, "dialect")))
+            return SceneText(_string(raw, "content"), Markup(_string(raw, "dialect")))
         case SceneTime.KIND:
             return SceneTime(
                 _string(raw, "instant"),

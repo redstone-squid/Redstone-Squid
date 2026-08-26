@@ -78,5 +78,5 @@ def test_standalone_preview_includes_discord_like_css() -> None:
 
 
 def test_html_preview_rejects_an_unknown_target_version() -> None:
-    with pytest.raises(DrawInvariantError, match=r"target .* version 99"):
+    with pytest.raises(DrawInvariantError, match=r"target version 99"):
         Renderer().draw(replace(_scene(), target_version=99))

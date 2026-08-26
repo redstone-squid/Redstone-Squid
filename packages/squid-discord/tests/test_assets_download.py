@@ -5,7 +5,7 @@ import pytest
 
 import squid_discord
 import squid_layouts as sl
-from squid_discord import V2_TARGET, Everyone, Mount, delivery
+from squid_discord import DISCORD_V2_DPY27, Everyone, Mount, delivery
 from squid_discord.renderer import V2Renderer
 from squid_layouts.html import Renderer as HtmlRenderer
 from squid_layouts.runtime.component import Component, RenderResult
@@ -21,7 +21,7 @@ def test_download_factory_hoists_its_asset_and_preserves_file_metadata() -> None
     asset = _inline()
     node = sl.download("Report", asset, key="report-download", description="Generated now")
 
-    result = sl.planning.plan(node, target=V2_TARGET)
+    result = sl.planning.plan(node, target=DISCORD_V2_DPY27)
 
     assert isinstance(node, sl.semantic.Download)
     assert result.scene.components_v2.children == (
@@ -33,7 +33,7 @@ def test_download_factory_hoists_its_asset_and_preserves_file_metadata() -> None
 
 
 def test_download_uses_localized_chrome_when_the_explicit_label_is_none() -> None:
-    result = sl.planning.plan(sl.download(None, _inline(), key="report-download"), target=V2_TARGET)
+    result = sl.planning.plan(sl.download(None, _inline(), key="report-download"), target=DISCORD_V2_DPY27)
 
     assert result.scene.components_v2.children[0] == SceneText("Download")
 
@@ -42,16 +42,16 @@ def test_equal_asset_keys_deduplicate_but_conflicting_assets_raise() -> None:
     asset = _inline()
     node = sl.download("Report", asset, key="report-download")
 
-    result = sl.planning.plan(sl.Document((node,), (asset,)), target=V2_TARGET)
+    result = sl.planning.plan(sl.Document((node,), (asset,)), target=DISCORD_V2_DPY27)
     assert result.scene.assets == (sl.scene.SceneAsset("report", "report.txt", "text/plain"),)
 
     conflicting = sl.document.Asset("report", "other.txt", "text/plain", sl.document.InlineAsset(b"other"))
     with pytest.raises(sl.errors.LayoutInvariantError, match="identifies two different assets"):
-        sl.planning.plan(sl.Document((node,), (conflicting,)), target=V2_TARGET)
+        sl.planning.plan(sl.Document((node,), (conflicting,)), target=DISCORD_V2_DPY27)
 
 
 def test_scene_file_codec_round_trips() -> None:
-    scene = sl.planning.plan(sl.download("Report", _inline(), key="report-download"), target=V2_TARGET).scene
+    scene = sl.planning.plan(sl.download("Report", _inline(), key="report-download"), target=DISCORD_V2_DPY27).scene
 
     assert Codec.loads(Codec.dumps(scene)) == scene
     assert Codec.to_dict(scene)["body"]["children"][1] == {
@@ -64,14 +64,14 @@ def test_scene_file_codec_round_trips() -> None:
 
 
 def test_discord_renderer_draws_an_attachment_file_or_url_link() -> None:
-    inline = sl.planning.plan(sl.download("Report", _inline(), key="report-download"), target=V2_TARGET)
+    inline = sl.planning.plan(sl.download("Report", _inline(), key="report-download"), target=DISCORD_V2_DPY27)
     inline_view = V2Renderer().view(inline.scene, plan=inline)
     assert any(isinstance(item, discord.ui.File) for item in inline_view.walk_children())
 
     stored = sl.document.Asset(
         "report", "report.txt", "text/plain", sl.document.StoredAsset("https://example.com/report.txt")
     )
-    linked = sl.planning.plan(sl.download("Report", stored, key="report-download"), target=V2_TARGET)
+    linked = sl.planning.plan(sl.download("Report", stored, key="report-download"), target=DISCORD_V2_DPY27)
     linked_view = V2Renderer().view(linked.scene, plan=linked)
     link = next(item for item in linked_view.walk_children() if isinstance(item, discord.ui.Button))
     assert link.url == "https://example.com/report.txt"
@@ -120,7 +120,7 @@ async def test_mount_keeps_raising_for_non_url_stored_references() -> None:
 
 
 def test_html_renderer_emits_data_links_resolver_links_and_visible_placeholders() -> None:
-    result = sl.planning.plan(sl.download("Report", _inline(), key="report-download"), target=V2_TARGET)
+    result = sl.planning.plan(sl.download("Report", _inline(), key="report-download"), target=DISCORD_V2_DPY27)
 
     rendered = HtmlRenderer().draw(result.scene, plan=result)
     assert 'href="data:text/plain;base64,ZnVsbCByZXBvcnQ="' in rendered

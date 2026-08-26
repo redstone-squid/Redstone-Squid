@@ -23,7 +23,6 @@ from squid_layouts.planning.limits import (
     Axis,
     ClassicLimits,
     ComponentLimits,
-    DiscordLimits,
     V2Limits,
 )
 from squid_layouts.planning.target import ResourceCost
@@ -161,13 +160,13 @@ def _walk(items: Sequence[Any], prefix: Path = ()) -> Iterator[tuple[Any, Path]]
             yield from _walk(children, path)
 
 
-def cost(*items: discord.ui.Item[Any], limits: V2Limits = LIMITS) -> ResourceCost:
+def cost(*items: discord.ui.Item[Any]) -> ResourceCost:
     """Cost items a view does not contain yet, so a caller can reserve for them.
 
     The single definition of what a component costs: the item, every descendant, and the
-    display text they carry. `Target`'s native-item adapter measures through here too.
+    display text they carry. A target's native-item adapter measures through here too.
+    Limit-independent, which is why it takes none.
     """
-    del limits  # Costing is limit-independent; the parameter keeps call sites uniform.
     components = 0
     text = 0
     for item in items:
@@ -182,33 +181,26 @@ def measure(
     host: DiscordPresentation | discord.ui.LayoutView | discord.ui.View,
     *,
     attachments: int = 0,
-    limits: DiscordLimits | None = None,
 ) -> DiscordReservation:
     """Measure what a host message or view already spends, mutating and repairing nothing.
 
     One function over three shapes because a caller reserving room does not care which one
-    it holds — it cares what is left. What it holds decides the axes, not the API.
+    it holds — it cares what is left. What it holds decides the axes, not the API, and it
+    decides the limits too: a V2 host is measured against the V2 table and a classic one
+    against the classic table, with nothing for a caller to get wrong.
     """
     if isinstance(host, DiscordPresentation):
         if host.mode is DiscordMode.CLASSIC:
-            return measure_classic(host, attachments=attachments, limits=_classic(limits))
-        return _measure_v2(host.layout, attachments=attachments + len(host.assets), limits=_v2(limits))
+            return measure_classic(host, attachments=attachments)
+        return _measure_v2(host.layout, attachments=attachments + len(host.assets))
     if isinstance(host, discord.ui.LayoutView):
-        return _measure_v2(host, attachments=attachments, limits=_v2(limits))
+        return _measure_v2(host, attachments=attachments)
     if isinstance(host, discord.ui.View):
         # A bare classic view is controls and nothing else: it says nothing about the
         # content or embeds the same message may also carry.
-        return measure_classic(DiscordPresentation.classic(view=host), attachments=attachments, limits=_classic(limits))
+        return measure_classic(DiscordPresentation.classic(view=host), attachments=attachments)
     message = f"measure expects a DiscordPresentation, LayoutView, or View, not {type(host).__name__}"
     raise TypeError(message)
-
-
-def _v2(limits: DiscordLimits | None) -> V2Limits:
-    return limits if isinstance(limits, V2Limits) else LIMITS
-
-
-def _classic(limits: DiscordLimits | None) -> ClassicLimits:
-    return limits if isinstance(limits, ClassicLimits) else CLASSIC_LIMITS
 
 
 def effective_rows(view: discord.ui.View) -> tuple[int, ...]:

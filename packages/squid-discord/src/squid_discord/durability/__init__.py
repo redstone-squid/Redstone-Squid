@@ -7,7 +7,7 @@ from typing import Any
 
 from squid_discord.mount import Mount
 from squid_discord.sessions import SessionKey
-from squid_discord.target import V2_TARGET
+from squid_discord.target import DISCORD_V2_DPY27
 from squid_discord.targets import DEFAULT_TARGETS, TargetRegistry
 from squid_layouts.runtime.component import Component, render_component_tree
 from squid_layouts.runtime.presentation import (
@@ -103,14 +103,14 @@ class MountState:
     component_version: int
     components: tuple[ComponentState, ...]
     presentation: PresentationState
-    target_id: str = V2_TARGET.id
-    target_version: int = V2_TARGET.version
+    target_triple: str = DISCORD_V2_DPY27.triple
+    target_version: int = DISCORD_V2_DPY27.version
     target_fingerprint: str = ""
     target_adapter_capabilities: tuple[str, ...] = ()
-    """A digest of the profile this mount was planned against.
+    """A digest of the target this mount was planned against.
 
-    Recorded beside the id because an id alone does not pin the budgets. Recovery refuses a
-    profile that has since changed rather than rebuilding a stored render against limits it
+    Recorded beside the triple because neither axis alone pins the budgets. Recovery refuses
+    a target that has since changed rather than rebuilding a stored render against limits it
     was never fitted to.
     """
 
@@ -209,7 +209,7 @@ class MountStateCodec:
             ],
             "presentation": _presentation_to_dict(state.presentation),
             "target": {
-                "id": state.target_id,
+                "triple": state.target_triple,
                 "version": state.target_version,
                 "fingerprint": state.target_fingerprint,
                 "adapter_capabilities": list(state.target_adapter_capabilities),
@@ -269,7 +269,7 @@ class MountStateCodec:
             _integer(raw, "component_version"),
             tuple(decoded_components),
             _presentation_from_dict(presentation),
-            _string(target, "id"),
+            _string(target, "triple"),
             _integer(target, "version"),
             _string(target, "fingerprint"),
             tuple(adapter_capabilities),
@@ -423,7 +423,7 @@ class ComponentRegistry:
                 dict(mount.presentation.disclosures),
                 dict(mount.presentation.strategies),
             ),
-            mount.target.id,
+            mount.target.triple,
             mount.target.version,
             mount.target.fingerprint,
             tuple(sorted(mount.target.adapter_capabilities)),
@@ -446,7 +446,7 @@ class ComponentRegistry:
         reader could already be clicking it.
         """
         target = targets.resolve(
-            state.target_id,
+            state.target_triple,
             state.target_version,
             state.target_fingerprint,
             state.target_adapter_capabilities,

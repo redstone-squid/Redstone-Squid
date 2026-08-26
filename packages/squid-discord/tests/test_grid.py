@@ -41,7 +41,7 @@ def test_explicit_matrix_table_is_dense_and_authoritative() -> None:
         display=sl.semantic.TableDisplay.MATRIX,
     )
 
-    result = sl.planning.plan(table, target=squid_discord.V2_TARGET)
+    result = sl.planning.plan(table, target=squid_discord.DISCORD_V2_DPY27)
     text = next(item.content for item in _walk(result.scene.body) if isinstance(item, SceneText))
 
     assert text.splitlines()[1].split() == ["Name", "Value"]
@@ -61,7 +61,7 @@ async def test_exact_button_grid_keeps_rows_keys_disabled_state_and_payload() ->
     cells = (*_cells(6)[:5], sp.GridCell("blocked", "Blocked", available=False))
     result = sl.planning.plan(
         squid_discord.button_grid(*cells, key="board", columns=5, on_pick=pick),
-        target=squid_discord.V2_TARGET,
+        target=squid_discord.DISCORD_V2_DPY27,
     )
     rows = [item for item in _walk(result.scene.body) if isinstance(item, SceneRow)]
     buttons = [item for item in _walk(result.scene.body) if isinstance(item, SceneButton)]
@@ -78,12 +78,12 @@ def test_exact_button_grid_refuses_illegal_discord_shapes_in_planning() -> None:
     with pytest.raises(LayoutInvariantError, match="maximum is 5"):
         sl.planning.plan(
             squid_discord.button_grid(*_cells(6), key="wide", columns=6, on_pick=_pick),
-            target=squid_discord.V2_TARGET,
+            target=squid_discord.DISCORD_V2_DPY27,
         )
     with pytest.raises(UnsolvableLayoutError):
         sl.planning.plan(
             squid_discord.button_grid(*_cells(35), key="large", columns=5, on_pick=_pick),
-            target=squid_discord.V2_TARGET,
+            target=squid_discord.DISCORD_V2_DPY27,
         )
 
 
@@ -98,7 +98,7 @@ def test_exact_button_grid_refuses_illegal_discord_shapes_in_planning() -> None:
 def test_semantic_grid_selects_a_legal_strategy(count: int, columns: int, scene_type: type, strategy: str) -> None:
     result = sl.planning.plan(
         sl.grid(*_cells(count), key="board", columns=columns, on_pick=_pick),
-        target=squid_discord.V2_TARGET,
+        target=squid_discord.DISCORD_V2_DPY27,
     )
 
     assert any(isinstance(item, scene_type) for item in _walk(result.scene.body))
@@ -116,14 +116,14 @@ def test_semantic_grid_strategy_remains_sticky_while_available() -> None:
     session = PresentationSession()
     first = sl.planning.plan(
         sl.grid(*_cells(6), key="board", columns=6, on_pick=_pick),
-        target=squid_discord.V2_TARGET,
+        target=squid_discord.DISCORD_V2_DPY27,
         session=session,
     )
     apply_updates(session, first.session_updates)
 
     second = sl.planning.plan(
         sl.grid(*_cells(5), key="board", columns=5, on_pick=_pick),
-        target=squid_discord.V2_TARGET,
+        target=squid_discord.DISCORD_V2_DPY27,
         session=session,
     )
 
@@ -148,7 +148,7 @@ async def test_coordinate_grid_lists_only_available_cells_and_submits_stable_key
             columns=6,
             on_pick=pick,
         ),
-        target=squid_discord.V2_TARGET,
+        target=squid_discord.DISCORD_V2_DPY27,
     )
     select = next(item for item in _walk(result.scene.body) if isinstance(item, SceneSelect))
 

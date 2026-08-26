@@ -14,7 +14,7 @@ from squid_discord.mount import (
     Scheduler,
     _monotonic,
 )
-from squid_discord.target import V2_TARGET, Target
+from squid_discord.target import DISCORD_V2_DPY27, Target
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.interactions import ActionMiddleware
 from squid_layouts.palette import DEFAULT_PALETTE, Palette
@@ -53,7 +53,7 @@ class MountDefaults:
     mount and must be supplied at each construction site.
     """
 
-    target: Target = V2_TARGET
+    target: Target = DISCORD_V2_DPY27
     chrome: Chrome = DEFAULT_CHROME
     localization: Localization = NEUTRAL
     palette: Palette = DEFAULT_PALETTE
