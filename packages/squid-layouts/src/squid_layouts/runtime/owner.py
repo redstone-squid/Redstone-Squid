@@ -148,6 +148,8 @@ class ComponentRuntime:
             return self._candidate_tree
         if reuse_committed and not self.dirty and self._committed_tree is not None:
             return self._committed_tree
+        if reuse_committed and self._backdated_to_committed():
+            return self._committed_tree  # pyrefly: ignore[bad-return]
         tree = render_component_tree(
             self.root,
             runtime=self,
@@ -162,14 +164,34 @@ class ComponentRuntime:
         )
         if reuse_committed and self._committed_tree is not None and tree == self._committed_tree:
             tree = self._committed_tree
-        self._dirty_components.clear()
-        self._forced_components.clear()
-        self._force_all = False
-        self._dirty_paths.clear()
+        self._clear_render_invalidations()
         if not tree.deferred:
             self._candidate_tree = tree
             self._candidate_revision = self.revision
         return tree
+
+    def _backdated_to_committed(self) -> bool:
+        """Whether every attributed invalidation settled to its committed render value."""
+        if self._committed_tree is None or self._force_all or self._forced_components or not self._dirty_components:
+            return False
+        for component in self._dirty_components:
+            cached = self._render_cache.get(component)
+            if (
+                cached is None
+                or cached.revision != component.__dict__.get("_state_revision", 0)
+                or not cached.observation.current()
+            ):
+                return False
+        self._clear_render_invalidations()
+        self._candidate_tree = self._committed_tree
+        self._candidate_revision = self.revision
+        return True
+
+    def _clear_render_invalidations(self) -> None:
+        self._dirty_components.clear()
+        self._forced_components.clear()
+        self._force_all = False
+        self._dirty_paths.clear()
 
     def commit(self, tree: ComponentTree, *, rendered_revision: int | None = None) -> None:
         """Publish one successfully planned tree and reconcile keyed lifecycle hooks.
@@ -183,6 +205,13 @@ class ComponentRuntime:
             # components that are only absent because expansion stopped early.
             message = "a discovery render cannot be committed"
             raise LayoutInvariantError(message)
+
+        if tree is self._committed_tree:
+            if rendered_revision is None or self.revision == rendered_revision:
+                self._candidate_tree = tree
+                self._candidate_revision = self.revision
+            self.dirty = rendered_revision is not None and self.revision != rendered_revision
+            return
 
         def depth(path: str) -> int:
             return 0 if path == "$" else path.count(".") + 1
