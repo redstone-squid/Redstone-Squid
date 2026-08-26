@@ -1,4 +1,4 @@
-"""Explicit pattern windows resolved through the shared cursor coordinator."""
+"""Explicit machine windows resolved through the shared cursor coordinator."""
 
 from collections.abc import Callable, Sequence
 

@@ -24,11 +24,11 @@ def _lookup(
     picked: tuple[Entry, ...] = (),
     minimum: int = 0,
     maximum: int = 2,
-) -> sp.Lookup[Entry]:
+) -> sp.SearchPicker[Entry]:
     async def committed(_event: sl.ActionEvent, values: tuple[Entry, ...]) -> None:
         commits.append(values)
 
-    return sp.Lookup(
+    return sp.SearchPicker(
         lambda query: sl.sources.list_source(tuple(item for item in items if query.lower() in item.label.lower())),
         identity=lambda item: item.key,
         label=lambda item: item.label,
@@ -41,7 +41,7 @@ def _lookup(
     )
 
 
-async def _search(mount: Mount, lookup: sp.Lookup[Entry], query: str) -> None:
+async def _search(mount: Mount, lookup: sp.SearchPicker[Entry], query: str) -> None:
     spec = sl.forms.FormSpec("Search", (sl.forms.TextField(key="query", label="Search"),))
     await mount.dispatch_submit(
         "lookup.search",
@@ -138,7 +138,7 @@ async def test_lookup_drops_a_stale_query_completion() -> None:
     async def committed(_event: sl.ActionEvent, _picked: tuple[Entry, ...]) -> None:
         pass
 
-    lookup = sp.Lookup(
+    lookup = sp.SearchPicker(
         DelayedSource,
         identity=lambda item: item.key,
         label=lambda item: item.label,

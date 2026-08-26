@@ -1,4 +1,4 @@
-"""Section-oriented editing over forms and nested pure patterns."""
+"""Section-oriented editing over forms and nested pure machines."""
 
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -24,10 +24,10 @@ from squid_ui.semantic import (
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import ContentLike, display_text, normalize_content, require_key
 from squid_ui_widgets.commit import CommitMode
-from squid_ui_widgets.shells import ComponentShell, Pattern, PatternControls, PatternEvent
+from squid_ui_widgets.drivers import ComponentDriver, StateMachine, MachineControls, TransitionEvent
 
 type EditorValues = Mapping[str, object]
-type EditorCommitHandler = Callable[[PatternEvent[EditorState], EditorValues, frozenset[str]], Awaitable[None]]
+type EditorCommitHandler = Callable[[TransitionEvent[EditorState], EditorValues, frozenset[str]], Awaitable[None]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,7 +65,7 @@ class EditorSection[StateT, ValueT]:
         load: Callable[[ValueT], StateT],
         dump: Callable[[StateT], ValueT],
         summary: Callable[[ValueT], TextLike],
-        pattern: Pattern[StateT] | None = None,
+        machine: StateMachine[StateT] | None = None,
         form: FormSpec | None = None,
         issues: Callable[[StateT], Iterable[FormIssue]] | None = None,
     ) -> None:
@@ -75,7 +75,7 @@ class EditorSection[StateT, ValueT]:
         self.load = load
         self.dump = dump
         self.summary = summary
-        self.pattern = pattern
+        self.machine = machine
         self.form = form
         self.issues = issues
 
@@ -134,22 +134,22 @@ class EditorSection[StateT, ValueT]:
         cls,
         key: str,
         label: TextLike,
-        pattern: Pattern[StateT],
+        machine: StateMachine[StateT],
         *,
         load: Callable[[ValueT], StateT],
         dump: Callable[[StateT], ValueT],
         summary: Callable[[ValueT], TextLike],
         issues: Callable[[StateT], Iterable[FormIssue]] | None = None,
     ) -> EditorSection[StateT, ValueT]:
-        """Adapt a nested pure pattern into an editor section."""
+        """Adapt a nested pure machine into an editor section."""
         return cls(
             key,
             label,
-            initial=pattern.initial_state,
+            initial=machine.initial_state,
             load=load,
             dump=dump,
             summary=summary,
-            pattern=pattern,
+            machine=machine,
             issues=issues,
         )
 
@@ -163,7 +163,7 @@ class EditorSection[StateT, ValueT]:
 
 
 class Editor:
-    """A pure editor whose form and nested-pattern sections share one commit boundary."""
+    """A pure editor whose form and nested-machine sections share one commit boundary."""
 
     def __init__(
         self,
@@ -217,18 +217,18 @@ class Editor:
         *,
         initial: EditorValues | EditorState | None = None,
         on_commit: EditorCommitHandler | None = None,
-    ) -> ComponentShell[EditorState]:
+    ) -> ComponentDriver[EditorState]:
         """Build an in-memory editor and dispatch each committed value change once."""
         state = self.initial_from(initial) if isinstance(initial, Mapping) else initial
 
-        async def changed(event: PatternEvent[EditorState]) -> None:
+        async def changed(event: TransitionEvent[EditorState]) -> None:
             if on_commit is None:
                 return
             changed_keys = self._committed_changes(event.previous, event.state)
             if changed_keys:
                 await on_commit(event, self.committed_values(event.state), changed_keys)
 
-        return ComponentShell(self, initial=state, on_change=changed)
+        return ComponentDriver(self, initial=state, on_change=changed)
 
     def _slot(self, state: EditorState, key: str) -> EditorSectionState | None:
         return next((slot for slot in state.sections if slot.key == key), None)
@@ -284,7 +284,7 @@ class Editor:
         remainder = action.removeprefix("section:")
         for section in self.sections:
             prefix = f"{section.key}:"
-            if remainder.startswith(prefix) and section.pattern is not None:
+            if remainder.startswith(prefix) and section.machine is not None:
                 return section, remainder.removeprefix(prefix)
         return None
 
@@ -314,7 +314,7 @@ class Editor:
         if action.startswith("edit:"):
             key = action.removeprefix("edit:")
             section = self._sections.get(key)
-            return replace(state, editing=key) if section is not None and section.pattern is not None else state
+            return replace(state, editing=key) if section is not None and section.machine is not None else state
         if action.startswith("submit:") and submitted is not None:
             key = action.removeprefix("submit:")
             section = self._sections.get(key)
@@ -328,8 +328,8 @@ class Editor:
             return state
         section, nested_action = nested
         slot = self._slot(state, section.key)
-        assert slot is not None and section.pattern is not None
-        nested_state = section.pattern.transition(
+        assert slot is not None and section.machine is not None
+        nested_state = section.machine.transition(
             slot.state,
             nested_action,
             values=values,
@@ -352,7 +352,7 @@ class Editor:
             return None
         section, nested_action = nested
         slot = self._slot(state, section.key)
-        resolver = getattr(section.pattern, "form_for", None)
+        resolver = getattr(section.machine, "form_for", None)
         if slot is None or resolver is None:
             return None
         return cast(FormSpec | None, resolver(slot.state, nested_action))
@@ -368,18 +368,18 @@ class Editor:
             return rendered.children
         return tuple(rendered) if isinstance(rendered, Sequence) else (rendered,)
 
-    def render(self, state: EditorState, controls: PatternControls[EditorState]) -> RenderResult:
+    def render(self, state: EditorState, controls: MachineControls[EditorState]) -> RenderResult:
         if state.editing is not None:
             section = self._sections.get(state.editing)
             slot = self._slot(state, state.editing)
-            if section is not None and section.pattern is not None and slot is not None:
-                nested = section.pattern.render(
+            if section is not None and section.machine is not None and slot is not None:
+                nested = section.machine.render(
                     slot.state,
                     _NestedControls(
                         controls,
                         self.key,
                         section.key,
-                        getattr(section.pattern, "key", None),
+                        getattr(section.machine, "key", None),
                     ),
                 )
                 return stack(
@@ -455,11 +455,11 @@ class Editor:
 
 
 class _NestedControls[ParentStateT, ChildStateT]:
-    """Namespace child-pattern controls through an Editor transition."""
+    """Namespace child-machine controls through an Editor transition."""
 
     def __init__(
         self,
-        parent: PatternControls[ParentStateT],
+        parent: MachineControls[ParentStateT],
         editor_key: str,
         section_key: str,
         pattern_key: str | None,

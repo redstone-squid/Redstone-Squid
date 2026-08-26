@@ -51,7 +51,7 @@ async def test_tabs_component_shell_switches_content_and_adapts_large_strips() -
 
     await mount.dispatch("settings.privacy", fake_interaction())
     view = commit_render(mount)
-    assert tabs.pattern_state == sp.TabsState("privacy")
+    assert tabs.machine_state == sp.TabsState("privacy")
     assert "privacy body" in _texts(view)
     assert "general body" not in _texts(view)
 
@@ -67,7 +67,7 @@ async def test_tabs_component_shell_switches_content_and_adapts_large_strips() -
     assert len(select.options) == 6
 
     await many_mount.dispatch("many-tabs", fake_interaction(), ["4"])
-    assert many.pattern_state == sp.TabsState("4")
+    assert many.machine_state == sp.TabsState("4")
 
 
 async def test_tabs_component_shell_embeds_only_selected_content() -> None:
@@ -88,23 +88,23 @@ def test_tabs_router_shell_encodes_next_state_and_input_state() -> None:
         [sp.Tab("one", "One", "one"), sp.Tab("two", "Two", "two")],
         key="tabs",
     )
-    routes: list[sp.PatternRoute[sp.TabsState]] = []
+    routes: list[sp.TransitionRoute[sp.TabsState]] = []
 
-    def route(request: sp.PatternRoute[sp.TabsState]) -> str:
+    def route(request: sp.TransitionRoute[sp.TabsState]) -> str:
         routes.append(request)
         return f"tabs:{request.state.selected}"
 
-    rendered = sp.RouterShell(route).render(small, small.initial_state)
+    rendered = sp.RouteDriver(route).render(small, small.initial_state)
     document = sl.planning.plan(rendered, target=squid_ui_discord.DISCORD_V2_DPY27).scene
     buttons = [item for row in document.components_v2.children if hasattr(row, "items") for item in row.items]
     assert all(isinstance(item, scene.RoutedButton) for item in buttons)
-    assert routes[-1] == sp.PatternRoute("select:two", sp.TabsState("two"), "next")
+    assert routes[-1] == sp.TransitionRoute("select:two", sp.TabsState("two"), "next")
 
     many = sp.Tabs([sp.Tab(str(index), str(index), str(index)) for index in range(6)], key="many")
-    routed = sp.RouterShell(route).render(many, many.initial_state)
+    routed = sp.RouteDriver(route).render(many, many.initial_state)
     routed_scene = sl.planning.plan(routed, target=squid_ui_discord.DISCORD_V2_DPY27).scene
     assert isinstance(routed_scene.components_v2.children[0], scene.RoutedSelect)
-    assert routes[-1] == sp.PatternRoute("select", sp.TabsState("0"), "input")
+    assert routes[-1] == sp.TransitionRoute("select", sp.TabsState("0"), "input")
 
 
 async def test_menu_component_shell_drills_down_and_owns_chrome() -> None:
@@ -128,14 +128,14 @@ async def test_menu_component_shell_drills_down_and_owns_chrome() -> None:
 
     await mount.dispatch("settings.administration", fake_interaction())
     view = commit_render(mount)
-    assert menu.pattern_state == sp.MenuState(("administration",))
+    assert menu.machine_state == sp.MenuState(("administration",))
     assert "screen: administration" in _texts(view)
     assert "Audit" in _labels(view)
 
     await mount.dispatch("settings.audit", fake_interaction())
-    assert menu.pattern_state == sp.MenuState(("administration", "audit"))
+    assert menu.machine_state == sp.MenuState(("administration", "audit"))
     await mount.dispatch("settings.home", fake_interaction())
-    assert menu.pattern_state == sp.MenuState()
+    assert menu.machine_state == sp.MenuState()
     await mount.dispatch("settings.close", fake_interaction())
     assert mount._finished
 
@@ -423,7 +423,7 @@ async def test_ranked_list_keeps_global_ranks_on_later_pages() -> None:
 
     await mount.dispatch("leaderboard.next", fake_interaction())
     view = commit_render(mount)
-    assert ranked.pattern_state == sp.RankedListState(Position(offset=1))
+    assert ranked.machine_state == sp.RankedListState(Position(offset=1))
     assert "3. **Edsger** — 10" in _texts(view)
 
 
