@@ -9,10 +9,10 @@ from squid_ui.runtime.component import RenderResult
 from squid_ui.semantic import ActionDisplay, Choice, Tone, fallback
 from squid_ui.sources import Position
 from squid_ui.text import TextLike
-from squid_patterns._content import display_text, require_key
-from squid_patterns._paging import window
-from squid_patterns.commit import CommitMode
-from squid_patterns.shells import ComponentShell, PatternControls, PatternEvent
+from squid_ui_widgets._content import display_text, require_key
+from squid_ui_widgets._paging import window
+from squid_ui_widgets.commit import CommitMode
+from squid_ui_widgets.shells import ComponentShell, PatternControls, PatternEvent
 
 
 @dataclass(frozen=True, slots=True)

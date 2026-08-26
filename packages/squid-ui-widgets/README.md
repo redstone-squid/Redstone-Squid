@@ -1,4 +1,4 @@
-# squid-patterns
+# squid-ui-widgets
 
 Reusable application patterns built on [`squid-ui`](../squid-ui/README.md): the
 state machines behind a wizard, a browser, an editor, a lookup, a ranked list, a vote.
@@ -8,7 +8,7 @@ applications already written in that language.
 
 ```python
 import squid_ui as sl
-import squid_patterns as sp
+import squid_ui_widgets as sp
 
 
 async def chosen(event: sp.PatternEvent[sp.DecisionState]) -> None:
@@ -41,7 +41,7 @@ machines that render portable documents, and any target `squid-ui` can plan for 
 them. `tests/architecture/test_boundaries.py::test_patterns_package_is_transport_free` is what
 keeps that true.
 
-`squid_patterns.guards.confirm` lives here rather than in `squid_ui.guards` for the same
+`squid_ui_widgets.guards.confirm` lives here rather than in `squid_ui.guards` for the same
 reason, inverted: the guard *vocabulary* is portable and has no opinion about what a refusal
 looks like, but `confirm` answers with a rendered question, so it belongs beside the shell it
 renders. It composes with `all_of` and `any_of` like any other guard.

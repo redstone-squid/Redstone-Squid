@@ -23,7 +23,7 @@ from squid_ui.semantic import (
     Tone,
 )
 from squid_ui.text import TextLike
-from squid_patterns._content import ContentItem
+from squid_ui_widgets._content import ContentItem
 
 
 @dataclass(frozen=True, slots=True)

@@ -253,7 +253,7 @@ import sys
 
 class BlockDownstream(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
-        if fullname.split(".", 1)[0] in {"discord", "anyio", "squid_storage", "squid_discord", "squid_patterns"}:
+        if fullname.split(".", 1)[0] in {"discord", "anyio", "squid_storage", "squid_discord", "squid_ui_widgets"}:
             raise ModuleNotFoundError(fullname)
         return None
 
@@ -267,7 +267,7 @@ import squid_ui.runtime.shared
 import squid_ui.runtime.topics
 assert squid_ui.runtime.shared.Shared
 assert squid_ui.runtime.shared.SharedPool
-assert not {"discord", "anyio", "squid_storage", "squid_discord", "squid_patterns"} & set(sys.modules)
+assert not {"discord", "anyio", "squid_storage", "squid_discord", "squid_ui_widgets"} & set(sys.modules)
 """
     subprocess.run([sys.executable, "-c", code], check=True)
 
