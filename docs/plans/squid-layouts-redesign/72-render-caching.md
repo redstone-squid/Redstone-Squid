@@ -48,6 +48,10 @@ Planning has three reuse lanes:
 3. **Incremental** recompiles changed regions and reuses realized regions when a cached certificate
    proves the preferred lossless result still fits.
 
+Framework-generated interaction behavior is represented by named, typed adapter descriptors rather
+than lowering-local closures. A program stores their descriptor shape and dynamic slots; it never
+stores Python bytecode, closure cells, authored callbacks or presentation sessions.
+
 The incremental certificate is conservative. Updated resource totals and ancestor-local caps must
 fit, and neither the affected island nor its boundary may contain pagination, shared `Budget`
 allocation, a variant/fallback/strategy choice, lossy overflow, or an opaque extension. V2 children

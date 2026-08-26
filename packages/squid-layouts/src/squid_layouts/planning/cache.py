@@ -20,7 +20,9 @@ class CachedPlan:
     search_fallback: bool = False
     variant_positions: tuple[tuple[tuple[int | str, ...], int], ...] = ()
     fallbacks: tuple[tuple[str, int], ...] = ()
-    """All three decision classes, so a hit re-lowers the winner instead of searching again."""
+    """Fallback decisions for entries whose selected primitive tree could not be compiled."""
+    lowered_template: object | None = None
+    """Selected primitive tree with every process-local value replaced by a document slot."""
 
 
 class PlanCache:
