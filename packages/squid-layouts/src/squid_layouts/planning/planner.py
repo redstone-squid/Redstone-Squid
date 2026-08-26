@@ -55,6 +55,7 @@ from squid_layouts.planning.semantic_adaptation.lowering import (
 )
 from squid_layouts.planning.semantic_adaptation.model import FallbackAxis, SemanticDecisions, SemanticLowering
 from squid_layouts.planning.target import Target
+from squid_layouts.primitives.constraints import Paginate
 from squid_layouts.primitives.nodes import (
     Break,
     Budget,
@@ -70,8 +71,14 @@ from squid_layouts.primitives.nodes import (
     SelectMenu,
     Variants,
 )
+from squid_layouts.primitives.nodes import Code as PrimitiveCode
+from squid_layouts.primitives.nodes import Footer as PrimitiveFooter
+from squid_layouts.primitives.nodes import Heading as PrimitiveHeading
+from squid_layouts.primitives.nodes import Text as PrimitiveText
 from squid_layouts.runtime.presentation import PresentationSession
 from squid_layouts.scene.model import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity
+from squid_layouts.semantic import Code as SemanticCode
+from squid_layouts.semantic import Paragraph as SemanticParagraph
 from squid_layouts.sources import Position
 from squid_layouts.text import NEUTRAL, Localization
 
@@ -246,6 +253,54 @@ def _declared_assets(document: Document) -> tuple[Asset, ...]:
 
     walk(document.children)
     return _merge_assets(found)
+
+
+def _incremental_shape(document: Document) -> str | None:
+    """Identify one independent text region while excluding pagination and shared allocation."""
+    if document.assets or len(document.children) != 1:
+        return None
+    node = document.children[0]
+    match node:
+        case SemanticParagraph(importance=importance):
+            shape: object = ("semantic.paragraph", importance)
+        case SemanticCode(language=language):
+            shape = ("semantic.code", language)
+        case PrimitiveText(overflow=overflow, priority=priority):
+            if isinstance(overflow, Paginate):
+                return None
+            shape = ("primitive.text", overflow, priority)
+        case PrimitiveHeading(level=level, overflow=overflow, priority=priority):
+            if isinstance(overflow, Paginate):
+                return None
+            shape = ("primitive.heading", level, overflow, priority)
+        case PrimitiveFooter(overflow=overflow, priority=priority):
+            if isinstance(overflow, Paginate):
+                return None
+            shape = ("primitive.footer", overflow, priority)
+        case PrimitiveCode(lang=language, overflow=overflow, priority=priority):
+            if isinstance(overflow, Paginate):
+                return None
+            shape = ("primitive.code", language, overflow, priority)
+        case _:
+            return None
+    return stable_fingerprint(((document.key, shape),))
+
+
+def _certifies_incremental(candidate: _Candidate) -> bool:
+    """Whether this preferred state is an isolated, lossless fit with no choices to revisit."""
+    return (
+        candidate.feasible
+        and candidate.degradation.lossless
+        and not candidate.layout.overflowed
+        and not candidate.layout.notes
+        and not candidate.layout.pagers
+        and not candidate.broker.pagers
+        and not candidate.decisions.strategies
+        and not candidate.decisions.fallbacks
+        and not candidate.state.strategies
+        and not candidate.state.fallbacks
+        and not steppable(candidate.lowered, dict(candidate.state.variants))
+    )
 
 
 def _exact_key(
@@ -711,8 +766,7 @@ def plan[ModeT, AdapterT, BodyT: scene.Body](
     dialect = target.dialect
     limits = target.limits
     chrome = localize_chrome(chrome, localization)
-    cache_key = _plan_cache_key(
-        (document,),
+    cache_context = _plan_cache_context(
         target=target,
         chrome=chrome,
         localization=localization,
@@ -723,6 +777,13 @@ def plan[ModeT, AdapterT, BodyT: scene.Body](
         nav=nav,
         positions=positions,
         search_budget=search_budget,
+    )
+    cache_key = _plan_cache_key((document,), context=cache_context)
+    incremental_shape = None if cache is None else _incremental_shape(document)
+    incremental_key = (
+        None
+        if cache is None or incremental_shape is None
+        else _plan_cache_key(("incremental", incremental_shape), context=cache_context)
     )
     cached = cache.get(cache_key) if cache is not None else None
     if cached is not None:
@@ -806,19 +867,25 @@ def plan[ModeT, AdapterT, BodyT: scene.Body](
             memo.put(rendered, exact_key, presentation, presentation.revision, result)
         return result
 
-    selected = _search(
-        _Search(
-            document=document,
-            target=target,
-            chrome=chrome,
-            localization=localization,
-            palette=palette,
-            presentation=presentation,
-            positions=positions,
-            nav=nav,
-        ),
-        search_budget=search_budget,
+    search = _Search(
+        document=document,
+        target=target,
+        chrome=chrome,
+        localization=localization,
+        palette=palette,
+        presentation=presentation,
+        positions=positions,
+        nav=nav,
     )
+    reuse = PlanReuse.MISS
+    selected: _Candidate | None = None
+    if cache is not None and incremental_key is not None and cache.admits_incremental(incremental_key):
+        candidate = search.evaluate(_State())
+        if _certifies_incremental(candidate):
+            selected = replace(candidate, semantic=replace(candidate.semantic, states_explored=1))
+            reuse = PlanReuse.INCREMENTAL
+    if selected is None:
+        selected = _search(search, search_budget=search_budget)
     broker = selected.broker
     semantic = selected.semantic
     assets = _merge_assets(document.assets, semantic.assets)
@@ -920,6 +987,8 @@ def plan[ModeT, AdapterT, BodyT: scene.Body](
         resources=resources,
         metrics=PlanMetrics(
             states_explored=semantic.states_explored,
+            cache_hit=reuse is PlanReuse.INCREMENTAL,
+            reuse=reuse,
             search_fallback=semantic.search_fallback,
         ),
         session_updates=updates,
@@ -954,6 +1023,8 @@ def plan[ModeT, AdapterT, BodyT: scene.Body](
                 ),
             ),
         )
+        if incremental_key is not None and _certifies_incremental(selected) and not root_events:
+            cache.certify_incremental(incremental_key)
     if memo is not None and _cacheable(lowered):
         memo.put(rendered, exact_key, presentation, presentation.revision, result)
     return result
@@ -982,8 +1053,7 @@ def _reconcile_pagers(measured: MeasuredLayout, broker: CursorCoordinator) -> No
     measured.reposition(positions)
 
 
-def _plan_cache_key(
-    nodes: Sequence[object],
+def _plan_cache_context(
     *,
     target: Target[Any, Any, Any, Any],
     chrome: Chrome,
@@ -995,9 +1065,8 @@ def _plan_cache_key(
     nav: PlannedNav | None,
     positions: Mapping[str, Position] | None,
     search_budget: int,
-) -> str:
-    relevant = {
-        "document": stable_value(nodes),
+) -> Mapping[str, object]:
+    return {
         "target": target.fingerprint,
         "presentation": stable_value(presentation),
         "chrome": (
@@ -1025,6 +1094,10 @@ def _plan_cache_key(
             )
         ),
     }
+
+
+def _plan_cache_key(nodes: Sequence[object], *, context: Mapping[str, object]) -> str:
+    relevant = {"document": stable_value(nodes), **context}
     return stable_fingerprint((relevant,))
 
 
