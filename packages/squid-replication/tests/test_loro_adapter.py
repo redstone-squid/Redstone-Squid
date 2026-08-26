@@ -72,6 +72,7 @@ def test_one_action_spans_every_public_container_and_undoes_exactly() -> None:
     assert snapshot.movable("parts")[0].item_id == movable_id
     assert snapshot.tree("outline").node(root_id).metadata["label"] == "root"
 
+    token = ReplicationChangeToken.decode(document, token.encode())
     _apply_inverse(token)
 
     assert document.snapshot() == ReplicatedSnapshot(
@@ -160,6 +161,26 @@ def test_later_remote_replacement_or_move_conflicts(kind: str) -> None:
     assert local.snapshot() == before
 
 
+def test_concurrent_plain_list_replacements_converge_to_one_visible_value() -> None:
+    first = _replica("a", 1).open("project")
+    second = _replica("b", 2).open("project")
+    with transaction():
+        first.list("items").insert(0, "base")
+    second.import_update(first.export_since())
+    with transaction():
+        first.list("items").replace(0, "first")
+    with transaction():
+        second.list("items").replace(0, "second")
+    first_update = first.export_since()
+    second_update = second.export_since()
+
+    first.import_update(second_update)
+    second.import_update(first_update)
+
+    assert first.snapshot() == second.snapshot()
+    assert len(first.list("items").value) == 1
+
+
 def test_nested_public_values_are_deeply_immutable() -> None:
     document = _replica("a", 1).open("project")
     with transaction():
@@ -170,6 +191,15 @@ def test_nested_public_values_are_deeply_immutable() -> None:
         _mutate_outer(value)
     with pytest.raises(TypeError):
         _mutate_inner(value)
+
+
+def test_backend_token_operation_data_is_deeply_immutable() -> None:
+    document = _replica("a", 1).open("project")
+    token = _record(lambda: document.map("settings").set("value", {"items": [1]}))
+    backend_token = cast(Any, token.backend_token)
+
+    with pytest.raises(TypeError):
+        backend_token.operations[0].data["value"]["items"] = ()
 
 
 def test_token_survives_checkpoint_reload() -> None:
@@ -304,3 +334,6 @@ def test_corrupt_native_update_is_translated_to_an_exception_subclass() -> None:
 
     with pytest.raises(ReplicationCorruptUpdateError):
         document.engine.prepare_remote(b"not a loro update")
+
+    with pytest.raises(ReplicationCorruptUpdateError):
+        document.export_since(b"not frontiers")
