@@ -80,6 +80,14 @@ def test_scene_json_is_canonical_and_round_trips() -> None:
     assert json.loads(encoded)["body"]["children"][0]["kind"] == "panel"
 
 
+def test_the_text_markup_key_is_still_spelled_dialect_on_the_wire() -> None:
+    """`SceneText.dialect` became `.markup` in Python; the wire format did not move."""
+    encoded = SceneCodec.dumps(_scene())
+
+    assert '"dialect":"discord-markdown"' in encoded
+    assert "markup" not in encoded
+
+
 def test_new_component_metadata_round_trips_on_protocol_one() -> None:
     scene = SceneDocument(
         protocol=1,
