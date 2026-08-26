@@ -86,7 +86,7 @@ class ErrorReportBrowser(sl.Component):
                     placeholder=L(t"Choose an error to open"),
                 )
             )
-        nodes.append(sl.actions(self._close_action(), key="list-actions"))
+        nodes.append(sl.action_controls(self._close_action(), key="list-actions"))
         return nodes
 
     def _render_detail(self) -> Sequence[sl.LayoutNode]:
@@ -114,14 +114,14 @@ class ErrorReportBrowser(sl.Component):
                 L(t"Full report"), report_asset(report), key="full-report", emphasis=sl.semantic.Emphasis.STRONG
             )
         )
-        controls: list[sl.semantic.Action] = []
+        controls: list[sl.semantic.ActionControl] = []
         if self._reports:
-            controls.append(sl.action(L(t"Back"), self._back, key="back"))
+            controls.append(sl.action_control(L(t"Back"), self._back, key="back"))
         controls.append(self._close_action())
-        return [sl.stack(*children), sl.actions(*controls, key="detail-actions")]
+        return [sl.stack(*children), sl.action_controls(*controls, key="detail-actions")]
 
-    def _close_action(self) -> sl.semantic.Action:
-        return sl.action(
+    def _close_action(self) -> sl.semantic.ActionControl:
+        return sl.action_control(
             L(t"Close"),
             self._close,
             key="close",

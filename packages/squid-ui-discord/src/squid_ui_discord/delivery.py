@@ -28,12 +28,12 @@ from typing import Any, Protocol, cast, overload
 
 import discord
 
-from squid_ui_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
-from squid_ui_discord.presentation import DiscordMode, DiscordPresentation, mode_of
 from squid_ui.errors import LayoutError, LimitViolationError
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.limits import LIMITS
 from squid_ui.target_types import DiscordPyAdapter
+from squid_ui_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
+from squid_ui_discord.presentation import DiscordMode, DiscordPresentation, mode_of
 
 # Discord's way of saying the credentials behind a handle are gone.
 _STALE_CODES = frozenset({10015, 10062, 50027})
@@ -61,7 +61,7 @@ class DeliveryAbandoned(Exception):
 
     Distinct from a failure: nothing reached Discord, but nothing went wrong either. The
     closed-DM path is the case — a payload too private for a channel, and no private channel
-    to put it in. `Mount.send` discards the staged render rather than committing one nobody
+    to put it in. `MessageRoot.send` discards the staged render rather than committing one nobody
     will ever see.
     """
 
@@ -566,9 +566,9 @@ def edit_to(
 ) -> Destination:
     """Write a mount's first render onto a message the bot already owns.
 
-    The way a mount *arrives* on an existing message: `Mount.send` runs its usual
+    The way a mount *arrives* on an existing message: `MessageRoot.send` runs its usual
     stage/deliver/commit around it, and the result names the permanent bot-token authority
-    for the message it wrote. `Mount.adopt_handle` is the other half of the pair -- it
+    for the message it wrote. `MessageRoot.adopt_handle` is the other half of the pair -- it
     retains authority for a mount that is already live, and stays the answer when the handle
     was established somewhere else.
 

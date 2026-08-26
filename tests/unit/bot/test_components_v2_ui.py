@@ -125,8 +125,8 @@ def test_search_results_use_named_selection_and_direct_build_action() -> None:
     )
     view = SearchResultsView(cast(SearchService, object()), SearchRequest("door"), page, author_id=123)
 
-    mount = view.mount(source=make_layout_bot())
-    rendered = commit_render(mount)
+    message_root = view.mount(source=make_layout_bot())
+    rendered = commit_render(message_root)
     result_buttons = [
         child
         for child in rendered.walk_children()
@@ -158,11 +158,11 @@ def test_search_results_preserve_page_warnings_without_refetching_the_initial_pa
 async def test_search_timeout_disables_bound_controls() -> None:
     page = SearchPage((BuildSearchHit("8", "Fast door", "confirmed"),), total=1, next=None, prev=None)
     view = SearchResultsView(cast(SearchService, object()), SearchRequest("door"), page, author_id=123)
-    mount = view.mount(source=make_layout_bot())
+    message_root = view.mount(source=make_layout_bot())
     message = fake_message()
-    await mount.send(delivered_to(message))
+    await message_root.send(delivered_to(message))
 
-    await mount.finish()
+    await message_root.finish()
 
     message.edit.assert_awaited_once()
     disabled = message.edit.await_args.kwargs["view"]

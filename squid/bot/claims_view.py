@@ -3,15 +3,15 @@
 from collections.abc import Sequence
 from typing import cast
 
-import squid_ui_discord as sd
 import squid_ui as sl
+import squid_ui_discord as sd
 from squid.accounts.application import AccountService
 from squid.accounts.domain import AliasClaim
 from squid.accounts.errors import AliasAlreadyClaimedError
 from squid.bot.consent import with_consented_account
 from squid.bot.i18n import t
 from squid.bot.profile_render import present_claimant
-from squid.bot.ui import DISCORD_BLUE, L, create_mount
+from squid.bot.ui import DISCORD_BLUE, L, create_message_root
 from squid.bot.utils.permissions import enforce
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import ACCOUNT_CLAIM_APPROVE, ACCOUNT_CLAIM_REJECT
@@ -96,10 +96,10 @@ class ClaimReviewComponent(sl.Component):
                     maximum=1,
                 ),
             )
-        buttons: list[sl.semantic.Action] = []
+        buttons: list[sl.semantic.ActionControl] = []
         if self._can_approve:
             buttons.append(
-                sl.action(
+                sl.action_control(
                     L(t"Take the name")
                     if self.selected_id is not None and self.reassign_armed == self.selected_id
                     else L(t"Approve"),
@@ -111,14 +111,14 @@ class ClaimReviewComponent(sl.Component):
             )
         if self._can_reject:
             buttons.append(
-                sl.action(
+                sl.action_control(
                     L(t"Reject"),
                     self._reject,
                     key="reject",
                     available=self.selected is not None,
                 )
             )
-        buttons.append(sl.action(L(t"Close"), self._close, key="close"))
+        buttons.append(sl.action_control(L(t"Close"), self._close, key="close"))
         return (
             sl.primitives.Panel(
                 (
@@ -128,7 +128,7 @@ class ClaimReviewComponent(sl.Component):
                 ),
                 accent=DISCORD_BLUE,
             ),
-            sl.actions(*buttons, key="claim-actions"),
+            sl.action_controls(*buttons, key="claim-actions"),
         )
 
     def _page_footer(self, page: int, pages: int) -> sl.text.Message:
@@ -204,8 +204,8 @@ class ClaimReviewComponent(sl.Component):
         self.closed = True
         await event.finish()
 
-    def mount(self, *, source: sd.host.HostSource) -> sd.Mount:
-        return create_mount(
+    def mount(self, *, source: sd.host.HostSource) -> sd.MessageRoot:
+        return create_message_root(
             self,
             source=source,
             access=sd.Owner(self._author_id),

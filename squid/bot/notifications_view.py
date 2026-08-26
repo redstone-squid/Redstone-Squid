@@ -8,10 +8,10 @@ looking at it and removing it belong to the same message (audit C5's retyping ha
 
 from typing import TYPE_CHECKING
 
-import squid_ui_discord as sd
 import squid_ui as sl
+import squid_ui_discord as sd
 from squid.bot.i18n import t
-from squid.bot.ui import create_mount
+from squid.bot.ui import create_message_root
 from squid.core.i18n import _
 from squid.notifications import (
     NotificationPreferences,
@@ -133,15 +133,15 @@ class NotificationPanel(sl.Component):
             )
         )
         nodes.append(
-            sl.actions(
-                sl.action(
+            sl.action_controls(
+                sl.action_control(
                     t(self.locale, _("Unfollow selected")),
                     self._unfollow,
                     key="unfollow_selected",
                     tone=sl.Tone.DANGER,
                     available=bool(self.selected_ids),
                 ),
-                sl.action(
+                sl.action_control(
                     t(self.locale, _("Close")),
                     self._close,
                     key="close",
@@ -205,8 +205,8 @@ class NotificationPanel(sl.Component):
             return None
         return t(self.locale, _("Discord rejected a DM, so DMs are suspended until you re-enable them."))
 
-    def mount(self, *, source: sd.host.HostSource) -> sd.Mount:
-        return create_mount(
+    def mount(self, *, source: sd.host.HostSource) -> sd.MessageRoot:
+        return create_message_root(
             self,
             source=source,
             access=sd.Owner(self._author_id),

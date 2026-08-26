@@ -49,10 +49,10 @@ from squid.runtime import (
     start_permission_epoch_watch,
 )
 from squid.topics import TopicPublisher, open_topic_bridge, resource_topic
-from squid_ui_discord import install
-from squid_ui.profiling import MemoryProfiler
 from squid_reactivity import LocalTopicBus
 from squid_storage import PostgresTopicBridge
+from squid_ui.profiling import MemoryProfiler
+from squid_ui_discord import install
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -173,7 +173,7 @@ class RedstoneSquid(Bot):
         self.layout_challenges = self.layout_host.challenges
         # How many of each panel a user may have open, and which mounts die with their
         # parent. Reached from a handler as `interaction.client.mounts`.
-        self.mounts = self.layout_host.mounts
+        self.message_roots = self.layout_host.message_roots
 
     def is_operational(self) -> bool:
         """Return whether Discord and every critical bot-owned job are healthy."""

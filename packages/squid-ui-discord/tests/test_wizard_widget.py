@@ -6,7 +6,7 @@ import pytest
 import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui.semantic import FormTrigger, Stack
-from squid_ui_discord import Everyone, Mount
+from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord.testing import commit_render, fake_interaction
 from squid_ui_widgets import REVIEW_STEP
 
@@ -29,9 +29,9 @@ def _text_input(modal: discord.ui.Modal) -> discord.ui.TextInput:
     return label.component
 
 
-async def _submit_form(mount: Mount, key: str, value: str) -> None:
+async def _submit_form(message_root: MessageRoot, key: str, value: str) -> None:
     opened = fake_interaction()
-    await mount.dispatch(key, opened)
+    await message_root.dispatch(key, opened)
     modal = opened.response.send_modal.await_args.args[0]
     assert isinstance(modal, discord.ui.Modal)
     _text_input(modal)._value = value  # pyrefly: ignore[missing-attribute]
@@ -64,13 +64,13 @@ def test_branch_flip_retains_orphans_but_finish_collects_only_live_steps() -> No
 
 async def test_consecutive_forms_use_the_framework_owned_interstitial_hop() -> None:
     wizard = sp.Wizard("Build", _steps).build_component()
-    mount = Mount(wizard, access=Everyone(), timeout=None)
-    commit_render(mount)
+    message_root = MessageRoot(wizard, access=Everyone(), timeout=None)
+    commit_render(message_root)
 
-    await _submit_form(mount, "wizard.kind", "advanced")
+    await _submit_form(message_root, "wizard.kind", "advanced")
 
     assert wizard.machine_state.current == "detail"
-    view = commit_render(mount)
+    view = commit_render(message_root)
     button = next(
         item for item in view.walk_children() if isinstance(item, discord.ui.Button) and item.label == "Continue"
     )
@@ -86,11 +86,11 @@ async def test_plain_next_opens_the_following_form_without_an_intermediate_rende
             sp.WizardStep("done", "Done", "Review"),
         ),
     ).build_component()
-    mount = Mount(wizard, access=Everyone(), timeout=None)
-    commit_render(mount)
+    message_root = MessageRoot(wizard, access=Everyone(), timeout=None)
+    commit_render(message_root)
 
     opened = fake_interaction()
-    await mount.dispatch("wizard.name", opened)
+    await message_root.dispatch("wizard.name", opened)
 
     assert opened.response.send_modal.await_count == 1
     assert wizard.machine_state.current == "intro"
@@ -103,10 +103,10 @@ async def test_last_form_dispatches_finish_once_with_live_answers() -> None:
         completed.append(answers)
 
     wizard = sp.Wizard("One", (sp.WizardStep("name", "Name", _form("Name", "name")),)).build_component(on_finish=finish)
-    mount = Mount(wizard, access=Everyone(), timeout=None)
-    commit_render(mount)
+    message_root = MessageRoot(wizard, access=Everyone(), timeout=None)
+    commit_render(message_root)
 
-    await _submit_form(mount, "wizard.name", "Ada")
+    await _submit_form(message_root, "wizard.name", "Ada")
 
     assert wizard.machine_state.complete
     assert completed == [{"name": {"name": "Ada"}}]
@@ -251,15 +251,15 @@ async def test_finish_dispatches_once_from_the_review_screen() -> None:
 
     wizard = sp.Wizard("One", (sp.WizardStep("name", "Name", _form("Name", "name")),), review=True)
     shell = wizard.build_component(on_finish=finish)
-    mount = Mount(shell, access=Everyone(), timeout=None)
-    commit_render(mount)
+    message_root = MessageRoot(shell, access=Everyone(), timeout=None)
+    commit_render(message_root)
 
-    await _submit_form(mount, "wizard.name", "Ada")
+    await _submit_form(message_root, "wizard.name", "Ada")
     assert shell.machine_state.current == REVIEW_STEP
     assert not shell.machine_state.complete
 
-    commit_render(mount)
-    await mount.dispatch("wizard.finish", fake_interaction())
+    commit_render(message_root)
+    await message_root.dispatch("wizard.finish", fake_interaction())
 
     assert shell.machine_state.complete
     assert completed == [{"name": {"name": "Ada"}}]

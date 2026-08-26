@@ -1,6 +1,6 @@
 """One installed Discord runtime, reachable from the client it was installed on.
 
-:class:`MountDefaults` answered *construction*: the values every mount on this host shares.
+:class:`MessageRootDefaults` answered *construction*: the values every mount on this host shares.
 It cannot answer *lookup*, because it is a value — nothing hands one back from an
 interaction. A challenge presenter needs the session registry and the background runner, and
 a panel opened from a click holds neither, so a host that wanted both ended up minting a
@@ -22,16 +22,16 @@ from typing import Any, Unpack
 import anyio
 import discord
 
-from squid_ui_discord.access import AccessPolicy
-from squid_ui_discord.challenges import ChallengeRunner, DialogPresenter
-from squid_ui_discord.defaults import MountDefaults, MountOptions
-from squid_ui_discord.delivery import Replyable
-from squid_ui_discord.mount import Mount
-from squid_ui_discord.scheduler import MountScheduler
-from squid_ui_discord.sessions import SessionRegistry
 from squid_ui.profiling import Profiler
 from squid_ui.runtime.component import Component
 from squid_ui.runtime.topics import TopicBus
+from squid_ui_discord.access import AccessPolicy
+from squid_ui_discord.challenges import ChallengeRunner, DialogPresenter
+from squid_ui_discord.delivery import Replyable
+from squid_ui_discord.message_root import MessageRoot
+from squid_ui_discord.message_root_options import MessageRootDefaults, MessageRootOptions
+from squid_ui_discord.message_root_scheduler import MessageRootScheduler
+from squid_ui_discord.sessions import SessionRegistry
 
 type HostSource = discord.Client | discord.Interaction[Any] | Replyable
 """Anything an installation can be found from: the client, or something carrying one."""
@@ -76,29 +76,31 @@ class LayoutHost[ClientT: discord.Client]:
         self,
         client: ClientT,
         *,
-        mounts: SessionRegistry,
+        message_roots: SessionRegistry,
         challenges: ChallengeRunner,
-        scheduler: MountScheduler | None,
+        scheduler: MessageRootScheduler | None,
     ) -> None:
         self.client = client
-        self.mounts = mounts
+        self.message_roots = message_roots
         self.challenges = challenges
         self.scheduler = scheduler
 
     @property
-    def defaults(self) -> MountDefaults:
+    def defaults(self) -> MessageRootDefaults:
         """The values every mount on this host is built from.
 
         The registry's own defaults, not a copy: a mount opened through `mounts.open` and one
         built here are wired the same way, which is the whole reason this lookup exists.
         """
-        return self.mounts.defaults
+        return self.message_roots.defaults
 
     @defaults.setter
-    def defaults(self, defaults: MountDefaults) -> None:
-        self.mounts.defaults = defaults
+    def defaults(self, defaults: MessageRootDefaults) -> None:
+        self.message_roots.defaults = defaults
 
-    def mount(self, component: Component, *, access: AccessPolicy, **overrides: Unpack[MountOptions]) -> Mount:
+    def mount(
+        self, component: Component, *, access: AccessPolicy, **overrides: Unpack[MessageRootOptions]
+    ) -> MessageRoot:
         """Construct a mount from this host's defaults, applying per-call overrides.
 
         The reason a panel needs no object but the host: chrome, localization, the error
@@ -127,7 +129,7 @@ class LayoutHost[ClientT: discord.Client]:
         that owns the job is the thing entitled to end it.
         """
         try:
-            await self.mounts.close_all()
+            await self.message_roots.close_all()
         finally:
             if _INSTALLED.get(self.client) is self:
                 del _INSTALLED[self.client]
@@ -156,7 +158,7 @@ class LayoutHost[ClientT: discord.Client]:
 def install[ClientT: discord.Client](
     client: ClientT,
     *,
-    defaults: MountDefaults = MountDefaults(),  # noqa: B008  # frozen value
+    defaults: MessageRootDefaults = MessageRootDefaults(),  # noqa: B008  # frozen value
     bus: TopicBus | None = None,
     profiler: Profiler | None = None,
 ) -> LayoutHost[ClientT]:
@@ -174,15 +176,15 @@ def install[ClientT: discord.Client](
     if _INSTALLED.get(client) is not None:
         message = "client already has a layout host installed"
         raise ValueError(message)
-    scheduler = None if bus is None else MountScheduler(bus, profiler=profiler)
+    scheduler = None if bus is None else MessageRootScheduler(bus, profiler=profiler)
     if scheduler is not None:
         defaults = defaults.replace(scheduler=scheduler)
-    mounts = SessionRegistry(defaults=defaults)
+    message_roots = SessionRegistry(defaults=defaults)
     challenges = ChallengeRunner()
     # The knot install exists to tie: the presenter needs the registry and the runner, and
     # the registry needs the presenter to hand every mount it opens.
-    mounts.defaults = mounts.defaults.replace(challenge=DialogPresenter(mounts, challenges))
-    host = LayoutHost(client, mounts=mounts, challenges=challenges, scheduler=scheduler)
+    message_roots.defaults = message_roots.defaults.replace(challenge=DialogPresenter(message_roots, challenges))
+    host = LayoutHost(client, message_roots=message_roots, challenges=challenges, scheduler=scheduler)
     _INSTALLED[client] = host
     return host
 

@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock
 
 import anyio
 
-import squid_ui_discord as sd
 import squid_ui as sl
+import squid_ui_discord as sd
 from squid.bot.app import RedstoneSquid
 from squid.topics import resource_topic
 from squid_ui_discord import Everyone
@@ -40,7 +40,7 @@ class Projection(sl.Component):
                 return sl.paragraph("loading")
 
 
-async def _drain_scheduler(scheduler: sd.MountScheduler) -> None:
+async def _drain_scheduler(scheduler: sd.MessageRootScheduler) -> None:
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(scheduler.run)
         await asyncio.wait_for(scheduler._queue.join(), timeout=1)
@@ -49,15 +49,15 @@ async def _drain_scheduler(scheduler: sd.MountScheduler) -> None:
 
 async def test_one_resource_publish_refreshes_two_panels_without_second_post_writer() -> None:
     bus = sl.runtime.LocalTopicBus()
-    scheduler = sd.MountScheduler(bus)
+    scheduler = sd.MessageRootScheduler(bus)
     messages = [fake_message(message_id=1), fake_message(message_id=2)]
     source = "before"
     panels = [Projection(lambda: source), Projection(lambda: source)]
 
     for panel, message in zip(panels, messages, strict=True):
-        mount = sd.Mount(panel, access=Everyone(), scheduler=scheduler, timeout=None)
-        await mount.send(delivered_to(message))
-        assert mount.followed == (resource_topic("build", "42"),), "following is what the render read"
+        message_root = sd.MessageRoot(panel, access=Everyone(), scheduler=scheduler, timeout=None)
+        await message_root.send(delivered_to(message))
+        assert message_root.followed == (resource_topic("build", "42"),), "following is what the render read"
 
     posts = SimpleNamespace(pending_generation=AsyncMock(return_value=7))
     reconciler = SimpleNamespace(reconcile=AsyncMock())

@@ -7,7 +7,7 @@ The rules here are denylists rather than allowlists, which is deliberate and mea
 allowlist of legal suffixes was considered and rejected on the numbers: the six packages
 export 555 classes with 273 distinct last words, 179 of them used exactly once, and
 restricting to multi-word names only brings that to 173 and 102. A closed set would have to
-reject `Mount`, `Chrome`, `Palette` and every authoring node -- `Heading`, `Paragraph`,
+reject `MessageRoot`, `Chrome`, `Palette` and every authoring node -- `Heading`, `Paragraph`,
 `Gallery` -- or grow an exemption list longer than the rule. A denylist scales to names
 nobody has written yet, which is the same reasoning `DISCOURAGED_VERBS` was written under.
 
@@ -24,12 +24,12 @@ from collections import defaultdict
 from pathlib import Path
 from types import ModuleType
 
-import squid_ui_discord
-import squid_ui
-import squid_ui_widgets
 import squid_reactivity
 import squid_replication
 import squid_storage
+import squid_ui
+import squid_ui_discord
+import squid_ui_widgets
 
 PACKAGE_SOURCE_ROOTS = (
     Path("packages/squid-ui/src"),
@@ -94,7 +94,7 @@ ANNOTATION_VOCABULARY = {
     "ChangeReport": frozenset({"summary"}),
     "ExceptionReport": frozenset({"summary"}),
     "Markup": frozenset({"dialect"}),
-    "MountScheduler": frozenset({"reactor"}),
+    "MessageRootScheduler": frozenset({"reactor"}),
     "ReplacementPolicy": frozenset({"protect", "protection"}),
     "SessionSnapshot": frozenset({"summary"}),
     "UndoMode": frozenset({"strategy"}),
@@ -106,7 +106,7 @@ RETIRED_VERBS = frozenset({"format_prefill", "list_records", "purge_expired", "d
 
 `flush` is deliberately absent: persistence `flush` names a different subject -- writing
 pending bytes -- and `PersistentStatePool.flush` and `DurableSessionRuntime.flush` keep it. What
-retired was `Mount.flush`, which delivered a render and is now `Mount.refresh`.
+retired was `MessageRoot.flush`, which delivered a render and is now `MessageRoot.refresh`.
 """
 
 AGENT_NOUNS = {
@@ -136,7 +136,7 @@ AGENT_NOUNS = {
 """`Xer` performs the verb `x`, so the family is self-checking.
 
 This is what caught `Reactor`: there is no verb `react`, and the class actually schedules
-re-renders in response to topic traffic, so it is a `MountScheduler`.
+re-renders in response to topic traffic, so it is a `MessageRootScheduler`.
 """
 
 NOT_AGENT_NOUNS = frozenset(
@@ -165,7 +165,7 @@ NOT_AGENT_NOUNS = frozenset(
 SAME_CONCEPT_TWO_LAYERS = {
     # A semantic node and the exact primitive it lowers to. The parallel spelling is the
     # point: `sl.Heading` and what planning emits for it are the same idea, twice.
-    "ActionGroup",
+    "ControlGroup",
     "Code",
     "Heading",
     "Section",
@@ -177,7 +177,6 @@ SAME_CONCEPT_TWO_LAYERS = {
     # is the whole point, and `sl.scene` is the namespace that disambiguates.
     "Asset",
     "Button",
-    "Document",
     "EntitySelect",
     "Extension",
     "File",
@@ -251,7 +250,7 @@ def _method_names(node: ast.ClassDef) -> set[str]:
 def test_one_public_name_means_one_class() -> None:
     """Two classes sharing a short name is the defect, whatever the word happens to be.
 
-    `MountSnapshot` named both a view of a live mount and the serialized state that
+    `MessageRootSnapshot` named both a view of a live mount and the serialized state that
     outlives it, and both were exported from `squid_ui_discord`.
     """
     collisions = {name: sorted(where) for name, where in _exported_classes().items() if len(where) > 1}

@@ -17,10 +17,6 @@ from typing import Any
 
 import discord
 
-from squid_ui_discord.attachments import files_for
-from squid_ui_discord.composition import compose
-from squid_ui_discord.inspection import DiscordReservation, audit, cost, measure
-from squid_ui_discord.target import DISCORD_V2_DPY27, Target
 from squid_ui.assets import Asset
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.document import DocumentLike
@@ -31,6 +27,10 @@ from squid_ui.planning.planner import EMPTY_RESERVATION
 from squid_ui.planning.target import ResourceCost
 from squid_ui.scene.model import PlanReport, PlanResult
 from squid_ui.text import NEUTRAL, Localization
+from squid_ui_discord.attachments import files_for
+from squid_ui_discord.composition import compose
+from squid_ui_discord.inspection import DiscordReservation, audit, cost, measure
+from squid_ui_discord.target import DISCORD_V2_DPY27, Target
 
 
 class StaleReservationError(LayoutError):
@@ -351,6 +351,6 @@ def _reject_dispatchable(view: discord.ui.LayoutView) -> None:
         if item.is_dispatchable():
             message = (
                 f"{type(item).__name__} dispatches through its view, which a fragment does not own; "
-                "use a routed control, a link button, or hand the whole message to a Mount"
+                "use a routed control, a link button, or hand the whole message to a MessageRoot"
             )
             raise FragmentOwnershipError(message)

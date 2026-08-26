@@ -3,13 +3,13 @@
 import discord
 import pytest
 
-import squid_ui_discord
 import squid_ui as sl
-from squid_ui_discord import DISCORD_V2_DPY27, Everyone, Mount, delivery
-from squid_ui_discord.renderer import V2Renderer
+import squid_ui_discord
 from squid_ui import scene
 from squid_ui.html import Renderer as HtmlRenderer
 from squid_ui.runtime.component import Component, RenderResult
+from squid_ui_discord import DISCORD_V2_DPY27, Everyone, MessageRoot, delivery
+from squid_ui_discord.renderer import V2Renderer
 
 
 def _inline() -> sl.document.Asset:
@@ -84,7 +84,7 @@ class _DownloadComponent(Component):
         return sl.download("Report", self.asset, key="report-download")
 
 
-async def _send(mount: Mount) -> tuple[discord.ui.LayoutView, list[discord.File]]:
+async def _send(message_root: MessageRoot) -> tuple[discord.ui.LayoutView, list[discord.File]]:
     delivered: list[tuple[discord.ui.LayoutView, list[discord.File]]] = []
 
     async def destination(presentation: squid_ui_discord.presentation.DiscordPresentation) -> delivery.DeliveryResult:
@@ -93,12 +93,12 @@ async def _send(mount: Mount) -> tuple[discord.ui.LayoutView, list[discord.File]
         delivered.append((presentation.layout, presentation.build_files()))
         return delivery.DeliveryResult(None, None)
 
-    await mount.send(destination)
+    await message_root.send(destination)
     return delivered[0]
 
 
-async def test_mount_attaches_inline_bytes_and_does_not_attach_url_assets() -> None:
-    _view, files = await _send(Mount(_DownloadComponent(_inline()), access=Everyone(), timeout=None))
+async def test_message_root_attaches_inline_bytes_and_does_not_attach_url_assets() -> None:
+    _view, files = await _send(MessageRoot(_DownloadComponent(_inline()), access=Everyone(), timeout=None))
     assert len(files) == 1
     assert files[0].filename == "report.txt"
     assert files[0].fp.read() == b"full report"
@@ -106,16 +106,16 @@ async def test_mount_attaches_inline_bytes_and_does_not_attach_url_assets() -> N
     stored = sl.document.Asset(
         "report", "report.txt", "text/plain", sl.document.StoredAsset("https://example.com/report.txt")
     )
-    view, linked_files = await _send(Mount(_DownloadComponent(stored), access=Everyone(), timeout=None))
+    view, linked_files = await _send(MessageRoot(_DownloadComponent(stored), access=Everyone(), timeout=None))
     assert linked_files == []
     assert any(isinstance(item, discord.ui.Button) and item.url for item in view.walk_children())
 
 
-async def test_mount_keeps_raising_for_non_url_stored_references() -> None:
+async def test_message_root_keeps_raising_for_non_url_stored_references() -> None:
     stored = sl.document.Asset("report", "report.txt", "text/plain", sl.document.StoredAsset("reports/current"))
 
     with pytest.raises(TypeError, match="needs a host resolver"):
-        await _send(Mount(_DownloadComponent(stored), access=Everyone(), timeout=None))
+        await _send(MessageRoot(_DownloadComponent(stored), access=Everyone(), timeout=None))
 
 
 def test_html_renderer_emits_data_links_resolver_links_and_visible_placeholders() -> None:

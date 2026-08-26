@@ -9,11 +9,11 @@ from typing import Any, overload
 from discord.abc import Messageable
 from discord.ext.commands import Context
 
-import squid_ui_discord as sd
 import squid_ui as sl
+import squid_ui_discord as sd
 from squid.bot.errors import build_error_presentation, record_operation_error
 from squid.bot.i18n import resolve_locale
-from squid.bot.ui import create_mount, destination, error_node, info_node
+from squid.bot.ui import create_message_root, destination, error_node, info_node
 from squid.core.i18n import _, translate
 from squid_ui.runtime.component import RenderResult
 
@@ -156,12 +156,12 @@ def managed_result[**P](
                 initial=info_node(translate(locale, title), translate(locale, description)),
                 locale=locale,
             )
-            mount = create_mount(component, source=ctx, access=sd.Everyone(), locale=locale, timeout=900)
-            delivered = await mount.send(destination(ctx, locale=locale))
+            message_root = create_message_root(component, source=ctx, access=sd.Everyone(), locale=locale, timeout=900)
+            delivered = await message_root.send(destination(ctx, locale=locale))
             match component.execution.status:
                 case sl.operations.Succeeded():
                     if dismiss_on_success:
-                        await mount.dismiss()
+                        await message_root.dismiss()
                 case sl.operations.Failed(error=error):
                     result = delivered.result if isinstance(delivered, sd.delivery.Delivered) else None
                     await record_operation_error(
@@ -236,7 +236,7 @@ async def run_command_operation(
         initial=info_node(translate(locale, title), translate(locale, description)),
         locale=locale,
     )
-    mount = create_mount(component, source=source, access=sd.Everyone(), locale=locale, timeout=900)
+    message_root = create_message_root(component, source=source, access=sd.Everyone(), locale=locale, timeout=900)
     destination = sd.send_to(target)
 
     async def capture(
@@ -246,11 +246,11 @@ async def run_command_operation(
         component._result = result
         return result
 
-    delivered = await mount.send(capture)
+    delivered = await message_root.send(capture)
     match component.execution.status:
         case sl.operations.Succeeded():
             if dismiss_on_success:
-                await mount.dismiss()
+                await message_root.dismiss()
         case sl.operations.Failed(error=error):
             result = delivered.result if isinstance(delivered, sd.delivery.Delivered) else None
             await record_operation_error(

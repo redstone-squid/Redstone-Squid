@@ -111,8 +111,8 @@ def _sent_view(interaction: discord.Interaction[Any]) -> Any:
 
 
 def _component(view: Any) -> BuildEditComponent | None:
-    mount = getattr(view, "_mount", None)
-    component = getattr(mount, "component", None)
+    message_root = getattr(view, "_root", None)
+    component = getattr(message_root, "component", None)
     return component if isinstance(component, BuildEditComponent) else None
 
 
@@ -168,8 +168,8 @@ async def test_a_stored_editor_follows_its_build_without_rereading_it() -> None:
     assert cast(StubBuilds, cog.builds).gets == 1
     component = _component(_sent_view(interaction))
     assert component is not None
-    mount = cast(Any, _sent_view(interaction))._mount
-    assert mount.observed == (resource_topic("build", "1"),)
+    message_root = cast(Any, _sent_view(interaction))._root
+    assert message_root.observed == (resource_topic("build", "1"),)
 
 
 async def test_a_field_the_build_does_not_have_is_refused_not_dropped() -> None:

@@ -9,13 +9,13 @@ from typing import TYPE_CHECKING, cast
 
 import anyio
 
-from squid_ui_discord.live import find, mounts
-from squid_ui_discord.mount import MountSnapshot
-from squid_ui_discord.scheduler import MountScheduler, MountSchedulerSnapshot
-from squid_ui_discord.sessions import Session, SessionRegistry
 from squid_ui.profiling import NoOpProfiler, Profiler, RuntimeSnapshot
 from squid_ui.runtime.histories import HistorySnapshot, inspect_histories
 from squid_ui.runtime.topics import Address, BusSnapshot, CellAddress, Topic, TopicBus
+from squid_ui_discord.live import find, message_roots
+from squid_ui_discord.message_root import MessageRootSnapshot
+from squid_ui_discord.message_root_scheduler import MessageRootScheduler, MessageRootSchedulerSnapshot
+from squid_ui_discord.sessions import Session, SessionRegistry
 
 if TYPE_CHECKING:
     # Annotations only. Kept out of the runtime import graph so `import squid_ui_discord` does
@@ -85,7 +85,7 @@ class SessionInspection:
     local: bool
     opened_at: datetime
     participants: tuple[int, ...]
-    mounts: tuple[str, ...]
+    message_roots: tuple[str, ...]
     members: tuple[int, ...] = ()
     capacity: int | None = None
     remaining_capacity: int | None = None
@@ -94,10 +94,10 @@ class SessionInspection:
 
 
 @dataclass(frozen=True, slots=True)
-class MountInspection:
+class MessageRootInspection:
     """Expensive detail for one live mount, beyond its cheap snapshot."""
 
-    snapshot: MountSnapshot
+    snapshot: MessageRootSnapshot
     middleware: tuple[str, ...]
     observed: tuple[str, ...]
     followed: tuple[str, ...]
@@ -119,8 +119,8 @@ class OperationalSnapshot:
     """The bounded process-wide view rendered by the devtools dashboard."""
 
     sessions: tuple[SessionInspection, ...]
-    mounts: tuple[MountSnapshot, ...]
-    scheduler: MountSchedulerSnapshot | None
+    message_roots: tuple[MessageRootSnapshot, ...]
+    scheduler: MessageRootSchedulerSnapshot | None
     topics: BusSnapshot | None
     profiler: RuntimeSnapshot
     durable: DurableRuntimeSnapshot | None
@@ -175,7 +175,7 @@ class DevToolsRuntime:
         self,
         *,
         sessions: SessionRegistry | None = None,
-        scheduler: MountScheduler | None = None,
+        scheduler: MessageRootScheduler | None = None,
         bus: TopicBus | None = None,
         profiler: Profiler | None = None,
         durable: DurableSessionRuntime | None = None,
@@ -207,7 +207,7 @@ class DevToolsRuntime:
         topics = snapshot_topics() if callable(snapshot_topics) else None
         return OperationalSnapshot(
             sessions,
-            tuple(mount.snapshot() for mount in mounts()),
+            tuple(message_root.snapshot() for message_root in message_roots()),
             None if self.scheduler is None else self.scheduler.snapshot(),
             topics,
             self.profiler.snapshot(),
@@ -222,32 +222,34 @@ class DevToolsRuntime:
             for record in await runtime.store.list()
         )
 
-    def inspect_mount(self, mount_id: str) -> MountInspection:
+    def inspect_root(self, message_root_id: str) -> MessageRootInspection:
         """Inspect a live mount and its component-owned history stacks."""
-        mount = find(mount_id)
-        if mount is None:
-            message = f"no live mount {mount_id!r}"
+        message_root = find(message_root_id)
+        if message_root is None:
+            message = f"no live mount {message_root_id!r}"
             raise TargetNotFound(message)
         histories = tuple(
-            history for component in mount.runtime.components.values() for history in inspect_histories(component)
+            history
+            for component in message_root.runtime.components.values()
+            for history in inspect_histories(component)
         )
-        return MountInspection(
-            mount.snapshot(),
-            mount.middleware,
-            tuple(_address_text(address) for address in mount.observed),
-            tuple(_address_text(address) for address in mount.followed),
+        return MessageRootInspection(
+            message_root.snapshot(),
+            message_root.middleware,
+            tuple(_address_text(address) for address in message_root.observed),
+            tuple(_address_text(address) for address in message_root.followed),
             histories,
         )
 
-    async def refresh_mount(self, mount_id: str) -> OperationResult:
+    async def refresh_root(self, message_root_id: str) -> OperationResult:
         """Render and deliver one mount immediately."""
-        self._authorize(DevToolsAction.REFRESH_MOUNT, mount_id, confirmed=True)
-        mount = find(mount_id)
-        if mount is None:
-            message = f"no live mount {mount_id!r}"
+        self._authorize(DevToolsAction.REFRESH_MOUNT, message_root_id, confirmed=True)
+        message_root = find(message_root_id)
+        if message_root is None:
+            message = f"no live mount {message_root_id!r}"
             raise TargetNotFound(message)
-        await mount.refresh()
-        return self._success(DevToolsAction.REFRESH_MOUNT, mount_id, "mount refreshed")
+        await message_root.refresh()
+        return self._success(DevToolsAction.REFRESH_MOUNT, message_root_id, "mount refreshed")
 
     async def close_session(self, session_id: str, *, confirmed: bool = False) -> OperationResult:
         """Finish one logical session through its owning registry."""
@@ -374,7 +376,7 @@ def _session_inspection(session: Session) -> SessionInspection:
         snapshot.local,
         snapshot.opened_at,
         tuple(sorted(snapshot.participants)),
-        tuple(mount.id for mount in session.mounts),
+        tuple(message_root.id for message_root in session.message_roots),
         tuple(sorted(snapshot.members)),
         snapshot.capacity,
         snapshot.remaining_capacity,
@@ -401,7 +403,7 @@ __all__ = [
     "DevToolsPolicy",
     "DevToolsRuntime",
     "DurableRecordInspection",
-    "MountInspection",
+    "MessageRootInspection",
     "OperationResult",
     "OperationalSnapshot",
     "RuntimeUnavailable",

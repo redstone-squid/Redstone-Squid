@@ -5,15 +5,15 @@ from typing import TYPE_CHECKING, Any
 
 import discord
 
-from squid_ui_discord import delivery as deliver
-from squid_ui_discord.modal import ModalSpec, build_form_modal, build_modal
 from squid_ui.forms import FieldError, FormField, FormIssue, FormLike, FormSpec, SubmitHandler, bind_form
 from squid_ui.interactions import ActionEvent, ActionMode, Visibility
 from squid_ui.text import TextLike, resolve_text
+from squid_ui_discord import delivery as deliver
+from squid_ui_discord.modal import ModalSpec, build_form_modal, build_modal
 
 if TYPE_CHECKING:
-    from squid_ui_discord.mount import Mount
     from squid_ui.runtime.histories import History
+    from squid_ui_discord.message_root import MessageRoot
 
 
 class ActionResponder:
@@ -22,11 +22,11 @@ class ActionResponder:
     def __init__(
         self,
         interaction: discord.Interaction,
-        mount: Mount,
+        message_root: MessageRoot,
         selected_entities: tuple[object, ...] = (),
     ) -> None:
         self.interaction = interaction
-        self.mount = mount
+        self.message_root = message_root
         self.selected_entities = selected_entities
 
     async def acknowledge(self) -> None:
@@ -34,7 +34,7 @@ class ActionResponder:
             await self.interaction.response.defer()
 
     async def notice(self, text: TextLike, *, visibility: Visibility = Visibility.PRIVATE) -> None:
-        resolved = resolve_text(text, self.mount.localization).content
+        resolved = resolve_text(text, self.message_root.localization).content
         await deliver.respond_text(self.interaction, resolved, ephemeral=visibility is Visibility.PRIVATE)
 
     async def send_modal(self, form: ModalSpec | discord.ui.Modal) -> None:
@@ -43,7 +43,7 @@ class ActionResponder:
         Not part of `sl.ActionResponder`: a form's payload is a frontend object, so no
         portable protocol can type it. Reach this through `squid_ui_discord.responder(event)`.
         """
-        modal = build_modal(form, limits=self.mount.limits.components) if isinstance(form, ModalSpec) else form
+        modal = build_modal(form, limits=self.message_root.limits.components) if isinstance(form, ModalSpec) else form
         if self.interaction.response.is_done():
             message = "Discord modals must be the interaction's initial response"
             raise RuntimeError(message)
@@ -62,7 +62,7 @@ class ActionResponder:
         """Present a portable form and route its submission back through this mount."""
         spec, handler, default_mode = bind_form(form, on_submit)
         selected_mode = mode or default_mode
-        modal = self._form_modal(spec, key, handler, selected_mode, self.mount.generation, label, record)
+        modal = self._form_modal(spec, key, handler, selected_mode, self.message_root.generation, label, record)
         if self.interaction.response.is_done():
             message = "Discord modals must be the interaction's initial response"
             raise RuntimeError(message)
@@ -79,7 +79,7 @@ class ActionResponder:
         record: History | None,
     ) -> discord.ui.Modal:
         async def submit(interaction: discord.Interaction, values: dict[str, object]) -> None:
-            await self.mount.dispatch_submit(
+            await self.message_root.dispatch_submit(
                 key,
                 interaction,
                 spec,
@@ -94,9 +94,9 @@ class ActionResponder:
         return build_form_modal(
             spec,
             on_submit=submit,
-            timeout=self.mount.timeout,
-            localization=self.mount.localization,
-            limits=self.mount.limits.components,
+            timeout=self.message_root.timeout,
+            localization=self.message_root.localization,
+            limits=self.message_root.limits.components,
         )
 
     async def retry_form(
@@ -117,14 +117,14 @@ class ActionResponder:
         labels = {field.key: field.label or field.key for field in spec.items if isinstance(field, FormField)}
         for error in errors:
             if isinstance(error, FieldError):
-                label = resolve_text(labels.get(error.key, error.key), self.mount.localization).content
-                message = resolve_text(error.message, self.mount.localization).content
+                label = resolve_text(labels.get(error.key, error.key), self.message_root.localization).content
+                message = resolve_text(error.message, self.message_root.localization).content
                 lines.append(f"**{label}:** {message}")
             else:
-                lines.append(resolve_text(error.message, self.mount.localization).content)
+                lines.append(resolve_text(error.message, self.message_root.localization).content)
         retry = _RetryButton(
             owner_id=actor_id,
-            modal=lambda interaction: ActionResponder(interaction, self.mount)._form_modal(
+            modal=lambda interaction: ActionResponder(interaction, self.message_root)._form_modal(
                 spec,
                 key,
                 handler,
@@ -146,10 +146,10 @@ class ActionResponder:
         await self.notice(url)
 
     async def finish(self) -> None:
-        await self.mount.finish_via(self.interaction)
+        await self.message_root.finish_via(self.interaction)
 
     def invalidate(self) -> None:
-        self.mount.invalidate()
+        self.message_root.invalidate()
 
 
 def responder(event: ActionEvent) -> ActionResponder:
@@ -181,7 +181,7 @@ def native(event: ActionEvent) -> discord.Interaction[Any]:
     Do not drive `.response` yourself: the mount owns this interaction's response
     lifecycle. Use `event.acknowledge()`, `event.notice()`, `event.finish()`, or
     `responder(event).send_modal()`. A hand-rolled `defer()` survives only because
-    `Mount.flush` falls back to editing through the followup.
+    `MessageRoot.flush` falls back to editing through the followup.
 
     The one sanctioned driver is `squid_ui_discord.adopt`'s interaction proxy, which exists to put
     a legacy `interaction.response.edit_message(view=self)` back under mount ownership by

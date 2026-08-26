@@ -1,6 +1,6 @@
 """The mount: one component bound to one Discord message.
 
-Every interaction funnels through :meth:`Mount.dispatch` — access policy, handler, error hook,
+Every interaction funnels through :meth:`MessageRoot.dispatch` — access policy, handler, error hook,
 and the re-render/edit cycle live here once instead of per view. The mount outlives its
 discord.py views: each render produces a fresh :class:`MountedView`, and the previous one is
 stopped after a successful edit so dispatch tables do not accumulate.
@@ -127,7 +127,7 @@ class _DiscordBinding:
     composer: Callable[..., Composition[Any]]
     mode: DiscordMode
     render_capability: str
-    renderer: Callable[[Mount[Any, Any], float | None], V2Renderer | ClassicRenderer]
+    renderer: Callable[[MessageRoot[Any, Any], float | None], V2Renderer | ClassicRenderer]
 
 
 _BINDINGS: dict[str, _DiscordBinding] = {
@@ -135,21 +135,21 @@ _BINDINGS: dict[str, _DiscordBinding] = {
         composer=compose,
         mode=DiscordMode.COMPONENTS_V2,
         render_capability=AdapterCapability.RENDER_V2,
-        renderer=lambda mount, timeout: V2Renderer(
-            limits=mount.limits,
-            view_factory=lambda: MountedView(mount, timeout),
-            cache=mount.render_cache,
+        renderer=lambda message_root, timeout: V2Renderer(
+            limits=message_root.limits,
+            view_factory=lambda: MountedView(message_root, timeout),
+            cache=message_root.render_cache,
         ),
     ),
     CLASSIC_TARGET_ID: _DiscordBinding(
         composer=classic_compose,
         mode=DiscordMode.CLASSIC,
         render_capability=AdapterCapability.RENDER_CLASSIC,
-        renderer=lambda mount, timeout: ClassicRenderer(
-            limits=mount.limits,
-            view_factory=lambda: ClassicMountedView(mount, timeout),
+        renderer=lambda message_root, timeout: ClassicRenderer(
+            limits=message_root.limits,
+            view_factory=lambda: ClassicMountedView(message_root, timeout),
             always_view=True,
-            cache=mount.render_cache,
+            cache=message_root.render_cache,
         ),
     ),
 }
@@ -232,7 +232,7 @@ class FinishHook(Protocol):
 
     # Positional-only, as `Destination` is: a named parameter would make the protocol demand
     # that every observer spell the argument `mount`.
-    def __call__(self, mount: Mount, /) -> Awaitable[None]: ...
+    def __call__(self, message_root: MessageRoot, /) -> Awaitable[None]: ...
 
 
 class PresentedHook(Protocol):
@@ -243,7 +243,7 @@ class PresentedHook(Protocol):
     to wait on the mount that is calling it.
     """
 
-    def __call__(self, mount: Mount, /) -> None: ...
+    def __call__(self, message_root: MessageRoot, /) -> None: ...
 
 
 class CommittedHook(Protocol):
@@ -253,20 +253,20 @@ class CommittedHook(Protocol):
     render lock, where awaiting or re-entering the mount would deadlock.
     """
 
-    def __call__(self, mount: Mount, /) -> None: ...
+    def __call__(self, message_root: MessageRoot, /) -> None: ...
 
 
 class Scheduler(Protocol):
-    """Anything that can absorb out-of-band refresh requests (see `MountScheduler`)."""
+    """Anything that can absorb out-of-band refresh requests (see `MessageRootScheduler`)."""
 
-    def schedule(self, mount: Mount) -> None: ...
+    def schedule(self, message_root: MessageRoot) -> None: ...
 
 
 @runtime_checkable
 class ReactiveScheduler(Protocol):
     """A scheduler that can preserve the component attribution of a bus change."""
 
-    def schedule_reactive(self, mount: Mount, address: Address) -> None: ...
+    def schedule_reactive(self, message_root: MessageRoot, address: Address) -> None: ...
 
 
 type ResumedPress = Callable[[], Awaitable[None]]
@@ -295,13 +295,13 @@ class ChallengeSupervisor(Protocol):
 class ChallengeRequest:
     """One press that stopped to ask its actor a question, and the two answers it takes.
 
-    `approve` *is* the resumed press: it re-enters `Mount.dispatch` from the top and runs
+    `approve` *is* the resumed press: it re-enters `MessageRoot.dispatch` from the top and runs
     the whole action. It must therefore be handed to a `ChallengeSupervisor` rather than
     awaited from the dialog's own handler. `decline` only records the refusal and delivers
     the challenge's wording, so it is safe to await anywhere.
     """
 
-    mount: Mount
+    message_root: MessageRoot
     interaction: discord.Interaction
     """The interaction that asked. Its response has been spent on the question, so it is an
     actor identity and a private answering channel -- never a handle to this mount's message."""
@@ -327,12 +327,12 @@ class ChallengePresenter(Protocol):
 class ExpirySupervisor(Protocol):
     """A scheduler that observes mount edit-authority deadlines."""
 
-    def watch(self, mount: Mount) -> Callable[[], None]: ...
+    def watch(self, message_root: MessageRoot) -> Callable[[], None]: ...
 
 
 @runtime_checkable
 class TopicScheduler(Protocol):
-    """A scheduler backed by a topic bus (see `MountScheduler`).
+    """A scheduler backed by a topic bus (see `MessageRootScheduler`).
 
     Separate from `Scheduler` because following is optional: a mount with no scheduler, or
     one whose scheduler only absorbs refreshes, is simply not live-updated.
@@ -340,7 +340,7 @@ class TopicScheduler(Protocol):
 
     bus: TopicBus
 
-    def schedule(self, mount: Mount) -> None: ...
+    def schedule(self, message_root: MessageRoot) -> None: ...
 
 
 def _unique_by_identity(middleware: Sequence[ActionMiddleware]) -> tuple[ActionMiddleware, ...]:
@@ -383,7 +383,7 @@ type ExpiryPolicy = PauseUpdates | RenewEphemeral
 DEFAULT_EXPIRY = PauseUpdates()
 
 
-class MountLifecycle(StrEnum):
+class MessageRootStatus(StrEnum):
     """Which mount-owned generation the reader can currently see."""
 
     ACTIVE = "active"
@@ -399,14 +399,14 @@ class _MountedBehaviour:
     both message modes, and a second copy of them would be a second thing to keep in step.
     """
 
-    _mount: Mount
+    _root: MessageRoot
 
-    def __init__(self, mount: Mount, timeout: float | None) -> None:
+    def __init__(self, message_root: MessageRoot, timeout: float | None) -> None:
         super().__init__(timeout=timeout)  # type: ignore[call-arg]
-        self._mount = mount
+        self._root = message_root
 
     async def on_timeout(self) -> None:
-        await self._mount.handle_timeout()
+        await self._root.handle_timeout()
 
     def is_dispatchable(self) -> bool:
         # A mount wants storing even when it draws nothing dispatchable, because
@@ -415,7 +415,7 @@ class _MountedBehaviour:
         return True
 
     async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item[Any]) -> None:
-        await self._mount.handle_error(interaction, error, f"item:{type(item).__name__}")
+        await self._root.handle_error(interaction, error, f"item:{type(item).__name__}")
 
 
 class MountedView(_MountedBehaviour, discord.ui.LayoutView):
@@ -429,7 +429,7 @@ class ClassicMountedView(_MountedBehaviour, discord.ui.View):
 type AnyMountedView = MountedView | ClassicMountedView
 
 
-def _custom_id(mount_id: str, generation: int, key: str) -> str:
+def _custom_id(message_root_id: str, generation: int, key: str) -> str:
     """A per-render-unique control id for ``key``, within Discord's 100-char limit.
 
     Nested components produce long dotted keys, and truncating those makes two controls
@@ -440,7 +440,7 @@ def _custom_id(mount_id: str, generation: int, key: str) -> str:
     the mount stops its predecessor. Reusing ids lets the predecessor unregister the new
     view's controls when it stops, leaving visible buttons with no callback.
     """
-    prefix = f"ctl:{mount_id}:{generation}:"
+    prefix = f"ctl:{message_root_id}:{generation}:"
     custom_id = f"{prefix}{key}"
     if len(custom_id) <= 100:
         return custom_id
@@ -448,30 +448,30 @@ def _custom_id(mount_id: str, generation: int, key: str) -> str:
 
 
 class _WiredButton(discord.ui.Button[AnyMountedView]):
-    def __init__(self, node: scene.Button, mount: Mount, key: str, generation: int) -> None:
+    def __init__(self, node: scene.Button, message_root: MessageRoot, key: str, generation: int) -> None:
         super().__init__(
             style=getattr(discord.ButtonStyle, node.style.value),
             label=node.label,
             emoji=discord_emoji(node.emoji),
             disabled=node.disabled,
-            custom_id=_custom_id(mount.id, generation, key),
+            custom_id=_custom_id(message_root.id, generation, key),
         )
-        self._mount = mount
+        self._root = message_root
         self._key = key
         self._generation = generation
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        await self._mount.dispatch(self._key, interaction, generation=self._generation)
+        await self._root.dispatch(self._key, interaction, generation=self._generation)
 
 
 class _WiredSelect(discord.ui.Select[AnyMountedView]):
-    def __init__(self, node: scene.Select, mount: Mount, key: str, generation: int) -> None:
+    def __init__(self, node: scene.Select, message_root: MessageRoot, key: str, generation: int) -> None:
         super().__init__(
             placeholder=node.placeholder,
             min_values=node.min_values,
             max_values=node.max_values,
             disabled=node.disabled,
-            custom_id=_custom_id(mount.id, generation, key),
+            custom_id=_custom_id(message_root.id, generation, key),
             options=[
                 discord.SelectOption(
                     label=option.label,
@@ -483,12 +483,12 @@ class _WiredSelect(discord.ui.Select[AnyMountedView]):
                 for option in node.options
             ],
         )
-        self._mount = mount
+        self._root = message_root
         self._key = key
         self._generation = generation
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        await self._mount.dispatch(self._key, interaction, self.values, generation=self._generation)
+        await self._root.dispatch(self._key, interaction, self.values, generation=self._generation)
 
 
 _CHANNEL_TYPES = {
@@ -535,18 +535,18 @@ type _SelectionValues = list[str] | _EntityValues | None
 
 
 class _EntityDispatch:
-    _mount: Mount
+    _root: MessageRoot
     _key: str
     _generation: int
 
-    def _wire(self, mount: Mount, key: str, generation: int) -> None:
-        self._mount = mount
+    def _wire(self, message_root: MessageRoot, key: str, generation: int) -> None:
+        self._root = message_root
         self._key = key
         self._generation = generation
 
     async def _dispatch(self, interaction: discord.Interaction, values: Sequence[object]) -> None:
         resolved = tuple(values)
-        await self._mount.dispatch(
+        await self._root.dispatch(
             self._key,
             interaction,
             _EntityValues(tuple(_entity_ref(value) for value in resolved), resolved),
@@ -554,13 +554,13 @@ class _EntityDispatch:
         )
 
 
-def _entity_kwargs(node: scene.EntitySelect, mount: Mount, key: str, generation: int) -> dict[str, object]:
+def _entity_kwargs(node: scene.EntitySelect, message_root: MessageRoot, key: str, generation: int) -> dict[str, object]:
     return {
         "placeholder": node.placeholder,
         "min_values": node.min_values,
         "max_values": node.max_values,
         "disabled": node.disabled,
-        "custom_id": _custom_id(mount.id, generation, key),
+        "custom_id": _custom_id(message_root.id, generation, key),
         "default_values": [_default_value(value) for value in node.default_values],
     }
 
@@ -586,9 +586,9 @@ class _WiredMentionableSelect(_EntityDispatch, discord.ui.MentionableSelect[AnyM
 
 
 def _wired_entity_select(
-    node: scene.EntitySelect, mount: Mount, key: str, generation: int
+    node: scene.EntitySelect, message_root: MessageRoot, key: str, generation: int
 ) -> discord.ui.BaseSelect[Any]:
-    kwargs = _entity_kwargs(node, mount, key, generation)
+    kwargs = _entity_kwargs(node, message_root, key, generation)
     if node.entity_type is EntityType.USER:
         item = _WiredUserSelect(**kwargs)
     elif node.entity_type is EntityType.ROLE:
@@ -597,7 +597,7 @@ def _wired_entity_select(
         item = _WiredChannelSelect(channel_types=[_CHANNEL_TYPES[value] for value in node.channel_types], **kwargs)
     else:
         item = _WiredMentionableSelect(**kwargs)
-    item._wire(mount, key, generation)
+    item._wire(message_root, key, generation)
     return item
 
 
@@ -731,7 +731,7 @@ class _LifecycleCandidate:
 
 
 @dataclass(frozen=True, slots=True)
-class MountAddress:
+class MessageAddress:
     """Where a mount's message is -- for links and diagnostics, never for writing to it.
 
     Writing goes through an :class:`~squid_ui_discord.delivery.EditHandle`, which is
@@ -747,7 +747,7 @@ class MountAddress:
 
 
 @dataclass(frozen=True, slots=True)
-class MountSnapshot:
+class MessageRootSnapshot:
     """One read-only look at a live mount, for host diagnostics.
 
     A single call rather than a dozen properties: it fixes what a mount is willing to say
@@ -760,7 +760,7 @@ class MountSnapshot:
     id: str
     component: str
     """Qualified class name of the root component."""
-    address: MountAddress | None
+    address: MessageAddress | None
     generation: int
     pending: bool
     finished: bool
@@ -770,7 +770,7 @@ class MountSnapshot:
     """Seconds since the initial send or last accepted click — what the timeout counts."""
     expires_in: float | None
     """Seconds of idle timeout left, or `None` for a mount that never times out."""
-    lifecycle: MountLifecycle
+    lifecycle: MessageRootStatus
     """Whether the application tree or framework renewal generation is visible."""
     handle_expires_in: float | None
     """Seconds of known edit authority left, or `None` for permanent/unknown authority."""
@@ -875,14 +875,14 @@ class _BusyPaint:
 
     def __init__(
         self,
-        mount: Mount,
+        message_root: MessageRoot,
         key: str,
         busy: BusySpec,
         interaction: discord.Interaction,
         *,
         resumed: bool = False,
     ) -> None:
-        self._mount = mount
+        self._root = message_root
         self._key = key
         self._busy = busy
         self._interaction = interaction
@@ -899,12 +899,12 @@ class _BusyPaint:
     async def show(self, profile: _DispatchProfile) -> None:
         """Relabel the pressed control and disable the panel, once."""
         async with self._lock:
-            if self._closed or self._shown or self._mount._finished:
+            if self._closed or self._shown or self._root._finished:
                 return
             pending = self._busy.pending
-            label = self._mount._chrome_text(self._mount.chrome.working if pending is None else pending)
-            source = self._mount._source(self._interaction, resumed=self._resumed)
-            wrote = await self._mount._repaint(self._key, label, through=source)
+            label = self._root._chrome_text(self._root.chrome.working if pending is None else pending)
+            source = self._root._source(self._interaction, resumed=self._resumed)
+            wrote = await self._root._repaint(self._key, label, through=source)
             if wrote is None:
                 # Nothing could write, so the click is still unanswered: the watchdog goes
                 # on to defer it at the usual deadline.
@@ -922,15 +922,13 @@ class _BusyPaint:
     async def restore(self) -> None:
         """Put the committed scene back, live controls and all."""
         async with self._lock:
-            if not self._shown or self._mount._finished:
+            if not self._shown or self._root._finished:
                 return
             self._shown = False
-            await self._mount._repaint(
-                None, None, through=self._mount._source(self._interaction, resumed=self._resumed)
-            )
+            await self._root._repaint(None, None, through=self._root._source(self._interaction, resumed=self._resumed))
 
 
-class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
+class MessageRoot[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
     """Binds a component to a message and owns its whole interaction lifecycle."""
 
     def __init__(
@@ -962,7 +960,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         # Diagnostics only. `_active` is what the idle timeout counts from: the initial send
         # and each accepted click move it, while unattended refreshes deliberately do not.
         self._born = self._active = self.clock()
-        self.address: MountAddress | None = None
+        self.address: MessageAddress | None = None
         """Where this mount's message is, once it has one. Read `handle` to write to it."""
         self._chrome = chrome
         self.localization = localization
@@ -1034,14 +1032,14 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         topic_bus = scheduler.bus if isinstance(scheduler, TopicScheduler) else None
         reconciler_ref: weakref.ReferenceType[SubscriptionReconciler] | None = None
 
-        def collected(_reference: weakref.ReferenceType[Mount]) -> None:
+        def collected(_reference: weakref.ReferenceType[MessageRoot]) -> None:
             if reconciler_ref is not None and (reconciler := reconciler_ref()) is not None:
                 reconciler.close()
 
-        mount_ref = weakref.ref(self, collected)
+        message_root_ref = weakref.ref(self, collected)
 
         def refresh(address: Address) -> None:
-            if (current := mount_ref()) is None:
+            if (current := message_root_ref()) is None:
                 if reconciler_ref is not None and (reconciler := reconciler_ref()) is not None:
                     reconciler.close()
                 return
@@ -1063,7 +1061,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         self._handle: deliver.EditHandle | None = None
         self._delete_handle: deliver.DeleteHandle | None = None
         self._ephemeral: bool | None = None
-        self._lifecycle = MountLifecycle.ACTIVE
+        self._lifecycle = MessageRootStatus.ACTIVE
         self._unwatch_expiry: Callable[[], None] | None = None
         self._expiry_arm_requested: deliver.EditHandle | None = None
         self._view: MountedView | None = None
@@ -1134,7 +1132,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             self._handle = handle
             if handle.permanent:
                 self._ephemeral = False
-            if self._lifecycle is MountLifecycle.RENEWAL_ARMED:
+            if self._lifecycle is MessageRootStatus.RENEWAL_ARMED:
                 candidate: _Candidate | None = None
                 try:
                     candidate = cast(_Candidate, await self._stage_loaded())
@@ -1198,8 +1196,8 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         """
         return self._plan
 
-    def snapshot(self) -> MountSnapshot:
-        """Describe this mount for a diagnostics surface. See :class:`MountSnapshot`."""
+    def snapshot(self) -> MessageRootSnapshot:
+        """Describe this mount for a diagnostics surface. See :class:`MessageRootSnapshot`."""
         now = self.clock()
         idle = now - self._active
         component = type(self.component)
@@ -1208,7 +1206,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             wall_clock = getattr(self.scheduler, "clock", None)
             current = wall_clock() if callable(wall_clock) else datetime.now(UTC)
             handle_expires_in = max(0.0, (self._handle.expires_at - current).total_seconds())
-        return MountSnapshot(
+        return MessageRootSnapshot(
             id=self.id,
             component=f"{component.__module__}.{component.__qualname__}",
             address=self.address,
@@ -1244,7 +1242,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         if (
             policy is None
             or self._finished
-            or self._lifecycle is not MountLifecycle.ACTIVE
+            or self._lifecycle is not MessageRootStatus.ACTIVE
             or self._plan is None
             or handle is not self._handle
             or handle.permanent
@@ -1296,7 +1294,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         """
         if message is None or self.address is not None:
             return
-        self.address = MountAddress(
+        self.address = MessageAddress(
             message_id=message.id,
             channel_id=message.channel.id,
             guild_id=None if message.guild is None else message.guild.id,
@@ -1504,7 +1502,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         if (
             tree is self._planned_tree
             and self._plan is not None
-            and self._lifecycle is MountLifecycle.ACTIVE
+            and self._lifecycle is MessageRootStatus.ACTIVE
             and self._planned_environment == self._plan_environment()
         ):
             if profile is not None:
@@ -1650,7 +1648,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         is mid-transaction and a re-render would observe half-written state.
         """
         async with self._render_lock:
-            if self._finished or self._lifecycle is MountLifecycle.RENEWAL_ARMED:
+            if self._finished or self._lifecycle is MessageRootStatus.RENEWAL_ARMED:
                 return None
             plan = self._plan
             if plan is None:
@@ -1724,7 +1722,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         """Make the candidate's generation the live one: its control ids now answer clicks."""
         self._generation = candidate.generation
         self._assets = candidate.assets
-        self._lifecycle = MountLifecycle.ACTIVE
+        self._lifecycle = MessageRootStatus.ACTIVE
         candidate.view.timeout = self._remaining_timeout()
         self._swap_view(candidate.view)
         # The commit point is where a mount becomes something a reader can see and click, and
@@ -1741,7 +1739,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         values through the mount's key indirection without replacing the live controls.
         """
         plan = self._plan
-        if plan is None or self._lifecycle is not MountLifecycle.ACTIVE:
+        if plan is None or self._lifecycle is not MessageRootStatus.ACTIVE:
             return False
         if candidate.plan.report.scene_fingerprint != plan.report.scene_fingerprint:
             return False
@@ -1777,7 +1775,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         self._form_bindings = {}
         self._generation = candidate.generation
         self._plan = candidate.composition.plan
-        self._lifecycle = MountLifecycle.RENEWAL_ARMED
+        self._lifecycle = MessageRootStatus.RENEWAL_ARMED
         candidate.view.timeout = self._remaining_timeout()
         self._swap_view(candidate.view)
         live.track(self)
@@ -1966,7 +1964,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         profile: OperationRecorder | None = None,
     ) -> None:
         """Advance explicit async bindings through progress and terminal paints."""
-        if self._lifecycle is MountLifecycle.RENEWAL_ARMED:
+        if self._lifecycle is MessageRootStatus.RENEWAL_ARMED:
             return
         candidate = committed
         for pass_index in range(_MAX_LOAD_PASSES):
@@ -2103,7 +2101,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         """
         component = type(self.component)
         name = f"{component.__module__}.{component.__qualname__}"
-        with self.profiler.operation(OperationKind.SEND, name=name, attributes={"mount_id": self.id}) as profile:
+        with self.profiler.operation(OperationKind.SEND, name=name, attributes={"message_root_id": self.id}) as profile:
             with profile.span("render_lock"):
                 await self._render_lock.acquire()
             try:
@@ -2254,7 +2252,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             name=key,
             attributes={
                 "kind": kind.value,
-                "mount_id": self.id,
+                "message_root_id": self.id,
                 "resumed": resumed,
                 "actor": interaction.user.id,
             },
@@ -2339,7 +2337,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                 source is None
                 or source.expired()
                 or self._finished
-                or self._lifecycle is not MountLifecycle.RENEWAL_ARMED
+                or self._lifecycle is not MessageRootStatus.RENEWAL_ARMED
                 or generation != self._generation
                 or self._handlers.get(key) is not binding
             ):
@@ -2410,7 +2408,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             name=key,
             attributes={
                 "kind": InteractionKind.SUBMIT.value,
-                "mount_id": self.id,
+                "message_root_id": self.id,
                 "actor": interaction.user.id,
             },
         ) as operation:
@@ -2486,8 +2484,8 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             text = resolve_text(self.chrome.session_ended, self.localization).content
             await deliver.respond_text(interaction, text, ephemeral=True)
             profile.presentation = PresentationStatus.WRITTEN
-            profile.acknowledge("mount_finished")
-            profile.finish(DispatchDisposition.MOUNT_FINISHED)
+            profile.acknowledge("message_root_finished")
+            profile.finish(DispatchDisposition.MESSAGE_ROOT_FINISHED)
             return False
         try:
             with profile.operation.span(
@@ -2668,7 +2666,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             name=key,
             attributes={
                 "kind": InteractionKind.PRESS.value,
-                "mount_id": self.id,
+                "message_root_id": self.id,
                 "resumed": True,
                 "actor": interaction.user.id,
             },
@@ -2817,7 +2815,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         action_context = ActionContext.create(
             f"{type(self.component).__name__}.{key}",
             actor=ActorRef("discord_user", str(interaction.user.id)),
-            metadata={"mount_id": self.id, "generation": str(active_generation)},
+            metadata={"message_root_id": self.id, "generation": str(active_generation)},
         )
         request = ActionRequest(
             event,
@@ -2954,7 +2952,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                 action_context := ActionContext.create(
                     f"{type(self.component).__name__}.{key}",
                     actor=ActorRef("discord_user", str(interaction.user.id)),
-                    metadata={"mount_id": self.id, "generation": str(active_generation)},
+                    metadata={"message_root_id": self.id, "generation": str(active_generation)},
                 ),
                 rebased,
             )
@@ -3053,7 +3051,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             with profile.operation.span("flush"):
                 return await self._flush(interaction, profile.operation, dispatch=profile)
         with self.profiler.operation(
-            OperationKind.DELIVERY, name="flush", attributes={"mount_id": self.id}
+            OperationKind.DELIVERY, name="flush", attributes={"message_root_id": self.id}
         ) as operation:
             try:
                 presentation = await self._flush(interaction, operation)
@@ -3078,11 +3076,11 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         try:
             if self._finished:
                 return PresentationStatus.ABANDONED
-            if self._lifecycle is MountLifecycle.RENEWAL_ARMED:
+            if self._lifecycle is MessageRootStatus.RENEWAL_ARMED:
                 acknowledge = True
             if not self._dirty:
                 acknowledge = True
-            elif self._lifecycle is MountLifecycle.ACTIVE:
+            elif self._lifecycle is MessageRootStatus.ACTIVE:
                 # A component cannot enter the tree without a state write, so a click that
                 # changed nothing never reaches this at all.
                 candidate = await self._stage_loaded(profile=operation, preflight=True)
@@ -3138,7 +3136,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                 self._finished = True
                 candidate = (
                     self._draw_renewal(disabled=True)
-                    if self._lifecycle is MountLifecycle.RENEWAL_ARMED
+                    if self._lifecycle is MessageRootStatus.RENEWAL_ARMED
                     else self._stage(disabled=True)
                 )
                 source = deliver.handle_from(interaction)
@@ -3213,7 +3211,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         component = type(self.component)
         name = f"{component.__module__}.{component.__qualname__}"
         with self.profiler.operation(
-            OperationKind.REFRESH, name=name, attributes={"mount_id": self.id}, links=links
+            OperationKind.REFRESH, name=name, attributes={"message_root_id": self.id}, links=links
         ) as profile:
             with profile.span("render_lock"):
                 await self._render_lock.acquire()
@@ -3226,7 +3224,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     status = TraceStatus.ABANDONED if armed is PresentationStatus.ABANDONED else TraceStatus.COMPLETED
                     profile.set_result(TraceResult(status, presentation=armed))
                     return armed
-                if self._lifecycle is MountLifecycle.RENEWAL_ARMED:
+                if self._lifecycle is MessageRootStatus.RENEWAL_ARMED:
                     profile.set_result(TraceResult(TraceStatus.COMPLETED, presentation=PresentationStatus.NO_CHANGE))
                     return PresentationStatus.NO_CHANGE
                 if self._handle is None or self._handle.expired():
@@ -3321,7 +3319,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     if disable and self._handle is not None:
                         candidate = (
                             self._draw_renewal(disabled=True)
-                            if self._lifecycle is MountLifecycle.RENEWAL_ARMED
+                            if self._lifecycle is MessageRootStatus.RENEWAL_ARMED
                             else self._stage(disabled=True)
                         )
                         try:
@@ -3402,6 +3400,6 @@ def _disable_all(view: discord.ui.LayoutView | discord.ui.View) -> None:
             target.disabled = True  # pyrefly: ignore  # guarded by hasattr
 
 
-def owned_mount(component: Component, user_id: int, **options: Any) -> Mount:
+def current_message_root(component: Component, user_id: int, **options: Any) -> MessageRoot:
     """Construct a mount whose controls belong to one Discord user."""
-    return Mount(component, access=Owner(user_id), **options)
+    return MessageRoot(component, access=Owner(user_id), **options)

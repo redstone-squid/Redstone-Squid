@@ -21,8 +21,6 @@ from urllib.parse import urlsplit
 
 import discord
 
-from squid_ui_discord.actions import ActionResponder, responder, selected_entities
-from squid_ui_discord.mount import _CHANNEL_TYPES
 from squid_ui.assets import Asset, StoredAsset
 from squid_ui.document import Document
 from squid_ui.emoji import Emoji, normalize_emoji
@@ -52,6 +50,8 @@ from squid_ui.primitives.styles import ActionStyle
 from squid_ui.runtime.component import Component
 from squid_ui.runtime.reactivity import state
 from squid_ui.target_types import ComponentsV2Target
+from squid_ui_discord.actions import ActionResponder, responder, selected_entities
+from squid_ui_discord.message_root import _CHANNEL_TYPES
 
 type Item = discord.ui.Item[Any]
 type KeyFactory = Callable[[Item], str]
@@ -608,7 +608,7 @@ class _AdoptedView(Component):
             if view.is_finished():
                 await answers.finish()
 
-    def _adopt_modal(self, modal: discord.ui.Modal, mount: Any) -> None:
+    def _adopt_modal(self, modal: discord.ui.Modal, message_root: Any) -> None:
         """Put the proxy in front of a modal's submit, which is a second interaction.
 
         Without this the modal's own `edit_message(view=self)` reaches Discord directly, which
@@ -620,14 +620,14 @@ class _AdoptedView(Component):
         submit = modal.on_submit
 
         async def on_submit(interaction: discord.Interaction) -> None:
-            proxy = _InteractionProxy(self, ActionResponder(interaction, mount), view)
+            proxy = _InteractionProxy(self, ActionResponder(interaction, message_root), view)
             try:
                 await submit(cast(Any, proxy))
             finally:
                 self.mutated(view)
             if not interaction.response.is_done():
                 await interaction.response.defer()
-            await mount.schedule()
+            await message_root.schedule()
 
         modal.on_submit = on_submit
 
@@ -773,7 +773,7 @@ class _ProxyResponse:
                 "answered; open the modal before deferring or replying"
             )
             raise AdoptionError(message)
-        self._proxy.component._adopt_modal(modal, self._proxy.responder.mount)
+        self._proxy.component._adopt_modal(modal, self._proxy.responder.message_root)
         await self._proxy.responder.send_modal(modal)
         self._done = True
 

@@ -15,7 +15,7 @@ from squid_ui.profiling import NoOpProfiler, OperationKind, PresentationStatus, 
 from squid_ui.runtime.topics import Address, CellAddress, Topic, TopicBus
 
 if TYPE_CHECKING:
-    from squid_ui_discord.mount import Mount
+    from squid_ui_discord.message_root import MessageRoot
 
 logger = logging.getLogger(__name__)
 _NOOP_PROFILER = NoOpProfiler()
@@ -26,7 +26,7 @@ def _utc_now() -> datetime:
 
 
 @dataclass(frozen=True, slots=True)
-class MountSchedulerSnapshot:
+class MessageRootSchedulerSnapshot:
     """One immutable diagnostic view of refresh scheduling pressure."""
 
     queued: int
@@ -62,7 +62,7 @@ class _Causes:
             self.omitted_links += 1
 
 
-class MountScheduler:
+class MessageRootScheduler:
     """Own concurrent, per-mount-coalesced refreshes and live-update expiry checks.
 
     Args:
@@ -103,15 +103,15 @@ class MountScheduler:
         self.clock = clock
         self.max_causal_links = max_causal_links
         self._monotonic = monotonic
-        self._queue: asyncio.Queue[Mount] = asyncio.Queue()
-        self._queued: set[Mount] = set()
-        self._in_flight: set[Mount] = set()
-        self._redeliver: set[Mount] = set()
-        self._queued_causes: weakref.WeakKeyDictionary[Mount, _Causes] = weakref.WeakKeyDictionary()
-        self._redelivery_causes: weakref.WeakKeyDictionary[Mount, _Causes] = weakref.WeakKeyDictionary()
-        self._followed: weakref.WeakKeyDictionary[Mount, int] = weakref.WeakKeyDictionary()
-        self._watched: weakref.WeakSet[Mount] = weakref.WeakSet()
-        self._warned_handles: weakref.WeakKeyDictionary[Mount, object] = weakref.WeakKeyDictionary()
+        self._queue: asyncio.Queue[MessageRoot] = asyncio.Queue()
+        self._queued: set[MessageRoot] = set()
+        self._in_flight: set[MessageRoot] = set()
+        self._redeliver: set[MessageRoot] = set()
+        self._queued_causes: weakref.WeakKeyDictionary[MessageRoot, _Causes] = weakref.WeakKeyDictionary()
+        self._redelivery_causes: weakref.WeakKeyDictionary[MessageRoot, _Causes] = weakref.WeakKeyDictionary()
+        self._followed: weakref.WeakKeyDictionary[MessageRoot, int] = weakref.WeakKeyDictionary()
+        self._watched: weakref.WeakSet[MessageRoot] = weakref.WeakSet()
+        self._warned_handles: weakref.WeakKeyDictionary[MessageRoot, object] = weakref.WeakKeyDictionary()
         self._running = False
         self._scheduled = 0
         self._coalesced = 0
@@ -119,66 +119,70 @@ class MountScheduler:
         self._failed = 0
         self._unchanged = 0
 
-    def watch(self, mount: Mount) -> Callable[[], None]:
+    def watch(self, message_root: MessageRoot) -> Callable[[], None]:
         """Observe a delivered mount's edit-authority deadline until it finishes."""
-        if mount.finished:
+        if message_root.finished:
             message = "cannot watch a finished mount"
             raise ValueError(message)
-        if mount.scheduler is not self:
+        if message_root.scheduler is not self:
             message = "a watched mount must use this scheduler as its scheduler"
             raise ValueError(message)
-        self._watched.add(mount)
+        self._watched.add(message_root)
         active = True
-        mount_ref = weakref.ref(mount)
+        message_root_ref = weakref.ref(message_root)
 
         def unwatch() -> None:
             nonlocal active
             if not active:
                 return
             active = False
-            if (current := mount_ref()) is not None:
+            if (current := message_root_ref()) is not None:
                 self._watched.discard(current)
                 self._warned_handles.pop(current, None)
 
         return unwatch
 
-    def schedule(self, mount: Mount) -> None:
+    def schedule(self, message_root: MessageRoot) -> None:
         """Enqueue a refresh while coalescing requests for the same mount."""
-        if mount.finished:
+        if message_root.finished:
             return
-        mount.invalidate()
-        self._enqueue(mount)
+        message_root.invalidate()
+        self._enqueue(message_root)
 
-    def schedule_reactive(self, mount: Mount, address: Address) -> None:
+    def schedule_reactive(self, message_root: MessageRoot, address: Address) -> None:
         """Enqueue a refresh attributed to one bus address."""
-        if mount.finished:
+        if message_root.finished:
             return
-        mount.runtime.invalidate_address(address)
-        self._enqueue(mount)
+        message_root.runtime.invalidate_address(address)
+        self._enqueue(message_root)
 
-    def _enqueue(self, mount: Mount) -> None:
+    def _enqueue(self, message_root: MessageRoot) -> None:
         """Enqueue an already invalidated mount while coalescing requests."""
-        if mount.finished:
+        if message_root.finished:
             return
         self._scheduled += 1
         triggered = self._monotonic()
         link = self.profiler.capture_link()
-        if mount in self._in_flight:
+        if message_root in self._in_flight:
             self._coalesced += 1
-            self._redelivery_causes.setdefault(mount, _Causes()).add(triggered, link, max_links=self.max_causal_links)
-            self._redeliver.add(mount)
+            self._redelivery_causes.setdefault(message_root, _Causes()).add(
+                triggered, link, max_links=self.max_causal_links
+            )
+            self._redeliver.add(message_root)
             return
-        if mount in self._queued:
+        if message_root in self._queued:
             self._coalesced += 1
-            self._queued_causes.setdefault(mount, _Causes()).add(triggered, link, max_links=self.max_causal_links)
+            self._queued_causes.setdefault(message_root, _Causes()).add(
+                triggered, link, max_links=self.max_causal_links
+            )
             return
-        self._queued_causes.setdefault(mount, _Causes()).add(triggered, link, max_links=self.max_causal_links)
-        self._queued.add(mount)
-        self._queue.put_nowait(mount)
+        self._queued_causes.setdefault(message_root, _Causes()).add(triggered, link, max_links=self.max_causal_links)
+        self._queued.add(message_root)
+        self._queue.put_nowait(message_root)
 
-    def snapshot(self) -> MountSchedulerSnapshot:
+    def snapshot(self) -> MessageRootSchedulerSnapshot:
         """Return queue depth, coalescing, and refresh status diagnostics."""
-        return MountSchedulerSnapshot(
+        return MessageRootSchedulerSnapshot(
             queued=len(self._queued),
             in_flight=len(self._in_flight),
             redeliver=len(self._redeliver),
@@ -204,12 +208,12 @@ class MountScheduler:
         await self._queue.join()
 
     @overload
-    def follow(self, mount: Mount, *topics: Topic) -> Callable[[], None]: ...
+    def follow(self, message_root: MessageRoot, *topics: Topic) -> Callable[[], None]: ...
 
     @overload
-    def follow(self, mount: Mount, *topics: CellAddress) -> Callable[[], None]: ...
+    def follow(self, message_root: MessageRoot, *topics: CellAddress) -> Callable[[], None]: ...
 
-    def follow(self, mount: Mount, *topics: Address) -> Callable[[], None]:
+    def follow(self, message_root: MessageRoot, *topics: Address) -> Callable[[], None]:
         """Refresh ``mount`` when any exact topic changes, returning an unfollow callback.
 
         Call this before the mount's initial send so a write cannot land between its first
@@ -220,10 +224,10 @@ class MountScheduler:
         if self.bus is None:
             message = "cannot follow topics without a topic bus"
             raise RuntimeError(message)
-        if mount.finished:
+        if message_root.finished:
             message = "cannot follow a finished mount"
             raise ValueError(message)
-        if mount.scheduler is not self:
+        if message_root.scheduler is not self:
             message = "a followed mount must use this scheduler as its scheduler"
             raise ValueError(message)
         if not topics:
@@ -240,28 +244,28 @@ class MountScheduler:
             active = False
             for unsubscribe in unsubscribers:
                 unsubscribe()
-            if (current := mount_ref()) is not None:
+            if (current := message_root_ref()) is not None:
                 count = self._followed.get(current, 0)
                 if count <= 1:
                     self._followed.pop(current, None)
                 else:
                     self._followed[current] = count - 1
 
-        mount_ref = weakref.ref(mount, lambda _: unfollow())
+        message_root_ref = weakref.ref(message_root, lambda _: unfollow())
 
         def refresh(topic: Address) -> None:
-            if (current := mount_ref()) is None:
+            if (current := message_root_ref()) is None:
                 unfollow()
                 return
             self.schedule_reactive(current, topic)
 
         unsubscribers.extend(self.bus.subscribe(topic, refresh) for topic in topics)
-        self._followed[mount] = self._followed.get(mount, 0) + 1
+        self._followed[message_root] = self._followed.get(message_root, 0) + 1
 
-        async def finish(finished: Mount) -> None:
+        async def finish(finished: MessageRoot) -> None:
             unfollow()
 
-        mount.on_finish(finish)
+        message_root.on_finish(finish)
         return unfollow
 
     async def run(self) -> None:
@@ -280,10 +284,10 @@ class MountScheduler:
 
     async def _worker(self) -> None:
         while True:
-            mount = await self._queue.get()
-            self._queued.discard(mount)
-            self._in_flight.add(mount)
-            causes = self._queued_causes.pop(mount, _Causes())
+            message_root = await self._queue.get()
+            self._queued.discard(message_root)
+            self._in_flight.add(message_root)
+            causes = self._queued_causes.pop(message_root, _Causes())
             cancelled = False
             try:
                 delivery_started = self._monotonic()
@@ -304,8 +308,8 @@ class MountScheduler:
                     operation.increment("scheduler.cause_links_omitted", causes.omitted_links)
                     link = self.profiler.capture_link()
                     try:
-                        with mount._scheduled_delivery():
-                            status = await mount.refresh(links=() if link is None else (link,))
+                        with message_root._scheduled_delivery():
+                            status = await message_root.refresh(links=() if link is None else (link,))
                         if status is PresentationStatus.UNCHANGED:
                             self._unchanged += 1
                     finally:
@@ -314,22 +318,22 @@ class MountScheduler:
                     self._delivered += 1
             except Exception:
                 self._failed += 1
-                logger.exception("mount refresh failed for %s", mount.id)
+                logger.exception("mount refresh failed for %s", message_root.id)
             except anyio.get_cancelled_exc_class():
                 cancelled = True
                 raise
             finally:
-                self._in_flight.discard(mount)
+                self._in_flight.discard(message_root)
                 if cancelled:
-                    self._redeliver.discard(mount)
-                    self._redelivery_causes.pop(mount, None)
-                elif mount in self._redeliver:
-                    self._redeliver.discard(mount)
-                    causes = self._redelivery_causes.pop(mount, _Causes())
-                    if not mount.finished:
-                        self._queued_causes[mount] = causes
-                        self._queued.add(mount)
-                        self._queue.put_nowait(mount)
+                    self._redeliver.discard(message_root)
+                    self._redelivery_causes.pop(message_root, None)
+                elif message_root in self._redeliver:
+                    self._redeliver.discard(message_root)
+                    causes = self._redelivery_causes.pop(message_root, _Causes())
+                    if not message_root.finished:
+                        self._queued_causes[message_root] = causes
+                        self._queued.add(message_root)
+                        self._queue.put_nowait(message_root)
                 self._queue.task_done()
 
     async def _sweep(self) -> None:
@@ -340,13 +344,13 @@ class MountScheduler:
     def _sweep_once(self) -> None:
         """Schedule the final honest refresh for handles approaching expiry."""
         now = self.clock()
-        for mount in tuple(self._watched):
-            handle = mount.handle
-            if handle is None or not mount._should_arm_expiry(handle, now):
-                self._warned_handles.pop(mount, None)
+        for message_root in tuple(self._watched):
+            handle = message_root.handle
+            if handle is None or not message_root._should_arm_expiry(handle, now):
+                self._warned_handles.pop(message_root, None)
                 continue
-            if self._warned_handles.get(mount) is handle:
+            if self._warned_handles.get(message_root) is handle:
                 continue
-            self._warned_handles[mount] = handle
-            mount._queue_expiry_arm(handle)
-            self.schedule(mount)
+            self._warned_handles[message_root] = handle
+            message_root._queue_expiry_arm(handle)
+            self.schedule(message_root)

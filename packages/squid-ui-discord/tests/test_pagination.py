@@ -35,7 +35,7 @@ from squid_ui.semantic import Item, Items, Paragraph
 from squid_ui.sources import Direction, Position, PositionResolver
 from squid_ui.text import NEUTRAL
 from squid_ui_discord import V2_LIMITS as LIMITS
-from squid_ui_discord import Everyone, Mount, conform
+from squid_ui_discord import Everyone, MessageRoot, conform
 from squid_ui_discord.modal import LabelSpec, ModalSpec, TextInputSpec, build_modal
 from squid_ui_discord.testing import assert_within_limits, commit_render, fake_interaction
 
@@ -207,8 +207,8 @@ class TestMountPagination:
         return [item for item in view.walk_children() if isinstance(item, discord.ui.Button)]
 
     def test_nav_row_is_synthesized(self):
-        mount = Mount(Browser(), access=Everyone(), timeout=None)
-        view = commit_render(mount)
+        message_root = MessageRoot(Browser(), access=Everyone(), timeout=None)
+        view = commit_render(message_root)
         prev_button, next_button = self._nav_buttons(view)
         assert prev_button.disabled  # first page
         assert not next_button.disabled
@@ -216,11 +216,11 @@ class TestMountPagination:
         assert conform(view) == []
 
     async def test_next_advances_and_edges_disable(self):
-        mount = Mount(Browser(), access=Everyone(), timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(Browser(), access=Everyone(), timeout=None)
+        commit_render(message_root)
         interaction = fake_interaction()
 
-        await mount.dispatch("__cursor_next.entries", interaction)
+        await message_root.dispatch("__cursor_next.entries", interaction)
 
         edited = interaction.response.edit_message.await_args.kwargs["view"]
         prev_button, _ = self._nav_buttons(edited)
@@ -228,33 +228,33 @@ class TestMountPagination:
         footers = [c.content for c in edited.walk_children() if isinstance(c, discord.ui.TextDisplay)]
         assert any("Page 2 of" in text for text in footers)
 
-    def test_the_mount_draws_once_per_render(self, monkeypatch):
+    def test_the_message_root_draws_once_per_render(self, monkeypatch):
         """The fingerprint dance used to make every flush plan twice."""
-        from squid_ui_discord import mount as mount_module
+        from squid_ui_discord import message_root as message_root_module
 
         calls = 0
-        planner = mount_module.plan_document
+        planner = message_root_module.plan_document
 
         def counted(*args, **kwargs):
             nonlocal calls
             calls += 1
             return planner(*args, **kwargs)
 
-        monkeypatch.setattr(mount_module, "plan_document", counted)
-        mount = Mount(TwoBrowsers(), access=Everyone(), timeout=None)
-        commit_render(mount)
+        monkeypatch.setattr(message_root_module, "plan_document", counted)
+        message_root = MessageRoot(TwoBrowsers(), access=Everyone(), timeout=None)
+        commit_render(message_root)
         assert calls == 1
 
-    async def test_a_paged_picker_follows_its_anchor_through_the_mount(self):
+    async def test_a_paged_picker_follows_its_anchor_through_the_root(self):
         """The production path, which used to launder every cursor through `page=`."""
         catalog = Catalog()
-        mount = Mount(catalog, access=Everyone(), timeout=None)
-        commit_render(mount)
-        await mount.dispatch("__cursor_next.catalog.items", fake_interaction())
-        assert mount.presentation.cursor("catalog.items").position.offset == 1
+        message_root = MessageRoot(catalog, access=Everyone(), timeout=None)
+        commit_render(message_root)
+        await message_root.dispatch("__cursor_next.catalog.items", fake_interaction())
+        assert message_root.presentation.cursor("catalog.items").position.offset == 1
 
         catalog.lead = ("new",)
-        view = commit_render(mount)
+        view = commit_render(message_root)
 
         # One item joined the head, so the reader's page slid by one to keep them on it.
         values = [
@@ -266,10 +266,10 @@ class TestMountPagination:
         assert "24" in values
 
     def test_stopping_replaced_view_keeps_new_paginator_registered(self):
-        """discord.py must retain the new generation after Mount stops the old one."""
-        mount = Mount(Browser(), access=Everyone(), timeout=None)
-        first = commit_render(mount)
-        second = commit_render(mount)
+        """discord.py must retain the new generation after MessageRoot stops the old one."""
+        message_root = MessageRoot(Browser(), access=Everyone(), timeout=None)
+        first = commit_render(message_root)
+        second = commit_render(message_root)
         message_id = 42
         store = ViewStore(cast(ConnectionState, SimpleNamespace()))
 
@@ -285,82 +285,82 @@ class TestMountPagination:
             label = f"{context.position.offset + 1}/{context.state.extent}"
             return (Row((Button(label=label, on_click=context.on_next, key="jump"),)),)
 
-        mount = Mount(Browser(), access=Everyone(), timeout=None, nav=nav)
-        view = commit_render(mount)
+        message_root = MessageRoot(Browser(), access=Everyone(), timeout=None, nav=nav)
+        view = commit_render(message_root)
         assert [button.label for button in self._nav_buttons(view)] == [
-            f"1/{mount.presentation.cursor('entries').extent}"
+            f"1/{message_root.presentation.cursor('entries').extent}"
         ]
 
-        await mount.dispatch("jump", fake_interaction())
+        await message_root.dispatch("jump", fake_interaction())
 
-        assert mount.presentation.cursor("entries").position.offset == 1
+        assert message_root.presentation.cursor("entries").position.offset == 1
 
     async def test_a_materialized_cursor_seeks_to_a_page(self):
-        mount = Mount(Browser(), access=Everyone(), timeout=None, nav=page_select_nav)
-        view = commit_render(mount)
+        message_root = MessageRoot(Browser(), access=Everyone(), timeout=None, nav=page_select_nav)
+        view = commit_render(message_root)
         jump = next(item for item in view.walk_children() if isinstance(item, discord.ui.Select))
         assert jump.custom_id is not None and jump.custom_id.endswith("__cursor_seek.entries")
 
-        await mount.dispatch("__cursor_seek.entries", fake_interaction(), ["3"])
+        await message_root.dispatch("__cursor_seek.entries", fake_interaction(), ["3"])
 
-        assert mount.presentation.cursor("entries").position.offset == 3
+        assert message_root.presentation.cursor("entries").position.offset == 3
 
     async def test_seeking_past_the_end_clamps_to_the_last_page(self):
-        mount = Mount(Browser(), access=Everyone(), timeout=None, nav=page_select_nav)
-        commit_render(mount)
-        extent = mount.presentation.cursor("entries").extent
+        message_root = MessageRoot(Browser(), access=Everyone(), timeout=None, nav=page_select_nav)
+        commit_render(message_root)
+        extent = message_root.presentation.cursor("entries").extent
 
-        await mount.dispatch("__cursor_seek.entries", fake_interaction(), ["9999"])
+        await message_root.dispatch("__cursor_seek.entries", fake_interaction(), ["9999"])
 
-        assert mount.presentation.cursor("entries").position.offset == extent - 1
+        assert message_root.presentation.cursor("entries").position.offset == extent - 1
 
     async def test_seeking_to_the_visible_page_is_a_clean_noop(self):
-        mount = Mount(Browser(), access=Everyone(), timeout=None, nav=page_select_nav)
-        commit_render(mount)
+        message_root = MessageRoot(Browser(), access=Everyone(), timeout=None, nav=page_select_nav)
+        commit_render(message_root)
         interaction = fake_interaction()
 
-        await mount.dispatch("__cursor_seek.entries", interaction, ["0"])
+        await message_root.dispatch("__cursor_seek.entries", interaction, ["0"])
 
         interaction.response.defer.assert_awaited_once()
 
     def test_the_stock_factory_still_draws_no_jump_control(self):
         """`page_select_nav` is opt-in: a select costs a whole component row."""
-        view = commit_render(Mount(Browser(), access=Everyone(), timeout=None))
+        view = commit_render(MessageRoot(Browser(), access=Everyone(), timeout=None))
 
         assert not [item for item in view.walk_children() if isinstance(item, discord.ui.Select)]
 
     async def test_prev_at_first_page_is_a_clean_noop(self):
-        mount = Mount(Browser(), access=Everyone(), timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(Browser(), access=Everyone(), timeout=None)
+        commit_render(message_root)
         interaction = fake_interaction()
 
-        await mount.dispatch("__cursor_previous.entries", interaction)
+        await message_root.dispatch("__cursor_previous.entries", interaction)
 
         interaction.response.defer.assert_awaited_once()
 
     async def test_two_pagers_advance_independently(self):
-        mount = Mount(TwoBrowsers(), access=Everyone(), timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(TwoBrowsers(), access=Everyone(), timeout=None)
+        commit_render(message_root)
 
-        await mount.dispatch("__cursor_next.left", fake_interaction())
+        await message_root.dispatch("__cursor_next.left", fake_interaction())
 
-        assert {key: cursor.position.offset for key, cursor in mount.presentation.cursors.items()} == {
+        assert {key: cursor.position.offset for key, cursor in message_root.presentation.cursors.items()} == {
             "left": 1,
             "right": 0,
         }
 
     async def test_changed_content_resets_only_its_pager(self):
         component = TwoBrowsers()
-        mount = Mount(component, access=Everyone(), timeout=None)
-        commit_render(mount)
-        await mount.dispatch("__cursor_next.left", fake_interaction())
-        await mount.dispatch("__cursor_next.right", fake_interaction())
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
+        commit_render(message_root)
+        await message_root.dispatch("__cursor_next.left", fake_interaction())
+        await message_root.dispatch("__cursor_next.right", fake_interaction())
 
         component.left_version = "new"
-        mount.invalidate()
-        commit_render(mount)
+        message_root.invalidate()
+        commit_render(message_root)
 
-        assert {key: cursor.position.offset for key, cursor in mount.presentation.cursors.items()} == {
+        assert {key: cursor.position.offset for key, cursor in message_root.presentation.cursors.items()} == {
             "left": 0,
             "right": 1,
         }
@@ -557,6 +557,6 @@ def test_the_solver_counts_the_nav_it_realized():
     def nav(state):
         return default_nav(NavigationContext(state, move, move))
 
-    view = commit_render(Mount(Browser(), access=Everyone(), timeout=None))
+    view = commit_render(MessageRoot(Browser(), access=Everyone(), timeout=None))
     solved = measure(Browser().render(), nav=nav)
     assert component_count(solved.children) == len(list(view.walk_children()))

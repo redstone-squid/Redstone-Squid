@@ -57,7 +57,7 @@ async def test_selecting_a_claim_enables_decisions() -> None:
     assert component.reassign_armed is None
 
 
-async def test_closing_finishes_the_semantic_mount() -> None:
+async def test_closing_finishes_the_semantic_root() -> None:
     component = make_component((make_claim(7),))
     event = SimpleNamespace(finish=AsyncMock())
 

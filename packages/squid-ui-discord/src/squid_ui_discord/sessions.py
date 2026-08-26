@@ -10,9 +10,9 @@ from enum import Enum, StrEnum
 from typing import Protocol
 from uuid import uuid4
 
-from squid_ui_discord.defaults import MountDefaults
 from squid_ui_discord.delivery import Abandoned, Delivered, Destination
-from squid_ui_discord.mount import Mount
+from squid_ui_discord.message_root import MessageRoot
+from squid_ui_discord.message_root_options import MessageRootDefaults
 
 logger = logging.getLogger(__name__)
 
@@ -304,7 +304,7 @@ class _Membership:
     session's ownership a single entry that is either there or not.
     """
 
-    parent: Mount | None
+    parent: MessageRoot | None
     """`None` for the root, which the session holds directly."""
     actor: int | None
     """Operational attribution, not membership -- see `Session.join`."""
@@ -316,7 +316,7 @@ class Session:
     def __init__(
         self,
         registry: SessionRegistry,
-        root: Mount,
+        root: MessageRoot,
         *,
         key: Hashable | None,
         actor_id: int | None,
@@ -341,7 +341,7 @@ class Session:
         self.key = key
         self.root = root
         self._registry = registry
-        self._graph: dict[Mount, _Membership] = {root: _Membership(parent=None, actor=actor_id)}
+        self._graph: dict[MessageRoot, _Membership] = {root: _Membership(parent=None, actor=actor_id)}
         # The opener is the initial member: a semantic default that makes their presence
         # explicit, not an authorization decision. Recovery supplies the stored set instead.
         if members is None:
@@ -363,7 +363,7 @@ class Session:
         self._closed = False
 
     @property
-    def mounts(self) -> tuple[Mount, ...]:
+    def message_roots(self) -> tuple[MessageRoot, ...]:
         """The root followed by attached mounts in registration order."""
         return tuple(self._graph)
 
@@ -406,18 +406,18 @@ class Session:
         """Actors attributed to non-root mounts, for replacement protection."""
         return frozenset(
             membership.actor
-            for mount, membership in self._graph.items()
-            if mount is not self.root and membership.actor is not None
+            for message_root, membership in self._graph.items()
+            if message_root is not self.root and membership.actor is not None
         )
 
-    def parent_of(self, mount: Mount) -> Mount | None:
+    def parent_of(self, message_root: MessageRoot) -> MessageRoot | None:
         """Return the mount's parent, or `None` for the root or an unknown mount."""
-        membership = self._graph.get(mount)
+        membership = self._graph.get(message_root)
         return None if membership is None else membership.parent
 
-    def actor_for(self, mount: Mount) -> int | None:
+    def actor_for(self, message_root: MessageRoot) -> int | None:
         """Return the actor attributed to one mount in this session."""
-        membership = self._graph.get(mount)
+        membership = self._graph.get(message_root)
         return None if membership is None else membership.actor
 
     @property
@@ -457,11 +457,11 @@ class Session:
 
     async def attach(
         self,
-        mount: Mount,
+        message_root: MessageRoot,
         destination: Destination,
         *,
         actor_id: int | None = None,
-        parent: Mount | None = None,
+        parent: MessageRoot | None = None,
     ) -> OpenResult:
         """Deliver and attach a child mount to this session."""
         async with self._lifecycle_lock:
@@ -470,12 +470,12 @@ class Session:
             parent = self.root if parent is None else parent
             if parent not in self._graph or parent.finished:
                 return Rejected((self.snapshot,), RejectionReason.SESSION_FINISHED)
-            result = await mount.send(destination)
+            result = await message_root.send(destination)
             if isinstance(result, Abandoned):
                 return result
-            self._graph[mount] = _Membership(parent=parent, actor=actor_id)
-            self._registry._index_mount(self, mount)
-            mount.on_finish(self._mount_finished)
+            self._graph[message_root] = _Membership(parent=parent, actor=actor_id)
+            self._registry._index_root(self, message_root)
+            message_root.on_finish(self._message_root_finished)
             return Opened(self)
 
     async def join(
@@ -561,51 +561,51 @@ class Session:
                 return
             self._finishing = True
             try:
-                await self._finish_mounts(self._depth_first(self.root), disable=disable)
+                await self._finish_roots(self._depth_first(self.root), disable=disable)
             finally:
                 self._registry._forget(self)
                 self._closed = True
                 self._finishing = False
 
     def _activate(self) -> None:
-        self._registry._index_mount(self, self.root)
-        self.root.on_finish(self._mount_finished)
+        self._registry._index_root(self, self.root)
+        self.root.on_finish(self._message_root_finished)
 
-    def _attach_existing(self, mount: Mount, *, parent: Mount, actor_id: int | None) -> None:
+    def _attach_existing(self, message_root: MessageRoot, *, parent: MessageRoot, actor_id: int | None) -> None:
         """Attach an already presented mount while reconstructing a session."""
         if parent not in self._graph:
             message = "recovered attachment parent is not in the session"
             raise ValueError(message)
-        self._graph[mount] = _Membership(parent=parent, actor=actor_id)
-        self._registry._index_mount(self, mount)
-        mount.on_finish(self._mount_finished)
+        self._graph[message_root] = _Membership(parent=parent, actor=actor_id)
+        self._registry._index_root(self, message_root)
+        message_root.on_finish(self._message_root_finished)
 
-    async def _mount_finished(self, mount: Mount) -> None:
+    async def _message_root_finished(self, message_root: MessageRoot) -> None:
         if self._finishing or self._closed:
             return
         async with self._lifecycle_lock:
-            if self._finishing or self._closed or mount not in self._graph:
+            if self._finishing or self._closed or message_root not in self._graph:
                 return
             self._finishing = True
             try:
-                if mount is self.root:
+                if message_root is self.root:
                     descendants = tuple(
-                        candidate for candidate in self._depth_first(self.root) if candidate is not mount
+                        candidate for candidate in self._depth_first(self.root) if candidate is not message_root
                     )
-                    await self._finish_mounts(descendants)
+                    await self._finish_roots(descendants)
                     self._registry._forget(self)
                     self._closed = True
                     return
-                branch = self._depth_first(mount)
-                await self._finish_mounts(tuple(candidate for candidate in branch if candidate is not mount))
+                branch = self._depth_first(message_root)
+                await self._finish_roots(tuple(candidate for candidate in branch if candidate is not message_root))
                 self._detach(branch)
             finally:
                 self._finishing = False
 
-    def _depth_first(self, root: Mount) -> tuple[Mount, ...]:
-        ordered: list[Mount] = []
+    def _depth_first(self, root: MessageRoot) -> tuple[MessageRoot, ...]:
+        ordered: list[MessageRoot] = []
 
-        def visit(parent: Mount) -> None:
+        def visit(parent: MessageRoot) -> None:
             for child, membership in tuple(self._graph.items()):
                 if membership.parent is parent:
                     visit(child)
@@ -614,19 +614,19 @@ class Session:
         visit(root)
         return tuple(ordered)
 
-    async def _finish_mounts(self, mounts: Sequence[Mount], *, disable: bool = True) -> None:
-        for mount in mounts:
+    async def _finish_roots(self, message_roots: Sequence[MessageRoot], *, disable: bool = True) -> None:
+        for message_root in message_roots:
             try:
-                await mount.finish(disable=disable)
+                await message_root.finish(disable=disable)
             except Exception:
-                logger.exception("could not finish mount %s in session %r", mount.id, self.key)
+                logger.exception("could not finish mount %s in session %r", message_root.id, self.key)
 
-    def _detach(self, branch: Sequence[Mount]) -> None:
-        for mount in branch:
+    def _detach(self, branch: Sequence[MessageRoot]) -> None:
+        for message_root in branch:
             # The registry is a separate owner of the same mount, so its index is dropped
             # separately rather than folded into the membership record.
-            self._registry._unindex_mount(self, mount)
-            self._graph.pop(mount, None)
+            self._registry._unindex_root(self, message_root)
+            self._graph.pop(message_root, None)
 
 
 def _resolve_victims(selected: tuple[SessionSnapshot, ...], occupants: tuple[Session, ...]) -> tuple[Session, ...]:
@@ -638,17 +638,17 @@ def _resolve_victims(selected: tuple[SessionSnapshot, ...], occupants: tuple[Ses
 class SessionRegistry:
     """The live logical sessions owned by this process."""
 
-    def __init__(self, defaults: MountDefaults = MountDefaults()) -> None:  # noqa: B008  # frozen value
+    def __init__(self, defaults: MessageRootDefaults = MessageRootDefaults()) -> None:  # noqa: B008  # frozen value
         self.defaults = defaults
         self._by_key: dict[Hashable, list[Session]] = {}
-        self._by_mount: dict[Mount, Session] = {}
+        self._by_root: dict[MessageRoot, Session] = {}
         self._sessions: list[Session] = []
         self._locks: dict[Hashable, asyncio.Lock] = {}
         self._waiting: dict[Hashable, int] = {}
 
     async def open(
         self,
-        mount: Mount,
+        message_root: MessageRoot,
         destination: Destination,
         *,
         key: Hashable | None = None,
@@ -668,13 +668,13 @@ class SessionRegistry:
         and opening time.  ``capacity`` caps the session's explicit members; it is a fact of
         this session rather than of the key contest, so it is not part of ``policy``.
         """
-        if not isinstance(mount, Mount):
-            message = "SessionRegistry.open requires a Mount; use MountDefaults.mount or ScreenSpec.open"
+        if not isinstance(message_root, MessageRoot):
+            message = "SessionRegistry.open requires a MessageRoot; use MessageRootDefaults.mount or ScreenSpec.open"
             raise TypeError(message)
 
         if key is None:
             return await self._open_locked(
-                mount,
+                message_root,
                 destination,
                 key=None,
                 policy=policy,
@@ -691,7 +691,7 @@ class SessionRegistry:
             )
         async with self._lock_for(key):
             return await self._open_locked(
-                mount,
+                message_root,
                 destination,
                 key=key,
                 policy=policy,
@@ -709,7 +709,7 @@ class SessionRegistry:
 
     async def _open_coordinated[SessionT: Session](
         self,
-        mount: Mount,
+        message_root: MessageRoot,
         destination: Destination,
         *,
         key: SessionKey,
@@ -730,7 +730,7 @@ class SessionRegistry:
         """
         async with self._lock_for(key):
             return await self._open_locked(
-                mount,
+                message_root,
                 destination,
                 key=key,
                 policy=policy,
@@ -748,12 +748,12 @@ class SessionRegistry:
 
     def _register_recovered[SessionT: Session](
         self,
-        root: Mount,
+        root: MessageRoot,
         *,
         key: SessionKey,
         actor_id: int | None,
         snapshot: SessionSnapshot,
-        attachments: tuple[tuple[Mount, Mount, int | None], ...],
+        attachments: tuple[tuple[MessageRoot, MessageRoot, int | None], ...],
         session_type: type[SessionT],
         members: frozenset[int] | None = None,
         capacity: int | None = None,
@@ -777,17 +777,17 @@ class SessionRegistry:
         self._sessions.append(session)
         self._by_key.setdefault(key, []).append(session)
         session._activate()
-        for mount, parent, mount_actor_id in attachments:
-            session._attach_existing(mount, parent=parent, actor_id=mount_actor_id)
+        for message_root, parent, message_root_actor_id in attachments:
+            session._attach_existing(message_root, parent=parent, actor_id=message_root_actor_id)
         return session
 
     def get(self, key: Hashable) -> tuple[Session, ...]:
         """Return every session currently occupying `key`, oldest first."""
         return tuple(self._by_key.get(key, ()))
 
-    def session_for(self, mount: Mount) -> Session | None:
+    def session_for(self, message_root: MessageRoot) -> Session | None:
         """Return the logical session that owns `mount`, if this registry knows it."""
-        return self._by_mount.get(mount)
+        return self._by_root.get(message_root)
 
     def sessions_for_member(
         self, user_id: int, *, domain: str | None = None, excluding: Collection[Session] = ()
@@ -838,7 +838,7 @@ class SessionRegistry:
 
     async def _open_locked(
         self,
-        mount: Mount,
+        message_root: MessageRoot,
         destination: Destination,
         *,
         key: Hashable | None,
@@ -861,7 +861,7 @@ class SessionRegistry:
         snapshots = tuple(sorted(snapshots, key=lambda occupant: (occupant.opened_at, occupant.id)))
         newcomer = session_type(
             self,
-            mount,
+            message_root,
             key=key,
             actor_id=actor_id,
             durable=durable,
@@ -903,10 +903,10 @@ class SessionRegistry:
         # Indexed before delivery, because delivery renders: a root component that draws
         # session facts would otherwise find no session on its own first paint and never be
         # asked to draw again. An abandoned delivery takes the entry back out.
-        self._index_mount(newcomer, mount)
-        result = await mount.send(destination)
+        self._index_root(newcomer, message_root)
+        result = await message_root.send(destination)
         if isinstance(result, Abandoned):
-            self._unindex_mount(newcomer, mount)
+            self._unindex_root(newcomer, message_root)
             return result
 
         # The opener joins by opening, so a quota has to bind here too — otherwise it is
@@ -916,8 +916,8 @@ class SessionRegistry:
             if actor_id is not None:
                 await commit.enter_async_context(self._member_lock(actor_id))
                 if newcomer._quota_reached(actor_id, excluding=victims):
-                    self._unindex_mount(newcomer, mount)
-                    await mount.finish()
+                    self._unindex_root(newcomer, message_root)
+                    await message_root.finish()
                     return Rejected(snapshots, RejectionReason.QUOTA_REACHED)
 
             if before_registration is not None:
@@ -943,12 +943,12 @@ class SessionRegistry:
                 self._forget(session)
         return tuple(self._by_key.get(key, ()))
 
-    def _index_mount(self, session: Session, mount: Mount) -> None:
-        self._by_mount[mount] = session
+    def _index_root(self, session: Session, message_root: MessageRoot) -> None:
+        self._by_root[message_root] = session
 
-    def _unindex_mount(self, session: Session, mount: Mount) -> None:
-        if self._by_mount.get(mount) is session:
-            del self._by_mount[mount]
+    def _unindex_root(self, session: Session, message_root: MessageRoot) -> None:
+        if self._by_root.get(message_root) is session:
+            del self._by_root[message_root]
 
     def _forget(self, session: Session) -> None:
         if session in self._sessions:
@@ -959,8 +959,8 @@ class SessionRegistry:
                 occupants.remove(session)
                 if not occupants:
                     del self._by_key[session.key]
-        for mount in session.mounts:
-            self._unindex_mount(session, mount)
+        for message_root in session.message_roots:
+            self._unindex_root(session, message_root)
 
     @asynccontextmanager
     async def _lock_for(self, key: Hashable) -> AsyncIterator[None]:

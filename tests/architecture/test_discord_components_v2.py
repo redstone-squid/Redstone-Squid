@@ -20,7 +20,7 @@ LEGACY_TYPE_HOMES = {"presentation.py", "delivery.py", "composition.py", "adopti
 # purpose: they draw embeds and plain views, measure a host's, and mount one. This is the
 # whole point of the target and not a regression. Everything else in the package — and every
 # line of the bot — stays on Components V2, which is what the rest of this test guards.
-CLASSIC_TARGET_HOMES = {"classic.py", "classic_renderer.py", "inspection.py", "mount.py", "targets.py"}
+CLASSIC_TARGET_HOMES = {"classic.py", "classic_renderer.py", "inspection.py", "message_root.py", "targets.py"}
 
 
 class DiscordUiVisitor(ast.NodeVisitor):

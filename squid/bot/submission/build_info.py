@@ -3,11 +3,11 @@
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
-import squid_ui_discord as sd
 import squid_ui as sl
+import squid_ui_discord as sd
 from squid.bot.i18n import t
 from squid.bot.routes.builds import build_edit
-from squid.bot.ui import create_mount
+from squid.bot.ui import create_message_root
 from squid.core.i18n import _
 from squid.topics import resource_topic
 
@@ -91,7 +91,9 @@ class BuildInfoComponent(sl.Component):
         build, node = self._current()
         if build.id is None:
             # Nothing stored to point a route at yet, so the control lives in this session.
-            edit = sl.actions(sl.action(t(self.locale, _("Edit")), self._edit, key="edit"), key="build-actions")
+            edit = sl.action_controls(
+                sl.action_control(t(self.locale, _("Edit")), self._edit, key="edit"), key="build-actions"
+            )
         else:
             edit = sl.primitives.Section(
                 (sl.primitives.Text(t(self.locale, _("Edit this build.")), priority=-10),),
@@ -107,10 +109,10 @@ class BuildInfoComponent(sl.Component):
             self.build,
             interaction.client.services.builds,
             locale=self.locale,
-        ).send(interaction, ephemeral=self._ephemeral, parent=sd.responder(event).mount)
+        ).send(interaction, ephemeral=self._ephemeral, parent=sd.responder(event).message_root)
 
-    def mount(self, *, source: sd.host.HostSource, scheduler: sd.MountScheduler | None = None) -> sd.Mount:
-        return create_mount(
+    def mount(self, *, source: sd.host.HostSource, scheduler: sd.MessageRootScheduler | None = None) -> sd.MessageRoot:
+        return create_message_root(
             self,
             source=source,
             access=self._access,

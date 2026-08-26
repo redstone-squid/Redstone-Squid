@@ -9,16 +9,16 @@ from unittest.mock import AsyncMock
 import discord
 import pytest
 
-import squid_ui_discord
 import squid_ui as sl
-from squid_ui_discord import Everyone, Mount, Owner, live
+import squid_ui_discord
+from squid_reactivity import ActionLedger, OperationEventSnapshot, add_action_result_sink, transaction
+from squid_ui.primitives import Button, Heading, Row
+from squid_ui.profiling import MemoryProfiler, OperationKind
+from squid_ui_discord import Everyone, MessageRoot, Owner, live
 from squid_ui_discord.devtools import DevTools
 from squid_ui_discord.devtools_runtime import DevToolsRuntime
 from squid_ui_discord.routing import Router
 from squid_ui_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
-from squid_ui.primitives import Button, Heading, Row
-from squid_ui.profiling import MemoryProfiler, OperationKind
-from squid_reactivity import ActionLedger, OperationEventSnapshot, add_action_result_sink, transaction
 
 
 class Subject(sl.Component):
@@ -88,14 +88,14 @@ class TestMountCommands:
         ctx = make_context()
         cog = DevTools()
 
-        await run(cog.list_mounts, cog, ctx)
+        await run(cog.list_roots, cog, ctx)
 
-        assert len(live.mounts()) == 1
-        assert live.mounts()[0].snapshot().access == Owner(1)
+        assert len(live.message_roots()) == 1
+        assert live.message_roots()[0].snapshot().access == Owner(1)
 
     @pytest.mark.parametrize(("command", "expected"), (("dump_plan", "logical"), ("dump_metrics", "cache:")))
     async def test_snapshot_reports_render_with_squid_ui(self, command: str, expected: str) -> None:
-        subject = Mount(Subject(), access=Everyone())
+        subject = MessageRoot(Subject(), access=Everyone())
         await subject.send(delivered_to(fake_message()))
         ctx = make_context()
         cog = DevTools()
@@ -106,7 +106,7 @@ class TestMountCommands:
         assert expected in rendered
 
     async def test_scene_is_attached_as_protocol_json(self) -> None:
-        subject = Mount(Subject(), access=Everyone())
+        subject = MessageRoot(Subject(), access=Everyone())
         await subject.send(delivered_to(fake_message()))
         ctx = make_context()
         cog = DevTools()
@@ -117,7 +117,7 @@ class TestMountCommands:
         assert file.filename == f"scene-{subject.id}-gen1.json"
         assert sl.scene.Codec.loads(file.fp.read().decode()) == subject.snapshot().scene
 
-    async def test_an_unknown_mount_is_explained(self) -> None:
+    async def test_an_unknown_message_root_is_explained(self) -> None:
         ctx = make_context()
         cog = DevTools()
 
@@ -198,9 +198,9 @@ class TestProfiles:
         assert "n=1" in rendered
         assert "p50" not in rendered
 
-    async def test_mount_profile_filters_bounded_traces_by_non_aggregate_attribute(self) -> None:
+    async def test_message_root_profile_filters_bounded_traces_by_non_aggregate_attribute(self) -> None:
         profiler = MemoryProfiler()
-        subject = Mount(Subject(), access=Everyone(), profiler=profiler)
+        subject = MessageRoot(Subject(), access=Everyone(), profiler=profiler)
         await subject.send(delivered_to(fake_message()))
         assert {aggregate.key.counter_name for aggregate in profiler.snapshot().counter_aggregates} >= {
             "planner.calls",
@@ -216,10 +216,10 @@ class TestProfiles:
         assert "send" in rendered
         assert "planner" in rendered
 
-    async def test_timeline_reads_as_a_transcript_across_mounts(self) -> None:
+    async def test_timeline_reads_as_a_transcript_across_roots(self) -> None:
         profiler = MemoryProfiler()
-        first = Mount(Clicker(), access=Everyone(), profiler=profiler, timeout=None)
-        second = Mount(Clicker(), access=Everyone(), profiler=profiler, timeout=None)
+        first = MessageRoot(Clicker(), access=Everyone(), profiler=profiler, timeout=None)
+        second = MessageRoot(Clicker(), access=Everyone(), profiler=profiler, timeout=None)
         commit_render(first)
         commit_render(second)
         await first.dispatch("bump", fake_interaction(user_id=11))
@@ -239,10 +239,10 @@ class TestProfiles:
 
     async def test_timeline_filters_to_one_actor(self) -> None:
         profiler = MemoryProfiler()
-        mount = Mount(Clicker(), access=Everyone(), profiler=profiler, timeout=None)
-        commit_render(mount)
-        await mount.dispatch("bump", fake_interaction(user_id=11))
-        await mount.dispatch("bump", fake_interaction(user_id=22))
+        message_root = MessageRoot(Clicker(), access=Everyone(), profiler=profiler, timeout=None)
+        commit_render(message_root)
+        await message_root.dispatch("bump", fake_interaction(user_id=11))
+        await message_root.dispatch("bump", fake_interaction(user_id=22))
         ctx = make_context()
         cog = DevTools(profiler=profiler)
 
@@ -264,7 +264,7 @@ class TestProfiles:
     async def test_queue_command_infers_bus_and_profiler_from_scheduler(self) -> None:
         profiler = MemoryProfiler()
         bus = sl.runtime.LocalTopicBus()
-        scheduler = squid_ui_discord.MountScheduler(bus, profiler=profiler)
+        scheduler = squid_ui_discord.MessageRootScheduler(bus, profiler=profiler)
 
         def refresh(topic) -> None:
             pass
