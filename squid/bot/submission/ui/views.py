@@ -13,7 +13,7 @@ import squid_ui_discord as sd
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.components import BuildField, get_text_input
-from squid.bot.ui import DISCORD_YELLOW, create_message_root, error_layout, respond_presentation
+from squid.bot.ui import DISCORD_YELLOW, create_message_root, error_layout, respond_payload
 from squid.bot.utils.permissions import allows
 from squid.bot.utils.sentinel import DEFAULT, DefaultType
 from squid.builds.application import BuildEditPatch, BuildService
@@ -703,7 +703,7 @@ class BuildEditComponent(sl.Component):
                 self.locale,
                 _("Only the pending build's submitter or a trusted staff member can edit it."),
             )
-            await respond_presentation(interaction, error_layout(t(self.locale, _("Cannot edit this build")), message))
+            await respond_payload(interaction, error_layout(t(self.locale, _("Cannot edit this build")), message))
             return
         client = interaction.client
         build, node = self._current()
@@ -724,17 +724,17 @@ class BuildEditComponent(sl.Component):
 
         self._refresh = refresh
         message_root = self.mount(interaction.user.id, source=interaction, scheduler=client.layout_scheduler)
-        destination = sd.respond_to(interaction, ephemeral=ephemeral, wait=True)
+        message_destination = sd.respond_to(interaction, ephemeral=ephemeral, wait=True)
         parent_session = None if parent is None else interaction.client.sessions.session_for(parent)
         if parent_session is None:
             await interaction.client.sessions.open(
                 message_root,
-                destination,
+                message_destination,
                 key=SessionKey.custom("build-edit", (interaction.user.id, self.build.id)),
                 actor_id=interaction.user.id,
             )
         else:
-            await parent_session.attach(message_root, destination, actor_id=interaction.user.id, parent=parent)
+            await parent_session.attach(message_root, message_destination, actor_id=interaction.user.id, parent=parent)
 
     def mount(
         self, user_id: int, *, source: sd.runtime.RuntimeSource, scheduler: sd.MessageRootScheduler | None = None

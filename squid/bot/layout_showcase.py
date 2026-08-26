@@ -20,8 +20,8 @@ from squid.bot.ui import (
     DISCORD_YELLOW,
     L,
     create_message_root,
-    destination,
     localization_for,
+    message_destination,
     send_component,
 )
 from squid.core.i18n import _
@@ -1358,7 +1358,7 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         panel = Lobby(self.bot.sessions, ctx.author.id)
         await self.bot.sessions.open(
             panel.mount(source=ctx, locale=locale),
-            destination(ctx, locale=locale),
+            message_destination(ctx, locale=locale),
             key=SessionKey.guild("showcase-lobby", ctx.guild.id),
             actor_id=ctx.author.id,
             capacity=4,

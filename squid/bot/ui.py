@@ -46,7 +46,6 @@ __all__ = [
     "card_node",
     "contribute",
     "create_message_root",
-    "destination",
     "error_layout",
     "error_node",
     "help_layout",
@@ -54,12 +53,11 @@ __all__ = [
     "info_node",
     "link_layout",
     "localization_for",
+    "message_destination",
     "render_item",
-    "render_presentation",
-    "render_static",
-    "reply",
-    "reply_presentation",
-    "respond_presentation",
+    "render_payload",
+    "reply_payload",
+    "respond_payload",
     "send_component",
     "text_layout",
     "truncate_display_text",
@@ -180,45 +178,15 @@ class Private:
 type Visibility = Private | Literal["public", "personal"]
 
 
-async def reply(
+async def reply_payload(
     ctx: Context[Any],
-    presentation: sd.message_payload.MessagePayload,
-    *,
-    visibility: Visibility = "public",
-    locale: str | None = None,
-    files: Sequence[discord.File] = (),
-) -> discord.Message | None:
-    """The one reply entry point: send a presentation with an explicit audience.
-
-    "public" answers in the channel; "personal" is ephemeral where the transport allows it
-    (see `squid.bot.utils.visibility.personal`); `Private(reason)` must never reach a channel
-    and falls back to a DM on the prefix side.
-    """
-    # Imported lazily to keep the command UI helpers independent from audience policy.
-    from squid.bot.utils.visibility import deliver_privately, personal
-
-    if isinstance(visibility, Private):
-        return await deliver_privately(
-            ctx,
-            presentation,
-            reason=visibility.reason,
-            locale=locale,
-            files=files,
-        )
-    ephemeral = visibility == "personal" and personal(ctx)
-    result = await sd.reply_to(ctx, ephemeral=ephemeral, files=files)(presentation)
-    return result.message
-
-
-async def reply_presentation(
-    ctx: Context[Any],
-    presentation: sd.message_payload.MessagePayload,
+    payload: sd.message_payload.MessagePayload,
     *,
     visibility: Visibility = "public",
     allowed_mentions: discord.AllowedMentions | None = None,
     files: Sequence[discord.File] = (),
 ) -> sd.delivery.DeliveryResult:
-    """Deliver a complete Squid presentation through the selected command audience."""
+    """Deliver a complete Squid payload through the selected command audience."""
     from squid.bot.utils.visibility import personal
 
     if isinstance(visibility, Private):
@@ -226,43 +194,43 @@ async def reply_presentation(
 
         message = await deliver_privately(
             ctx,
-            presentation,
+            payload,
             reason=visibility.reason,
             allowed_mentions=allowed_mentions,
             files=files,
         )
         if message is None:
             raise sd.delivery.DeliveryAbandoned
-        handle = sd.delivery.handle_for(message, mode=presentation.mode)
+        handle = sd.delivery.handle_for(message, mode=payload.mode)
         return sd.delivery.DeliveryResult(message, handle)
 
-    destination = sd.reply_to(
+    message_destination = sd.reply_to(
         ctx,
         ephemeral=visibility == "personal" and personal(ctx),
         files=files,
         allowed_mentions=allowed_mentions,
     )
-    return await destination(presentation)
+    return await message_destination(payload)
 
 
-async def respond_presentation(
+async def respond_payload(
     interaction: discord.Interaction[Any],
-    presentation: sd.MessagePayload,
+    payload: sd.MessagePayload,
     *,
     ephemeral: bool = True,
     wait: bool = False,
     allowed_mentions: discord.AllowedMentions | None = None,
 ) -> sd.delivery.DeliveryResult:
-    """Deliver a complete presentation as an interaction response or follow-up."""
+    """Deliver a complete payload as an interaction response or follow-up."""
     return await sd.respond_to(
         interaction,
         ephemeral=ephemeral,
         wait=wait,
         allowed_mentions=allowed_mentions,
-    )(presentation)
+    )(payload)
 
 
-def destination(
+def message_destination(
     ctx: Context[Any],
     *,
     visibility: Visibility = "public",
@@ -286,18 +254,18 @@ def destination(
             return sd.reply_to(ctx, ephemeral=True, files=files)
 
         async def privately(
-            presentation: sd.message_payload.MessagePayload,
+            payload: sd.message_payload.MessagePayload,
         ) -> sd.delivery.DeliveryResult:
             message = await deliver_privately(
                 ctx,
-                presentation,
+                payload,
                 reason=visibility.reason,
                 locale=locale,
                 files=files,
             )
             if message is None:
                 raise sd.delivery.DeliveryAbandoned
-            handle = sd.delivery.handle_for(message, mode=presentation.mode)
+            handle = sd.delivery.handle_for(message, mode=payload.mode)
             return sd.delivery.DeliveryResult(message, handle)
 
         return privately
@@ -346,32 +314,14 @@ def render_item(
     )
 
 
-def render_static(
+def render_payload(
     nodes: ui.DocumentLike,
     *,
     locale: str | None = None,
     strict: bool = False,
     reservation: sd.ResourceCost = sd.EMPTY_RESERVATION,
 ) -> sd.message_payload.MessagePayload:
-    """Render a sessionless document through the bot's chrome and catalogue."""
-    return sd.render_static(
-        nodes,
-        chrome=CHROME,
-        localization=localization_for(locale),
-        palette=PALETTES.resolve(),
-        strict=strict,
-        reservation=reservation,
-    )
-
-
-def render_presentation(
-    nodes: ui.DocumentLike,
-    *,
-    locale: str | None = None,
-    strict: bool = False,
-    reservation: sd.ResourceCost = sd.EMPTY_RESERVATION,
-) -> sd.message_payload.MessagePayload:
-    """Render a complete presentation for framework-owned delivery."""
+    """Render a complete Discord payload through the bot's chrome and catalogue."""
     return sd.render_static(
         nodes,
         chrome=CHROME,
@@ -460,7 +410,7 @@ async def send_component(
     message_root = create_message_root(
         component, source=ctx, access=access, locale=locale, timeout=timeout, scheduler=scheduler
     )
-    await message_root.send(destination(ctx, visibility=visibility, locale=locale))
+    await message_root.send(message_destination(ctx, visibility=visibility, locale=locale))
     return message_root
 
 
@@ -572,7 +522,7 @@ def card_layout(
     locale: str | None = None,
 ) -> sd.message_payload.MessagePayload:
     """Create a standalone V2 card."""
-    return render_static(
+    return render_payload(
         [
             card_node(
                 title,
@@ -597,7 +547,7 @@ def text_layout(
     node: ui.LayoutNode = ui.truncate(ui.paragraph(content))
     if accent_colour is not None:
         node = ui.block(node, accent=accent_colour)
-    return render_static([node], locale=locale)
+    return render_payload([node], locale=locale)
 
 
 def _prefixed(prefix: str, value: ui.TextLike) -> ui.TextLike:
@@ -612,7 +562,7 @@ def _prefixed(prefix: str, value: ui.TextLike) -> ui.TextLike:
 def error_layout(
     title: ui.TextLike, description: ui.TextLike | None, *, locale: str | None = None
 ) -> sd.message_payload.MessagePayload:
-    return render_static([error_node(title, description)], locale=locale)
+    return render_payload([error_node(title, description)], locale=locale)
 
 
 def error_node(title: ui.TextLike, description: ui.TextLike | None) -> ui.LayoutNode:
@@ -638,7 +588,7 @@ def warning_layout(
 def info_layout(
     title: ui.TextLike, description: ui.TextLike | None, *, locale: str | None = None
 ) -> sd.message_payload.MessagePayload:
-    return render_static([info_node(title, description)], locale=locale)
+    return render_payload([info_node(title, description)], locale=locale)
 
 
 def info_node(title: ui.TextLike, description: ui.TextLike | None) -> ui.LayoutNode:
@@ -678,4 +628,4 @@ def link_layout(
         ui.action_controls(ui.link(label, url, key="open-link"), key="link"),
         accent=DISCORD_GREEN,
     )
-    return render_static([node], locale=locale)
+    return render_payload([node], locale=locale)

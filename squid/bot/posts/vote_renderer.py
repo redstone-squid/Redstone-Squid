@@ -91,7 +91,7 @@ class VoteSessionRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
                     channel_id=channel_id,
                     guild_id=guild_id,
                     surface="build_review",
-                    presentation=render_build_review(card, snapshot, guild_id),
+                    payload=render_build_review(card, snapshot, guild_id),
                 )
             )
         return posts
@@ -104,7 +104,7 @@ class VoteSessionRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
             content = "" if message is None else message.content
         layout = render_delete_log(snapshot, content)
         return [
-            DesiredPost(channel_id=channel_id, guild_id=guild_id, surface="vote_card", presentation=layout)
+            DesiredPost(channel_id=channel_id, guild_id=guild_id, surface="vote_card", payload=layout)
             for channel_id, guild_id in (await self._published_channels(snapshot)).items()
         ]
 
@@ -118,7 +118,7 @@ class VoteSessionRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
             # still gets a card, and a delivery that failed is retried.
             channels.update({channel.id: channel.guild.id for channel in await configured_vote_channels(self.bot)})
         return [
-            DesiredPost(channel_id=channel_id, guild_id=guild_id, surface="vote_card", presentation=layout)
+            DesiredPost(channel_id=channel_id, guild_id=guild_id, surface="vote_card", payload=layout)
             for channel_id, guild_id in channels.items()
         ]
 

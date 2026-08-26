@@ -31,7 +31,7 @@ from discord.ext.commands import Context
 
 import squid_ui_discord as sd
 from squid.bot.i18n import t
-from squid.bot.ui import error_layout, info_layout, reply_presentation
+from squid.bot.ui import error_layout, info_layout, reply_payload
 from squid.core.i18n import _
 from squid_ui_discord import send_to
 
@@ -48,7 +48,7 @@ def personal(ctx: Context[Any]) -> bool:
 
 async def deliver_privately(
     ctx: Context[Any],
-    presentation: sd.MessagePayload,
+    payload: sd.MessagePayload,
     *,
     reason: str,
     locale: str | None = None,
@@ -71,13 +71,13 @@ async def deliver_privately(
             ephemeral=True,
             files=files,
             allowed_mentions=allowed_mentions,
-        )(presentation)
+        )(payload)
         return result.message
 
     try:
-        result = await send_to(ctx.author, files=files, allowed_mentions=allowed_mentions)(presentation)
+        result = await send_to(ctx.author, files=files, allowed_mentions=allowed_mentions)(payload)
     except discord.Forbidden:
-        await reply_presentation(
+        await reply_payload(
             ctx,
             error_layout(
                 t(locale, _("Nowhere private to send this")),
@@ -91,7 +91,7 @@ async def deliver_privately(
             ),
         )
         return None
-    await reply_presentation(
+    await reply_payload(
         ctx,
         info_layout(t(locale, _("Sent by direct message")), reason),
     )

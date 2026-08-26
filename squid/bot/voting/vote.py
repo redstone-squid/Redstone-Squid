@@ -13,7 +13,7 @@ from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.operations import run_command_operation
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
-from squid.bot.ui import error_layout, info_node, respond_presentation, text_layout
+from squid.bot.ui import error_layout, info_node, respond_payload, text_layout
 from squid.bot.voting.actors import describe_rejection, resolve_actor
 from squid.bot.voting.poll_wizard import present_poll_form
 from squid.bot.voting.publisher import DiscordPollPublisher
@@ -201,7 +201,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         if account is None or account.id is None or account.needs_consent_refresh:
             if await ensure_consented_account(interaction, self.bot.services.accounts, locale=locale) is None:
                 return
-            await respond_presentation(
+            await respond_payload(
                 interaction, text_layout(t(locale, _("Thanks. Run `/poll` again to open the editor.")))
             )
             return
@@ -219,7 +219,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         await interaction.response.defer(ephemeral=True)
         locale = await resolve_locale(interaction, self.bot.services.settings)
         if interaction.guild is None or message.guild != interaction.guild:
-            await respond_presentation(
+            await respond_payload(
                 interaction,
                 error_layout(
                     t(locale, _("Cannot vote on this message")),
@@ -257,7 +257,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             locale=locale,
             reports=self.bot.services.error_reports,
         )
-        await respond_presentation(interaction, text_layout(t(locale, _("Deletion vote opened."))))
+        await respond_payload(interaction, text_layout(t(locale, _("Deletion vote opened."))))
 
     async def _consented_account_id(self, discord_id: int) -> int | None:
         """Resolve a voter's account without creating one.

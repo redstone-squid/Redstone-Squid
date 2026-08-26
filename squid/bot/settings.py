@@ -12,13 +12,13 @@ from squid.bot.i18n import resolve_locale, t
 from squid.bot.operations import managed_result
 from squid.bot.settings_view import FOLLOW_DISCORD, SETTINGS_SESSION_SPEC, SettingsCapabilities, SettingsPanel
 from squid.bot.ui import (
-    destination,
     error_layout,
     error_node,
     info_layout,
     info_node,
     localization_for,
-    reply_presentation,
+    message_destination,
+    reply_payload,
 )
 from squid.bot.utils.permissions import hide_unless, requires, subject_for
 from squid.bot.utils.visibility import personal
@@ -62,7 +62,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         # leaving two live panels writing the same settings service.
         await SETTINGS_SESSION_SPEC.open(
             view,
-            destination(ctx, visibility="personal", locale=locale),
+            message_destination(ctx, visibility="personal", locale=locale),
             sessions=ctx,
             open_context=sd.OpenContext.of(ctx),
             localization=localization_for(locale),
@@ -232,11 +232,11 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
             ),
         )
 
-    async def _reply(self, ctx: Context[BotT], presentation: sd.message_payload.MessagePayload) -> None:
-        """Answer the caller privately through the presentation delivery boundary."""
-        await reply_presentation(
+    async def _reply(self, ctx: Context[BotT], payload: sd.message_payload.MessagePayload) -> None:
+        """Answer the caller privately through the payload delivery boundary."""
+        await reply_payload(
             ctx,
-            presentation,
+            payload,
             visibility="personal" if personal(ctx) else "public",
         )
 

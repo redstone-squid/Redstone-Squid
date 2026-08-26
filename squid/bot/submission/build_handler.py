@@ -15,8 +15,7 @@ from squid.bot.ui import (
     DISCORD_RED,
     DISCORD_YELLOW,
     render_item,
-    render_presentation,
-    render_static,
+    render_payload,
     truncate_display_text,
 )
 from squid.bot.voting.sessions import configured_vote_channels, ensure_build_review
@@ -98,13 +97,9 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
                 return await self.bot.get_or_fetch_message(source.channel_id, source.message_id)
         return None
 
-    async def render_layout(self) -> sd.message_payload.MessagePayload:
-        """Render a standalone Components V2 presentation for the build."""
-        return render_static([await self.render_node()])
-
-    async def render_presentation(self) -> sd.message_payload.MessagePayload:
-        """Render the complete presentation used by post delivery."""
-        return render_presentation([await self.render_node()])
+    async def render_payload(self) -> sd.message_payload.MessagePayload:
+        """Render the complete message payload used by post delivery."""
+        return render_payload([await self.render_node()])
 
     async def render_container(
         self, *, reservation: sd.ResourceCost = sd.EMPTY_RESERVATION

@@ -1,4 +1,4 @@
-"""Shared Discord error presentation and framework hooks."""
+"""Shared Discord error notice and framework hooks."""
 
 import logging
 from collections.abc import Awaitable, Callable, Mapping
@@ -11,7 +11,7 @@ from discord.ext import commands
 
 import squid_ui_discord as sd
 from squid.accounts.errors import ConsentRequiredError
-from squid.bot.ui import error_layout, reply_presentation, respond_presentation
+from squid.bot.ui import error_layout, reply_payload, respond_payload
 from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.core.errors import DomainError, JSONValue, SquidError
 from squid.core.i18n import _, translate
@@ -39,7 +39,7 @@ def _reports_from(client: object) -> ErrorReportService | None:
 
 
 @dataclass(frozen=True, slots=True)
-class ErrorPresentation:
+class ErrorNotice:
     """Safe Discord-facing representation of an exception."""
 
     title: str
@@ -52,8 +52,8 @@ class ErrorPresentation:
     ID, while a moderator looking one up will be quoting whatever the card showed.
     """
 
-    def to_presentation(self) -> sd.message_payload.MessagePayload:
-        """Build the complete Components V2 presentation for this error."""
+    def to_payload(self) -> sd.message_payload.MessagePayload:
+        """Build the complete Components V2 payload for this error."""
         return error_layout(self.title, self.detail)
 
 
@@ -110,7 +110,7 @@ def mark_error_presented(error: BaseException) -> None:
 
 
 def _presentation_locale(interaction: discord.Interaction[Any] | None) -> str | None:
-    """Best-effort Discord-native locale for error presentation.
+    """Best-effort Discord-native locale for error notice.
 
     Deliberately skips the admin-configured guild override (which requires a
     database lookup): this runs on every error, including ones raised from
@@ -127,7 +127,7 @@ def _presentation_locale(interaction: discord.Interaction[Any] | None) -> str | 
     return str(locale) if locale is not None else None
 
 
-def _present_missing_nodes(error: PermissionNodeRequired, locale: str | None) -> ErrorPresentation:
+def _present_missing_nodes(error: PermissionNodeRequired, locale: str | None) -> ErrorNotice:
     """Name the nodes a caller is missing, with what each one is for.
 
     Node names are identifiers and stay untranslated; their catalogue
@@ -138,7 +138,7 @@ def _present_missing_nodes(error: PermissionNodeRequired, locale: str | None) ->
         f"`{name}` — {translate(locale, CATALOGUE[name].description)}" for name in error.nodes if name in CATALOGUE
     )
     if error.forbidden:
-        return ErrorPresentation(
+        return ErrorNotice(
             translate(locale, _("Permission withheld")),
             translate(
                 locale,
@@ -151,76 +151,76 @@ def _present_missing_nodes(error: PermissionNodeRequired, locale: str | None) ->
         if error.mode == "any"
         else _("You need these permissions to use this command:")
     )
-    return ErrorPresentation(
+    return ErrorNotice(
         translate(locale, _("Missing permission")),
         f"{translate(locale, lead)}\n{described}",
     )
 
 
-def build_error_presentation(error: BaseException, locale: str | None = None) -> ErrorPresentation:
+def build_error_notice(error: BaseException, locale: str | None = None) -> ErrorNotice:
     """Classify an exception into safe Discord-facing text, translated into `locale`."""
     error = unwrap_error(error)
     if isinstance(error, ConsentRequiredError):
         # Every Discord path that needs consent asks for it first, so reaching here means one
         # slipped the gate. Name the command that can fix it rather than rendering the API's
         # wording, which tells a Discord user to go and accept a notice somewhere they are not.
-        return ErrorPresentation(
+        return ErrorNotice(
             translate(locale, _("Consent required")),
             translate(locale, _("Run `/account consent` to read the privacy notice and accept it.")),
         )
     if isinstance(error, DomainError):
-        return ErrorPresentation(error.localized_title(locale), error.localized_public_detail(locale))
+        return ErrorNotice(error.localized_title(locale), error.localized_public_detail(locale))
     if isinstance(error, commands.NoPrivateMessage):
-        return ErrorPresentation(
+        return ErrorNotice(
             translate(locale, _("Server only")),
             translate(locale, _("This command cannot be used in a private message.")),
         )
     if isinstance(error, (commands.MissingRole, commands.MissingAnyRole, commands.MissingPermissions)):
-        return ErrorPresentation(
+        return ErrorNotice(
             translate(locale, _("Missing permission")),
             translate(locale, _("You do not have permission to use this command.")),
         )
     if isinstance(error, commands.NotOwner):
-        return ErrorPresentation(
+        return ErrorNotice(
             translate(locale, _("Owner only")),
             translate(locale, _("Only the bot owner can use this command.")),
         )
     if isinstance(error, PermissionNodeRequired):
         return _present_missing_nodes(error, locale)
     if isinstance(error, (commands.CommandOnCooldown, app_commands.CommandOnCooldown)):
-        return ErrorPresentation(
+        return ErrorNotice(
             translate(locale, _("Command on cooldown")),
             translate(locale, _("Try again in {seconds:.1f} seconds."), seconds=error.retry_after),
         )
     if isinstance(error, commands.MaxConcurrencyReached):
-        return ErrorPresentation(
+        return ErrorNotice(
             translate(locale, _("Command already running")),
             translate(locale, _("Wait for the current operation to finish and try again.")),
         )
     if isinstance(error, commands.CheckFailure):
-        return ErrorPresentation(
+        return ErrorNotice(
             translate(locale, _("Command unavailable")),
             str(error) or translate(locale, _("You cannot use this command here.")),
         )
     if isinstance(error, commands.UserInputError):
-        return ErrorPresentation(
+        return ErrorNotice(
             translate(locale, _("Invalid command input")),
             str(error) or translate(locale, _("Check the command arguments and try again.")),
         )
     if isinstance(error, app_commands.TransformerError):
-        return ErrorPresentation(
+        return ErrorNotice(
             translate(locale, _("Invalid command input")),
             translate(locale, _("One of the command options is invalid.")),
         )
     if isinstance(error, app_commands.CheckFailure):
-        return ErrorPresentation(
+        return ErrorNotice(
             translate(locale, _("Command unavailable")),
             translate(locale, _("You cannot use this command here.")),
         )
 
     error_id = correlation_id()
     reference = correlation_reference(error_id)
-    return ErrorPresentation(
+    return ErrorNotice(
         translate(locale, _("Something went wrong")),
         translate(locale, _("An unexpected error occurred. Reference: `{error_id}`"), error_id=reference),
         error_id,
@@ -230,7 +230,7 @@ def build_error_presentation(error: BaseException, locale: str | None = None) ->
 
 async def _capture(
     error: BaseException,
-    presentation: ErrorPresentation,
+    notice: ErrorNotice,
     *,
     surface: str,
     context: Mapping[str, object],
@@ -242,22 +242,22 @@ async def _capture(
     service lookup happen out here, and this runs inside a handler that owes the user a reply.
     Losing the diagnostic is survivable; losing the reply is a command that silently does nothing.
     """
-    if reports is None or presentation.error_id is None or presentation.reference is None:
+    if reports is None or notice.error_id is None or notice.reference is None:
         return
     command = context.get("command")
     try:
         buffer = correlated_log_buffer()
         await reports.record(
             error,
-            correlation_id=presentation.error_id,
-            reference=presentation.reference,
+            correlation_id=notice.error_id,
+            reference=notice.reference,
             surface=surface,
             origin=command if isinstance(command, str) else None,
             context=cast(Mapping[str, JSONValue], context),
-            log_tail=buffer.drain(presentation.error_id) if buffer is not None else (),
+            log_tail=buffer.drain(notice.error_id) if buffer is not None else (),
         )
     except Exception:
-        logger.exception("Could not capture a Discord failure [error_id=%s]", presentation.error_id)
+        logger.exception("Could not capture a Discord failure [error_id=%s]", notice.error_id)
 
 
 async def _handle_discord_error(
@@ -273,8 +273,8 @@ async def _handle_discord_error(
         return
 
     original = unwrap_error(error)
-    presentation = build_error_presentation(original, locale)
-    if presentation.error_id is not None:
+    notice = build_error_notice(original, locale)
+    if notice.error_id is not None:
         application_context = _safe_log_context(original.context) if isinstance(original, SquidError) else None
         safe_context = _safe_log_context(context)
         # Capture before logging, so the stored tail is what the command was doing before it
@@ -282,7 +282,7 @@ async def _handle_discord_error(
         # the redacted one: persisting is more exposing than logging, not less.
         await _capture(
             original,
-            presentation,
+            notice,
             surface=surface,
             context={**safe_context, "application_context": application_context},
             reports=reports,
@@ -291,8 +291,8 @@ async def _handle_discord_error(
         # one the reporter quoted by exact match.
         logger.error(
             "Discord failure [error_id=%s error_ref=%s surface=%s context=%r application_context=%r]",
-            presentation.error_id,
-            presentation.reference,
+            notice.error_id,
+            notice.reference,
             surface,
             _safe_log_context(context),
             application_context,
@@ -301,11 +301,11 @@ async def _handle_discord_error(
         )
 
     try:
-        await responder(presentation.to_presentation())
+        await responder(notice.to_payload())
     except discord.HTTPException:
         logger.exception(
             "Failed to send Discord error response [error_id=%s surface=%s]",
-            presentation.error_id,
+            notice.error_id,
             surface,
         )
     finally:
@@ -318,10 +318,10 @@ async def handle_context_error[BotT: commands.Bot](
 ) -> None:
     """Handle an exception raised by a prefix or hybrid command."""
 
-    async def respond(presentation: sd.message_payload.MessagePayload) -> None:
-        await reply_presentation(
+    async def respond(payload: sd.message_payload.MessagePayload) -> None:
+        await reply_payload(
             context,
-            presentation,
+            payload,
             visibility="personal" if context.interaction is not None else "public",
         )
 
@@ -348,8 +348,8 @@ async def handle_interaction_error(
 ) -> None:
     """Handle an exception raised by an application command or UI interaction."""
 
-    async def respond(presentation: sd.message_payload.MessagePayload) -> None:
-        await respond_presentation(interaction, presentation)
+    async def respond(payload: sd.message_payload.MessagePayload) -> None:
+        await respond_payload(interaction, payload)
 
     command = interaction.command
     await _handle_discord_error(
@@ -378,24 +378,24 @@ async def record_operation_error(
     if is_error_presented(error):
         return
     original = unwrap_error(error)
-    presentation = build_error_presentation(original, locale)
+    notice = build_error_notice(original, locale)
     context = {
         "channel_id": result.message.channel.id if result is not None and result.message is not None else None,
         "message_id": result.message_id if result is not None else None,
     }
-    if presentation.error_id is not None:
+    if notice.error_id is not None:
         application_context = _safe_log_context(original.context) if isinstance(original, SquidError) else None
         await _capture(
             original,
-            presentation,
+            notice,
             surface="command_operation",
             context={**context, "application_context": application_context},
             reports=reports,
         )
         logger.error(
             "Discord failure [error_id=%s error_ref=%s surface=command_operation context=%r application_context=%r]",
-            presentation.error_id,
-            presentation.reference,
+            notice.error_id,
+            notice.reference,
             context,
             application_context,
             exc_info=original,
@@ -424,7 +424,7 @@ class SquidCommandTree[ClientT: discord.Client](app_commands.CommandTree[ClientT
         if interaction.channel_id is not None:
             attributes["squid.channel.id"] = interaction.channel_id
         # The correlation scope opens inside the span so it adopts the trace id when one exists.
-        # Binding here rather than at presentation time is what lets an error report carry the log
+        # Binding here rather than at notice time is what lets an error report carry the log
         # lines the command produced before it failed.
         with trace_span(f"discord.command {command_name}", attributes) as span, correlation_scope():
             await super()._call(interaction)  # pyright: ignore[reportPrivateUsage]

@@ -12,7 +12,7 @@ import squid_ui as sl
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.routes.redstoner_roles import redstoner_roles, remove_redstoner_role
-from squid.bot.ui import render_presentation, reply_presentation, respond_presentation, text_layout
+from squid.bot.ui import render_payload, reply_payload, respond_payload, text_layout
 from squid.bot.utils.permissions import check_is_home_server, hide_unless, requires
 from squid.community.domain import RedstonerDecisionKind
 from squid.core.i18n import _
@@ -60,7 +60,7 @@ async def remove_own_redstoner_role(interaction: Interaction[squid.bot.app.Redst
     await asyncio.sleep(10)
 
     await member.add_roles(redstoner_role)
-    await respond_presentation(
+    await respond_payload(
         interaction,
         text_layout(t(locale, _("{member} — just kidding, here is your role back."), member=member.mention)),
     )
@@ -89,7 +89,7 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def abc(self, ctx: Context[BotT]):
         """Post the Redstoner role controls."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        presentation = render_presentation(
+        presentation = render_payload(
             [
                 sl.primitives.Text(t(locale, _("Redstoner role controls"))),
                 # Not translated: one panel is read by everyone in the channel, so the
@@ -106,7 +106,7 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             ],
             locale=locale,
         )
-        await reply_presentation(ctx, presentation)
+        await reply_payload(ctx, presentation)
 
     @redstoner_group.command(name="resync")
     @check_is_home_server()
@@ -146,7 +146,7 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             text_layout(t(locale, _("Gave {member} the redstoner role."), member=member.mention))
         )
 
-        presentation = render_presentation(
+        presentation = render_payload(
             [
                 sl.primitives.Text(
                     t(

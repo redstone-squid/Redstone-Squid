@@ -8,7 +8,7 @@ from discord.ext.commands import Context
 import squid_ui_discord as sd
 from squid.bot.diagnostics_view import SESSION_SECONDS, ErrorReportBrowser
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.ui import Private, create_message_root, destination, info_layout
+from squid.bot.ui import Private, create_message_root, info_layout, message_destination
 from squid.bot.utils.permissions import hide_unless, requires
 from squid.bot.utils.visibility import deliver_privately
 from squid.core.i18n import _
@@ -87,7 +87,7 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         # A closed DM raises DeliveryAbandoned, which discards the render: there is nothing to
         # bind and, deliberately, no channel fallback.
         await message_root.send(
-            destination(
+            message_destination(
                 ctx,
                 visibility=Private(
                     t(locale, _("An error report names internal paths, so it is never posted in a channel."))
@@ -99,13 +99,13 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     async def _deliver(
         self,
         ctx: Context[BotT],
-        presentation: sd.message_payload.MessagePayload,
+        payload: sd.message_payload.MessagePayload,
         locale: str | None,
     ) -> None:
         """Answer a plain layout where only the caller can read it (see `_deliver_browser`)."""
         await deliver_privately(
             ctx,
-            presentation,
+            payload,
             reason=t(locale, _("An error report names internal paths, so it is never posted in a channel.")),
             locale=locale,
         )
