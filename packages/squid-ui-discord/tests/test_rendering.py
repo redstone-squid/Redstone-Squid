@@ -4,7 +4,7 @@ from collections.abc import Callable
 
 import discord
 import pytest
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 import squid_ui as sl
@@ -12,7 +12,9 @@ import squid_ui.runtime.component as component_module
 import squid_ui.runtime.owner as owner_module
 import squid_ui_discord as sd
 from squid_ui import Component, ContextKey, PressEvent, state
+from squid_ui.document import Asset, Document, InlineAsset
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.planning.planner import plan
 from squid_ui.primitives import (
     Boundary,
     Break,
@@ -124,6 +126,82 @@ class TestBoundaries:
 
 
 class TestRenderCaching:
+    @settings(max_examples=20, deadline=None)
+    @given(
+        st.lists(
+            st.tuples(
+                st.integers(min_value=0, max_value=3),
+                st.integers(min_value=-10, max_value=10),
+                st.booleans(),
+                st.booleans(),
+            ),
+            min_size=1,
+            max_size=12,
+        )
+    )
+    def test_incremental_tree_and_plan_match_forced_cold_oracle(
+        self,
+        changes: list[tuple[int, int, bool, bool]],
+    ) -> None:
+        class Child(Component):
+            def render(self) -> Text:
+                return Text("child")
+
+        class Leaf(Component):
+            value: int = state(0)
+            wrapped: bool = state(default=False)
+            child_visible: bool = state(default=False)
+
+            def __init__(self) -> None:
+                self.child = Child()
+
+            async def press(self, _event: PressEvent) -> None:
+                pass
+
+            def render(self):
+                value = Text(str(self.value))
+                body = Panel(children=(value,)) if self.wrapped else value
+                child = (self.boundary(self.child, key="child"),) if self.child_visible else ()
+                return (body, *child, Row((Button("Run", self.press, "run"),)))
+
+        class Root(Component):
+            def __init__(self) -> None:
+                self.leaves = tuple(Leaf() for _ in range(4))
+                self.asset = Asset("evidence", "evidence.txt", "text/plain", InlineAsset(b"evidence"))
+
+            def render(self) -> Document:
+                children = tuple(self.boundary(leaf, key=str(index)) for index, leaf in enumerate(self.leaves))
+                return Document(children, (self.asset,), key="oracle")
+
+        root = Root()
+        runtime = ComponentRuntime(root)
+        initial = runtime.render()
+        runtime.commit(initial, rendered_revision=runtime.revision)
+
+        for index, value, wrapped, child_visible in changes:
+            leaf = root.leaves[index]
+            leaf.value = value
+            leaf.wrapped = wrapped
+            leaf.child_visible = child_visible
+            optimized = runtime.render(reuse_committed=True)
+            cold = render_component_tree(root, runtime=runtime, context=runtime.context)
+
+            assert optimized == cold
+            optimized_plan = plan(
+                Document(optimized.nodes, optimized.assets, optimized.document_key),
+                target=sd.DISCORD_V2_DPY27,
+            )
+            cold_plan = plan(
+                Document(cold.nodes, cold.assets, cold.document_key),
+                target=sd.DISCORD_V2_DPY27,
+            )
+            assert optimized_plan.scene == cold_plan.scene
+            assert optimized_plan.report == cold_plan.report
+            assert optimized_plan.bindings.keys() == cold_plan.bindings.keys()
+            assert optimized_plan.form_bindings.keys() == cold_plan.form_bindings.keys()
+            assert optimized_plan.resources.keys() == cold_plan.resources.keys()
+            runtime.commit(optimized, rendered_revision=runtime.revision)
+
     def test_dirty_leaf_splices_without_visiting_clean_siblings(self, monkeypatch) -> None:
         class Leaf(Component):
             value: int = state(0)
