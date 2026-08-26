@@ -80,7 +80,7 @@ class EditorSection[StateT, ValueT]:
         self.issues = issues
 
     @classmethod
-    def form(
+    def from_form(
         cls,
         key: str,
         label: TextLike,
@@ -115,7 +115,7 @@ class EditorSection[StateT, ValueT]:
             for field in spec.items:
                 if not isinstance(field, FormField):
                     continue
-                formatted = field.format_prefill(value.get(field.key))
+                formatted = field.format(value.get(field.key))
                 parts.append(f"{display_text(field.label)}: {_formatted(formatted)}")
             return " · ".join(parts)
 
@@ -130,7 +130,7 @@ class EditorSection[StateT, ValueT]:
         )
 
     @classmethod
-    def pattern(
+    def from_pattern(
         cls,
         key: str,
         label: TextLike,
@@ -212,7 +212,7 @@ class Editor:
             slots.append(EditorSectionState(section.key, state, section.dump(state)))
         return EditorState(tuple(slots))
 
-    def component(
+    def build_component(
         self,
         *,
         initial: EditorValues | EditorState | None = None,

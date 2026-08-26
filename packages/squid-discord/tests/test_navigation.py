@@ -34,7 +34,7 @@ async def test_push_pop_and_controls_render_last():
 
     navigator.push(Screen("child"))
     interaction = fake_interaction()
-    await mount.flush(interaction)
+    await mount.refresh(interaction)
     pushed = interaction.response.edit_message.await_args.kwargs["view"]
     assert "## child" in _texts(pushed)
 

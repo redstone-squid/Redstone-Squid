@@ -392,7 +392,7 @@ async def with_consented_account(
         granted = await accounts.get_or_create_identity(IdentityProvider.DISCORD, str(user.id), consent=consent)
         assert granted.id is not None, "get_or_create_identity always returns a persisted account"
         await work(prompt, granted.id)
-        await mount.refresh()
+        await mount.schedule()
 
     await request_consent(
         interaction,

@@ -64,7 +64,7 @@ class DurableSessionStore(Protocol):
     newcomer atomically. A target already present must be named as a victim.
     """
 
-    async def list_records(self) -> tuple[StoredSessionRecord, ...]: ...
+    async def list(self) -> tuple[StoredSessionRecord, ...]: ...
 
     async def load(self, key: str) -> StoredSessionRecord | None: ...
 
@@ -114,7 +114,7 @@ class MemorySessionStore:
         self._clock = clock
         self._lock = asyncio.Lock()
 
-    async def list_records(self) -> tuple[StoredSessionRecord, ...]:
+    async def list(self) -> tuple[StoredSessionRecord, ...]:
         async with self._lock:
             return tuple(self._records[key] for key in sorted(self._records))
 
@@ -286,7 +286,7 @@ class SQLiteSessionStore:
         self._initialized = False
         self._initialize_lock = asyncio.Lock()
 
-    async def list_records(self) -> tuple[StoredSessionRecord, ...]:
+    async def list(self) -> tuple[StoredSessionRecord, ...]:
         await self._initialize()
         return await asyncio.to_thread(self._list_records)
 

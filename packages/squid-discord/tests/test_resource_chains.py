@@ -188,7 +188,7 @@ async def test_a_publish_redraws_the_whole_chain_without_a_torn_paint() -> None:
 
     panel.source = "v2"
     bus.publish(TOPIC)
-    await mount.refresh_now()
+    await mount.refresh()
 
     drawn = [texts(call.kwargs["view"]) for call in message.edit.await_args_list]
     assert drawn[-1] == "card(v2)"

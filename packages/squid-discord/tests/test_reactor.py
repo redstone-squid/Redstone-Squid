@@ -49,7 +49,7 @@ async def test_reactor_refreshes_different_mounts_concurrently() -> None:
         return refresh
 
     for mount in mounts:
-        mount.refresh_now = refresh_for(mount)  # pyrefly: ignore
+        mount.refresh = refresh_for(mount)  # pyrefly: ignore
         reactor.schedule(mount)
 
     async with anyio.create_task_group() as tasks:
@@ -79,7 +79,7 @@ async def test_publish_during_refresh_redelivers_without_overlap() -> None:
             await release.wait()
         running = False
 
-    mount.refresh_now = refresh  # pyrefly: ignore
+    mount.refresh = refresh  # pyrefly: ignore
     reactor.schedule(mount)
 
     async with anyio.create_task_group() as tasks:
@@ -113,7 +113,7 @@ async def test_reactor_profile_includes_coalesced_wait_and_links_refresh() -> No
         received_links = links
         monotonic += 0.5
 
-    mount.refresh_now = refresh  # pyrefly: ignore
+    mount.refresh = refresh  # pyrefly: ignore
     with profiler.operation(OperationKind.DISPATCH, name="save"):
         reactor.schedule(mount)
         reactor.schedule(mount)
@@ -139,7 +139,7 @@ async def test_follow_coalesces_topics_and_unsubscribes_on_finish() -> None:
     bus = LocalTopicBus()
     reactor = Reactor(bus)
     mount = Mount(Empty(), access=Everyone(), scheduler=reactor)
-    mount.refresh_now = AsyncMock()  # pyrefly: ignore
+    mount.refresh = AsyncMock()  # pyrefly: ignore
     reactor.follow(mount, Topic("build", "42"), Topic("group", "7"), Topic("index", "recent"))
 
     bus.publish(Topic("build", "42"), Topic("group", "7"), Topic("index", "recent"))

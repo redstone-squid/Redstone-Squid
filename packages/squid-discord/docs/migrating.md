@@ -35,7 +35,7 @@ attached = sd.contribute(
     to=view,
     followed_by=(host_controls,),
 )
-await interaction.response.send_message(view=view, files=attached.files())
+await interaction.response.send_message(view=view, files=attached.build_files())
 ```
 
 This is the one-call form exercised by `tests/test_fragments.py`. For a plan/apply boundary, use

@@ -156,14 +156,14 @@ async def test_open_publishes_one_whole_session_and_finish_deletes_it() -> None:
         assert report.restored == ()
         assert isinstance(result, Opened)
         assert isinstance(result.session, DurableSession)
-        records = await store.list_records()
+        records = await store.list()
         assert len(records) == 1
         record = DurableSessionCodec.loads(records[0].snapshot_payload)
         assert record.key == SessionKey.user("counter", 7)
         assert tuple(state.id for state in record.mounts) == ("root",)
 
         await result.session.finish()
-        assert await store.list_records() == ()
+        assert await store.list() == ()
         assert mount.finished
         tasks.cancel_scope.cancel()
 
@@ -177,7 +177,7 @@ async def test_initial_summary_records_the_opener_as_a_participant() -> None:
         _, result = await open_counter(durable)
 
         assert isinstance(result, Opened)
-        records = await store.list_records()
+        records = await store.list()
         assert json.loads(records[0].summary_payload)["members"] == [7]
         tasks.cancel_scope.cancel()
 
@@ -251,7 +251,7 @@ async def test_suppressed_runtime_commit_checkpoints_hidden_component_state() ->
         component.advanced = True
         mount.invalidate()
 
-        assert await mount.refresh_now() is PresentationStatus.UNCHANGED
+        assert await mount.refresh() is PresentationStatus.UNCHANGED
 
         with anyio.fail_after(1):
             while True:
@@ -274,7 +274,7 @@ async def test_failed_promotion_keeps_the_durable_incumbent() -> None:
         await tasks.start(durable.run)
         _, first = await open_counter(durable, message_id=1)
         assert isinstance(first, Opened)
-        first_record = (await store.list_records())[0]
+        first_record = (await store.list())[0]
         frontend.reject_next = True
 
         _, replacement = await open_counter(durable, message_id=2)
@@ -303,7 +303,7 @@ async def test_attached_mount_is_checkpointed_in_the_same_record() -> None:
         )
 
         assert isinstance(attached, Opened)
-        record = DurableSessionCodec.loads((await store.list_records())[0].snapshot_payload)
+        record = DurableSessionCodec.loads((await store.list())[0].snapshot_payload)
         assert len(record.mounts) == 2
         assert record.mounts[1].parent_id == "root"
         assert record.mounts[1].actor_id == 8
@@ -526,7 +526,7 @@ async def test_a_durable_join_is_checkpointed_and_survives_recovery() -> None:
         assert (await opened.session.join(8)).status is MembershipStatus.JOINED
 
         # Checkpointed by the join itself, with no maintenance sweep in between.
-        record = DurableSessionCodec.loads((await store.list_records())[0].snapshot_payload)
+        record = DurableSessionCodec.loads((await store.list())[0].snapshot_payload)
         assert record.members == frozenset({7, 8})
         assert record.capacity == 3
         assert record.protocol == 2
@@ -614,7 +614,7 @@ async def test_a_failed_membership_checkpoint_leaves_the_session_dirty_and_usabl
         assert session.health is DurabilityHealth.CHECKPOINT_PENDING
 
         await durable.flush()
-        record = DurableSessionCodec.loads((await store.list_records())[0].snapshot_payload)
+        record = DurableSessionCodec.loads((await store.list())[0].snapshot_payload)
         assert record.members == frozenset({7, 8})
         assert session.health is DurabilityHealth.HEALTHY
         tasks.cancel_scope.cancel()
@@ -649,7 +649,7 @@ async def test_a_protocol_1_record_recovers_unbounded_with_its_opener_as_member(
         tasks.cancel_scope.cancel()
 
     # Rewrite the stored pair as a record and summary from before membership existed.
-    stored = (await store.list_records())[0]
+    stored = (await store.list())[0]
     snapshot = json.loads(stored.snapshot_payload)
     snapshot["protocol"] = 1
     del snapshot["members"], snapshot["capacity"]
@@ -675,7 +675,7 @@ async def test_a_protocol_1_record_recovers_unbounded_with_its_opener_as_member(
 
         # Recovery requests a checkpoint, which rewrites the record at the current protocol.
         await second.flush()
-        upgraded = DurableSessionCodec.loads((await store.list_records())[0].snapshot_payload)
+        upgraded = DurableSessionCodec.loads((await store.list())[0].snapshot_payload)
         assert upgraded.protocol == 2
         tasks.cancel_scope.cancel()
 
@@ -690,7 +690,7 @@ async def test_a_summary_disagreeing_with_its_record_is_refused() -> None:
         assert isinstance(opened, Opened)
         tasks.cancel_scope.cancel()
 
-    stored = (await store.list_records())[0]
+    stored = (await store.list())[0]
     summary = json.loads(stored.summary_payload)
     summary["members"] = [7, 8]
     store._records[stored.key] = StoredSessionRecord(
@@ -723,7 +723,7 @@ async def test_a_durable_quota_survives_recovery() -> None:
             domain="game",
         )
         assert isinstance(opened, Opened)
-        record = DurableSessionCodec.loads((await store.list_records())[0].snapshot_payload)
+        record = DurableSessionCodec.loads((await store.list())[0].snapshot_payload)
         assert record.quota == 1
         assert record.domain == "game"
         tasks.cancel_scope.cancel()

@@ -68,9 +68,9 @@ class Composition[ViewT: (discord.ui.LayoutView, discord.ui.View | None), BodyT 
         """Declarative files this composition expects to be uploaded with it."""
         return self.presentation.assets
 
-    def files(self) -> list[discord.File]:
+    def build_files(self) -> list[discord.File]:
         """Materialize fresh file wrappers; a sent `discord.File` cannot be re-sent."""
-        return self.presentation.files()
+        return self.presentation.build_files()
 
     @property
     def page(self) -> int:

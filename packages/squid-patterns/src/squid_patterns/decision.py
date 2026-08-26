@@ -55,7 +55,7 @@ class Decision:
     def finish_actions(self) -> frozenset[str]:
         return frozenset(f"choose:{option.key}" for option in self.options)
 
-    def component(
+    def build_component(
         self,
         *,
         on_decide: DecisionHandler | None = None,

@@ -122,7 +122,7 @@ class PersistedPool[ScopeT: Hashable, SharedT: Shared[Any]]:
         """Snapshot the loaded namespaces. Inspection only, so it stays synchronous."""
         return self._pool.active()
 
-    async def drop(self, scope: ScopeT) -> SharedT | None:
+    async def delete(self, scope: ScopeT) -> SharedT | None:
         """Retire scope and stop persisting through the handle that owned it.
 
         The retired namespace stays usable, reactive and readable; it simply stops writing to a
@@ -132,7 +132,7 @@ class PersistedPool[ScopeT: Hashable, SharedT: Shared[Any]]:
         committed action -- which is why this drains before returning.
         """
         async with self._load_lock:
-            retired = self._pool.drop(scope)
+            retired = self._pool.delete(scope)
             if retired is None:
                 return None
             self._detach(retired, scope)

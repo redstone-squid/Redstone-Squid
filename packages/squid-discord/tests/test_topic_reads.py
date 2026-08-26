@@ -124,11 +124,11 @@ async def test_one_publish_refreshes_a_watching_mount_exactly_once() -> None:
     mount, message = await mounted(Watcher(load), bus, reactor)
     refreshes = 0
 
-    async def refresh_now(*, links=()) -> None:
+    async def refresh(*, links=()) -> None:
         nonlocal refreshes
         refreshes += 1
 
-    mount.refresh_now = refresh_now  # pyrefly: ignore
+    mount.refresh = refresh  # pyrefly: ignore
 
     bus.publish(BUILD)
     await drain(reactor, bus)
@@ -172,7 +172,7 @@ async def test_a_mount_with_no_reactor_still_refetches_on_its_next_render() -> N
     assert loads() == 1
 
     bus.publish(BUILD)
-    await mount.refresh_now()
+    await mount.refresh()
 
     assert loads() == 2
 
@@ -228,7 +228,7 @@ async def test_a_dropped_conditional_watch_stops_refreshing_once_delivered() -> 
     assert mount.followed == (BUILD,)
 
     panel.topic = OTHER
-    await mount.refresh_now()
+    await mount.refresh()
 
     assert mount.followed == (OTHER,)
     assert {snapshot.topic for snapshot in bus.snapshot().topics} == {OTHER}
@@ -246,7 +246,7 @@ async def test_a_discarded_staged_render_leaves_no_permanent_follow() -> None:
     mount._rollback(candidate)
 
     panel.topic = BUILD
-    await mount.refresh_now()
+    await mount.refresh()
     assert mount.followed == (BUILD,)
 
 

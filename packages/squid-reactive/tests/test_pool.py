@@ -177,7 +177,7 @@ def test_drop_retires_a_handle_that_stays_usable_while_a_new_generation_starts(b
     pool = SharedPool(Preferences, bus)
     first = pool.get(UserScope(1))
 
-    retired = pool.drop(UserScope(1))
+    retired = pool.delete(UserScope(1))
     second = pool.get(UserScope(1))
 
     assert retired is first
@@ -192,7 +192,7 @@ def test_drop_retires_a_handle_that_stays_usable_while_a_new_generation_starts(b
 
 
 def test_dropping_an_absent_scope_returns_none(bus: LocalTopicBus) -> None:
-    assert SharedPool(Preferences, bus).drop(UserScope(1)) is None
+    assert SharedPool(Preferences, bus).delete(UserScope(1)) is None
 
 
 def test_clear_empties_the_pool(bus: LocalTopicBus) -> None:
@@ -223,7 +223,7 @@ def test_a_snapshot_can_be_iterated_while_its_scopes_are_retired(bus: LocalTopic
         pool.get(UserScope(user_id))
 
     for scope in pool.active():
-        pool.drop(scope)
+        pool.delete(scope)
 
     assert pool.active() == {}
 

@@ -160,7 +160,7 @@ async def test_run_serves_a_refresh_the_host_reactor_queued() -> None:
     host = install(cast(discord.Client, fake_client()), bus=bus)
     assert host.reactor is not None
     mount = host.mount(Panel(), access=sd.Everyone(), timeout=None)
-    mount.refresh_now = AsyncMock()  # pyrefly: ignore
+    mount.refresh = AsyncMock()  # pyrefly: ignore
     host.reactor.follow(mount, Topic("build", "42"))
 
     task = asyncio.create_task(host.run())
@@ -168,8 +168,8 @@ async def test_run_serves_a_refresh_the_host_reactor_queued() -> None:
         bus.publish(Topic("build", "42"))
         for _ in range(20):
             await asyncio.sleep(0)
-            if mount.refresh_now.await_count:
+            if mount.refresh.await_count:
                 break
     finally:
         task.cancel()
-    mount.refresh_now.assert_awaited()
+    mount.refresh.assert_awaited()

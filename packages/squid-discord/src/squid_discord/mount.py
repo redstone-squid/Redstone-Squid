@@ -2052,7 +2052,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     binding = self._handlers.get(key)
                 if binding is None:
                     # A click raced a re-render that removed the control; acknowledge and move on.
-                    profile.presentation = await self.flush(interaction, profile=profile)
+                    profile.presentation = await self.refresh(interaction, profile=profile)
                     profile.finish(DispatchDisposition.MISSING)
                     return
                 if isinstance(binding, _RenewalBinding):
@@ -2636,7 +2636,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         self._renew(interaction, resumed=profile.resumed)
         painted = busy is not None and await busy.close()
         try:
-            profile.presentation = await self.flush(interaction, profile=profile)
+            profile.presentation = await self.refresh(interaction, profile=profile)
         except Exception as error:
             profile.presentation = PresentationStatus.FAILED
             profile.finish(DispatchDisposition.DELIVERY_FAILED, error)
@@ -2755,7 +2755,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         profile.acknowledge("action")
         self._renew(interaction)
         try:
-            profile.presentation = await self.flush(interaction, profile=profile)
+            profile.presentation = await self.refresh(interaction, profile=profile)
         except Exception as error:
             profile.presentation = PresentationStatus.FAILED
             profile.finish(DispatchDisposition.DELIVERY_FAILED, error)
@@ -2821,7 +2821,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             profile.acknowledge(source if deferred else "action")
         return deferred
 
-    async def flush(
+    async def _refresh_through(
         self,
         interaction: discord.Interaction,
         *,
@@ -2945,8 +2945,8 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         if run_hooks:
             await self._run_finish_hooks()
 
-    async def refresh(self) -> None:
-        """Out-of-band re-render (background state change, not an interaction).
+    async def schedule(self) -> None:
+        """Ask for an out-of-band re-render (background state change, not an interaction).
 
         Shows the newest state at the next opportunity rather than this instant: a scheduler
         coalesces requests, and a mount with no live `handle` — an ephemeral message nobody
@@ -2955,10 +2955,26 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         if self.scheduler is not None:
             self.scheduler.schedule(self)
             return
-        await self.refresh_now()
+        await self.refresh()
 
-    async def refresh_now(self, *, links: Sequence[TraceLink] = ()) -> PresentationStatus:
-        """Re-render and deliver right now, reporting how the presentation settled."""
+    async def refresh(
+        self,
+        interaction: discord.Interaction | None = None,
+        *,
+        links: Sequence[TraceLink] = (),
+        profile: _DispatchProfile | None = None,
+    ) -> PresentationStatus:
+        """Re-render and deliver right now, reporting how the presentation settled.
+
+        With an `interaction`, the delivery is that interaction's edit; without one it is an
+        out-of-band render against the mount's own edit authority. One verb rather than the
+        three this used to have, because both do the same thing to the same subject.
+        """
+        if interaction is not None:
+            return await self._refresh_through(interaction, profile=profile)
+        return await self._refresh_now(links=links)
+
+    async def _refresh_now(self, *, links: Sequence[TraceLink] = ()) -> PresentationStatus:
         component = type(self.component)
         name = f"{component.__module__}.{component.__qualname__}"
         with self.profiler.operation(

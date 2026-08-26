@@ -165,7 +165,7 @@ async def test_a_dropped_generation_stops_persisting_to_the_slot_it_no_longer_ow
         await tasks.start(pool.run)
         retired = await pool.load("guild")
 
-        assert await pool.drop("guild") is retired
+        assert await pool.delete("guild") is retired
 
         fresh = await pool.load("guild")
         assert fresh is not retired
@@ -198,7 +198,7 @@ async def test_drop_writes_out_what_the_retired_handle_already_committed(
 
         with transaction():
             preferences.theme = "light"
-        await pool.drop("guild")
+        await pool.delete("guild")
 
         assert await store.get(slot, "guild") == {"theme": "light"}
         await pool.close()
@@ -207,7 +207,7 @@ async def test_drop_writes_out_what_the_retired_handle_already_committed(
 async def test_dropping_an_absent_scope_returns_none(slot: Slot[str, Mapping[str, object]]) -> None:
     pool = PersistedPool(Preferences, LocalTopicBus(), store=MemoryScopedStore(), slot=slot)
 
-    assert await pool.drop("guild") is None
+    assert await pool.delete("guild") is None
     await pool.close()
 
 

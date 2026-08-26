@@ -209,14 +209,14 @@ class ReplaceOldest:
 class ReplacementPolicy(Protocol):
     """Asynchronously decide whether one immutable collision victim may be retired."""
 
-    async def allows(self, request: OpeningRequest, victim: SessionSnapshot) -> bool: ...
+    async def permits(self, request: OpeningRequest, victim: SessionSnapshot) -> bool: ...
 
 
 @dataclass(frozen=True, slots=True)
 class ProtectCrossUserAttachments:
     """Keep sessions that another participant or attachment actor is using."""
 
-    async def allows(self, request: OpeningRequest, victim: SessionSnapshot) -> bool:
+    async def permits(self, request: OpeningRequest, victim: SessionSnapshot) -> bool:
         actor_id = request.actor_id
         others = victim.participants if actor_id is None else victim.participants - {actor_id}
         allowed = not others
@@ -230,7 +230,7 @@ class ProtectCrossUserAttachments:
 class Unprotected:
     """Allow every collision-selected replacement."""
 
-    async def allows(self, request: OpeningRequest, victim: SessionSnapshot) -> bool:
+    async def permits(self, request: OpeningRequest, victim: SessionSnapshot) -> bool:
         return True
 
 
@@ -890,7 +890,7 @@ class SessionRegistry:
                 message = "collision policy must select the exact required occupants"
                 raise ValueError(message)
             for victim in selected:
-                if not await policy.protect.allows(request, victim):
+                if not await policy.protect.permits(request, victim):
                     return Rejected(snapshots, RejectionReason.PROTECTED)
 
         # Advisory: the authoritative check is under the member lock below, but refusing

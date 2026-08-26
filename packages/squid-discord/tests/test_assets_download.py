@@ -90,7 +90,7 @@ async def _send(mount: Mount) -> tuple[discord.ui.LayoutView, list[discord.File]
     async def destination(presentation: squid_discord.presentation.DiscordPresentation) -> delivery.DeliveryResult:
         # Materializing the files is the destination's job, so this is where an asset the
         # host never resolved is refused.
-        delivered.append((presentation.layout, presentation.files()))
+        delivered.append((presentation.layout, presentation.build_files()))
         return delivery.DeliveryResult(None, None)
 
     await mount.send(destination)
