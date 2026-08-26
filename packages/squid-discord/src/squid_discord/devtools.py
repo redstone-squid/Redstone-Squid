@@ -262,7 +262,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
             "",
         ]
         lines.extend(
-            f"{record.key} scope={record.scope} summary={record.summary_bytes}B snapshot={record.snapshot_bytes}B"
+            f"{record.key} scope={record.scope} snapshot={record.snapshot_bytes}B record={record.record_bytes}B"
             for record in records
         )
         await self._send(ctx, [section(sl.heading("Persistence"), code("\n".join(lines)))])

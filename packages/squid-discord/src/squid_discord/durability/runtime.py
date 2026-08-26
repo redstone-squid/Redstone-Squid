@@ -317,7 +317,7 @@ class DurableSessionRuntime:
             stored = await self.store.inspect(reservation)
             if stored is None:
                 return Rejected((), RejectionReason.ADMISSION_BUSY)
-            remote = tuple(_loads_snapshot(record.summary_payload, local=False) for record in stored)
+            remote = tuple(_loads_snapshot(record.snapshot_payload, local=False) for record in stored)
             now = datetime.now(UTC)
             snapshot = SessionSnapshot(str(uuid4()), now, key, actor_id, durable=True, local=True)
 
@@ -360,8 +360,8 @@ class DurableSessionRuntime:
                 token = await self.store.commit(
                     reservation,
                     key=snapshot.id,
-                    summary_payload=_dumps_snapshot(newcomer.snapshot),
-                    snapshot_payload=DurableSessionCodec.dumps(record),
+                    snapshot_payload=_dumps_snapshot(newcomer.snapshot),
+                    record_payload=DurableSessionCodec.dumps(record),
                     victims=tuple(victim.id for victim in victims if victim.durable),
                     lease_seconds=self.lease_seconds,
                 )
@@ -450,13 +450,13 @@ class DurableSessionRuntime:
                 continue
             mounts: list[Mount] = []
             try:
-                record = DurableSessionCodec.loads(listed.snapshot_payload)
+                record = DurableSessionCodec.loads(listed.record_payload)
                 item = _item_from_record(record, "")
                 if record.expires_at is not None and record.expires_at <= self.clock():
                     await self.store.delete(token)
                     report.expired.append(_item_from_record(record, "session expired before recovery"))
                     continue
-                snapshot = _loads_snapshot(listed.summary_payload, local=True)
+                snapshot = _loads_snapshot(listed.snapshot_payload, local=True)
                 _validate_snapshot_record(snapshot, record)
                 by_id: dict[str, Mount] = {}
                 states_by_id = {state.id: state for state in record.mounts}
@@ -804,7 +804,7 @@ def _snapshot_ids(value: object) -> frozenset[int]:
 
 def _item_from_stored(record: StoredSessionRecord, reason: str) -> RecoveryItem:
     try:
-        snapshot = _loads_snapshot(record.summary_payload, local=False)
+        snapshot = _loads_snapshot(record.snapshot_payload, local=False)
     except MountStateError:
         return RecoveryItem(record.key, None, (), reason)
     return RecoveryItem(record.key, snapshot.key if isinstance(snapshot.key, SessionKey) else None, (), reason)

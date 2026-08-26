@@ -110,8 +110,8 @@ class DurableRecordInspection:
 
     key: str
     scope: str
-    summary_bytes: int
     snapshot_bytes: int
+    record_bytes: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -218,7 +218,7 @@ class DevToolsRuntime:
         """List persisted durable records without claiming or changing them."""
         runtime = self._require_durable()
         return tuple(
-            DurableRecordInspection(record.key, record.scope, len(record.summary_payload), len(record.snapshot_payload))
+            DurableRecordInspection(record.key, record.scope, len(record.snapshot_payload), len(record.record_payload))
             for record in await runtime.store.list()
         )
 
