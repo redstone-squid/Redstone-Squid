@@ -308,6 +308,66 @@ class TestRenderCaching:
         assert runtime._component_paths is component_paths
         assert runtime.components["50"] is root.leaves[50]
 
+    def test_structural_commit_reconciles_only_the_changed_subtree(self) -> None:
+        class Child(Component):
+            def __init__(self) -> None:
+                self.mounts = 0
+                self.unmounts = 0
+
+            def render(self) -> Text:
+                return Text("child")
+
+            def on_mount(self) -> None:
+                self.mounts += 1
+
+            def on_unmount(self) -> None:
+                self.unmounts += 1
+
+        class Leaf(Component):
+            visible: bool = state(default=False)
+
+            def __init__(self) -> None:
+                self.child = Child()
+
+            def render(self):
+                return self.boundary(self.child, key="child") if self.visible else Text("empty")
+
+        class Root(Component):
+            def __init__(self) -> None:
+                self.leaves = tuple(Leaf() for _ in range(100))
+
+            def render(self):
+                return tuple(self.boundary(leaf, key=str(index)) for index, leaf in enumerate(self.leaves))
+
+        root = Root()
+        runtime = ComponentRuntime(root)
+        initial = runtime.render()
+        runtime.commit(initial, rendered_revision=runtime.revision)
+        components = runtime.components
+        component_paths = runtime._component_paths
+
+        root.leaves[50].visible = True
+        mounted = runtime.render(reuse_committed=True)
+        runtime.commit(mounted, rendered_revision=runtime.revision)
+
+        child = root.leaves[50].child
+        assert runtime.components is components
+        assert runtime._component_paths is component_paths
+        assert runtime.components["50.child"] is child
+        assert child.mounts == 1
+        assert child.unmounts == 0
+
+        root.leaves[50].visible = False
+        unmounted = runtime.render(reuse_committed=True)
+        runtime.commit(unmounted, rendered_revision=runtime.revision)
+
+        assert runtime.components is components
+        assert runtime._component_paths is component_paths
+        assert "50.child" not in runtime.components
+        assert child.mounts == 1
+        assert child.unmounts == 1
+        assert child not in runtime._render_cache
+
     def test_dirty_nested_leaf_splices_through_structural_ancestors(self, monkeypatch) -> None:
         class Leaf(Component):
             value: int = state(0)

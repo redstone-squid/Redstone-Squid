@@ -134,6 +134,9 @@ class ComponentTree:
     until someone clicks it.
     """
     _topology: object = field(default_factory=object, compare=False, repr=False)
+    _topology_base: object | None = field(default=None, compare=False, repr=False)
+    _removed_components: tuple[tuple[str, Component], ...] = field(default=(), compare=False, repr=False)
+    _added_components: tuple[tuple[str, Component], ...] = field(default=(), compare=False, repr=False)
 
 
 @dataclass(slots=True)
@@ -172,6 +175,14 @@ class _NodeSplice:
     route: _LayoutRoute
     count: int
     key: str
+
+
+@dataclass(frozen=True, slots=True)
+class _SpliceResult:
+    subtree: _ExpandedSubtree
+    base_topology: object
+    removed: tuple[tuple[str, Component], ...]
+    added: tuple[tuple[str, Component], ...]
 
 
 class Component[ModeT = Any](StateOwner):
@@ -473,7 +484,7 @@ def render_component_tree(
         finally:
             active.remove(identity)
 
-    spliced: _ExpandedSubtree | None = None
+    spliced: _SpliceResult | None = None
     attempted_splices: set[Component] = set()
     try:
         spliced = _splice_dirty_subtrees(
@@ -499,24 +510,28 @@ def render_component_tree(
             document_key = None
             nodes = tuple(expand(root, "$", context or {}))
         else:
-            nodes = spliced.nodes
+            nodes = spliced.subtree.nodes
     except _AtomicResourcePending as pending:
         # Atomic state is never rendered while pending. Keep the resource observation from
         # the aborted discovery pass so the frontend can settle it before retrying.
         observed_bindings.append(pending.resource)
         nodes = ()
     if spliced is not None:
-        for held in spliced.components.values():
+        subtree = spliced.subtree
+        for held in subtree.components.values():
             held._runtime = runtime
         return ComponentTree(
-            spliced.nodes,
-            spliced.components,
-            spliced.assets,
+            subtree.nodes,
+            subtree.components,
+            subtree.assets,
             render_cache[root].document_key,
             (),
-            spliced.async_bindings,
-            spliced.observations,
-            spliced.topology,
+            subtree.async_bindings,
+            subtree.observations,
+            subtree.topology,
+            spliced.base_topology,
+            spliced.removed,
+            spliced.added,
         )
     complete = not deferred and (root_subtree := subtree_cache.get("$")) is not None
     return ComponentTree(
@@ -540,10 +555,16 @@ def _splice_dirty_subtrees(
     subtree_cache: dict[str, _ExpandedSubtree],
     expand: Callable[[Component, str, dict[ContextKey[Any], object]], list[LayoutNode]],
     attempted: set[Component],
-) -> _ExpandedSubtree | None:
+) -> _SpliceResult | None:
     """Patch independently dirty cached subtrees through their structural parent routes."""
     if force_all or not dirty or root not in render_cache:
         return None
+    root_subtree = subtree_cache.get("$")
+    if root_subtree is None:
+        return None
+    base_topology = root_subtree.topology
+    removed_components: list[tuple[str, Component]] = []
+    added_components: list[tuple[str, Component]] = []
     selected_paths = (
         {component: path for component in dirty if (path := component_paths.get(component)) is not None}
         if component_paths is not None
@@ -572,10 +593,22 @@ def _splice_dirty_subtrees(
         candidate = subtree_cache.get(path)
         if candidate is None:
             return None
+        removed_components.extend(
+            (candidate_path, held)
+            for candidate_path, held in previous.components.items()
+            if candidate.components.get(candidate_path) is not held
+        )
+        added_components.extend(
+            (candidate_path, held)
+            for candidate_path, held in candidate.components.items()
+            if previous.components.get(candidate_path) is not held
+        )
         if candidate_nodes != candidate.nodes:
             candidate.nodes = candidate_nodes
-        if not _same_subtree_metadata(previous, candidate) or len(previous.nodes) != len(candidate.nodes):
+        if not _same_subtree_presentation_metadata(previous, candidate) or len(previous.nodes) != len(candidate.nodes):
             return None
+        previous_child = previous
+        changed_child = candidate
         child_path = path
         while child_path != "$":
             parent_path = "$" if "." not in child_path else child_path.rsplit(".", 1)[0]
@@ -586,30 +619,50 @@ def _splice_dirty_subtrees(
                 or (splice := parent.child_splices.get(child_path)) is None
             ):
                 return None
-            replacement = tuple(_namespace(list(subtree_cache[child_path].nodes), splice.key))
+            replacement = tuple(_namespace(list(changed_child.nodes), splice.key))
             if len(replacement) != splice.count:
                 return None
-            parent = _ExpandedSubtree(
+            same_topology = _same_component_map(previous_child.components, changed_child.components)
+            if same_topology:
+                changed_components = parent.components
+            else:
+                changed_components = dict(parent.components)
+                for removed_path, removed in previous_child.components.items():
+                    if changed_components.get(removed_path) is removed:
+                        changed_components.pop(removed_path)
+                changed_components.update(changed_child.components)
+            changed_parent = _ExpandedSubtree(
                 parent.component,
                 parent.inherited_context,
                 _splice_nodes(parent.nodes, splice, replacement),
-                parent.components,
+                changed_components,
                 parent.assets,
                 parent.async_bindings,
                 parent.observations,
                 parent.child_splices,
-                parent.topology,
+                parent.topology if same_topology else object(),
             )
-            subtree_cache[parent_path] = parent
+            subtree_cache[parent_path] = changed_parent
+            previous_child = parent
+            changed_child = changed_parent
             child_path = parent_path
-    return subtree_cache.get("$")
+    if (root_subtree := subtree_cache.get("$")) is None:
+        return None
+    return _SpliceResult(
+        root_subtree,
+        base_topology,
+        tuple(removed_components),
+        tuple(added_components),
+    )
 
 
-def _same_subtree_metadata(left: _ExpandedSubtree, right: _ExpandedSubtree) -> bool:
+def _same_component_map(left: dict[str, Component], right: dict[str, Component]) -> bool:
+    return left.keys() == right.keys() and all(left[path] is right[path] for path in left)
+
+
+def _same_subtree_presentation_metadata(left: _ExpandedSubtree, right: _ExpandedSubtree) -> bool:
     return (
-        left.components.keys() == right.components.keys()
-        and all(left.components[path] is right.components[path] for path in left.components)
-        and left.assets == right.assets
+        left.assets == right.assets
         and left.async_bindings == right.async_bindings
         and left.observations == right.observations
     )
