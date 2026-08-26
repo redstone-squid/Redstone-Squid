@@ -106,7 +106,7 @@ class Wizard:
     def initial_state(self) -> WizardState:
         return self._initial_state
 
-    def component(
+    def build_component(
         self,
         *,
         initial: WizardState | None = None,
@@ -369,7 +369,7 @@ def _prefill_text(form_field: FormField[object], value: object) -> str:
     """One answer value as review text, through the field's own prefill conversion."""
     if value is None:
         return ""
-    shown = form_field.format_prefill(value)
+    shown = form_field.format(value)
     if isinstance(shown, list | tuple):
         return ", ".join(str(item) for item in shown)
     return str(shown)

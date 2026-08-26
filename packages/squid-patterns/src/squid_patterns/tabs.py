@@ -63,7 +63,7 @@ class Tabs:
     def initial_state(self) -> TabsState:
         return self._initial_state
 
-    def component(
+    def build_component(
         self,
         *,
         initial: TabsState | None = None,

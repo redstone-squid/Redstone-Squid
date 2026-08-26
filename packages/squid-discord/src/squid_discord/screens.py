@@ -86,7 +86,7 @@ class Scope(StrEnum):
     USER_GUILD = "user_guild"
     GLOBAL = "global"
 
-    def of(self, opener: Opener) -> SessionScope:
+    def resolve(self, opener: Opener) -> SessionScope:
         """Build this kind of scope as a value, for a kind chosen at runtime.
 
         `ScreenSpec` declares its scope as a member and resolves it here, so this returns the union.
@@ -157,7 +157,7 @@ class ScreenSpec:
 
     def key(self, opener: Opener) -> SessionKey:
         """Derive this screen's session key from an opener."""
-        return SessionKey(self.name, self.scope.of(opener))
+        return SessionKey(self.name, self.scope.resolve(opener))
 
     async def open(
         self,

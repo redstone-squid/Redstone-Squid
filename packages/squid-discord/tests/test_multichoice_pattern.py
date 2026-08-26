@@ -34,7 +34,7 @@ async def test_window_merge_preserves_staging_from_other_pages() -> None:
         (sp.MultiChoiceGroup("members", "Members", _options("member", 30)),),
         key="roles",
         maximum=10,
-    ).component()
+    ).build_component()
     mount = Mount(panel, access=Everyone(), timeout=None)
     commit_render(mount)
 
@@ -72,7 +72,7 @@ def test_cardinality_violation_blocks_apply_and_reduces_other_window_capacity() 
         maximum=3,
     )
     invalid = sp.MultiChoiceState(("left-0", "left-1", "right-0", "right-1"))
-    component = pattern.component(initial=invalid)
+    component = pattern.build_component(initial=invalid)
     rendered = component.render()
     apply = next(
         node for node in _walk(rendered) if isinstance(node, sl.semantic.Action) and node.key == "choices.apply"
@@ -81,7 +81,7 @@ def test_cardinality_violation_blocks_apply_and_reduces_other_window_capacity() 
     assert pattern.errors(invalid) == ("Select no more than 3 options.",)
 
     staged_elsewhere = sp.MultiChoiceState(("right-0", "right-1"))
-    rendered = pattern.component(initial=staged_elsewhere).render()
+    rendered = pattern.build_component(initial=staged_elsewhere).render()
     left = next(node for node in _walk(rendered) if isinstance(node, Choices) and node.key == "choices.left.select")
     assert left.maximum == 1
 
@@ -96,7 +96,7 @@ async def test_apply_commits_and_dispatches_exactly_once() -> None:
         "Roles",
         (sp.MultiChoiceGroup("roles", "Roles", _options("role", 3)),),
         minimum=1,
-    ).component(on_commit=applied)
+    ).build_component(on_commit=applied)
     mount = Mount(panel, access=Everyone(), timeout=None)
     commit_render(mount)
     await mount.dispatch("choices.roles.select", fake_interaction(), ["role-1"])
@@ -116,7 +116,7 @@ def test_small_panel_offers_a_modal_alternate_with_staged_prefill() -> None:
         "Roles",
         (sp.MultiChoiceGroup("roles", "Roles", _options("role", 3)),),
     )
-    rendered = pattern.component(initial=sp.MultiChoiceState(("role-1",))).render()
+    rendered = pattern.build_component(initial=sp.MultiChoiceState(("role-1",))).render()
     alternate = next(node for node in _walk(rendered) if isinstance(node, FormTrigger))
     assert alternate.spec.prefill == {"selection": ("role-1",)}
     field = alternate.spec.items[0]
@@ -129,7 +129,7 @@ def test_panel_modal_alternate_scales_to_twenty_five_options() -> None:
         (sp.MultiChoiceGroup("roles", "Roles", _options("role", 25)),),
     )
 
-    rendered = pattern.component().render()
+    rendered = pattern.build_component().render()
 
     assert any(isinstance(node, FormTrigger) for node in _walk(rendered))
 
@@ -172,7 +172,7 @@ async def test_immediate_policy_commits_valid_changes_without_apply() -> None:
         (sp.MultiChoiceGroup("roles", "Roles", _options("role", 3)),),
         minimum=1,
         commit=sp.CommitPolicy.IMMEDIATE,
-    ).component(on_commit=committed)
+    ).build_component(on_commit=committed)
     mount = Mount(panel, access=Everyone(), timeout=None)
     commit_render(mount)
 

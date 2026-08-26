@@ -104,7 +104,7 @@ class TestList:
 class TestDetail:
     async def test_a_detail_view_reports_state_plan_and_handlers(self) -> None:
         subject = await live_subject(access=Owner(7))
-        await subject.refresh_now()
+        await subject.refresh()
         _, view = mount_inspector(MountInspector(focus=subject.id))
 
         body = "\n".join(_texts(view))
@@ -134,7 +134,7 @@ class TestDetail:
         )
         assert subject.handle is not None
         subject._queue_expiry_arm(subject.handle)
-        await subject.refresh_now()
+        await subject.refresh()
         subject.invalidate()
 
         _, view = mount_inspector(MountInspector(focus=subject.id))

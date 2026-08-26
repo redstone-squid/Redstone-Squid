@@ -76,7 +76,7 @@ contribution = classic.contribute(document, to=host)
 
 await ctx.send(
     **contribution.presentation._send_fields(),
-    files=contribution.files(),
+    files=contribution.build_files(),
 )
 ```
 

@@ -175,7 +175,7 @@ async def _armed_mount(
     await mount.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
     assert mount.handle is not None
     mount._queue_expiry_arm(mount.handle)
-    await mount.refresh_now()
+    await mount.refresh()
     return mount, interaction, reactor
 
 
@@ -211,7 +211,7 @@ class TestEphemeralRenewal:
         interaction.response.edit_message.reset_mock()
 
         mount.invalidate()
-        await mount.refresh_now()
+        await mount.refresh()
 
         assert component.renders == rendered
         assert mount.pending
@@ -330,7 +330,7 @@ class TestEphemeralRenewal:
         mount._queue_expiry_arm(stale)
         interaction.response.edit_message.reset_mock()
 
-        await mount.refresh_now()
+        await mount.refresh()
 
         assert mount.snapshot().lifecycle is MountLifecycle.ACTIVE
         assert mount.generation == active_generation
@@ -1106,7 +1106,7 @@ class TestPresentedHooks:
         committed.clear()
         presented.clear()
 
-        assert await mount.refresh_now() is PresentationStatus.UNCHANGED
+        assert await mount.refresh() is PresentationStatus.UNCHANGED
         assert committed == [mount]
         assert presented == []
 
@@ -1127,7 +1127,7 @@ class TestPresentedHooks:
         assert calls == 1
         assert mount.pending
 
-        await mount.refresh_now()
+        await mount.refresh()
         assert calls == 1
         assert not mount.pending
         assert mount.snapshot().suppressed == 1
@@ -1139,7 +1139,7 @@ class TestPresentedHooks:
         await mount.send(delivered_to(fake_message()))
         presented.clear()
 
-        assert await mount.refresh_now() is PresentationStatus.UNCHANGED
+        assert await mount.refresh() is PresentationStatus.UNCHANGED
 
         assert presented == []
 
@@ -1728,21 +1728,21 @@ class TestLifecycle:
         await mount.dispatch("inc", interaction)  # finished mounts ignore late clicks
         interaction.response.edit_message.assert_not_awaited()
 
-    async def test_refresh_now_edits_bound_message(self):
+    async def test_refresh_edits_bound_message(self):
         component = Counter()
         mount = Mount(component, access=Everyone(), timeout=None)
         message: Any = fake_message()
         await mount.send(delivered_to(message))
         component.count = 7
 
-        await mount.refresh_now()
+        await mount.refresh()
 
         message.edit.assert_awaited_once()
 
     async def test_reactor_coalesces_double_schedule(self):
         component = Counter()
         mount = Mount(component, access=Everyone(), timeout=None)
-        mount.refresh_now = AsyncMock()  # pyrefly: ignore
+        mount.refresh = AsyncMock()  # pyrefly: ignore
         reactor = Reactor()
         reactor.schedule(mount)
         reactor.schedule(mount)
@@ -1766,7 +1766,7 @@ class TestLifecycle:
         mount._handle = delivery.handle_from(fake_interaction(expired=True))
         issued = mount._issued
 
-        await mount.refresh_now()
+        await mount.refresh()
 
         assert component.loads == 1
         assert mount._issued == issued
@@ -1793,7 +1793,7 @@ class TestLifecycle:
 
         for elapsed in range(1, 11):
             now = 100.0 + elapsed
-            await mount.refresh_now()
+            await mount.refresh()
 
         message.edit.assert_not_awaited()
         assert mount.snapshot().idle == 10
@@ -1832,7 +1832,7 @@ class TestDeliveryAtomicity:
 
         monkeypatch.setattr(delivery, "handle_from", _refuse_handle)
         with pytest.raises(discord.HTTPException):
-            await mount.flush(fake_interaction())
+            await mount.refresh(fake_interaction())
 
         assert mount._generation == live_generation
         assert mount._handlers is live_handlers
@@ -1853,7 +1853,7 @@ class TestDeliveryAtomicity:
 
         monkeypatch.setattr(delivery, "handle_from", _refuse_handle)
         with pytest.raises(discord.HTTPException):
-            await mount.flush(fake_interaction())
+            await mount.refresh(fake_interaction())
         monkeypatch.undo()
 
         # The stale-generation guard would silently defer this click if the mount had
@@ -1877,13 +1877,13 @@ class TestDeliveryAtomicity:
         live_generation = mount._generation
 
         with pytest.raises(discord.HTTPException):
-            await mount.refresh_now()
+            await mount.refresh()
 
         assert mount._generation == live_generation
         assert mount._dirty
 
         message.edit = AsyncMock(return_value=message)
-        await mount.refresh_now()
+        await mount.refresh()
 
         assert mount._generation > live_generation
         assert not mount._dirty
@@ -1906,7 +1906,7 @@ class TestDeliveryAtomicity:
         component.count = 1
 
         async with anyio.create_task_group() as tasks:
-            tasks.start_soon(mount.refresh_now)
+            tasks.start_soon(mount.refresh)
             await started.wait()
             component.count = 2
             release.set()
@@ -1915,7 +1915,7 @@ class TestDeliveryAtomicity:
         assert mount.pending
         assert mount.runtime.dirty
 
-    async def test_refresh_and_flush_deliver_in_generation_order(self):
+    async def test_two_refreshes_deliver_in_generation_order(self):
         component = Counter()
         mount = Mount(component, access=Everyone(), timeout=None)
         message: Any = fake_message()
@@ -1939,12 +1939,12 @@ class TestDeliveryAtomicity:
         component.count = 1
 
         async with anyio.create_task_group() as tasks:
-            tasks.start_soon(mount.refresh_now)
+            tasks.start_soon(mount.refresh)
             await started.wait()
             component.count = 2
             interaction = fake_interaction()
             interaction.response.edit_message = AsyncMock(side_effect=edit)
-            tasks.start_soon(mount.flush, interaction)
+            tasks.start_soon(mount.refresh, interaction)
             await anyio.sleep(0)
             assert not second_started.is_set()
             release.set()
@@ -2037,7 +2037,7 @@ class TestDeliveryAtomicity:
         component.count = 1
 
         async with anyio.create_task_group() as tasks:
-            tasks.start_soon(mount.refresh_now)
+            tasks.start_soon(mount.refresh)
             await started.wait()
             tasks.start_soon(mount.finish)
             await anyio.sleep(0)
@@ -2065,7 +2065,7 @@ class _Destination:
         self.calls: list[tuple[discord.ui.LayoutView, list[discord.File]]] = []
 
     async def __call__(self, presentation: squid_discord.presentation.DiscordPresentation) -> Any:
-        self.calls.append((presentation.layout, presentation.files()))
+        self.calls.append((presentation.layout, presentation.build_files()))
         if self.raises is not None:
             raise self.raises
         return delivery.DeliveryResult(self.message, self.handle)
@@ -2131,7 +2131,7 @@ class TestSend:
         }
 
         component.count = 4
-        await mount.refresh_now()
+        await mount.refresh()
 
         refreshed = _operation_trace(profiler, OperationKind.REFRESH)
         assert refreshed.result.presentation is PresentationStatus.WRITTEN
@@ -2250,7 +2250,7 @@ class TestSend:
         await mount.send(_Destination(message))
         component.contents = b"second"
 
-        result = await mount.refresh_now()
+        result = await mount.refresh()
 
         assert result is PresentationStatus.WRITTEN
         message.edit.assert_awaited_once()
@@ -2277,7 +2277,7 @@ class TestSend:
         component.version = 1
         mount.invalidate()
 
-        result = await mount.refresh_now()
+        result = await mount.refresh()
 
         assert result is PresentationStatus.UNCHANGED
         message.edit.assert_not_awaited()
@@ -2314,7 +2314,7 @@ class TestSend:
         component.allowed = False
         mount.invalidate()
 
-        assert await mount.refresh_now() is PresentationStatus.UNCHANGED
+        assert await mount.refresh() is PresentationStatus.UNCHANGED
 
         interaction = fake_interaction()
         await mount.dispatch("same", interaction, generation=mount._generation)
@@ -2664,7 +2664,7 @@ class TestEditHandles:
         interaction = fake_interaction()
         interaction.message = None
 
-        await mount.flush(interaction)
+        await mount.refresh(interaction)
 
         message.edit.assert_awaited_once()
         interaction.response.defer.assert_awaited_once()
@@ -2683,7 +2683,7 @@ class TestEditHandles:
         assert mount.handle.expires_at == interaction.expires_at
 
         component.count += 1
-        await mount.refresh_now()
+        await mount.refresh()
 
         interaction.followup.edit_message.assert_awaited_once()
         assert interaction.followup.edit_message.await_args.args[0] == interaction.message.id
@@ -2706,7 +2706,7 @@ class TestEditHandles:
         mount._handle = delivery.handle_from(fake_interaction(expired=True))
         component.count += 1
 
-        await mount.refresh_now()
+        await mount.refresh()
 
         # Not an error and not the end of the mount: the message is simply out of reach
         # until someone clicks it again.
@@ -2740,8 +2740,8 @@ class TestEditHandles:
         mount._handle = _Stale()
         component.count += 1
 
-        await mount.refresh_now()
-        await mount.refresh_now()
+        await mount.refresh()
+        await mount.refresh()
 
         assert _Stale.writes == 1
         assert mount.handle is None
@@ -2763,7 +2763,7 @@ class TestDestinations:
         interaction.original_response.assert_not_awaited()
 
         component.count += 1
-        await mount.refresh_now()
+        await mount.refresh()
 
         interaction.edit_original_response.assert_awaited_once()
         assert not mount.pending
@@ -2783,7 +2783,7 @@ class TestDestinations:
         assert mount.handle.expires_at == interaction.expires_at
 
         component.count += 1
-        await mount.refresh_now()
+        await mount.refresh()
 
         interaction.edit_original_response.assert_awaited_once()
         message.edit.assert_not_awaited()
@@ -2798,7 +2798,7 @@ class TestDestinations:
 
         await mount.send(delivery.respond_to(interaction, wait=True))
         component.count += 1
-        await mount.refresh_now()
+        await mount.refresh()
 
         interaction.followup.edit_message.assert_awaited_once()
         assert interaction.followup.edit_message.await_args.args[0] == 42
@@ -2841,7 +2841,7 @@ class TestDestinations:
 
         assert mount.handle is not None and not mount.handle.permanent
         component.count += 1
-        await mount.refresh_now()
+        await mount.refresh()
         interaction.edit_original_response.assert_awaited_once()
 
     async def test_stale_public_response_drops_then_renews_for_the_pending_render(self):
@@ -2853,7 +2853,7 @@ class TestDestinations:
         await mount.send(delivery.respond_to(interaction, ephemeral=False, wait=True))
         component.count += 1
 
-        await mount.refresh_now()
+        await mount.refresh()
 
         assert mount.handle is None
         assert mount.pending
@@ -3175,7 +3175,7 @@ class TestResourceLoading:
 
         assert loads == []
         panel.shown = True
-        await mount.refresh_now()
+        await mount.refresh()
 
         assert loads == ["load"]
         assert message.edit.await_count == 2
@@ -3231,7 +3231,7 @@ class TestResourceLoading:
 
         message.edit.side_effect = None
         message.edit.return_value = message
-        await mount.refresh_now()
+        await mount.refresh()
 
         assert not mount.pending
         assert mount._view is not None
@@ -3537,7 +3537,7 @@ class TestLoading:
         destination.raises = None
         await mount.send(destination)
         component.label = "changed"
-        await mount.refresh_now()
+        await mount.refresh()
 
         assert log.count("load:panel") == 1
 

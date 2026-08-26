@@ -97,7 +97,7 @@ class SharedPool[ScopeT: Hashable, SharedT: Shared[Any]]:
         """Return the canonical namespace for `scope`, or None. Never calls the factory."""
         return self._handles.get(scope)
 
-    def drop(self, scope: ScopeT) -> SharedT | None:
+    def delete(self, scope: ScopeT) -> SharedT | None:
         """Retire `scope`, returning the handle that was canonical, or None if it was absent.
 
         The retired handle is not invalidated or mutated: components still holding it keep reading

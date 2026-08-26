@@ -936,7 +936,7 @@ class LayoutShowcase(sl.Component):
 
     async def _drop_history_conflict(self, event: sl.ActionEvent) -> None:
         del event
-        dropped = self.action_history.drop_conflicted()
+        dropped = self.action_history.delete_conflicted()
         self.history_result = (
             "Dropped the conflicted entry without changing state." if dropped else "No conflict to drop."
         )

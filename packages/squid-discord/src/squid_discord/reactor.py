@@ -290,7 +290,7 @@ class Reactor:
                     operation.increment("reactor.cause_links_omitted", causes.omitted_links)
                     link = self.profiler.capture_link()
                     try:
-                        status = await mount.refresh_now(links=() if link is None else (link,))
+                        status = await mount.refresh(links=() if link is None else (link,))
                         if status is PresentationStatus.UNCHANGED:
                             self._unchanged += 1
                     finally:

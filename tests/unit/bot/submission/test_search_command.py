@@ -181,7 +181,7 @@ async def test_public_build_panel_recovers_background_refresh_after_its_followup
     interaction.followup.edit_message.side_effect = _unknown_webhook()
     cog.bot.topic_bus.publish(resource_topic("build", "42"))
 
-    await mount.refresh_now()
+    await mount.refresh()
 
     assert mount.handle is None
     assert mount.pending

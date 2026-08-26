@@ -33,8 +33,8 @@ async def test_round_trip_expiry_touch_and_reclamation(
     assert await store.get(slot, "guild") == {"theme": 1}
     now[0] = 110.0
     assert await store.get(slot, "guild") is None
-    assert await store.purge_expired() == 1
-    assert not await store.drop(slot, "guild")
+    assert await store.purge() == 1
+    assert not await store.delete(slot, "guild")
 
 
 @pytest.mark.parametrize("store_kind", ["memory", "sqlite"])
@@ -64,7 +64,7 @@ async def test_stored_none_is_a_row_and_newer_versions_are_refused() -> None:
     current = Slot("value", json_codec(), version=2)
     await store.put(old, "scope", None)
     assert await store.get(current, "scope") is None
-    assert await store.drop(current, "scope")
+    assert await store.delete(current, "scope")
 
     await store.put(current, "scope", {"version": 2})
     with pytest.raises(SlotVersionError, match="newer than declared"):

@@ -75,7 +75,7 @@ match result.status:
 
 Later writes elsewhere survive. Redo is the inverse of the committed undo, so an intervening same-slot
 write makes redo conflict rather than overwrite it. A conflicted entry remains inspectable and may be
-explicitly removed with `drop_conflicted()`.
+explicitly removed with `delete_conflicted()`.
 
 A sibling write to a `Shared` register demonstrates the conditional rule directly:
 

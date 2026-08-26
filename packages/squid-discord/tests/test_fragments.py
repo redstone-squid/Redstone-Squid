@@ -170,7 +170,7 @@ class TestAttachedFragment:
     def test_files_are_repeatable_and_fresh(self):
         host = _host()
         attached = contribute(_text("body"), to=host)
-        assert attached.files() == []
+        assert attached.build_files() == []
         assert attached.attachments([]) == []
 
     def test_attaching_twice_is_refused(self):

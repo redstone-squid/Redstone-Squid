@@ -65,7 +65,7 @@ class DevToolsPolicy:
     enabled: frozenset[DevToolsAction] = _DEFAULT_ACTIONS
     confirmations: frozenset[DevToolsAction] = _DEFAULT_CONFIRMATIONS
 
-    def allows(self, action: DevToolsAction) -> bool:
+    def permits(self, action: DevToolsAction) -> bool:
         """Whether ``action`` is enabled for this runtime."""
         return action in self.enabled
 
@@ -219,7 +219,7 @@ class DevToolsRuntime:
         runtime = self._require_durable()
         return tuple(
             DurableRecordInspection(record.key, record.scope, len(record.summary_payload), len(record.snapshot_payload))
-            for record in await runtime.store.list_records()
+            for record in await runtime.store.list()
         )
 
     def inspect_mount(self, mount_id: str) -> MountInspection:
@@ -246,7 +246,7 @@ class DevToolsRuntime:
         if mount is None:
             message = f"no live mount {mount_id!r}"
             raise TargetNotFound(message)
-        await mount.refresh_now()
+        await mount.refresh()
         return self._success(DevToolsAction.REFRESH_MOUNT, mount_id, "mount refreshed")
 
     async def close_session(self, session_id: str, *, confirmed: bool = False) -> OperationResult:
@@ -346,7 +346,7 @@ class DevToolsRuntime:
         return self.durable
 
     def _authorize(self, action: DevToolsAction, target: str | None, *, confirmed: bool) -> None:
-        if not self.policy.allows(action):
+        if not self.policy.permits(action):
             self._audit(DevToolsOperation(action=action, target=target, success=False, detail="action disabled"))
             message = f"devtools action {action.value!r} is disabled"
             raise ActionDisabled(message)

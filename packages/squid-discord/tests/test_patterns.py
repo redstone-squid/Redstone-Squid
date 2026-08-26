@@ -42,7 +42,7 @@ async def test_tabs_component_shell_switches_content_and_adapts_large_strips() -
         key="settings",
         heading="Settings",
     )
-    tabs = pattern.component()
+    tabs = pattern.build_component()
     mount = Mount(tabs, access=Everyone(), timeout=None)
 
     view = commit_render(mount)
@@ -59,7 +59,7 @@ async def test_tabs_component_shell_switches_content_and_adapts_large_strips() -
         [sp.Tab(str(index), f"Tab {index}", sl.paragraph(str(index))) for index in range(6)],
         key="many-tabs",
     )
-    many = many_pattern.component()
+    many = many_pattern.build_component()
     many_mount = Mount(many, access=Everyone(), timeout=None)
     many_view = commit_render(many_mount)
     select = next(item for item in many_view.walk_children() if isinstance(item, discord.ui.Select))
@@ -74,7 +74,7 @@ async def test_tabs_component_shell_embeds_only_selected_content() -> None:
     tabs = sp.Tabs(
         [sp.Tab("one", "One", Screen("one")), sp.Tab("two", "Two", Screen("two"))],
         key="screens",
-    ).component()
+    ).build_component()
     mount = Mount(tabs, access=Everyone(), timeout=None)
 
     view = commit_render(mount)
@@ -119,7 +119,7 @@ async def test_menu_component_shell_drills_down_and_owns_chrome() -> None:
             ),
         ],
         key="settings",
-    ).component()
+    ).build_component()
     mount = Mount(menu, access=Everyone(), timeout=None)
 
     view = commit_render(mount)
@@ -215,7 +215,7 @@ def test_ranked_list_projects_entries_and_renders_an_explicit_window() -> None:
         header=lambda total: sl.paragraph(f"Showing {total} entries"),
         footer=lambda total: sl.note(f"Total: {total}"),
         page_size=2,
-    ).component()
+    ).build_component()
     rendered = ranked.render()
     assert isinstance(rendered, Stack)
     listing = next(node for node in rendered.children if isinstance(node, Lines))
@@ -415,7 +415,9 @@ async def test_source_ranked_list_uses_the_mount_navigation_factory() -> None:
 
 
 async def test_ranked_list_keeps_global_ranks_on_later_pages() -> None:
-    ranked = sp.RankedList([("Ada", 30), ("Grace", 20), ("Edsger", 10)], key="leaderboard", page_size=2).component()
+    ranked = sp.RankedList(
+        [("Ada", 30), ("Grace", 20), ("Edsger", 10)], key="leaderboard", page_size=2
+    ).build_component()
     mount = Mount(ranked, access=Everyone(), timeout=None)
     commit_render(mount)
 
@@ -434,7 +436,7 @@ def test_ranked_list_top_n_and_explicit_entries() -> None:
         ],
         key="top",
         top_n=2,
-    ).component()
+    ).build_component()
     rendered = ranked.render()
     assert isinstance(rendered, Stack)
     listing = next(node for node in rendered.children if isinstance(node, Lines))

@@ -206,7 +206,7 @@ async def test_later_same_target_write_conflicts_without_clobbering() -> None:
     assert result.status is HistoryResultStatus.CONFLICT
     assert workspace.selected == 9
     assert subject.history.entries[0].state is HistoryEntryState.CONFLICTED
-    assert subject.history.drop_conflicted() is not None
+    assert subject.history.delete_conflicted() is not None
     assert not subject.history.can_undo
 
 

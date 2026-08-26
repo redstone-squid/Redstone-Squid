@@ -137,12 +137,12 @@ async def test_two_mounts_react_once_each_to_one_commit() -> None:
         assert mount.followed == (address(workspace, "selected"),)
 
         def counted(mount: Mount = mount):
-            async def refresh_now(*, links=()) -> None:
+            async def refresh(*, links=()) -> None:
                 refreshes[mount.id] = refreshes.get(mount.id, 0) + 1
 
-            return refresh_now
+            return refresh
 
-        mount.refresh_now = counted()  # pyrefly: ignore
+        mount.refresh = counted()  # pyrefly: ignore
 
     with transaction():
         workspace.selected = 3
@@ -163,7 +163,7 @@ async def test_a_dropped_conditional_read_stops_refreshing() -> None:
     assert set(mount.followed) == {address(workspace, "selected"), address(workspace, "detail")}
 
     panel.show_detail = False
-    await mount.refresh_now()
+    await mount.refresh()
     assert mount.followed == (address(workspace, "selected"),)
     assert {topic.topic for topic in bus.snapshot().topics} == {address(workspace, "selected")}
 
@@ -183,7 +183,7 @@ async def test_a_discarded_staged_render_leaves_no_permanent_follow() -> None:
     mount._rollback(candidate)
 
     panel.show_detail = False
-    await mount.refresh_now()
+    await mount.refresh()
     assert mount.followed == (address(workspace, "selected"),)
 
 
@@ -209,11 +209,11 @@ async def test_a_discarded_staged_render_keeps_the_visible_generations_follow() 
 
     refreshes = 0
 
-    async def refresh_now(*, links=()) -> None:
+    async def refresh(*, links=()) -> None:
         nonlocal refreshes
         refreshes += 1
 
-    mount.refresh_now = refresh_now  # pyrefly: ignore
+    mount.refresh = refresh  # pyrefly: ignore
     with transaction():
         workspace.selected = 3
     await drain(reactor, bus)
@@ -230,7 +230,7 @@ async def test_a_delivered_render_retires_what_the_old_one_needed() -> None:
     await mount.send(delivered_to(fake_message()))
 
     panel.other = True
-    await mount.refresh_now()
+    await mount.refresh()
     assert mount.followed == (address(workspace, "detail"),)
     assert {topic.topic for topic in bus.snapshot().topics} == {address(workspace, "detail")}
 
@@ -268,7 +268,7 @@ async def test_a_scheduler_that_cannot_follow_says_so_once(caplog: pytest.LogCap
     mount = Mount(Panel(workspace), access=Everyone())
     with caplog.at_level("WARNING"):
         await mount.send(delivered_to(fake_message()))
-        await mount.refresh_now()
+        await mount.refresh()
     assert sum("scheduler has no topic bus" in record.message for record in caplog.records) == 1
 
 
@@ -315,7 +315,7 @@ class TestSelfWrites:
         await mount.send(delivered_to(fake_message()))
         generation = mount.generation
 
-        status = await mount.refresh_now()
+        status = await mount.refresh()
         interaction = fake_interaction()
         await mount.dispatch("aside", interaction, generation=generation)
 
@@ -394,7 +394,7 @@ class TestSelfWrites:
             await mount.dispatch("pick", interaction)
 
         async with anyio.create_task_group() as tasks:
-            tasks.start_soon(mount.refresh_now)
+            tasks.start_soon(mount.refresh)
             await started.wait()
             tasks.start_soon(dispatch)
             while workspace.selected != 7:
@@ -430,7 +430,7 @@ class TestSelfWrites:
             await mount.dispatch("detail", interaction)
 
         async with anyio.create_task_group() as tasks:
-            tasks.start_soon(mount.refresh_now)
+            tasks.start_soon(mount.refresh)
             await started.wait()
             assert address(workspace, "detail") in mount._subscriptions.watched
             tasks.start_soon(dispatch)

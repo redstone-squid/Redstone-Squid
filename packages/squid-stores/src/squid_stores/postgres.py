@@ -80,7 +80,7 @@ class PostgresSessionStore:
         self._initialized = False
         self._initialize_lock = asyncio.Lock()
 
-    async def list_records(self) -> tuple[StoredSessionRecord, ...]:
+    async def list(self) -> tuple[StoredSessionRecord, ...]:
         await self._initialize()
         rows = await self.pool.fetch(
             f"SELECT key, scope, summary_payload, snapshot_payload FROM {self.table_name} ORDER BY key"

@@ -142,7 +142,7 @@ class CheckboxGroupField[ValueT](ExtensionField[tuple[ValueT, ...]]):
             raise FormValueError(message)
         return values
 
-    def format_prefill(self, value: object) -> object:
+    def format(self, value: object) -> object:
         submitted = tuple(value) if isinstance(value, list | tuple | set | frozenset) else (value,)
         return tuple(
             option.key
@@ -278,7 +278,7 @@ def _form_component(
         return component, lambda: component.value
     if isinstance(field, ScaleField):
         points = field.points
-        prefilled = None if prefill is None else str(field.format_prefill(prefill))
+        prefilled = None if prefill is None else str(field.format(prefill))
         if len(points) <= 10:
             component = discord.ui.RadioGroup(
                 custom_id=field.key,
@@ -307,7 +307,7 @@ def _form_component(
         if not 2 <= len(field.options) <= 10:
             message = f"Discord choice field {field.key!r} needs 2-10 options"
             raise LayoutInvariantError(message)
-        selected = field.format_prefill(prefill)
+        selected = field.format(prefill)
         if any(option.emoji is not None for option in field.options):
             component = discord.ui.Select(
                 custom_id=field.key,
@@ -348,7 +348,7 @@ def _form_component(
         if not 1 <= len(field.options) <= 25:
             message = f"Discord multi-choice field {field.key!r} needs 1-25 options"
             raise LayoutInvariantError(message)
-        selected = set(field.format_prefill(prefill))
+        selected = set(field.format(prefill))
         maximum = len(field.options) if field.maximum is None else field.maximum
         component = discord.ui.Select(
             custom_id=field.key,
@@ -370,7 +370,7 @@ def _form_component(
         )
         return component, lambda: component.values
     if isinstance(field, CheckboxGroupField):
-        selected = set(field.format_prefill(prefill))
+        selected = set(field.format(prefill))
         component = discord.ui.CheckboxGroup(
             custom_id=field.key,
             min_values=field.minimum,

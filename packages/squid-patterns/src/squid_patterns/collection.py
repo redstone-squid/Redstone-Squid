@@ -102,7 +102,7 @@ class CollectionEditor:
             collected.append(CollectionEntry(key, tuple(copied.items())))
         return CollectionState(tuple(collected))
 
-    def component(
+    def build_component(
         self,
         *,
         initial: CollectionState | None = None,

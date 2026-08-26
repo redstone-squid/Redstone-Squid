@@ -72,7 +72,7 @@ class RankedList[EntryT]:
     def initial_state(self) -> RankedListState:
         return self._initial_state
 
-    def component(self, *, initial: RankedListState | None = None) -> ComponentShell[RankedListState]:
+    def build_component(self, *, initial: RankedListState | None = None) -> ComponentShell[RankedListState]:
         """Build the in-memory shell for this ranking."""
         return ComponentShell(self, initial=initial)
 

@@ -18,7 +18,7 @@ def _walk(node: object) -> Iterable[object]:
 
 
 def _profile_section() -> sp.EditorSection[tuple[tuple[str, object], ...], Mapping[str, object]]:
-    return sp.EditorSection.form(
+    return sp.EditorSection.from_form(
         "profile",
         "Profile",
         sl.forms.FormSpec(
@@ -60,7 +60,7 @@ async def test_immediate_commit_reports_complete_values_and_all_changed_keys() -
         commits.append((values, changed))
 
     editor = sp.Editor("Account", (_profile_section(),), commit=sp.CommitPolicy.IMMEDIATE)
-    component = editor.component(
+    component = editor.build_component(
         initial={"profile": {"name": "Old", "bio": None}},
         on_commit=committed,
     )
@@ -108,7 +108,7 @@ def _collection_section() -> tuple[
         label=lambda value: str(value["name"]),
         window_size=1,
     )
-    section = sp.EditorSection.pattern(
+    section = sp.EditorSection.from_pattern(
         "links",
         "Links",
         collection,
@@ -170,7 +170,7 @@ def test_editor_render_shows_unsaved_status_and_gates_save_on_validation() -> No
         submitted={"name": "New", "bio": None},
     )
 
-    rendered = editor.component(initial=staged).render()
+    rendered = editor.build_component(initial=staged).render()
     save = next(node for node in _walk(rendered) if isinstance(node, sl.semantic.Action) and node.key == "editor.save")
 
     assert not save.available

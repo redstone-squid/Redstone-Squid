@@ -394,7 +394,7 @@ tabs = sp.Tabs(
 )
 
 # A mounted message: state lives in sl.state and controls use sl.action closures.
-mount = sd.Mount(tabs.component(), access=sd.Everyone())
+mount = sd.Mount(tabs.build_component(), access=sd.Everyone())
 
 # A restart-surviving message: state is decoded from and encoded into route parameters.
 shell = sp.RouterShell(

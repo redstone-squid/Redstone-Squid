@@ -627,7 +627,7 @@ class _AdoptedView(Component):
                 self.mutated(view)
             if not interaction.response.is_done():
                 await interaction.response.defer()
-            await mount.refresh()
+            await mount.schedule()
 
         modal.on_submit = on_submit
 

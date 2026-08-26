@@ -442,7 +442,7 @@ class DurableSessionRuntime:
     async def _recover(self) -> RecoveryReport:
         """Run recovery while the caller owns the maintenance lock."""
         report = _RecoveryReportBuilder()
-        for listed in await self.store.list_records():
+        for listed in await self.store.list():
             item = _item_from_stored(listed, "")
             token = await self.store.claim(listed.key, self.owner, self.lease_seconds)
             if token is None:

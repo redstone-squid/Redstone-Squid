@@ -82,7 +82,7 @@ async def test_fenced_snapshot_store_contract(kind: str, tmp_path: Path) -> None
     assert await store.load("missing") is None
     first = await _publish(store, key="first", owner="alpha")
     second = await _publish(store, key="second", owner="alpha")
-    assert tuple(record.key for record in await store.list_records()) == ("first", "second")
+    assert tuple(record.key for record in await store.list()) == ("first", "second")
     assert await store.release(first)
     assert await store.release(second)
 
