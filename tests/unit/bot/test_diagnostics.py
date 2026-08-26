@@ -15,12 +15,12 @@ from squid.bot.diagnostics import Diagnostics
 from squid.bot.diagnostics_view import ErrorReportBrowser, report_attachment
 from squid.bot.ui import create_mount
 from squid.diagnostics.domain import ErrorReport
-from squid_discord import (
+from squid_ui_discord import (
     V2_LIMITS as LIMITS,
 )
-from squid_discord import Mount, Owner
-from squid_discord.mount import MountedView
-from squid_discord.testing import assert_within_limits, commit_render, fake_interaction
+from squid_ui_discord import Mount, Owner
+from squid_ui_discord.mount import MountedView
+from squid_ui_discord.testing import assert_within_limits, commit_render, fake_interaction
 from squid_ui.sources import Position
 from tests.helpers.discord import make_layout_bot
 

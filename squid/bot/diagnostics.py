@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from discord.ext import commands
 from discord.ext.commands import Context
 
-import squid_discord as sd
+import squid_ui_discord as sd
 from squid.bot.diagnostics_view import SESSION_SECONDS, ErrorReportBrowser
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.ui import Private, create_mount, destination, info_layout

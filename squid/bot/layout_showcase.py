@@ -10,7 +10,7 @@ from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Context, guild_only
 
-import squid_discord as sd
+import squid_ui_discord as sd
 import squid_ui as sl
 import squid_ui_widgets as sp
 from squid.bot.i18n import resolve_locale
@@ -25,9 +25,9 @@ from squid.bot.ui import (
     send_component,
 )
 from squid.core.i18n import _
-from squid_discord import SessionKey
-from squid_discord.screens import Opener
-from squid_discord.sessions import UserScope
+from squid_ui_discord import SessionKey
+from squid_ui_discord.screens import Opener
+from squid_ui_discord.sessions import UserScope
 from squid_replication import ReplicatedDocument, ReplicatedScope
 
 if TYPE_CHECKING:

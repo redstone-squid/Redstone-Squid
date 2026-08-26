@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import discord
 from discord import TextChannel
 
-import squid_discord as sd
+import squid_ui_discord as sd
 from squid.bot.utils.sticky_message import FunctionalStickyMessage, StickyMessage
 
 

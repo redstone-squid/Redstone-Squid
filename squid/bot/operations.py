@@ -9,7 +9,7 @@ from typing import Any, overload
 from discord.abc import Messageable
 from discord.ext.commands import Context
 
-import squid_discord as sd
+import squid_ui_discord as sd
 import squid_ui as sl
 from squid.bot.errors import build_error_presentation, record_operation_error
 from squid.bot.i18n import resolve_locale

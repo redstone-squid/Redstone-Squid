@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 import discord
 
-import squid_discord as sd
+import squid_ui_discord as sd
 from squid.observability import SpanAttribute, correlation_scope, trace_span
 
 if TYPE_CHECKING:

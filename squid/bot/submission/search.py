@@ -13,7 +13,7 @@ from discord.ext import commands
 from discord.ext.commands import Cog, Context, when_mentioned
 from discord.utils import escape_markdown
 
-import squid_discord as sd
+import squid_ui_discord as sd
 import squid_ui as sl
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.operations import managed_result

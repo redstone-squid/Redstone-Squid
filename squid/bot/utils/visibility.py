@@ -29,11 +29,11 @@ from typing import Any
 import discord
 from discord.ext.commands import Context
 
-import squid_discord as sd
+import squid_ui_discord as sd
 from squid.bot.i18n import t
 from squid.bot.ui import error_layout, info_layout, reply_presentation
 from squid.core.i18n import _
-from squid_discord import send_to
+from squid_ui_discord import send_to
 
 
 def personal(ctx: Context[Any]) -> bool:

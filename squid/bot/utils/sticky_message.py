@@ -9,8 +9,8 @@ from typing import Any, override
 import discord
 from discord import TextChannel
 
-import squid_discord as sd
-from squid_discord import send_to
+import squid_ui_discord as sd
+from squid_ui_discord import send_to
 
 logger = logging.getLogger(__name__)
 

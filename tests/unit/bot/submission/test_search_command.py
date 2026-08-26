@@ -9,15 +9,15 @@ import pytest
 from discord.ext import commands
 
 import squid.bot.submission.search as search_module
-import squid_discord as sd
+import squid_ui_discord as sd
 import squid_ui as sl
 from squid.bot.submission.search import SearchCog, SearchTarget
 from squid.builds.domain import OtherBuild
 from squid.core.errors import ValidationError
 from squid.search.domain import SearchMode, SearchPage, SearchRequest, SearchScope, SortDirection
 from squid.topics import resource_topic
-from squid_discord import Everyone
-from squid_discord.testing import fake_interaction, fake_message
+from squid_ui_discord import Everyone
+from squid_ui_discord.testing import fake_interaction, fake_message
 from tests.helpers.discord import make_layout_bot
 
 

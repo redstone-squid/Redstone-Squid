@@ -8,7 +8,7 @@ import anyio
 import discord
 from whenever import Instant
 
-import squid_discord as sd
+import squid_ui_discord as sd
 import squid_ui as sl
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
@@ -21,7 +21,7 @@ from squid.builds.domain import DOOR_ORIENTATION_NAMES, Build, BuildCategory, Bu
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 from squid.topics import resource_topic
-from squid_discord import SessionKey
+from squid_ui_discord import SessionKey
 
 
 @dataclass(frozen=True, slots=True)

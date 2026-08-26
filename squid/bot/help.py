@@ -15,7 +15,7 @@ from squid.config import BuildConfig
 from squid.core.i18n import _
 from squid.suggestions.application import candidate, rank
 from squid.suggestions.domain import MAX_SUGGESTIONS
-from squid_discord import send_to
+from squid_ui_discord import send_to
 
 if TYPE_CHECKING:
     import squid.bot.app

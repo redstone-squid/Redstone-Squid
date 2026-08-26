@@ -10,7 +10,7 @@ from discord.ext.commands import Cog
 
 from squid.bot._types import GuildMessageable
 from squid.bot.ui import text_layout
-from squid_discord import send_to
+from squid_ui_discord import send_to
 
 if TYPE_CHECKING:
     import squid.bot.app

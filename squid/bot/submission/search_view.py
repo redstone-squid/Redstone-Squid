@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from discord.utils import escape_markdown
 
-import squid_discord as sd
+import squid_ui_discord as sd
 import squid_ui as sl
 import squid_ui_widgets as sp
 from squid.bot.i18n import t
