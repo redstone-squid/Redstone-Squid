@@ -197,7 +197,7 @@ class FakeRenderer:
                 channel_id=channel.id,
                 guild_id=GUILD,
                 surface="build_card",
-                presentation=sd.render_static([]),
+                payload=sd.render_static([]),
             )
             for channel in self.channels
         ]

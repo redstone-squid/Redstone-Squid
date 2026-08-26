@@ -172,9 +172,9 @@ def _destination(target: ConsentTarget) -> sd.MessageDestination:
     return sd.deliver_to(target, ephemeral=ephemeral, wait=True)
 
 
-async def _send(target: ConsentTarget, presentation: sd.message_payload.MessagePayload) -> None:
-    """Send a plain presentation where the prompt itself would have gone."""
-    await _destination(target)(presentation)
+async def _send(target: ConsentTarget, payload: sd.message_payload.MessagePayload) -> None:
+    """Send a plain payload where the prompt itself would have gone."""
+    await _destination(target)(payload)
 
 
 def _user_of(target: ConsentTarget) -> discord.User | discord.Member:

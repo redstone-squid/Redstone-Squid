@@ -8,7 +8,7 @@ from discord import app_commands
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.ui.views import BuildEditComponent
-from squid.bot.ui import error_layout, respond_presentation, text_layout
+from squid.bot.ui import error_layout, respond_payload, text_layout
 from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.builds.application import BuildService
 from squid.builds.domain import DoorOrientationLiteral
@@ -79,7 +79,7 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
         locale = await resolve_locale(interaction, self.bot.services.settings)
         build = await self.builds.get(build_id)
         if build is None:
-            await respond_presentation(
+            await respond_payload(
                 interaction,
                 error_layout(t(locale, _("Error")), t(locale, _("No build with that ID."))),
             )
@@ -113,7 +113,7 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
         if inapplicable:
             # Dropping a typed option silently is the failure mode this command was merged to
             # end, so a door option on a build with no door is a refusal rather than a no-op.
-            await respond_presentation(
+            await respond_payload(
                 interaction,
                 error_layout(
                     t(locale, _("Not a field of this build")),
@@ -133,18 +133,18 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
         await interaction.response.defer(ephemeral=True)
         locale = await resolve_locale(interaction, self.bot.services.settings)
         if message.author.id != self.bot.user.id:  # type: ignore
-            await respond_presentation(interaction, text_layout(t(locale, _("This does not look like a build."))))
+            await respond_payload(interaction, text_layout(t(locale, _("This does not look like a build."))))
             return
 
         # Which build a card shows is a property of the post, not of the message: the
         # same message row is just a fact about a Discord message.
         post = await self.bot.services.posts.resolve(message.id)
         if post is None or post.resource_kind != "build":
-            await respond_presentation(interaction, text_layout(t(locale, _("This does not look like a build."))))
+            await respond_payload(interaction, text_layout(t(locale, _("This does not look like a build."))))
             return
 
         build = await self.builds.get(int(post.resource_key))
         if build is None:
-            await respond_presentation(interaction, text_layout(t(locale, _("This does not look like a build."))))
+            await respond_payload(interaction, text_layout(t(locale, _("This does not look like a build."))))
             return
         await BuildEditComponent(build, self.builds, locale=locale).send(interaction, ephemeral=True)

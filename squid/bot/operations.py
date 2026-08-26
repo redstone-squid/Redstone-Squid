@@ -11,9 +11,9 @@ from discord.ext.commands import Context
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.errors import build_error_presentation, record_operation_error
+from squid.bot.errors import build_error_notice, record_operation_error
 from squid.bot.i18n import resolve_locale
-from squid.bot.ui import create_message_root, destination, error_node, info_node
+from squid.bot.ui import create_message_root, error_node, info_node, message_destination
 from squid.core.i18n import _, translate
 from squid_ui.runtime.component import RenderResult
 
@@ -64,8 +64,8 @@ class CommandOperation(sl.Component):
             case sl.operations.Succeeded(value=value):
                 return value
             case sl.operations.Failed(error=error):
-                presentation = build_error_presentation(error, self._locale)
-                return error_node(presentation.title, presentation.detail)
+                payload = build_error_notice(error, self._locale)
+                return error_node(payload.title, payload.detail)
             case sl.operations.Cancelled(progress=progress):
                 return self._initial if progress is None else progress
 
@@ -104,8 +104,8 @@ class _ManagedResultComponent(sl.Component):
             case sl.operations.Succeeded(value=value):
                 return value
             case sl.operations.Failed(error=error):
-                presentation = build_error_presentation(error, self._locale)
-                return error_node(presentation.title, presentation.detail)
+                payload = build_error_notice(error, self._locale)
+                return error_node(payload.title, payload.detail)
             case sl.operations.Cancelled():
                 return self._initial
 
@@ -157,7 +157,7 @@ def managed_result[**P](
                 locale=locale,
             )
             message_root = create_message_root(component, source=ctx, access=sd.Everyone(), locale=locale, timeout=900)
-            delivered = await message_root.send(destination(ctx, locale=locale))
+            delivered = await message_root.send(message_destination(ctx, locale=locale))
             match component.execution.status:
                 case sl.operations.Succeeded():
                     if dismiss_on_success:
@@ -237,12 +237,12 @@ async def run_command_operation(
         locale=locale,
     )
     message_root = create_message_root(component, source=source, access=sd.Everyone(), locale=locale, timeout=900)
-    destination = sd.send_to(target)
+    message_destination = sd.send_to(target)
 
     async def capture(
-        presentation: sd.message_payload.MessagePayload,
+        payload: sd.message_payload.MessagePayload,
     ) -> sd.delivery.DeliveryResult:
-        result = await destination(presentation)
+        result = await message_destination(payload)
         component._result = result
         return result
 
