@@ -95,7 +95,7 @@ class DurableSessionCodec:
             raise MessageRootStateError(message)
         raw_roots = item.get("message_roots")
         if not isinstance(raw_roots, list):
-            message = "durable session mounts must be an array"
+            message = "durable session message_roots must be an array"
             raise MessageRootStateError(message)
         message_roots: list[SessionRootRecord] = []
         for raw_root in raw_roots:

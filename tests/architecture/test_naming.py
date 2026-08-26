@@ -88,18 +88,81 @@ six packages. Checking identifiers closes the gap left by the first class-and-me
 RETIRED_IDENTIFIERS = frozenset({"summary_bytes", "summary_payload"})
 """Ambiguous retired words in durable identifiers whose complete spelling is unambiguous."""
 
+RETIRED_CLASS_NAMES = frozenset(
+    {
+        "Action",
+        "ActionGroup",
+        "Composition",
+        "Destination",
+        "DiscordMode",
+        "DiscordModeError",
+        "DiscordPresentation",
+        "DiscordReservation",
+        "HostSource",
+        "LayoutHost",
+        "LayoutHostMissing",
+        "Measure",
+        "Mount",
+        "MountAddress",
+        "MountDefaults",
+        "MountInspection",
+        "MountOptions",
+        "MountScheduler",
+        "MountSnapshot",
+        "MountState",
+        "Navigator",
+        "Opener",
+        "OpeningRequest",
+        "Scope",
+        "Screen",
+        "ScreenOptionsResolver",
+        "ScreenSpec",
+        "SessionPolicy",
+        "SessionRegistry",
+    }
+)
+"""Exact public concepts replaced in the whole-suite naming pass.
+
+These cannot join `RETIRED_IDENTIFIER_WORDS`: words such as ``action``, ``scope``, and
+``mount`` remain valid verbs or domain words even though the ambiguous class names retired.
+"""
+
+RETIRED_PACKAGE_IMPORTS = frozenset(
+    {
+        "squid_components",
+        "squid_crdt",
+        "squid_discord",
+        "squid_layouts",
+        "squid_persistence",
+        "squid_reactive",
+    }
+)
+
+RETIRED_DISCORD_MODULES = frozenset({"composition", "host", "mount", "presentation", "screens"})
+
 ANNOTATION_VOCABULARY = {
+    "AdmissionSpec": frozenset({"policy"}),
     "ActionMode": frozenset({"policy"}),
     "ActionStatus": frozenset({"status"}),
     "ChangeReport": frozenset({"summary"}),
+    "ClientRuntime": frozenset({"host", "layout_host"}),
     "ExceptionReport": frozenset({"summary"}),
     "Markup": frozenset({"dialect"}),
+    "MessagePayload": frozenset({"presentation"}),
+    "MessageRoot": frozenset({"mount"}),
     "MessageRootScheduler": frozenset({"reactor"}),
+    "OpenContext": frozenset({"opener"}),
     "ReplacementPolicy": frozenset({"protect", "protection"}),
+    "RenderedMessage": frozenset({"composition"}),
+    "SessionManager": frozenset({"registry"}),
+    "SessionSpec": frozenset({"screen"}),
     "SessionSnapshot": frozenset({"summary"}),
     "UndoMode": frozenset({"strategy"}),
 }
 """Words whose ambiguity disappears once an identifier's annotated type is known."""
+
+ANNOTATION_IDENTIFIER_EXEMPTIONS = frozenset({("MessageRoot", "mount")})
+"""Deliberate verb uses that happen to return the noun their action creates."""
 
 RETIRED_VERBS = frozenset({"format_prefill", "list_records", "purge_expired", "drop", "allows", "refresh_now"})
 """Callable names that said in two words what one dictionary verb already said.
@@ -303,6 +366,30 @@ def test_retired_words_stay_retired() -> None:
     assert not offenders, f"these words retired into the suffix table; see docs/squid-vocabulary.md: {offenders}"
 
 
+def test_replaced_concept_names_stay_retired() -> None:
+    """Exact old concepts cannot return while their ordinary words remain available."""
+    offenders = [f"{path}::{node.name}" for path, node in _classes_in_source() if node.name in RETIRED_CLASS_NAMES]
+    assert not offenders, f"use the current concept vocabulary: {offenders}"
+
+
+def test_replaced_package_and_module_names_stay_retired() -> None:
+    """Imports and physical Discord modules use the same current package vocabulary."""
+    imported: list[str] = []
+    for root in PACKAGE_SOURCE_ROOTS:
+        for path in root.rglob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    imported.extend(alias.name.split(".", maxsplit=1)[0] for alias in node.names)
+                elif isinstance(node, ast.ImportFrom) and node.module is not None:
+                    imported.append(node.module.split(".", maxsplit=1)[0])
+    old_imports = sorted(set(imported) & RETIRED_PACKAGE_IMPORTS)
+    discord_root = Path("packages/squid-ui-discord/src/squid_ui_discord")
+    old_modules = sorted(path.stem for path in discord_root.glob("*.py") if path.stem in RETIRED_DISCORD_MODULES)
+    assert not old_imports, f"use the renamed package roots: {old_imports}"
+    assert not old_modules, f"use the renamed Discord modules: {old_modules}"
+
+
 def test_retired_verbs_stay_retired() -> None:
     """Public, private, module, and nested callables share the verb dictionary."""
     offenders = [f"{path}::{node.name}" for path, node in _functions_in_source() if node.name in RETIRED_VERBS]
@@ -320,7 +407,11 @@ def _identifier_words(name: str) -> set[str]:
 def _annotation_names(annotation: ast.expr | None) -> set[str]:
     if annotation is None:
         return set()
-    return {node.id for node in ast.walk(annotation) if isinstance(node, ast.Name)}
+    return {
+        node.id if isinstance(node, ast.Name) else node.attr
+        for node in ast.walk(annotation)
+        if isinstance(node, ast.Name | ast.Attribute)
+    }
 
 
 def test_retired_identifier_words_stay_retired() -> None:
@@ -373,6 +464,8 @@ def test_annotated_identifiers_follow_their_type_vocabulary() -> None:
                 for name, annotation in pairs:
                     words = _identifier_words(name)
                     for type_name in _annotation_names(annotation):
+                        if (type_name, name) in ANNOTATION_IDENTIFIER_EXEMPTIONS:
+                            continue
                         retired = ANNOTATION_VOCABULARY.get(type_name, frozenset())
                         if words & retired:
                             offenders.append(f"{path}::{name}: {type_name}")

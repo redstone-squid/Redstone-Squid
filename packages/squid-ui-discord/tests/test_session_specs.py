@@ -1,4 +1,4 @@
-"""Reusable per-open Discord screen policy."""
+"""Reusable per-open Discord session recipe."""
 
 from collections.abc import Callable
 from types import SimpleNamespace
@@ -48,14 +48,14 @@ def to_message() -> squid_ui_discord.MessageDestination:
         (ScopeKind.GLOBAL, OpenContext(7, 42), squid_ui_discord.SessionKey.global_("panel")),
     ],
 )
-def test_screen_key_uses_its_declared_scope(
+def test_session_spec_key_uses_its_declared_scope(
     scope: ScopeKind, open_context: OpenContext, expected: squid_ui_discord.SessionKey
 ) -> None:
     assert SessionSpec("panel", scope=scope).key(open_context) == expected
 
 
-def test_opener_reads_an_interaction_and_a_command_context_alike() -> None:
-    """`Replyable` and `discord.Interaction` never meet, and screen policy does not care."""
+def test_open_context_reads_an_interaction_and_a_command_context_alike() -> None:
+    """`Replyable` and `discord.Interaction` never meet, and session recipe does not care."""
     interaction = fake_interaction(user_id=7)
     interaction.guild_id = 42
     context = SimpleNamespace(author=SimpleNamespace(id=7), guild=SimpleNamespace(id=42), send=AsyncMock())
@@ -64,15 +64,15 @@ def test_opener_reads_an_interaction_and_a_command_context_alike() -> None:
     assert OpenContext.of(cast(Any, context)) == OpenContext(7, 42)
 
 
-def test_opener_reads_a_command_context_in_a_dm_as_guildless() -> None:
+def test_open_context_reads_a_command_context_in_a_dm_as_guildless() -> None:
     context = SimpleNamespace(author=SimpleNamespace(id=7), guild=None, send=AsyncMock())
 
     assert OpenContext.of(cast(Any, context)) == OpenContext(7, None)
 
 
 @pytest.mark.parametrize("scope", [ScopeKind.GUILD, ScopeKind.USER_GUILD])
-def test_guild_screen_key_requires_a_guild(scope: ScopeKind) -> None:
-    with pytest.raises(TypeError, match="require an opener with a guild"):
+def test_guild_session_spec_key_requires_a_guild(scope: ScopeKind) -> None:
+    with pytest.raises(TypeError, match="require an open context with a guild"):
         SessionSpec("panel", scope=scope).key(OpenContext(7))
 
 
@@ -85,13 +85,13 @@ def test_guild_screen_key_requires_a_guild(scope: ScopeKind) -> None:
         (OpenContext.global_, squid_ui_discord.sessions.GlobalScope()),
     ],
 )
-def test_an_opener_builds_each_scope_as_a_value(build: Callable[[OpenContext], object], expected: object) -> None:
+def test_an_open_context_builds_each_scope_as_a_value(build: Callable[[OpenContext], object], expected: object) -> None:
     assert build(OpenContext(7, 42)) == expected
 
 
 @pytest.mark.parametrize("build", [OpenContext.guild, OpenContext.user_guild])
-def test_a_guild_scope_requires_an_opener_with_a_guild(build: Callable[[OpenContext], object]) -> None:
-    with pytest.raises(TypeError, match="require an opener with a guild"):
+def test_a_guild_scope_requires_an_open_context_with_a_guild(build: Callable[[OpenContext], object]) -> None:
+    with pytest.raises(TypeError, match="require an open context with a guild"):
         build(OpenContext(7))
 
 
@@ -102,14 +102,14 @@ def test_a_session_key_carries_the_scope_a_pool_would_key_on() -> None:
     assert key.scope == OpenContext(7, 42).user_guild()
 
 
-def test_opener_reads_discord_identity() -> None:
+def test_open_context_reads_discord_identity() -> None:
     interaction = fake_interaction(user_id=7)
     interaction.guild_id = 42
 
     assert OpenContext.of(interaction) == OpenContext(7, 42)
 
 
-def test_screen_options_are_defensively_copied_and_read_only() -> None:
+def test_session_spec_options_are_defensively_copied_and_read_only() -> None:
     source: dict[str, object] = {"timeout": 20}
     spec = SessionSpec("panel", options=source)
     source["timeout"] = None
@@ -121,7 +121,7 @@ def test_screen_options_are_defensively_copied_and_read_only() -> None:
         options["timeout"] = None
 
 
-async def test_screen_applies_options_overrides_and_access() -> None:
+async def test_session_spec_applies_options_overrides_and_access() -> None:
     on_error = AsyncMock()
     manager = SessionManager(MessageRootDefaults(timeout=30, strict=True, on_error=on_error))
     spec = SessionSpec("panel", access=lambda open_context: Everyone(), options={"timeout": 20})
@@ -137,7 +137,7 @@ async def test_screen_applies_options_overrides_and_access() -> None:
     assert result.session.actor_for(result.session.root) == 7
 
 
-async def test_screen_resolves_options_once_between_static_options_and_overrides() -> None:
+async def test_session_spec_resolves_options_once_between_static_options_and_overrides() -> None:
     calls: list[OpenContext] = []
 
     async def resolve(open_context: OpenContext) -> squid_ui_discord.MessageRootOptions:
@@ -155,21 +155,21 @@ async def test_screen_resolves_options_once_between_static_options_and_overrides
     assert result.session.root.strict is True
 
 
-async def test_screen_resolver_failure_does_not_construct_or_deliver_a_root() -> None:
+async def test_session_spec_resolver_failure_does_not_construct_or_deliver_a_root() -> None:
     destination = AsyncMock()
 
     async def fail(_open_context: OpenContext) -> squid_ui_discord.MessageRootOptions:
-        raise RuntimeError("cannot resolve screen")
+        raise RuntimeError("cannot resolve spec")
 
     spec = SessionSpec("panel", resolve_options=fail)
 
-    with pytest.raises(RuntimeError, match="cannot resolve screen"):
+    with pytest.raises(RuntimeError, match="cannot resolve spec"):
         await spec.open(Panel(), destination, sessions=SessionManager(), open_context=OpenContext(7))
 
     destination.assert_not_awaited()
 
 
-async def test_screen_respond_derives_identity_and_delivery_from_the_interaction() -> None:
+async def test_session_spec_respond_derives_identity_and_delivery_from_the_interaction() -> None:
     manager = SessionManager(MessageRootDefaults(timeout=30))
     interaction = fake_interaction(user_id=7)
     interaction.guild_id = 42
@@ -193,7 +193,7 @@ async def test_screen_respond_derives_identity_and_delivery_from_the_interaction
     interaction.original_response.assert_awaited_once_with()
 
 
-async def test_screen_responds_with_an_attached_root() -> None:
+async def test_session_spec_responds_with_an_attached_root() -> None:
     manager = SessionManager()
     root_root = manager.defaults.mount(Panel(), access=Owner(7), timeout=None)
     root = await manager.open(root_root, to_message())
@@ -215,7 +215,7 @@ async def test_screen_responds_with_an_attached_root() -> None:
     assert len(attached.session.message_roots) == 2
 
 
-async def test_screen_attaches_to_a_live_parent_session() -> None:
+async def test_session_spec_attaches_to_a_live_parent_session() -> None:
     manager = SessionManager()
     root_root = manager.defaults.mount(Panel(), access=Owner(7), timeout=None)
     root = await manager.open(root_root, to_message())
@@ -232,7 +232,7 @@ async def test_screen_attaches_to_a_live_parent_session() -> None:
     assert manager.get(spec.key(OpenContext(7))) == ()
 
 
-async def test_screen_rejects_an_unknown_parent_without_delivery() -> None:
+async def test_session_spec_rejects_an_unknown_parent_without_delivery() -> None:
     manager = SessionManager()
     unknown_parent = MessageRootDefaults(timeout=None).mount(Panel(), access=Owner(7))
     spec = SessionSpec("child", options={"timeout": None})
@@ -248,7 +248,7 @@ async def test_screen_rejects_an_unknown_parent_without_delivery() -> None:
     destination.assert_not_awaited()
 
 
-async def test_screen_rejects_a_finished_parent_without_delivery() -> None:
+async def test_session_spec_rejects_a_finished_parent_without_delivery() -> None:
     manager = SessionManager()
     root_root = manager.defaults.mount(Panel(), access=Owner(7), timeout=None)
     root = await manager.open(root_root, to_message())
@@ -265,7 +265,7 @@ async def test_screen_rejects_a_finished_parent_without_delivery() -> None:
     destination.assert_not_awaited()
 
 
-async def test_screen_rejects_a_detached_parent_without_delivery() -> None:
+async def test_session_spec_rejects_a_detached_parent_without_delivery() -> None:
     manager = SessionManager()
     root_root = manager.defaults.mount(Panel(), access=Owner(7), timeout=None)
     root = await manager.open(root_root, to_message())
@@ -285,14 +285,14 @@ async def test_screen_rejects_a_detached_parent_without_delivery() -> None:
     destination.assert_not_awaited()
 
 
-def test_screen_ergonomics_are_promoted_from_the_public_bundle() -> None:
+def test_session_spec_ergonomics_are_promoted_from_the_public_bundle() -> None:
     assert squid_ui_discord.OpenContext is OpenContext
     assert squid_ui_discord.ScopeKind is ScopeKind
     assert squid_ui_discord.MessageRootOptionsResolver is MessageRootOptionsResolver
     assert squid_ui_discord.StackNavigator is squid_ui_discord.navigation.StackNavigator
 
 
-async def test_a_screen_carries_its_capacity_into_the_session() -> None:
+async def test_a_session_spec_carries_its_capacity_into_the_session() -> None:
     sessions = SessionManager()
     spec = SessionSpec("lobby", scope=ScopeKind.GUILD, capacity=4, access=lambda open_context: Everyone())
 
@@ -303,7 +303,7 @@ async def test_a_screen_carries_its_capacity_into_the_session() -> None:
     assert opened.session.remaining_capacity == 3
 
 
-async def test_a_screen_carries_its_quota_and_domain() -> None:
+async def test_a_session_spec_carries_its_quota_and_domain() -> None:
     sessions = SessionManager()
     spec = SessionSpec("lobby", scope=ScopeKind.GUILD, quota=1, domain="game", access=lambda open_context: Everyone())
 

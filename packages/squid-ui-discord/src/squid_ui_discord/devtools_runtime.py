@@ -95,7 +95,7 @@ class SessionInspection:
 
 @dataclass(frozen=True, slots=True)
 class MessageRootInspection:
-    """Expensive detail for one live mount, beyond its cheap snapshot."""
+    """Expensive detail for one live message root, beyond its cheap snapshot."""
 
     snapshot: MessageRootSnapshot
     middleware: tuple[str, ...]
@@ -158,7 +158,7 @@ class ConfirmationRequired(DevToolsError):
 
 
 class TargetNotFound(DevToolsError):
-    """A requested mount, session, or durable record does not exist."""
+    """A requested message root, session, or durable record does not exist."""
 
 
 class RuntimeUnavailable(DevToolsError):
@@ -223,10 +223,10 @@ class DevToolsRuntime:
         )
 
     def inspect_root(self, message_root_id: str) -> MessageRootInspection:
-        """Inspect a live mount and its component-owned history stacks."""
+        """Inspect a live message root and its component-owned history stacks."""
         message_root = find(message_root_id)
         if message_root is None:
-            message = f"no live mount {message_root_id!r}"
+            message = f"no live message root {message_root_id!r}"
             raise TargetNotFound(message)
         histories = tuple(
             history
@@ -242,14 +242,14 @@ class DevToolsRuntime:
         )
 
     async def refresh_root(self, message_root_id: str) -> OperationResult:
-        """Render and deliver one mount immediately."""
+        """Render and deliver one message root immediately."""
         self._authorize(DevToolsAction.REFRESH_MOUNT, message_root_id, confirmed=True)
         message_root = find(message_root_id)
         if message_root is None:
-            message = f"no live mount {message_root_id!r}"
+            message = f"no live message root {message_root_id!r}"
             raise TargetNotFound(message)
         await message_root.refresh()
-        return self._success(DevToolsAction.REFRESH_MOUNT, message_root_id, "mount refreshed")
+        return self._success(DevToolsAction.REFRESH_MOUNT, message_root_id, "message root refreshed")
 
     async def close_session(self, session_id: str, *, confirmed: bool = False) -> OperationResult:
         """Finish one logical session through its owning registry."""

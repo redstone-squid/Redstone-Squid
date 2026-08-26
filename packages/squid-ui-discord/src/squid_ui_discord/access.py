@@ -1,4 +1,4 @@
-"""Explicit authorization policies for Discord mounts."""
+"""Explicit authorization policies for Discord message roots."""
 
 from collections.abc import Awaitable, Callable
 from collections.abc import Set as AbstractSet
