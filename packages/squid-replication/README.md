@@ -1,4 +1,4 @@
-# squid-replicated
+# squid-replication
 
 Optional replicated-state integration for Squid actions. The package keeps backend containers
 private, exposes immutable Python snapshots, stages mutations as transaction participants, and
@@ -15,7 +15,7 @@ action-addressable inverse tokens, reordered delivery, restart, and multi-contai
 register conflicts, compaction, ownership, security, and representative workloads remain gated.
 
 ```python
-from squid_replicated import ReplicatedScope
+from squid_replication import ReplicatedScope
 from squid_reactivity import transaction
 
 scope = ReplicatedScope("replica-a")

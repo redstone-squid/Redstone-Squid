@@ -28,7 +28,7 @@ from squid.core.i18n import _
 from squid_discord import SessionKey
 from squid_discord.screens import Opener
 from squid_discord.sessions import UserScope
-from squid_replicated import ReplicatedDocument, ReplicatedScope
+from squid_replication import ReplicatedDocument, ReplicatedScope
 
 if TYPE_CHECKING:
     import squid.bot.app

@@ -1,6 +1,6 @@
 """Optional immutable-snapshot replicated state for Squid actions."""
 
-from squid_replicated.document import (
+from squid_replication.document import (
     PreparedReplicatedInverse,
     ReplicatedChangeToken,
     ReplicatedClosedError,
@@ -10,9 +10,9 @@ from squid_replicated.document import (
     ReplicatedScope,
     ReplicatedSet,
 )
-from squid_replicated.engine import ReplicatedEngine, StagedReplica
-from squid_replicated.fake import FakeEngine, FakeSnapshot, FakeVersion
-from squid_replicated.transport import ReplicatedUpdate
+from squid_replication.engine import ReplicatedEngine, StagedReplica
+from squid_replication.fake import FakeEngine, FakeSnapshot, FakeVersion
+from squid_replication.transport import ReplicatedUpdate
 
 __all__ = [
     "FakeEngine",

@@ -28,13 +28,13 @@ import squid_discord
 import squid_ui
 import squid_patterns
 import squid_reactivity
-import squid_replicated
+import squid_replication
 import squid_storage
 
 PACKAGE_SOURCE_ROOTS = (
     Path("packages/squid-ui/src"),
     Path("packages/squid-reactivity/src"),
-    Path("packages/squid-replicated/src"),
+    Path("packages/squid-replication/src"),
     Path("packages/squid-storage/src"),
     Path("packages/squid-discord/src"),
     Path("packages/squid-patterns/src"),
@@ -213,7 +213,7 @@ operation reports through.
 def _exported_classes() -> dict[str, set[str]]:
     """Every class reachable through a package `__all__`, by short name to defining module."""
     found: dict[str, set[str]] = defaultdict(set)
-    for package in (squid_discord, squid_ui, squid_patterns, squid_reactivity, squid_replicated, squid_storage):
+    for package in (squid_discord, squid_ui, squid_patterns, squid_reactivity, squid_replication, squid_storage):
         modules: list[ModuleType] = [package]
         modules.extend(
             importlib.import_module(info.name)

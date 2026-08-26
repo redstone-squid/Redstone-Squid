@@ -41,7 +41,7 @@ Each row is the mechanism the survey named and the thing in the tree that is it.
 | Missionary: structured cancellation and an ownership hierarchy | Deliberately *not* in `squid-reactivity` (`dependencies = []`); the task-group hierarchy is `squid-ui`' mount lifetime | `resources.py:78` |
 | TanStack DB: optimistic overlay distinct from the remote write | `Resource.replace` stages through a participant; the remote half is an `operation` | `resources.py:434`, plan 48 |
 | TanStack DB: explicit transaction lifecycle states | `Pending`/`Ready`/`Failed` for resources, `Pending`/`Succeeded`/`Failed`/`Cancelled` for operations | `resources.py:145`, `operations.py:48` |
-| Compose merge policies for commutative writes (counter, set union) | `ReplicatedCounter.increment` and `ReplicatedSet.add`/`discard`, staged into the same action | `squid-replicated/document.py:362`, `:376` |
+| Compose merge policies for commutative writes (counter, set union) | `ReplicatedCounter.increment` and `ReplicatedSet.add`/`discard`, staged into the same action | `squid-replication/document.py:362`, `:376` |
 | Missionary glitch freedom (`y = x + x` never observes a torn `x`) | Free by construction: reads are pull, and one action's writes install under `_COMMIT_GATE` before any consumer is notified | `core.py:786`, `core.py:902` |
 
 The one item worth stating positively rather than as a table row: **glitch freedom is not
@@ -80,7 +80,7 @@ policy. A blind write is last-commit-wins, a cell the action read *and* wrote is
 automatically, and a read the action merely branched on is opted into validation with
 `strong_read()` (`core.py:743`). That is three policies selected by what the action actually did,
 and the choice between them was made twice, in both directions — see 90's "serializable actions
-by default" entry. Commutative merge, the case `merge=` exists for, is `squid-replicated`. See
+by default" entry. Commutative merge, the case `merge=` exists for, is `squid-replication`. See
 §3.2 for whether the residue is worth anything.
 
 **"Jotai shows another way around JS's missing AsyncContext."** True and irrelevant. Python has
@@ -228,15 +228,15 @@ implementing those two members. So this needs no preparatory seam either. The "d
 **CRDT/local-first as a third tier — `State` / `Shared` / `Replicated`, each implementing one
 observation/version interface, "a remarkably clean extension point".** Shipped, and it is the
 package layout: `state()` is local and OCC, `Shared[ScopeT]` is addressed and published on the
-bus, and `squid-replicated` joins the same action through the `ActionParticipant` seam. Plans 40,
+bus, and `squid-replication` joins the same action through the `ActionParticipant` seam. Plans 40,
 45, 47, 55, 63 and 68.
 
 The Automerge argument behind it — that replacing a whole immutable object destroys the intent
 needed to merge concurrent edits to *different fields*, turning compatible changes into one
-conflict — is also already the reason `squid-replicated` exposes `ReplicatedCounter.increment`
+conflict — is also already the reason `squid-replication` exposes `ReplicatedCounter.increment`
 and `ReplicatedSet.add`/`discard` rather than replicated scalar cells. Those stage
 `engine.operation("increment", path, amount)`: an operation, not a value with a merger attached
-(`squid-replicated/document.py:362`, `:376`).
+(`squid-replication/document.py:362`, `:376`).
 
 ### 6.2 Corrections
 
@@ -295,7 +295,7 @@ exists to keep author code out of" is overstated. A merge or a re-applied operat
 but not past the point of no return, so one that raised could simply become the conflict it
 already is. That ground is weak; the other two stand.
 
-And the decisive evidence is one package over: **`squid-replicated` already chose operation
+And the decisive evidence is one package over: **`squid-replication` already chose operation
 semantics over value merging**, for exactly this reason. So the survey's preferred design is the
 shipped one, and the only open question is whether a *local, non-replicated* cell deserves the
 same treatment — which is precisely the residue §3.2 called thin.

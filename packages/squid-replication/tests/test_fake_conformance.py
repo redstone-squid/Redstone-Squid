@@ -23,7 +23,7 @@ from squid_reactivity import (
 )
 from squid_reactivity.core import _CURRENT
 from squid_reactivity.testing import InterleavingHarness
-from squid_replicated import (
+from squid_replication import (
     FakeEngine,
     PreparedReplicatedInverse,
     ReplicatedChangeToken,
@@ -32,7 +32,7 @@ from squid_replicated import (
     ReplicatedScope,
     ReplicatedUpdate,
 )
-from squid_replicated.fake import FakeOperation, PreparedFakeUpdate
+from squid_replication.fake import FakeOperation, PreparedFakeUpdate
 
 
 class LocalModel(Reactive):

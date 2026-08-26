@@ -77,7 +77,7 @@ class PycrdtTextEngine:
         try:
             import pycrdt
         except ImportError as error:
-            message = "install squid-replicated[pycrdt] to use PycrdtTextEngine"
+            message = "install squid-replication[pycrdt] to use PycrdtTextEngine"
             raise RuntimeError(message) from error
         self.module = pycrdt
         self.text = pycrdt.Text()

@@ -15,7 +15,7 @@ SCAN_ROOTS = (
     Path("packages/squid-ui/src"),
     Path("packages/squid-discord/src"),
     Path("packages/squid-patterns/src"),
-    Path("packages/squid-replicated/src"),
+    Path("packages/squid-replication/src"),
 )
 
 COMPILER_PASS_ROOT = Path("packages/squid-ui/src/squid_ui/planning")
