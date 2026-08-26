@@ -62,8 +62,8 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
             author_id=interaction.user.id,
             locale=locale,
         )
-        mount = component.mount(source=interaction)
-        await mount.send(respond_to(interaction, ephemeral=True, wait=True))
+        message_root = component.mount(source=interaction)
+        await message_root.send(respond_to(interaction, ephemeral=True, wait=True))
 
     @autocompletes(
         creator="creator_profiles",

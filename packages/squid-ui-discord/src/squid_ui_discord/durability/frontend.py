@@ -8,7 +8,7 @@ import discord
 
 from squid_ui_discord.delivery import Abandoned, DeliveryResult, EditHandle, StaleHandleError, handle_for
 from squid_ui_discord.durability import FrontendAddress
-from squid_ui_discord.mount import Mount
+from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.presentation import DiscordMode, DiscordPresentation
 
 
@@ -34,8 +34,8 @@ type PromotionResult = Promoted | NotDurable
 class RecoveredBinding:
     """One restored mount and the persisted message it must reclaim."""
 
-    record_mount_id: str
-    mount: Mount
+    record_message_root_id: str
+    message_root: MessageRoot
     address: FrontendAddress
 
 
@@ -43,14 +43,14 @@ class RecoveredBinding:
 class Reconnected:
     """Every mount in a restored session was redrawn onto its Discord message."""
 
-    record_mount_ids: tuple[str, ...]
+    record_message_root_ids: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class Missing:
     """Discord definitively reported that one or more persisted messages are gone."""
 
-    record_mount_ids: tuple[str, ...]
+    record_message_root_ids: tuple[str, ...]
     reasons: tuple[str, ...]
 
 
@@ -58,7 +58,7 @@ class Missing:
 class Unreachable:
     """One or more persisted messages could not be reached temporarily."""
 
-    record_mount_ids: tuple[str, ...]
+    record_message_root_ids: tuple[str, ...]
     reasons: tuple[str, ...]
 
 
@@ -68,7 +68,7 @@ type ReconnectResult = Reconnected | Missing | Unreachable
 class DurableFrontend(Protocol):
     """A frontend that can promote live deliveries and reconnect restored sessions."""
 
-    async def promote(self, mount: Mount, result: DeliveryResult) -> PromotionResult: ...
+    async def promote(self, message_root: MessageRoot, result: DeliveryResult) -> PromotionResult: ...
 
     async def reconnect(self, bindings: Sequence[RecoveredBinding]) -> ReconnectResult: ...
 
@@ -87,14 +87,14 @@ class DiscordFrontend:
     def __init__(self, client: discord.Client) -> None:
         self.client = client
 
-    async def promote(self, mount: Mount, result: DeliveryResult) -> PromotionResult:
+    async def promote(self, message_root: MessageRoot, result: DeliveryResult) -> PromotionResult:
         """Trade a recoverable public delivery up to permanent bot-token authority."""
         message = result.message
         if message is None:
             return NotDurable("the delivery did not expose an addressable message")
         if result.ephemeral is True:
             return NotDurable("ephemeral Discord messages cannot be recovered")
-        address = mount.address
+        address = message_root.address
         if address is None or address.message_id != message.id or address.channel_id != message.channel.id:
             return NotDurable("the delivery result does not address this mount's message")
 
@@ -104,7 +104,7 @@ class DiscordFrontend:
             return NotDurable("Discord no longer has the delivered message")
 
         handle = handle_for(durable_message)
-        await mount.adopt_handle(handle)
+        await message_root.adopt_handle(handle)
         values: dict[str, str | int] = {
             "channel_id": durable_message.channel.id,
             "message_id": durable_message.id,
@@ -127,11 +127,11 @@ class DiscordFrontend:
                 channel_id, message_id = self._coordinates(binding.address)
                 message = await self._fetch_message(channel_id, message_id)
             except discord.NotFound:
-                missing.append((binding.record_mount_id, "Discord no longer has the channel or message"))
+                missing.append((binding.record_message_root_id, "Discord no longer has the channel or message"))
             except discord.Forbidden:
-                unreachable.append((binding.record_mount_id, "Discord denied access to the channel or message"))
+                unreachable.append((binding.record_message_root_id, "Discord denied access to the channel or message"))
             except discord.HTTPException:
-                unreachable.append((binding.record_mount_id, "Discord could not resolve the channel or message"))
+                unreachable.append((binding.record_message_root_id, "Discord could not resolve the channel or message"))
             else:
                 resolved.append(_ResolvedBinding(binding, message))
 
@@ -154,26 +154,26 @@ class DiscordFrontend:
                 return DeliveryResult(message, authority, message_id=message.id, ephemeral=False)
 
             try:
-                result = await item.binding.mount.send(edit)
+                result = await item.binding.message_root.send(edit)
             except discord.NotFound:
-                return Missing((item.binding.record_mount_id,), ("Discord no longer has the message",))
+                return Missing((item.binding.record_message_root_id,), ("Discord no longer has the message",))
             except discord.Forbidden, StaleHandleError:
                 return Unreachable(
-                    (item.binding.record_mount_id,),
+                    (item.binding.record_message_root_id,),
                     ("Discord denied permanent edit access to the message",),
                 )
             except discord.HTTPException:
                 return Unreachable(
-                    (item.binding.record_mount_id,),
+                    (item.binding.record_message_root_id,),
                     ("Discord could not reconnect the message",),
                 )
             if isinstance(result, Abandoned):
                 return Unreachable(
-                    (item.binding.record_mount_id,),
+                    (item.binding.record_message_root_id,),
                     ("the restored mount finished before it could reconnect",),
                 )
 
-        return Reconnected(tuple(binding.record_mount_id for binding in bindings))
+        return Reconnected(tuple(binding.record_message_root_id for binding in bindings))
 
     async def _normal_message(self, message: discord.Message) -> discord.Message:
         """Return a message whose ``edit`` endpoint uses the bot token."""

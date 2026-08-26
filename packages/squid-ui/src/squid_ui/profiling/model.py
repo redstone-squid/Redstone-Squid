@@ -30,7 +30,7 @@ class TraceStatus(StrEnum):
 class DispatchDisposition(StrEnum):
     """Terminal result of one mounted action dispatch."""
 
-    MOUNT_FINISHED = "mount_finished"
+    MESSAGE_ROOT_FINISHED = "message_root_finished"
     ACCESS_DENIED = "access_denied"
     ACCESS_FAILED = "access_failed"
     GUARD_DENIED = "guard_denied"

@@ -119,7 +119,7 @@ class _Staged:
 
 @dataclass(frozen=True, slots=True)
 class GuardLedger:
-    """Mount-owned state for stateful guards, seen by a guard as one action-scoped view.
+    """MessageRoot-owned state for stateful guards, seen by a guard as one action-scoped view.
 
     Guard objects are rebuilt by the factories on every render, so they cannot hold state.
     The mount owns one ledger for its whole lifetime and hands each dispatch a view bound to

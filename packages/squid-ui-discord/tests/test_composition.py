@@ -31,7 +31,7 @@ from squid_ui.runtime.owner import ComponentRuntime
 from squid_ui.runtime.shared import SharedState
 from squid_ui.runtime.topics import CellAddress, LocalTopicBus
 from squid_ui.semantic import ActionControl, ActionControls, Choice, Choices, Controlled, Group, List, ListItem
-from squid_ui_discord import Everyone, Mount
+from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord.testing import commit_render, fake_interaction
 
 
@@ -80,41 +80,41 @@ def _texts(view: discord.ui.LayoutView) -> list[str]:
 class TestBoundaries:
     async def test_each_instance_answers_only_its_own_control(self):
         pair = Pair()
-        mount = Mount(pair, access=Everyone(), timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(pair, access=Everyone(), timeout=None)
+        commit_render(message_root)
 
-        await mount.dispatch("left.inc", fake_interaction())
+        await message_root.dispatch("left.inc", fake_interaction())
 
         assert (pair.left.count, pair.right.count) == (1, 0)
 
-        await mount.dispatch("right.inc", fake_interaction())
+        await message_root.dispatch("right.inc", fake_interaction())
 
         assert (pair.left.count, pair.right.count) == (1, 1)
 
     def test_controls_are_namespaced_including_every_explicit_key(self):
-        mount = Mount(Pair(), access=Everyone(), timeout=None)
-        commit_render(mount)
-        assert set(mount._handlers) == {"left.inc", "left.help", "right.inc", "right.help"}
+        message_root = MessageRoot(Pair(), access=Everyone(), timeout=None)
+        commit_render(message_root)
+        assert set(message_root._handlers) == {"left.inc", "left.help", "right.inc", "right.help"}
 
     def test_a_childs_state_change_re_renders_the_root_message(self):
         pair = Pair()
-        mount = Mount(pair, access=Everyone(), timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(pair, access=Everyone(), timeout=None)
+        commit_render(message_root)
 
         pair.right.count = 3
 
-        assert mount._dirty
-        assert "right: 3" in _texts(commit_render(mount))
+        assert message_root._dirty
+        assert "right: 3" in _texts(commit_render(message_root))
 
-    def test_components_do_not_expose_the_frontend_mount(self):
+    def test_components_do_not_expose_the_frontend_root(self):
         pair = Pair()
-        commit_render(Mount(pair, access=Everyone(), timeout=None))
+        commit_render(MessageRoot(pair, access=Everyone(), timeout=None))
         assert not hasattr(pair.left, "mount")
 
     def test_embedding_does_not_mutate_the_childs_own_keys(self):
         # render() stays pure: namespacing rewrites the returned tree, not the component.
         pair = Pair()
-        commit_render(Mount(pair, access=Everyone(), timeout=None))
+        commit_render(MessageRoot(pair, access=Everyone(), timeout=None))
         row = pair.left.render()[1]
         assert isinstance(row, Row)
         button = row.items[0]
@@ -375,14 +375,14 @@ class Nest(Component):
 
 @given(st.integers(min_value=0, max_value=8))
 def test_nested_embeds_stay_addressable(depth):
-    mount = Mount(Nest(depth), access=Everyone(), timeout=None)
-    view = commit_render(mount)
+    message_root = MessageRoot(Nest(depth), access=Everyone(), timeout=None)
+    view = commit_render(message_root)
     ids = _custom_ids(view)
 
     assert len(ids) == depth + 1
     assert len(set(ids)) == len(ids), "two controls in one message may not share a custom_id"
     assert all(len(custom_id) <= 100 for custom_id in ids)
-    assert len(mount._handlers) == depth + 1
+    assert len(message_root._handlers) == depth + 1
 
 
 class PagedChild(Component):
@@ -400,15 +400,15 @@ class PagedPair(Component):
 
 
 def test_embed_namespaces_pager_state_and_controls() -> None:
-    mount = Mount(PagedPair(), access=Everyone(), timeout=None)
-    commit_render(mount)
+    message_root = MessageRoot(PagedPair(), access=Everyone(), timeout=None)
+    commit_render(message_root)
 
-    assert {key: cursor.position.offset for key, cursor in mount.presentation.cursors.items()} == {
+    assert {key: cursor.position.offset for key, cursor in message_root.presentation.cursors.items()} == {
         "left.items": 0,
         "right.items": 0,
     }
-    assert "__cursor_next.left.items" in mount._handlers
-    assert "__cursor_next.right.items" in mount._handlers
+    assert "__cursor_next.left.items" in message_root._handlers
+    assert "__cursor_next.right.items" in message_root._handlers
 
 
 def test_duplicate_sibling_embed_keys_are_rejected() -> None:
@@ -417,7 +417,7 @@ def test_duplicate_sibling_embed_keys_are_rejected() -> None:
             return [self.boundary(Counter("one"), key="same"), self.boundary(Counter("two"), key="same")]
 
     with pytest.raises(LayoutInvariantError, match="duplicate Boundary key"):
-        commit_render(Mount(Duplicate(), access=Everyone(), timeout=None))
+        commit_render(MessageRoot(Duplicate(), access=Everyone(), timeout=None))
 
 
 def test_one_component_instance_cannot_occupy_two_paths() -> None:
@@ -428,7 +428,7 @@ def test_one_component_instance_cannot_occupy_two_paths() -> None:
             return [self.boundary(child, key="one"), self.boundary(child, key="two")]
 
     with pytest.raises(LayoutInvariantError, match="already embedded"):
-        commit_render(Mount(Duplicate(), access=Everyone(), timeout=None))
+        commit_render(MessageRoot(Duplicate(), access=Everyone(), timeout=None))
 
 
 def test_component_embedding_cycles_are_rejected() -> None:
@@ -437,7 +437,7 @@ def test_component_embedding_cycles_are_rejected() -> None:
             return self.boundary(self, key="self")
 
     with pytest.raises(LayoutInvariantError, match="embedding cycle"):
-        commit_render(Mount(Cycle(), access=Everyone(), timeout=None))
+        commit_render(MessageRoot(Cycle(), access=Everyone(), timeout=None))
 
 
 class Tracked(Component):
@@ -467,16 +467,16 @@ async def test_keyed_component_lifecycle_tracks_replacement_and_finish() -> None
             return self.boundary(self.child, key="child")
 
     parent = Parent()
-    mount = Mount(parent, access=Everyone(), timeout=None)
-    commit_render(mount)
+    message_root = MessageRoot(parent, access=Everyone(), timeout=None)
+    commit_render(message_root)
     assert events == ["mount:parent", "mount:first"]
 
     parent.child = Tracked("second", events)
-    mount.invalidate()
-    commit_render(mount)
+    message_root.invalidate()
+    commit_render(message_root)
     assert events[-2:] == ["unmount:first", "mount:second"]
 
-    await mount.finish(disable=False)
+    await message_root.finish(disable=False)
     assert events[-2:] == ["unmount:second", "unmount:parent"]
 
 
@@ -495,7 +495,7 @@ def test_typed_context_flows_to_descendants_without_entering_component_state() -
             self.provide(greeting, "hello from context")
             return self.boundary(self.child, key="child")
 
-    view = commit_render(Mount(Parent(), access=Everyone(), timeout=None))
+    view = commit_render(MessageRoot(Parent(), access=Everyone(), timeout=None))
 
     assert "hello from context" in _texts(view)
 
@@ -515,10 +515,10 @@ def test_semantic_actions_are_namespaced_across_embedded_instances() -> None:
         def render(self):
             return (self.boundary(self.left, key="left"), self.boundary(self.right, key="right"))
 
-    mount = Mount(Parent(), access=Everyone(), timeout=None)
-    commit_render(mount)
+    message_root = MessageRoot(Parent(), access=Everyone(), timeout=None)
+    commit_render(message_root)
 
-    assert {"left.run", "right.run"} <= mount._handlers.keys()
+    assert {"left.run", "right.run"} <= message_root._handlers.keys()
 
 
 def test_all_keyed_semantics_are_namespaced_through_semantic_containers() -> None:
@@ -549,13 +549,13 @@ def test_all_keyed_semantics_are_namespaced_through_semantic_containers() -> Non
         def render(self):
             return (self.boundary(self.left, key="left"), self.boundary(self.right, key="right"))
 
-    mount = Mount(Parent(), access=Everyone(), timeout=None)
-    commit_render(mount)
+    message_root = MessageRoot(Parent(), access=Everyone(), timeout=None)
+    commit_render(message_root)
 
-    assert {"left.entries", "right.entries"} <= mount.presentation.cursors.keys()
-    assert {"left.choice", "right.choice"} <= mount._handlers.keys()
-    assert "__cursor_next.left.entries" in mount._handlers
-    assert "__cursor_next.right.entries" in mount._handlers
+    assert {"left.entries", "right.entries"} <= message_root.presentation.cursors.keys()
+    assert {"left.choice", "right.choice"} <= message_root._handlers.keys()
+    assert "__cursor_next.left.entries" in message_root._handlers
+    assert "__cursor_next.right.entries" in message_root._handlers
 
 
 class TestRenderItem:

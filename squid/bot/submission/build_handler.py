@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING, Literal, cast, override
 import discord
 from discord.utils import escape_markdown
 
-import squid_ui_discord as sd
 import squid_ui as sl
+import squid_ui_discord as sd
 from squid.bot._types import GuildMessageable
 from squid.bot.ui import (
     DISCORD_GREEN,
@@ -171,7 +171,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         rows = ()
         if build.original_link is not None:
             rows = (
-                sl.actions(
+                sl.action_controls(
                     sl.link("Original submission", build.original_link, key="original-submission"),
                     key="submission-links",
                 ),

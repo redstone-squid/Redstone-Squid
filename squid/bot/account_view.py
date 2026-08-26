@@ -13,8 +13,8 @@ from typing import cast
 
 import discord
 
-import squid_ui_discord as sd
 import squid_ui as sl
+import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.accounts.application import AccountService
 from squid.accounts.domain import (
@@ -35,7 +35,7 @@ from squid.accounts.errors import AccountNotFoundError
 from squid.bot.consent import request_consent
 from squid.bot.i18n import t
 from squid.bot.profile_render import identity_label, own_profile_avatar, own_profile_fields
-from squid.bot.ui import CardField, create_mount
+from squid.bot.ui import CardField, create_message_root
 from squid.core.errors import ValidationError
 from squid.core.i18n import _
 
@@ -73,7 +73,7 @@ class AccountPanel(sl.Component):
         self._timeout = timeout
         self._profile = AccountProfile.empty(account_id)
         self._profile_editor = None
-        self._mount: sd.Mount | None = None
+        self._root: sd.MessageRoot | None = None
 
     async def on_load(self) -> None:
         await self._refresh()
@@ -107,8 +107,8 @@ class AccountPanel(sl.Component):
         if self._profile_editor is not None:
             return (
                 self.boundary(self._profile_editor, key="profile-editor"),
-                sl.actions(
-                    sl.action(
+                sl.action_controls(
+                    sl.action_control(
                         t(self.locale, _("Cancel")),
                         self._cancel_profile_edit,
                         key="cancel-profile-edit",
@@ -171,8 +171,8 @@ class AccountPanel(sl.Component):
             )
         )
         nodes.append(
-            sl.actions(
-                sl.action(
+            sl.action_controls(
+                sl.action_control(
                     t(self.locale, _("Unlink")),
                     self._unlink,
                     key="unlink",
@@ -180,13 +180,13 @@ class AccountPanel(sl.Component):
                     available=self.selected is not None,
                     guard=sp.guards.confirm(self._unlink_warning()),
                 ),
-                sl.action(
+                sl.action_control(
                     t(self.locale, _("Edit page")),
                     self._edit_page,
                     key="edit_page",
                     emphasis=sl.semantic.Emphasis.STRONG,
                 ),
-                sl.action(t(self.locale, _("Close")), self._close, key="close"),
+                sl.action_control(t(self.locale, _("Close")), self._close, key="close"),
                 key="account-actions",
             )
         )
@@ -376,7 +376,7 @@ class AccountPanel(sl.Component):
         if not self._needs_consent:
             await work()
             return
-        mount = sd.responder(event).mount
+        message_root = sd.responder(event).message_root
 
         async def answered(_prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
             if consent is None:
@@ -386,14 +386,14 @@ class AccountPanel(sl.Component):
             await self._accounts.grant_current_consent(self._account_id)
             self._needs_consent = False
             await work()
-            await mount.schedule()
+            await message_root.schedule()
 
         await request_consent(
             sd.native(event),
             user_id=self._author_id,
             on_answer=answered,
             locale=self.locale,
-            parent=mount,
+            parent=message_root,
         )
 
     async def _reload(self) -> None:
@@ -457,12 +457,12 @@ class AccountPanel(sl.Component):
             )
         return None
 
-    def mount(self, *, source: sd.host.HostSource) -> sd.Mount:
-        self._mount = create_mount(
+    def mount(self, *, source: sd.host.HostSource) -> sd.MessageRoot:
+        self._root = create_message_root(
             self,
             source=source,
             access=sd.Owner(self._author_id),
             locale=self.locale,
             timeout=self._timeout,
         )
-        return self._mount
+        return self._root

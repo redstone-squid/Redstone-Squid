@@ -15,15 +15,15 @@ from squid_ui_discord.sessions import (
     UserScope,
 )
 
-from . import FrontendAddress, MountState, MountStateCodec, MountStateError
+from . import FrontendAddress, MessageRootState, MessageRootStateCodec, MessageRootStateError
 
 
 @dataclass(frozen=True, slots=True)
-class SessionMountRecord:
+class SessionRootRecord:
     """One stored mount and its position in a durable session graph."""
 
     id: str
-    state: MountState
+    state: MessageRootState
     address: FrontendAddress
     parent_id: str | None
     actor_id: int | None
@@ -39,7 +39,7 @@ class DurableSessionRecord:
     actor_id: int | None
     opened_at: float
     expires_at: float | None
-    mounts: tuple[SessionMountRecord, ...]
+    message_roots: tuple[SessionRootRecord, ...]
     members: frozenset[int] = frozenset()
     capacity: int | None = None
     quota: int | None = None
@@ -65,59 +65,59 @@ class DurableSessionCodec:
             "capacity": record.capacity,
             "quota": record.quota,
             "domain": record.domain,
-            "mounts": [
+            "message_roots": [
                 {
-                    "id": mount.id,
-                    "state": json.loads(MountStateCodec.dumps(mount.state)),
-                    "address": {"frontend": mount.address.frontend, "values": dict(mount.address.values)},
-                    "parent_id": mount.parent_id,
-                    "actor_id": mount.actor_id,
+                    "id": message_root.id,
+                    "state": json.loads(MessageRootStateCodec.dumps(message_root.state)),
+                    "address": {"frontend": message_root.address.frontend, "values": dict(message_root.address.values)},
+                    "parent_id": message_root.parent_id,
+                    "actor_id": message_root.actor_id,
                 }
-                for mount in record.mounts
+                for message_root in record.message_roots
             ],
         }
         try:
             return json.dumps(raw, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
         except (TypeError, ValueError) as error:
             message = f"durable session record is not JSON serializable: {error}"
-            raise MountStateError(message) from error
+            raise MessageRootStateError(message) from error
 
     @classmethod
     def loads(cls, payload: str) -> DurableSessionRecord:
         try:
             raw = json.loads(payload)
         except json.JSONDecodeError as error:
-            raise MountStateError(str(error)) from error
+            raise MessageRootStateError(str(error)) from error
         item = _object(raw, "durable session record")
         protocol = _integer(item, "protocol")
         if protocol != cls.protocol:
             message = f"unsupported durable session record protocol {protocol}"
-            raise MountStateError(message)
-        raw_mounts = item.get("mounts")
-        if not isinstance(raw_mounts, list):
+            raise MessageRootStateError(message)
+        raw_roots = item.get("message_roots")
+        if not isinstance(raw_roots, list):
             message = "durable session mounts must be an array"
-            raise MountStateError(message)
-        mounts: list[SessionMountRecord] = []
-        for raw_mount in raw_mounts:
-            mount = _object(raw_mount, "durable mount")
-            address = _object(mount.get("address"), "mount address")
+            raise MessageRootStateError(message)
+        message_roots: list[SessionRootRecord] = []
+        for raw_root in raw_roots:
+            message_root = _object(raw_root, "durable mount")
+            address = _object(message_root.get("address"), "mount address")
             values = _object(address.get("values"), "mount address values")
             if not all(isinstance(key, str) and isinstance(value, str | int) for key, value in values.items()):
                 message = "mount address values must contain string keys and string or integer values"
-                raise MountStateError(message)
-            actor_id = mount.get("actor_id")
+                raise MessageRootStateError(message)
+            actor_id = message_root.get("actor_id")
             if actor_id is not None and (not isinstance(actor_id, int) or isinstance(actor_id, bool)):
                 message = "mount actor_id must be an integer or null"
-                raise MountStateError(message)
-            parent_id = mount.get("parent_id")
+                raise MessageRootStateError(message)
+            parent_id = message_root.get("parent_id")
             if parent_id is not None and not isinstance(parent_id, str):
                 message = "mount parent_id must be a string or null"
-                raise MountStateError(message)
-            mounts.append(
-                SessionMountRecord(
-                    id=_string(mount, "id"),
-                    state=MountStateCodec.loads(
-                        json.dumps(mount.get("state"), ensure_ascii=False, separators=(",", ":"))
+                raise MessageRootStateError(message)
+            message_roots.append(
+                SessionRootRecord(
+                    id=_string(message_root, "id"),
+                    state=MessageRootStateCodec.loads(
+                        json.dumps(message_root.get("state"), ensure_ascii=False, separators=(",", ":"))
                     ),
                     address=FrontendAddress(_string(address, "frontend"), values),
                     parent_id=parent_id,
@@ -127,14 +127,14 @@ class DurableSessionCodec:
         actor_id = item.get("actor_id")
         if actor_id is not None and (not isinstance(actor_id, int) or isinstance(actor_id, bool)):
             message = "session actor_id must be an integer or null"
-            raise MountStateError(message)
+            raise MessageRootStateError(message)
         opened_at = _number(item, "opened_at")
         expires_at = item.get("expires_at")
         if expires_at is not None and (
             not isinstance(expires_at, int | float) or isinstance(expires_at, bool) or not math.isfinite(expires_at)
         ):
             message = "session expires_at must be a number or null"
-            raise MountStateError(message)
+            raise MessageRootStateError(message)
         record = DurableSessionRecord(
             protocol=protocol,
             id=_string(item, "id"),
@@ -142,7 +142,7 @@ class DurableSessionCodec:
             actor_id=actor_id,
             opened_at=opened_at,
             expires_at=None if expires_at is None else float(expires_at),
-            mounts=tuple(mounts),
+            message_roots=tuple(message_roots),
             members=_member_ids(item.get("members")),
             capacity=_capacity(item.get("capacity")),
             quota=_capacity(item.get("quota")),
@@ -155,40 +155,43 @@ class DurableSessionCodec:
     def _validate(cls, record: DurableSessionRecord) -> None:
         if record.protocol != cls.protocol:
             message = f"unsupported durable session record protocol {record.protocol}"
-            raise MountStateError(message)
+            raise MessageRootStateError(message)
         _member_ids(sorted(record.members))
         _capacity(record.capacity)
         _capacity(record.quota)
         _domain(record.domain)
-        if not record.id or not record.mounts:
+        if not record.id or not record.message_roots:
             message = "durable sessions require a non-empty id and at least one mount"
-            raise MountStateError(message)
-        ids = {mount.id for mount in record.mounts}
-        if len(ids) != len(record.mounts) or "" in ids:
+            raise MessageRootStateError(message)
+        ids = {message_root.id for message_root in record.message_roots}
+        if len(ids) != len(record.message_roots) or "" in ids:
             message = "durable mount ids must be non-empty and unique"
-            raise MountStateError(message)
-        roots = tuple(mount for mount in record.mounts if mount.parent_id is None)
-        if len(roots) != 1 or record.mounts[0] is not roots[0]:
+            raise MessageRootStateError(message)
+        roots = tuple(message_root for message_root in record.message_roots if message_root.parent_id is None)
+        if len(roots) != 1 or record.message_roots[0] is not roots[0]:
             message = "durable sessions require exactly one root mount in the first position"
-            raise MountStateError(message)
-        if any(mount.parent_id is not None and mount.parent_id not in ids for mount in record.mounts):
+            raise MessageRootStateError(message)
+        if any(
+            message_root.parent_id is not None and message_root.parent_id not in ids
+            for message_root in record.message_roots
+        ):
             message = "durable mount parent does not exist in the same record"
-            raise MountStateError(message)
+            raise MessageRootStateError(message)
         preceding: set[str] = set()
-        for mount in record.mounts:
-            if mount.parent_id is not None and mount.parent_id not in preceding:
+        for message_root in record.message_roots:
+            if message_root.parent_id is not None and message_root.parent_id not in preceding:
                 message = "durable mount parents must precede their children"
-                raise MountStateError(message)
-            preceding.add(mount.id)
-        for mount in record.mounts:
-            seen = {mount.id}
-            parent_id = mount.parent_id
+                raise MessageRootStateError(message)
+            preceding.add(message_root.id)
+        for message_root in record.message_roots:
+            seen = {message_root.id}
+            parent_id = message_root.parent_id
             while parent_id is not None:
                 if parent_id in seen:
                     message = "durable mount graph contains a cycle"
-                    raise MountStateError(message)
+                    raise MessageRootStateError(message)
                 seen.add(parent_id)
-                parent = next(candidate for candidate in record.mounts if candidate.id == parent_id)
+                parent = next(candidate for candidate in record.message_roots if candidate.id == parent_id)
                 parent_id = parent.parent_id
         encode_session_key(record.key)
 
@@ -216,10 +219,10 @@ def encode_session_key(key: SessionKey) -> dict[str, Any]:
         encoded = {"type": SessionScopeKind.CUSTOM, "value": _encode_custom_scope(scope.value)}
     else:
         message = f"unsupported durable session scope {type(scope).__name__}"
-        raise MountStateError(message)
+        raise MessageRootStateError(message)
     if not key.name:
         message = "durable session key names must be non-empty"
-        raise MountStateError(message)
+        raise MessageRootStateError(message)
     return {"name": key.name, "scope": encoded}
 
 
@@ -239,7 +242,7 @@ def decode_session_key(raw: dict[str, Any]) -> SessionKey:
     if kind == SessionScopeKind.CUSTOM:
         return SessionKey.custom(name, _decode_custom_scope(scope.get("value")))
     message = f"unsupported durable session scope type {kind!r}"
-    raise MountStateError(message)
+    raise MessageRootStateError(message)
 
 
 def encode_session_scope(key: SessionKey) -> str:
@@ -256,7 +259,7 @@ def _encode_custom_scope(value: Any) -> Any:
     if isinstance(value, tuple):
         return [_encode_custom_scope(item) for item in value]
     message = "durable custom scopes support only JSON scalars and nested tuples"
-    raise MountStateError(message)
+    raise MessageRootStateError(message)
 
 
 def _decode_custom_scope(value: Any) -> Any:
@@ -267,13 +270,13 @@ def _decode_custom_scope(value: Any) -> Any:
     if isinstance(value, list):
         return tuple(_decode_custom_scope(item) for item in value)
     message = "durable custom scope value is malformed"
-    raise MountStateError(message)
+    raise MessageRootStateError(message)
 
 
 def _object(value: object, description: str) -> dict[str, Any]:
     if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
         message = f"{description} must be an object with string keys"
-        raise MountStateError(message)
+        raise MessageRootStateError(message)
     return value
 
 
@@ -281,7 +284,7 @@ def _string(raw: dict[str, Any], key: str) -> str:
     value = raw.get(key)
     if not isinstance(value, str):
         message = f"{key} must be a string"
-        raise MountStateError(message)
+        raise MessageRootStateError(message)
     return value
 
 
@@ -290,7 +293,7 @@ def _member_ids(value: object) -> frozenset[int]:
         isinstance(item, int) and not isinstance(item, bool) and item > 0 for item in value
     ):
         message = "durable session members must be an array of positive integers"
-        raise MountStateError(message)
+        raise MessageRootStateError(message)
     return frozenset(value)
 
 
@@ -299,7 +302,7 @@ def _capacity(value: object) -> int | None:
         return None
     if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
         message = "durable session capacity must be a positive integer or null"
-        raise MountStateError(message)
+        raise MessageRootStateError(message)
     return value
 
 
@@ -308,7 +311,7 @@ def _domain(value: object) -> str | None:
         return None
     if not isinstance(value, str) or not value:
         message = "durable session domain must be a non-empty string or null"
-        raise MountStateError(message)
+        raise MessageRootStateError(message)
     return value
 
 
@@ -316,7 +319,7 @@ def _integer(raw: dict[str, Any], key: str) -> int:
     value = raw.get(key)
     if not isinstance(value, int) or isinstance(value, bool):
         message = f"{key} must be an integer"
-        raise MountStateError(message)
+        raise MessageRootStateError(message)
     return value
 
 
@@ -324,5 +327,5 @@ def _number(raw: dict[str, Any], key: str) -> float:
     value = raw.get(key)
     if not isinstance(value, int | float) or isinstance(value, bool) or not math.isfinite(value):
         message = f"{key} must be a number"
-        raise MountStateError(message)
+        raise MessageRootStateError(message)
     return float(value)

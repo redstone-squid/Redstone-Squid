@@ -9,9 +9,9 @@ from typing import Any
 
 import discord
 
-import squid_ui_discord
 import squid_ui as sl
-from squid_ui_discord import Everyone, Mount
+import squid_ui_discord
+from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord.testing import delivered_to, fake_message
 
 TOPIC = sl.runtime.Topic("build", "1")
@@ -166,8 +166,8 @@ async def test_a_chain_settles_in_one_send_and_draws_once() -> None:
 
         return DeliveryResult(message, handle_for(message))
 
-    mount = Mount(panel, access=Everyone(), timeout=None)
-    await mount.send(destination)
+    message_root = MessageRoot(panel, access=Everyone(), timeout=None)
+    await message_root.send(destination)
 
     assert texts(sent[-1]) == "card(v1)"
     assert len(sent) == 1
@@ -178,17 +178,17 @@ async def test_a_chain_settles_in_one_send_and_draws_once() -> None:
 
 async def test_a_publish_redraws_the_whole_chain_without_a_torn_paint() -> None:
     bus = sl.runtime.LocalTopicBus()
-    scheduler = squid_ui_discord.MountScheduler(bus)
+    scheduler = squid_ui_discord.MessageRootScheduler(bus)
     panel = Chain()
     message: Any = fake_message()
-    mount = Mount(panel, access=Everyone(), scheduler=scheduler, timeout=None)
-    await mount.send(delivered_to(message))
+    message_root = MessageRoot(panel, access=Everyone(), scheduler=scheduler, timeout=None)
+    await message_root.send(delivered_to(message))
 
-    assert mount.followed == (TOPIC,), "a render reading only `node` still follows what `build` watched"
+    assert message_root.followed == (TOPIC,), "a render reading only `node` still follows what `build` watched"
 
     panel.source = "v2"
     bus.publish(TOPIC)
-    await mount.refresh()
+    await message_root.refresh()
 
     drawn = [texts(call.kwargs["view"]) for call in message.edit.await_args_list]
     assert drawn[-1] == "card(v2)"
@@ -213,11 +213,11 @@ async def test_two_independent_resources_still_settle_together() -> None:
             ready = isinstance(left, sl.resources.Ready) and isinstance(right, sl.resources.Ready)
             return sl.paragraph(f"{left.value}{right.value}" if ready else "loading")
 
-    mount = Mount(Pair(), access=Everyone(), timeout=None)
+    message_root = MessageRoot(Pair(), access=Everyone(), timeout=None)
     message: Any = fake_message()
-    await mount.send(delivered_to(message))
+    await message_root.send(delivered_to(message))
 
-    assert mount.snapshot().suppressed >= 0  # the send completed
+    assert message_root.snapshot().suppressed >= 0  # the send completed
 
 
 # --- Cycles ---------------------------------------------------------------------------

@@ -4,18 +4,6 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from typing import TypedDict, Unpack
 
-from squid_ui_discord.access import AccessPolicy
-from squid_ui_discord.mount import (
-    DEFAULT_EXPIRY,
-    ChallengePresenter,
-    ErrorHook,
-    ExpiryPolicy,
-    Mount,
-    Scheduler,
-    _monotonic,
-)
-from squid_ui_discord.render_cache import RenderProgramCache
-from squid_ui_discord.target import DISCORD_V2_DPY27, Target
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.interactions import ActionMiddleware
 from squid_ui.palette import DEFAULT_PALETTE, Palette
@@ -23,10 +11,22 @@ from squid_ui.planning.navigation import NavFactory
 from squid_ui.profiling import Profiler
 from squid_ui.runtime.component import Component
 from squid_ui.text import NEUTRAL, Localization
+from squid_ui_discord.access import AccessPolicy
+from squid_ui_discord.message_root import (
+    DEFAULT_EXPIRY,
+    ChallengePresenter,
+    ErrorHook,
+    ExpiryPolicy,
+    MessageRoot,
+    Scheduler,
+    _monotonic,
+)
+from squid_ui_discord.render_cache import RenderProgramCache
+from squid_ui_discord.target import DISCORD_V2_DPY27, Target
 
 
-class MountOptions(TypedDict, total=False):
-    """Per-mount overrides accepted by :meth:`MountDefaults.mount`."""
+class MessageRootOptions(TypedDict, total=False):
+    """Per-mount overrides accepted by :meth:`MessageRootDefaults.mount`."""
 
     target: Target
     chrome: Chrome
@@ -48,7 +48,7 @@ class MountOptions(TypedDict, total=False):
 
 
 @dataclass(frozen=True, slots=True)
-class MountDefaults:
+class MessageRootDefaults:
     """Host-wide values used to construct mounts.
 
     Access remains deliberately absent: it identifies the actor allowed to use a specific
@@ -78,11 +78,11 @@ class MountDefaults:
         component: Component,
         *,
         access: AccessPolicy,
-        **overrides: Unpack[MountOptions],
-    ) -> Mount:
+        **overrides: Unpack[MessageRootOptions],
+    ) -> MessageRoot:
         """Construct a mount, applying per-call overrides over these defaults."""
         configured = self.replace(**overrides)
-        return Mount(
+        return MessageRoot(
             component,
             access=access,
             target=configured.target,
@@ -104,6 +104,6 @@ class MountDefaults:
             clock=configured.clock,
         )
 
-    def replace(self, **changes: Unpack[MountOptions]) -> MountDefaults:
+    def replace(self, **changes: Unpack[MessageRootOptions]) -> MessageRootDefaults:
         """Return a copy with selected host defaults replaced."""
         return replace(self, **changes)

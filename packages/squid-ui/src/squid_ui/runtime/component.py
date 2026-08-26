@@ -7,7 +7,7 @@ directly.
 
 Components compose through explicit keyed Boundary nodes, so two instances of the same
 child class can appear in one message without their controls or pagers cross-wiring. Only the
-root component is attached to a Mount; children reach it through their parent.
+root component is attached to a MessageRoot; children reach it through their parent.
 """
 
 from collections.abc import Callable, Sequence

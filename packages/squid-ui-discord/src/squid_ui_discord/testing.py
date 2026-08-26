@@ -2,7 +2,7 @@
 
 Two halves. `fake_interaction`, `fake_message`, `delivered_to` and `commit_render` stand in
 for the Discord boundary, so a test can send a mount to nowhere and then drive it through
-`Mount.dispatch` — the same funnel a real press takes. `payload_problems`, `modal_problems`
+`MessageRoot.dispatch` — the same funnel a real press takes. `payload_problems`, `modal_problems`
 and `assert_within_limits` check the other end: they walk the serialized wire payload, not the
 Python objects, so they verify exactly what Discord will see, including any chrome discord.py
 adds during serialization.
@@ -22,12 +22,12 @@ from unittest.mock import AsyncMock
 
 import discord
 
-from squid_ui_discord.delivery import DeliveryResult, Destination, EditHandle, handle_for
-from squid_ui_discord.mount import AnyMountedView, ClassicMountedView, Mount, MountedView
-from squid_ui_discord.presentation import DiscordPresentation
 from squid_ui import scene
 from squid_ui.planning.limits import COMPONENT_LIMITS, LIMITS, ComponentLimits, DiscordLimits, V2Limits
 from squid_ui.planning.target import Target
+from squid_ui_discord.delivery import DeliveryResult, Destination, EditHandle, handle_for
+from squid_ui_discord.message_root import AnyMountedView, ClassicMountedView, MessageRoot, MountedView
+from squid_ui_discord.presentation import DiscordPresentation
 
 type ComponentPayload = dict[str, Any]
 
@@ -229,10 +229,10 @@ def delivered_to(message: Any, *, handle: EditHandle | None = None) -> Destinati
     return send
 
 
-def commit_render(mount: Mount, *, disabled: bool = False) -> MountedView:
-    """Stage a render and commit it with no Discord delivery — `Mount.send` to nowhere.
+def commit_render(message_root: MessageRoot, *, disabled: bool = False) -> MountedView:
+    """Stage a render and commit it with no Discord delivery — `MessageRoot.send` to nowhere.
 
-    `Mount._stage_view` only stages; handlers and the live generation move when a delivery
+    `MessageRoot._stage_view` only stages; handlers and the live generation move when a delivery
     lands. Tests that never touch Discord say where that point is with this, rather than
     driving a destination that would only ever hand back `None`.
 
@@ -241,27 +241,27 @@ def commit_render(mount: Mount, *, disabled: bool = False) -> MountedView:
     `on_load` -- a test that wants a loaded render wants the real seam,
     `await mount.send(delivered_to(fake_message()))`.
     """
-    view = _commit(mount, disabled=disabled)
+    view = _commit(message_root, disabled=disabled)
     assert isinstance(view, MountedView), "this mount draws a classic message; use commit_classic_render"
     return view
 
 
-def commit_classic_render(mount: Mount, *, disabled: bool = False) -> ClassicMountedView:
+def commit_classic_render(message_root: MessageRoot, *, disabled: bool = False) -> ClassicMountedView:
     """`commit_render` for a mount whose target draws a classic message.
 
     A separate function rather than a widened return type: a test knows which kind of mount
     it built, and every V2 caller would otherwise have to narrow a union it can never see.
     """
-    view = _commit(mount, disabled=disabled)
+    view = _commit(message_root, disabled=disabled)
     assert isinstance(view, ClassicMountedView), "this mount draws a Components V2 message; use commit_render"
     return view
 
 
-def _commit(mount: Mount, *, disabled: bool) -> AnyMountedView:
-    view = mount._stage_view(disabled=disabled)
-    candidate = mount._pending
+def _commit(message_root: MessageRoot, *, disabled: bool) -> AnyMountedView:
+    view = message_root._stage_view(disabled=disabled)
+    candidate = message_root._pending
     assert candidate is not None and candidate.view is view
-    mount._commit(candidate)
+    message_root._commit(candidate)
     return view
 
 

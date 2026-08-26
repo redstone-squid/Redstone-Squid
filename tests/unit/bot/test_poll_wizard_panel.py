@@ -23,14 +23,14 @@ def make_wizard() -> PollConfirmationComponent:
 async def open_wizard(
     wizard: PollConfirmationComponent,
     *,
-    scheduler: sd.MountScheduler | None = None,
+    scheduler: sd.MessageRootScheduler | None = None,
     message: discord.Message | None = None,
-) -> sd.Mount:
+) -> sd.MessageRoot:
     bot = make_layout_bot()
     opened = await POLL_SCREEN.open(
         wizard,
         delivered_to(message or fake_message()),
-        sessions=bot.mounts,
+        sessions=bot.message_roots,
         opener=sd.Opener(OWNER_ID, 7),
         scheduler=scheduler,
         expiry=sd.RenewEphemeral() if scheduler is not None else sd.PauseUpdates(),
@@ -40,12 +40,12 @@ async def open_wizard(
 
 
 async def test_scheduler_backed_wizard_renews_its_private_session() -> None:
-    scheduler = sd.MountScheduler()
+    scheduler = sd.MessageRootScheduler()
 
-    mount = await open_wizard(make_wizard(), scheduler=scheduler)
+    message_root = await open_wizard(make_wizard(), scheduler=scheduler)
 
-    assert mount.scheduler is scheduler
-    assert isinstance(mount.expiry, sd.RenewEphemeral)
+    assert message_root.scheduler is scheduler
+    assert isinstance(message_root.expiry, sd.RenewEphemeral)
 
 
 async def test_cancelling_disables_the_wizard_and_leaves_the_notice_alone() -> None:
@@ -55,10 +55,10 @@ async def test_cancelling_disables_the_wizard_and_leaves_the_notice_alone() -> N
     wizard and left the real wizard clickable. The mount falls back to the message instead.
     """
     message = fake_message()
-    mount = await open_wizard(make_wizard(), message=message)
+    message_root = await open_wizard(make_wizard(), message=message)
 
     interaction = fake_interaction(user_id=OWNER_ID)
-    await mount.dispatch("cancel", interaction)
+    await message_root.dispatch("cancel", interaction)
 
     interaction.response.send_message.assert_awaited_once()
     interaction.edit_original_response.assert_not_awaited()
@@ -67,12 +67,12 @@ async def test_cancelling_disables_the_wizard_and_leaves_the_notice_alone() -> N
     assert all(getattr(item, "disabled", True) for item in disabled.walk_children())
 
 
-async def test_custom_duration_submission_returns_through_the_mount_funnel() -> None:
+async def test_custom_duration_submission_returns_through_the_message_root_funnel() -> None:
     wizard = make_wizard()
-    mount = await open_wizard(wizard)
+    message_root = await open_wizard(wizard)
     opening = fake_interaction(user_id=OWNER_ID)
 
-    await mount.dispatch("duration", opening, ["custom"])
+    await message_root.dispatch("duration", opening, ["custom"])
 
     modal = opening.response.send_modal.await_args.args[0]
     label = modal.children[0]
@@ -84,4 +84,4 @@ async def test_custom_duration_submission_returns_through_the_mount_funnel() -> 
     await modal.on_submit(fake_interaction(user_id=OWNER_ID))
 
     assert wizard.draft.duration_seconds == 12 * 3600
-    assert mount.generation == 2
+    assert message_root.generation == 2

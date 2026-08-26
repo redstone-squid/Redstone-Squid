@@ -64,16 +64,16 @@ async def test_cooldown_admits_once_per_window_and_reports_the_wait() -> None:
     assert (await _decision(guard, _event(), ledger)).allowed
 
 
-async def test_cooldown_counts_per_actor_unless_scoped_to_the_mount() -> None:
+async def test_cooldown_counts_per_actor_unless_scoped_to_the_root() -> None:
     clock = _Clock()
     ledger = _ledger(clock)
     per_actor = guards.cooldown(30)
     assert (await _decision(per_actor, _event("1"), ledger)).allowed
     assert (await _decision(per_actor, _event("2"), ledger)).allowed
 
-    mount_wide = guards.cooldown(30, per=GuardScope.MOUNT, key="shared")
-    assert (await _decision(mount_wide, _event("1"), ledger)).allowed
-    assert not (await _decision(mount_wide, _event("2"), ledger)).allowed
+    message_root_wide = guards.cooldown(30, per=GuardScope.MOUNT, key="shared")
+    assert (await _decision(message_root_wide, _event("1"), ledger)).allowed
+    assert not (await _decision(message_root_wide, _event("2"), ledger)).allowed
 
 
 async def test_a_shared_key_puts_two_actions_in_one_bucket() -> None:
@@ -89,7 +89,7 @@ async def test_a_shared_key_puts_two_actions_in_one_bucket() -> None:
     assert (await _decision(unshared, _event(), store.for_action("down"))).allowed
 
 
-async def test_once_is_spent_per_actor_and_survives_the_whole_mount() -> None:
+async def test_once_is_spent_per_actor_and_survives_the_whole_root() -> None:
     clock = _Clock()
     ledger = _ledger(clock)
     guard = guards.once()
@@ -182,7 +182,7 @@ async def test_all_of_reports_the_first_denial_and_any_of_the_last() -> None:
     assert (await _decision(guards.any_of(no_first, no_second), _event(), ledger)).reason == "second"
 
 
-async def test_a_ledger_view_shares_entries_with_the_mount_wide_store() -> None:
+async def test_a_ledger_view_shares_entries_with_the_message_root_wide_store() -> None:
     clock = _Clock()
     store = GuardLedger(now=clock)
     guard = guards.once()

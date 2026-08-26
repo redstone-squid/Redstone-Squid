@@ -8,7 +8,7 @@ from discord.ext.commands import Context
 import squid_ui_discord as sd
 from squid.bot.diagnostics_view import SESSION_SECONDS, ErrorReportBrowser
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.ui import Private, create_mount, destination, info_layout
+from squid.bot.ui import Private, create_message_root, destination, info_layout
 from squid.bot.utils.permissions import hide_unless, requires
 from squid.bot.utils.visibility import deliver_privately
 from squid.core.i18n import _
@@ -70,13 +70,13 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         browser: ErrorReportBrowser,
         locale: str | None,
     ) -> None:
-        """Mount the browser and answer where only the caller can read it.
+        """MessageRoot the browser and answer where only the caller can read it.
 
         A report carries a traceback naming internal paths and the unredacted message every
         other surface withholds, which is the payload class `deliver_privately` exists for:
         ephemeral on the slash side, direct messages on the prefix side, never the channel.
         """
-        mount = create_mount(
+        message_root = create_message_root(
             browser,
             source=ctx,
             access=sd.Owner(ctx.author.id),
@@ -86,7 +86,7 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         )
         # A closed DM raises DeliveryAbandoned, which discards the render: there is nothing to
         # bind and, deliberately, no channel fallback.
-        await mount.send(
+        await message_root.send(
             destination(
                 ctx,
                 visibility=Private(

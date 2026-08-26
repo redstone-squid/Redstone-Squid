@@ -26,10 +26,10 @@ def test_renamed_submodules_are_modules_not_shadowed_callables(dotted: str) -> N
 
 def test_the_adapter_namespace_exposes_its_surface() -> None:
     """What `squid_ui_discord` promotes to its root, and what it deliberately does not."""
-    assert squid_ui_discord.Mount
+    assert squid_ui_discord.MessageRoot
     assert squid_ui_discord.button_grid
     assert squid_ui_discord.modals.CheckboxGroupField
-    assert squid_ui_discord.MountDefaults
+    assert squid_ui_discord.MessageRootDefaults
     assert squid_ui_discord.SessionRegistry
     assert squid_ui_discord.routing.routers
     assert squid_ui_discord.renderer.V2Renderer
@@ -54,7 +54,7 @@ def test_the_adapter_namespace_exposes_its_surface() -> None:
     assert squid_ui_discord.durability.DurableBot
     assert squid_ui_discord.durability.DiscordFrontend
     assert not hasattr(squid_ui_discord.durability, "MountManager")
-    assert squid_ui_discord.MountScheduler.follow
+    assert squid_ui_discord.MessageRootScheduler.follow
     for removed in ("SessionPolicy", "Router", "V2Renderer", "ClassicRenderer", "AuditReport"):
         assert removed not in squid_ui_discord.__all__ and not hasattr(squid_ui_discord, removed)
 
@@ -69,7 +69,7 @@ def test_testing_helpers_are_a_declared_namespace_not_an_accident() -> None:
         squid_ui_discord.testing.__all__
     )
     assert [name for name in squid_ui_discord.testing.__all__ if not hasattr(squid_ui_discord.testing, name)] == []
-    # The doubles stay one tier down; nothing here belongs beside Mount and Screen.
+    # The doubles stay one tier down; nothing here belongs beside MessageRoot and Screen.
     for name in squid_ui_discord.testing.__all__:
         assert name not in squid_ui_discord.__all__
 
@@ -113,7 +113,7 @@ class BlockStores(importlib.abc.MetaPathFinder):
 
 sys.meta_path.insert(0, BlockStores())
 import squid_ui_discord
-assert squid_ui_discord.Mount
+assert squid_ui_discord.MessageRoot
 assert squid_ui_discord.ScreenSpec
 assert "durability" in squid_ui_discord.__all__
 assert "squid_storage" not in sys.modules

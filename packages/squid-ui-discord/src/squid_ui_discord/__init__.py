@@ -6,6 +6,17 @@
 # they are two distinct source modules that would otherwise collide on one attribute).
 from importlib import import_module
 
+# `target.v2()` and `target.classic()` are deliberately not promoted here: `classic` at this
+# level already names the classic-composition submodule, and one name may not mean two things.
+from squid_ui.errors import (
+    ExistingLayoutError,
+    LimitViolationError,
+)
+from squid_ui.planning import limits as limits
+from squid_ui.planning import navigation as navigation_controls
+from squid_ui.planning.limits import LIMITS as V2_LIMITS
+from squid_ui.planning.planner import EMPTY_RESERVATION
+from squid_ui.planning.target import ResourceCost
 from squid_ui_discord import (
     access,
     actions,
@@ -23,7 +34,7 @@ from squid_ui_discord import (
     host,
     inspection,
     live,
-    mount,
+    message_root,
     navigation,
     presentation,
     renderer,
@@ -60,10 +71,6 @@ from squid_ui_discord.composition import (
     render_static,
 )
 from squid_ui_discord.conformance import conform
-from squid_ui_discord.defaults import (
-    MountDefaults,
-    MountOptions,
-)
 from squid_ui_discord.delivery import (
     Destination,
     deliver_to,
@@ -79,25 +86,33 @@ from squid_ui_discord.host import (
     LayoutHostMissing,
     install,
 )
-from squid_ui_discord.live import mounts
+from squid_ui_discord.live import message_roots
 from squid_ui_discord.managed import (
     ErrorObserver,
     ErrorRenderer,
     ManagedDelivery,
     ManagedError,
-    MountFactory,
+    MessageRootFactory,
     SuccessRenderer,
     Work,
     run_managed_result,
 )
-from squid_ui_discord.mount import (
+from squid_ui_discord.message_root import (
     ChallengePresenter,
     ChallengeRequest,
     ChallengeSupervisor,
-    Mount,
+    MessageRoot,
     PauseUpdates,
     RenewEphemeral,
-    owned_mount,
+    current_message_root,
+)
+from squid_ui_discord.message_root_options import (
+    MessageRootDefaults,
+    MessageRootOptions,
+)
+from squid_ui_discord.message_root_scheduler import (
+    MessageRootScheduler,
+    MessageRootSchedulerSnapshot,
 )
 from squid_ui_discord.navigation import Navigator
 from squid_ui_discord.presentation import (
@@ -124,10 +139,6 @@ from squid_ui_discord.roles import (
     RolesUpdated,
     RoleTransitionResult,
 )
-from squid_ui_discord.scheduler import (
-    MountScheduler,
-    MountSchedulerSnapshot,
-)
 from squid_ui_discord.screens import Opener, Scope, ScreenOptionsResolver, ScreenSpec
 from squid_ui_discord.sessions import (
     SessionKey,
@@ -137,18 +148,6 @@ from squid_ui_discord.target import (
     DISCORD_V1_DPY27,
     DISCORD_V2_DPY27,
 )
-
-# `target.v2()` and `target.classic()` are deliberately not promoted here: `classic` at this
-# level already names the classic-composition submodule, and one name may not mean two things.
-from squid_ui.errors import (
-    ExistingLayoutError,
-    LimitViolationError,
-)
-from squid_ui.planning import limits as limits
-from squid_ui.planning import navigation as navigation_controls
-from squid_ui.planning.limits import LIMITS as V2_LIMITS
-from squid_ui.planning.planner import EMPTY_RESERVATION
-from squid_ui.planning.target import ResourceCost
 
 _LAZY_NAMESPACES = frozenset({"durability"})
 """Namespaces imported on first use rather than by the bundle above.
@@ -206,12 +205,12 @@ __all__ = [
     "LimitViolationError",
     "ManagedDelivery",
     "ManagedError",
-    "Mount",
-    "MountDefaults",
-    "MountFactory",
-    "MountOptions",
-    "MountScheduler",
-    "MountSchedulerSnapshot",
+    "MessageRoot",
+    "MessageRootDefaults",
+    "MessageRootFactory",
+    "MessageRootOptions",
+    "MessageRootScheduler",
+    "MessageRootSchedulerSnapshot",
     "Navigator",
     "Opener",
     "Owner",
@@ -229,9 +228,9 @@ __all__ = [
     "RoleTransitionResult",
     "RolesUnchanged",
     "RolesUpdated",
+    "Scope",
     "ScreenOptionsResolver",
     "ScreenSpec",
-    "Scope",
     "SessionKey",
     "SessionRegistry",
     "SuccessRenderer",
@@ -249,6 +248,7 @@ __all__ = [
     "conform",
     "conformance",
     "contribute",
+    "current_message_root",
     "deliver_to",
     "delivery",
     "devtools",
@@ -263,14 +263,13 @@ __all__ = [
     "install",
     "limits",
     "live",
+    "message_root",
+    "message_roots",
     "modals",
     "mode_of",
-    "mount",
-    "mounts",
     "native",
     "navigation",
     "navigation_controls",
-    "owned_mount",
     "presentation",
     "render_item",
     "render_static",

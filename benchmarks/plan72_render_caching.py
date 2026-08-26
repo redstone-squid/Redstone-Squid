@@ -10,10 +10,10 @@ import json
 import time
 from dataclasses import asdict, dataclass
 
-from squid_ui_discord import Everyone, Mount
-from squid_ui_discord.testing import commit_render
 from squid_ui import Component, computed, state
 from squid_ui.primitives import Text
+from squid_ui_discord import Everyone, MessageRoot
+from squid_ui_discord.testing import commit_render
 
 
 class _Leaf(Component):
@@ -66,15 +66,15 @@ def measure_case(
     """Measure one component count with fresh cold owners and one warmed owner."""
     cold: list[int] = []
     for _ in range(cold_samples):
-        mount = Mount(_Root(components), access=Everyone(), timeout=None)
+        message_root = MessageRoot(_Root(components), access=Everyone(), timeout=None)
         started = time.perf_counter_ns()
-        commit_render(mount)
+        commit_render(message_root)
         cold.append(time.perf_counter_ns() - started)
-        mount._teardown()
+        message_root._teardown()
 
     root = _Root(components)
-    mount = Mount(root, access=Everyone(), timeout=None)
-    commit_render(mount)
+    message_root = MessageRoot(root, access=Everyone(), timeout=None)
+    commit_render(message_root)
     unchanged: list[int] = []
     gc_enabled = gc.isenabled()
     gc.disable()
@@ -82,15 +82,15 @@ def measure_case(
         for index in range(unchanged_samples):
             root.leaves[0].source = (index + 1) * 2
             started = time.perf_counter_ns()
-            tree = mount.runtime.render(reuse_committed=True)
-            candidate = mount._preflight(tree)
-            assert mount._same_as_live(candidate)
-            mount._suppress(candidate, None)
+            tree = message_root.runtime.render(reuse_committed=True)
+            candidate = message_root._preflight(tree)
+            assert message_root._same_as_live(candidate)
+            message_root._suppress(candidate, None)
             unchanged.append(time.perf_counter_ns() - started)
     finally:
         if gc_enabled:
             gc.enable()
-        mount._teardown()
+        message_root._teardown()
 
     cold_p95 = _p95(cold)
     unchanged_p95 = _p95(unchanged)

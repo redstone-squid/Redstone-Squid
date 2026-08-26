@@ -7,7 +7,7 @@ import discord
 
 import squid_ui as sl
 import squid_ui_widgets as sp
-from squid_ui_discord import Everyone, Mount
+from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord.testing import commit_render, fake_interaction
 
 
@@ -41,9 +41,9 @@ def _lookup(
     )
 
 
-async def _search(mount: Mount, lookup: sp.SearchPicker[Entry], query: str) -> None:
+async def _search(message_root: MessageRoot, lookup: sp.SearchPicker[Entry], query: str) -> None:
     spec = sl.forms.FormSpec("Search", (sl.forms.TextField(key="query", label="Search"),))
-    await mount.dispatch_submit(
+    await message_root.dispatch_submit(
         "lookup.search",
         fake_interaction(),
         spec,
@@ -55,18 +55,18 @@ async def _search(mount: Mount, lookup: sp.SearchPicker[Entry], query: str) -> N
 async def test_lookup_searches_picks_resolved_items_and_removes_them() -> None:
     commits: list[tuple[Entry, ...]] = []
     lookup = _lookup((Entry("a", "Alpha"), Entry("b", "Beta")), commits)
-    mount = Mount(lookup, access=Everyone(), timeout=None)
+    message_root = MessageRoot(lookup, access=Everyone(), timeout=None)
 
-    await _search(mount, lookup, "a")
+    await _search(message_root, lookup, "a")
 
     assert isinstance(lookup.results.status, sl.resources.Ready)
-    commit_render(mount)
-    await mount.dispatch("lookup.results.a", fake_interaction())
+    commit_render(message_root)
+    await message_root.dispatch("lookup.results.a", fake_interaction())
     assert lookup.picked == (Entry("a", "Alpha"),)
     assert commits == [(Entry("a", "Alpha"),)]
 
-    commit_render(mount)
-    await mount.dispatch("lookup.remove.a", fake_interaction())
+    commit_render(message_root)
+    await message_root.dispatch("lookup.remove.a", fake_interaction())
     assert lookup.picked == ()
     assert commits[-1] == ()
 
@@ -75,15 +75,15 @@ async def test_single_lookup_replaces_and_minimum_gates_removal() -> None:
     commits: list[tuple[Entry, ...]] = []
     first = Entry("a", "Alpha")
     lookup = _lookup((first, Entry("b", "Beta")), commits, picked=(first,), minimum=1, maximum=1)
-    mount = Mount(lookup, access=Everyone(), timeout=None)
+    message_root = MessageRoot(lookup, access=Everyone(), timeout=None)
 
-    await _search(mount, lookup, "Beta")
-    commit_render(mount)
-    await mount.dispatch("lookup.results", fake_interaction(), ["b"])
+    await _search(message_root, lookup, "Beta")
+    commit_render(message_root)
+    await message_root.dispatch("lookup.results", fake_interaction(), ["b"])
 
     assert lookup.picked == (Entry("b", "Beta"),)
     assert commits == [(Entry("b", "Beta"),)]
-    rendered = commit_render(mount)
+    rendered = commit_render(message_root)
     remove = next(
         child for child in rendered.walk_children() if isinstance(child, discord.ui.Button) and child.label == "Remove"
     )
@@ -93,18 +93,18 @@ async def test_single_lookup_replaces_and_minimum_gates_removal() -> None:
 async def test_lookup_pages_with_the_query_source_and_renders_no_results() -> None:
     commits: list[tuple[Entry, ...]] = []
     lookup = _lookup((Entry("a", "Alpha"), Entry("b", "Beta"), Entry("c", "Gamma")), commits)
-    mount = Mount(lookup, access=Everyone(), timeout=None)
+    message_root = MessageRoot(lookup, access=Everyone(), timeout=None)
 
-    await _search(mount, lookup, "")
+    await _search(message_root, lookup, "")
     assert lookup.query is None
 
-    await _search(mount, lookup, "a")
-    commit_render(mount)
-    await mount.dispatch("lookup.next", fake_interaction())
+    await _search(message_root, lookup, "a")
+    commit_render(message_root)
+    await message_root.dispatch("lookup.next", fake_interaction())
     assert isinstance(lookup.results.status, sl.resources.Ready)
     assert lookup.results.value.loaded.window.items == (Entry("c", "Gamma"),)
 
-    await _search(mount, lookup, "missing")
+    await _search(message_root, lookup, "missing")
     assert "No results" in str(lookup.render())
 
 

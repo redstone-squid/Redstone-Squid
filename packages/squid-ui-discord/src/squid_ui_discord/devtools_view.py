@@ -2,7 +2,7 @@
 
 squid-ui has excellent *planning* diagnostics — reports, fingerprints, plan metrics —
 and every one of them describes a render that already happened. Nothing answered "show me
-the UI sessions this process is holding right now". `squid_ui_discord.mounts()` is that list, and
+the UI sessions this process is holding right now". `squid_ui_discord.message_roots()` is that list, and
 this component is the reading of it.
 
 Deliberately untranslated, unlike the rest of `squid.bot`: it is owner-only, and most of what
@@ -36,10 +36,10 @@ _SELECT_LIMIT = 25
 """Discord's option cap. The list itself pages; the picker offers the newest of them."""
 
 
-class MountInspector(sl.Component):
+class MessageRootInspector(sl.Component):
     """The live mounts, and one of them opened.
 
-    Reads `squid_ui_discord.mounts()` on every render rather than holding a list, so a panel left
+    Reads `squid_ui_discord.message_roots()` on every render rather than holding a list, so a panel left
     open keeps telling the truth: sessions that finished while it was open are simply gone
     from the next render.
     """
@@ -62,19 +62,21 @@ class MountInspector(sl.Component):
         # reactive. Observe them even when an empty registry makes their usual branches
         # unreachable, otherwise a cached empty list cannot be refreshed.
         _ = self.revision, self.own_id
-        mounts = squid_ui_discord.mounts()
+        message_roots = squid_ui_discord.message_roots()
         if self.focus is not None:
             target = squid_ui_discord.live.find(self.focus)
             if target is not None:
                 return self._detail(target.snapshot(), target)
-        return self._list(mounts)
+        return self._list(message_roots)
 
     # --- List ---------------------------------------------------------------------------
 
-    def _list(self, mounts: Sequence[squid_ui_discord.Mount]) -> Sequence[sl.LayoutNode]:
+    def _list(self, message_roots: Sequence[squid_ui_discord.MessageRoot]) -> Sequence[sl.LayoutNode]:
         # Newest first: the session someone is asking about is almost always the one they
         # just opened.
-        snapshots = sorted((mount.snapshot() for mount in mounts), key=lambda snapshot: snapshot.age)
+        snapshots = sorted(
+            (message_root.snapshot() for message_root in message_roots), key=lambda snapshot: snapshot.age
+        )
         missing = self.focus is not None
         body: sl.LayoutNode
         if snapshots:
@@ -84,7 +86,7 @@ class MountInspector(sl.Component):
 
         nodes: list[sl.LayoutNode] = [sl.section(sl.heading(f"Live mounts — {len(snapshots)}"), body)]
         if missing:
-            nodes.insert(0, sl.status(f"Mount `{self.focus}` is no longer live.", tone=sl.Tone.WARNING))
+            nodes.insert(0, sl.status(f"MessageRoot `{self.focus}` is no longer live.", tone=sl.Tone.WARNING))
         if snapshots:
             nodes.append(
                 sl.choices(
@@ -103,7 +105,7 @@ class MountInspector(sl.Component):
         nodes.append(self._controls(back=False))
         return nodes
 
-    def _row(self, snapshot: squid_ui_discord.mount.MountSnapshot) -> str:
+    def _row(self, snapshot: squid_ui_discord.message_root.MessageRootSnapshot) -> str:
         mine = " *(this panel)*" if snapshot.id == self.own_id else ""
         key = self._session_key(snapshot.id)
         session = "" if key is None else f" · session `{key!r}`"
@@ -114,14 +116,14 @@ class MountInspector(sl.Component):
             f" · idle {_duration(snapshot.idle)} · {_expiry(snapshot)}{session}{location}"
         )
 
-    def _session_key(self, mount_id: str) -> Hashable | None:
+    def _session_key(self, message_root_id: str) -> Hashable | None:
         if self._registry is None:
             return None
         return next(
             (
                 session.key
                 for session in self._registry.active()
-                if any(mount.id == mount_id for mount in session.mounts)
+                if any(message_root.id == message_root_id for message_root in session.message_roots)
             ),
             None,
         )
@@ -129,7 +131,7 @@ class MountInspector(sl.Component):
     # --- Detail -------------------------------------------------------------------------
 
     def _detail(
-        self, snapshot: squid_ui_discord.mount.MountSnapshot, mount: squid_ui_discord.Mount
+        self, snapshot: squid_ui_discord.message_root.MessageRootSnapshot, message_root: squid_ui_discord.MessageRoot
     ) -> Sequence[sl.LayoutNode]:
         children: list[sl.LayoutNode] = [sl.bullets(*_summary(snapshot), key="summary")]
         if snapshot.handler_keys:
@@ -145,29 +147,29 @@ class MountInspector(sl.Component):
             sl.section(
                 sl.heading("Component state"),
                 sl.note("persisted fields only"),
-                sl.code(_dump(_exported_state(mount))),
+                sl.code(_dump(_exported_state(message_root))),
             )
         )
         children.append(
             sl.section(
                 sl.heading("Reactivity"),
                 sl.note("cell versions and what each computed last read"),
-                sl.code(_dump_lines(_reactivity(mount))),
+                sl.code(_dump_lines(_reactivity(message_root))),
             )
         )
         children.append(
             sl.section(
                 sl.heading("Presentation"),
                 sl.note("cursors, selections, disclosures, strategies"),
-                sl.code(_dump(_presentation(mount.presentation))),
+                sl.code(_dump(_presentation(message_root.presentation))),
             )
         )
         return [
-            sl.section(sl.heading(f"Mount {snapshot.id}"), *children),
+            sl.section(sl.heading(f"MessageRoot {snapshot.id}"), *children),
             self._controls(back=True),
         ]
 
-    def _plan_section(self, snapshot: squid_ui_discord.mount.MountSnapshot) -> Iterable[sl.LayoutNode]:
+    def _plan_section(self, snapshot: squid_ui_discord.message_root.MessageRootSnapshot) -> Iterable[sl.LayoutNode]:
         if snapshot.report is None or snapshot.metrics is None:
             yield sl.section(sl.heading("Plan"), sl.note("nothing has been committed yet"))
             return
@@ -213,7 +215,7 @@ class OperationalInspector(sl.Component):
     """The process-wide operational dashboard for the development owner."""
 
     section: str = sl.state("overview")
-    mount_id: str | None = sl.state(None)
+    message_root_id: str | None = sl.state(None)
     session_id: str | None = sl.state(None)
     revision: int = sl.state(0)
     notice: str | None = sl.state(None)
@@ -225,7 +227,7 @@ class OperationalInspector(sl.Component):
     def render(self) -> Sequence[sl.LayoutNode]:
         snapshot = self._devtools_runtime.snapshot()
         if self.section == "mounts":
-            nodes = self._mounts(snapshot)
+            nodes = self._roots(snapshot)
         elif self.section == "sessions":
             nodes = self._sessions(snapshot)
         elif self.section == "queues":
@@ -242,7 +244,7 @@ class OperationalInspector(sl.Component):
 
     def _overview(self, snapshot: squid_ui_discord.devtools_runtime.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         counts = [
-            f"mounts       {len(snapshot.mounts)}",
+            f"mounts       {len(snapshot.message_roots)}",
             f"sessions     {len(snapshot.sessions)}",
             f"scheduler     {_scheduler_summary(snapshot.scheduler)}",
             f"topics      {_topic_summary(snapshot.topics)}",
@@ -255,11 +257,11 @@ class OperationalInspector(sl.Component):
             self._controls(),
         ]
 
-    def _mounts(self, snapshot: squid_ui_discord.devtools_runtime.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
-        if self.mount_id is not None:
-            mount = squid_ui_discord.live.find(self.mount_id)
-            if mount is not None:
-                detail = self._devtools_runtime.inspect_mount(self.mount_id)
+    def _roots(self, snapshot: squid_ui_discord.devtools_runtime.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
+        if self.message_root_id is not None:
+            message_root = squid_ui_discord.live.find(self.message_root_id)
+            if message_root is not None:
+                detail = self._devtools_runtime.inspect_root(self.message_root_id)
                 histories = (
                     "\n".join(
                         f"{history.name}: undo={len(history.undo)} redo={len(history.redo)} limit={history.limit}"
@@ -269,7 +271,7 @@ class OperationalInspector(sl.Component):
                 )
                 return [
                     sl.section(
-                        sl.heading(f"Mount {self.mount_id}"),
+                        sl.heading(f"MessageRoot {self.message_root_id}"),
                         sl.bullets(
                             *_summary(detail.snapshot),
                             f"**Middleware**\n{_dump(detail.middleware)}",
@@ -280,13 +282,13 @@ class OperationalInspector(sl.Component):
                     ),
                     self._controls(back=True),
                 ]
-            notice = f"Mount `{self.mount_id}` is no longer live."
+            notice = f"MessageRoot `{self.message_root_id}` is no longer live."
         else:
             notice = None
 
         rows = [
-            f"`{mount.id}` **{mount.component.rsplit('.', 1)[-1]}** · gen {mount.generation} · {_flags(mount)}"
-            for mount in snapshot.mounts
+            f"`{message_root.id}` **{message_root.component.rsplit('.', 1)[-1]}** · gen {message_root.generation} · {_flags(message_root)}"
+            for message_root in snapshot.message_roots
         ]
         nodes: list[sl.LayoutNode] = [
             sl.section(
@@ -294,15 +296,17 @@ class OperationalInspector(sl.Component):
                 sl.bullets(*rows, key="mounts", page_size=8) if rows else sl.paragraph("No live mounts."),
             ),
         ]
-        if snapshot.mounts:
+        if snapshot.message_roots:
             nodes.append(
                 sl.choices(
                     *(
-                        sl.choice(mount.id, key=mount.id, description=mount.component.rsplit(".", 1)[-1])
-                        for mount in snapshot.mounts[:25]
+                        sl.choice(
+                            message_root.id, key=message_root.id, description=message_root.component.rsplit(".", 1)[-1]
+                        )
+                        for message_root in snapshot.message_roots[:25]
                     ),
                     key="mount",
-                    selection=sl.controlled((), self._open_mount),
+                    selection=sl.controlled((), self._open_root),
                 )
             )
         if notice is not None:
@@ -333,7 +337,7 @@ class OperationalInspector(sl.Component):
                             f"**Key**\n`{session.key}`",
                             f"**Actor**\n{session.actor_id if session.actor_id is not None else 'none'}",
                             f"**Members**\n{_members(session)}",
-                            f"**Mounts**\n{_dump(session.mounts)}",
+                            f"**Mounts**\n{_dump(session.message_roots)}",
                         ),
                     ),
                     confirmation,
@@ -344,7 +348,7 @@ class OperationalInspector(sl.Component):
             notice = None
 
         rows = [
-            f"`{session.id}` · key `{session.key}` · mounts={len(session.mounts)} · members={_members(session)}"
+            f"`{session.id}` · key `{session.key}` · mounts={len(session.message_roots)} · members={_members(session)}"
             for session in snapshot.sessions
         ]
         nodes: list[sl.LayoutNode] = [
@@ -357,7 +361,7 @@ class OperationalInspector(sl.Component):
             nodes.append(
                 sl.choices(
                     *(
-                        sl.choice(session.id, key=session.id, description=f"mounts={len(session.mounts)}")
+                        sl.choice(session.id, key=session.id, description=f"mounts={len(session.message_roots)}")
                         for session in snapshot.sessions[:25]
                     ),
                     key="session",
@@ -432,11 +436,11 @@ class OperationalInspector(sl.Component):
 
     async def _select_section(self, event: sl.ChoiceEvent) -> None:
         self.section = event.selected[0]
-        self.mount_id = None
+        self.message_root_id = None
         self.session_id = None
 
-    async def _open_mount(self, event: sl.ChoiceEvent) -> None:
-        self.mount_id = event.selected[0]
+    async def _open_root(self, event: sl.ChoiceEvent) -> None:
+        self.message_root_id = event.selected[0]
 
     async def _open_session(self, event: sl.ChoiceEvent) -> None:
         self.session_id = event.selected[0]
@@ -460,7 +464,7 @@ class OperationalInspector(sl.Component):
             self.confirming_session = None
 
     async def _back(self, event: sl.ActionEvent) -> None:
-        self.mount_id = None
+        self.message_root_id = None
         self.session_id = None
         self.confirming_session = None
         self.section = "overview"
@@ -472,7 +476,7 @@ class OperationalInspector(sl.Component):
         await event.finish()
 
 
-def scene_attachment(snapshot: squid_ui_discord.mount.MountSnapshot) -> sl.document.Asset | None:
+def scene_attachment(snapshot: squid_ui_discord.message_root.MessageRootSnapshot) -> sl.document.Asset | None:
     """The mount's committed scene as the protocol JSON, for reading outside Discord."""
     if snapshot.scene is None:
         return None
@@ -484,7 +488,7 @@ def scene_attachment(snapshot: squid_ui_discord.mount.MountSnapshot) -> sl.docum
     )
 
 
-def plan_text(snapshot: squid_ui_discord.mount.MountSnapshot) -> str:
+def plan_text(snapshot: squid_ui_discord.message_root.MessageRootSnapshot) -> str:
     """Render the retained plan report, grouping adaptations by severity."""
     report = snapshot.report
     if report is None:
@@ -506,7 +510,7 @@ def plan_text(snapshot: squid_ui_discord.mount.MountSnapshot) -> str:
     return "\n".join(lines)
 
 
-def metrics_text(snapshot: squid_ui_discord.mount.MountSnapshot) -> str:
+def metrics_text(snapshot: squid_ui_discord.message_root.MessageRootSnapshot) -> str:
     """Render the planner work and cache disposition retained by a mount."""
     metrics = snapshot.metrics
     if metrics is None:
@@ -520,7 +524,7 @@ def metrics_text(snapshot: squid_ui_discord.mount.MountSnapshot) -> str:
     )
 
 
-def _summary(snapshot: squid_ui_discord.mount.MountSnapshot) -> list[str]:
+def _summary(snapshot: squid_ui_discord.message_root.MessageRootSnapshot) -> list[str]:
     entries = [
         f"**Component**\n`{snapshot.component}`",
         f"**Generation**\n{snapshot.generation} · {_flags(snapshot)} · {snapshot.suppressed} suppressed",
@@ -551,13 +555,13 @@ def _access_text(access: squid_ui_discord.AccessPolicy) -> str:
     return type(access).__name__
 
 
-def _option_description(snapshot: squid_ui_discord.mount.MountSnapshot) -> str:
+def _option_description(snapshot: squid_ui_discord.message_root.MessageRootSnapshot) -> str:
     return f"gen {snapshot.generation} · idle {_duration(snapshot.idle)} · {_expiry(snapshot)}"
 
 
-def _flags(snapshot: squid_ui_discord.mount.MountSnapshot) -> str:
+def _flags(snapshot: squid_ui_discord.message_root.MessageRootSnapshot) -> str:
     flags = []
-    if snapshot.lifecycle is squid_ui_discord.mount.MountLifecycle.RENEWAL_ARMED:
+    if snapshot.lifecycle is squid_ui_discord.message_root.MessageRootStatus.RENEWAL_ARMED:
         flags.append("renewal armed")
     if snapshot.pending:
         flags.append("dirty")
@@ -568,7 +572,7 @@ def _flags(snapshot: squid_ui_discord.mount.MountSnapshot) -> str:
     return " ".join(flags) if flags else "clean"
 
 
-def _expiry(snapshot: squid_ui_discord.mount.MountSnapshot) -> str:
+def _expiry(snapshot: squid_ui_discord.message_root.MessageRootSnapshot) -> str:
     timeout = "no timeout" if snapshot.expires_in is None else f"timeout in {_duration(snapshot.expires_in)}"
     if snapshot.handle_expires_in is None:
         return timeout
@@ -584,7 +588,7 @@ def _duration(seconds: float) -> str:
     return f"{total // 3600}h{total % 3600 // 60:02d}m"
 
 
-def _scheduler_summary(snapshot: squid_ui_discord.MountSchedulerSnapshot | None) -> str:
+def _scheduler_summary(snapshot: squid_ui_discord.MessageRootSchedulerSnapshot | None) -> str:
     if snapshot is None:
         return "unconfigured"
     return f"queued={snapshot.queued} in_flight={snapshot.in_flight} failed={snapshot.failed}"
@@ -613,14 +617,14 @@ def _recovery_summary(report: RecoveryReport | None) -> str:
     return f"restored={len(report.restored)} failed={len(report.failed)}"
 
 
-def _exported_state(mount: squid_ui_discord.Mount) -> dict[str, object]:
+def _exported_state(message_root: squid_ui_discord.MessageRoot) -> dict[str, object]:
     """Declared persistent state for every component in the committed tree, by path.
 
     Each component is exported on its own, so one field whose value refuses to be formatted
     does not cost the whole dump.
     """
     exported: dict[str, object] = {}
-    for path, component in mount.runtime.components.items():
+    for path, component in message_root.runtime.components.items():
         try:
             exported[path] = sl.runtime.export_state(component)
         except Exception as error:
@@ -628,16 +632,18 @@ def _exported_state(mount: squid_ui_discord.Mount) -> dict[str, object]:
     return exported
 
 
-def _reactivity(mount: squid_ui_discord.Mount) -> list[str]:
+def _reactivity(message_root: squid_ui_discord.MessageRoot) -> list[str]:
     """Every cell's version and every computed's current source set, resolved to names.
 
     Names are resolved across the whole tree rather than per component, because a computed
     may read another component's state and printing an identity would say nothing.
     """
-    components = mount.runtime.components
+    components = message_root.runtime.components
     # Deduplicated by identity: several panels usually hold the very same namespace, and
     # that is the point of one.
-    namespaces = {id(owner): owner for owner, _ in (_pair(topic) for topic in mount.observed) if owner is not None}
+    namespaces = {
+        id(owner): owner for owner, _ in (_pair(topic) for topic in message_root.observed) if owner is not None
+    }
     labels: dict[int, str] = {}
     for path, component in components.items():
         for name, cell in sl.runtime.inspect_cells(component).items():

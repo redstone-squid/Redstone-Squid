@@ -7,7 +7,7 @@ import discord
 import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui.semantic import ActionControls, RoutedActionControl, Stack
-from squid_ui_discord import Everyone, Mount
+from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord.testing import commit_render, fake_interaction
 
 
@@ -42,9 +42,9 @@ def _text_input(modal: discord.ui.Modal) -> discord.ui.TextInput:
     return label.component
 
 
-async def _submit(mount: Mount, action: str, value: str) -> discord.ui.Modal:
+async def _submit(message_root: MessageRoot, action: str, value: str) -> discord.ui.Modal:
     opened = fake_interaction()
-    await mount.dispatch(action, opened)
+    await message_root.dispatch(action, opened)
     modal = opened.response.send_modal.await_args.args[0]
     assert isinstance(modal, discord.ui.Modal)
     _text_input(modal)._value = value  # pyrefly: ignore[missing-attribute]
@@ -59,10 +59,10 @@ async def test_add_appends_a_minted_entry_and_reports_the_full_ordered_collectio
         changes.append(values)
 
     component = _editor().build_component(on_change=changed)
-    mount = Mount(component, access=Everyone(), timeout=None)
-    commit_render(mount)
+    message_root = MessageRoot(component, access=Everyone(), timeout=None)
+    commit_render(message_root)
 
-    await _submit(mount, "collection.add", "OpenAI")
+    await _submit(message_root, "collection.add", "OpenAI")
 
     assert component.machine_state == sp.CollectionState((sp.CollectionEntry("1", (("name", "OpenAI"),)),), "1")
     assert tuple(dict(value) for value in changes[-1]) == ({"name": "OpenAI"},)
@@ -72,10 +72,10 @@ async def test_edit_prefills_and_retains_the_entry_identity() -> None:
     editor = _editor()
     component = editor.build_component(initial=editor.initial_from(({"name": "Old"},)))
     component.machine_state = editor.transition(component.machine_state, "select", values=("1",))
-    mount = Mount(component, access=Everyone(), timeout=None)
-    commit_render(mount)
+    message_root = MessageRoot(component, access=Everyone(), timeout=None)
+    commit_render(message_root)
 
-    modal = await _submit(mount, "collection.edit", "New")
+    modal = await _submit(message_root, "collection.edit", "New")
 
     assert _text_input(modal).default == "Old"
     assert component.machine_state.entries == (sp.CollectionEntry("1", (("name", "New"),)),)

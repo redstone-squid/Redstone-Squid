@@ -1,6 +1,6 @@
 """Stateless control identity: routes that own their own custom id format.
 
-The third interactivity tier. A `Mount` keeps handlers in memory and issues an id per
+The third interactivity tier. A `MessageRoot` keeps handlers in memory and issues an id per
 render generation; a route does the opposite — the id *is* the state pointer, the store
 owns the state, and the control keeps working after a restart, a redeploy, or a year.
 

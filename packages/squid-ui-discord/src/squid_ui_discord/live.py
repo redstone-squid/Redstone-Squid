@@ -14,35 +14,35 @@ import weakref
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from squid_ui_discord.mount import Mount
+    from squid_ui_discord.message_root import MessageRoot
 
-_LIVE: weakref.WeakValueDictionary[str, Mount] = weakref.WeakValueDictionary()
+_LIVE: weakref.WeakValueDictionary[str, MessageRoot] = weakref.WeakValueDictionary()
 
 
-def track(mount: Mount) -> None:
+def track(message_root: MessageRoot) -> None:
     """Record `mount` as live until it finishes.
 
     Idempotent, and meant to be called on every commit: the first call registers the
     deregistration hook, every later one is a dict lookup.
     """
-    if _LIVE.get(mount.id) is mount:
+    if _LIVE.get(message_root.id) is message_root:
         return
-    _LIVE[mount.id] = mount
+    _LIVE[message_root.id] = message_root
     # Exact deregistration rather than waiting for the collector: a finished mount is still
     # referenced by whatever host object opened it, and listing it as live would be a lie.
-    mount.on_finish(_forget)
+    message_root.on_finish(_forget)
 
 
-async def _forget(mount: Mount) -> None:
-    if _LIVE.get(mount.id) is mount:
-        del _LIVE[mount.id]
+async def _forget(message_root: MessageRoot) -> None:
+    if _LIVE.get(message_root.id) is message_root:
+        del _LIVE[message_root.id]
 
 
-def mounts() -> tuple[Mount, ...]:
+def message_roots() -> tuple[MessageRoot, ...]:
     """Every mount live in this process, in the order they first rendered."""
     return tuple(_LIVE.values())
 
 
-def find(mount_id: str) -> Mount | None:
+def find(message_root_id: str) -> MessageRoot | None:
     """The live mount with this id, or `None` if it has finished or was collected."""
-    return _LIVE.get(mount_id)
+    return _LIVE.get(message_root_id)

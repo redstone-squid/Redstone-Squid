@@ -5,8 +5,10 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-import squid_ui_discord
 import squid_ui as sl
+import squid_ui_discord
+from squid_ui.profiling import MemoryProfiler, OperationKind
+from squid_ui.runtime import BusSnapshot
 from squid_ui_discord import Everyone, SessionKey, SessionRegistry
 from squid_ui_discord.devtools_runtime import (
     ActionDisabled,
@@ -16,11 +18,9 @@ from squid_ui_discord.devtools_runtime import (
     DevToolsRuntime,
 )
 from squid_ui_discord.durability import PurgeResult
-from squid_ui_discord.scheduler import MountSchedulerSnapshot
+from squid_ui_discord.message_root_scheduler import MessageRootSchedulerSnapshot
 from squid_ui_discord.sessions import Opened
 from squid_ui_discord.testing import delivered_to, fake_message
-from squid_ui.profiling import MemoryProfiler, OperationKind
-from squid_ui.runtime import BusSnapshot
 
 
 class Panel(sl.Component):
@@ -33,7 +33,7 @@ class Panel(sl.Component):
 
 async def open_panel(registry: SessionRegistry, *, key: SessionKey | None = None) -> Opened:
     result = await registry.open(
-        squid_ui_discord.Mount(Panel(), access=Everyone(), timeout=None),
+        squid_ui_discord.MessageRoot(Panel(), access=Everyone(), timeout=None),
         delivered_to(fake_message()),
         key=key,
     )
@@ -41,16 +41,16 @@ async def open_panel(registry: SessionRegistry, *, key: SessionKey | None = None
     return result
 
 
-async def test_snapshot_and_mount_inspection_include_sessions_history_and_middleware() -> None:
+async def test_snapshot_and_message_root_inspection_include_sessions_history_and_middleware() -> None:
     registry = SessionRegistry()
     opened = await open_panel(registry, key=SessionKey.global_("devtools"))
     runtime = DevToolsRuntime(sessions=registry)
 
     snapshot = runtime.snapshot()
     assert snapshot.sessions[0].id == opened.session.id
-    assert snapshot.sessions[0].mounts == (opened.session.root.id,)
+    assert snapshot.sessions[0].message_roots == (opened.session.root.id,)
 
-    inspection = runtime.inspect_mount(opened.session.root.id)
+    inspection = runtime.inspect_root(opened.session.root.id)
     assert inspection.snapshot.id == opened.session.root.id
     assert inspection.histories[0].name == "history"
     assert inspection.histories[0].undo == ()
@@ -59,7 +59,7 @@ async def test_snapshot_and_mount_inspection_include_sessions_history_and_middle
 async def test_session_inspection_reports_membership_and_capacity() -> None:
     registry = SessionRegistry()
     opened = await registry.open(
-        squid_ui_discord.Mount(Panel(), access=Everyone(), timeout=None),
+        squid_ui_discord.MessageRoot(Panel(), access=Everyone(), timeout=None),
         delivered_to(fake_message()),
         key=SessionKey.global_("devtools"),
         actor_id=7,
@@ -80,7 +80,7 @@ async def test_session_inspection_reports_membership_and_capacity() -> None:
     assert inspected.participants == (7, 8)
 
 
-async def test_close_session_requires_confirmation_and_finishes_all_mounts() -> None:
+async def test_close_session_requires_confirmation_and_finishes_all_roots() -> None:
     registry = SessionRegistry()
     opened = await open_panel(registry, key=SessionKey.global_("devtools"))
     runtime = DevToolsRuntime(sessions=registry)
@@ -142,8 +142,8 @@ class _IdleScheduler:
         self.waits = 0
         self.on_wait: Callable[[], None] | None = None
 
-    def snapshot(self) -> MountSchedulerSnapshot:
-        return MountSchedulerSnapshot(self.queued, self.in_flight, self.redeliver, 0, 0, 0, 0, 0)
+    def snapshot(self) -> MessageRootSchedulerSnapshot:
+        return MessageRootSchedulerSnapshot(self.queued, self.in_flight, self.redeliver, 0, 0, 0, 0, 0)
 
     async def wait_idle(self) -> None:
         self.waits += 1

@@ -7,10 +7,10 @@ import discord
 import pytest
 
 import squid_ui as sl
-from squid_ui_discord import Everyone, Mount
+from squid_ui.forms import FormText
+from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord.modal import CheckboxGroupField, EntityField, EntityType, FileField, build_form_modal
 from squid_ui_discord.testing import commit_render, fake_interaction
-from squid_ui.forms import FormText
 
 
 async def _ignore_raw(interaction, values) -> None: ...
@@ -248,9 +248,9 @@ def _text_input(modal: discord.ui.Modal) -> discord.ui.TextInput:
     return component
 
 
-async def _open_form(panel: DurationPanel, mount: Mount) -> discord.ui.Modal:
+async def _open_form(panel: DurationPanel, message_root: MessageRoot) -> discord.ui.Modal:
     interaction = fake_interaction()
-    await mount.dispatch("duration", interaction)
+    await message_root.dispatch("duration", interaction)
     modal = interaction.response.send_modal.await_args.args[0]
     assert isinstance(modal, discord.ui.Modal)
     return modal
@@ -258,9 +258,9 @@ async def _open_form(panel: DurationPanel, mount: Mount) -> discord.ui.Modal:
 
 async def test_invalid_submission_preserves_input_for_framework_retry() -> None:
     panel = DurationPanel()
-    mount = Mount(panel, access=Everyone(), timeout=None)
-    commit_render(mount)
-    modal = await _open_form(panel, mount)
+    message_root = MessageRoot(panel, access=Everyone(), timeout=None)
+    commit_render(message_root)
+    modal = await _open_form(panel, message_root)
     _text_input(modal)._value = "eventually"  # pyrefly: ignore[missing-attribute]
 
     submission = fake_interaction()
@@ -288,14 +288,14 @@ async def test_valid_submission_dispatches_typed_event_and_commits_the_runtime()
     reports and `on_presented` does not.
     """
     panel = DurationPanel()
-    mount = Mount(panel, access=Everyone(), timeout=None)
-    committed: list[Mount] = []
-    presented: list[Mount] = []
-    commit_render(mount)
-    mount.on_committed(committed.append)
-    mount.on_presented(presented.append)
-    generation = mount.generation
-    modal = await _open_form(panel, mount)
+    message_root = MessageRoot(panel, access=Everyone(), timeout=None)
+    committed: list[MessageRoot] = []
+    presented: list[MessageRoot] = []
+    commit_render(message_root)
+    message_root.on_committed(committed.append)
+    message_root.on_presented(presented.append)
+    generation = message_root.generation
+    modal = await _open_form(panel, message_root)
     _text_input(modal)._value = "2h"  # pyrefly: ignore[missing-attribute]
 
     await modal.on_submit(fake_interaction())
@@ -304,19 +304,19 @@ async def test_valid_submission_dispatches_typed_event_and_commits_the_runtime()
     assert len(panel.events) == 1
     assert isinstance(panel.events[0], sl.SubmitEvent)
     assert panel.events[0].values == {"duration": 7200}
-    assert committed == [mount], "the submission committed the application runtime"
+    assert committed == [message_root], "the submission committed the application runtime"
     assert presented == [], "nothing visible moved, so no presentation was published"
-    assert mount.generation == generation, "a suppressed render retains the live generation"
+    assert message_root.generation == generation, "a suppressed render retains the live generation"
 
 
 async def test_exclusive_submission_from_a_stale_generation_is_ignored() -> None:
     panel = DurationPanel()
-    mount = Mount(panel, access=Everyone(), timeout=None)
-    commit_render(mount)
-    modal = await _open_form(panel, mount)
+    message_root = MessageRoot(panel, access=Everyone(), timeout=None)
+    commit_render(message_root)
+    modal = await _open_form(panel, message_root)
     _text_input(modal)._value = "2h"  # pyrefly: ignore[missing-attribute]
     panel.seconds = 60
-    commit_render(mount)
+    commit_render(message_root)
 
     submission = fake_interaction()
     await modal.on_submit(submission)
@@ -328,9 +328,9 @@ async def test_exclusive_submission_from_a_stale_generation_is_ignored() -> None
 
 async def test_accept_and_mark_delivers_parse_errors_to_the_handler() -> None:
     panel = DurationPanel(validation=sl.forms.FormValidationMode.ACCEPT_AND_MARK)
-    mount = Mount(panel, access=Everyone(), timeout=None)
-    commit_render(mount)
-    modal = await _open_form(panel, mount)
+    message_root = MessageRoot(panel, access=Everyone(), timeout=None)
+    commit_render(message_root)
+    modal = await _open_form(panel, message_root)
     _text_input(modal)._value = "bad"  # pyrefly: ignore[missing-attribute]
 
     await modal.on_submit(fake_interaction())

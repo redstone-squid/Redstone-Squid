@@ -10,12 +10,8 @@ from unittest.mock import AsyncMock
 import discord
 import pytest
 
-import squid_ui_discord
 import squid_ui as sl
-from squid_ui_discord import Everyone, Mount
-from squid_ui_discord.adoption import AdoptionError, adopt
-from squid_ui_discord.mount import _EntityValues
-from squid_ui_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
+import squid_ui_discord
 from squid_ui.assets import Asset, InlineAsset, StoredAsset
 from squid_ui.document import Document
 from squid_ui.emoji import Emoji
@@ -35,6 +31,10 @@ from squid_ui.primitives import (
     Text,
     Thumbnail,
 )
+from squid_ui_discord import Everyone, MessageRoot
+from squid_ui_discord.adoption import AdoptionError, adopt
+from squid_ui_discord.message_root import _EntityValues
+from squid_ui_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 
 
 class Paginator(discord.ui.View):
@@ -63,19 +63,19 @@ class Paginator(discord.ui.View):
         await interaction.response.edit_message(view=self)
 
 
-def _mounted(view: discord.ui.View, **options: Any) -> tuple[Mount, list[BaseException]]:
+def _mounted(view: discord.ui.View, **options: Any) -> tuple[MessageRoot, list[BaseException]]:
     """A committed mount around `view`, plus the list its error hook appends to."""
     errors: list[BaseException] = []
-    mount = Mount(adopt(view, **options), access=Everyone(), timeout=None, on_error=_record(errors))
-    commit_render(mount)
-    return mount, errors
+    message_root = MessageRoot(adopt(view, **options), access=Everyone(), timeout=None, on_error=_record(errors))
+    commit_render(message_root)
+    return message_root, errors
 
 
-def _mounted_layout(view: discord.ui.LayoutView, **options: Any) -> tuple[Mount, list[BaseException]]:
+def _mounted_layout(view: discord.ui.LayoutView, **options: Any) -> tuple[MessageRoot, list[BaseException]]:
     errors: list[BaseException] = []
-    mount = Mount(adopt(view, **options), access=Everyone(), timeout=None, on_error=_record(errors))
-    commit_render(mount)
-    return mount, errors
+    message_root = MessageRoot(adopt(view, **options), access=Everyone(), timeout=None, on_error=_record(errors))
+    commit_render(message_root)
+    return message_root, errors
 
 
 def _row_buttons(row: Row) -> tuple[Button, ...]:
@@ -244,10 +244,10 @@ async def test_layout_view_dispatches_original_callback_and_reconstructs_the_tre
 
     button.callback = callback
     layout.add_item(discord.ui.Container(text, discord.ui.ActionRow(button)))
-    mount, errors = _mounted_layout(layout)
+    message_root, errors = _mounted_layout(layout)
     interaction = fake_interaction()
 
-    await mount.dispatch("run", interaction)
+    await message_root.dispatch("run", interaction)
 
     assert not errors
     assert text.content == "after"
@@ -383,10 +383,10 @@ async def test_keys_override_both_defaults() -> None:
 
 async def test_the_paginator_re_renders_and_disables_with_no_http_of_its_own() -> None:
     view = Paginator()
-    mount, errors = _mounted(view)
+    message_root, errors = _mounted(view)
     interaction = fake_interaction()
 
-    await mount.dispatch("next", interaction)
+    await message_root.dispatch("next", interaction)
 
     assert view.page == 1
     # Exactly one edit reached Discord, and the mount made it. Two would mean the legacy object
@@ -397,7 +397,7 @@ async def test_the_paginator_re_renders_and_disables_with_no_http_of_its_own() -
     assert [button.label for button in buttons] == ["Previous", "Next"]
     assert [button.disabled for button in buttons] == [False, False]
 
-    await mount.dispatch("next", fake_interaction())
+    await message_root.dispatch("next", fake_interaction())
 
     assert view.page == 2
     assert view.next.disabled
@@ -415,9 +415,9 @@ async def test_a_string_selects_values_reach_the_legacy_callback() -> None:
             seen.append(list(select.values))
             await interaction.response.edit_message(view=self)
 
-    mount, errors = _mounted(Picker())
+    message_root, errors = _mounted(Picker())
 
-    await mount.dispatch("pick", fake_interaction(), ["b"])
+    await message_root.dispatch("pick", fake_interaction(), ["b"])
 
     assert seen == [["b"]]
 
@@ -431,10 +431,10 @@ async def test_an_entity_selects_resolved_objects_reach_the_legacy_callback() ->
             seen.append(list(select.values))
             await interaction.response.edit_message(view=self)
 
-    mount, errors = _mounted(Picker())
+    message_root, errors = _mounted(Picker())
     member = discord.Object(id=5)
 
-    await mount.dispatch("who", fake_interaction(), _EntityValues((EntityRef(EntityKind.USER, 5),), (member,)))
+    await message_root.dispatch("who", fake_interaction(), _EntityValues((EntityRef(EntityKind.USER, 5),), (member,)))
 
     assert seen == [[member]]
 
@@ -448,21 +448,21 @@ async def test_editing_with_a_different_view_refuses() -> None:
         async def go(self, interaction: discord.Interaction, button: discord.ui.Button[Any]) -> None:
             await interaction.response.edit_message(view=discord.ui.View(timeout=None))
 
-    mount, errors = _mounted(Swapper())
-    await mount.dispatch("go", fake_interaction())
+    message_root, errors = _mounted(Swapper())
+    await message_root.dispatch("go", fake_interaction())
 
     assert isinstance(errors[0], AdoptionError)
     assert "different screen" in str(errors[0])
 
 
-async def test_editing_with_a_payload_the_mount_owns_refuses() -> None:
+async def test_editing_with_a_payload_the_message_root_owns_refuses() -> None:
     class Chatty(discord.ui.View):
         @discord.ui.button(label="go", custom_id="go")
         async def go(self, interaction: discord.Interaction, button: discord.ui.Button[Any]) -> None:
             await interaction.response.edit_message(content="hello", view=self)
 
-    mount, errors = _mounted(Chatty())
-    await mount.dispatch("go", fake_interaction())
+    message_root, errors = _mounted(Chatty())
+    await message_root.dispatch("go", fake_interaction())
 
     assert isinstance(errors[0], AdoptionError)
     assert "content" in str(errors[0])
@@ -484,11 +484,11 @@ async def test_the_second_writer_calls_all_refuse() -> None:
             await interaction.delete_original_response()
 
     for key, fragment in (("original", "second writer"), ("message", "second writer"), ("delete", "finish")):
-        mount, errors = _mounted(SecondWriter())
+        message_root, errors = _mounted(SecondWriter())
         errors: list[BaseException] = []
-        mount.on_error = _record(errors)
+        message_root.on_error = _record(errors)
 
-        await mount.dispatch(key, fake_interaction())
+        await message_root.dispatch(key, fake_interaction())
 
         assert isinstance(errors[0], AdoptionError), key
         assert fragment in str(errors[0]), key
@@ -500,8 +500,8 @@ async def test_an_unsupported_response_call_refuses_by_name() -> None:
         async def go(self, interaction: discord.Interaction, button: discord.ui.Button[Any]) -> None:
             await interaction.response.pong()
 
-    mount, errors = _mounted(Odd())
-    await mount.dispatch("go", fake_interaction())
+    message_root, errors = _mounted(Odd())
+    await message_root.dispatch("go", fake_interaction())
 
     assert isinstance(errors[0], AdoptionError)
     assert "pong" in str(errors[0])
@@ -520,14 +520,14 @@ async def test_defer_and_ephemeral_send_message_go_through_the_responder() -> No
         async def notice(self, interaction: discord.Interaction, button: discord.ui.Button[Any]) -> None:
             await interaction.response.send_message("only you", ephemeral=True)
 
-    mount, errors = _mounted(Answering())
+    message_root, errors = _mounted(Answering())
     deferred = fake_interaction()
-    await mount.dispatch("defer", deferred)
+    await message_root.dispatch("defer", deferred)
     assert deferred.response.defer.await_count == 1
 
-    mount, errors = _mounted(Answering())
+    message_root, errors = _mounted(Answering())
     noticed = fake_interaction()
-    await mount.dispatch("notice", noticed)
+    await message_root.dispatch("notice", noticed)
     assert noticed.response.send_message.await_args.kwargs["ephemeral"] is True
 
 
@@ -541,9 +541,9 @@ async def test_is_done_reports_the_swallowed_edit() -> None:
             await interaction.response.edit_message(view=self)
             seen.append(interaction.response.is_done())
 
-    mount, errors = _mounted(Checking())
+    message_root, errors = _mounted(Checking())
 
-    await mount.dispatch("go", fake_interaction())
+    await message_root.dispatch("go", fake_interaction())
 
     assert seen == [False, True]
 
@@ -555,10 +555,10 @@ async def test_followup_passes_through_after_acknowledging_the_real_interaction(
             await interaction.response.edit_message(view=self)
             await interaction.followup.send("aside", ephemeral=True)
 
-    mount, errors = _mounted(Talkative())
+    message_root, errors = _mounted(Talkative())
     interaction = fake_interaction()
 
-    await mount.dispatch("go", interaction)
+    await message_root.dispatch("go", interaction)
 
     # The swallowed edit left the real interaction unanswered, so the followup would have 404'd
     # without the proxy deferring first.
@@ -569,18 +569,18 @@ async def test_followup_passes_through_after_acknowledging_the_real_interaction(
 # --- view-level API ---------------------------------------------------------------------------
 
 
-async def test_stop_inside_a_callback_finishes_the_mount() -> None:
+async def test_stop_inside_a_callback_finishes_the_root() -> None:
     class Closing(discord.ui.View):
         @discord.ui.button(label="done", custom_id="done")
         async def done(self, interaction: discord.Interaction, button: discord.ui.Button[Any]) -> None:
             self.stop()
 
-    mount = Mount(adopt(Closing()), access=Everyone(), timeout=None)
-    await mount.send(delivered_to(fake_message()))
+    message_root = MessageRoot(adopt(Closing()), access=Everyone(), timeout=None)
+    await message_root.send(delivered_to(fake_message()))
 
-    await mount.dispatch("done", fake_interaction())
+    await message_root.dispatch("done", fake_interaction())
 
-    assert mount.finished
+    assert message_root.finished
 
 
 async def test_an_overridden_interaction_check_can_refuse_the_press() -> None:
@@ -594,9 +594,9 @@ async def test_an_overridden_interaction_check_can_refuse_the_press() -> None:
         async def go(self, interaction: discord.Interaction, button: discord.ui.Button[Any]) -> None:
             ran.append("go")
 
-    mount, errors = _mounted(Guarded())
+    message_root, errors = _mounted(Guarded())
 
-    await mount.dispatch("go", fake_interaction())
+    await message_root.dispatch("go", fake_interaction())
 
     assert ran == []
 
@@ -613,14 +613,14 @@ async def test_a_refusing_interaction_check_still_reports_mutation_and_finishes(
             raise AssertionError("the item callback must not run")
 
     view = Guarded()
-    mount, errors = _mounted(view)
+    message_root, errors = _mounted(view)
 
-    await mount.dispatch("go", fake_interaction())
+    await message_root.dispatch("go", fake_interaction())
 
     button = view.children[0]
     assert isinstance(button, discord.ui.Button)
     assert button.disabled
-    assert mount.finished
+    assert message_root.finished
     assert errors == []
 
 
@@ -638,15 +638,15 @@ async def test_an_interaction_check_error_uses_the_legacy_error_hook() -> None:
         async def go(self, interaction: discord.Interaction, button: discord.ui.Button[Any]) -> None:
             raise AssertionError("the item callback must not run")
 
-    mount, errors = _mounted(Failing())
+    message_root, errors = _mounted(Failing())
 
-    await mount.dispatch("go", fake_interaction())
+    await message_root.dispatch("go", fake_interaction())
 
     assert [type(error) for error in caught] == [RuntimeError]
     assert errors == []
 
 
-async def test_without_a_legacy_error_hook_an_interaction_check_error_reaches_the_mount() -> None:
+async def test_without_a_legacy_error_hook_an_interaction_check_error_reaches_the_root() -> None:
     class Failing(discord.ui.View):
         async def interaction_check(self, interaction: discord.Interaction) -> bool:
             raise RuntimeError("check failed")
@@ -655,14 +655,14 @@ async def test_without_a_legacy_error_hook_an_interaction_check_error_reaches_th
         async def go(self, interaction: discord.Interaction, button: discord.ui.Button[Any]) -> None:
             raise AssertionError("the item callback must not run")
 
-    mount, errors = _mounted(Failing())
+    message_root, errors = _mounted(Failing())
 
-    await mount.dispatch("go", fake_interaction())
+    await message_root.dispatch("go", fake_interaction())
 
     assert [type(error) for error in errors] == [RuntimeError]
 
 
-async def test_an_overridden_on_error_intercepts_before_the_mount_sees_it() -> None:
+async def test_an_overridden_on_error_intercepts_before_the_message_root_sees_it() -> None:
     caught: list[BaseException] = []
 
     class Failing(discord.ui.View):
@@ -673,8 +673,8 @@ async def test_an_overridden_on_error_intercepts_before_the_mount_sees_it() -> N
         async def go(self, interaction: discord.Interaction, button: discord.ui.Button[Any]) -> None:
             raise RuntimeError("legacy")
 
-    mount, errors = _mounted(Failing())
-    await mount.dispatch("go", fake_interaction())
+    message_root, errors = _mounted(Failing())
+    await message_root.dispatch("go", fake_interaction())
 
     assert [type(error) for error in caught] == [RuntimeError]
     assert errors == []
@@ -688,8 +688,8 @@ async def test_without_an_override_the_error_reaches_the_mounts_hook() -> None:
             raise RuntimeError("legacy")
 
     view = Failing()
-    mount, errors = _mounted(view)
-    await mount.dispatch("go", fake_interaction())
+    message_root, errors = _mounted(view)
+    await message_root.dispatch("go", fake_interaction())
 
     assert [type(error) for error in errors] == [RuntimeError]
     # `mutated` cannot roll an in-place write back, and the docstring says so rather than
@@ -700,7 +700,7 @@ async def test_without_an_override_the_error_reaches_the_mounts_hook() -> None:
 # --- the modal round-trip ----------------------------------------------------------------------
 
 
-async def test_a_modal_submit_refreshes_the_mount_and_issues_no_edit_of_its_own() -> None:
+async def test_a_modal_submit_refreshes_the_message_root_and_issues_no_edit_of_its_own() -> None:
     class Renaming(discord.ui.Modal, title="Rename"):
         field: discord.ui.TextInput[Any] = discord.ui.TextInput(label="name")
 
@@ -722,11 +722,11 @@ async def test_a_modal_submit_refreshes_the_mount_and_issues_no_edit_of_its_own(
             await interaction.response.send_modal(Renaming(self))
 
     view = Named()
-    mount = Mount(adopt(view), access=Everyone(), timeout=None)
-    await mount.send(delivered_to(fake_message()))
+    message_root = MessageRoot(adopt(view), access=Everyone(), timeout=None)
+    await message_root.send(delivered_to(fake_message()))
     press = fake_interaction()
 
-    await mount.dispatch("rename", press)
+    await message_root.dispatch("rename", press)
 
     modal = press.response.send_modal.await_args.args[0]
     submit = fake_interaction()
@@ -746,8 +746,8 @@ async def test_a_modal_after_the_response_is_spent_refuses_with_an_adoption_erro
             await interaction.response.defer()
             await interaction.response.send_modal(discord.ui.Modal(title="too late"))
 
-    mount, errors = _mounted(Late())
-    await mount.dispatch("go", fake_interaction())
+    message_root, errors = _mounted(Late())
+    await message_root.dispatch("go", fake_interaction())
 
     assert isinstance(errors[0], AdoptionError)
     assert "first response" in str(errors[0])
@@ -757,10 +757,10 @@ async def test_a_modal_after_the_response_is_spent_refuses_with_an_adoption_erro
 
 
 async def test_the_adopted_scene_conforms_strictly() -> None:
-    mount, errors = _mounted(Paginator())
+    message_root, errors = _mounted(Paginator())
     interaction = fake_interaction()
 
-    await mount.dispatch("next", interaction)
+    await message_root.dispatch("next", interaction)
 
     drawn = interaction.response.edit_message.await_args.kwargs["view"]
     assert squid_ui_discord.conform(drawn, strict=True) == []
@@ -774,11 +774,11 @@ async def test_an_adopted_view_embeds_in_a_larger_squid_screen() -> None:
         def render(self):
             return [sl.semantic.Paragraph("Legacy controls below"), self.boundary(self.child, key="legacy")]
 
-    mount = Mount(Screen(adopt(Paginator())), access=Everyone(), timeout=None)
-    commit_render(mount)
+    message_root = MessageRoot(Screen(adopt(Paginator())), access=Everyone(), timeout=None)
+    commit_render(message_root)
     interaction = fake_interaction()
 
-    await mount.dispatch("legacy.next", interaction)
+    await message_root.dispatch("legacy.next", interaction)
 
     drawn = interaction.response.edit_message.await_args.kwargs["view"]
     labels = [item.label for item in drawn.walk_children() if isinstance(item, discord.ui.Button)]

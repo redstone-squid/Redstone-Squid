@@ -8,10 +8,11 @@ from typing import TYPE_CHECKING, Any, Unpack, cast
 
 import discord
 
+from squid_ui.runtime.component import Component
 from squid_ui_discord.access import AccessPolicy, Owner
-from squid_ui_discord.defaults import MountOptions
 from squid_ui_discord.delivery import Destination, Replyable, respond_to
-from squid_ui_discord.mount import Mount
+from squid_ui_discord.message_root import MessageRoot
+from squid_ui_discord.message_root_options import MessageRootOptions
 from squid_ui_discord.sessions import (
     DEFAULT_SESSION_POLICY,
     GlobalScope,
@@ -26,7 +27,6 @@ from squid_ui_discord.sessions import (
     UserGuildScope,
     UserScope,
 )
-from squid_ui.runtime.component import Component
 
 if TYPE_CHECKING:
     from squid_ui_discord.host import HostSource
@@ -122,10 +122,10 @@ def _registry(source: SessionRegistry | HostSource) -> SessionRegistry:
     # not needed at import time.
     from squid_ui_discord.host import LayoutHost
 
-    return LayoutHost.of(source).mounts
+    return LayoutHost.of(source).message_roots
 
 
-type ScreenOptionsResolver = Callable[[Opener], Awaitable[MountOptions]]
+type ScreenOptionsResolver = Callable[[Opener], Awaitable[MessageRootOptions]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,9 +165,9 @@ class ScreenSpec:
         """Derive this screen's session key from an opener."""
         return SessionKey(self.name, self.scope.resolve(opener))
 
-    async def _mount_options(self, opener: Opener, overrides: MountOptions) -> MountOptions:
+    async def _message_root_options(self, opener: Opener, overrides: MessageRootOptions) -> MessageRootOptions:
         resolved = {} if self.resolve_options is None else await self.resolve_options(opener)
-        return cast(MountOptions, {**self.options, **resolved, **overrides})
+        return cast(MessageRootOptions, {**self.options, **resolved, **overrides})
 
     async def open(
         self,
@@ -176,7 +176,7 @@ class ScreenSpec:
         *,
         sessions: SessionRegistry | HostSource,
         opener: Opener,
-        **overrides: Unpack[MountOptions],
+        **overrides: Unpack[MessageRootOptions],
     ) -> OpenResult:
         """Construct and open a root mount using this screen's policy.
 
@@ -185,10 +185,10 @@ class ScreenSpec:
         caller holding neither from dispatching over the two invocation surfaces itself.
         """
         sessions = _registry(sessions)
-        options = await self._mount_options(opener, overrides)
-        mount = sessions.defaults.mount(component, access=self.access(opener), **options)
+        options = await self._message_root_options(opener, overrides)
+        message_root = sessions.defaults.mount(component, access=self.access(opener), **options)
         return await sessions.open(
-            mount,
+            message_root,
             destination,
             key=self.key(opener),
             policy=self.policy,
@@ -205,17 +205,17 @@ class ScreenSpec:
         *,
         sessions: SessionRegistry | HostSource,
         opener: Opener,
-        parent: Mount,
-        **overrides: Unpack[MountOptions],
+        parent: MessageRoot,
+        **overrides: Unpack[MessageRootOptions],
     ) -> OpenResult:
         """Construct and attach a mount below one known live parent."""
         sessions = _registry(sessions)
         parent_session = sessions.session_for(parent)
         if parent_session is None:
             return Rejected((), RejectionReason.SESSION_FINISHED)
-        options = await self._mount_options(opener, overrides)
-        mount = sessions.defaults.mount(component, access=self.access(opener), **options)
-        return await parent_session.attach(mount, destination, actor_id=opener.user_id, parent=parent)
+        options = await self._message_root_options(opener, overrides)
+        message_root = sessions.defaults.mount(component, access=self.access(opener), **options)
+        return await parent_session.attach(message_root, destination, actor_id=opener.user_id, parent=parent)
 
     async def respond(
         self,
@@ -225,7 +225,7 @@ class ScreenSpec:
         sessions: SessionRegistry | HostSource | None = None,
         ephemeral: bool = True,
         wait: bool = False,
-        **overrides: Unpack[MountOptions],
+        **overrides: Unpack[MessageRootOptions],
     ) -> OpenResult:
         """Open this screen as an interaction response.
 
@@ -245,11 +245,11 @@ class ScreenSpec:
         component: Component,
         interaction: discord.Interaction[Any],
         *,
-        parent: Mount,
+        parent: MessageRoot,
         sessions: SessionRegistry | HostSource | None = None,
         ephemeral: bool = True,
         wait: bool = False,
-        **overrides: Unpack[MountOptions],
+        **overrides: Unpack[MessageRootOptions],
     ) -> OpenResult:
         """Attach this screen as an interaction response below a live parent."""
         return await self.attach(

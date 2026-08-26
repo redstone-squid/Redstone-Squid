@@ -8,14 +8,14 @@ from unittest.mock import AsyncMock
 import discord
 import pytest
 
-import squid_ui_discord as sd
 import squid_ui as sl
+import squid_ui_discord as sd
+from squid_reactivity import LocalTopicBus
+from squid_ui.primitives import Heading
+from squid_ui.runtime.topics import Topic
 from squid_ui_discord import LayoutHost, install
 from squid_ui_discord.host import _INSTALLED, LayoutHostMissing
 from squid_ui_discord.testing import delivered_to, fake_interaction, fake_message
-from squid_ui.primitives import Heading
-from squid_ui.runtime.topics import Topic
-from squid_reactivity import LocalTopicBus
 
 
 class Panel(sl.Component):
@@ -45,11 +45,11 @@ def test_install_wires_the_presenter_the_registry_could_not_build_for_itself() -
 
     presenter = host.defaults.challenge
     assert isinstance(presenter, sd.DialogPresenter)
-    assert presenter.sessions is host.mounts
+    assert presenter.sessions is host.message_roots
     assert presenter.supervisor is host.challenges
     # The registry's defaults and the host's are one object, so a mount opened through
     # either is wired the same way.
-    assert host.defaults is host.mounts.defaults
+    assert host.defaults is host.message_roots.defaults
 
 
 def test_install_makes_a_reactor_only_when_given_a_bus() -> None:
@@ -74,7 +74,7 @@ def test_a_second_install_on_one_client_is_refused() -> None:
 def test_install_keeps_host_defaults_and_adds_to_them() -> None:
     chrome = sl.chrome.Chrome(close=sl.text.ResolvedText("Dismiss"))
 
-    host = install(cast(discord.Client, fake_client()), defaults=sd.MountDefaults(chrome=chrome, strict=True))
+    host = install(cast(discord.Client, fake_client()), defaults=sd.MessageRootDefaults(chrome=chrome, strict=True))
 
     assert host.defaults.chrome is chrome
     assert host.defaults.strict is True
@@ -107,23 +107,23 @@ def test_of_survives_a_source_that_cannot_be_a_weak_key() -> None:
 def test_a_panel_holding_the_host_needs_no_other_object() -> None:
     host = install(cast(discord.Client, fake_client()))
 
-    mount = host.mount(Panel(), access=sd.Everyone(), timeout=None)
+    message_root = host.mount(Panel(), access=sd.Everyone(), timeout=None)
 
-    assert mount.challenge is host.defaults.challenge
-    assert mount.access == sd.Everyone()
+    assert message_root.challenge is host.defaults.challenge
+    assert message_root.access == sd.Everyone()
 
 
 async def test_close_finishes_every_session_and_stops_answering_of() -> None:
     client = fake_client()
     host = install(cast(discord.Client, client))
-    mount = host.mount(Panel(), access=sd.Everyone(), timeout=None)
-    opened = await host.mounts.open(mount, delivered_to(fake_message()))
+    message_root = host.mount(Panel(), access=sd.Everyone(), timeout=None)
+    opened = await host.message_roots.open(message_root, delivered_to(fake_message()))
     assert isinstance(opened, sd.sessions.Opened)
 
     await host.close()
 
-    assert mount.finished
-    assert tuple(host.mounts.active()) == ()
+    assert message_root.finished
+    assert tuple(host.message_roots.active()) == ()
     with pytest.raises(LayoutHostMissing):
         LayoutHost.of(cast(Any, client))
 
@@ -131,7 +131,7 @@ async def test_close_finishes_every_session_and_stops_answering_of() -> None:
 async def test_close_drops_the_installation_even_when_a_teardown_fails() -> None:
     client = fake_client()
     host = install(cast(discord.Client, client))
-    host.mounts.close_all = AsyncMock(side_effect=RuntimeError("gateway is gone"))
+    host.message_roots.close_all = AsyncMock(side_effect=RuntimeError("gateway is gone"))
 
     with pytest.raises(RuntimeError):
         await host.close()
@@ -159,17 +159,17 @@ async def test_run_serves_a_refresh_the_host_reactor_queued() -> None:
     bus = LocalTopicBus()
     host = install(cast(discord.Client, fake_client()), bus=bus)
     assert host.scheduler is not None
-    mount = host.mount(Panel(), access=sd.Everyone(), timeout=None)
-    mount.refresh = AsyncMock()  # pyrefly: ignore
-    host.scheduler.follow(mount, Topic("build", "42"))
+    message_root = host.mount(Panel(), access=sd.Everyone(), timeout=None)
+    message_root.refresh = AsyncMock()  # pyrefly: ignore
+    host.scheduler.follow(message_root, Topic("build", "42"))
 
     task = asyncio.create_task(host.run())
     try:
         bus.publish(Topic("build", "42"))
         for _ in range(20):
             await asyncio.sleep(0)
-            if mount.refresh.await_count:
+            if message_root.refresh.await_count:
                 break
     finally:
         task.cancel()
-    mount.refresh.assert_awaited()
+    message_root.refresh.assert_awaited()

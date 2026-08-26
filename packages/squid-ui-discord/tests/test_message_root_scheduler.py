@@ -10,11 +10,11 @@ from unittest.mock import AsyncMock
 import anyio
 import pytest
 
-from squid_ui_discord import Everyone, Mount, MountScheduler, PauseUpdates, RenewEphemeral, delivery
-from squid_ui_discord.testing import delivered_to, fake_interaction, fake_message
 from squid_ui import Component
 from squid_ui.profiling import MemoryProfiler, OperationKind, TraceLink
 from squid_ui.runtime import LocalTopicBus, Topic
+from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler, PauseUpdates, RenewEphemeral, delivery
+from squid_ui_discord.testing import delivered_to, fake_interaction, fake_message
 
 
 class Empty(Component):
@@ -22,7 +22,7 @@ class Empty(Component):
         return []
 
 
-async def _drain_scheduler(scheduler: MountScheduler) -> None:
+async def _drain_scheduler(scheduler: MessageRootScheduler) -> None:
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(scheduler.run)
         await asyncio.wait_for(scheduler._queue.join(), timeout=1)
@@ -30,27 +30,27 @@ async def _drain_scheduler(scheduler: MountScheduler) -> None:
 
 
 async def test_reactor_refreshes_different_mounts_concurrently() -> None:
-    scheduler = MountScheduler(concurrency=2)
+    scheduler = MessageRootScheduler(concurrency=2)
     both_started = asyncio.Event()
     release = asyncio.Event()
     started: set[str] = set()
-    mounts = [
-        Mount(Empty(), access=Everyone(), scheduler=scheduler),
-        Mount(Empty(), access=Everyone(), scheduler=scheduler),
+    message_roots = [
+        MessageRoot(Empty(), access=Everyone(), scheduler=scheduler),
+        MessageRoot(Empty(), access=Everyone(), scheduler=scheduler),
     ]
 
-    def refresh_for(mount: Mount):
+    def refresh_for(message_root: MessageRoot):
         async def refresh(*, links: tuple[TraceLink, ...] = ()) -> None:
-            started.add(mount.id)
+            started.add(message_root.id)
             if len(started) == 2:
                 both_started.set()
             await release.wait()
 
         return refresh
 
-    for mount in mounts:
-        mount.refresh = refresh_for(mount)  # pyrefly: ignore
-        scheduler.schedule(mount)
+    for message_root in message_roots:
+        message_root.refresh = refresh_for(message_root)  # pyrefly: ignore
+        scheduler.schedule(message_root)
 
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(scheduler.run)
@@ -62,8 +62,8 @@ async def test_reactor_refreshes_different_mounts_concurrently() -> None:
 
 
 async def test_publish_during_refresh_redelivers_without_overlap() -> None:
-    scheduler = MountScheduler()
-    mount = Mount(Empty(), access=Everyone(), scheduler=scheduler)
+    scheduler = MessageRootScheduler()
+    message_root = MessageRoot(Empty(), access=Everyone(), scheduler=scheduler)
     first_started = asyncio.Event()
     release = asyncio.Event()
     calls = 0
@@ -79,13 +79,13 @@ async def test_publish_during_refresh_redelivers_without_overlap() -> None:
             await release.wait()
         running = False
 
-    mount.refresh = refresh  # pyrefly: ignore
-    scheduler.schedule(mount)
+    message_root.refresh = refresh  # pyrefly: ignore
+    scheduler.schedule(message_root)
 
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(scheduler.run)
         await first_started.wait()
-        scheduler.schedule(mount)
+        scheduler.schedule(message_root)
         release.set()
         await asyncio.wait_for(scheduler._queue.join(), timeout=1)
         tasks.cancel_scope.cancel()
@@ -103,9 +103,9 @@ async def test_reactor_profile_includes_coalesced_wait_and_links_refresh() -> No
         return monotonic
 
     profiler = MemoryProfiler(clock=clock)
-    scheduler = MountScheduler(profiler=profiler, monotonic=clock)
-    mount = Mount(Empty(), access=Everyone(), scheduler=scheduler)
-    assert mount.profiler is profiler
+    scheduler = MessageRootScheduler(profiler=profiler, monotonic=clock)
+    message_root = MessageRoot(Empty(), access=Everyone(), scheduler=scheduler)
+    assert message_root.profiler is profiler
     received_links: tuple[TraceLink, ...] = ()
 
     async def refresh(*, links: tuple[TraceLink, ...] = ()) -> None:
@@ -113,10 +113,10 @@ async def test_reactor_profile_includes_coalesced_wait_and_links_refresh() -> No
         received_links = links
         monotonic += 0.5
 
-    mount.refresh = refresh  # pyrefly: ignore
+    message_root.refresh = refresh  # pyrefly: ignore
     with profiler.operation(OperationKind.DISPATCH, name="save"):
-        scheduler.schedule(mount)
-        scheduler.schedule(mount)
+        scheduler.schedule(message_root)
+        scheduler.schedule(message_root)
     monotonic += 2.0
 
     await _drain_scheduler(scheduler)
@@ -137,27 +137,27 @@ async def test_reactor_profile_includes_coalesced_wait_and_links_refresh() -> No
 
 async def test_follow_coalesces_topics_and_unsubscribes_on_finish() -> None:
     bus = LocalTopicBus()
-    scheduler = MountScheduler(bus)
-    mount = Mount(Empty(), access=Everyone(), scheduler=scheduler)
-    mount.refresh = AsyncMock()  # pyrefly: ignore
-    scheduler.follow(mount, Topic("build", "42"), Topic("group", "7"), Topic("index", "recent"))
+    scheduler = MessageRootScheduler(bus)
+    message_root = MessageRoot(Empty(), access=Everyone(), scheduler=scheduler)
+    message_root.refresh = AsyncMock()  # pyrefly: ignore
+    scheduler.follow(message_root, Topic("build", "42"), Topic("group", "7"), Topic("index", "recent"))
 
     bus.publish(Topic("build", "42"), Topic("group", "7"), Topic("index", "recent"))
 
     assert scheduler._queue.qsize() == 1
 
-    await mount.finish(disable=False)
+    await message_root.finish(disable=False)
     assert bus.snapshot().topics == ()
 
 
-async def test_follow_rejects_a_mount_that_already_finished() -> None:
+async def test_follow_rejects_a_message_root_that_already_finished() -> None:
     bus = LocalTopicBus()
-    scheduler = MountScheduler(bus)
-    mount = Mount(Empty(), access=Everyone(), scheduler=scheduler)
-    await mount.finish(disable=False)
+    scheduler = MessageRootScheduler(bus)
+    message_root = MessageRoot(Empty(), access=Everyone(), scheduler=scheduler)
+    await message_root.finish(disable=False)
 
     with pytest.raises(ValueError, match="finished"):
-        scheduler.follow(mount, Topic("build", "42"))
+        scheduler.follow(message_root, Topic("build", "42"))
 
 
 async def test_expiry_sweep_flushes_pause_chrome_once_and_renewal_rearms_it() -> None:
@@ -165,11 +165,11 @@ async def test_expiry_sweep_flushes_pause_chrome_once_and_renewal_rearms_it() ->
     interaction = fake_interaction()
     interaction.expires_at = now + timedelta(seconds=30)
     bus = LocalTopicBus()
-    scheduler = MountScheduler(bus, clock=lambda: now)
-    mount = Mount(Empty(), access=Everyone(), scheduler=scheduler, expiry=PauseUpdates(warning=60))
-    await mount.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
+    scheduler = MessageRootScheduler(bus, clock=lambda: now)
+    message_root = MessageRoot(Empty(), access=Everyone(), scheduler=scheduler, expiry=PauseUpdates(warning=60))
+    await message_root.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
 
-    assert mount in scheduler._watched
+    assert message_root in scheduler._watched
 
     scheduler._sweep_once()
     await _drain_scheduler(scheduler)
@@ -182,38 +182,38 @@ async def test_expiry_sweep_flushes_pause_chrome_once_and_renewal_rearms_it() ->
     scheduler._sweep_once()
     assert scheduler._queue.empty()
 
-    assert mount.handle is not None
-    mount.handle.expires_at = now + timedelta(minutes=10)  # pyrefly: ignore[bad-assignment]
-    mount.status = None
+    assert message_root.handle is not None
+    message_root.handle.expires_at = now + timedelta(minutes=10)  # pyrefly: ignore[bad-assignment]
+    message_root.status = None
     now += timedelta(seconds=1)
     scheduler._sweep_once()
     assert scheduler._queue.empty()
 
-    mount.handle.expires_at = now + timedelta(seconds=20)  # pyrefly: ignore[bad-assignment]
+    message_root.handle.expires_at = now + timedelta(seconds=20)  # pyrefly: ignore[bad-assignment]
     now += timedelta(seconds=1)
     scheduler._sweep_once()
     assert scheduler._queue.qsize() == 1
 
 
 async def test_expiry_watch_does_not_require_a_topic_follow_and_stops_on_finish() -> None:
-    scheduler = MountScheduler()
-    mount = Mount(Empty(), access=Everyone(), scheduler=scheduler)
+    scheduler = MessageRootScheduler()
+    message_root = MessageRoot(Empty(), access=Everyone(), scheduler=scheduler)
 
-    await mount.send(delivered_to(fake_message()))
+    await message_root.send(delivered_to(fake_message()))
 
-    assert mount in scheduler._watched
-    assert mount not in scheduler._followed
-    await mount.finish(disable=False)
-    assert mount not in scheduler._watched
+    assert message_root in scheduler._watched
+    assert message_root not in scheduler._followed
+    await message_root.finish(disable=False)
+    assert message_root not in scheduler._watched
 
 
 async def test_expiry_none_never_schedules_pre_expiry_chrome() -> None:
     now = datetime.now(UTC)
     interaction = fake_interaction()
     interaction.expires_at = now + timedelta(seconds=5)
-    scheduler = MountScheduler(clock=lambda: now)
-    mount = Mount(Empty(), access=Everyone(), scheduler=scheduler, expiry=None)
-    await mount.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
+    scheduler = MessageRootScheduler(clock=lambda: now)
+    message_root = MessageRoot(Empty(), access=Everyone(), scheduler=scheduler, expiry=None)
+    await message_root.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
 
     scheduler._sweep_once()
 
@@ -223,17 +223,17 @@ async def test_expiry_none_never_schedules_pre_expiry_chrome() -> None:
 @pytest.mark.parametrize("authority", ["permanent", "unknown_deadline"])
 async def test_expiry_sweep_ignores_authority_without_a_temporary_deadline(authority: str) -> None:
     now = datetime.now(UTC)
-    scheduler = MountScheduler(clock=lambda: now)
+    scheduler = MessageRootScheduler(clock=lambda: now)
     if authority == "permanent":
-        mount = Mount(Empty(), access=Everyone(), scheduler=scheduler)
-        await mount.send(delivered_to(fake_message()))
+        message_root = MessageRoot(Empty(), access=Everyone(), scheduler=scheduler)
+        await message_root.send(delivered_to(fake_message()))
     else:
         interaction = fake_interaction()
         handle = delivery.handle_from(interaction)
         assert handle is not None
         handle.expires_at = None
-        mount = Mount(Empty(), access=Everyone(), scheduler=scheduler)
-        await mount.send(delivered_to(fake_message(ephemeral=True), handle=handle))
+        message_root = MessageRoot(Empty(), access=Everyone(), scheduler=scheduler)
+        await message_root.send(delivered_to(fake_message(ephemeral=True), handle=handle))
 
     scheduler._sweep_once()
 
@@ -242,18 +242,18 @@ async def test_expiry_sweep_ignores_authority_without_a_temporary_deadline(autho
 
 async def test_expiry_sweep_queues_several_arms_without_waiting_for_discord() -> None:
     now = datetime.now(UTC)
-    scheduler = MountScheduler(concurrency=2, clock=lambda: now)
-    mounts = []
+    scheduler = MessageRootScheduler(concurrency=2, clock=lambda: now)
+    message_roots = []
     for _ in range(4):
         interaction = fake_interaction()
         interaction.expires_at = now + timedelta(seconds=30)
-        mount = Mount(Empty(), access=Everyone(), scheduler=scheduler, timeout=None)
-        await mount.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
-        mounts.append(mount)
+        message_root = MessageRoot(Empty(), access=Everyone(), scheduler=scheduler, timeout=None)
+        await message_root.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
+        message_roots.append(message_root)
 
     scheduler._sweep_once()
 
-    assert scheduler._queue.qsize() == len(mounts)
+    assert scheduler._queue.qsize() == len(message_roots)
 
 
 @pytest.mark.parametrize(
@@ -266,42 +266,42 @@ async def test_renewal_sweep_requires_ephemeral_visibility_and_time_to_renew(
     now = datetime.now(UTC)
     interaction = fake_interaction()
     interaction.expires_at = now + timedelta(seconds=30)
-    scheduler = MountScheduler(clock=lambda: now)
-    mount = Mount(
+    scheduler = MessageRootScheduler(clock=lambda: now)
+    message_root = MessageRoot(
         Empty(),
         access=Everyone(),
         scheduler=scheduler,
         timeout=timeout,
         expiry=RenewEphemeral(warning=60),
     )
-    await mount.send(delivered_to(fake_message(ephemeral=ephemeral), handle=delivery.handle_from(interaction)))
+    await message_root.send(delivered_to(fake_message(ephemeral=ephemeral), handle=delivery.handle_from(interaction)))
 
     scheduler._sweep_once()
 
     assert scheduler._queue.qsize() == expected
 
 
-def test_collected_mount_unsubscribes() -> None:
+def test_collected_message_root_unsubscribes() -> None:
     bus = LocalTopicBus()
-    scheduler = MountScheduler(bus)
-    mount = Mount(Empty(), access=Everyone(), scheduler=scheduler)
-    scheduler.follow(mount, Topic("build", "42"))
-    reference = weakref.ref(mount)
+    scheduler = MessageRootScheduler(bus)
+    message_root = MessageRoot(Empty(), access=Everyone(), scheduler=scheduler)
+    scheduler.follow(message_root, Topic("build", "42"))
+    reference = weakref.ref(message_root)
 
-    del mount
+    del message_root
     gc.collect()
 
     assert reference() is None
     assert bus.snapshot().topics == ()
 
 
-async def test_collected_delivered_mount_leaves_the_expiry_watch() -> None:
-    scheduler = MountScheduler()
-    mount = Mount(Empty(), access=Everyone(), scheduler=scheduler)
-    await mount.send(delivered_to(fake_message()))
-    reference = weakref.ref(mount)
+async def test_collected_delivered_message_root_leaves_the_expiry_watch() -> None:
+    scheduler = MessageRootScheduler()
+    message_root = MessageRoot(Empty(), access=Everyone(), scheduler=scheduler)
+    await message_root.send(delivered_to(fake_message()))
+    reference = weakref.ref(message_root)
 
-    del mount
+    del message_root
     gc.collect()
 
     assert reference() is None
@@ -309,12 +309,12 @@ async def test_collected_delivered_mount_leaves_the_expiry_watch() -> None:
 
 
 def test_follow_requires_its_bus_and_scheduler() -> None:
-    mount = Mount(Empty(), access=Everyone())
+    message_root = MessageRoot(Empty(), access=Everyone())
 
     with pytest.raises(RuntimeError, match="topic bus"):
-        MountScheduler().follow(mount, Topic("build", "42"))
+        MessageRootScheduler().follow(message_root, Topic("build", "42"))
     with pytest.raises(ValueError, match="scheduler"):
-        MountScheduler(LocalTopicBus()).follow(mount, Topic("build", "42"))
+        MessageRootScheduler(LocalTopicBus()).follow(message_root, Topic("build", "42"))
 
 
 @pytest.mark.parametrize(
@@ -326,4 +326,4 @@ def test_follow_requires_its_bus_and_scheduler() -> None:
 )
 def test_reactor_rejects_invalid_settings(options: dict[str, Any]) -> None:
     with pytest.raises(ValueError):
-        MountScheduler(**options)
+        MessageRootScheduler(**options)

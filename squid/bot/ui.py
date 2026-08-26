@@ -16,8 +16,8 @@ from typing import Any, Literal
 import discord
 from discord.ext.commands import Context
 
-import squid_ui_discord as sd
 import squid_ui as ui
+import squid_ui_discord as sd
 from squid.core.i18n import catalog_for, negotiate_locale
 
 DISCORD_RED = 0xF04747
@@ -45,7 +45,7 @@ __all__ = [
     "card_layout",
     "card_node",
     "contribute",
-    "create_mount",
+    "create_message_root",
     "destination",
     "error_layout",
     "error_node",
@@ -398,7 +398,7 @@ async def _component_error_hook(interaction: discord.Interaction, error: Excepti
     await handle_interaction_error(interaction, error, surface=f"component:{source}")
 
 
-HOST_DEFAULTS = sd.MountDefaults(chrome=CHROME, palette=PALETTES.resolve(), on_error=_component_error_hook)
+HOST_DEFAULTS = sd.MessageRootDefaults(chrome=CHROME, palette=PALETTES.resolve(), on_error=_component_error_hook)
 """What the bot installs with: the chrome and error handling every panel shares.
 
 Only the half that can be written down as a value. The other half -- a challenge presenter,
@@ -408,7 +408,7 @@ gets the same wiring as one opened through `bot.mounts`.
 """
 
 
-def create_mount(
+def create_message_root(
     component: ui.Component,
     *,
     source: sd.host.HostSource,
@@ -416,9 +416,9 @@ def create_mount(
     locale: str | None = None,
     chrome: ui.chrome.Chrome | None = None,
     timeout: float | None = 180,
-    scheduler: sd.MountScheduler | None = None,
-    expiry: sd.mount.ExpiryPolicy | None = _DEFAULT_EXPIRY,
-) -> sd.Mount:
+    scheduler: sd.MessageRootScheduler | None = None,
+    expiry: sd.message_root.ExpiryPolicy | None = _DEFAULT_EXPIRY,
+) -> sd.MessageRoot:
     """A mount wired to the bot's chrome and shared interaction error handler.
 
     `source` is whatever names the bot -- the client, the interaction, or the command context
@@ -449,17 +449,19 @@ async def send_component(
     locale: str | None = None,
     timeout: float = 180,
     visibility: Visibility = "public",
-    scheduler: sd.MountScheduler | None = None,
-) -> sd.Mount:
-    """Mount a component and send it as the reply to a command.
+    scheduler: sd.MessageRootScheduler | None = None,
+) -> sd.MessageRoot:
+    """MessageRoot a component and send it as the reply to a command.
 
     Pass ``scheduler`` for a panel that must react to something another mount changes -- a
     shared namespace, or a bot topic. Without one the mount is refreshed only by its own
     clicks.
     """
-    mount = create_mount(component, source=ctx, access=access, locale=locale, timeout=timeout, scheduler=scheduler)
-    await mount.send(destination(ctx, visibility=visibility, locale=locale))
-    return mount
+    message_root = create_message_root(
+        component, source=ctx, access=access, locale=locale, timeout=timeout, scheduler=scheduler
+    )
+    await message_root.send(destination(ctx, visibility=visibility, locale=locale))
+    return message_root
 
 
 class PagedList(ui.Component):
@@ -509,7 +511,7 @@ class PagedList(ui.Component):
         total = len(self.entries)
         return L(t"Page {page} of {pages} · {total} in total")
 
-    async def send(self, ctx: Context[Any], *, visibility: Visibility = "public") -> sd.Mount:
+    async def send(self, ctx: Context[Any], *, visibility: Visibility = "public") -> sd.MessageRoot:
         """Send the first page bound to a mount that owns paging, access, and expiry."""
         return await send_component(
             ctx,
