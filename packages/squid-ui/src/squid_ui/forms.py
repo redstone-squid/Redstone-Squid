@@ -126,8 +126,13 @@ class FormField[ValueT]:
         """
         raise NotImplementedError
 
-    def format(self, value: ValueT | None) -> object:
-        """Convert a typed value back to an adapter-neutral prefill value."""
+    def format(self, value: object) -> object:
+        """Convert a stored value back to an adapter-neutral prefill value.
+
+        Takes `object` rather than `ValueT | None` because prefills reach this from untyped
+        stores and round-tripped payloads; every override narrows with `isinstance` before
+        touching the value and passes anything else straight back.
+        """
         return value
 
     def _missing(self, raw: object) -> bool:
@@ -252,7 +257,7 @@ class DurationField(FormField[int]):
             _invalid(f"Enter a duration no longer than {self.maximum} seconds.")
         return value
 
-    def format(self, value: int | None) -> object:
+    def format(self, value: object) -> object:
         if not isinstance(value, int):
             return value
         for suffix, unit in (("w", 604800), ("d", 86400), ("h", 3600), ("m", 60)):
@@ -282,7 +287,7 @@ class DateField(FormField[date]):
             _invalid(f"Enter a date on or before {self.maximum.isoformat()}.")
         return value
 
-    def format(self, value: date | None) -> object:
+    def format(self, value: object) -> object:
         return value.isoformat() if isinstance(value, date) else value
 
 
@@ -307,7 +312,7 @@ class TimeField(FormField[TimeValue]):
             _invalid(f"Enter a time at or before {self.maximum.isoformat()}.")
         return value
 
-    def format(self, value: TimeValue | None) -> object:
+    def format(self, value: object) -> object:
         return value.isoformat() if isinstance(value, TimeValue) else value
 
 
@@ -362,7 +367,7 @@ class DateTimeField(FormField[DateTimeValue]):
             _invalid(f"Enter a date and time on or before {self.maximum.isoformat()}.")
         return value
 
-    def format(self, value: DateTimeValue | None) -> object:
+    def format(self, value: object) -> object:
         return value.isoformat() if isinstance(value, DateTimeValue) else value
 
 
@@ -420,7 +425,7 @@ class ZonedDateTimeField(FormField[ZonedDateTime]):
             _invalid(f"Enter a date and time on or before {self.maximum.isoformat()}.")
         return value
 
-    def format(self, value: ZonedDateTime | None) -> object:
+    def format(self, value: object) -> object:
         if not isinstance(value, ZonedDateTime):
             return value
         return value.instant.astimezone(timezone_from_name(self.timezone)).isoformat()
@@ -465,7 +470,7 @@ class ScaleField(FormField[int]):
             _invalid(f"Choose a value from {self.minimum} to {self.maximum}.")
         return value
 
-    def format(self, value: int | None) -> object:
+    def format(self, value: object) -> object:
         # A string either way: it is the radio option's value and the text input's default.
         return None if value is None else str(value)
 
@@ -505,7 +510,7 @@ class ChoiceField[ValueT](FormField[ValueT]):
             _invalid("Choose one of the available options.")
         return option.value
 
-    def format(self, value: ValueT | None) -> object:
+    def format(self, value: object) -> object:
         option = next((option for option in self.options if option.value == value or option.key == value), None)
         return option.key if option is not None else value
 
@@ -546,7 +551,7 @@ class MultiChoiceField[ValueT](FormField[tuple[ValueT, ...]]):
             _invalid(f"Choose no more than {maximum} options.")
         return values
 
-    def format(self, value: tuple[ValueT, ...] | None) -> object:
+    def format(self, value: object) -> tuple[str, ...]:
         submitted = tuple(value) if isinstance(value, list | tuple | set | frozenset) else (value,)
         return tuple(
             option.key
