@@ -252,7 +252,7 @@ class CommittedHook(Protocol):
 
 
 class Scheduler(Protocol):
-    """Anything that can absorb out-of-band refresh requests (see `Reactor`)."""
+    """Anything that can absorb out-of-band refresh requests (see `MountScheduler`)."""
 
     def schedule(self, mount: Mount) -> None: ...
 
@@ -320,7 +320,7 @@ class ExpirySupervisor(Protocol):
 
 @runtime_checkable
 class TopicScheduler(Protocol):
-    """A scheduler backed by a topic bus (see `Reactor`).
+    """A scheduler backed by a topic bus (see `MountScheduler`).
 
     Separate from `Scheduler` because following is optional: a mount with no scheduler, or
     one whose scheduler only absorbs refreshes, is simply not live-updated.
@@ -1061,7 +1061,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         """The bus addresses this mount is subscribed to, for diagnostics.
 
         `observed`, minus everything a scheduler that cannot follow topics could not
-        subscribe to. A host that followed a topic of its own through the reactor holds that
+        subscribe to. A host that followed a topic of its own through the scheduler holds that
         subscription itself and is not listed here.
         """
         return self._subscriptions.followed

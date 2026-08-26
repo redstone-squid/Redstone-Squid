@@ -17,7 +17,7 @@ from discord.webhook.async_ import AsyncWebhookAdapter, async_context
 
 import squid_discord
 import squid_layouts as sl
-from squid_discord import Everyone, Mount, Owner, PauseUpdates, Reactor, RenewEphemeral, Users, delivery
+from squid_discord import Everyone, Mount, MountScheduler, Owner, PauseUpdates, RenewEphemeral, Users, delivery
 from squid_discord.access import Allowed, Check, Denied
 from squid_discord.mount import MountLifecycle, _BusyPaint, _custom_id
 from squid_discord.testing import (
@@ -109,10 +109,10 @@ def test_renewal_policy_requires_an_expiry_supervisor() -> None:
 
 async def test_mount_snapshot_reports_lifecycle_and_handle_expiry() -> None:
     now = datetime.now(UTC)
-    reactor = Reactor(clock=lambda: now)
+    scheduler = MountScheduler(clock=lambda: now)
     interaction = fake_interaction()
     interaction.expires_at = now + timedelta(seconds=45)
-    mount = Mount(Counter(), access=Everyone(), scheduler=reactor)
+    mount = Mount(Counter(), access=Everyone(), scheduler=scheduler)
     await mount.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
 
     snapshot = mount.snapshot()
@@ -159,15 +159,15 @@ async def _armed_mount(
     *,
     access: squid_discord.AccessPolicy | None = None,
     on_error: squid_discord.mount.ErrorHook | None = None,
-) -> tuple[Mount, Any, Reactor]:
+) -> tuple[Mount, Any, MountScheduler]:
     now = datetime.now(UTC)
-    reactor = Reactor(clock=lambda: now)
+    scheduler = MountScheduler(clock=lambda: now)
     interaction = fake_interaction()
     interaction.expires_at = now + timedelta(seconds=30)
     mount = Mount(
         Counter() if component is None else component,
         access=Everyone() if access is None else access,
-        scheduler=reactor,
+        scheduler=scheduler,
         timeout=None,
         expiry=RenewEphemeral(warning=60),
         on_error=on_error,
@@ -176,7 +176,7 @@ async def _armed_mount(
     assert mount.handle is not None
     mount._queue_expiry_arm(mount.handle)
     await mount.refresh()
-    return mount, interaction, reactor
+    return mount, interaction, scheduler
 
 
 class TestEphemeralRenewal:
@@ -1743,10 +1743,10 @@ class TestLifecycle:
         component = Counter()
         mount = Mount(component, access=Everyone(), timeout=None)
         mount.refresh = AsyncMock()  # pyrefly: ignore
-        reactor = Reactor()
-        reactor.schedule(mount)
-        reactor.schedule(mount)
-        assert reactor._queue.qsize() == 1
+        scheduler = MountScheduler()
+        scheduler.schedule(mount)
+        scheduler.schedule(mount)
+        assert scheduler._queue.qsize() == 1
 
     async def test_expired_handle_marks_dirty_without_loading_or_staging(self):
         class Loaded(Component):

@@ -178,10 +178,10 @@ async def test_a_chain_settles_in_one_send_and_draws_once() -> None:
 
 async def test_a_publish_redraws_the_whole_chain_without_a_torn_paint() -> None:
     bus = sl.runtime.LocalTopicBus()
-    reactor = squid_discord.Reactor(bus)
+    scheduler = squid_discord.MountScheduler(bus)
     panel = Chain()
     message: Any = fake_message()
-    mount = Mount(panel, access=Everyone(), scheduler=reactor, timeout=None)
+    mount = Mount(panel, access=Everyone(), scheduler=scheduler, timeout=None)
     await mount.send(delivered_to(message))
 
     assert mount.followed == (TOPIC,), "a render reading only `node` still follows what `build` watched"

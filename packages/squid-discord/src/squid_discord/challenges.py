@@ -37,7 +37,7 @@ class ChallengeRunner:
 
     `resume` is a plain queue push and copies no context, so it is safe to call from inside
     the dialog's transaction; `run` is the host's background task that drains it. Started
-    once, alongside the reactor:
+    once, alongside the scheduler:
 
     ```python
     background.start(runner.run(), name="layout-challenges")

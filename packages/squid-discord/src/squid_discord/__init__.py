@@ -105,10 +105,6 @@ from squid_discord.presentation import (
     DiscordPresentation,
     mode_of,
 )
-from squid_discord.reactor import (
-    Reactor,
-    ReactorSnapshot,
-)
 from squid_discord.roles import (
     ANY,
     AT_LEAST_ONE,
@@ -126,6 +122,10 @@ from squid_discord.roles import (
     RolesUnchanged,
     RolesUpdated,
     RoleTransitionResult,
+)
+from squid_discord.scheduler import (
+    MountScheduler,
+    MountSchedulerSnapshot,
 )
 from squid_discord.screens import ScreenSpec
 from squid_discord.sessions import (
@@ -209,10 +209,10 @@ __all__ = [
     "MountDefaults",
     "MountFactory",
     "MountOptions",
+    "MountScheduler",
+    "MountSchedulerSnapshot",
     "Owner",
     "PauseUpdates",
-    "Reactor",
-    "ReactorSnapshot",
     "RenewEphemeral",
     "ResourceCost",
     "RoleCategory",

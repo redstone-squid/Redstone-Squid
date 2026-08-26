@@ -38,7 +38,7 @@ the scene shapes, the `discord.*` capability tags, and the `DiscordTarget` marke
 that imports discord.py.
 
 What lives here is everything that needs a gateway: the renderers that turn a scene into
-`discord.ui` objects, `Mount` and its lifecycle, `Session`, `Router`, `Reactor`, `Screen`,
+`discord.ui` objects, `Mount` and its lifecycle, `Session`, `Router`, `MountScheduler`, `Screen`,
 delivery and receipts, adoption of views this library did not create, challenges, `RolePanel`,
 devtools, and durability.
 
@@ -63,7 +63,7 @@ reach it through `LayoutHost.of(source)`. Install once per client; a second inst
 host = sd.install(bot, defaults=sd.MountDefaults(chrome=CHROME), bus=topic_bus)
 ```
 
-`install` starts nothing. Supervise `host.run()`, or supervise `host.reactor.run()` and
+`install` starts nothing. Supervise `host.run()`, or supervise `host.scheduler.run()` and
 `host.challenges.run()` separately when the host needs per-job health reporting. `host.close()`
 ends every session and removes the client registration.
 

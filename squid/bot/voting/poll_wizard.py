@@ -203,7 +203,9 @@ async def present_poll_form(
             allow_network=allow_network,
         )
         await form_interaction.client.mounts.open(
-            component.mount(source=form_interaction, reactor=getattr(form_interaction.client, "layout_reactor", None)),
+            component.mount(
+                source=form_interaction, scheduler=getattr(form_interaction.client, "layout_reactor", None)
+            ),
             sd.respond_to(form_interaction, ephemeral=True, wait=True),
             key=SessionKey.user_guild("poll-wizard", form_interaction.user.id, form_interaction.guild.id),
             actor_id=form_interaction.user.id,
@@ -399,13 +401,13 @@ class PollConfirmationComponent(sl.Component):
     def _scope_label(self) -> str:
         return next(label for value, label, _ in SCOPE_CHOICES if value is self.draft.scope)
 
-    def mount(self, *, source: sd.host.HostSource, reactor: sd.Reactor | None = None) -> sd.Mount:
+    def mount(self, *, source: sd.host.HostSource, scheduler: sd.MountScheduler | None = None) -> sd.Mount:
         self._mount = create_mount(
             self,
             source=source,
             access=sd.Owner(self.owner_id),
             timeout=self._timeout,
-            reactor=reactor,
-            expiry=sd.RenewEphemeral() if reactor is not None else sd.PauseUpdates(),
+            scheduler=scheduler,
+            expiry=sd.RenewEphemeral() if scheduler is not None else sd.PauseUpdates(),
         )
         return self._mount
