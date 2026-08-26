@@ -2,31 +2,33 @@
 
 from squid_replication.document import (
     PreparedReplicationInverse,
-    ReplicationChangeToken,
+    Replica,
     ReplicaClosedError,
     ReplicatedCounter,
     ReplicatedDocument,
-    ReplicationResyncRequiredError,
-    Replica,
     ReplicatedSet,
+    ReplicationChangeToken,
+    ReplicationResyncRequiredError,
 )
-from squid_replication.engine import ReplicationEngine, ReplicaBranch
-from squid_replication.reference import ReferenceEngine, ReferenceSnapshot, ReferenceVersion
+from squid_replication.engine import ReplicaBranch, ReplicationBackend, ReplicationEngine
+from squid_replication.reference import ReferenceBackend, ReferenceEngine, ReferenceSnapshot, ReferenceVersion
 from squid_replication.transport import ReplicationUpdate
 
 __all__ = [
+    "PreparedReplicationInverse",
+    "ReferenceBackend",
     "ReferenceEngine",
     "ReferenceSnapshot",
     "ReferenceVersion",
-    "PreparedReplicationInverse",
-    "ReplicationChangeToken",
+    "Replica",
+    "ReplicaBranch",
     "ReplicaClosedError",
     "ReplicatedCounter",
     "ReplicatedDocument",
+    "ReplicatedSet",
+    "ReplicationBackend",
+    "ReplicationChangeToken",
     "ReplicationEngine",
     "ReplicationResyncRequiredError",
-    "Replica",
-    "ReplicatedSet",
     "ReplicationUpdate",
-    "ReplicaBranch",
 ]
