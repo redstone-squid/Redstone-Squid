@@ -15,7 +15,7 @@ from squid_reactive import (
     ConflictDetail,
     Reactive,
     ReactiveConflictError,
-    add_action_outcome_sink,
+    add_action_result_sink,
     on_action_commit,
     state,
     strong_read,
@@ -153,7 +153,7 @@ def test_three_replicas_converge_for_every_delivery_order() -> None:
     assert replicas[0].counter("votes").value == 6
 
 
-def test_remote_import_invalidates_and_has_remote_action_outcome() -> None:
+def test_remote_import_invalidates_and_has_a_remote_action_result() -> None:
     source = ReplicatedScope("a").open("project")
     target = ReplicatedScope("b").open("project")
     with transaction():
@@ -162,7 +162,7 @@ def test_remote_import_invalidates_and_has_remote_action_outcome() -> None:
     snapshots = []
     target.subscribe(snapshots.append)
     ledger = ActionLedger()
-    add_action_outcome_sink(ledger)
+    add_action_result_sink(ledger)
 
     try:
         target.import_update(updates)
@@ -170,10 +170,10 @@ def test_remote_import_invalidates_and_has_remote_action_outcome() -> None:
         ledger.close()
 
     assert snapshots[-1].counter("votes") == 1
-    assert ledger.outcomes[-1].kind == "remote"
-    assert ledger.outcomes[-1].actor is not None
-    assert ledger.outcomes[-1].actor.identity == "a"
-    assert ledger.outcomes[-1].metadata == ()
+    assert ledger.results[-1].kind == "remote"
+    assert ledger.results[-1].actor is not None
+    assert ledger.results[-1].actor.identity == "a"
+    assert ledger.results[-1].metadata == ()
 
 
 def test_scheduler_places_remote_import_before_local_validation() -> None:

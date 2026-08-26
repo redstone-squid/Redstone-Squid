@@ -247,7 +247,7 @@ type RoleTransitionResult = (
     | RoleMutationForbidden
     | RoleMutationFailed
 )
-type RoleFeedback = Callable[[discord.Interaction[Any], RoleTransitionResult], Awaitable[None]]
+type RoleNoticeHandler = Callable[[discord.Interaction[Any], RoleTransitionResult], Awaitable[None]]
 
 
 @dataclass(slots=True)
@@ -309,8 +309,8 @@ def _role_is_editable(role: Any, guild: Any) -> bool:
         return False
 
 
-def _default_feedback_message(result: RoleTransitionResult) -> str:
-    """Return a short, mention-free message for the built-in feedback hook."""
+def _default_notice(result: RoleTransitionResult) -> str:
+    """Return a short, mention-free message for the built-in notice hook."""
     match result:
         case RolesUpdated():
             return "Your roles were updated."
@@ -326,9 +326,9 @@ def _default_feedback_message(result: RoleTransitionResult) -> str:
             return "Discord could not update your roles. Please try again."
 
 
-async def _send_default_feedback(interaction: discord.Interaction[Any], result: RoleTransitionResult) -> None:
-    """Send built-in private feedback, using a follow-up after a deferred interaction."""
-    content = _default_feedback_message(result)
+async def _send_default_notice(interaction: discord.Interaction[Any], result: RoleTransitionResult) -> None:
+    """Send built-in private notice, using a follow-up after a deferred interaction."""
+    content = _default_notice(result)
     allowed_mentions = discord.AllowedMentions.none()
     if interaction.response.is_done():
         await interaction.followup.send(content, ephemeral=True, allowed_mentions=allowed_mentions)
@@ -345,7 +345,7 @@ class RolePanel(Component):
         *,
         title: TextLike,
         categories: Sequence[RoleCategory],
-        feedback: RoleFeedback | None = None,
+        notice: RoleNoticeHandler | None = None,
         audit_reason: str = "Self-role panel",
     ) -> None:
         if not isinstance(routes, RouteGroup):
@@ -354,7 +354,7 @@ class RolePanel(Component):
         self.routes = routes
         self.title = title
         self.categories = tuple(categories)
-        self.feedback = feedback
+        self.notice = notice
         self.audit_reason = audit_reason
         self._categories = self._validate_categories(self.categories)
         self._toggle_route, self._set_route = self._install_routes(routes)
@@ -491,13 +491,13 @@ class RolePanel(Component):
                 frozenset(),
                 "Role panels are available only to server members.",
             )
-            await self._feedback(interaction, result)
+            await self._notice(interaction, result)
             return
 
         await interaction.response.defer(ephemeral=True, thinking=True)
         if category is None:
             result = RoleSelectionInvalid(category_key, frozenset(), frozenset(), "Unknown role category.")
-            await self._feedback(interaction, result)
+            await self._notice(interaction, result)
             return
 
         key = (int(guild.id), int(actor.id))
@@ -509,7 +509,7 @@ class RolePanel(Component):
                 toggle_role_id=toggle_role_id,
                 selected_values=selected_values,
             )
-        await self._feedback(interaction, result)
+        await self._notice(interaction, result)
 
     async def _transition_locked(
         self,
@@ -654,12 +654,12 @@ class RolePanel(Component):
             return candidate, "The selection does not satisfy this category's cardinality."
         return candidate, None
 
-    async def _feedback(self, interaction: discord.Interaction[Any], result: RoleTransitionResult) -> None:
-        """Run the configured feedback hook or the safe built-in hook."""
-        if self.feedback is None:
-            await _send_default_feedback(interaction, result)
+    async def _notice(self, interaction: discord.Interaction[Any], result: RoleTransitionResult) -> None:
+        """Run the configured notice hook or the safe built-in hook."""
+        if self.notice is None:
+            await _send_default_notice(interaction, result)
         else:
-            await self.feedback(interaction, result)
+            await self.notice(interaction, result)
 
 
 __all__ = [
@@ -670,9 +670,9 @@ __all__ = [
     "Cardinality",
     "RoleCategory",
     "RoleConfigurationUnavailable",
-    "RoleFeedback",
     "RoleMutationFailed",
     "RoleMutationForbidden",
+    "RoleNoticeHandler",
     "RoleOption",
     "RolePanel",
     "RoleSelectionInvalid",

@@ -365,19 +365,19 @@ class DevToolsRuntime:
 
 
 def _session_inspection(session: Session) -> SessionInspection:
-    summary = session.summary
+    snapshot = session.snapshot
     return SessionInspection(
         session.id,
-        repr(summary.key),
-        summary.actor_id,
-        summary.durable,
-        summary.local,
-        summary.opened_at,
-        tuple(sorted(summary.participants)),
+        repr(snapshot.key),
+        snapshot.actor_id,
+        snapshot.durable,
+        snapshot.local,
+        snapshot.opened_at,
+        tuple(sorted(snapshot.participants)),
         tuple(mount.id for mount in session.mounts),
-        tuple(sorted(summary.members)),
-        summary.capacity,
-        summary.remaining_capacity,
+        tuple(sorted(snapshot.members)),
+        snapshot.capacity,
+        snapshot.remaining_capacity,
         session.quota,
         session.domain,
     )

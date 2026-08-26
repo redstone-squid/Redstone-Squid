@@ -11,16 +11,16 @@ import pytest
 import squid_discord
 import squid_layouts as sl
 from squid_discord import Everyone, SessionKey, SessionRegistry
-from squid_discord.delivery import DeliveryReceipt
+from squid_discord.delivery import DeliveryResult
 from squid_discord.durability import (
     ComponentRegistry,
     DurabilityHealth,
     DurableSession,
     DurableSessionCodec,
     DurableSessionRuntime,
+    FrontendAddress,
     MemorySessionStore,
     Missing,
-    MountLocator,
     MountStateError,
     NotDurable,
     Promoted,
@@ -38,7 +38,7 @@ from squid_discord.sessions import (
 )
 from squid_discord.testing import delivered_to, fake_message
 from squid_layouts.primitives import Text
-from squid_layouts.profiling import PresentationOutcome
+from squid_layouts.profiling import PresentationStatus
 from squid_stores import StoredSessionRecord
 
 
@@ -62,7 +62,7 @@ class FakeFrontend:
     missing_ids: frozenset[str] = frozenset()
     unreachable_ids: frozenset[str] = frozenset()
 
-    async def promote(self, mount: squid_discord.Mount, receipt: DeliveryReceipt):
+    async def promote(self, mount: squid_discord.Mount, receipt: DeliveryResult):
         if self.reject_next:
             self.reject_next = False
             return NotDurable("test destination is temporary")
@@ -70,7 +70,7 @@ class FakeFrontend:
             return NotDurable("message has no durable binding")
         await mount.adopt_handle(receipt.handle)
         return Promoted(
-            MountLocator(
+            FrontendAddress(
                 "fake",
                 {"channel_id": receipt.message.channel.id, "message_id": receipt.message.id},
             ),
@@ -87,7 +87,7 @@ class FakeFrontend:
         if unreachable:
             return Unreachable(unreachable, tuple("test frontend is unavailable" for _ in unreachable))
         for binding in bindings:
-            message_id = binding.locator.values["message_id"]
+            message_id = binding.address.values["message_id"]
             assert isinstance(message_id, int)
             await binding.mount.send(delivered_to(fake_message(message_id=message_id)))
         return Reconnected(tuple(binding.record_mount_id for binding in bindings))
@@ -251,7 +251,7 @@ async def test_suppressed_runtime_commit_checkpoints_hidden_component_state() ->
         component.advanced = True
         mount.invalidate()
 
-        assert await mount.refresh_now() is PresentationOutcome.UNCHANGED
+        assert await mount.refresh_now() is PresentationStatus.UNCHANGED
 
         with anyio.fail_after(1):
             while True:

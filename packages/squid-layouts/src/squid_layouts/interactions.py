@@ -26,7 +26,7 @@ class ActionPolicy(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class Feedback:
+class BusySpec:
     """Ask the framework to show that a slow action is running.
 
     The interim paint is a patch of the scene already on screen — the pressed control
@@ -226,8 +226,8 @@ class ActionBinding:
     routes: Mapping[str, ActionBinding] = field(default_factory=dict)
     guard: Guard | None = None
     """Admission checked by the frontend after the concurrency gate, before the handler."""
-    feedback: Feedback | None = None
-    """Busy feedback policy for a handler slow enough to need it."""
+    busy: BusySpec | None = None
+    """Busy busy policy for a handler slow enough to need it."""
     label: TextLike = ""
     """What the pressed control says, which is what a framework-written entry is called."""
     record: History | None = None
@@ -253,9 +253,9 @@ __all__ = [
     "ActionRequest",
     "ActionResponder",
     "Actor",
+    "BusySpec",
     "EntitySelectionEvent",
     "EntitySelectionHandler",
-    "Feedback",
     "PressEvent",
     "PressHandler",
     "SelectionEvent",

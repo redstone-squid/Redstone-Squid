@@ -52,8 +52,8 @@ from squid_layouts.interactions import (
     ActionProceed,
     ActionRequest,
     Actor,
+    BusySpec,
     EntitySelectionEvent,
-    Feedback,
     PressEvent,
     SelectionEvent,
     SubmitEvent,
@@ -72,7 +72,7 @@ from squid_layouts.planning.navigation import (
 )
 from squid_layouts.primitives.nodes import Button, Node, Row
 from squid_layouts.profiling import (
-    ActionOutcome,
+    ActionResult,
     DetachedSpanRecorder,
     DispatchDisposition,
     DispatchResult,
@@ -80,11 +80,11 @@ from squid_layouts.profiling import (
     NoOpProfiler,
     OperationKind,
     OperationRecorder,
-    PresentationOutcome,
+    PresentationStatus,
     Profiler,
     TraceLink,
-    TraceOutcome,
     TraceResult,
+    TraceStatus,
 )
 
 # (deliver is imported as a module so tests can monkeypatch its functions.)
@@ -711,8 +711,8 @@ class _DispatchProfile:
     interaction: discord.Interaction
     generation: GenerationDecision
     acknowledgement: DetachedSpanRecorder
-    action: ActionOutcome = ActionOutcome.NOT_RUN
-    presentation: PresentationOutcome = PresentationOutcome.NOT_REQUIRED
+    action: ActionResult = ActionResult.NOT_RUN
+    presentation: PresentationStatus = PresentationStatus.NOT_REQUIRED
     acknowledged: bool = False
     finished: bool = False
     resumed: bool = False
@@ -740,11 +740,11 @@ class _DispatchProfile:
         self.operation.increment("dispatch.rebased", int(self.generation.rebased))
         self.acknowledge("action")
         # Both challenge dispositions fall through to COMPLETED, which is right: asking a
-        # question and being told no are outcomes, not failures.
-        outcome = (
-            TraceOutcome.CANCELLED
+        # question and being told no are results, not failures.
+        status = (
+            TraceStatus.CANCELLED
             if disposition is DispatchDisposition.CANCELLED
-            else TraceOutcome.FAILED
+            else TraceStatus.FAILED
             if disposition
             in {
                 DispatchDisposition.ACCESS_FAILED,
@@ -752,12 +752,12 @@ class _DispatchProfile:
                 DispatchDisposition.ACTION_FAILED,
                 DispatchDisposition.DELIVERY_FAILED,
             }
-            else TraceOutcome.COMPLETED
+            else TraceStatus.COMPLETED
         )
         detail = None if error is None else f"{type(error).__module__}.{type(error).__qualname__}"
         self.operation.set_result(
             TraceResult(
-                outcome,
+                status,
                 detail,
                 DispatchResult(disposition, self.action, self.presentation, self.generation),
             )
@@ -795,14 +795,14 @@ class _BusyPaint:
         self,
         mount: Mount,
         key: str,
-        feedback: Feedback,
+        busy: BusySpec,
         interaction: discord.Interaction,
         *,
         resumed: bool = False,
     ) -> None:
         self._mount = mount
         self._key = key
-        self._feedback = feedback
+        self._busy = busy
         self._interaction = interaction
         self._resumed = resumed
         self._lock = asyncio.Lock()
@@ -819,7 +819,7 @@ class _BusyPaint:
         async with self._lock:
             if self._closed or self._shown or self._mount._finished:
                 return
-            pending = self._feedback.pending
+            pending = self._busy.pending
             label = self._mount._chrome_text(self._mount.chrome.working if pending is None else pending)
             source = self._mount._source(self._interaction, resumed=self._resumed)
             wrote = await self._mount._repaint(self._key, label, through=source)
@@ -900,7 +900,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             raise ValueError(message)
         self.acknowledgement_timeout = acknowledgement_timeout
         self.pending_after = pending_after
-        """How long an action carrying `Feedback` may run before its interim paint appears."""
+        """How long an action carrying `BusySpec` may run before its interim paint appears."""
         self.guards = GuardLedger(now=clock)
         """Where stateful guards keep their counts; it lives and dies with this mount."""
         self.challenge = challenge
@@ -1147,8 +1147,8 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         timeout = self._remaining_timeout()
         return remaining <= policy.warning and (timeout is None or timeout > remaining)
 
-    async def _apply_expiry_arm(self, profile: OperationRecorder) -> PresentationOutcome | None:
-        """Apply queued policy UI, returning an outcome when renewal consumed the refresh."""
+    async def _apply_expiry_arm(self, profile: OperationRecorder) -> PresentationStatus | None:
+        """Apply queued policy UI, returning a status when renewal consumed the refresh."""
         requested = self._expiry_arm_requested
         self._expiry_arm_requested = None
         if requested is None:
@@ -1171,9 +1171,9 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                 candidate.view.stop()
                 self._dirty = True
                 logger.debug("mount %s could not arm renewal before its edit handle expired", self.id)
-                return PresentationOutcome.ABANDONED
+                return PresentationStatus.ABANDONED
             self._commit_renewal(candidate)
-            return PresentationOutcome.WRITTEN
+            return PresentationStatus.WRITTEN
         self.status = self.chrome.updates_paused
         self.invalidate()
         return None
@@ -1350,7 +1350,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                 binding.policy,
                 binding.routes,
                 binding.guard,
-                binding.feedback,
+                binding.busy,
             )
             handlers[internal.key] = internal
             item = _WiredButton(node, self, internal.key, generation)
@@ -1887,7 +1887,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                 await self._render_lock.acquire()
             try:
                 if self._finished:
-                    profile.set_result(TraceResult(TraceOutcome.ABANDONED, presentation=PresentationOutcome.ABANDONED))
+                    profile.set_result(TraceResult(TraceStatus.ABANDONED, presentation=PresentationStatus.ABANDONED))
                     return deliver.Abandoned()
                 # A render staged by `_stage_view` and never delivered is superseded, not delivered.
                 if self._pending is not None:
@@ -1906,7 +1906,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     logger.debug("mount %s was not delivered: the destination abandoned it", self.id)
                     with profile.span("rollback"):
                         self._rollback(candidate)
-                    profile.set_result(TraceResult(TraceOutcome.ABANDONED, presentation=PresentationOutcome.ABANDONED))
+                    profile.set_result(TraceResult(TraceStatus.ABANDONED, presentation=PresentationStatus.ABANDONED))
                     return deliver.Abandoned()
                 except Exception:
                     with profile.span("rollback"):
@@ -1923,7 +1923,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                 if self._unwatch_expiry is None and isinstance(self.scheduler, ExpirySupervisor):
                     self._unwatch_expiry = self.scheduler.watch(self)
                 await self._settle_visible(candidate, profile=profile)
-                profile.set_result(TraceResult(TraceOutcome.COMPLETED, presentation=PresentationOutcome.WRITTEN))
+                profile.set_result(TraceResult(TraceStatus.COMPLETED, presentation=PresentationStatus.WRITTEN))
                 settled = all(not binding.pending for binding in candidate.tree.async_bindings)
                 return deliver.Delivered(receipt, settled=settled)
             finally:
@@ -2063,7 +2063,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                         binding = binding.routed(tuple(values))
                     if binding is None:
                         await self._acknowledge(interaction, profile=profile, source="invalid_selection")
-                        profile.presentation = PresentationOutcome.ACKNOWLEDGED
+                        profile.presentation = PresentationStatus.ACKNOWLEDGED
                         profile.finish(DispatchDisposition.INVALID_SELECTION)
                         return
                     key = binding.key
@@ -2091,11 +2091,11 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     rebase=lambda: self._handlers.get(key),
                 )
             except anyio.get_cancelled_exc_class():
-                profile.action = ActionOutcome.CANCELLED
+                profile.action = ActionResult.CANCELLED
                 profile.finish(DispatchDisposition.CANCELLED)
                 raise
             except Exception as error:
-                profile.presentation = PresentationOutcome.FAILED
+                profile.presentation = PresentationStatus.FAILED
                 profile.finish(DispatchDisposition.DELIVERY_FAILED, error)
                 raise
 
@@ -2144,22 +2144,22 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                         with profile.operation.span("commit"):
                             self._commit_presented(candidate)
                         await self._settle_visible(candidate, through=source, profile=profile.operation)
-                        profile.presentation = PresentationOutcome.WRITTEN
+                        profile.presentation = PresentationStatus.WRITTEN
                         if wrote is source:
                             profile.acknowledge("interaction_write")
                         acknowledge = wrote is not source
         finally:
             self._render_lock.release()
         if failure is not None:
-            profile.presentation = PresentationOutcome.FAILED
+            profile.presentation = PresentationStatus.FAILED
             await self.handle_error(interaction, failure, "renewal")
             profile.acknowledge("error_hook")
             profile.finish(DispatchDisposition.ACTION_FAILED, failure)
             return
         if acknowledge:
             await self._acknowledge(interaction, profile=profile, source="renewal")
-            if profile.presentation is PresentationOutcome.NOT_REQUIRED:
-                profile.presentation = PresentationOutcome.ACKNOWLEDGED
+            if profile.presentation is PresentationStatus.NOT_REQUIRED:
+                profile.presentation = PresentationStatus.ACKNOWLEDGED
         profile.finish(DispatchDisposition.COMPLETED)
 
     async def dispatch_submit(
@@ -2243,11 +2243,11 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     rebase=rebase,
                 )
             except anyio.get_cancelled_exc_class():
-                profile.action = ActionOutcome.CANCELLED
+                profile.action = ActionResult.CANCELLED
                 profile.finish(DispatchDisposition.CANCELLED)
                 raise
             except Exception as error:
-                profile.presentation = PresentationOutcome.FAILED
+                profile.presentation = PresentationStatus.FAILED
                 profile.finish(DispatchDisposition.DELIVERY_FAILED, error)
                 raise
 
@@ -2264,7 +2264,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             # nobody will see again.
             text = resolve_text(self.chrome.session_ended, self.localization).content
             await deliver.respond_text(interaction, text, ephemeral=True)
-            profile.presentation = PresentationOutcome.WRITTEN
+            profile.presentation = PresentationStatus.WRITTEN
             profile.acknowledge("mount_finished")
             profile.finish(DispatchDisposition.MOUNT_FINISHED)
             return False
@@ -2283,7 +2283,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             reason = self.chrome.not_yours if decision.reason is None else decision.reason
             text = resolve_text(reason, self.localization).content
             await deliver.respond_text(interaction, text, ephemeral=True)
-            profile.presentation = PresentationOutcome.WRITTEN
+            profile.presentation = PresentationStatus.WRITTEN
             profile.acknowledge("access_denied")
             profile.finish(DispatchDisposition.ACCESS_DENIED)
             return False
@@ -2339,24 +2339,24 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                 "guard",
                 attributes={"guard": f"{type(guard).__module__}.{type(guard).__qualname__}"},
             ):
-                outcome = await guard.admit(self._event(interaction, values), ledger)
+                decision = await guard.admit(self._event(interaction, values), ledger)
         except Exception as error:
             await self.handle_error(interaction, error, f"guard:{key}")
             profile.acknowledge("error_hook")
             profile.finish(DispatchDisposition.GUARD_FAILED, error)
             return _REFUSED
-        if isinstance(outcome, Challenge):
-            return _Admission(admitted=False, challenge=outcome)
+        if isinstance(decision, Challenge):
+            return _Admission(admitted=False, challenge=decision)
         ledger.commit()
-        if outcome.allowed:
+        if decision.allowed:
             return _ADMITTED
-        reason = outcome.reason
+        reason = decision.reason
         if reason is None:
             reason = (
-                self.chrome.not_now if outcome.retry_after is None else self.chrome.try_again_in(outcome.retry_after)
+                self.chrome.not_now if decision.retry_after is None else self.chrome.try_again_in(decision.retry_after)
             )
         await deliver.respond_text(interaction, self._chrome_text(reason), ephemeral=True)
-        profile.presentation = PresentationOutcome.WRITTEN
+        profile.presentation = PresentationStatus.WRITTEN
         profile.acknowledge("guard_denied")
         profile.finish(DispatchDisposition.GUARD_DENIED)
         return _REFUSED
@@ -2409,7 +2409,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             profile.acknowledge("error_hook")
             profile.finish(DispatchDisposition.GUARD_FAILED, error)
             return
-        profile.presentation = PresentationOutcome.WRITTEN
+        profile.presentation = PresentationStatus.WRITTEN
         profile.acknowledge("challenge_issued")
         profile.finish(DispatchDisposition.CHALLENGE_ISSUED)
 
@@ -2456,14 +2456,14 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                 await deliver.respond_text(interaction, self._chrome_text(challenge.on_decline), ephemeral=True)
             operation.set_result(
                 TraceResult(
-                    TraceOutcome.COMPLETED,
+                    TraceStatus.COMPLETED,
                     None,
                     DispatchResult(
                         DispatchDisposition.CHALLENGE_DECLINED,
-                        ActionOutcome.NOT_RUN,
-                        PresentationOutcome.WRITTEN
+                        ActionResult.NOT_RUN,
+                        PresentationStatus.WRITTEN
                         if challenge.on_decline is not None
-                        else PresentationOutcome.NOT_REQUIRED,
+                        else PresentationStatus.NOT_REQUIRED,
                         GenerationDecision(None, self._generation),
                     ),
                 )
@@ -2501,7 +2501,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             profile.decide_generation(self._generation)
             if binding.policy is ActionPolicy.EXCLUSIVE and generation not in {None, self._generation}:
                 await self._acknowledge(interaction, profile=profile, source="stale")
-                profile.presentation = PresentationOutcome.ACKNOWLEDGED
+                profile.presentation = PresentationStatus.ACKNOWLEDGED
                 profile.finish(DispatchDisposition.STALE)
                 return
             rebased = binding.policy is ActionPolicy.REBASE and generation not in {None, self._generation}
@@ -2513,7 +2513,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     refreshed = rebase()
                 if refreshed is None:
                     await self._acknowledge(interaction, profile=profile, source="stale")
-                    profile.presentation = PresentationOutcome.ACKNOWLEDGED
+                    profile.presentation = PresentationStatus.ACKNOWLEDGED
                     profile.finish(DispatchDisposition.STALE)
                     return
                 binding = refreshed
@@ -2544,12 +2544,10 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         rebased: bool,
         profile: _DispatchProfile,
     ) -> None:
-        # Painting feedback may wait behind arbitrary visible-resource work under the render
+        # Painting busy may wait behind arbitrary visible-resource work under the render
         # lock. The acknowledgement deadline is independent so only Discord can delay it.
         busy = (
-            None
-            if binding.feedback is None
-            else _BusyPaint(self, key, binding.feedback, interaction, resumed=profile.resumed)
+            None if binding.busy is None else _BusyPaint(self, key, binding.busy, interaction, resumed=profile.resumed)
         )
 
         async def acknowledge_by_deadline() -> None:
@@ -2623,29 +2621,29 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         try:
             handled = await self._run_middleware(request, handle, profile.operation)
         except Exception as error:
-            profile.action = ActionOutcome.FAILED
+            profile.action = ActionResult.FAILED
             # Before the error hook: the failed action leaves no flush behind, so without
             # this the panel would sit on "working" with every control dead.
-            restore = binding.feedback is not None and binding.feedback.restore_on_error
+            restore = binding.busy is not None and binding.busy.restore_on_error
             if busy is not None and await busy.close() and restore:
                 await busy.restore()
             await self.handle_error(interaction, error, f"action:{key}")
             profile.acknowledge("error_hook")
             profile.finish(DispatchDisposition.ACTION_FAILED, error)
             return
-        profile.action = ActionOutcome.HANDLED if handled else ActionOutcome.SHORT_CIRCUITED
+        profile.action = ActionResult.HANDLED if handled else ActionResult.SHORT_CIRCUITED
         profile.acknowledge("action")
         self._renew(interaction, resumed=profile.resumed)
         painted = busy is not None and await busy.close()
         try:
             profile.presentation = await self.flush(interaction, profile=profile)
         except Exception as error:
-            profile.presentation = PresentationOutcome.FAILED
+            profile.presentation = PresentationStatus.FAILED
             profile.finish(DispatchDisposition.DELIVERY_FAILED, error)
             raise
         # An action that changed nothing flushes nothing, and a stranded "working" panel is
         # not a policy choice -- so this restore ignores `restore_on_error`.
-        if painted and busy is not None and profile.presentation is not PresentationOutcome.WRITTEN:
+        if painted and busy is not None and profile.presentation is not PresentationStatus.WRITTEN:
             await busy.restore()
         profile.finish(DispatchDisposition.COMPLETED)
 
@@ -2721,7 +2719,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     label=binding.label,
                     record=binding.record,
                 )
-                profile.presentation = PresentationOutcome.WRITTEN
+                profile.presentation = PresentationStatus.WRITTEN
                 profile.acknowledge("validation_retry")
                 profile.finish(DispatchDisposition.VALIDATION_RETRY)
                 return
@@ -2747,9 +2745,9 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     await binding.handler(event)
 
             handled = await self._run_middleware(request, handle, profile.operation)
-            profile.action = ActionOutcome.HANDLED if handled else ActionOutcome.SHORT_CIRCUITED
+            profile.action = ActionResult.HANDLED if handled else ActionResult.SHORT_CIRCUITED
         except Exception as error:
-            profile.action = ActionOutcome.FAILED
+            profile.action = ActionResult.FAILED
             await self.handle_error(interaction, error, f"form:{key}")
             profile.acknowledge("error_hook")
             profile.finish(DispatchDisposition.ACTION_FAILED, error)
@@ -2759,7 +2757,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         try:
             profile.presentation = await self.flush(interaction, profile=profile)
         except Exception as error:
-            profile.presentation = PresentationOutcome.FAILED
+            profile.presentation = PresentationStatus.FAILED
             profile.finish(DispatchDisposition.DELIVERY_FAILED, error)
             raise
         profile.finish(DispatchDisposition.COMPLETED)
@@ -2828,7 +2826,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         interaction: discord.Interaction,
         *,
         profile: _DispatchProfile | None = None,
-    ) -> PresentationOutcome:
+    ) -> PresentationStatus:
         """Apply pending state changes as an interaction edit, or just acknowledge."""
         if profile is not None:
             with profile.operation.span("flush"):
@@ -2839,12 +2837,10 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             try:
                 presentation = await self._flush(interaction, operation)
             except Exception:
-                operation.set_result(TraceResult(TraceOutcome.FAILED, presentation=PresentationOutcome.FAILED))
+                operation.set_result(TraceResult(TraceStatus.FAILED, presentation=PresentationStatus.FAILED))
                 raise
-            outcome = (
-                TraceOutcome.ABANDONED if presentation is PresentationOutcome.ABANDONED else TraceOutcome.COMPLETED
-            )
-            operation.set_result(TraceResult(outcome, presentation=presentation))
+            status = TraceStatus.ABANDONED if presentation is PresentationStatus.ABANDONED else TraceStatus.COMPLETED
+            operation.set_result(TraceResult(status, presentation=presentation))
             return presentation
 
     async def _flush(
@@ -2853,14 +2849,14 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         operation: OperationRecorder,
         *,
         dispatch: _DispatchProfile | None = None,
-    ) -> PresentationOutcome:
+    ) -> PresentationStatus:
         acknowledge = False
-        presentation = PresentationOutcome.NO_CHANGE
+        presentation = PresentationStatus.NO_CHANGE
         with operation.span("render_lock"):
             await self._render_lock.acquire()
         try:
             if self._finished:
-                return PresentationOutcome.ABANDONED
+                return PresentationStatus.ABANDONED
             if self._lifecycle is MountLifecycle.RENEWAL_ARMED:
                 acknowledge = True
             if not self._dirty:
@@ -2874,7 +2870,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     with operation.span("suppress"):
                         self._suppress(candidate, operation)
                     acknowledge = True
-                    presentation = PresentationOutcome.UNCHANGED
+                    presentation = PresentationStatus.UNCHANGED
                     # Only visible resources could still move the panel; they settle through
                     # their own comparison.
                     await self._settle_visible(candidate, through=source, profile=operation)
@@ -2889,12 +2885,12 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                         with operation.span("rollback"):
                             self._rollback(candidate)
                         acknowledge = True
-                        presentation = PresentationOutcome.ABANDONED
+                        presentation = PresentationStatus.ABANDONED
                     else:
                         with operation.span("commit"):
                             self._commit_presented(candidate)
                         await self._settle_visible(candidate, through=source, profile=operation)
-                        presentation = PresentationOutcome.WRITTEN
+                        presentation = PresentationStatus.WRITTEN
                         if dispatch is not None and wrote is source:
                             dispatch.acknowledge("interaction_write")
                         # Only the interaction's own handle answers the click by editing through
@@ -2905,8 +2901,8 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             self._render_lock.release()
         if acknowledge:
             await self._acknowledge(interaction, profile=dispatch, source="flush")
-            if presentation is PresentationOutcome.NO_CHANGE:
-                presentation = PresentationOutcome.ACKNOWLEDGED
+            if presentation is PresentationStatus.NO_CHANGE:
+                presentation = PresentationStatus.ACKNOWLEDGED
         return presentation
 
     async def finish_via(self, interaction: discord.Interaction) -> None:
@@ -2961,7 +2957,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             return
         await self.refresh_now()
 
-    async def refresh_now(self, *, links: Sequence[TraceLink] = ()) -> PresentationOutcome:
+    async def refresh_now(self, *, links: Sequence[TraceLink] = ()) -> PresentationStatus:
         """Re-render and deliver right now, reporting how the presentation settled."""
         component = type(self.component)
         name = f"{component.__module__}.{component.__qualname__}"
@@ -2972,35 +2968,33 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                 await self._render_lock.acquire()
             try:
                 if self._finished:
-                    profile.set_result(TraceResult(TraceOutcome.ABANDONED, presentation=PresentationOutcome.ABANDONED))
-                    return PresentationOutcome.ABANDONED
+                    profile.set_result(TraceResult(TraceStatus.ABANDONED, presentation=PresentationStatus.ABANDONED))
+                    return PresentationStatus.ABANDONED
                 armed = await self._apply_expiry_arm(profile)
                 if armed is not None:
-                    outcome = (
-                        TraceOutcome.ABANDONED if armed is PresentationOutcome.ABANDONED else TraceOutcome.COMPLETED
-                    )
-                    profile.set_result(TraceResult(outcome, presentation=armed))
+                    status = TraceStatus.ABANDONED if armed is PresentationStatus.ABANDONED else TraceStatus.COMPLETED
+                    profile.set_result(TraceResult(status, presentation=armed))
                     return armed
                 if self._lifecycle is MountLifecycle.RENEWAL_ARMED:
-                    profile.set_result(TraceResult(TraceOutcome.COMPLETED, presentation=PresentationOutcome.NO_CHANGE))
-                    return PresentationOutcome.NO_CHANGE
+                    profile.set_result(TraceResult(TraceStatus.COMPLETED, presentation=PresentationStatus.NO_CHANGE))
+                    return PresentationStatus.NO_CHANGE
                 if self._handle is None or self._handle.expired():
                     self._dirty = True
-                    profile.set_result(TraceResult(TraceOutcome.ABANDONED, presentation=PresentationOutcome.ABANDONED))
-                    return PresentationOutcome.ABANDONED
+                    profile.set_result(TraceResult(TraceStatus.ABANDONED, presentation=PresentationStatus.ABANDONED))
+                    return PresentationStatus.ABANDONED
                 candidate = await self._stage_loaded(profile=profile)
                 if self._same_as_live(candidate):
                     with profile.span("suppress"):
                         self._suppress(candidate, profile)
                     await self._settle_visible(candidate, profile=profile)
-                    profile.set_result(TraceResult(TraceOutcome.COMPLETED, presentation=PresentationOutcome.UNCHANGED))
-                    return PresentationOutcome.UNCHANGED
+                    profile.set_result(TraceResult(TraceStatus.COMPLETED, presentation=PresentationStatus.UNCHANGED))
+                    return PresentationStatus.UNCHANGED
                 try:
                     delivered = await self._deliver(candidate, profile=profile) is not None
                 except Exception:
                     with profile.span("rollback"):
                         self._rollback(candidate)
-                    profile.set_result(TraceResult(TraceOutcome.FAILED, presentation=PresentationOutcome.FAILED))
+                    profile.set_result(TraceResult(TraceStatus.FAILED, presentation=PresentationStatus.FAILED))
                     raise
                 if not delivered:
                     # `_rollback` leaves the mount dirty, so the next interaction shows this render.
@@ -3008,13 +3002,13 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     with profile.span("rollback"):
                         self._rollback(candidate)
                     logger.debug("mount %s has no live edit handle; render deferred", self.id)
-                    profile.set_result(TraceResult(TraceOutcome.ABANDONED, presentation=PresentationOutcome.ABANDONED))
-                    return PresentationOutcome.ABANDONED
+                    profile.set_result(TraceResult(TraceStatus.ABANDONED, presentation=PresentationStatus.ABANDONED))
+                    return PresentationStatus.ABANDONED
                 with profile.span("commit"):
                     self._commit_presented(candidate)
                 await self._settle_visible(candidate, profile=profile)
-                profile.set_result(TraceResult(TraceOutcome.COMPLETED, presentation=PresentationOutcome.WRITTEN))
-                return PresentationOutcome.WRITTEN
+                profile.set_result(TraceResult(TraceStatus.COMPLETED, presentation=PresentationStatus.WRITTEN))
+                return PresentationStatus.WRITTEN
             finally:
                 self._render_lock.release()
 

@@ -18,8 +18,8 @@ class OperationKind(StrEnum):
     ROUTE_DISPATCH = "route_dispatch"
 
 
-class TraceOutcome(StrEnum):
-    """Framework-independent terminal outcome for an operation or span."""
+class TraceStatus(StrEnum):
+    """Framework-independent terminal status for an operation or span."""
 
     COMPLETED = "completed"
     FAILED = "failed"
@@ -49,7 +49,7 @@ class DispatchDisposition(StrEnum):
     CANCELLED = "cancelled"
 
 
-class ActionOutcome(StrEnum):
+class ActionResult(StrEnum):
     """How far an admitted portable action chain progressed."""
 
     NOT_RUN = "not_run"
@@ -59,7 +59,7 @@ class ActionOutcome(StrEnum):
     CANCELLED = "cancelled"
 
 
-class PresentationOutcome(StrEnum):
+class PresentationStatus(StrEnum):
     """How the presentation required by an operation settled."""
 
     NOT_REQUIRED = "not_required"
@@ -87,8 +87,8 @@ class DispatchResult:
     """Independent terminal, action, presentation, and generation dispatch facts."""
 
     disposition: DispatchDisposition
-    action: ActionOutcome
-    presentation: PresentationOutcome
+    action: ActionResult
+    presentation: PresentationStatus
     generation: GenerationDecision
 
 
@@ -145,10 +145,10 @@ class SpanAttribute:
 class TraceResult:
     """Framework-independent operation result and optional bounded detail."""
 
-    outcome: TraceOutcome
+    status: TraceStatus
     detail: str | None = None
     dispatch: DispatchResult | None = None
-    presentation: PresentationOutcome | None = None
+    presentation: PresentationStatus | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,7 +160,7 @@ class RuntimeSpan:
     name: str
     started: float
     duration: float
-    outcome: TraceOutcome
+    status: TraceStatus
     attributes: tuple[SpanAttribute, ...] = ()
     links: tuple[TraceLink, ...] = ()
     omitted_links: int = 0
@@ -240,11 +240,11 @@ class AggregateKey:
 
     operation: OperationKind | None
     name: str
-    outcome: TraceOutcome | None
+    status: TraceStatus | None
     detail: str | None
     disposition: DispatchDisposition | None
-    action: ActionOutcome | None
-    presentation: PresentationOutcome | None
+    action: ActionResult | None
+    presentation: PresentationStatus | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -263,7 +263,7 @@ class SpanAggregateKey:
     operation: OperationKind | None
     operation_name: str
     span_name: str
-    outcome: TraceOutcome | None
+    status: TraceStatus | None
 
 
 @dataclass(frozen=True, slots=True)

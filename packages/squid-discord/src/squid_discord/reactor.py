@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, overload
 
 import anyio
 
-from squid_layouts.profiling import NoOpProfiler, OperationKind, PresentationOutcome, Profiler, TraceLink
+from squid_layouts.profiling import NoOpProfiler, OperationKind, PresentationStatus, Profiler, TraceLink
 from squid_layouts.runtime.topics import Address, CellAddress, Topic, TopicBus
 
 if TYPE_CHECKING:
@@ -163,7 +163,7 @@ class Reactor:
         self._queue.put_nowait(mount)
 
     def snapshot(self) -> ReactorSnapshot:
-        """Return queue depth, coalescing, and refresh outcome diagnostics."""
+        """Return queue depth, coalescing, and refresh status diagnostics."""
         return ReactorSnapshot(
             queued=len(self._queued),
             in_flight=len(self._in_flight),
@@ -290,8 +290,8 @@ class Reactor:
                     operation.increment("reactor.cause_links_omitted", causes.omitted_links)
                     link = self.profiler.capture_link()
                     try:
-                        outcome = await mount.refresh_now(links=() if link is None else (link,))
-                        if outcome is PresentationOutcome.UNCHANGED:
+                        status = await mount.refresh_now(links=() if link is None else (link,))
+                        if status is PresentationStatus.UNCHANGED:
                             self._unchanged += 1
                     finally:
                         if causes.last_triggered is not None:

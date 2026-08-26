@@ -50,9 +50,9 @@ def to_message(message: Any = _DEFAULT_MESSAGE) -> squid_discord.Destination:
 
     async def send(
         presentation: squid_discord.presentation.DiscordPresentation,
-    ) -> squid_discord.delivery.DeliveryReceipt:
+    ) -> squid_discord.delivery.DeliveryResult:
         handle = None if delivered is None else squid_discord.delivery.handle_for(delivered)
-        return squid_discord.delivery.DeliveryReceipt(delivered, handle)
+        return squid_discord.delivery.DeliveryResult(delivered, handle)
 
     return send
 
@@ -60,10 +60,10 @@ def to_message(message: Any = _DEFAULT_MESSAGE) -> squid_discord.Destination:
 def slowly() -> squid_discord.Destination:
     async def send(
         presentation: squid_discord.presentation.DiscordPresentation,
-    ) -> squid_discord.delivery.DeliveryReceipt:
+    ) -> squid_discord.delivery.DeliveryResult:
         await anyio.sleep(0)
         message = fake_message()
-        return squid_discord.delivery.DeliveryReceipt(message, squid_discord.delivery.handle_for(message))
+        return squid_discord.delivery.DeliveryResult(message, squid_discord.delivery.handle_for(message))
 
     return send
 
@@ -71,7 +71,7 @@ def slowly() -> squid_discord.Destination:
 def abandoning() -> squid_discord.Destination:
     async def send(
         presentation: squid_discord.presentation.DiscordPresentation,
-    ) -> squid_discord.delivery.DeliveryReceipt:
+    ) -> squid_discord.delivery.DeliveryResult:
         raise squid_discord.delivery.DeliveryAbandoned
 
     return send
@@ -80,7 +80,7 @@ def abandoning() -> squid_discord.Destination:
 def failing(error: Exception) -> squid_discord.Destination:
     async def send(
         presentation: squid_discord.presentation.DiscordPresentation,
-    ) -> squid_discord.delivery.DeliveryReceipt:
+    ) -> squid_discord.delivery.DeliveryResult:
         raise error
 
     return send
@@ -135,7 +135,7 @@ async def test_any_hashable_key_can_name_a_session() -> None:
     assert registry.get(key) == (result.session,)
 
 
-class TestOutcomes:
+class TestResults:
     async def test_opened_carries_the_logical_session(self) -> None:
         mount = a_mount()
 
@@ -158,7 +158,7 @@ class TestOutcomes:
         )
 
         assert isinstance(first, Opened)
-        assert result == Rejected((first.session.summary,), RejectionReason.COLLISION)
+        assert result == Rejected((first.session.snapshot,), RejectionReason.COLLISION)
         destination.assert_not_awaited()
 
     async def test_abandoned_is_distinct_from_rejection_and_delivery(self) -> None:
@@ -212,7 +212,7 @@ class TestReplacement:
         result = await registry.open(a_mount(), to_message(), key=KEY, actor_id=8)
 
         assert isinstance(first, Opened)
-        assert result == Rejected((first.session.summary,), RejectionReason.PROTECTED)
+        assert result == Rejected((first.session.snapshot,), RejectionReason.PROTECTED)
 
     async def test_unprotected_policy_explicitly_allows_cross_user_replacement(self) -> None:
         registry = SessionRegistry()
@@ -257,7 +257,7 @@ class TestCardinality:
     async def test_a_custom_collision_policy_selects_exact_victims(self) -> None:
         class ReplaceNewest:
             async def select(
-                self, request: OpeningRequest, occupants: tuple[squid_discord.sessions.SessionSummary, ...]
+                self, request: OpeningRequest, occupants: tuple[squid_discord.sessions.SessionSnapshot, ...]
             ):
                 return Replace(occupants[-request.required_victims :])
 
@@ -279,7 +279,7 @@ class TestCardinality:
     async def test_a_custom_policy_must_select_the_exact_required_victims(self) -> None:
         class SelectNobody:
             async def select(
-                self, request: OpeningRequest, occupants: tuple[squid_discord.sessions.SessionSummary, ...]
+                self, request: OpeningRequest, occupants: tuple[squid_discord.sessions.SessionSnapshot, ...]
             ):
                 return Replace(())
 
@@ -365,7 +365,7 @@ class TestAttachments:
             policy=SessionPolicy(protect=ProtectCrossUserAttachments()),
         )
 
-        assert result == Rejected((first.session.summary,), RejectionReason.PROTECTED)
+        assert result == Rejected((first.session.snapshot,), RejectionReason.PROTECTED)
 
     async def test_one_unreachable_sibling_does_not_strand_the_rest(self) -> None:
         registry = SessionRegistry()
@@ -561,7 +561,7 @@ class TestMembership:
             a_mount(), to_message(), key=KEY, actor_id=7, policy=SessionPolicy(protect=Unprotected())
         )
 
-        assert protected == Rejected((first.session.summary,), RejectionReason.PROTECTED)
+        assert protected == Rejected((first.session.snapshot,), RejectionReason.PROTECTED)
         assert isinstance(unprotected, Opened)
 
     async def test_capacity_and_member_ids_are_validated(self) -> None:

@@ -14,7 +14,7 @@ from squid_discord.testing import fake_interaction
 from squid_layouts import scene
 from squid_layouts.errors import DrawInvariantError, LayoutInvariantError
 from squid_layouts.primitives import Option, Panel, RoutedButton, RoutedSelect, Row
-from squid_layouts.profiling import MemoryProfiler, OperationKind, TraceOutcome
+from squid_layouts.profiling import MemoryProfiler, OperationKind, TraceStatus
 from squid_layouts.profiling.profiler import _MAX_NAME_LENGTH
 
 EDIT_BUILD = sl.routing.Route("edit:build:{build_id:int}")
@@ -858,7 +858,7 @@ class TestProfiling:
         trace = profiler.snapshot().recent[0]
         assert trace.operation is OperationKind.ROUTE_DISPATCH
         assert trace.name == POLL_CLOSE.format
-        assert trace.result.outcome is TraceOutcome.COMPLETED
+        assert trace.result.status is TraceStatus.COMPLETED
         spans = {span.name: span for span in trace.spans}
         # Bounded the way the profiler bounds it. Unbounded, this qualname is exactly 120
         # characters when `__name__` is a bare `test_routing`, so the assertion used to pass
@@ -885,7 +885,7 @@ class TestProfiling:
         await router.dispatch(fake_interaction(), POLL_CLOSE.id())
 
         trace = profiler.snapshot().recent[0]
-        assert trace.result.outcome is TraceOutcome.COMPLETED
+        assert trace.result.status is TraceStatus.COMPLETED
         assert trace.result.detail == "short_circuited"
         assert all(span.name != "handler" for span in trace.spans)
 
