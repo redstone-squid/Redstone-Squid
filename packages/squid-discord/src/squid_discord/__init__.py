@@ -16,6 +16,7 @@ from squid_discord import (
     conformance,
     delivery,
     devtools,
+    devtools_runtime,
     fragments,
     grids,
     guards,
@@ -24,7 +25,6 @@ from squid_discord import (
     live,
     mount,
     navigation,
-    operations,
     presentation,
     renderer,
     roles,
@@ -157,7 +157,7 @@ is built on `squid_stores`, which arrives with the `durable` extra. Importing it
 make `import squid_discord` fail on an install that never persists a panel. It stays in
 `__all__` because it is documented surface, and `from squid_discord import durability` still
 works -- the import system consults this hook before falling back to the submodule.
-`operations`, `devtools` and `devtools_view` name its types under `TYPE_CHECKING` for the same
+`devtools_runtime`, `devtools` and `devtools_view` name its types under `TYPE_CHECKING` for the same
 reason; every use there is an annotation.
 """
 
@@ -247,6 +247,7 @@ __all__ = [
     "deliver_to",
     "delivery",
     "devtools",
+    "devtools_runtime",
     "durability",
     "edit_to",
     "fragments",
@@ -264,7 +265,6 @@ __all__ = [
     "native",
     "navigation",
     "navigation_controls",
-    "operations",
     "owned_mount",
     "presentation",
     "render_item",
