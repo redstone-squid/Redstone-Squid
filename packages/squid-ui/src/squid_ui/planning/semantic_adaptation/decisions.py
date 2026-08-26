@@ -10,16 +10,16 @@ from squid_ui.planning.semantic_adaptation.model import FallbackAxis, SemanticDe
 from squid_ui.primitives.nodes import Panel
 from squid_ui.runtime.presentation_state import PresentationState
 from squid_ui.semantic import (
-    Action,
-    ActionDisplay,
-    ActionGroup,
-    Actions,
+    ActionControl,
+    ActionControls,
     Article,
     Aside,
     BestEffort,
     Block,
     Budgeted,
     Cluster,
+    ControlDisplay,
+    ControlGroup,
     Controlled,
     Details,
     FallbackContent,
@@ -97,7 +97,7 @@ def nominate_decisions(
                 rung = fallback_rung(path, len(branches), selected_rungs)
                 occurrences.append(FallbackAxis(path, len(branches), branch_paths(path, len(branches))))
                 walk(branches[rung], branch_paths(path, len(branches))[rung])
-            case Actions():
+            case ActionControls():
                 axes.append(action_axis(node, path, limits, session))
             case Table():
                 axes.append(table_axis(node, path, session))
@@ -322,18 +322,20 @@ def media_axis(node: Media, path: str, session: PresentationState) -> StrategyAx
     )
 
 
-def action_axis(node: Actions, path: str, limits: DiscordLimits, session: PresentationState) -> StrategyAxis:
+def action_axis(node: ActionControls, path: str, limits: DiscordLimits, session: PresentationState) -> StrategyAxis:
     actions = [action for item in node.items for action in contained_actions(item)]
-    forced_pager = any(len(tuple(contained_actions(item))) > 75 for item in node.items if isinstance(item, ActionGroup))
-    if not any(isinstance(item, ActionGroup) for item in node.items):
+    forced_pager = any(
+        len(tuple(contained_actions(item))) > 75 for item in node.items if isinstance(item, ControlGroup)
+    )
+    if not any(isinstance(item, ControlGroup) for item in node.items):
         forced_pager = len(actions) > 75
     available = ["grouped", "paged"] if forced_pager else ["individual", "grouped"]
     if not individual_fits(len(actions), limits) and "individual" in available:
         available.remove("individual")
     preferred = {
-        ActionDisplay.INDIVIDUAL: "individual",
-        ActionDisplay.GROUPED: "grouped",
-        ActionDisplay.AUTO: "individual" if len(actions) <= 5 else "grouped",
+        ControlDisplay.INDIVIDUAL: "individual",
+        ControlDisplay.GROUPED: "grouped",
+        ControlDisplay.AUTO: "individual" if len(actions) <= 5 else "grouped",
     }[node.display]
     if forced_pager:
         preferred = "paged"
@@ -351,9 +353,9 @@ def action_axis(node: Actions, path: str, limits: DiscordLimits, session: Presen
     )
 
 
-def contained_actions(item: Action | object) -> Sequence[Action]:
-    if isinstance(item, Action):
+def contained_actions(item: ActionControl | object) -> Sequence[ActionControl]:
+    if isinstance(item, ActionControl):
         return (item,)
-    if isinstance(item, ActionGroup):
-        return tuple(action for action in item.actions if isinstance(action, Action))
+    if isinstance(item, ControlGroup):
+        return tuple(control for control in item.controls if isinstance(control, ActionControl))
     return ()

@@ -3,9 +3,9 @@
 from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping
 from dataclasses import dataclass
 
-from squid_ui.factories import actions, stack, status
+from squid_ui.factories import action_controls, stack, status
 from squid_ui.runtime.component import RenderResult
-from squid_ui.semantic import ActionDisplay, Emphasis, Tone
+from squid_ui.semantic import ControlDisplay, Emphasis, Tone
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 from squid_ui_widgets.drivers import ComponentDriver, MachineControls, TransitionEvent
@@ -94,9 +94,9 @@ class Decision:
         selected = next((option for option in options if option.key == state.decided), None)
         return stack(
             *controls.content(self.prompt, prefix=f"{self.key}.prompt"),
-            actions(
+            action_controls(
                 *(
-                    controls.action(
+                    controls.action_control(
                         option.label,
                         f"choose:{option.key}",
                         key=f"{self.key}.{option.key}",
@@ -107,7 +107,7 @@ class Decision:
                     for option in options
                 ),
                 key=f"{self.key}.options",
-                display=ActionDisplay.INDIVIDUAL,
+                display=ControlDisplay.INDIVIDUAL,
             ),
             status(controls.chrome.decided(selected.label), tone=selected.tone) if selected is not None else None,
         )

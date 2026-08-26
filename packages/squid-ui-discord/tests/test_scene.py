@@ -15,8 +15,8 @@ from squid_ui.primitives.nodes import Text
 from squid_ui.primitives.styles import ActionStyle
 
 
-def _scene() -> scene.Document:
-    return scene.Document(
+def _scene() -> scene.Scene:
+    return scene.Scene(
         protocol=scene.Codec.protocol,
         target="discord.components-v2",
         target_version=1,
@@ -68,7 +68,7 @@ def test_scene_wire_uses_the_python_markup_and_mode_vocabulary() -> None:
 
 
 def test_new_component_metadata_round_trips_on_protocol_one() -> None:
-    document = scene.Document(
+    document = scene.Scene(
         protocol=1,
         target="discord.components-v2",
         target_version=1,
@@ -116,7 +116,7 @@ def test_protocol_one_decodes_payloads_without_new_optional_fields() -> None:
 
 def test_scene_fingerprint_is_stable_and_content_sensitive() -> None:
     first = _scene()
-    second = scene.Document(
+    second = scene.Scene(
         scene.Codec.protocol, first.target, first.target_version, scene.ComponentsV2((scene.Text("different"),))
     )
     assert scene.Codec.fingerprint(first) == scene.Codec.fingerprint(scene.Codec.loads(scene.Codec.dumps(first)))
@@ -167,8 +167,8 @@ def test_zoned_timestamp_plans_as_an_instant_plus_named_timezone() -> None:
     )
 
 
-def _classic_scene() -> scene.Document:
-    return scene.Document(
+def _classic_scene() -> scene.Scene:
+    return scene.Scene(
         protocol=scene.Codec.protocol,
         target="discord.components-v1",
         target_version=1,

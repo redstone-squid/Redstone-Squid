@@ -9,13 +9,6 @@ from urllib.parse import urlsplit
 
 import discord
 
-from squid_ui_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
-from squid_ui_discord.attachments import attachment_assets
-from squid_ui_discord.conformance import LimitViolationError, conform
-from squid_ui_discord.emoji import discord_emoji
-from squid_ui_discord.presentation import DiscordPresentation
-from squid_ui_discord.render_cache import RenderProgramCache
-from squid_ui_discord.target import DISCORD_V2_DPY27
 from squid_ui import scene
 from squid_ui.assets import Asset, StoredAsset
 from squid_ui.errors import DrawInvariantError
@@ -26,6 +19,13 @@ from squid_ui.scene.model import PlanResult
 from squid_ui.target_types import DiscordPyAdapter
 from squid_ui.temporal import ZonedDateTime
 from squid_ui.text import discord_text
+from squid_ui_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
+from squid_ui_discord.attachments import attachment_assets
+from squid_ui_discord.conformance import LimitViolationError, conform
+from squid_ui_discord.emoji import discord_emoji
+from squid_ui_discord.presentation import DiscordPresentation
+from squid_ui_discord.render_cache import RenderProgramCache
+from squid_ui_discord.target import DISCORD_V2_DPY27
 
 type Control = scene.Button | scene.Select | scene.EntitySelect
 type Wire = Callable[[Control, ActionBinding], discord.ui.Item[Any]]
@@ -159,7 +159,7 @@ def _compile_item(node: scene.Node) -> _V2Instruction:
     raise DrawInvariantError(message)
 
 
-def _compile_program(document: scene.Document[scene.ComponentsV2]) -> _V2Program:
+def _compile_program(document: scene.Scene[scene.ComponentsV2]) -> _V2Program:
     children = tuple(_compile_item(child) for child in document.components_v2.children)
 
     def opaque(instruction: _V2Instruction) -> bool:
@@ -188,7 +188,7 @@ class V2Renderer:
 
     def draw(
         self,
-        document: scene.Document[scene.ComponentsV2],
+        document: scene.Scene[scene.ComponentsV2],
         *,
         plan: PlanResult[scene.ComponentsV2] | None = None,
         wire: Wire | None = None,
@@ -206,7 +206,7 @@ class V2Renderer:
 
     def view(
         self,
-        document: scene.Document[scene.ComponentsV2],
+        document: scene.Scene[scene.ComponentsV2],
         *,
         plan: PlanResult[scene.ComponentsV2] | None = None,
         wire: Wire | None = None,
@@ -247,7 +247,7 @@ class V2Renderer:
 
     def _cache_key(
         self,
-        document: scene.Document[scene.ComponentsV2],
+        document: scene.Scene[scene.ComponentsV2],
         plan: PlanResult[scene.ComponentsV2] | None,
     ) -> Hashable:
         fingerprint = plan.report.scene_fingerprint if plan is not None else scene.Codec.fingerprint(document)

@@ -6,13 +6,24 @@ from typing import Literal
 
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.factories import action, actions, bullet, bullets, choice, choices, controlled, heading, note, stack
+from squid_ui.factories import (
+    action_control,
+    action_controls,
+    bullet,
+    bullets,
+    choice,
+    choices,
+    controlled,
+    heading,
+    note,
+    stack,
+)
 from squid_ui.interactions import ActionEvent
 from squid_ui.planning.navigation import NAV_FACTORY_CONTEXT, NavigationContext, NavigationState, default_nav
 from squid_ui.runtime.component import Component, RenderResult
 from squid_ui.runtime.reactivity import state
 from squid_ui.runtime.resources import Failed, Pending, Ready, resource
-from squid_ui.semantic import Action, ActionDisplay, ChoiceEvent, LayoutNode, Link
+from squid_ui.semantic import ActionControl, ChoiceEvent, ControlDisplay, LayoutNode, Link
 from squid_ui.sources import (
     ORIGIN,
     CountPrecision,
@@ -52,7 +63,7 @@ class Browser[ItemT](Component):
         label: Callable[[ItemT], TextLike],
         detail: BrowserDetail[ItemT],
         summary: Callable[[ItemT], TextLike] | None = None,
-        entry_actions: Callable[[ItemT], Sequence[Action | Link]] | None = None,
+        entry_actions: Callable[[ItemT], Sequence[ActionControl | Link]] | None = None,
         overview: BrowserOverview[ItemT] | None = None,
         page_size: int = 10,
         on_open: BrowserOpenHandler[ItemT] | None = None,
@@ -181,7 +192,9 @@ class Browser[ItemT](Component):
         return stack(
             heading(self.title) if self.title is not None else None,
             note(message),
-            actions(action(self.retry, self._retry, key=f"{self.key}.retry"), key=f"{self.key}.retry-row")
+            action_controls(
+                action_control(self.retry, self._retry, key=f"{self.key}.retry"), key=f"{self.key}.retry-row"
+            )
             if retry
             else None,
         )
@@ -241,7 +254,9 @@ class Browser[ItemT](Component):
             picker,
             *self._navigation(loaded),
             note(status_text) if status_text is not None else None,
-            actions(action(self.retry, self._retry, key=f"{self.key}.retry"), key=f"{self.key}.retry-row")
+            action_controls(
+                action_control(self.retry, self._retry, key=f"{self.key}.retry"), key=f"{self.key}.retry-row"
+            )
             if retry
             else None,
             note(footer) if (footer := window_footer(chrome, self.source, loaded, self.page_size)) else None,
@@ -317,21 +332,25 @@ class Browser[ItemT](Component):
         return stack(
             heading(self.title) if self.title is not None else None,
             *detail,
-            actions(*entry_actions, key=f"{self.key}.entry-actions") if entry_actions else None,
-            actions(
-                action(chrome.back, self._back, key=f"{self.key}.back"),
-                action(chrome.previous, self._previous_item, key=f"{self.key}.item-previous", available=index > 0),
-                action(
+            action_controls(*entry_actions, key=f"{self.key}.entry-actions") if entry_actions else None,
+            action_controls(
+                action_control(chrome.back, self._back, key=f"{self.key}.back"),
+                action_control(
+                    chrome.previous, self._previous_item, key=f"{self.key}.item-previous", available=index > 0
+                ),
+                action_control(
                     chrome.next,
                     self._next_item,
                     key=f"{self.key}.item-next",
                     available=index < len(items) - 1,
                 ),
                 key=f"{self.key}.detail-navigation",
-                display=ActionDisplay.INDIVIDUAL,
+                display=ControlDisplay.INDIVIDUAL,
             ),
             note(status_text) if status_text is not None else None,
-            actions(action(self.retry, self._retry, key=f"{self.key}.retry"), key=f"{self.key}.retry-row")
+            action_controls(
+                action_control(self.retry, self._retry, key=f"{self.key}.retry"), key=f"{self.key}.retry-row"
+            )
             if retry
             else None,
         )

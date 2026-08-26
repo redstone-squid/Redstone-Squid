@@ -5,7 +5,7 @@ from typing import Any, cast
 
 import squid_ui as sl
 import squid_ui_widgets as sp
-from squid_ui.semantic import Actions, FormTrigger, RoutedAction, Stack
+from squid_ui.semantic import ActionControls, FormTrigger, RoutedActionControl, Stack
 
 
 def _walk(node: object) -> Iterable[object]:
@@ -13,7 +13,7 @@ def _walk(node: object) -> Iterable[object]:
     if isinstance(node, Stack):
         for child in node.children:
             yield from _walk(child)
-    elif isinstance(node, Actions):
+    elif isinstance(node, ActionControls):
         yield from node.items
 
 
@@ -151,7 +151,9 @@ def test_nested_forms_keep_router_shell_parity() -> None:
 
     rendered = sp.RouteDriver(route).render(editor, state)
 
-    add = next(node for node in _walk(rendered) if isinstance(node, RoutedAction) and node.key.endswith("links.add"))
+    add = next(
+        node for node in _walk(rendered) if isinstance(node, RoutedActionControl) and node.key.endswith("links.add")
+    )
     assert add
     request = next(route for route in routes if route.action == "section:links:add")
     assert request.phase == "input"
@@ -171,7 +173,9 @@ def test_editor_render_shows_unsaved_status_and_gates_save_on_validation() -> No
     )
 
     rendered = editor.build_component(initial=staged).render()
-    save = next(node for node in _walk(rendered) if isinstance(node, sl.semantic.Action) and node.key == "editor.save")
+    save = next(
+        node for node in _walk(rendered) if isinstance(node, sl.semantic.ActionControl) and node.key == "editor.save"
+    )
 
     assert not save.available
     assert any(isinstance(node, FormTrigger) for node in _walk(rendered))

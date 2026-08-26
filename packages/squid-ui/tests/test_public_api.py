@@ -39,9 +39,9 @@ ROOT_API = frozenset(
         "TextValue",
         "ToggleEvent",
         "Tone",
-        "action",
-        "action_group",
-        "actions",
+        "action_control",
+        "control_group",
+        "action_controls",
         "article",
         "aside",
         "best_effort",
@@ -80,9 +80,9 @@ ROOT_API = frozenset(
         "items",
         "keep_with_next",
         "link",
-        "managed",
+        "uncontrolled",
         "md",
-        "measure",
+        "metric",
         "media",
         "media_item",
         "navigation",
@@ -103,7 +103,7 @@ ROOT_API = frozenset(
         "resource",
         "resources",
         "roster",
-        "routed_action",
+        "routed_action_control",
         "routed_choices",
         "routing",
         "runtime",
@@ -229,9 +229,14 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert sl.scene.File
     assert sl.html.Renderer
     assert sl.runtime.TopicBus
-    assert {"SharedState", "SharedStatePool", "SharedStateFactory", "ReactiveConflictError", "state", "addresses"} <= set(
-        sl.runtime.__all__
-    )
+    assert {
+        "SharedState",
+        "SharedStatePool",
+        "SharedStateFactory",
+        "ReactiveConflictError",
+        "state",
+        "addresses",
+    } <= set(sl.runtime.__all__)
 
 
 def test_the_engine_no_longer_carries_its_leaf_namespaces() -> None:

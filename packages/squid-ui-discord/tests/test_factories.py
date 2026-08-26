@@ -92,12 +92,12 @@ class TestRefusals:
             sl.section(sl.heading("H"), sl.paragraph("a"), 3)  # type: ignore[arg-type]
 
     def test_collections_refuse_foreign_elements(self) -> None:
-        with pytest.raises(TypeError, match=r"sl\.actions\(\) argument 0: text is not an entry here"):
-            sl.actions("Vote", key="votes")  # type: ignore[arg-type]
+        with pytest.raises(TypeError, match=r"sl\.action_controls\(\) argument 0: text is not an entry here"):
+            sl.action_controls("Vote", key="votes")  # type: ignore[arg-type]
 
     def test_collections_still_ask_sequences_to_unpack(self) -> None:
-        with pytest.raises(TypeError, match=r"unpack it, e\.g\. sl\.actions\(\*entries\)"):
-            sl.actions([sl.action("Vote", _noop, key="vote")], key="votes")  # type: ignore[arg-type]
+        with pytest.raises(TypeError, match=r"unpack it, e\.g\. sl\.action_controls\(\*entries\)"):
+            sl.action_controls([sl.action_control("Vote", _noop, key="vote")], key="votes")  # type: ignore[arg-type]
 
 
 class TestParity:
@@ -129,7 +129,7 @@ class TestParity:
         assert sl.code("x = 1", language="python") == sl.semantic.Code("x = 1", "python")
         assert sl.quote("q", attribution="me") == sl.semantic.Quote("q", "me")
         assert sl.progress(0.5, label="L") == sl.semantic.ProgressBar(0.5, "L")
-        assert sl.measure(3, "Blocks", unit="s") == sl.semantic.Measure(3, "Blocks", "s")
+        assert sl.metric(3, "Blocks", unit="s") == sl.semantic.Metric(3, "Blocks", "s")
         instant = datetime(2026, 8, 22, tzinfo=UTC)
         assert sl.timestamp(instant, style=sl.semantic.TimeStyle.RELATIVE, label="Updated") == sl.semantic.Timestamp(
             instant, sl.semantic.TimeStyle.RELATIVE, "Updated"
@@ -166,15 +166,15 @@ class TestParity:
             sl.table(sl.columns(sl.column("A")), sl.table_row("1", "2"), key="k")
 
     def test_controls(self) -> None:
-        assert sl.action("Vote", _noop, key="vote") == sl.semantic.Action("vote", "Vote", _noop)
+        assert sl.action_control("Vote", _noop, key="vote") == sl.semantic.ActionControl("vote", "Vote", _noop)
         assert sl.link("Docs", "https://example.invalid", key="docs") == sl.semantic.Link(
             "docs", "Docs", "https://example.invalid"
         )
-        assert sl.action_group(sl.action("Vote", _noop, key="vote"), key="g") == sl.semantic.ActionGroup(
-            "g", (sl.semantic.Action("vote", "Vote", _noop),)
+        assert sl.control_group(sl.action_control("Vote", _noop, key="vote"), key="g") == sl.semantic.ControlGroup(
+            "g", (sl.semantic.ActionControl("vote", "Vote", _noop),)
         )
-        assert sl.actions(sl.action("Vote", _noop, key="vote"), key="a") == sl.semantic.Actions(
-            (sl.semantic.Action("vote", "Vote", _noop),), "a"
+        assert sl.action_controls(sl.action_control("Vote", _noop, key="vote"), key="a") == sl.semantic.ActionControls(
+            (sl.semantic.ActionControl("vote", "Vote", _noop),), "a"
         )
         assert sl.choice("Yes", key="y", description="d") == sl.semantic.Choice("y", "Yes", "d")
         assert sl.choices(
@@ -193,7 +193,11 @@ class TestParity:
 
 class TestDrift:
     _ALIASES = {
+        "ActionControl": "action_control",
+        "ActionControls": "action_controls",
+        "ControlGroup": "control_group",
         "FormTrigger": "form",
+        "Metric": "metric",
         "List": "bullets",
         "ProgressBar": "progress",
         "RoutedChoices": "routed_choices",

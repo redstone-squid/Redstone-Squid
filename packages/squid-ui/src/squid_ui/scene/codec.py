@@ -18,7 +18,6 @@ from squid_ui.scene.model import (
     ClassicRow,
     ComponentsV2,
     Control,
-    Document,
     Embed,
     EmbedAuthor,
     EmbedField,
@@ -38,6 +37,7 @@ from squid_ui.scene.model import (
     RoutedButton,
     RoutedSelect,
     Row,
+    Scene,
     Section,
     Select,
     Separator,
@@ -70,11 +70,11 @@ class Codec:
         return json.dumps(cls.schema(), sort_keys=True, separators=(",", ":"))
 
     @classmethod
-    def dumps(cls, scene: Document[Any]) -> str:
+    def dumps(cls, scene: Scene[Any]) -> str:
         return json.dumps(cls.to_dict(scene), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
     @classmethod
-    def loads(cls, payload: str) -> Document:
+    def loads(cls, payload: str) -> Scene:
         try:
             raw = json.loads(payload)
         except json.JSONDecodeError as error:
@@ -85,11 +85,11 @@ class Codec:
         return cls.from_dict(raw)
 
     @classmethod
-    def fingerprint(cls, scene: Document[Any]) -> str:
+    def fingerprint(cls, scene: Scene[Any]) -> str:
         return hashlib.blake2s(cls.dumps(scene).encode(), digest_size=16).hexdigest()
 
     @classmethod
-    def to_dict(cls, scene: Document[Any]) -> dict[str, Any]:
+    def to_dict(cls, scene: Scene[Any]) -> dict[str, Any]:
         if scene.protocol != cls.protocol:
             msg = f"unsupported scene protocol {scene.protocol}"
             raise CodecError(msg)
@@ -113,7 +113,7 @@ class Codec:
         }
 
     @classmethod
-    def from_dict(cls, raw: Mapping[str, Any]) -> Document:
+    def from_dict(cls, raw: Mapping[str, Any]) -> Scene:
         protocol = _integer(raw, "protocol")
         if protocol != cls.protocol:
             msg = f"unsupported scene protocol {protocol}"
@@ -123,7 +123,7 @@ class Codec:
         if not isinstance(assets, list) or not isinstance(pagers, list):
             msg = "scene assets and pagers must be arrays"
             raise CodecError(msg)
-        return Document(
+        return Scene(
             protocol=protocol,
             target=_string(raw, "target"),
             target_version=_integer(raw, "target_version"),

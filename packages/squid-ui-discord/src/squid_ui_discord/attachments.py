@@ -16,7 +16,7 @@ from squid_ui.assets import Asset, InlineAsset, StoredAsset
 from squid_ui.scene.model import PlanResult
 
 
-def scene_nodes(document: scene.Document) -> tuple[scene.Node, ...]:
+def scene_nodes(document: scene.Scene) -> tuple[scene.Node, ...]:
     """Every drawable node in a scene, whichever kind of message it resolved to."""
     match document.body:
         case scene.ComponentsV2(children=children):

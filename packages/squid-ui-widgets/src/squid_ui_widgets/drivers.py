@@ -5,20 +5,20 @@ from dataclasses import dataclass
 from typing import Any, Literal, Protocol
 
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME, Chrome
-from squid_ui.factories import action, choice, choices, controlled, form, routed_action, routed_choices
+from squid_ui.factories import action_control, choice, choices, controlled, form, routed_action_control, routed_choices
 from squid_ui.forms import Form, FormLike
 from squid_ui.interactions import ActionEvent, SubmitEvent
 from squid_ui.runtime.component import Component, RenderResult
 from squid_ui.runtime.reactivity import state
 from squid_ui.semantic import (
-    Action,
+    ActionControl,
     Choice,
     ChoiceEvent,
     Choices,
     Emphasis,
     FormTrigger,
     LayoutNode,
-    RoutedAction,
+    RoutedActionControl,
     RoutedChoices,
     Tone,
 )
@@ -82,7 +82,7 @@ class MachineControls[StateT](Protocol):
 
     def content(self, content: Sequence[ContentItem], *, prefix: str) -> tuple[LayoutNode, ...]: ...
 
-    def action(
+    def action_control(
         self,
         label: TextLike,
         action_name: str,
@@ -91,7 +91,7 @@ class MachineControls[StateT](Protocol):
         tone: Tone = Tone.NEUTRAL,
         emphasis: Emphasis = Emphasis.NORMAL,
         available: bool = True,
-    ) -> Action | RoutedAction: ...
+    ) -> ActionControl | RoutedActionControl: ...
 
     def choices(
         self,
@@ -115,7 +115,7 @@ class MachineControls[StateT](Protocol):
         label: TextLike,
         tone: Tone = Tone.NEUTRAL,
         emphasis: Emphasis = Emphasis.NORMAL,
-    ) -> FormTrigger | RoutedAction: ...
+    ) -> FormTrigger | RoutedActionControl: ...
 
 
 class ComponentDriver[StateT](Component):
@@ -175,7 +175,7 @@ class _ComponentControls[StateT]:
             for index, item in enumerate(content)
         )
 
-    def action(
+    def action_control(
         self,
         label: TextLike,
         action_name: str,
@@ -184,11 +184,11 @@ class _ComponentControls[StateT]:
         tone: Tone = Tone.NEUTRAL,
         emphasis: Emphasis = Emphasis.NORMAL,
         available: bool = True,
-    ) -> Action:
+    ) -> ActionControl:
         async def trigger(event: ActionEvent) -> None:
             await self.owner._dispatch(event, action_name)
 
-        return action(label, trigger, key=key, tone=tone, emphasis=emphasis, available=available)
+        return action_control(label, trigger, key=key, tone=tone, emphasis=emphasis, available=available)
 
     def choices(
         self,
@@ -286,7 +286,7 @@ class _RoutedControls[StateT]:
             raise TypeError(message)
         return tuple(content)  # type: ignore[bad-return]
 
-    def action(
+    def action_control(
         self,
         label: TextLike,
         action_name: str,
@@ -295,10 +295,10 @@ class _RoutedControls[StateT]:
         tone: Tone = Tone.NEUTRAL,
         emphasis: Emphasis = Emphasis.NORMAL,
         available: bool = True,
-    ) -> RoutedAction:
+    ) -> RoutedActionControl:
         next_state = self.machine.transition(self.current, action_name)
         route_id = self.route(TransitionRoute(action_name, next_state, "next"))
-        return routed_action(label, route_id, key=key, tone=tone, emphasis=emphasis, available=available)
+        return routed_action_control(label, route_id, key=key, tone=tone, emphasis=emphasis, available=available)
 
     def choices(
         self,
@@ -333,7 +333,7 @@ class _RoutedControls[StateT]:
         label: TextLike,
         tone: Tone = Tone.NEUTRAL,
         emphasis: Emphasis = Emphasis.NORMAL,
-    ) -> RoutedAction:
+    ) -> RoutedActionControl:
         del spec
         route_id = self.route(TransitionRoute(action_name, self.current, "input"))
-        return routed_action(label, route_id, key=key, tone=tone, emphasis=emphasis)
+        return routed_action_control(label, route_id, key=key, tone=tone, emphasis=emphasis)
