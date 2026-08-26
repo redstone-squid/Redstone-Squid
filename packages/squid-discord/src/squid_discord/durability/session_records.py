@@ -49,12 +49,13 @@ class DurableSessionRecord:
 class DurableSessionCodec:
     """Canonical JSON codec for durable session records.
 
-    Protocol 2 adds explicit membership. Protocol 1 records predate it and decode with an
-    unbounded capacity and the stored opener as their only member, which is what they meant.
+    Protocol 3 aligns mount state and address keys with the Python vocabulary. Protocol 2
+    adds explicit membership. Protocol 1 records predate it and decode with an unbounded
+    capacity and the stored opener as their only member, which is what they meant.
     """
 
-    protocol = 2
-    supported = (1, 2)
+    protocol = 3
+    supported = (1, 2, 3)
 
     @classmethod
     def dumps(cls, record: DurableSessionRecord) -> str:
@@ -73,10 +74,11 @@ class DurableSessionCodec:
             "mounts": [
                 {
                     "id": mount.id,
-                    # Wire key stays "snapshot"; only the Python field was renamed.
-                    "snapshot": json.loads(MountStateCodec.dumps(mount.state)),
-                    # Wire key stays "locator"; see DurableMountCodec.dumps.
-                    "locator": {"frontend": mount.address.frontend, "values": dict(mount.address.values)},
+                    ("snapshot" if record.protocol < 3 else "state"): json.loads(MountStateCodec.dumps(mount.state)),
+                    ("locator" if record.protocol < 3 else "address"): {
+                        "frontend": mount.address.frontend,
+                        "values": dict(mount.address.values),
+                    },
                     "parent_id": mount.parent_id,
                     "actor_id": mount.actor_id,
                 }
@@ -100,6 +102,8 @@ class DurableSessionCodec:
         if protocol not in cls.supported:
             message = f"unsupported durable session record protocol {protocol}"
             raise MountStateError(message)
+        state_key = "snapshot" if protocol < 3 else "state"
+        address_key = "locator" if protocol < 3 else "address"
         raw_mounts = item.get("mounts")
         if not isinstance(raw_mounts, list):
             message = "durable session mounts must be an array"
@@ -107,7 +111,7 @@ class DurableSessionCodec:
         mounts: list[SessionMountRecord] = []
         for raw_mount in raw_mounts:
             mount = _object(raw_mount, "durable mount")
-            address = _object(mount.get("locator"), "mount address")
+            address = _object(mount.get(address_key), "mount address")
             values = _object(address.get("values"), "mount address values")
             if not all(isinstance(key, str) and isinstance(value, str | int) for key, value in values.items()):
                 message = "mount address values must contain string keys and string or integer values"
@@ -124,7 +128,7 @@ class DurableSessionCodec:
                 SessionMountRecord(
                     id=_string(mount, "id"),
                     state=MountStateCodec.loads(
-                        json.dumps(mount.get("snapshot"), ensure_ascii=False, separators=(",", ":"))
+                        json.dumps(mount.get(state_key), ensure_ascii=False, separators=(",", ":"))
                     ),
                     address=FrontendAddress(_string(address, "frontend"), values),
                     parent_id=parent_id,
