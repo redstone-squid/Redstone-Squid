@@ -127,7 +127,7 @@ from squid_discord.roles import (
     RolesUpdated,
     RoleTransitionResult,
 )
-from squid_discord.screens import Screen
+from squid_discord.screens import ScreenSpec
 from squid_discord.sessions import (
     SessionKey,
     SessionRegistry,
@@ -226,7 +226,7 @@ __all__ = [
     "RoleTransitionResult",
     "RolesUnchanged",
     "RolesUpdated",
-    "Screen",
+    "ScreenSpec",
     "SessionKey",
     "SessionRegistry",
     "SuccessRenderer",

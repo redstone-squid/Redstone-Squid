@@ -18,13 +18,13 @@ from dataclasses import dataclass, field
 
 from squid_discord.delivery import respond_to
 from squid_discord.mount import ChallengeRequest, ChallengeSupervisor, ResumedPress
-from squid_discord.screens import Opener, Screen
+from squid_discord.screens import Opener, ScreenSpec
 from squid_discord.sessions import SessionRegistry
 from squid_layouts.guards import ChallengeResolver
 
 logger = logging.getLogger(__name__)
 
-CHALLENGE_SCREEN = Screen("challenge")
+CHALLENGE_SCREEN = ScreenSpec("challenge")
 """Owner-only by default, so only the actor who was asked can answer.
 
 Its session key rarely decides anything: a challenge is opened with `parent=`, so it attaches
@@ -140,7 +140,7 @@ class DialogPresenter:
 
     sessions: SessionRegistry
     supervisor: ChallengeSupervisor
-    screen: Screen = field(default=CHALLENGE_SCREEN)
+    screen: ScreenSpec = field(default=CHALLENGE_SCREEN)
 
     async def present(self, request: ChallengeRequest) -> None:
         """Open the dialog through the interaction that asked, and return."""

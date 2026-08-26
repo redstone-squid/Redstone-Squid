@@ -238,7 +238,7 @@ def items_axis(node: Items, path: str, limits: DiscordLimits, session: Presentat
 
 
 def navigation_axis(node: Navigation, path: str, limits: DiscordLimits, session: PresentationSession) -> StrategyAxis:
-    available = tuple(destination for destination in node.destinations if destination.available)
+    available = tuple(destination for destination in node.options if destination.available)
     strategies = ["individual"]
     if not individual_fits(len(available), limits):
         strategies.remove("individual")

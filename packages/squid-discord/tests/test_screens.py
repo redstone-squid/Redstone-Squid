@@ -9,7 +9,7 @@ import pytest
 
 import squid_discord
 import squid_layouts as sl
-from squid_discord import Everyone, MountDefaults, Owner, Screen, SessionRegistry
+from squid_discord import Everyone, MountDefaults, Owner, ScreenSpec, SessionRegistry
 from squid_discord.screens import Opener, Scope
 from squid_discord.sessions import Opened, Rejected, RejectionReason
 from squid_discord.testing import fake_interaction, fake_message
@@ -41,7 +41,7 @@ def to_message() -> squid_discord.Destination:
     ],
 )
 def test_screen_key_uses_its_declared_scope(scope: Scope, opener: Opener, expected: squid_discord.SessionKey) -> None:
-    assert Screen("panel", scope=scope).key(opener) == expected
+    assert ScreenSpec("panel", scope=scope).key(opener) == expected
 
 
 def test_opener_reads_an_interaction_and_a_command_context_alike() -> None:
@@ -63,7 +63,7 @@ def test_opener_reads_a_command_context_in_a_dm_as_guildless() -> None:
 @pytest.mark.parametrize("scope", [Scope.GUILD, Scope.USER_GUILD])
 def test_guild_screen_key_requires_a_guild(scope: Scope) -> None:
     with pytest.raises(TypeError, match="require an opener with a guild"):
-        Screen("panel", scope=scope).key(Opener(7))
+        ScreenSpec("panel", scope=scope).key(Opener(7))
 
 
 @pytest.mark.parametrize(
@@ -87,7 +87,7 @@ def test_a_guild_scope_requires_an_opener_with_a_guild(build: Callable[[Opener],
 
 def test_a_session_key_carries_the_scope_a_pool_would_key_on() -> None:
     """The point of one taxonomy: a panel holding its key needs no conversion to reach a pool."""
-    key = Screen("panel", scope=Scope.USER_GUILD).key(Opener(7, 42))
+    key = ScreenSpec("panel", scope=Scope.USER_GUILD).key(Opener(7, 42))
 
     assert key.scope == Opener(7, 42).user_guild()
 
@@ -101,7 +101,7 @@ def test_opener_reads_discord_identity() -> None:
 
 def test_screen_options_are_defensively_copied_and_read_only() -> None:
     source: dict[str, object] = {"timeout": 20}
-    screen = Screen("panel", options=source)
+    screen = ScreenSpec("panel", options=source)
     source["timeout"] = None
 
     assert screen.options["timeout"] == 20
@@ -114,7 +114,7 @@ def test_screen_options_are_defensively_copied_and_read_only() -> None:
 async def test_screen_applies_options_overrides_and_access() -> None:
     on_error = AsyncMock()
     registry = SessionRegistry(MountDefaults(timeout=30, strict=True, on_error=on_error))
-    screen = Screen("panel", access=lambda opener: Everyone(), options={"timeout": 20})
+    screen = ScreenSpec("panel", access=lambda opener: Everyone(), options={"timeout": 20})
 
     result = await screen.open(Panel(), to_message(), sessions=registry, opener=Opener(7), timeout=None)
 
@@ -131,7 +131,7 @@ async def test_screen_respond_derives_identity_and_delivery_from_the_interaction
     registry = SessionRegistry(MountDefaults(timeout=30))
     interaction = fake_interaction(user_id=7)
     interaction.guild_id = 42
-    screen = Screen("panel", scope=Scope.USER_GUILD)
+    screen = ScreenSpec("panel", scope=Scope.USER_GUILD)
 
     result = await screen.respond(
         Panel(),
@@ -159,7 +159,7 @@ async def test_screen_respond_forwards_parent_attachment() -> None:
     interaction = fake_interaction(user_id=7)
     interaction.guild_id = None
 
-    attached = await Screen("child").respond(
+    attached = await ScreenSpec("child").respond(
         Panel(),
         interaction,
         sessions=registry,
@@ -178,7 +178,7 @@ async def test_screen_attaches_to_a_live_parent_session() -> None:
     root_mount = registry.defaults.mount(Panel(), access=Owner(7), timeout=None)
     root = await registry.open(root_mount, to_message())
     assert isinstance(root, Opened)
-    screen = Screen("child", options={"timeout": None})
+    screen = ScreenSpec("child", options={"timeout": None})
 
     attached = await screen.open(Panel(), to_message(), sessions=registry, opener=Opener(7), parent=root.session.root)
 
@@ -191,7 +191,7 @@ async def test_screen_attaches_to_a_live_parent_session() -> None:
 async def test_screen_opens_a_root_when_parent_has_no_live_session() -> None:
     registry = SessionRegistry()
     unknown_parent = MountDefaults(timeout=None).mount(Panel(), access=Owner(7))
-    screen = Screen("child", options={"timeout": None})
+    screen = ScreenSpec("child", options={"timeout": None})
 
     opened = await screen.open(Panel(), to_message(), sessions=registry, opener=Opener(7), parent=unknown_parent)
 
@@ -201,7 +201,7 @@ async def test_screen_opens_a_root_when_parent_has_no_live_session() -> None:
 
 async def test_a_screen_carries_its_capacity_into_the_session() -> None:
     sessions = SessionRegistry()
-    screen = Screen("lobby", scope=Scope.GUILD, capacity=4, access=lambda opener: Everyone())
+    screen = ScreenSpec("lobby", scope=Scope.GUILD, capacity=4, access=lambda opener: Everyone())
 
     opened = await screen.open(Panel(), to_message(), sessions=sessions, opener=Opener(7, guild_id=5))
 
@@ -212,7 +212,7 @@ async def test_a_screen_carries_its_capacity_into_the_session() -> None:
 
 async def test_a_screen_carries_its_quota_and_domain() -> None:
     sessions = SessionRegistry()
-    screen = Screen("lobby", scope=Scope.GUILD, quota=1, domain="game", access=lambda opener: Everyone())
+    screen = ScreenSpec("lobby", scope=Scope.GUILD, quota=1, domain="game", access=lambda opener: Everyone())
 
     first = await screen.open(Panel(), to_message(), sessions=sessions, opener=Opener(7, guild_id=5))
     second = await screen.open(Panel(), to_message(), sessions=sessions, opener=Opener(7, guild_id=6))
