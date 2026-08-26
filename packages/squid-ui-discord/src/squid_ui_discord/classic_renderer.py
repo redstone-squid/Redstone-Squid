@@ -17,8 +17,7 @@ therefore has to be caught here, by walking what will actually be sent.
 from collections.abc import Callable, Hashable
 from dataclasses import dataclass
 from datetime import datetime
-from enum import StrEnum
-from typing import Any, cast
+from typing import Any
 
 import discord
 
@@ -34,27 +33,58 @@ from squid_ui_discord.emoji import discord_emoji
 from squid_ui_discord.inspection import audit_classic_payload
 from squid_ui_discord.message_payload import MessagePayload
 from squid_ui_discord.render_cache import RenderProgramCache
+from squid_ui_discord.renderer import Control as Control
 from squid_ui_discord.renderer import RoutedItem, RoutedSelectItem
 from squid_ui_discord.renderer import Wire as Wire
 from squid_ui_discord.target import DISCORD_V1_DPY27
 
-type Control = scene.Button | scene.Select | scene.EntitySelect
 type ClassicViewFactory = Callable[[], discord.ui.View]
 
 
-class _ClassicControlOp(StrEnum):
-    LINK = "link"
-    PREMIUM = "premium"
-    ROUTED_BUTTON = "routed_button"
-    ROUTED_SELECT = "routed_select"
-    CONTROL = "control"
-    EXTENSION = "extension"
+@dataclass(frozen=True, slots=True)
+class _ClassicLink:
+    node: scene.Link
 
 
 @dataclass(frozen=True, slots=True)
-class _ClassicControlInstruction:
-    op: _ClassicControlOp
-    source: scene.Control
+class _ClassicPremium:
+    node: scene.PremiumButton
+
+
+@dataclass(frozen=True, slots=True)
+class _ClassicRoutedButton:
+    node: scene.RoutedButton
+
+
+@dataclass(frozen=True, slots=True)
+class _ClassicRoutedSelect:
+    node: scene.RoutedSelect
+
+
+@dataclass(frozen=True, slots=True)
+class _ClassicControlItem:
+    node: Control
+
+
+@dataclass(frozen=True, slots=True)
+class _ClassicExtension:
+    node: scene.Extension
+
+
+type _ClassicControlInstruction = (
+    _ClassicLink
+    | _ClassicPremium
+    | _ClassicRoutedButton
+    | _ClassicRoutedSelect
+    | _ClassicControlItem
+    | _ClassicExtension
+)
+"""One control-drawing step, holding the exact scene node it draws.
+
+The V2 renderer's `_V2Instruction` carries the same shape and for the same reason: a tag
+beside a widened `scene.Control` makes every arm of `_control` re-assert what the compiler
+already proved.
+"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -197,19 +227,18 @@ class ClassicRenderer:
             for control in row.controls:
                 match control:
                     case scene.Link():
-                        op = _ClassicControlOp.LINK
+                        instructions.append(_ClassicLink(control))
                     case scene.PremiumButton():
-                        op = _ClassicControlOp.PREMIUM
+                        instructions.append(_ClassicPremium(control))
                     case scene.RoutedButton():
-                        op = _ClassicControlOp.ROUTED_BUTTON
+                        instructions.append(_ClassicRoutedButton(control))
                     case scene.RoutedSelect():
-                        op = _ClassicControlOp.ROUTED_SELECT
+                        instructions.append(_ClassicRoutedSelect(control))
                     case scene.Button() | scene.Select() | scene.EntitySelect():
-                        op = _ClassicControlOp.CONTROL
+                        instructions.append(_ClassicControlItem(control))
                     case scene.Extension():
-                        op = _ClassicControlOp.EXTENSION
+                        instructions.append(_ClassicExtension(control))
                         opaque = True
-                instructions.append(_ClassicControlInstruction(op, control))
             rows.append(tuple(instructions))
         return _ClassicProgram(body.content, embeds, tuple(rows), opaque)
 
@@ -269,10 +298,8 @@ class ClassicRenderer:
         plan: PlanResult | None,
         wire: Wire | None,
     ) -> discord.ui.Item[Any]:
-        control = instruction.source
-        match instruction.op:
-            case _ClassicControlOp.LINK:
-                node = cast(scene.Link, control)
+        match instruction:
+            case _ClassicLink(node=node):
                 return discord.ui.Button(
                     style=discord.ButtonStyle.link,
                     label=node.label,
@@ -280,10 +307,9 @@ class ClassicRenderer:
                     emoji=discord_emoji(node.emoji),
                     disabled=node.disabled,
                 )
-            case _ClassicControlOp.PREMIUM:
-                return discord.ui.Button(sku_id=cast(scene.PremiumButton, control).sku_id)
-            case _ClassicControlOp.ROUTED_BUTTON:
-                node = cast(scene.RoutedButton, control)
+            case _ClassicPremium(node=node):
+                return discord.ui.Button(sku_id=node.sku_id)
+            case _ClassicRoutedButton(node=node):
                 return RoutedItem(
                     style=getattr(discord.ButtonStyle, node.style.value),
                     label=node.label,
@@ -291,8 +317,7 @@ class ClassicRenderer:
                     emoji=discord_emoji(node.emoji),
                     disabled=node.disabled,
                 )
-            case _ClassicControlOp.ROUTED_SELECT:
-                node = cast(scene.RoutedSelect, control)
+            case _ClassicRoutedSelect(node=node):
                 return RoutedSelectItem(
                     options=[_option(option) for option in node.options],
                     custom_id=node.route_id,
@@ -301,26 +326,25 @@ class ClassicRenderer:
                     max_values=node.max_values,
                     disabled=node.disabled,
                 )
-            case _ClassicControlOp.CONTROL:
+            case _ClassicControlItem(node=node):
                 if plan is None or wire is None:
                     message = "interactive scene controls require a mounted Discord frontend"
                     raise TypeError(message)
-                binding = plan.bindings.get(control.action)
+                binding = plan.bindings.get(node.action)
                 if binding is None:
-                    message = f"scene action {control.action!r} has no binding"
+                    message = f"scene action {node.action!r} has no binding"
                     raise DrawInvariantError(message)
-                return wire(control, binding)
-            case _ClassicControlOp.EXTENSION:
-                kind = cast(scene.Extension, control).kind
-                message = f"a classic message cannot draw the Discord extension {kind!r} in row {row}"
+                return wire(node, binding)
+            case _ClassicExtension(node=node):
+                message = f"a classic message cannot draw the Discord extension {node.kind!r} in row {row}"
                 raise DrawInvariantError(message)
 
 
-def _option(option: object) -> discord.SelectOption:
+def _option(option: scene.Option) -> discord.SelectOption:
     return discord.SelectOption(
-        label=option.label,  # type: ignore[attr-defined]
-        value=option.value,  # type: ignore[attr-defined]
-        description=option.description,  # type: ignore[attr-defined]
-        default=option.default,  # type: ignore[attr-defined]
-        emoji=discord_emoji(option.emoji),  # type: ignore[attr-defined]
+        label=option.label,
+        value=option.value,
+        description=option.description,
+        default=option.default,
+        emoji=discord_emoji(option.emoji),
     )
