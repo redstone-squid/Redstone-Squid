@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import cast
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -25,7 +26,7 @@ class ContextKey[ValueT]:
         if self.cache_version is None:
             return False
         try:
-            version = self.cache_version  # Preserve the generic narrowing for both calls.
-            return version(left) == version(right)  # pyrefly: ignore[bad-argument-type]
+            version = self.cache_version
+            return version(cast(ValueT, left)) == version(cast(ValueT, right))
         except Exception:
             return False
