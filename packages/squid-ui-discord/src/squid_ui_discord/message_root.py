@@ -94,7 +94,7 @@ from squid_ui.runtime.topics import Address, SubscriptionReconciler, TopicBus
 from squid_ui.scene.model import PlanMetrics, PlanReport, PlanResult
 from squid_ui.semantic import Status
 from squid_ui.sources import Position
-from squid_ui.target_types import DiscordPyAdapter
+from squid_ui.target_types import ComponentsV2Target, DiscordPy27Adapter, DiscordPyAdapter
 from squid_ui.text import NEUTRAL, Localization, TextLike, resolve_text
 from squid_ui_discord import delivery as deliver
 from squid_ui_discord import live
@@ -928,7 +928,7 @@ class _BusyPaint:
             await self._root._repaint(None, None, through=self._root._source(self._interaction, resumed=self._resumed))
 
 
-class MessageRoot[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
+class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = DiscordPy27Adapter]:
     """Binds a component to a message and owns its whole interaction lifecycle."""
 
     def __init__(
@@ -936,7 +936,7 @@ class MessageRoot[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         component: Component[ModeT],
         *,
         access: AccessPolicy,
-        target: Target[Any, Any, ModeT, AdapterT] = DISCORD_V2_DPY27,  # type: ignore[assignment]
+        target: Target[Any, Any, ModeT, AdapterT] = DISCORD_V2_DPY27,
         chrome: Chrome = DEFAULT_CHROME,
         localization: Localization = NEUTRAL,
         palette: Palette = DEFAULT_PALETTE,

@@ -141,7 +141,7 @@ def _dynamic_values(value: object) -> tuple[object, ...]:
 
 
 def _program_dynamic_values(
-    document: Document,
+    document: Document[Any],
     *,
     target: object,
     limits: object,
@@ -231,7 +231,7 @@ def _compile_template(nodes: Sequence[Node], dynamic: tuple[object, ...]) -> obj
         return None
 
 
-def _declared_assets(document: Document) -> tuple[Asset, ...]:
+def _declared_assets(document: Document[Any]) -> tuple[Asset, ...]:
     found: list[Asset] = list(document.assets)
 
     def walk(value: object) -> None:
@@ -255,7 +255,7 @@ def _declared_assets(document: Document) -> tuple[Asset, ...]:
     return _merge_assets(found)
 
 
-def _incremental_shape(document: Document) -> str | None:
+def _incremental_shape(document: Document[Any]) -> str | None:
     """Identify one independent text region while excluding pagination and shared allocation."""
     if document.assets or len(document.children) != 1:
         return None
@@ -404,7 +404,7 @@ class _Expansion:
 class _Search:
     """Everything one document's search needs that does not change between candidates."""
 
-    document: Document
+    document: Document[Any]
     target: Target[Any, Any, Any, Any]
     chrome: Chrome
     localization: Localization
