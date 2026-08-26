@@ -35,7 +35,7 @@ from squid.accounts.errors import AccountNotFoundError
 from squid.bot.consent import request_consent
 from squid.bot.i18n import t
 from squid.bot.profile_render import identity_label, own_profile_avatar, own_profile_fields
-from squid.bot.ui import DISCORD_BLUE, CardField, create_mount
+from squid.bot.ui import CardField, create_mount
 from squid.core.errors import ValidationError
 from squid.core.i18n import _
 
@@ -103,9 +103,7 @@ class AccountPanel(sl.Component):
 
     def render(self) -> tuple[sl.LayoutNode, ...]:
         if self.closed:
-            # DISCORD_BLUE is house chrome, not a Tone, so this needs sl.section's accent
-            # rather than sl.status's fixed tone palette.
-            return (sl.section(sl.heading(t(self.locale, _("Account controls closed"))), accent=DISCORD_BLUE),)
+            return (sl.section(sl.heading(t(self.locale, _("Account controls closed")))),)
         if self._profile_editor is not None:
             return (
                 self.boundary(self._profile_editor, key="profile-editor"),
@@ -132,7 +130,6 @@ class AccountPanel(sl.Component):
                 sl.fields(*fields),
                 bool(extra_media) and sl.media(*extra_media, key="media"),
                 footer and sl.note(footer),
-                accent=DISCORD_BLUE,
                 thumbnail=media[0] if media else None,
             )
         ]
@@ -353,7 +350,6 @@ class AccountPanel(sl.Component):
             sl.heading(draft.display_name or t(self.locale, _("Your account"))),
             draft.bio and sl.truncate(sl.paragraph(draft.bio)),
             sl.fields(*fields) if fields else None,
-            accent=DISCORD_BLUE,
         )
 
     async def _profile_committed(

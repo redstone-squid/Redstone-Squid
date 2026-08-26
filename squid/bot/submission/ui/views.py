@@ -13,7 +13,7 @@ import squid_layouts as sl
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.components import BuildField, get_text_input
-from squid.bot.ui import DISCORD_BLUE, DISCORD_YELLOW, create_mount, error_layout, respond_presentation
+from squid.bot.ui import DISCORD_YELLOW, create_mount, error_layout, respond_presentation
 from squid.bot.utils.permissions import allows
 from squid.bot.utils.sentinel import DEFAULT, DefaultType
 from squid.builds.application import BuildEditPatch, BuildService
@@ -215,7 +215,7 @@ class SubmissionFormComponent(sl.Component):
 
     def render(self) -> tuple[sl.LayoutNode, ...]:
         if self.closed:
-            return (sl.section(sl.heading(t(self.locale, _("Submission closed"))), accent=DISCORD_BLUE),)
+            return (sl.section(sl.heading(t(self.locale, _("Submission closed")))),)
         missing = []
         if self.build.door_orientation is None:
             missing.append(t(self.locale, _("door type")))
@@ -240,7 +240,7 @@ class SubmissionFormComponent(sl.Component):
                 sl.truncate(sl.paragraph(guidance)),
                 sl.fields(*fields),
                 sl.note(t(self.locale, _("Only the door type and opening size are required."))),
-                accent=DISCORD_BLUE if self.is_ready else DISCORD_YELLOW,
+                accent=sl.palette.INHERIT if self.is_ready else DISCORD_YELLOW,
             ),
             sl.semantic.Choices(
                 key="door_type",
@@ -548,7 +548,6 @@ class BuildEditComponent(sl.Component):
                 sl.section(
                     sl.heading(t(self.locale, _("Changes saved"))),
                     sl.paragraph(t(self.locale, _("The build card has been refreshed."))),
-                    accent=DISCORD_BLUE,
                 ),
             )
         state = self.projection.status
@@ -596,7 +595,7 @@ class BuildEditComponent(sl.Component):
                 sl.heading(t(self.locale, _("Edit build"))),
                 sl.truncate(sl.paragraph(description)),
                 sl.fields(sl.field(t(self.locale, _("Fields in this section")), self.summary_text())),
-                accent=DISCORD_YELLOW if self.validation_error else DISCORD_BLUE,
+                accent=DISCORD_YELLOW if self.validation_error else sl.palette.INHERIT,
             )
         ]
         if (node := self._current()[1]) is not None:

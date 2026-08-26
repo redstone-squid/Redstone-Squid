@@ -35,6 +35,7 @@ __all__ = [
     "DISCORD_RED",
     "DISCORD_YELLOW",
     "HOST_DEFAULTS",
+    "PALETTES",
     "CardField",
     "CardSection",
     "L",
@@ -153,6 +154,20 @@ CHROME = ui.chrome.Chrome(
     page_footer=lambda page, pages: L(t"Page {page} of {pages}"),
 )
 _OPEN_LINK = L(t"Open link")
+
+PALETTES = ui.PaletteRegistry(
+    {
+        "squid": ui.Palette(
+            brand=DISCORD_BLUE,
+            neutral=DISCORD_GREY,
+            info=DISCORD_BLUE,
+            success=DISCORD_GREEN,
+            warning=DISCORD_YELLOW,
+            danger=DISCORD_RED,
+        )
+    },
+    default="squid",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -310,6 +325,7 @@ def contribute(
         followed_by=followed_by,
         chrome=CHROME,
         localization=localization_for(locale),
+        palette=PALETTES.resolve(),
         strict=strict,
     )
 
@@ -325,6 +341,7 @@ def render_item(
         node,
         chrome=CHROME,
         localization=localization_for(locale),
+        palette=PALETTES.resolve(),
         reservation=reservation,
     )
 
@@ -341,6 +358,7 @@ def render_static(
         nodes,
         chrome=CHROME,
         localization=localization_for(locale),
+        palette=PALETTES.resolve(),
         strict=strict,
         reservation=reservation,
     )
@@ -358,6 +376,7 @@ def render_presentation(
         nodes,
         chrome=CHROME,
         localization=localization_for(locale),
+        palette=PALETTES.resolve(),
         strict=strict,
         reservation=reservation,
     )
@@ -379,7 +398,7 @@ async def _component_error_hook(interaction: discord.Interaction, error: Excepti
     await handle_interaction_error(interaction, error, surface=f"component:{source}")
 
 
-HOST_DEFAULTS = sd.MountDefaults(chrome=CHROME, on_error=_component_error_hook)
+HOST_DEFAULTS = sd.MountDefaults(chrome=CHROME, palette=PALETTES.resolve(), on_error=_component_error_hook)
 """What the bot installs with: the chrome and error handling every panel shares.
 
 Only the half that can be written down as a value. The other half -- a challenge presenter,
@@ -636,7 +655,6 @@ def help_layout(
     return card_layout(
         title,
         description,
-        accent_colour=DISCORD_BLUE,
         sections=sections,
         footer=footer,
         locale=locale,

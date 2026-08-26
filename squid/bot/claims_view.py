@@ -60,7 +60,6 @@ class ClaimReviewComponent(sl.Component):
                 sl.section(
                     sl.heading(L(t"Claims closed")),
                     sl.paragraph(L(t"This review queue is closed.")),
-                    accent=DISCORD_BLUE,
                 ),
             )
         entries = tuple(_claim_entry(claim, self.locale) for claim in self._claims)
