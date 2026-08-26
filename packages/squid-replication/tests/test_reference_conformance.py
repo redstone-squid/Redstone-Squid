@@ -8,13 +8,12 @@ import weakref
 
 import pytest
 
-from squid_ui.runtime import History
 from squid_reactivity import (
     ActionCommit,
     ActionLedger,
     ConflictDetail,
-    StateOwner,
     ReactiveConflictError,
+    StateOwner,
     add_action_result_sink,
     on_action_commit,
     state,
@@ -24,15 +23,25 @@ from squid_reactivity import (
 from squid_reactivity.core import _CURRENT
 from squid_reactivity.testing import InterleavingHarness
 from squid_replication import (
-    ReferenceEngine,
     PreparedReplicationInverse,
-    ReplicationChangeToken,
+    ReferenceBackend,
+    ReferenceEngine,
     ReplicaClosedError,
+    ReplicationChangeToken,
     ReplicationResyncRequiredError,
-    Replica,
     ReplicationUpdate,
 )
-from squid_replication.reference import ReferenceOperation, PreparedReferenceUpdate
+from squid_replication import (
+    Replica as _Replica,
+)
+from squid_replication.reference import PreparedReferenceUpdate, ReferenceOperation
+from squid_ui.runtime import History
+
+_REFERENCE_BACKEND = ReferenceBackend()
+
+
+def Replica(replica_id: str) -> _Replica:
+    return _Replica(replica_id, backend=_REFERENCE_BACKEND)
 
 
 class LocalModel(StateOwner):
