@@ -39,7 +39,7 @@ from squid_layouts.profiling.model import (
     TraceStatus,
 )
 
-_SCHEMA_VERSION = 2
+_SCHEMA_VERSION = 1
 _DEFAULT_BOUNDS = (0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0)
 _MAX_NAME_LENGTH = 120
 _MAX_DETAIL_LENGTH = 240

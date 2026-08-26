@@ -535,7 +535,7 @@ async def test_a_durable_join_is_checkpointed_and_survives_recovery() -> None:
         record = DurableSessionCodec.loads(payload)
         assert record.members == frozenset({7, 8})
         assert record.capacity == 3
-        assert record.protocol == 3
+        assert record.protocol == DurableSessionCodec.protocol
         tasks.cancel_scope.cancel()
 
     async with anyio.create_task_group() as tasks:
@@ -635,61 +635,7 @@ async def _fenced_out(*args: object, **kwargs: object) -> bool:
     return False
 
 
-async def test_a_protocol_1_record_recovers_unbounded_with_its_opener_as_member() -> None:
-    store = MemorySessionStore()
-    key = SessionKey.guild("counter", 5)
-
-    async with anyio.create_task_group() as tasks:
-        first = runtime(store, FakeFrontend())
-        await tasks.start(first.run)
-        mount = squid_discord.Mount(Counter(), access=Everyone(), timeout=None)
-        opened = await first.open(
-            mount,
-            delivered_to(fake_message(message_id=99)),
-            recipe="counter",
-            key=key,
-            actor_id=7,
-            capacity=2,
-        )
-        assert isinstance(opened, Opened)
-        tasks.cancel_scope.cancel()
-
-    # Rewrite the stored pair as a record and summary from before membership existed.
-    stored = (await store.list())[0]
-    snapshot = json.loads(stored.record_payload)
-    snapshot["protocol"] = 1
-    for mount in snapshot["mounts"]:
-        mount["snapshot"] = mount.pop("state")
-        mount["locator"] = mount.pop("address")
-    del snapshot["members"], snapshot["capacity"]
-    summary = json.loads(stored.snapshot_payload)
-    del summary["members"]
-    store._records[stored.key] = StoredSessionRecord(
-        stored.key, stored.scope, json.dumps(summary), json.dumps(snapshot)
-    )
-
-    record = DurableSessionCodec.loads(json.dumps(snapshot))
-    assert record.protocol == 1
-    assert record.members == frozenset({7})
-    assert record.capacity is None
-
-    async with anyio.create_task_group() as tasks:
-        second = runtime(store, FakeFrontend())
-        report = await tasks.start(second.run)
-
-        assert len(report.restored) == 1
-        recovered = next(iter(second.sessions.active()))
-        assert recovered.members == frozenset({7})
-        assert recovered.capacity is None
-
-        # Recovery requests a checkpoint, which rewrites the record at the current protocol.
-        await second.flush()
-        upgraded = DurableSessionCodec.loads((await store.list())[0].record_payload)
-        assert upgraded.protocol == 3
-        tasks.cancel_scope.cancel()
-
-
-async def test_a_summary_disagreeing_with_its_record_is_refused() -> None:
+async def test_a_record_without_membership_is_refused() -> None:
     store = MemorySessionStore()
 
     async with anyio.create_task_group() as tasks:
@@ -700,10 +646,35 @@ async def test_a_summary_disagreeing_with_its_record_is_refused() -> None:
         tasks.cancel_scope.cancel()
 
     stored = (await store.list())[0]
-    summary = json.loads(stored.snapshot_payload)
-    summary["members"] = [7, 8]
+    record = json.loads(stored.record_payload)
+    del record["members"]
     store._records[stored.key] = StoredSessionRecord(
-        stored.key, stored.scope, json.dumps(summary), stored.record_payload
+        stored.key, stored.scope, stored.snapshot_payload, json.dumps(record)
+    )
+
+    async with anyio.create_task_group() as tasks:
+        second = runtime(store, FakeFrontend())
+        report = await tasks.start(second.run)
+
+        assert len(report.incompatible) == 1
+        tasks.cancel_scope.cancel()
+
+
+async def test_a_snapshot_disagreeing_with_its_record_is_refused() -> None:
+    store = MemorySessionStore()
+
+    async with anyio.create_task_group() as tasks:
+        first = runtime(store, FakeFrontend())
+        await tasks.start(first.run)
+        _, opened = await open_counter(first)
+        assert isinstance(opened, Opened)
+        tasks.cancel_scope.cancel()
+
+    stored = (await store.list())[0]
+    snapshot = json.loads(stored.snapshot_payload)
+    snapshot["members"] = [7, 8]
+    store._records[stored.key] = StoredSessionRecord(
+        stored.key, stored.scope, json.dumps(snapshot), stored.record_payload
     )
 
     async with anyio.create_task_group() as tasks:

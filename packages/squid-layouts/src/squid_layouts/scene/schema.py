@@ -37,12 +37,12 @@ def _node(kind: str, properties: dict[str, Any], *required: str) -> dict[str, An
 
 SCHEMA: dict[str, Any] = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://schem-at.github.io/squid-layouts/scene-v2.schema.json",
-    "title": "squid-layouts resolved scene protocol 2",
+    "$id": "https://schem-at.github.io/squid-layouts/scene-v1.schema.json",
+    "title": "squid-layouts resolved scene protocol 1",
     "type": "object",
     "additionalProperties": False,
     "properties": {
-        "protocol": {"const": 2},
+        "protocol": {"const": 1},
         "target": {"type": "string"},
         "target_version": {"type": "integer", "minimum": 0},
         "body": {"$ref": "#/$defs/body"},
