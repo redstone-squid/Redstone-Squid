@@ -7,7 +7,8 @@ would be making layout decisions with none of the planner's budget information.
 """
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
+from datetime import datetime
 from typing import Any
 
 from squid_ui import scene
@@ -39,6 +40,7 @@ from squid_ui.primitives.nodes import (
     Button,
     Card,
     CardMedia,
+    CardText,
     Content,
     ControlGroup,
     EntitySelect,
@@ -49,6 +51,7 @@ from squid_ui.primitives.nodes import (
     LinkButton,
     MediaCollection,
     Node,
+    Option,
     Panel,
     PremiumButton,
     RawItem,
@@ -114,11 +117,11 @@ def _validate(nodes: Sequence[Node], limits: ClassicLimits) -> None:
         message = f"{path}: {detail}"
         raise LayoutInvariantError(message)
 
-    def slot(path: str, value: object, cap: int, what: str) -> None:
+    def slot(path: str, value: CardText | None, cap: int, what: str) -> None:
         """A direct value over its local cap is a planning error, not a silent trim."""
         if value is None:
             return
-        node = card_text(value)  # type: ignore[arg-type]
+        node = card_text(value)
         length = len(node.content.strip())
         if length > cap and isinstance(node.overflow, Never):
             fail(path, f"{what} is {length} characters; the cap is {cap}. Give it an explicit overflow policy")
@@ -285,12 +288,8 @@ class _ClassicConverter:
 
     bindings: SceneBindings
     content: str | None = None
-    embeds: list[scene.Embed] = None  # type: ignore[assignment]
-    rows: list[scene.ClassicRow] = None  # type: ignore[assignment]
-
-    def __post_init__(self) -> None:
-        self.embeds = []
-        self.rows = []
+    embeds: list[scene.Embed] = field(default_factory=list)
+    rows: list[scene.ClassicRow] = field(default_factory=list)
 
     def convert(self, children: Sequence[Realized], path: str = "") -> None:
         for index, child in enumerate(children):
@@ -412,22 +411,21 @@ def _media(media: CardMedia | None) -> scene.EmbedMedia | None:
     return None if media is None else scene.EmbedMedia(media.url, media.description)
 
 
-def _timestamp(value: object) -> str | None:
+def _timestamp(value: ZonedDateTime | datetime | None) -> str | None:
     if value is None:
         return None
     if isinstance(value, ZonedDateTime):
         return value.instant.isoformat()
-    return value.isoformat()  # type: ignore[union-attr]
+    return value.isoformat()
 
 
-def _options(options: Sequence[object]) -> list[scene.Option]:
+def _options(options: Sequence[Option]) -> list[scene.Option]:
     return [
-        scene.Option(option.label, option.value, option.description, option.default, option.emoji)  # type: ignore[attr-defined]
-        for option in options
+        scene.Option(option.label, option.value, option.description, option.default, option.emoji) for option in options
     ]
 
 
-def _as_control(node: object, path: str) -> scene.Control:
+def _as_control(node: scene.Node, path: str) -> scene.Control:
     if not isinstance(node, scene.Link | scene.PremiumButton | scene.Button | scene.RoutedButton | scene.Extension):
         message = f"{path}: an action row cannot hold {type(node).__name__}"
         raise LayoutInvariantError(message)
