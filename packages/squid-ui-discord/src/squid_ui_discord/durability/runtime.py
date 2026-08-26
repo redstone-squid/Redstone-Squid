@@ -29,7 +29,7 @@ from squid_ui_discord.sessions import (
     SessionRegistry,
     SessionSnapshot,
 )
-from squid_storage import ClaimToken, DurableSessionStore, StoredSessionRecord
+from squid_storage import ClaimToken, DurableSessionStore, SessionRecord
 
 from . import ComponentRegistry, FrontendAddress, MountStateError, RestoreContext
 from .frontend import (
@@ -797,7 +797,7 @@ def _snapshot_ids(value: object) -> frozenset[int]:
     return frozenset(value)
 
 
-def _item_from_stored(record: StoredSessionRecord, reason: str) -> RecoveryItem:
+def _item_from_stored(record: SessionRecord, reason: str) -> RecoveryItem:
     try:
         snapshot = _loads_snapshot(record.snapshot_payload, local=False)
     except MountStateError:
