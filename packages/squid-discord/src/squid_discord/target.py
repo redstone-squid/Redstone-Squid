@@ -6,18 +6,18 @@ from typing import overload
 import discord
 
 from squid_discord.adapter import DISCORD_PY_27_ADAPTER
-from squid_layouts import scene
-from squid_layouts.planning.adapter import AdapterProfile
-from squid_layouts.planning.discord import (
+from squid_ui import scene
+from squid_ui.planning.adapter import AdapterProfile
+from squid_ui.planning.discord import (
     CLASSIC_PROTOCOL_CAPABILITIES,
     V2_PROTOCOL_CAPABILITIES,
     classic_target,
     components_v2_target,
 )
-from squid_layouts.planning.limits import CLASSIC_LIMITS, LIMITS, ClassicLimits, V2Limits
-from squid_layouts.planning.target import Target
-from squid_layouts.primitives.nodes import Extension, PrimitiveNode
-from squid_layouts.target_types import (
+from squid_ui.planning.limits import CLASSIC_LIMITS, LIMITS, ClassicLimits, V2Limits
+from squid_ui.planning.target import Target
+from squid_ui.primitives.nodes import Extension, PrimitiveNode
+from squid_ui.target_types import (
     ClassicTarget,
     ComponentsV2Target,
     DiscordPy27Adapter,

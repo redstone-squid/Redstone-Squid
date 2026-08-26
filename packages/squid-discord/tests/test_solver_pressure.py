@@ -2,13 +2,13 @@
 
 import pytest
 
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import DISCORD_V2_DPY27
 from squid_discord.target import v2
-from squid_layouts import scene
-from squid_layouts.planning import measure
-from squid_layouts.planning.limits import V2Limits
-from squid_layouts.primitives import Paginate, Text
+from squid_ui import scene
+from squid_ui.planning import measure
+from squid_ui.planning.limits import V2Limits
+from squid_ui.primitives import Paginate, Text
 
 
 class TestBudgetContract:

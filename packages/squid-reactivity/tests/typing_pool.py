@@ -4,7 +4,7 @@ The pool's whole claim is that the namespace's `Shared[ScopeT]`, the lookup scop
 argument and the returned handle are one inferred pair. The assertions below are on the **full**
 pool type rather than on the handle alone, because the failure mode this guards against is
 `SharedPool[Any, Preferences]` -- which would satisfy a handle-only assertion while silently
-accepting the wrong scope. See `docs/plans/squid-layouts-redesign/spikes/59/` for the measurement
+accepting the wrong scope. See `docs/plans/squid-ui-redesign/spikes/59/` for the measurement
 that chose this signature.
 """
 

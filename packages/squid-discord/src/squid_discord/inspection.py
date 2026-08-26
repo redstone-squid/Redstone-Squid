@@ -16,8 +16,8 @@ import discord
 from discord.ui.select import BaseSelect
 
 from squid_discord.presentation import DiscordMode, DiscordPresentation
-from squid_layouts.errors import ExistingLayoutError, LimitViolationError
-from squid_layouts.planning.limits import (
+from squid_ui.errors import ExistingLayoutError, LimitViolationError
+from squid_ui.planning.limits import (
     CLASSIC_LIMITS,
     LIMITS,
     Axis,
@@ -25,7 +25,7 @@ from squid_layouts.planning.limits import (
     ComponentLimits,
     V2Limits,
 )
-from squid_layouts.planning.target import ResourceCost
+from squid_ui.planning.target import ResourceCost
 
 type Path = tuple[int, ...]
 

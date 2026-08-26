@@ -12,8 +12,8 @@ from dataclasses import asdict, dataclass
 
 from squid_discord import Everyone, Mount
 from squid_discord.testing import commit_render
-from squid_layouts import Component, computed, state
-from squid_layouts.primitives import Text
+from squid_ui import Component, computed, state
+from squid_ui.primitives import Text
 
 
 class _Leaf(Component):

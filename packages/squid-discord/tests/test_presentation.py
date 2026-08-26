@@ -14,16 +14,16 @@ import discord
 import pytest
 
 import squid_discord
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import delivery
 from squid_discord.durability import FrontendAddress
 from squid_discord.durability.frontend import DiscordFrontend, Promoted, Reconnected, RecoveredBinding
 from squid_discord.presentation import DiscordMode, DiscordModeError, DiscordPresentation, mode_of
 from squid_discord.testing import delivered_to, fake_interaction, fake_message
-from squid_layouts.assets import Asset, InlineAsset
-from squid_layouts.errors import LimitViolationError
-from squid_layouts.planning.limits import LIMITS
-from squid_layouts.primitives import Text
+from squid_ui.assets import Asset, InlineAsset
+from squid_ui.errors import LimitViolationError
+from squid_ui.planning.limits import LIMITS
+from squid_ui.primitives import Text
 
 CLASSIC = DiscordMode.CLASSIC
 V2 = DiscordMode.COMPONENTS_V2

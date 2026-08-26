@@ -9,7 +9,7 @@ import discord
 from whenever import Instant
 
 import squid_discord as sd
-import squid_layouts as sl
+import squid_ui as sl
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.components import BuildField, get_text_input

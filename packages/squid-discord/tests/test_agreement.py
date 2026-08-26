@@ -6,7 +6,7 @@ import discord
 import pytest
 
 import squid_discord
-import squid_layouts as sl
+import squid_ui as sl
 import squid_patterns as sp
 from squid_discord.testing import commit_render, fake_interaction
 

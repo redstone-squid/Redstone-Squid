@@ -38,14 +38,14 @@ from squid_discord.presentation import DiscordMode, DiscordPresentation
 from squid_discord.render_cache import RenderProgramCache, RenderProgramCacheSnapshot
 from squid_discord.renderer import V2Renderer
 from squid_discord.target import DISCORD_V2_DPY27, Target
-from squid_layouts import scene
-from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME, LOCALIZATION_CONTEXT, Chrome, localize_chrome
-from squid_layouts.document import Asset, Document
-from squid_layouts.entity import ChannelType, EntityKind, EntityRef, EntityType
-from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.forms import FormBinding, FormSpec, FormValidationMode, SubmitHandler
-from squid_layouts.guards import Challenge, GuardLedger, approvals
-from squid_layouts.interactions import (
+from squid_ui import scene
+from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME, LOCALIZATION_CONTEXT, Chrome, localize_chrome
+from squid_ui.document import Asset, Document
+from squid_ui.entity import ChannelType, EntityKind, EntityRef, EntityType
+from squid_ui.errors import LayoutInvariantError
+from squid_ui.forms import FormBinding, FormSpec, FormValidationMode, SubmitHandler
+from squid_ui.guards import Challenge, GuardLedger, approvals
+from squid_ui.interactions import (
     ActionBinding,
     ActionEvent,
     ActionKind,
@@ -60,21 +60,21 @@ from squid_layouts.interactions import (
     SelectionEvent,
     SubmitEvent,
 )
-from squid_layouts.palette import DEFAULT_PALETTE, Palette
-from squid_layouts.planning.adapter import (
+from squid_ui.palette import DEFAULT_PALETTE, Palette
+from squid_ui.planning.adapter import (
     AdapterCapability,
 )
-from squid_layouts.planning.discord import CLASSIC_TARGET_ID, V2_TARGET_ID
-from squid_layouts.planning.navigation import (
+from squid_ui.planning.discord import CLASSIC_TARGET_ID, V2_TARGET_ID
+from squid_ui.planning.navigation import (
     NAV_FACTORY_CONTEXT,
     NavFactory,
     NavigationContext,
     NavigationState,
     default_nav,
 )
-from squid_layouts.planning.planner import plan as plan_document
-from squid_layouts.primitives.nodes import Button, Node, Row
-from squid_layouts.profiling import (
+from squid_ui.planning.planner import plan as plan_document
+from squid_ui.primitives.nodes import Button, Node, Row
+from squid_ui.profiling import (
     ActionResult,
     DetachedSpanRecorder,
     DispatchDisposition,
@@ -91,24 +91,24 @@ from squid_layouts.profiling import (
 )
 
 # (deliver is imported as a module so tests can monkeypatch its functions.)
-from squid_layouts.runtime.component import Component, ComponentTree
-from squid_layouts.runtime.histories import History
-from squid_layouts.runtime.owner import ComponentRuntime
-from squid_layouts.runtime.presentation import PresentationSession, SessionUpdate, apply_updates
-from squid_layouts.runtime.reactivity import (
+from squid_ui.runtime.component import Component, ComponentTree
+from squid_ui.runtime.histories import History
+from squid_ui.runtime.owner import ComponentRuntime
+from squid_ui.runtime.presentation import PresentationSession, SessionUpdate, apply_updates
+from squid_ui.runtime.reactivity import (
     ActionCommit,
     Aftermath,
     on_action_commit,
     readonly_transaction,
     transaction,
 )
-from squid_layouts.runtime.resources import AsyncBinding, PendingMode, abandon_superseded_loads
-from squid_layouts.runtime.topics import Address, SubscriptionReconciler, TopicBus
-from squid_layouts.scene.model import PlanMetrics, PlanReport, PlanResult
-from squid_layouts.semantic import Status
-from squid_layouts.sources import Position
-from squid_layouts.target_types import DiscordPyAdapter
-from squid_layouts.text import NEUTRAL, Localization, TextLike, resolve_text
+from squid_ui.runtime.resources import AsyncBinding, PendingMode, abandon_superseded_loads
+from squid_ui.runtime.topics import Address, SubscriptionReconciler, TopicBus
+from squid_ui.scene.model import PlanMetrics, PlanReport, PlanResult
+from squid_ui.semantic import Status
+from squid_ui.sources import Position
+from squid_ui.target_types import DiscordPyAdapter
+from squid_ui.text import NEUTRAL, Localization, TextLike, resolve_text
 from squid_reactivity.actions import ActionContext, ActorRef
 
 logger = logging.getLogger(__name__)

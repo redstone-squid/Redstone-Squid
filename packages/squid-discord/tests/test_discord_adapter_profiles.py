@@ -9,13 +9,13 @@ from squid_discord.adapter import (
     require_discord_py_capability,
 )
 from squid_discord.target import classic, v2
-from squid_layouts import scene
-from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.planning import plan
-from squid_layouts.planning.adapter import AdapterCapability, AdapterProfile
-from squid_layouts.planning.discord import classic_target, components_v2_target
-from squid_layouts.planning.types import DiscordAdapter
-from squid_layouts.primitives import Text
+from squid_ui import scene
+from squid_ui.errors import LayoutInvariantError
+from squid_ui.planning import plan
+from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
+from squid_ui.planning.discord import classic_target, components_v2_target
+from squid_ui.planning.types import DiscordAdapter
+from squid_ui.primitives import Text
 
 
 class AlternateAdapter(DiscordAdapter):
@@ -50,9 +50,9 @@ def guarded(name, *args, **kwargs):
         raise AssertionError(f'discord.py imported by {name}')
     return original(name, *args, **kwargs)
 builtins.__import__ = guarded
-from squid_layouts.planning.adapter import AdapterProfile
-from squid_layouts.planning.discord import components_v2_target
-from squid_layouts.planning.types import DiscordAdapter
+from squid_ui.planning.adapter import AdapterProfile
+from squid_ui.planning.discord import components_v2_target
+from squid_ui.planning.types import DiscordAdapter
 components_v2_target(AdapterProfile(DiscordAdapter, 'alternate', '>=1'))
 """
 

@@ -11,7 +11,7 @@ import pytest
 from whenever import Instant
 
 import squid_discord as sd
-import squid_layouts as sl
+import squid_ui as sl
 import squid_patterns as sp
 from squid.accounts.domain import (
     Account,

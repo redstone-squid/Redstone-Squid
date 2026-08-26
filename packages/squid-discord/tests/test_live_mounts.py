@@ -7,8 +7,8 @@ import pytest
 from squid_discord import Everyone, Mount, Owner, live
 from squid_discord.delivery import DeliveryResult
 from squid_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
-from squid_layouts import Component, PressEvent, state
-from squid_layouts.primitives import Button, Heading, Row, Text
+from squid_ui import Component, PressEvent, state
+from squid_ui.primitives import Button, Heading, Row, Text
 
 
 class Panel(Component):

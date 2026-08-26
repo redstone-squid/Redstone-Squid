@@ -30,10 +30,10 @@ import discord
 
 from squid_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
 from squid_discord.presentation import DiscordMode, DiscordPresentation, mode_of
-from squid_layouts.errors import LayoutError, LimitViolationError
-from squid_layouts.planning.adapter import AdapterCapability, AdapterProfile
-from squid_layouts.planning.limits import LIMITS
-from squid_layouts.target_types import DiscordPyAdapter
+from squid_ui.errors import LayoutError, LimitViolationError
+from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
+from squid_ui.planning.limits import LIMITS
+from squid_ui.target_types import DiscordPyAdapter
 
 # Discord's way of saying the credentials behind a handle are gone.
 _STALE_CODES = frozenset({10015, 10062, 50027})

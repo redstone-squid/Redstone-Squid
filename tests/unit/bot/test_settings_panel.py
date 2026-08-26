@@ -9,11 +9,11 @@ import pytest
 
 import squid.bot.settings_view as settings_view
 import squid_discord as sd
-import squid_layouts as sl
+import squid_ui as sl
 from squid.bot.settings_view import SettingsCapabilities, SettingsPanel
 from squid.voting.domain import VoteKind
 from squid_discord.testing import commit_render
-from squid_layouts.runtime.reactivity import readonly_transaction
+from squid_ui.runtime.reactivity import readonly_transaction
 from tests.helpers.discord import make_layout_bot
 
 GUILD_ID = 7

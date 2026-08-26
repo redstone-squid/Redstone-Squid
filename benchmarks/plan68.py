@@ -76,7 +76,7 @@ def core_baseline() -> dict[str, dict[str, int]]:
 
 def retention_baseline() -> dict[str, int]:
     """Measure retained bytes for bounded action outcomes and conditional history entries."""
-    from squid_layouts.runtime import History
+    from squid_ui.runtime import History
     from squid_reactive import ActionLedger, add_action_outcome_sink
 
     ledger = ActionLedger(limit=100)

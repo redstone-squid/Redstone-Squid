@@ -1,11 +1,11 @@
 [project]
 name = "squid-patterns"
 version = "0.1.0"
-description = "Frontend-neutral, reusable application patterns for squid-layouts"
+description = "Frontend-neutral, reusable application patterns for squid-ui"
 requires-python = ">=3.14"
 readme = "README.md"
 license = "MIT"
-dependencies = ["squid-layouts"]
+dependencies = ["squid-ui"]
 
 [build-system]
 requires = ["uv_build>=0.11,<0.13"]

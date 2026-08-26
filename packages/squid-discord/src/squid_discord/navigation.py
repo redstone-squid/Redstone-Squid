@@ -7,11 +7,11 @@ rewriting subclass constructors to keep controls in order. It is an ordinary con
 their parent rather than through a mount reference the navigator hands out.
 """
 
-from squid_layouts.chrome import CHROME_CONTEXT
-from squid_layouts.interactions import PressEvent
-from squid_layouts.primitives.nodes import Button, Node, Row
-from squid_layouts.primitives.styles import ActionStyle
-from squid_layouts.runtime.component import Component
+from squid_ui.chrome import CHROME_CONTEXT
+from squid_ui.interactions import PressEvent
+from squid_ui.primitives.nodes import Button, Node, Row
+from squid_ui.primitives.styles import ActionStyle
+from squid_ui.runtime.component import Component
 
 
 class Navigator(Component):

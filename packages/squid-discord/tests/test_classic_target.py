@@ -3,14 +3,14 @@
 import discord
 import pytest
 
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, V2_LIMITS
 from squid_discord.target import classic
-from squid_layouts import scene
-from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
-from squid_layouts.planning import Target, plan
-from squid_layouts.planning.limits import CLASSIC_LIMITS, Axis
-from squid_layouts.primitives import (
+from squid_ui import scene
+from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
+from squid_ui.planning import Target, plan
+from squid_ui.planning.limits import CLASSIC_LIMITS, Axis
+from squid_ui.primitives import (
     Card,
     CardAuthor,
     CardField,

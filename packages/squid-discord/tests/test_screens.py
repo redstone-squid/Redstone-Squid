@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 import squid_discord
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import (
     Everyone,
     MountDefaults,
@@ -21,7 +21,7 @@ from squid_discord import (
 )
 from squid_discord.sessions import Opened, Rejected, RejectionReason
 from squid_discord.testing import fake_interaction, fake_message
-from squid_layouts.primitives import Heading
+from squid_ui.primitives import Heading
 
 
 class Panel(sl.Component):

@@ -3,10 +3,10 @@
 import re
 from collections.abc import Iterable, Mapping
 
-from squid_layouts.factories import is_layout_node, paragraph
-from squid_layouts.runtime.component import Component
-from squid_layouts.semantic import LayoutNode
-from squid_layouts.text import Message, ResolvedText, TextLike
+from squid_ui.factories import is_layout_node, paragraph
+from squid_ui.runtime.component import Component
+from squid_ui.semantic import LayoutNode
+from squid_ui.text import Message, ResolvedText, TextLike
 
 type ContentItem = LayoutNode | Component
 type ContentLike = ContentItem | TextLike | Iterable[ContentItem | TextLike]

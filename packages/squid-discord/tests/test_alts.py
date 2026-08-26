@@ -5,16 +5,16 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import (
     conform,
     render_static,
 )
 from squid_discord.testing import assert_within_limits
-from squid_layouts.planning import SolveNoteCode, measure
-from squid_layouts.planning.layout_measurement.model import MeasuredPanel, MeasuredSection, MeasuredText
-from squid_layouts.planning.layout_measurement.solver import MeasuredLayout
-from squid_layouts.primitives import (
+from squid_ui.planning import SolveNoteCode, measure
+from squid_ui.planning.layout_measurement.model import MeasuredPanel, MeasuredSection, MeasuredText
+from squid_ui.planning.layout_measurement.solver import MeasuredLayout
+from squid_ui.primitives import (
     Alt,
     Condense,
     Lines,

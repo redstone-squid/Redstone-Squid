@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING, overload
 
 import anyio
 
-from squid_layouts.profiling import NoOpProfiler, OperationKind, PresentationStatus, Profiler, TraceLink
-from squid_layouts.runtime.topics import Address, CellAddress, Topic, TopicBus
+from squid_ui.profiling import NoOpProfiler, OperationKind, PresentationStatus, Profiler, TraceLink
+from squid_ui.runtime.topics import Address, CellAddress, Topic, TopicBus
 
 if TYPE_CHECKING:
     from squid_discord.mount import Mount

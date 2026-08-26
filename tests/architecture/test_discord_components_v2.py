@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import override
 
 BOT_ROOT = Path(__file__).parents[2] / "squid" / "bot"
-LAYOUTS_ROOT = Path(__file__).parents[2] / "packages" / "squid-layouts" / "src"
+LAYOUTS_ROOT = Path(__file__).parents[2] / "packages" / "squid-ui" / "src"
 MESSAGE_METHODS = {"edit", "edit_message", "send", "send_message"}
 LEGACY_KEYWORDS = {"content", "embed", "embeds"}
 # The framework has to *name* the classic message vocabulary to model it: a
@@ -28,7 +28,7 @@ class DiscordUiVisitor(ast.NodeVisitor):
         self.path = path
         self.function_names: list[str] = []
         self.violations: list[str] = []
-        in_discord_frontend = path.parts[-3:-1] == ("squid_layouts", "discord")
+        in_discord_frontend = path.parts[-3:-1] == ("squid_ui", "discord")
         self.names_types_only = in_discord_frontend and path.name in LEGACY_TYPE_HOMES
         self.owns_classic = in_discord_frontend and path.name in CLASSIC_TARGET_HOMES
         self.constructions: set[int] = set()

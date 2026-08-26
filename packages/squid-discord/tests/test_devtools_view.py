@@ -7,11 +7,11 @@ import discord
 import pytest
 
 import squid_discord
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import Everyone, Mount, Owner, live
 from squid_discord.devtools_view import MountInspector, metrics_text, plan_text, scene_attachment
 from squid_discord.testing import assert_within_limits, commit_render, delivered_to, fake_interaction
-from squid_layouts.primitives import Button, Heading, Row, Text
+from squid_ui.primitives import Button, Heading, Row, Text
 
 
 class Subject(sl.Component):

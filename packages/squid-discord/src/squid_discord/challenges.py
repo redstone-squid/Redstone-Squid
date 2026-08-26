@@ -20,7 +20,7 @@ from squid_discord.delivery import respond_to
 from squid_discord.mount import ChallengeRequest, ChallengeSupervisor, ResumedPress
 from squid_discord.screens import Opener, ScreenSpec
 from squid_discord.sessions import SessionRegistry
-from squid_layouts.guards import ChallengeResolver
+from squid_ui.guards import ChallengeResolver
 
 logger = logging.getLogger(__name__)
 

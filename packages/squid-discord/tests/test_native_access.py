@@ -5,11 +5,11 @@ import pytest
 from squid_discord import Everyone, Mount, native, responder
 from squid_discord.actions import ActionResponder
 from squid_discord.testing import commit_render, fake_interaction
-from squid_layouts import Component, PressEvent, TextLike
-from squid_layouts.forms import FormLike, SubmitHandler
-from squid_layouts.interactions import ActionMode, Actor, Visibility
-from squid_layouts.interactions import ActionResponder as ActionResponderProtocol
-from squid_layouts.primitives import Button, Row
+from squid_ui import Component, PressEvent, TextLike
+from squid_ui.forms import FormLike, SubmitHandler
+from squid_ui.interactions import ActionMode, Actor, Visibility
+from squid_ui.interactions import ActionResponder as ActionResponderProtocol
+from squid_ui.primitives import Button, Row
 
 
 class Portable:

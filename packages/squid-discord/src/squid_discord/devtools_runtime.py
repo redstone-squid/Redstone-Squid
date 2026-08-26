@@ -13,9 +13,9 @@ from squid_discord.live import find, mounts
 from squid_discord.mount import MountSnapshot
 from squid_discord.scheduler import MountScheduler, MountSchedulerSnapshot
 from squid_discord.sessions import Session, SessionRegistry
-from squid_layouts.profiling import NoOpProfiler, Profiler, RuntimeSnapshot
-from squid_layouts.runtime.histories import HistorySnapshot, inspect_histories
-from squid_layouts.runtime.topics import Address, BusSnapshot, CellAddress, Topic, TopicBus
+from squid_ui.profiling import NoOpProfiler, Profiler, RuntimeSnapshot
+from squid_ui.runtime.histories import HistorySnapshot, inspect_histories
+from squid_ui.runtime.topics import Address, BusSnapshot, CellAddress, Topic, TopicBus
 
 if TYPE_CHECKING:
     # Annotations only. Kept out of the runtime import graph so `import squid_discord` does

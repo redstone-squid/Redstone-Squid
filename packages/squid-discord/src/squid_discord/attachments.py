@@ -11,9 +11,9 @@ from urllib.parse import urlsplit
 
 import discord
 
-from squid_layouts import scene
-from squid_layouts.assets import Asset, InlineAsset, StoredAsset
-from squid_layouts.scene.model import PlanResult
+from squid_ui import scene
+from squid_ui.assets import Asset, InlineAsset, StoredAsset
+from squid_ui.scene.model import PlanResult
 
 
 def scene_nodes(document: scene.Document) -> tuple[scene.Node, ...]:

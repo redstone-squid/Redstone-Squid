@@ -12,9 +12,9 @@ import pytest
 
 from squid_discord import Everyone, Mount, MountScheduler, PauseUpdates, RenewEphemeral, delivery
 from squid_discord.testing import delivered_to, fake_interaction, fake_message
-from squid_layouts import Component
-from squid_layouts.profiling import MemoryProfiler, OperationKind, TraceLink
-from squid_layouts.runtime import LocalTopicBus, Topic
+from squid_ui import Component
+from squid_ui.profiling import MemoryProfiler, OperationKind, TraceLink
+from squid_ui.runtime import LocalTopicBus, Topic
 
 
 class Empty(Component):

@@ -10,7 +10,7 @@ exclude-newer-span = "P7D"
 members = [
     "redstone-squid",
     "squid-discord",
-    "squid-layouts",
+    "squid-ui",
     "squid-patterns",
     "squid-reactivity",
     "squid-replicated",
@@ -2817,7 +2817,7 @@ dependencies = [
     { name = "redis" },
     { name = "sqlalchemy", extra = ["postgresql-asyncpg", "postgresql-psycopg2binary"] },
     { name = "squid-discord" },
-    { name = "squid-layouts" },
+    { name = "squid-ui" },
     { name = "squid-patterns" },
     { name = "squid-replicated" },
     { name = "squid-stores", extra = ["postgres"] },
@@ -2902,7 +2902,7 @@ requires-dist = [
     { name = "redis", specifier = ">=8,<9" },
     { name = "sqlalchemy", extras = ["postgresql-asyncpg", "postgresql-psycopg2binary"], specifier = ">=2.0.41" },
     { name = "squid-discord", editable = "packages/squid-discord" },
-    { name = "squid-layouts", editable = "packages/squid-layouts" },
+    { name = "squid-ui", editable = "packages/squid-ui" },
     { name = "squid-patterns", editable = "packages/squid-patterns" },
     { name = "squid-replicated", editable = "packages/squid-replicated" },
     { name = "squid-stores", extras = ["postgres"], editable = "packages/squid-stores" },
@@ -3250,7 +3250,7 @@ dependencies = [
     { name = "anyio" },
     { name = "discord-py" },
     { name = "packaging" },
-    { name = "squid-layouts" },
+    { name = "squid-ui" },
 ]
 
 [package.optional-dependencies]
@@ -3266,16 +3266,16 @@ requires-dist = [
     { name = "anyio", specifier = ">=4.14,<5" },
     { name = "discord-py", specifier = ">=2.7,<3" },
     { name = "packaging", specifier = ">=24,<27" },
-    { name = "squid-layouts", editable = "packages/squid-layouts" },
+    { name = "squid-ui", editable = "packages/squid-ui" },
     { name = "squid-stores", marker = "extra == 'durable'", editable = "packages/squid-stores" },
     { name = "squid-stores", extras = ["postgres"], marker = "extra == 'postgres'", editable = "packages/squid-stores" },
 ]
 provides-extras = ["durable", "postgres"]
 
 [[package]]
-name = "squid-layouts"
+name = "squid-ui"
 version = "0.1.0"
-source = { editable = "packages/squid-layouts" }
+source = { editable = "packages/squid-ui" }
 dependencies = [
     { name = "squid-reactivity" },
 ]
@@ -3288,11 +3288,11 @@ name = "squid-patterns"
 version = "0.1.0"
 source = { editable = "packages/squid-patterns" }
 dependencies = [
-    { name = "squid-layouts" },
+    { name = "squid-ui" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "squid-layouts", editable = "packages/squid-layouts" }]
+requires-dist = [{ name = "squid-ui", editable = "packages/squid-ui" }]
 
 [[package]]
 name = "squid-reactivity"

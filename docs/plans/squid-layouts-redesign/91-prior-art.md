@@ -34,11 +34,11 @@ Each row is the mechanism the survey named and the thing in the tree that is it.
 | Salsa revisions: per-input change versions plus a database-wide revision | Per-cell `version` plus the global `_EPOCH`; a node settled in the current epoch skips walking its sources | `core.py:394`, `core.py:1636` |
 | Salsa backdating: a recompute producing an equal value does not propagate | `_Derived.settle` bumps its version only when the new value differs | `core.py:1656` |
 | Salsa dynamic tracked dependencies, no declared lists | `_CONSUMER` records what the last run read, so a conditional dependency is exact | `core.py:1646`, `computed` at `core.py:1699` |
-| Glimmer autotracking and `@cached` getters | `computed` — the same thing, arrived at independently and already credited to the same lineage in [41](../completed/squid-layouts-redesign/41-reactivity-cells.md) | `core.py:1699` |
+| Glimmer autotracking and `@cached` getters | `computed` — the same thing, arrived at independently and already credited to the same lineage in [41](../completed/squid-ui-redesign/41-reactivity-cells.md) | `core.py:1699` |
 | Dioxus: signal reads tracked *through* `await` inside a resource | `_CONSUMER` is a `ContextVar` set around the loader await, so reads before and after an `await` both land in that generation's read set | `resources.py:533`–`resources.py:541` |
 | Dioxus: invalidation cancels the old future | `_new_generation` cancels the superseded load's scope | `resources.py:578`, seam at `resources.py:122` |
 | Jane Street Incremental: demand-driven, only observed nodes are necessary | Pull model throughout — a computed nobody reads is never evaluated, and no source holds a back-edge to its readers | `core.py:1614` docstring, [32](32-demand-driven.md) |
-| Missionary: structured cancellation and an ownership hierarchy | Deliberately *not* in `squid-reactivity` (`dependencies = []`); the task-group hierarchy is `squid-layouts`' mount lifetime | `resources.py:78` |
+| Missionary: structured cancellation and an ownership hierarchy | Deliberately *not* in `squid-reactivity` (`dependencies = []`); the task-group hierarchy is `squid-ui`' mount lifetime | `resources.py:78` |
 | TanStack DB: optimistic overlay distinct from the remote write | `Resource.replace` stages through a participant; the remote half is an `operation` | `resources.py:434`, plan 48 |
 | TanStack DB: explicit transaction lifecycle states | `Pending`/`Ready`/`Failed` for resources, `Pending`/`Succeeded`/`Failed`/`Cancelled` for operations | `resources.py:145`, `operations.py:48` |
 | Compose merge policies for commutative writes (counter, set union) | `ReplicatedCounter.increment` and `ReplicatedSet.add`/`discard`, staged into the same action | `squid-replicated/document.py:362`, `:376` |
@@ -195,7 +195,7 @@ resource model is the one already answered here.
 3. **Salsa's algorithm page** — durability is §3.1's answer, already written down.
 4. **Dioxus resources** — confirms the mechanism; do not adopt the contract (§2).
 5. **Missionary** — for the structured-concurrency and dynamic-DAG framing, not for anything to
-   copy; the cancellation half is `squid-layouts`' by design.
+   copy; the cancellation half is `squid-ui`' by design.
 
 ## 6. The second survey
 
@@ -223,7 +223,7 @@ facto, since `_Cell`, `_Derived` and `Resource` all answer `settle() -> int`, ca
 are walked structurally by `Observation.addresses()` (`core.py:1756`). A `TableView` would join by
 implementing those two members. So this needs no preparatory seam either. The "do not teach
 `state()` about collections" half is also the standing position, for the same reason [41
-](../completed/squid-layouts-redesign/41-reactivity-cells.md) rejected deep proxies over `dict`/`list`/`set`.
+](../completed/squid-ui-redesign/41-reactivity-cells.md) rejected deep proxies over `dict`/`list`/`set`.
 
 **CRDT/local-first as a third tier — `State` / `Shared` / `Replicated`, each implementing one
 observation/version interface, "a remarkably clean extension point".** Shipped, and it is the
@@ -261,7 +261,7 @@ them survived inverting it.
 **Durable aftermath / transactional outbox: "for a Discord layout library, probably unnecessary".
 Built, and in production shape — for one direction.** `CompensationOutbox` /
 `TransactionalCompensationOutbox` carry idempotency keys, a claim/dispatch/reconcile lifecycle,
-bounded records, retry limits and restart recovery (`squid-layouts/runtime/histories.py:181`
+bounded records, retry limits and restart recovery (`squid-ui/runtime/histories.py:181`
 onward). The load-bearing part is `participant()`, which stages first-seen intent persistence *in
 the same commit as the action record* — the transactional outbox at the correct gate, not a
 best-effort write after it. Plan 68 built it after finding the consumer 90 had been waiting for.
@@ -383,7 +383,7 @@ conflict sample (A) needs.
 
 | Action | Where |
 |---|---|
-| **Do:** fix `MemoryCompensationOutbox`'s docstring — it cross-references a `restore` method that does not exist; the restart path is the `records=` constructor argument, as its own test uses (`packages/squid-layouts/tests/test_history.py:507`) | `histories.py:201` |
+| **Do:** fix `MemoryCompensationOutbox`'s docstring — it cross-references a `restore` method that does not exist; the restart path is the `records=` constructor argument, as its own test uses (`packages/squid-ui/tests/test_history.py:507`) | `histories.py:201` |
 | **File:** `commute`, with a ledger sample from a contended workload as the removal condition — not a design exercise | §6.3 A |
 | **File:** long-lived forks, ordered *after* commute, with "a draft that outlives its mount or its process" as the trigger | §6.3 B |
 | **Porting note:** retryable pure actions, and durable *forward* aftermath intents — both inherit most of their machinery, both are blocked here by Discord facts rather than by design | §6.2, §6.3 C |

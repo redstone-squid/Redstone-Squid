@@ -10,22 +10,22 @@ from discord.ui.view import ViewStore
 from hypothesis import given
 from hypothesis import strategies as st
 
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import V2_LIMITS as LIMITS
 from squid_discord import Everyone, Mount, conform
 from squid_discord.modal import LabelSpec, ModalSpec, TextInputSpec, build_modal
 from squid_discord.testing import assert_within_limits, commit_render, fake_interaction
-from squid_layouts import Component, field, fields, paragraph, section, truncate
-from squid_layouts.chrome import DEFAULT_CHROME
-from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.planning import SolveNoteCode, measure
-from squid_layouts.planning.layout_measurement.costing import component_count
-from squid_layouts.planning.layout_measurement.model import MeasuredText
-from squid_layouts.planning.layout_measurement.text import split_pages
-from squid_layouts.planning.limits import Axis
-from squid_layouts.planning.navigation import NavigationContext, default_nav, page_select_nav
-from squid_layouts.planning.semantic_adaptation.lowering import lower_semantics
-from squid_layouts.primitives import (
+from squid_ui import Component, field, fields, paragraph, section, truncate
+from squid_ui.chrome import DEFAULT_CHROME
+from squid_ui.errors import LayoutInvariantError
+from squid_ui.planning import SolveNoteCode, measure
+from squid_ui.planning.layout_measurement.costing import component_count
+from squid_ui.planning.layout_measurement.model import MeasuredText
+from squid_ui.planning.layout_measurement.text import split_pages
+from squid_ui.planning.limits import Axis
+from squid_ui.planning.navigation import NavigationContext, default_nav, page_select_nav
+from squid_ui.planning.semantic_adaptation.lowering import lower_semantics
+from squid_ui.primitives import (
     Button,
     Code,
     Heading,
@@ -34,10 +34,10 @@ from squid_layouts.primitives import (
     Row,
     Text,
 )
-from squid_layouts.runtime import PresentationSession
-from squid_layouts.semantic import Item, Items, Paragraph
-from squid_layouts.sources import Direction, Position, PositionPolicy
-from squid_layouts.text import NEUTRAL
+from squid_ui.runtime import PresentationSession
+from squid_ui.semantic import Item, Items, Paragraph
+from squid_ui.sources import Direction, Position, PositionPolicy
+from squid_ui.text import NEUTRAL
 
 
 class TestSplitPages:

@@ -10,7 +10,7 @@ from squid.bot.errors import is_error_presented
 from squid.bot.operations import managed_result, run_command_operation
 from squid.bot.ui import info_node
 from squid_discord.testing import fake_message
-from squid_layouts.runtime.component import RenderResult
+from squid_ui.runtime.component import RenderResult
 from tests.helpers.discord import make_layout_bot
 
 

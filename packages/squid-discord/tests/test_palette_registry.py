@@ -1,6 +1,6 @@
 """Palette registry behavior at the live-mount boundary."""
 
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import Mount, Owner
 
 

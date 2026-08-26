@@ -10,12 +10,12 @@ from discord.abc import Messageable
 from discord.ext.commands import Context
 
 import squid_discord as sd
-import squid_layouts as sl
+import squid_ui as sl
 from squid.bot.errors import build_error_presentation, record_operation_error
 from squid.bot.i18n import resolve_locale
 from squid.bot.ui import create_mount, destination, error_node, info_node
 from squid.core.i18n import _, translate
-from squid_layouts.runtime.component import RenderResult
+from squid_ui.runtime.component import RenderResult
 
 type OperationWork = Callable[
     [sl.operations.Progress[RenderResult | None], sd.delivery.DeliveryResult],

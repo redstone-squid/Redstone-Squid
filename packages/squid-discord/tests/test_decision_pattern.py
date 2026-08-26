@@ -2,11 +2,11 @@
 
 import discord
 
-import squid_layouts as sl
+import squid_ui as sl
 import squid_patterns as sp
 from squid_discord import Everyone, Mount
 from squid_discord.testing import commit_render, fake_interaction
-from squid_layouts.semantic import Actions, Stack, Status
+from squid_ui.semantic import Actions, Stack, Status
 
 
 def _actions(rendered: sl.LayoutNode) -> tuple[sl.semantic.Action, ...]:

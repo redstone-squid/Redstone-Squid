@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from typing import cast
 
 import squid_discord as sd
-import squid_layouts as sl
+import squid_ui as sl
 from squid.accounts.application import AccountService
 from squid.accounts.domain import AliasClaim
 from squid.accounts.errors import AliasAlreadyClaimedError

@@ -3,10 +3,10 @@
 **Status: applied 2026-08-26. `tests/architecture/test_naming.py` enforces the
 retired vocabulary across public and private identifiers.**
 
-One dictionary for `squid-layouts`, `squid-reactivity`, `squid-replicated`, `squid-stores`,
+One dictionary for `squid-ui`, `squid-reactivity`, `squid-replicated`, `squid-stores`,
 `squid-discord`, and `squid-patterns`, covering head nouns, suffixes, callable verbs, and
 private identifiers. It is the naming source of truth referenced by
-[squid-layouts-architecture.md §Naming](squid-layouts-architecture.md#naming).
+[squid-ui-architecture.md §Naming](squid-ui-architecture.md#naming).
 
 ## The rules
 
@@ -153,7 +153,7 @@ traffic.
 `RCard` and `RCardField` are measurement-realized nodes. The letter is unreadable and the
 word is `Measured`.
 
-**A prefix that repeats the module name is redundant.** `squid_layouts.scene` exports 39
+**A prefix that repeats the module name is redundant.** `squid_ui.scene` exports 39
 classes that all begin with `Scene`. Under the rule you approved — *one word, two altitudes,
 only when one lowers to the other* — `scene.Text` is exactly what `primitives.Text` lowers
 to, so the prefix is carrying no information the import path does not already carry. The same

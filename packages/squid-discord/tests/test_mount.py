@@ -16,7 +16,7 @@ import pytest
 from discord.webhook.async_ import AsyncWebhookAdapter, async_context
 
 import squid_discord
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import Everyone, Mount, MountScheduler, Owner, PauseUpdates, RenewEphemeral, Users, delivery
 from squid_discord.access import Allowed, Check, Denied
 from squid_discord.mount import MountLifecycle, _BusyPaint, _custom_id
@@ -27,7 +27,7 @@ from squid_discord.testing import (
     fake_interaction,
     fake_message,
 )
-from squid_layouts import (
+from squid_ui import (
     ActionEvent,
     Component,
     Document,
@@ -38,13 +38,13 @@ from squid_layouts import (
     resource,
     state,
 )
-from squid_layouts import form as sl_form
-from squid_layouts.chrome import LOCALIZATION_CONTEXT, Chrome
-from squid_layouts.document import Asset, InlineAsset
-from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.forms import FormField, FormSpec, TextField
-from squid_layouts.interactions import ActionKind, ActionMiddleware, ActionMode, ActionProceed, ActionRequest
-from squid_layouts.primitives import (
+from squid_ui import form as sl_form
+from squid_ui.chrome import LOCALIZATION_CONTEXT, Chrome
+from squid_ui.document import Asset, InlineAsset
+from squid_ui.errors import LayoutInvariantError
+from squid_ui.forms import FormField, FormSpec, TextField
+from squid_ui.interactions import ActionKind, ActionMiddleware, ActionMode, ActionProceed, ActionRequest
+from squid_ui.primitives import (
     ActionGroup,
     Button,
     Heading,
@@ -55,7 +55,7 @@ from squid_layouts.primitives import (
     SelectMenu,
     Text,
 )
-from squid_layouts.profiling import (
+from squid_ui.profiling import (
     ActionResult,
     DispatchDisposition,
     MemoryProfiler,
@@ -64,7 +64,7 @@ from squid_layouts.profiling import (
     RuntimeTrace,
     TraceStatus,
 )
-from squid_layouts.runtime import (
+from squid_ui.runtime import (
     ComponentRuntime,
     Failed,
     Pending,
@@ -74,9 +74,9 @@ from squid_layouts.runtime import (
     batch,
     transaction,
 )
-from squid_layouts.runtime.reactivity import _CURRENT
-from squid_layouts.semantic import Paragraph
-from squid_layouts.text import Localization, Message
+from squid_ui.runtime.reactivity import _CURRENT
+from squid_ui.semantic import Paragraph
+from squid_ui.text import Localization, Message
 from squid_reactivity import ActionLedger, add_action_result_sink
 
 

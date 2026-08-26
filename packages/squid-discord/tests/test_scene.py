@@ -6,13 +6,13 @@ from datetime import UTC, datetime, timedelta, timezone
 import jsonschema
 import pytest
 
-from squid_layouts import scene
-from squid_layouts.document import Asset, Document, InlineAsset, as_document
-from squid_layouts.emoji import Emoji
-from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.interactions import ActionMode
-from squid_layouts.primitives.nodes import Text
-from squid_layouts.primitives.styles import ActionStyle
+from squid_ui import scene
+from squid_ui.document import Asset, Document, InlineAsset, as_document
+from squid_ui.emoji import Emoji
+from squid_ui.errors import LayoutInvariantError
+from squid_ui.interactions import ActionMode
+from squid_ui.primitives.nodes import Text
+from squid_ui.primitives.styles import ActionStyle
 
 
 def _scene() -> scene.Document:
@@ -143,7 +143,7 @@ def test_scene_protocol_exposes_a_deterministic_cross_language_schema() -> None:
 
 
 def test_timestamp_plans_as_a_typed_utc_scene_instant() -> None:
-    import squid_layouts as sl
+    import squid_ui as sl
     from squid_discord import DISCORD_V2_DPY27
 
     instant = datetime(2026, 8, 22, 16, 30, tzinfo=timezone(timedelta(hours=2)))
@@ -155,7 +155,7 @@ def test_timestamp_plans_as_a_typed_utc_scene_instant() -> None:
 
 
 def test_zoned_timestamp_plans_as_an_instant_plus_named_timezone() -> None:
-    import squid_layouts as sl
+    import squid_ui as sl
     from squid_discord import DISCORD_V2_DPY27
 
     value = sl.temporal.ZonedDateTime(datetime(2026, 8, 22, 14, 30, tzinfo=UTC), "America/New_York")

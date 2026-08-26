@@ -43,13 +43,13 @@ def test_the_documented_patterns_are_exported() -> None:
 
 
 def test_the_confirm_guard_lives_here_rather_than_in_the_vocabulary() -> None:
-    """`squid_layouts.guards` decides admission; the guard that *asks* renders a shell.
+    """`squid_ui.guards` decides admission; the guard that *asks* renders a shell.
 
     Moving it up is what removed the engine's only forward reference into this package -- a
     function-local import whose own comment explained that the vocabulary could not depend on
     its rendering at import time.
     """
-    import squid_layouts as sl
+    import squid_ui as sl
 
     assert sp.guards.confirm
     assert not hasattr(sl.guards, "confirm")
@@ -83,5 +83,5 @@ def test_package_metadata_names_only_the_engine() -> None:
     metadata = tomllib.loads((Path(__file__).parents[1] / "pyproject.toml").read_text())
     project = metadata["project"]
     assert project["version"] == "0.1.0"
-    assert project["dependencies"] == ["squid-layouts"]
+    assert project["dependencies"] == ["squid-ui"]
     assert "optional-dependencies" not in project

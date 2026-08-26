@@ -3,15 +3,15 @@
 import pytest
 
 from squid_discord import V2_LIMITS as LIMITS
-from squid_layouts import scene
-from squid_layouts.errors import LayoutDegradedError
-from squid_layouts.planning import plan
-from squid_layouts.planning.adapter import AdapterProfile
-from squid_layouts.planning.degradation import DegradationEffect, DegradationProfile
-from squid_layouts.planning.discord import components_v2_target
-from squid_layouts.planning.limits import V2Limits
-from squid_layouts.planning.types import DiscordAdapter
-from squid_layouts.primitives import Fidelity, Panel, Text, Variant, Variants
+from squid_ui import scene
+from squid_ui.errors import LayoutDegradedError
+from squid_ui.planning import plan
+from squid_ui.planning.adapter import AdapterProfile
+from squid_ui.planning.degradation import DegradationEffect, DegradationProfile
+from squid_ui.planning.discord import components_v2_target
+from squid_ui.planning.limits import V2Limits
+from squid_ui.planning.types import DiscordAdapter
+from squid_ui.primitives import Fidelity, Panel, Text, Variant, Variants
 
 
 def _target(name: str, *, capabilities: frozenset[str] = frozenset(), limits: V2Limits = LIMITS):

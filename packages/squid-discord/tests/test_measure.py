@@ -11,13 +11,13 @@ from squid_discord import (
 from squid_discord import conform, render_static
 from squid_discord.conformance import ELLIPSIS
 from squid_discord.testing import assert_within_limits
-from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.planning import (
+from squid_ui.errors import LayoutInvariantError
+from squid_ui.planning import (
     LayoutOverflowError,
     SolveNoteCode,
     measure,
 )
-from squid_layouts.primitives import (
+from squid_ui.primitives import (
     Code,
     Drop,
     Footer,

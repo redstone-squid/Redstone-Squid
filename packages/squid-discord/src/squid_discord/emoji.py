@@ -2,7 +2,7 @@
 
 import discord
 
-from squid_layouts.emoji import Emoji
+from squid_ui.emoji import Emoji
 
 
 def discord_emoji(emoji: Emoji | None) -> str | discord.PartialEmoji | None:

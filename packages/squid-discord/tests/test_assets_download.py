@@ -4,12 +4,12 @@ import discord
 import pytest
 
 import squid_discord
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import DISCORD_V2_DPY27, Everyone, Mount, delivery
 from squid_discord.renderer import V2Renderer
-from squid_layouts import scene
-from squid_layouts.html import Renderer as HtmlRenderer
-from squid_layouts.runtime.component import Component, RenderResult
+from squid_ui import scene
+from squid_ui.html import Renderer as HtmlRenderer
+from squid_ui.runtime.component import Component, RenderResult
 
 
 def _inline() -> sl.document.Asset:

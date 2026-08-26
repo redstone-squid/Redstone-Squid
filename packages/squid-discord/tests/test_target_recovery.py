@@ -6,19 +6,19 @@ import re
 import pytest
 
 import squid_discord
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, Mount
 from squid_discord.adapter import discord_py_adapter_profile
 from squid_discord.durability import DEFAULT_TARGETS, ComponentRegistry, MountStateCodec
 from squid_discord.target import classic
 from squid_discord.targets import TargetRegistry
 from squid_discord.testing import commit_classic_render, commit_render
-from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.planning import Target
-from squid_layouts.planning.adapter import (
+from squid_ui.errors import LayoutInvariantError
+from squid_ui.planning import Target
+from squid_ui.planning.adapter import (
     AdapterCapability,
 )
-from squid_layouts.planning.limits import ClassicLimits
+from squid_ui.planning.limits import ClassicLimits
 
 
 class Screen(sl.Component):
