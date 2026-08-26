@@ -1,13 +1,13 @@
 # squid-discord
 
-The discord.py runtime for [`squid-layouts`](../squid-layouts/README.md): mounts, sessions,
+The discord.py runtime for [`squid-ui`](../squid-ui/README.md): mounts, sessions,
 routing, delivery, adoption, roles, devtools and durable panels.
 
-`squid-layouts` plans a layout. This package puts it on Discord and keeps it there.
+`squid-ui` plans a layout. This package puts it on Discord and keeps it there.
 
 ```python
 import squid_discord as sd
-import squid_layouts as sl
+import squid_ui as sl
 
 
 class Panel(sl.Component):
@@ -32,7 +32,7 @@ await mount.send(sd.respond_to(interaction))
 
 The dividing line is **discord.py**, not the word "Discord".
 
-Discord *protocol* knowledge stays in `squid-layouts`, because the planner plans against it and
+Discord *protocol* knowledge stays in `squid-ui`, because the planner plans against it and
 the HTML renderer reads the same target ids: Components V2 and classic limits, the two dialects,
 the scene shapes, the `discord.*` capability tags, and the `DiscordTarget` marker types. None of
 that imports discord.py.
@@ -80,7 +80,7 @@ await mount.dispatch("add", fake_interaction())
 ```
 
 A panel that renders portable nodes needs no double at all -- plan it against a target and
-inspect the scene, which is what `squid-layouts` is for.
+inspect the scene, which is what `squid-ui` is for.
 
 ## Docs
 

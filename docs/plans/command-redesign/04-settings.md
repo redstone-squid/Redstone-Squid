@@ -44,7 +44,7 @@ channel setting would otherwise fail only at send time.
 nothing left to do. Changing five channels and the language is now one message and six clicks
 instead of six invocations.
 
-This design is restored by [squid-layouts plan 52](../squid-layouts-redesign/52-entity-selects.md).
+This design is restored by [squid-ui plan 52](../squid-ui-redesign/52-entity-selects.md).
 The five Discord-resolved selects cost ten V2 components regardless of guild size; the earlier
 string-choice implementation had to multiplex and page them because it enumerated guild channels.
 

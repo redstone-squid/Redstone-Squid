@@ -10,16 +10,16 @@ from squid_discord import DISCORD_V2_DPY27, render_static
 from squid_discord import (
     V2_LIMITS as LIMITS,
 )
-from squid_layouts import scene
-from squid_layouts.errors import LayoutDegradedError
-from squid_layouts.planning import (
+from squid_ui import scene
+from squid_ui.errors import LayoutDegradedError
+from squid_ui.planning import (
     SolveNoteCode,
     measure,
     plan,
 )
-from squid_layouts.planning.layout_measurement.model import MeasuredPanel, MeasuredText
-from squid_layouts.planning.navigation import NavigationContext, default_nav
-from squid_layouts.primitives import (
+from squid_ui.planning.layout_measurement.model import MeasuredPanel, MeasuredText
+from squid_ui.planning.navigation import NavigationContext, default_nav
+from squid_ui.primitives import (
     ActionGroup,
     Alt,
     Fidelity,
@@ -36,7 +36,7 @@ from squid_layouts.primitives import (
     Variant,
     Variants,
 )
-from squid_layouts.scene.model import PlanResult
+from squid_ui.scene.model import PlanResult
 
 
 def _rendered(solved) -> str:

@@ -4,22 +4,22 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
-from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME
-from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.factories import action, actions, heading, note, stack
-from squid_layouts.interactions import ActionEvent
-from squid_layouts.planning.navigation import (
+from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
+from squid_ui.errors import LayoutInvariantError
+from squid_ui.factories import action, actions, heading, note, stack
+from squid_ui.interactions import ActionEvent
+from squid_ui.planning.navigation import (
     NAV_FACTORY_CONTEXT,
     NavigationContext,
     NavigationState,
     default_nav,
 )
-from squid_layouts.primitives import Lines
-from squid_layouts.runtime.component import Component, RenderResult
-from squid_layouts.runtime.reactivity import state
-from squid_layouts.runtime.resources import Failed, Pending, Ready, resource
-from squid_layouts.semantic import LayoutNode
-from squid_layouts.sources import (
+from squid_ui.primitives import Lines
+from squid_ui.runtime.component import Component, RenderResult
+from squid_ui.runtime.reactivity import state
+from squid_ui.runtime.resources import Failed, Pending, Ready, resource
+from squid_ui.semantic import LayoutNode
+from squid_ui.sources import (
     ORIGIN,
     CountPrecision,
     LoadedWindow,
@@ -28,7 +28,7 @@ from squid_layouts.sources import (
     WindowSource,
     window_footer,
 )
-from squid_layouts.text import TextLike
+from squid_ui.text import TextLike
 from squid_patterns._content import ContentLike, normalize_content, require_key
 from squid_patterns._ranked import Projector, RankedEntry, RankedRows
 

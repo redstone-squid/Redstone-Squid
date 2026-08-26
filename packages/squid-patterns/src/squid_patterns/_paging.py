@@ -2,10 +2,10 @@
 
 from collections.abc import Callable, Sequence
 
-from squid_layouts.chrome import Chrome
-from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursorRequest, content_fingerprint
-from squid_layouts.runtime.presentation import PresentationSession
-from squid_layouts.sources import Position
+from squid_ui.chrome import Chrome
+from squid_ui.planning.cursors import CursorCoordinator, MaterializedCursorRequest, content_fingerprint
+from squid_ui.runtime.presentation import PresentationSession
+from squid_ui.sources import Position
 
 
 def window[T](

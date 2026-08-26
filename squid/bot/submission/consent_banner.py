@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, override
 from discord import Interaction, TextChannel
 
 import squid_discord as sd
-import squid_layouts as sl
+import squid_ui as sl
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.bot.consent import CONSENT_SCREEN, ConsentPrompt
 from squid.bot.i18n import resolve_locale, t

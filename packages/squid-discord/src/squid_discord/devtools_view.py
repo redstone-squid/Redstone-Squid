@@ -1,6 +1,6 @@
 """The `/dev ui` inspector: every live mount, and why one of them is odd.
 
-squid-layouts has excellent *planning* diagnostics — reports, fingerprints, plan metrics —
+squid-ui has excellent *planning* diagnostics — reports, fingerprints, plan metrics —
 and every one of them describes a render that already happened. Nothing answered "show me
 the UI sessions this process is holding right now". `squid_discord.mounts()` is that list, and
 this component is the reading of it.
@@ -18,10 +18,10 @@ from typing import TYPE_CHECKING, Any
 # a host would write it. Safe despite `__init__` importing this module: every use below is
 # either a deferred annotation or inside a function body, so nothing resolves at import.
 import squid_discord
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord.devtools_runtime import DevToolsRuntime
-from squid_layouts.profiling import RuntimeSnapshot
-from squid_layouts.runtime.topics import BusSnapshot
+from squid_ui.profiling import RuntimeSnapshot
+from squid_ui.runtime.topics import BusSnapshot
 
 if TYPE_CHECKING:
     # Annotations only; see the note in operations.py about the `durable` extra.

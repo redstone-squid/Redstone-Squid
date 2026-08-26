@@ -6,9 +6,9 @@ from typing import cast
 import pytest
 
 import squid_discord
-import squid_layouts as sl
+import squid_ui as sl
 import squid_patterns as sp
-from squid_layouts import scene
+from squid_ui import scene
 
 OPTIONS = (
     sp.TallyOption("yes", "Yes", 3, mine=True, emoji="✅"),

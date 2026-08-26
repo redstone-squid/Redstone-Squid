@@ -3,12 +3,12 @@
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
 
-from squid_layouts.factories import actions, heading, paragraph, stack, status
-from squid_layouts.forms import ChoiceOption, FormSpec, MultiChoiceField
-from squid_layouts.runtime.component import RenderResult
-from squid_layouts.semantic import ActionDisplay, Choice, Tone, fallback
-from squid_layouts.sources import Position
-from squid_layouts.text import TextLike
+from squid_ui.factories import actions, heading, paragraph, stack, status
+from squid_ui.forms import ChoiceOption, FormSpec, MultiChoiceField
+from squid_ui.runtime.component import RenderResult
+from squid_ui.semantic import ActionDisplay, Choice, Tone, fallback
+from squid_ui.sources import Position
+from squid_ui.text import TextLike
 from squid_patterns._content import display_text, require_key
 from squid_patterns._paging import window
 from squid_patterns.commit import CommitMode

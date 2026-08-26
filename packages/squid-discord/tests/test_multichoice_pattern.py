@@ -4,11 +4,11 @@ from collections.abc import Iterable
 
 import discord
 
-import squid_layouts as sl
+import squid_ui as sl
 import squid_patterns as sp
 from squid_discord import Everyone, Mount
 from squid_discord.testing import commit_render, fake_interaction
-from squid_layouts.semantic import Actions, Choices, FallbackContent, FormTrigger, RoutedAction, RoutedChoices, Stack
+from squid_ui.semantic import Actions, Choices, FallbackContent, FormTrigger, RoutedAction, RoutedChoices, Stack
 
 
 def _options(prefix: str, count: int) -> tuple[sl.semantic.Choice, ...]:

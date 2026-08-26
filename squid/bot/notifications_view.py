@@ -9,7 +9,7 @@ looking at it and removing it belong to the same message (audit C5's retyping ha
 from typing import TYPE_CHECKING
 
 import squid_discord as sd
-import squid_layouts as sl
+import squid_ui as sl
 from squid.bot.i18n import t
 from squid.bot.ui import create_mount
 from squid.core.i18n import _

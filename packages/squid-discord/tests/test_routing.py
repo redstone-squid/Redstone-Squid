@@ -7,15 +7,15 @@ import discord
 import pytest
 
 import squid_discord
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import render_static
 from squid_discord.routing import Router, _dispatch_item
 from squid_discord.testing import fake_interaction
-from squid_layouts import scene
-from squid_layouts.errors import DrawInvariantError, LayoutInvariantError
-from squid_layouts.primitives import Option, Panel, RoutedButton, RoutedSelect, Row
-from squid_layouts.profiling import MemoryProfiler, OperationKind, TraceStatus
-from squid_layouts.profiling.profiler import _MAX_NAME_LENGTH
+from squid_ui import scene
+from squid_ui.errors import DrawInvariantError, LayoutInvariantError
+from squid_ui.primitives import Option, Panel, RoutedButton, RoutedSelect, Row
+from squid_ui.profiling import MemoryProfiler, OperationKind, TraceStatus
+from squid_ui.profiling.profiler import _MAX_NAME_LENGTH
 
 EDIT_BUILD = sl.routing.Route("edit:build:{build_id:int}")
 POLL_CLOSE = sl.routing.Route("poll:close")

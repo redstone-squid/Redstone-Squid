@@ -25,14 +25,14 @@ from pathlib import Path
 from types import ModuleType
 
 import squid_discord
-import squid_layouts
+import squid_ui
 import squid_patterns
 import squid_reactivity
 import squid_replicated
 import squid_stores
 
 PACKAGE_SOURCE_ROOTS = (
-    Path("packages/squid-layouts/src"),
+    Path("packages/squid-ui/src"),
     Path("packages/squid-reactivity/src"),
     Path("packages/squid-replicated/src"),
     Path("packages/squid-stores/src"),
@@ -41,7 +41,7 @@ PACKAGE_SOURCE_ROOTS = (
 )
 
 TERMINATING_VERBS = frozenset({"close", "detach", "finish", "cancel", "discard", "run"})
-"""What ends something, and nothing else. See `docs/squid-layouts-architecture.md`."""
+"""What ends something, and nothing else. See `docs/squid-ui-architecture.md`."""
 
 OBJECT_ENDING_VERBS = frozenset({"close", "finish"})
 """The two that end *the object itself*, and so may not appear on one class together.
@@ -213,7 +213,7 @@ operation reports through.
 def _exported_classes() -> dict[str, set[str]]:
     """Every class reachable through a package `__all__`, by short name to defining module."""
     found: dict[str, set[str]] = defaultdict(set)
-    for package in (squid_discord, squid_layouts, squid_patterns, squid_reactivity, squid_replicated, squid_stores):
+    for package in (squid_discord, squid_ui, squid_patterns, squid_reactivity, squid_replicated, squid_stores):
         modules: list[ModuleType] = [package]
         modules.extend(
             importlib.import_module(info.name)

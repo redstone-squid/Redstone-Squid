@@ -31,12 +31,12 @@ from squid_discord.render_cache import RenderProgramCache
 from squid_discord.renderer import RoutedItem, RoutedSelectItem
 from squid_discord.renderer import Wire as Wire
 from squid_discord.target import DISCORD_V1_DPY27
-from squid_layouts import scene
-from squid_layouts.errors import DrawInvariantError
-from squid_layouts.planning.adapter import AdapterCapability, AdapterProfile
-from squid_layouts.planning.limits import CLASSIC_LIMITS, ClassicLimits
-from squid_layouts.scene.model import PlanResult
-from squid_layouts.target_types import DiscordPyAdapter
+from squid_ui import scene
+from squid_ui.errors import DrawInvariantError
+from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
+from squid_ui.planning.limits import CLASSIC_LIMITS, ClassicLimits
+from squid_ui.scene.model import PlanResult
+from squid_ui.target_types import DiscordPyAdapter
 
 type Control = scene.Button | scene.Select | scene.EntitySelect
 type ClassicViewFactory = Callable[[], discord.ui.View]

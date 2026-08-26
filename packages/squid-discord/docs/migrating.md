@@ -23,7 +23,7 @@ timeout, error policy, sending, and editing. Declare controls the host will appe
 
 ```python
 import discord
-import squid_layouts as sl
+import squid_ui as sl
 
 view = ExistingLayoutView(timeout=180)
 host_controls = discord.ui.ActionRow(

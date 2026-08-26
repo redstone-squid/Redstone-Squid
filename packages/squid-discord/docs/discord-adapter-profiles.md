@@ -15,7 +15,7 @@ that operation. An unknown version fails with a message asking for an explicitly
 Applications may opt into a newer discord.py release without waiting for a Squid release:
 
 ```python
-import squid_layouts as sl
+import squid_ui as sl
 
 profile = sd.discord_py_adapter_profile(
     "my-discord-py-2.8",

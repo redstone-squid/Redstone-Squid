@@ -1,13 +1,13 @@
 # squid-patterns
 
-Reusable application patterns built on [`squid-layouts`](../squid-layouts/README.md): the
+Reusable application patterns built on [`squid-ui`](../squid-ui/README.md): the
 state machines behind a wizard, a browser, an editor, a lookup, a ranked list, a vote.
 
-`squid-layouts` gives you the words and the compiler. This package is a set of useful
+`squid-ui` gives you the words and the compiler. This package is a set of useful
 applications already written in that language.
 
 ```python
-import squid_layouts as sl
+import squid_ui as sl
 import squid_patterns as sp
 
 
@@ -37,11 +37,11 @@ panel = sp.confirm("Delete this build?", on_confirm=chosen)
 ## Frontend-neutral, deliberately
 
 Nothing here imports `discord.py`, `squid-discord`, or a store backend — the patterns are state
-machines that render portable documents, and any target `squid-layouts` can plan for can display
+machines that render portable documents, and any target `squid-ui` can plan for can display
 them. `tests/architecture/test_boundaries.py::test_patterns_package_is_transport_free` is what
 keeps that true.
 
-`squid_patterns.guards.confirm` lives here rather than in `squid_layouts.guards` for the same
+`squid_patterns.guards.confirm` lives here rather than in `squid_ui.guards` for the same
 reason, inverted: the guard *vocabulary* is portable and has no opinion about what a refusal
 looks like, but `confirm` answers with a rendered question, so it belongs beside the shell it
 renders. It composes with `all_of` and `any_of` like any other guard.

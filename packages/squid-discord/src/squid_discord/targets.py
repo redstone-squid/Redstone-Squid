@@ -8,7 +8,7 @@ and a fingerprint, and recovery refuses anything it cannot resolve exactly.
 """
 
 from squid_discord.target import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Target
-from squid_layouts.errors import LayoutInvariantError
+from squid_ui.errors import LayoutInvariantError
 
 
 class TargetRegistry:

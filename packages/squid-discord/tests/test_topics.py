@@ -8,9 +8,9 @@ import anyio
 import pytest
 
 from squid_discord.durability import PostgresTopicBridge
-from squid_layouts import state
-from squid_layouts.runtime import Shared
-from squid_layouts.runtime.topics import Address, CellAddress, KindKeyCodec, LocalTopicBus, Topic, TopicBus
+from squid_ui import state
+from squid_ui.runtime import Shared
+from squid_ui.runtime.topics import Address, CellAddress, KindKeyCodec, LocalTopicBus, Topic, TopicBus
 
 
 class Workspace(Shared[int]):

@@ -21,9 +21,9 @@ from squid_discord.durability import (
     migrate_component_state,
 )
 from squid_discord.testing import commit_render
-from squid_layouts import Component, state
-from squid_layouts.primitives import Lines, Paginate, Text
-from squid_layouts.sources import Position
+from squid_ui import Component, state
+from squid_ui.primitives import Lines, Paginate, Text
+from squid_ui.sources import Position
 
 
 class DurableChild(Component):

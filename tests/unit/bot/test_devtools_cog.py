@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 from squid.bot.devtools import _authorized, setup
 from squid_discord import MountScheduler, SessionRegistry
 from squid_discord.devtools import DevTools
-from squid_layouts.profiling import MemoryProfiler
+from squid_ui.profiling import MemoryProfiler
 
 
 async def test_setup_adds_the_generic_cog_with_the_host_registry() -> None:

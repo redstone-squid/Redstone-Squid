@@ -21,16 +21,16 @@ from squid_discord.attachments import files_for
 from squid_discord.composition import compose
 from squid_discord.inspection import DiscordReservation, audit, cost, measure
 from squid_discord.target import DISCORD_V2_DPY27, Target
-from squid_layouts.assets import Asset
-from squid_layouts.chrome import DEFAULT_CHROME, Chrome
-from squid_layouts.document import DocumentLike
-from squid_layouts.errors import ExistingLayoutError, LayoutError
-from squid_layouts.palette import DEFAULT_PALETTE, Palette
-from squid_layouts.planning.limits import LIMITS, V2Limits
-from squid_layouts.planning.planner import EMPTY_RESERVATION
-from squid_layouts.planning.target import ResourceCost
-from squid_layouts.scene.model import PlanReport, PlanResult
-from squid_layouts.text import NEUTRAL, Localization
+from squid_ui.assets import Asset
+from squid_ui.chrome import DEFAULT_CHROME, Chrome
+from squid_ui.document import DocumentLike
+from squid_ui.errors import ExistingLayoutError, LayoutError
+from squid_ui.palette import DEFAULT_PALETTE, Palette
+from squid_ui.planning.limits import LIMITS, V2Limits
+from squid_ui.planning.planner import EMPTY_RESERVATION
+from squid_ui.planning.target import ResourceCost
+from squid_ui.scene.model import PlanReport, PlanResult
+from squid_ui.text import NEUTRAL, Localization
 
 
 class StaleReservationError(LayoutError):

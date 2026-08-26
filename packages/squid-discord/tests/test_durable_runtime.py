@@ -9,7 +9,7 @@ import anyio
 import pytest
 
 import squid_discord
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import Everyone, SessionKey, SessionRegistry
 from squid_discord.delivery import DeliveryResult
 from squid_discord.durability import (
@@ -37,8 +37,8 @@ from squid_discord.sessions import (
     Unprotected,
 )
 from squid_discord.testing import delivered_to, fake_message
-from squid_layouts.primitives import Text
-from squid_layouts.profiling import PresentationStatus
+from squid_ui.primitives import Text
+from squid_ui.profiling import PresentationStatus
 from squid_stores import StoredSessionRecord
 
 

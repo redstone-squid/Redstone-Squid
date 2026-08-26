@@ -6,13 +6,13 @@ from typing import cast
 import pytest
 
 import squid_discord
-import squid_layouts as sl
+import squid_ui as sl
 import squid_patterns as sp
-from squid_layouts import scene
-from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
-from squid_layouts.runtime import PresentationSession, apply_updates
-from squid_layouts.runtime.component import render_component_tree
-from squid_layouts.runtime.presentation import StrategyUpdate
+from squid_ui import scene
+from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
+from squid_ui.runtime import PresentationSession, apply_updates
+from squid_ui.runtime.component import render_component_tree
+from squid_ui.runtime.presentation import StrategyUpdate
 
 
 def _cells(count: int) -> tuple[sp.GridCell, ...]:

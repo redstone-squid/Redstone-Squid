@@ -10,7 +10,7 @@ from collections.abc import Mapping
 from textwrap import dedent
 
 import squid_discord as sd
-import squid_layouts as sl
+import squid_ui as sl
 import squid_patterns as sp
 from squid.bot.ui import DISCORD_GREEN, DISCORD_RED, DISCORD_YELLOW, CardField, card_layout, render_presentation
 from squid.bot.voting.controls import poll_controls

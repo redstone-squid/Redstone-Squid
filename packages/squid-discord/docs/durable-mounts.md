@@ -8,7 +8,7 @@ Register a stable recipe for every mount type the runtime may reconstruct. The r
 including its dependencies and explicit access policy; snapshots never import application classes or infer an owner.
 
 ```python
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord.durability import (
     ComponentRegistry,
     DiscordFrontend,

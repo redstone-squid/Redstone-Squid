@@ -33,7 +33,7 @@ class SharedPool[ScopeT: Hashable, SharedT: Shared[Any]]:
     ``namespace`` is declared twice in the overloads, as a class and as the constructor that class
     already is. The callable spelling is what lets a type checker read ``ScopeT`` off
     ``Shared[ScopeT]`` rather than having to solve it from a type-parameter bound, which Pyrefly 1.2
-    will not do (see ``docs/plans/squid-layouts-redesign/spikes/59/``). Only a namespace *class* is
+    will not do (see ``docs/plans/squid-ui-redesign/spikes/59/``). Only a namespace *class* is
     accepted at runtime; a bare function is refused at construction, because the identity check a
     pool performs on what its factory returns needs a class to check against.
 

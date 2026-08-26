@@ -14,8 +14,8 @@ from squid_discord import (
     render_static,
 )
 from squid_discord.composition import Composition
-from squid_layouts import PressEvent
-from squid_layouts.primitives import (
+from squid_ui import PressEvent
+from squid_ui.primitives import (
     Button,
     Code,
     Drop,

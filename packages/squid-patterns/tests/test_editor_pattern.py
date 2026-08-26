@@ -3,9 +3,9 @@
 from collections.abc import Iterable, Mapping
 from typing import Any, cast
 
-import squid_layouts as sl
+import squid_ui as sl
 import squid_patterns as sp
-from squid_layouts.semantic import Actions, FormTrigger, RoutedAction, Stack
+from squid_ui.semantic import Actions, FormTrigger, RoutedAction, Stack
 
 
 def _walk(node: object) -> Iterable[object]:

@@ -6,15 +6,15 @@ import discord
 import pytest
 
 import squid_discord
-import squid_layouts as sl
+import squid_ui as sl
 import squid_patterns as sp
 from squid_discord import Everyone, Mount
 from squid_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
-from squid_layouts import scene
-from squid_layouts.planning.navigation import SEEK_OPTION_LIMIT, NavigationContext, _seek_pages, page_select_nav
-from squid_layouts.primitives import Button, Lines, Row
-from squid_layouts.semantic import Stack
-from squid_layouts.sources import Position, Window
+from squid_ui import scene
+from squid_ui.planning.navigation import SEEK_OPTION_LIMIT, NavigationContext, _seek_pages, page_select_nav
+from squid_ui.primitives import Button, Lines, Row
+from squid_ui.semantic import Stack
+from squid_ui.sources import Position, Window
 
 
 def _texts(view: discord.ui.LayoutView) -> list[str]:
