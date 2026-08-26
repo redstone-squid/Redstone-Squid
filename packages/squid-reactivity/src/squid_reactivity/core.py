@@ -25,7 +25,7 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import Any, ClassVar, Protocol, Self, overload
 
-from squid_reactive.actions import (
+from squid_reactivity.actions import (
     ActionCommit,
     ActionContext,
     ActionResult,
@@ -191,11 +191,11 @@ def _frozen(value: Any) -> Any:
     return value
 
 
-_CURRENT: ContextVar[_Transaction | None] = ContextVar("squid_reactive_transaction", default=None)
-_RELAXED_READS: ContextVar[int] = ContextVar("squid_reactive_relaxed_reads", default=0)
-_STRONG_READS: ContextVar[int] = ContextVar("squid_reactive_strong_reads", default=0)
+_CURRENT: ContextVar[_Transaction | None] = ContextVar("squid_reactivity_transaction", default=None)
+_RELAXED_READS: ContextVar[int] = ContextVar("squid_reactivity_relaxed_reads", default=0)
+_STRONG_READS: ContextVar[int] = ContextVar("squid_reactivity_strong_reads", default=0)
 _INTERLEAVER: ContextVar[Callable[[str], None] | None] = ContextVar(
-    "squid_reactive_deterministic_interleaver", default=None
+    "squid_reactivity_deterministic_interleaver", default=None
 )
 _INTERLEAVER_USERS = 0
 
@@ -235,7 +235,7 @@ class _Cell:
     """One state field's storage: an immutable value, and the version that dates it.
 
     `address` is what an addressed cell publishes under: a ``CellAddress`` for shared state,
-    or a ``Topic`` for the valueless cell behind :func:`squid_reactive.watch`. A local owner's
+    or a ``Topic`` for the valueless cell behind :func:`squid_reactivity.watch`. A local owner's
     cell has none, and the two behaviours an address adds --
     the commit precondition below, and being followed by a render -- both key off its
     presence rather than off a second cell type.
@@ -316,9 +316,9 @@ class _Consumer(Protocol):
     sources: dict[Any, int]
 
 
-_CONSUMER: ContextVar[_Consumer | None] = ContextVar("squid_reactive_consumer", default=None)
+_CONSUMER: ContextVar[_Consumer | None] = ContextVar("squid_reactivity_consumer", default=None)
 
-_SETTLING: ContextVar[tuple[Any, ...]] = ContextVar("squid_reactive_settling", default=())
+_SETTLING: ContextVar[tuple[Any, ...]] = ContextVar("squid_reactivity_settling", default=())
 """The derived nodes currently producing a value on this task, outermost first.
 
 Task-local rather than global: two independent values settled concurrently each copy the
@@ -358,9 +358,9 @@ def settling(node: Any) -> Iterator[None]:
         _SETTLING.reset(token)
 
 
-_OBSERVING: ContextVar[bool] = ContextVar("squid_reactive_observing_reads", default=False)
+_OBSERVING: ContextVar[bool] = ContextVar("squid_reactivity_observing_reads", default=False)
 
-_RENDER_OBSERVATION: ContextVar[Observation | None] = ContextVar("squid_reactive_read_observation", default=None)
+_RENDER_OBSERVATION: ContextVar[Observation | None] = ContextVar("squid_reactivity_read_observation", default=None)
 """The `Observation` for the render in progress on this task, set only while `rendering()` is.
 
 A separate var from `_CONSUMER`: a computed evaluated mid-render points `_CONSUMER` at its own
@@ -1805,7 +1805,7 @@ class Observation:
     A plain :class:`_Consumer`: the same tracked read a computed records is what a render
     records, and the context the read happens in is the only difference between them. For a
     shared cell that is the whole story -- there is no separate ``watch()`` to forget to
-    call. :func:`squid_reactive.watch` exists only for a named topic, which has no value to read.
+    call. :func:`squid_reactivity.watch` exists only for a named topic, which has no value to read.
     """
 
     sources: dict[Any, int] = field(default_factory=dict)

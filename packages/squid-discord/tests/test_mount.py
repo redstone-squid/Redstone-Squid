@@ -77,7 +77,7 @@ from squid_layouts.runtime import (
 from squid_layouts.runtime.reactivity import _CURRENT
 from squid_layouts.semantic import Paragraph
 from squid_layouts.text import Localization, Message
-from squid_reactive import ActionLedger, add_action_result_sink
+from squid_reactivity import ActionLedger, add_action_result_sink
 
 
 class Counter(Component):

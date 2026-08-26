@@ -14,10 +14,10 @@ from collections.abc import Callable, Hashable, Mapping
 from dataclasses import dataclass
 from typing import Any, assert_type, overload, reveal_type
 
-from squid_reactive import Shared, TopicBus
+from squid_reactivity import Shared, TopicBus
 
 # --------------------------------------------------------------------------------------
-# Scopes, declared here rather than imported: the question is about `squid_reactive`, and
+# Scopes, declared here rather than imported: the question is about `squid_reactivity`, and
 # `squid_layouts.discord.sessions` would drag discord.py in for two frozen dataclasses.
 # --------------------------------------------------------------------------------------
 

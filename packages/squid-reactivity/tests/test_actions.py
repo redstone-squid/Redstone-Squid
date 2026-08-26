@@ -9,7 +9,7 @@ import pytest
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
-from squid_reactive import (
+from squid_reactivity import (
     ActionCommit,
     ActionContext,
     ActionKind,
@@ -41,7 +41,7 @@ from squid_reactive import (
     strong_read,
     transaction,
 )
-from squid_reactive.core import _CURRENT
+from squid_reactivity.core import _CURRENT
 
 
 class Preferences(Shared[int]):

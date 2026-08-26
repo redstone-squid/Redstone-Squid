@@ -11,7 +11,7 @@ that chose this signature.
 from dataclasses import dataclass
 from typing import assert_type
 
-from squid_reactive import LocalTopicBus, Shared, SharedPool, TopicBus, state
+from squid_reactivity import LocalTopicBus, Shared, SharedPool, TopicBus, state
 
 
 @dataclass(frozen=True, slots=True)

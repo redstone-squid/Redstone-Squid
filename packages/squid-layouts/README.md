@@ -765,7 +765,7 @@ list rather than an assertion.
 
 ## Host integration rules
 
-- The base package depends only on the zero-dependency `squid-reactive` kernel. Install
+- The base package depends only on the zero-dependency `squid-reactivity` kernel. Install
   `squid-discord` for the discord.py adapter. The adapter never starts background work on its own;
   start `sd.MountScheduler.run()` and any external bridge under your own supervisor.
 - Factories take content positionally and everything else by keyword. `None` and `False`

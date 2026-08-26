@@ -1,6 +1,6 @@
-"""Compatibility exports for tracked topics from :mod:`squid_reactive`."""
+"""Compatibility exports for tracked topics from :mod:`squid_reactivity`."""
 
-from squid_reactive.topics import (
+from squid_reactivity.topics import (
     Address,
     BusSnapshot,
     CellAddress,

@@ -212,7 +212,7 @@ def make_layout_bot(**attributes: Any) -> Any:
     """
     import squid_discord as sd
     from squid.bot.ui import HOST_DEFAULTS
-    from squid_reactive import LocalTopicBus
+    from squid_reactivity import LocalTopicBus
 
     bus = attributes.get("topic_bus") or LocalTopicBus()
     client = FakeClient(topic_bus=bus, **{k: v for k, v in attributes.items() if k != "topic_bus"})

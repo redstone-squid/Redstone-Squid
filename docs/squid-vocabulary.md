@@ -3,7 +3,7 @@
 **Status: applied 2026-08-26. `tests/architecture/test_naming.py` enforces the
 retired vocabulary across public and private identifiers.**
 
-One dictionary for `squid-layouts`, `squid-reactive`, `squid-replicated`, `squid-stores`,
+One dictionary for `squid-layouts`, `squid-reactivity`, `squid-replicated`, `squid-stores`,
 `squid-discord`, and `squid-patterns`, covering head nouns, suffixes, callable verbs, and
 private identifiers. It is the naming source of truth referenced by
 [squid-layouts-architecture.md §Naming](squid-layouts-architecture.md#naming).

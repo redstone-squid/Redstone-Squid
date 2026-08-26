@@ -5,7 +5,7 @@ from collections.abc import Mapping
 import anyio
 import pytest
 
-from squid_reactive import LocalTopicBus, Shared, state, transaction
+from squid_reactivity import LocalTopicBus, Shared, state, transaction
 from squid_stores import MemoryScopedStore, PersistedPool, Slot, json_codec
 
 

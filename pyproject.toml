@@ -129,7 +129,7 @@ members = ["packages/*"]
 squid-discord = { workspace = true }
 squid-layouts = { workspace = true }
 squid-patterns = { workspace = true }
-squid-reactive = { workspace = true }
+squid-reactivity = { workspace = true }
 squid-replicated = { workspace = true }
 squid-stores = { workspace = true }
 
@@ -285,7 +285,7 @@ known-first-party = [
     "squid_discord",
     "squid_layouts",
     "squid_patterns",
-    "squid_reactive",
+    "squid_reactivity",
     "squid_replicated",
     "squid_stores",
 ]
@@ -396,7 +396,7 @@ pythonpath = ["."]
 testpaths = [
     "tests/unit",
     "tests/architecture",
-    "packages/squid-reactive/tests",
+    "packages/squid-reactivity/tests",
     "packages/squid-stores/tests",
     "packages/squid-layouts/tests",
     "packages/squid-discord/tests",
@@ -413,7 +413,7 @@ addopts = [
     # both ship a `test_topics.py` collide. importlib mode keys on the full path instead.
     "--import-mode=importlib",
     "--cov=squid",
-    "--cov=squid_reactive",
+    "--cov=squid_reactivity",
     "--cov=squid_stores",
     "--cov=squid_layouts",
     "--cov=squid_replicated",

@@ -133,7 +133,7 @@ from squid_layouts.text import (
     plain,
     raw_md,
 )
-from squid_reactive.operations import operation
+from squid_reactivity.operations import operation
 
 __all__ = [
     "ActionEvent",

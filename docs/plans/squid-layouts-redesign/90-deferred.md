@@ -158,7 +158,7 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   as a 17-row table (`Key`/`Address` never end, `Handle`/`Token` expire, `Registry`/`Pool`/
   `Runtime`/`Store` end explicitly, `Snapshot`/`Report`/`Result` end immediately, `Record`/
   `State` outlive the process) and rejected on measurement. The public surface across `sl`,
-  `sl.discord`, its twenty sub-namespaces, `squid_reactive` and `squid_stores` has **93
+  `sl.discord`, its twenty sub-namespaces, `squid_reactivity` and `squid_stores` has **93
   distinct class-name suffixes, 60 of them used exactly once**; only 15 recur three times or
   more. A closed table would have to reject `Component`, `Mount`, `Screen`, `Destination`,
   `Composition`, `Target` and `Work`, or grow until it was not a table. Record the numbers,
@@ -248,11 +248,11 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   its task group to completion before the next pass, so a superseded load is wasted work rather
   than a leak — and since the resource contract makes a loader safe to run zero, one or many
   times, wasted work is all it can be. Cancellation also has to live in `squid-layouts`, because
-  `squid-reactive` is `dependencies = []` and anyio is where CLAUDE.md puts cancellation. The
+  `squid-reactivity` is `dependencies = []` and anyio is where CLAUDE.md puts cancellation. The
   removal condition was "a loader expensive enough that the waste shows up, or a port that makes
   concurrent supersession ordinary".
   **Resolved 2026-08-24**, the same day, and by splitting the entry rather than meeting its
-  condition. `squid-reactive` supplies the seam — a `LoadScope` protocol and
+  condition. `squid-reactivity` supplies the seam — a `LoadScope` protocol and
   `abandon_superseded_loads`, read when a load *starts* rather than when the resource is
   constructed, so one installation covers a whole settle group — and `_new_generation` cancels
   through it; `sl.discord` installs the `anyio.CancelScope` that makes it real. Uninstalled it is

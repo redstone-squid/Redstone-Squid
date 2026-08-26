@@ -4,7 +4,7 @@ from collections import defaultdict, deque
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 
-import squid_reactive.core as core
+import squid_reactivity.core as core
 
 
 class InterleavingHarness:

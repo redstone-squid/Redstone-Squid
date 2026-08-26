@@ -3,7 +3,7 @@ import asyncio
 import anyio
 import pytest
 
-from squid_reactive import (
+from squid_reactivity import (
     ActionContext,
     ActionLedger,
     LocalTopicBus,
@@ -17,7 +17,7 @@ from squid_reactive import (
     transaction,
     watch,
 )
-from squid_reactive.resources import Pending, Ready, abandon_superseded_loads, resource
+from squid_reactivity.resources import Pending, Ready, abandon_superseded_loads, resource
 
 
 class Source(Reactive):

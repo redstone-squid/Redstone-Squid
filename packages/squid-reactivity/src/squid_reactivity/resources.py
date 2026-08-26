@@ -11,7 +11,7 @@ from enum import StrEnum
 from types import TracebackType
 from typing import Any, Literal, Protocol, overload
 
-from squid_reactive.actions import (
+from squid_reactivity.actions import (
     DEFAULT_REDACTION,
     ActionId,
     CausalRef,
@@ -20,8 +20,8 @@ from squid_reactive.actions import (
     current_causality,
     emit_causal_event,
 )
-from squid_reactive.completion import Completion
-from squid_reactive.core import (
+from squid_reactivity.completion import Completion
+from squid_reactivity.core import (
     _CONSUMER,
     ReactiveCycleError,
     ReactiveOwner,
@@ -116,7 +116,7 @@ class _NoAbandonment:
 
 _NO_ABANDONMENT = _NoAbandonment()
 
-_ABANDONMENT: ContextVar[Callable[[], LoadScope] | None] = ContextVar("squid_reactive_load_abandonment", default=None)
+_ABANDONMENT: ContextVar[Callable[[], LoadScope] | None] = ContextVar("squid_reactivity_load_abandonment", default=None)
 
 
 @contextmanager
@@ -188,7 +188,7 @@ class _AtomicResourcePending(ResourceNotReadyError):
 
 
 _CURRENT_BINDINGS: ContextVar[list[AsyncBinding] | None] = ContextVar(
-    "squid_reactive_observed_async_bindings", default=None
+    "squid_reactivity_observed_async_bindings", default=None
 )
 
 

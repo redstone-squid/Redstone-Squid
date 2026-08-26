@@ -18,7 +18,7 @@ from squid_discord.routing import Router
 from squid_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 from squid_layouts.primitives import Button, Heading, Row
 from squid_layouts.profiling import MemoryProfiler, OperationKind
-from squid_reactive import ActionLedger, OperationEventSnapshot, add_action_result_sink, transaction
+from squid_reactivity import ActionLedger, OperationEventSnapshot, add_action_result_sink, transaction
 
 
 class Subject(sl.Component):

@@ -27,13 +27,13 @@ from types import ModuleType
 import squid_discord
 import squid_layouts
 import squid_patterns
-import squid_reactive
+import squid_reactivity
 import squid_replicated
 import squid_stores
 
 PACKAGE_SOURCE_ROOTS = (
     Path("packages/squid-layouts/src"),
-    Path("packages/squid-reactive/src"),
+    Path("packages/squid-reactivity/src"),
     Path("packages/squid-replicated/src"),
     Path("packages/squid-stores/src"),
     Path("packages/squid-discord/src"),
@@ -196,7 +196,7 @@ SAME_CONCEPT_TWO_LAYERS = {
 
 UNRELATED_CONCEPTS_SHARING_A_WORD = {
     # `interactions.ActionKind` is the shape of a frontend interaction -- press, selection,
-    # submit. `squid_reactive.actions.ActionKind` is why a transaction exists -- action, undo,
+    # submit. `squid_reactivity.actions.ActionKind` is why a transaction exists -- action, undo,
     # redo, compensation. Two senses of "action": the thing a person did, and the unit of work
     # that records it. Unrelated.
     "ActionKind",
@@ -213,7 +213,7 @@ operation reports through.
 def _exported_classes() -> dict[str, set[str]]:
     """Every class reachable through a package `__all__`, by short name to defining module."""
     found: dict[str, set[str]] = defaultdict(set)
-    for package in (squid_discord, squid_layouts, squid_patterns, squid_reactive, squid_replicated, squid_stores):
+    for package in (squid_discord, squid_layouts, squid_patterns, squid_reactivity, squid_replicated, squid_stores):
         modules: list[ModuleType] = [package]
         modules.extend(
             importlib.import_module(info.name)
