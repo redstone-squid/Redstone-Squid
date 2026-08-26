@@ -16,7 +16,7 @@ from squid_ui_discord.testing import delivered_to, fake_interaction, fake_messag
 from squid_ui import Component, PressEvent, state
 from squid_ui.primitives import Button, Row, Text
 from squid_ui.profiling import PresentationStatus
-from squid_ui.runtime import CellAddress, LocalTopicBus, Shared, transaction
+from squid_ui.runtime import CellAddress, LocalTopicBus, SharedState, transaction
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,7 +24,7 @@ class Member:
     user_id: int
 
 
-class Workspace(Shared[Member]):
+class Workspace(SharedState[Member]):
     selected: int | None = state(None)
     detail: str = state("")
 

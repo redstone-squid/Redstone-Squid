@@ -21,10 +21,10 @@ type ActionId = uuid.UUID
 _EMPTY_METADATA: Mapping[str, str] = MappingProxyType({})
 
 
-class ActionKind(Enum):
+class ActionPurpose(Enum):
     """The semantic reason an action exists."""
 
-    ACTION = "action"
+    NORMAL = "normal"
     UNDO = "undo"
     REDO = "redo"
     COMPENSATION = "compensation"
@@ -67,7 +67,7 @@ class ActionContext:
     action_id: ActionId
     cause: CausalRef | None
     root_action_id: ActionId
-    kind: ActionKind
+    kind: ActionPurpose
     name: str
     actor: ActorRef | None
     started_at: datetime
@@ -81,7 +81,7 @@ class ActionContext:
         cls,
         name: str = "action",
         *,
-        kind: ActionKind = ActionKind.ACTION,
+        kind: ActionPurpose = ActionPurpose.NORMAL,
         cause: CausalRef | None = None,
         root_action_id: ActionId | None = None,
         actor: ActorRef | None = None,
@@ -156,7 +156,7 @@ class ConflictDetail:
 
 
 @dataclass(frozen=True, slots=True)
-class ParticipantChange:
+class TransactionContribution:
     """An opaque reversible participant contribution and its safe report."""
 
     participant_id: str
@@ -174,7 +174,7 @@ class ActionCommit:
     duration: timedelta
     reads: tuple[ObservedRead, ...]
     patches: Any
-    participant_changes: tuple[ParticipantChange, ...] = ()
+    participant_changes: tuple[TransactionContribution, ...] = ()
     tags: frozenset[str] = frozenset()
 
 
@@ -312,7 +312,7 @@ class ResourceEventSnapshot:
 
 
 @dataclass(frozen=True, slots=True)
-class AftermathFailureSnapshot:
+class ContinuationFailureSnapshot:
     """A post-result failure that cannot alter the immutable action result."""
 
     failure_id: str
@@ -325,7 +325,7 @@ class AftermathFailureSnapshot:
 
 
 type CausalEventSnapshot = (
-    ActionResultSnapshot | OperationEventSnapshot | ResourceEventSnapshot | AftermathFailureSnapshot
+    ActionResultSnapshot | OperationEventSnapshot | ResourceEventSnapshot | ContinuationFailureSnapshot
 )
 
 
@@ -505,7 +505,7 @@ _CURRENT_ACTION: ContextVar[ActionContext | None] = ContextVar("squid_reactivity
 _CURRENT_CAUSALITY: ContextVar[tuple[CausalRef, ActionId | None] | None] = ContextVar(
     "squid_reactivity_causality", default=None
 )
-_aftermath_depth: ContextVar[int] = ContextVar("squid_reactivity_aftermath_depth", default=0)
+_continuation_depth: ContextVar[int] = ContextVar("squid_reactivity_continuation_depth", default=0)
 
 
 def next_commit_sequence() -> CommitSequence:
@@ -581,7 +581,7 @@ def emit_result(result: ActionResult) -> None:
             failures.append((sink, error))
     _sinks[:] = live
     for sink, error in failures:
-        emit_aftermath_failure(result, "result_sink", type(sink).__qualname__, error)
+        emit_continuation_failure(result, "result_sink", type(sink).__qualname__, error)
 
 
 def emit_causal_event(snapshot: CausalEventSnapshot) -> None:
@@ -599,12 +599,12 @@ def emit_causal_event(snapshot: CausalEventSnapshot) -> None:
     _sinks[:] = live
 
 
-def emit_aftermath_failure(result: ActionResult, stage: str, callback: str, error: BaseException) -> None:
+def emit_continuation_failure(result: ActionResult, stage: str, callback: str, error: BaseException) -> None:
     """Record a redacted post-result failure causally beneath its immutable result."""
     exception = DEFAULT_REDACTION.redact_exception(ExceptionReport.capture(error))
     assert exception is not None
     emit_causal_event(
-        AftermathFailureSnapshot(
+        ContinuationFailureSnapshot(
             str(uuid.uuid7()),
             str(result.context.root_action_id),
             result.context.causal_ref(),
@@ -616,14 +616,14 @@ def emit_aftermath_failure(result: ActionResult, stage: str, callback: str, erro
     )
 
 
-class Aftermath:
+class ActionContinuation:
     """Authority to start fresh causal work after a result; the callback ends it."""
 
     def __init__(self, result: ActionResult) -> None:
         self.result = result
 
     @contextmanager
-    def start_action(self, name: str, *, kind: ActionKind = ActionKind.RECOVERY):
+    def start_action(self, name: str, *, kind: ActionPurpose = ActionPurpose.RECOVERY):
         """Start a fresh causal action and transaction."""
         from squid_reactivity.core import fresh_action_transaction
 
@@ -642,16 +642,16 @@ class Aftermath:
 
 
 @contextmanager
-def aftermath_callback():
-    token = _aftermath_depth.set(_aftermath_depth.get() + 1)
+def continuation_callback():
+    token = _continuation_depth.set(_continuation_depth.get() + 1)
     try:
         yield
     finally:
-        _aftermath_depth.reset(token)
+        _continuation_depth.reset(token)
 
 
-def in_aftermath() -> bool:
-    return _aftermath_depth.get() > 0
+def in_continuation() -> bool:
+    return _continuation_depth.get() > 0
 
 
 def elapsed(context: ActionContext) -> timedelta:

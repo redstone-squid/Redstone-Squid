@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from squid_reactivity import LocalTopicBus, Shared, SharedPool, TopicBus, state
+from squid_reactivity import LocalTopicBus, SharedState, SharedStatePool, TopicBus, state
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,11 +18,11 @@ class GuildScope:
     guild_id: int
 
 
-class Preferences(Shared[UserScope]):
+class Preferences(SharedState[UserScope]):
     theme: str = state("dark")
 
 
-class SearchState(Shared[UserScope]):
+class SearchState(SharedState[UserScope]):
     query: str = state("")
 
     def __init__(self, bus: TopicBus, scope: UserScope, *, index: object) -> None:
@@ -30,7 +30,7 @@ class SearchState(Shared[UserScope]):
         self._index = index
 
 
-class Anonymous(Shared):
+class Anonymous(SharedState):
     note: str = state("")
 
 
@@ -40,7 +40,7 @@ def bus() -> LocalTopicBus:
 
 
 def test_one_canonical_handle_per_equal_scope(bus: LocalTopicBus) -> None:
-    pool = SharedPool(Preferences, bus)
+    pool = SharedStatePool(Preferences, bus)
 
     mine = pool.get(UserScope(1))
     same = pool.get(UserScope(1))
@@ -51,7 +51,7 @@ def test_one_canonical_handle_per_equal_scope(bus: LocalTopicBus) -> None:
 
 
 def test_the_default_factory_receives_the_pool_bus_and_requested_scope(bus: LocalTopicBus) -> None:
-    pool = SharedPool(Preferences, bus)
+    pool = SharedStatePool(Preferences, bus)
 
     preferences = pool.get(UserScope(7))
 
@@ -67,7 +67,7 @@ def test_a_custom_factory_is_called_once_per_generation_with_its_dependencies(bu
         calls.append(scope)
         return SearchState(pool_bus, scope, index=index)
 
-    pool = SharedPool(SearchState, bus, factory=make)
+    pool = SharedStatePool(SearchState, bus, factory=make)
 
     first = pool.get(UserScope(1))
     pool.get(UserScope(1))
@@ -85,7 +85,7 @@ def test_a_hit_does_not_construct_a_namespace_it_throws_away(bus: LocalTopicBus)
         built += 1
         return Preferences(pool_bus, scope)
 
-    pool = SharedPool(Preferences, bus, factory=make)
+    pool = SharedStatePool(Preferences, bus, factory=make)
 
     pool.get(UserScope(1))
     pool.get(UserScope(1))
@@ -98,7 +98,7 @@ def test_a_failing_factory_caches_nothing(bus: LocalTopicBus) -> None:
     def make(pool_bus: TopicBus, scope: UserScope) -> Preferences:
         raise RuntimeError("no")
 
-    pool = SharedPool(Preferences, bus, factory=make)
+    pool = SharedStatePool(Preferences, bus, factory=make)
 
     with pytest.raises(RuntimeError, match="no"):
         pool.get(UserScope(1))
@@ -107,12 +107,12 @@ def test_a_failing_factory_caches_nothing(bus: LocalTopicBus) -> None:
 
 
 def test_same_scope_recursive_construction_fails_by_name(bus: LocalTopicBus) -> None:
-    pool: SharedPool[UserScope, Preferences]
+    pool: SharedStatePool[UserScope, Preferences]
 
     def make(pool_bus: TopicBus, scope: UserScope) -> Preferences:
         return pool.get(scope)
 
-    pool = SharedPool(Preferences, bus, factory=make)
+    pool = SharedStatePool(Preferences, bus, factory=make)
 
     with pytest.raises(RuntimeError, match="Preferences for scope UserScope"):
         pool.get(UserScope(1))
@@ -120,14 +120,14 @@ def test_same_scope_recursive_construction_fails_by_name(bus: LocalTopicBus) -> 
 
 
 def test_a_factory_may_construct_another_scope(bus: LocalTopicBus) -> None:
-    pool: SharedPool[UserScope, Preferences]
+    pool: SharedStatePool[UserScope, Preferences]
 
     def make(pool_bus: TopicBus, scope: UserScope) -> Preferences:
         if scope.user_id == 1:
             pool.get(UserScope(2))
         return Preferences(pool_bus, scope)
 
-    pool = SharedPool(Preferences, bus, factory=make)
+    pool = SharedStatePool(Preferences, bus, factory=make)
 
     assert pool.get(UserScope(1)).scope == UserScope(1)
     assert pool.get_existing(UserScope(2)) is not None
@@ -137,7 +137,7 @@ def test_a_wrong_namespace_type_is_refused_without_becoming_active(bus: LocalTop
     def make(pool_bus: TopicBus, scope: UserScope) -> Preferences:
         return Anonymous(pool_bus)  # pyrefly: ignore[bad-return]
 
-    pool = SharedPool(Preferences, bus, factory=make)
+    pool = SharedStatePool(Preferences, bus, factory=make)
 
     with pytest.raises(TypeError, match="returned Anonymous, not Preferences"):
         pool.get(UserScope(1))
@@ -148,7 +148,7 @@ def test_a_namespace_on_another_bus_is_refused(bus: LocalTopicBus) -> None:
     def make(pool_bus: TopicBus, scope: UserScope) -> Preferences:
         return Preferences(LocalTopicBus(), scope)
 
-    pool = SharedPool(Preferences, bus, factory=make)
+    pool = SharedStatePool(Preferences, bus, factory=make)
 
     with pytest.raises(TypeError, match="another TopicBus"):
         pool.get(UserScope(1))
@@ -158,14 +158,14 @@ def test_a_namespace_for_another_scope_is_refused(bus: LocalTopicBus) -> None:
     def make(pool_bus: TopicBus, scope: UserScope) -> Preferences:
         return Preferences(pool_bus, UserScope(99))
 
-    pool = SharedPool(Preferences, bus, factory=make)
+    pool = SharedStatePool(Preferences, bus, factory=make)
 
     with pytest.raises(TypeError, match="another scope"):
         pool.get(UserScope(1))
 
 
 def test_get_existing_distinguishes_a_miss_without_constructing(bus: LocalTopicBus) -> None:
-    pool = SharedPool(Preferences, bus)
+    pool = SharedStatePool(Preferences, bus)
 
     assert pool.get_existing(UserScope(1)) is None
     assert pool.active() == {}
@@ -174,7 +174,7 @@ def test_get_existing_distinguishes_a_miss_without_constructing(bus: LocalTopicB
 
 
 def test_drop_retires_a_handle_that_stays_usable_while_a_new_generation_starts(bus: LocalTopicBus) -> None:
-    pool = SharedPool(Preferences, bus)
+    pool = SharedStatePool(Preferences, bus)
     first = pool.get(UserScope(1))
 
     retired = pool.delete(UserScope(1))
@@ -192,11 +192,11 @@ def test_drop_retires_a_handle_that_stays_usable_while_a_new_generation_starts(b
 
 
 def test_dropping_an_absent_scope_returns_none(bus: LocalTopicBus) -> None:
-    assert SharedPool(Preferences, bus).delete(UserScope(1)) is None
+    assert SharedStatePool(Preferences, bus).delete(UserScope(1)) is None
 
 
 def test_clear_empties_the_pool(bus: LocalTopicBus) -> None:
-    pool = SharedPool(Preferences, bus)
+    pool = SharedStatePool(Preferences, bus)
     first = pool.get(UserScope(1))
     pool.get(UserScope(2))
 
@@ -207,7 +207,7 @@ def test_clear_empties_the_pool(bus: LocalTopicBus) -> None:
 
 
 def test_a_snapshot_is_copied_not_a_view(bus: LocalTopicBus) -> None:
-    pool = SharedPool(Preferences, bus)
+    pool = SharedStatePool(Preferences, bus)
     pool.get(UserScope(1))
 
     snapshot = pool.active()
@@ -218,7 +218,7 @@ def test_a_snapshot_is_copied_not_a_view(bus: LocalTopicBus) -> None:
 
 
 def test_a_snapshot_can_be_iterated_while_its_scopes_are_retired(bus: LocalTopicBus) -> None:
-    pool = SharedPool(Preferences, bus)
+    pool = SharedStatePool(Preferences, bus)
     for user_id in range(5):
         pool.get(UserScope(user_id))
 
@@ -229,7 +229,7 @@ def test_a_snapshot_can_be_iterated_while_its_scopes_are_retired(bus: LocalTopic
 
 
 def test_a_snapshot_cannot_mutate_the_pool(bus: LocalTopicBus) -> None:
-    pool = SharedPool(Preferences, bus)
+    pool = SharedStatePool(Preferences, bus)
     pool.get(UserScope(1))
 
     snapshot = pool.active()
@@ -242,20 +242,20 @@ def test_a_mutable_by_convention_but_hashable_scope_works(bus: LocalTopicBus) ->
     class Key:
         """Hashable by identity, which is all a dict asks."""
 
-    class Loose(Shared[Hashable]):
+    class Loose(SharedState[Hashable]):
         pass
 
-    pool: SharedPool[Hashable, Loose] = SharedPool(Loose, bus)
+    pool: SharedStatePool[Hashable, Loose] = SharedStatePool(Loose, bus)
     key = Key()
 
     assert pool.get(key) is pool.get(key)
 
 
 def test_an_unhashable_pool_key_raises_the_normal_type_error(bus: LocalTopicBus) -> None:
-    class Loose(Shared[Hashable]):
+    class Loose(SharedState[Hashable]):
         pass
 
-    pool: SharedPool[Hashable, Loose] = SharedPool(Loose, bus)
+    pool: SharedStatePool[Hashable, Loose] = SharedStatePool(Loose, bus)
 
     with pytest.raises(TypeError, match="unhashable"):
         pool.get(["guild", 7])  # pyrefly: ignore[bad-argument-type]
@@ -265,7 +265,7 @@ def test_an_unhashable_pool_key_raises_the_normal_type_error(bus: LocalTopicBus)
 
 
 def test_an_unscoped_namespace_pools_on_none(bus: LocalTopicBus) -> None:
-    pool: SharedPool[None, Anonymous] = SharedPool(Anonymous, bus)
+    pool: SharedStatePool[None, Anonymous] = SharedStatePool(Anonymous, bus)
 
     assert pool.get(None) is pool.get(None)
 
@@ -274,27 +274,27 @@ def test_a_pool_needs_a_namespace_class_not_a_function(bus: LocalTopicBus) -> No
     def looks_right(pool_bus: TopicBus, scope: UserScope) -> Preferences:
         return Preferences(pool_bus, scope)
 
-    with pytest.raises(TypeError, match="owns one Shared subclass"):
-        SharedPool(looks_right, bus)
+    with pytest.raises(TypeError, match="owns one SharedState subclass"):
+        SharedStatePool(looks_right, bus)
 
 
 def test_two_pools_over_one_namespace_do_not_converge(bus: LocalTopicBus) -> None:
     """A pool is a lifetime owner, not a registry: nothing is global."""
-    left = SharedPool(Preferences, bus)
-    right = SharedPool(Preferences, bus)
+    left = SharedStatePool(Preferences, bus)
+    right = SharedStatePool(Preferences, bus)
 
     assert left.get(UserScope(1)) is not right.get(UserScope(1))
 
 
 def test_repr_names_the_namespace_and_how_many_are_live(bus: LocalTopicBus) -> None:
-    pool = SharedPool(Preferences, bus)
+    pool = SharedStatePool(Preferences, bus)
     pool.get(UserScope(1))
 
-    assert repr(pool) == "SharedPool(Preferences, 1 active)"
+    assert repr(pool) == "SharedStatePool(Preferences, 1 active)"
 
 
 def test_a_scope_is_matched_by_equality_not_identity(bus: LocalTopicBus) -> None:
-    pool = SharedPool(Preferences, bus)
+    pool = SharedStatePool(Preferences, bus)
 
     assert pool.get(UserScope(1)) is pool.get(UserScope(1))
     assert pool.get_existing(GuildScope(1)) is None  # pyrefly: ignore[bad-argument-type]

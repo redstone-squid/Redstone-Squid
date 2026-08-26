@@ -1,4 +1,4 @@
-"""Computed values and resources declared on an `sl.runtime.Shared` namespace.
+"""Computed values and resources declared on an `sl.runtime.SharedState` namespace.
 
 A cell on a namespace is state several mounts share. These are the two derived forms of the
 same idea: a computed, which is a pure function of cells and needs no address of its own, and
@@ -17,7 +17,7 @@ from squid_ui_discord.testing import delivered_to, fake_message
 from squid_ui.runtime.shared import describe
 
 
-class Prefs(sl.runtime.Shared[int]):
+class Prefs(sl.runtime.SharedState[int]):
     first: str = sl.state("Ada")
     last: str = sl.state("Lovelace")
     unread: str = sl.state("not looked at")
@@ -27,7 +27,7 @@ class Prefs(sl.runtime.Shared[int]):
         return f"{self.first} {self.last}"
 
 
-class Catalog(sl.runtime.Shared[int]):
+class Catalog(sl.runtime.SharedState[int]):
     key: str = sl.state("k1")
 
     def __init__(self, bus: sl.runtime.LocalTopicBus, scope: int) -> None:
@@ -241,7 +241,7 @@ def test_a_component_resource_carries_no_address() -> None:
 def test_a_namespace_resource_may_not_take_a_reserved_name() -> None:
     with pytest.raises(TypeError, match="reserves 'scope'"):
 
-        class Bad(sl.runtime.Shared[int]):
+        class Bad(sl.runtime.SharedState[int]):
             @sl.resource
             async def scope(self) -> str:  # type: ignore[override]
                 return "x"
@@ -250,7 +250,7 @@ def test_a_namespace_resource_may_not_take_a_reserved_name() -> None:
 def test_a_namespace_computed_may_not_take_a_reserved_name() -> None:
     with pytest.raises(TypeError, match="reserves 'bus'"):
 
-        class Bad(sl.runtime.Shared[int]):
+        class Bad(sl.runtime.SharedState[int]):
             @sl.computed
             def bus(self) -> str:  # type: ignore[override]
                 return "x"
