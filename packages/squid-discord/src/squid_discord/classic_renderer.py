@@ -187,8 +187,10 @@ class ClassicRenderer:
         if selects and len(row.controls) > 1:
             message = f"row {index} mixes a select with other controls; a select occupies its whole row"
             raise DrawInvariantError(message)
-        if not selects and len(row.controls) > self.limits.row_buttons:
-            message = f"row {index} holds {len(row.controls)} buttons; the maximum is {self.limits.row_buttons}"
+        if not selects and len(row.controls) > self.limits.components.row_buttons:
+            message = (
+                f"row {index} holds {len(row.controls)} buttons; the maximum is {self.limits.components.row_buttons}"
+            )
             raise DrawInvariantError(message)
         if not row.controls:
             message = f"row {index} is empty; planning should not have produced it"

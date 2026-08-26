@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
-from typing import Any, Self, cast
+from typing import Any, Self
 
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning.adapter import (
@@ -16,17 +16,8 @@ from squid_layouts.planning.adapter import (
 from squid_layouts.planning.adapter import (
     PreparedExtension as PreparedExtension,
 )
+from squid_layouts.planning.limits import Axis, DiscordLimits
 from squid_layouts.target_types import DiscordTarget
-
-
-def _limit_values(limits: object) -> tuple[tuple[str, object], ...]:
-    """A limits object's fields, in name order, for a stable digest."""
-    if limits is None:
-        return ()
-    fields = getattr(limits, "__dataclass_fields__", None)
-    if fields is None:
-        return ()
-    return tuple(sorted((name, getattr(limits, name)) for name in fields))
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,19 +27,13 @@ class TargetProfile[ModeT = DiscordTarget, AdapterT = Any, BodyT = Any]:
     id: str
     version: int
     capabilities: frozenset[str] = frozenset()
-    limits: object | None = None
+    limits: DiscordLimits | None = None
     extensions: Mapping[str, ExtensionAdapter] = field(default_factory=dict)
     dialect: object | None = None
     """This target's `TargetDialect`: its shape, and nothing else about planning.
 
     Typed loosely for the same reason `limits` is — the protocol lives downstream of this
     module, and a target description should not have to import the machinery that reads it.
-    """
-    resources: Mapping[str, str] = field(default_factory=dict)
-    """Resource name to the message-wide limit attribute a reservation withholds from.
-
-    Only whole-message budgets belong here. Local caps describe the target's shape rather
-    than the remaining room, and reducing one would change what a legal document is.
     """
     mode: type[ModeT] | None = None
     adapter: AdapterProfile[AdapterT] | None = None
@@ -81,14 +66,6 @@ class TargetProfile[ModeT = DiscordTarget, AdapterT = Any, BodyT = Any]:
         )
 
     @property
-    def budgets(self) -> Mapping[str, str]:
-        """Axis name to limit attribute, taken from the limits unless this profile overrides."""
-        if self.resources:
-            return self.resources
-        declared = getattr(self.limits, "budgets", None)
-        return declared if isinstance(declared, Mapping) else {}
-
-    @property
     def fingerprint(self) -> str:
         """A digest of everything about this profile that changes what a legal document is.
 
@@ -100,21 +77,17 @@ class TargetProfile[ModeT = DiscordTarget, AdapterT = Any, BodyT = Any]:
         """
         from squid_layouts.planning.identity import stable_fingerprint
 
-        return stable_fingerprint((self.id, self.version, sorted(self.capabilities), _limit_values(self.limits)))
+        digest = () if self.limits is None else self.limits.digest()
+        return stable_fingerprint((self.id, self.version, sorted(self.capabilities), digest))
 
-    def capacity(self, name: str) -> int | None:
+    def capacity(self, axis: Axis) -> int | None:
         """This target's remaining room on one axis, or None if it does not budget it."""
-        attribute = self.budgets.get(name)
-        if attribute is None or self.limits is None:
-            return None
-        return getattr(self.limits, attribute)
+        return self.capacities.get(axis)
 
     @property
-    def capacities(self) -> dict[str, int]:
-        """Every message-wide budget by axis name, after any reservation."""
-        if self.limits is None:
-            return {}
-        return {name: getattr(self.limits, attribute) for name, attribute in self.budgets.items()}
+    def capacities(self) -> Mapping[Axis, int]:
+        """Every message-wide budget by axis, after any reservation."""
+        return {} if self.limits is None else self.limits.capacities
 
     def over_capacity(self, cost: ResourceCost) -> tuple[tuple[str, int, int], ...]:
         """Every axis this cost overspends, as (axis, spent, capacity)."""
@@ -129,20 +102,13 @@ class TargetProfile[ModeT = DiscordTarget, AdapterT = Any, BodyT = Any]:
         """
         if not cost.values:
             return self
-        budgets = self.budgets
-        unknown = sorted(set(cost.values) - set(budgets))
+        capacities = self.capacities
+        unknown = sorted(set(cost.values) - set(capacities))
         if unknown:
-            known = ", ".join(sorted(budgets)) or "none"
+            known = ", ".join(sorted(capacities)) or "none"
             message = f"target {self.id!r} has no reservable resource {unknown[0]!r} (known: {known})"
             raise LayoutInvariantError(message)
         limits = self.limits
         if limits is None:
             return self
-        reductions = {
-            budgets[name]: max(0, getattr(limits, budgets[name]) - amount)
-            for name, amount in cost.values.items()
-            if amount
-        }
-        if not reductions:
-            return self
-        return replace(self, limits=replace(cast(Any, limits), **reductions))
+        return replace(self, limits=limits.with_capacities(cost.values))

@@ -7,7 +7,7 @@ from squid_layouts.assets import Asset
 from squid_layouts.chrome import Chrome
 from squid_layouts.palette import Palette
 from squid_layouts.planning.cursors import CursorCoordinator
-from squid_layouts.planning.limits import V2Limits
+from squid_layouts.planning.limits import DiscordLimits
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET, StrategyAxis
 from squid_layouts.primitives.nodes import Node
 from squid_layouts.runtime.presentation import PresentationSession, SessionUpdate
@@ -28,7 +28,7 @@ class SemanticLowering:
 
 @dataclass(slots=True)
 class LoweringContext:
-    limits: V2Limits
+    limits: DiscordLimits
     chrome: Chrome
     localization: Localization
     palette: Palette

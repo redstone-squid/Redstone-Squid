@@ -5,7 +5,7 @@ from dataclasses import dataclass, replace
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning.breaking import BreakItem, balanced_breaks
 from squid_layouts.planning.layout_measurement.model import RText
-from squid_layouts.planning.limits import DISPLAY_TEXT, ELLIPSIS, TEXT_AXES
+from squid_layouts.planning.limits import ELLIPSIS, TEXT_AXES, Axis
 from squid_layouts.planning.target import ResourceCost
 from squid_layouts.primitives.constraints import Never, Overflow
 from squid_layouts.primitives.nodes import Code, Footer, Heading, Lines, Node, Text
@@ -70,7 +70,7 @@ def _escape_fences(content: str) -> str:
     return content.replace("```", "``\N{ZERO WIDTH SPACE}`")
 
 
-def make_unit(node: TextBearing, slot: RText, index: int, axis: str = DISPLAY_TEXT) -> TextUnit | None:
+def make_unit(node: TextBearing, slot: RText, index: int, axis: str = Axis.DISPLAY_TEXT) -> TextUnit | None:
     """Create the allocation unit for one text-bearing primitive."""
     prefix, suffix, ladders, join = "", "", None, "\n"
     ranks: tuple[int, ...] = ()

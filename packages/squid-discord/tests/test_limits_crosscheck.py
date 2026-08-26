@@ -29,7 +29,7 @@ def test_section_text_count_matches_discordpy():
 
 def test_modal_child_count_matches_discordpy():
     modal = discord.ui.Modal(title="t", timeout=None)
-    for index in range(LIMITS.modal_components):
+    for index in range(LIMITS.components.modal_components):
         modal.add_item(discord.ui.Label(text=f"l{index}", component=discord.ui.TextInput(label="i")))
     with pytest.raises(ValueError, match="maximum number of children"):
         modal.add_item(discord.ui.Label(text="over", component=discord.ui.TextInput(label="i")))
@@ -54,7 +54,7 @@ def test_gallery_item_count_matches_discordpy():
 
 def test_select_option_count_matches_discordpy():
     select = discord.ui.Select()
-    for index in range(LIMITS.select_options):
+    for index in range(LIMITS.components.select_options):
         select.append_option(discord.SelectOption(label=str(index)))
     with pytest.raises(ValueError, match="maximum number of options"):
         select.append_option(discord.SelectOption(label="over"))
@@ -62,8 +62,8 @@ def test_select_option_count_matches_discordpy():
 
 def test_discordpy_does_not_validate_string_lengths():
     # The premise of the conform gate: these all serialize locally and would 50035 at send time.
-    modal = discord.ui.Modal(title="t" * (LIMITS.modal_title + 1), timeout=None)
+    modal = discord.ui.Modal(title="t" * (LIMITS.components.modal_title + 1), timeout=None)
     modal.add_item(discord.ui.Label(text="l", component=discord.ui.TextInput(label="i", default="v" * 5000)))
     payload = modal.to_dict()
-    assert len(payload["title"]) > LIMITS.modal_title
-    assert len(payload["components"][0]["component"]["value"]) > LIMITS.text_input_value
+    assert len(payload["title"]) > LIMITS.components.modal_title
+    assert len(payload["components"][0]["component"]["value"]) > LIMITS.components.text_input_value

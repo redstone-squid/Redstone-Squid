@@ -75,7 +75,7 @@ class TestConformView:
         button = discord.ui.Button(label="b" * 200)
         view = _view(_row(button))
         assert conform(view)
-        assert button.label is not None and len(button.label) <= LIMITS.button_label
+        assert button.label is not None and len(button.label) <= LIMITS.components.button_label
         assert_within_limits(view)
 
     def test_select_options_and_strings_clamped(self):
@@ -87,9 +87,9 @@ class TestConformView:
         ]
         view = _view(_row(select))
         assert conform(view)
-        assert len(select.options) <= LIMITS.select_options
-        assert all(len(o.label) <= LIMITS.option_label for o in select.options)
-        assert all(len(o.value) <= LIMITS.option_value for o in select.options)
+        assert len(select.options) <= LIMITS.components.select_options
+        assert all(len(o.label) <= LIMITS.components.option_label for o in select.options)
+        assert all(len(o.value) <= LIMITS.components.option_value for o in select.options)
         assert_within_limits(view)
 
     def test_option_values_stay_unique_enough_to_dispatch(self):

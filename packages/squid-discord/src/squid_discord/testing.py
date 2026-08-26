@@ -13,6 +13,7 @@ names to `squid_discord` itself.
 """
 
 from collections.abc import Iterator
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
@@ -23,7 +24,7 @@ import discord
 from squid_discord.delivery import DeliveryReceipt, Destination, EditHandle, handle_for
 from squid_discord.mount import AnyMountedView, ClassicMountedView, Mount, MountedView
 from squid_discord.presentation import DiscordPresentation
-from squid_layouts.planning.limits import LIMITS, V2Limits
+from squid_layouts.planning.limits import COMPONENT_LIMITS, LIMITS, ComponentLimits, V2Limits
 
 type ComponentPayload = dict[str, Any]
 
@@ -60,25 +61,27 @@ def payload_problems(components: list[ComponentPayload], *, limits: V2Limits = L
     for component in flattened:
         match component.get("type"):
             case 2:
-                _check_string(problems, component, "label", limits.button_label, "button")
-                _check_string(problems, component, "custom_id", limits.custom_id, "button")
+                _check_string(problems, component, "label", limits.components.button_label, "button")
+                _check_string(problems, component, "custom_id", limits.components.custom_id, "button")
             case 3:
-                _check_string(problems, component, "placeholder", limits.select_placeholder, "select")
+                _check_string(problems, component, "placeholder", limits.components.select_placeholder, "select")
                 options = component.get("options", [])
-                if len(options) > limits.select_options:
-                    problems.append(f"{len(options)} select options (limit {limits.select_options})")
+                if len(options) > limits.components.select_options:
+                    problems.append(f"{len(options)} select options (limit {limits.components.select_options})")
                 for option in options:
-                    _check_string(problems, option, "label", limits.option_label, "option")
-                    _check_string(problems, option, "value", limits.option_value, "option")
-                    _check_string(problems, option, "description", limits.option_description, "option")
+                    _check_string(problems, option, "label", limits.components.option_label, "option")
+                    _check_string(problems, option, "value", limits.components.option_value, "option")
+                    _check_string(problems, option, "description", limits.components.option_description, "option")
             case 4:
-                _check_string(problems, component, "placeholder", limits.text_input_placeholder, "text input")
-                _check_string(problems, component, "value", limits.text_input_value, "text input")
+                _check_string(
+                    problems, component, "placeholder", limits.components.text_input_placeholder, "text input"
+                )
+                _check_string(problems, component, "value", limits.components.text_input_value, "text input")
                 max_length = component.get("max_length")
-                if max_length is not None and max_length > limits.text_input_value:
-                    problems.append(f"text input max_length {max_length} (limit {limits.text_input_value})")
+                if max_length is not None and max_length > limits.components.text_input_value:
+                    problems.append(f"text input max_length {max_length} (limit {limits.components.text_input_value})")
             case 5 | 6 | 7 | 8:
-                _check_string(problems, component, "placeholder", limits.select_placeholder, "select")
+                _check_string(problems, component, "placeholder", limits.components.select_placeholder, "select")
             case 9:
                 texts = component.get("components", [])
                 if len(texts) > limits.section_texts:
@@ -90,15 +93,15 @@ def payload_problems(components: list[ComponentPayload], *, limits: V2Limits = L
                 for item in items:
                     _check_string(problems, item, "description", limits.gallery_item_description, "gallery item")
             case 18:
-                _check_string(problems, component, "label", limits.label_text, "label")
-                _check_string(problems, component, "description", limits.label_description, "label")
+                _check_string(problems, component, "label", limits.components.label_text, "label")
+                _check_string(problems, component, "description", limits.components.label_description, "label")
             case _:
                 pass
 
     return problems
 
 
-def modal_problems(payload: dict[str, Any], *, limits: V2Limits = LIMITS) -> list[str]:
+def modal_problems(payload: dict[str, Any], *, limits: ComponentLimits = COMPONENT_LIMITS) -> list[str]:
     """Return every limit violation in a modal payload."""
     problems: list[str] = []
     title = payload.get("title", "")
@@ -107,7 +110,9 @@ def modal_problems(payload: dict[str, Any], *, limits: V2Limits = LIMITS) -> lis
     components = payload.get("components", [])
     if len(components) > limits.modal_components:
         problems.append(f"modal holds {len(components)} components (limit {limits.modal_components})")
-    problems.extend(payload_problems(components, limits=limits))
+    # A modal holds no gallery or section, so only the component half of the V2
+    # table can matter; carry the caller's over so an overridden cap still applies.
+    problems.extend(payload_problems(components, limits=replace(LIMITS, components=limits)))
     return problems
 
 
@@ -245,7 +250,7 @@ def _commit(mount: Mount, *, disabled: bool) -> AnyMountedView:
 def assert_within_limits(built: discord.ui.LayoutView | discord.ui.Modal, *, limits: V2Limits = LIMITS) -> None:
     """Assert that a built view or modal serializes within every Discord limit."""
     if isinstance(built, discord.ui.Modal):
-        problems = modal_problems(built.to_dict(), limits=limits)
+        problems = modal_problems(built.to_dict(), limits=limits.components)
     else:
         problems = payload_problems(built.to_components(), limits=limits)
     assert not problems, "; ".join(problems)

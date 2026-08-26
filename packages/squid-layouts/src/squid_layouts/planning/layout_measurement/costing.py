@@ -13,7 +13,7 @@ from squid_layouts.planning.layout_measurement.model import (
     RText,
 )
 from squid_layouts.planning.layout_measurement.realization import Builder
-from squid_layouts.planning.limits import COMPONENTS, CONTROLS, EMBEDS, LIMITS, ROWS, DiscordLimits
+from squid_layouts.planning.limits import LIMITS, Axis, DiscordLimits
 from squid_layouts.planning.navigation import NavNode
 from squid_layouts.planning.target import ResourceCost
 from squid_layouts.primitives.nodes import (
@@ -43,8 +43,8 @@ def measure_nodes(nodes: Sequence[Node], *, limits: DiscordLimits = LIMITS) -> R
         match node:
             case ActionGroup(items=items):
                 return [
-                    Row(tuple(items[start : start + limits.row_buttons]))
-                    for start in range(0, len(items), limits.row_buttons)
+                    Row(tuple(items[start : start + limits.components.row_buttons]))
+                    for start in range(0, len(items), limits.components.row_buttons)
                 ]
             case MediaCollection(items=items):
                 return [
@@ -122,36 +122,36 @@ def _item_component_cost(item: object) -> int:
 
 def structural_cost(children: Sequence[Realized]) -> dict[str, int]:
     """Count every structural axis at once, whichever target budgets them."""
-    totals = {COMPONENTS: 0, EMBEDS: 0, ROWS: 0, CONTROLS: 0}
+    totals = {Axis.COMPONENTS: 0, Axis.EMBEDS: 0, Axis.ROWS: 0, Axis.CONTROLS: 0}
 
     def walk(nodes: Sequence[Realized]) -> None:
         for child in nodes:
             match child:
                 case RPanel(children=inner):
-                    totals[COMPONENTS] += 1
+                    totals[Axis.COMPONENTS] += 1
                     walk(inner)
                 case RGroup(children=inner):
                     walk(inner)
                 case RCard(blocks=blocks):
-                    totals[EMBEDS] += 1
-                    totals[COMPONENTS] += 1
+                    totals[Axis.EMBEDS] += 1
+                    totals[Axis.COMPONENTS] += 1
                     walk(blocks)
                 case RContent():
                     continue
                 case RSection(texts=texts, accessory=accessory):
-                    totals[COMPONENTS] += 1 + len(texts) + _item_component_cost(accessory)
+                    totals[Axis.COMPONENTS] += 1 + len(texts) + _item_component_cost(accessory)
                 case Row(items=items):
-                    totals[COMPONENTS] += 1 + sum(_item_component_cost(item) for item in items)
-                    totals[ROWS] += 1
-                    totals[CONTROLS] += len(items)
+                    totals[Axis.COMPONENTS] += 1 + sum(_item_component_cost(item) for item in items)
+                    totals[Axis.ROWS] += 1
+                    totals[Axis.CONTROLS] += len(items)
                 case SelectMenu() | RoutedSelect() | EntitySelect():
-                    totals[COMPONENTS] += 2
-                    totals[ROWS] += 1
-                    totals[CONTROLS] += 1
+                    totals[Axis.COMPONENTS] += 2
+                    totals[Axis.ROWS] += 1
+                    totals[Axis.CONTROLS] += 1
                 case RawItem(component_cost=component_cost):
-                    totals[COMPONENTS] += component_cost
+                    totals[Axis.COMPONENTS] += component_cost
                 case _:
-                    totals[COMPONENTS] += 1
+                    totals[Axis.COMPONENTS] += 1
 
     walk(children)
     return totals
@@ -159,4 +159,4 @@ def structural_cost(children: Sequence[Realized]) -> dict[str, int]:
 
 def component_count(children: Sequence[Realized]) -> int:
     """Count components in one realized V2 subtree."""
-    return structural_cost(children)[COMPONENTS]
+    return structural_cost(children)[Axis.COMPONENTS]

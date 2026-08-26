@@ -10,7 +10,7 @@ from squid_layouts.planning.cursors import MaterializedCursorRequest
 from squid_layouts.planning.identity import stable_fingerprint
 from squid_layouts.planning.layout_measurement.costing import measure_nodes
 from squid_layouts.planning.layout_measurement.text import split_text_node, text_total
-from squid_layouts.planning.limits import COMPONENTS, DiscordLimits
+from squid_layouts.planning.limits import Axis, DiscordLimits
 from squid_layouts.planning.semantic_adaptation.common import (
     _resolve,
 )
@@ -125,7 +125,8 @@ def _as_fragment(node: Node, open_card: _Fragment | None) -> _Fragment | None:
 
 def _merge(first: _Fragment, second: _Fragment, limits: DiscordLimits) -> _Fragment | None:
     """Fold `second` into `first`, or None when the result would not be one legal embed."""
-    if len(first.fields) + len(second.fields) > getattr(limits, "embed_fields", 25):
+    embeds = limits.embeds
+    if embeds is None or len(first.fields) + len(second.fields) > embeds.fields:
         return None
     for slot in ("title", "url", "footer", "author", "image", "thumbnail", "timestamp"):
         if getattr(first, slot) is not None and getattr(second, slot) is not None:
@@ -249,7 +250,7 @@ def _split_oversized_region_items(
     result: list[_RegionItem] = []
     for item in items:
         cost = measure_nodes(item.nodes, limits=limits)
-        if text_total(cost) <= chars and cost.get(COMPONENTS) <= limits.component_budget:
+        if text_total(cost) <= chars and cost.get(Axis.COMPONENTS) <= limits.component_budget:
             result.append(item)
             continue
         fragments = (
@@ -260,7 +261,7 @@ def _split_oversized_region_items(
         if fragments is None or len(fragments) <= 1:
             message = (
                 f"{path}: unbreakable region child {type(item.nodes[0]).__name__} needs "
-                f"{text_total(cost)} characters and {cost.get(COMPONENTS)} components; "
+                f"{text_total(cost)} characters and {cost.get(Axis.COMPONENTS)} components; "
                 f"page limit is {chars} characters"
             )
             raise UnsolvableLayoutError(message)
@@ -288,7 +289,7 @@ def _break_region(
             [
                 BreakItem(
                     text_total(cost),
-                    cost.get(COMPONENTS),
+                    cost.get(Axis.COMPONENTS),
                     break_after=not item.keep_with_next,
                 )
                 for item, cost in zip(items, costs, strict=True)
