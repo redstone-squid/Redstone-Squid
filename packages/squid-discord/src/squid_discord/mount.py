@@ -35,6 +35,7 @@ from squid_discord.classic_renderer import ClassicRenderer
 from squid_discord.composition import Composition, compose
 from squid_discord.emoji import discord_emoji
 from squid_discord.presentation import DiscordMode, DiscordPresentation
+from squid_discord.render_cache import RenderProgramCache, RenderProgramCacheSnapshot
 from squid_discord.renderer import V2Renderer
 from squid_discord.target import DISCORD_V2_DPY27, Target
 from squid_layouts import scene
@@ -137,6 +138,7 @@ _BINDINGS: dict[str, _DiscordBinding] = {
         renderer=lambda mount, timeout: V2Renderer(
             limits=mount.limits,
             view_factory=lambda: MountedView(mount, timeout),
+            cache=mount.render_cache,
         ),
     ),
     CLASSIC_TARGET_ID: _DiscordBinding(
@@ -147,6 +149,7 @@ _BINDINGS: dict[str, _DiscordBinding] = {
             limits=mount.limits,
             view_factory=lambda: ClassicMountedView(mount, timeout),
             always_view=True,
+            cache=mount.render_cache,
         ),
     ),
 }
@@ -776,6 +779,7 @@ class MountSnapshot:
     """Action keys the live generation answers to."""
     suppressed: int
     """Renders committed without a Discord edit because they matched the live generation."""
+    render_cache: RenderProgramCacheSnapshot
     scene: scene.Document | None
     report: PlanReport | None
     metrics: PlanMetrics | None
@@ -943,6 +947,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         on_error: ErrorHook | None = None,
         middleware: Sequence[ActionMiddleware] = (),
         profiler: Profiler | None = None,
+        render_cache: RenderProgramCache | None = None,
         scheduler: Scheduler | None = None,
         expiry: ExpiryPolicy | None = DEFAULT_EXPIRY,
         nav: NavFactory | None = None,
@@ -1023,6 +1028,8 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             if inherited_profiler is not None
             else _NOOP_PROFILER
         )
+        self._owns_render_cache = render_cache is None
+        self.render_cache = render_cache if render_cache is not None else RenderProgramCache()
         self.scheduler = scheduler
         topic_bus = scheduler.bus if isinstance(scheduler, TopicScheduler) else None
         reconciler_ref: weakref.ReferenceType[SubscriptionReconciler] | None = None
@@ -1216,6 +1223,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             access=self.access,
             handler_keys=tuple(sorted(self._handlers)),
             suppressed=self._suppressed,
+            render_cache=self.render_cache.snapshot(),
             scene=None if self._plan is None else self._plan.scene,
             report=None if self._plan is None else self._plan.report,
             metrics=None if self._plan is None else self._plan.metrics,
@@ -1442,9 +1450,17 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                 return item
 
             renderer = self._renderer(self._remaining_timeout())
-            context = profile.span("renderer") if profile is not None else nullcontext()
-            with context:
+            before = self.render_cache.snapshot()
+            context = profile.span("renderer") if profile is not None else nullcontext(None)
+            with context as renderer_span:
                 presentation = cast(Any, renderer).draw(staged.plan.scene, plan=staged.plan, wire=wire)
+                after = self.render_cache.snapshot()
+                hit = after.hits > before.hits
+                if renderer_span is not None:
+                    renderer_span.set_attribute("program_cache_hit", hit)
+            if profile is not None:
+                profile.increment("renderer.program_hits", int(hit))
+                profile.increment("renderer.program_misses", int(not hit))
             composition = Composition(presentation, staged.plan)
             view = composition.presentation.view
             if not isinstance(view, MountedView | ClassicMountedView):
@@ -3365,6 +3381,8 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         self._subscriptions.close()
         self._expiry_arm_requested = None
         self.runtime.finish()
+        if self._owns_render_cache:
+            self.render_cache.clear()
 
     async def handle_timeout(self) -> None:
         await self.finish(disable=True)

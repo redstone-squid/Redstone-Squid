@@ -14,6 +14,7 @@ from squid_discord.mount import (
     Scheduler,
     _monotonic,
 )
+from squid_discord.render_cache import RenderProgramCache
 from squid_discord.target import DISCORD_V2_DPY27, Target
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.interactions import ActionMiddleware
@@ -36,6 +37,7 @@ class MountOptions(TypedDict, total=False):
     on_error: ErrorHook | None
     middleware: Sequence[ActionMiddleware]
     profiler: Profiler | None
+    render_cache: RenderProgramCache | None
     scheduler: Scheduler | None
     expiry: ExpiryPolicy | None
     nav: NavFactory | None
@@ -62,6 +64,7 @@ class MountDefaults:
     on_error: ErrorHook | None = None
     middleware: Sequence[ActionMiddleware] = ()
     profiler: Profiler | None = None
+    render_cache: RenderProgramCache | None = None
     scheduler: Scheduler | None = None
     expiry: ExpiryPolicy | None = DEFAULT_EXPIRY
     nav: NavFactory | None = None
@@ -91,6 +94,7 @@ class MountDefaults:
             on_error=configured.on_error,
             middleware=configured.middleware,
             profiler=configured.profiler,
+            render_cache=configured.render_cache,
             scheduler=configured.scheduler,
             expiry=configured.expiry,
             nav=configured.nav,
