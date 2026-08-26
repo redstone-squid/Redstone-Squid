@@ -13,7 +13,6 @@ from squid_layouts.semantic import (
     Choice,
     Choices,
     Column,
-    Destination,
     Details,
     Field,
     Fields,
@@ -22,6 +21,7 @@ from squid_layouts.semantic import (
     Media,
     MediaItem,
     Navigation,
+    NavOption,
     Note,
     Paragraph,
     Section,
@@ -87,7 +87,7 @@ def test_an_unset_selection_is_distinguishable_from_an_empty_one() -> None:
 
 
 def test_navigation_groups_six_destinations() -> None:
-    document = Navigation("tabs", tuple(Destination(str(index), f"Tab {index}") for index in range(6)))
+    document = Navigation("tabs", tuple(NavOption(str(index), f"Tab {index}") for index in range(6)))
 
     assert isinstance(plan(document, target=DISCORD_V2_DPY27).scene.components_v2.children[0], scene.Select)
 
@@ -101,7 +101,7 @@ def test_large_semantic_pickers_fold_into_keyed_25_and_11_pages() -> None:
             for index in range(36)
         ),
     )
-    navigation = Navigation("tabs", tuple(Destination(str(index), f"Tab {index}") for index in range(36)))
+    navigation = Navigation("tabs", tuple(NavOption(str(index), f"Tab {index}") for index in range(36)))
 
     choice_plan = plan(choices, target=DISCORD_V2_DPY27, positions={"size.choices": Position(offset=1)})
     item_plan = plan(items, target=DISCORD_V2_DPY27, positions={"catalog.items": Position(offset=1)})

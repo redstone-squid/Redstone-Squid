@@ -128,7 +128,7 @@ class TestParity:
         assert sl.status("s", tone=sl.Tone.DANGER) == sl.semantic.Status("s", sl.Tone.DANGER)
         assert sl.code("x = 1", language="python") == sl.semantic.Code("x = 1", "python")
         assert sl.quote("q", attribution="me") == sl.semantic.Quote("q", "me")
-        assert sl.progress(0.5, label="L") == sl.semantic.Progress(0.5, "L")
+        assert sl.progress(0.5, label="L") == sl.semantic.ProgressBar(0.5, "L")
         assert sl.measure(3, "Blocks", unit="s") == sl.semantic.Measure(3, "Blocks", "s")
         instant = datetime(2026, 8, 22, tzinfo=UTC)
         assert sl.timestamp(instant, style=sl.semantic.TimeStyle.RELATIVE, label="Updated") == sl.semantic.Timestamp(
@@ -183,11 +183,11 @@ class TestParity:
         assert sl.routed_choices(sl.choice("Yes", key="y"), key="c", route_id="r:choices") == sl.semantic.RoutedChoices(
             "c", (sl.semantic.Choice("y", "Yes"),), "r:choices"
         )
-        assert sl.destination("Home", key="home") == sl.semantic.Destination("home", "Home")
+        assert sl.nav_option("Home", key="home") == sl.semantic.NavOption("home", "Home")
         assert sl.navigation(
-            sl.destination("Home", key="home"), key="n", current=sl.controlled("home", _noop)
+            sl.nav_option("Home", key="home"), key="n", current=sl.controlled("home", _noop)
         ) == sl.semantic.Navigation(
-            "n", (sl.semantic.Destination("home", "Home"),), sl.semantic.Controlled("home", _noop)
+            "n", (sl.semantic.NavOption("home", "Home"),), sl.semantic.Controlled("home", _noop)
         )
 
 
@@ -195,6 +195,7 @@ class TestDrift:
     _ALIASES = {
         "FormTrigger": "form",
         "List": "bullets",
+        "ProgressBar": "progress",
         "RoutedChoices": "routed_choices",
         "ZonedTimestamp": "zoned_timestamp",
     }

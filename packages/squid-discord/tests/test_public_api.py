@@ -37,7 +37,7 @@ def test_the_adapter_namespace_exposes_its_surface() -> None:
     assert squid_discord.classic.compose
     assert squid_discord.SessionKey
     assert squid_discord.sessions.SessionPolicy
-    assert squid_discord.Screen
+    assert squid_discord.ScreenSpec
     assert squid_discord.screens.Scope
     assert squid_discord.screens.Opener
     assert squid_discord.presentation.DiscordPresentation
@@ -112,7 +112,7 @@ class BlockStores(importlib.abc.MetaPathFinder):
 sys.meta_path.insert(0, BlockStores())
 import squid_discord
 assert squid_discord.Mount
-assert squid_discord.Screen
+assert squid_discord.ScreenSpec
 assert "durability" in squid_discord.__all__
 assert "squid_stores" not in sys.modules
 """
