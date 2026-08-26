@@ -8,7 +8,9 @@ would be making layout decisions with none of the planner's budget information.
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
+from typing import Any
 
+from squid_layouts.capabilities import Capability
 from squid_layouts.chrome import Chrome
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursorRequest
@@ -25,9 +27,9 @@ from squid_layouts.planning.layout_measurement.solver import (
     MeasuredLayout,
     measure,
 )
-from squid_layouts.planning.limits import ClassicLimits
+from squid_layouts.planning.limits import CLASSIC_LIMITS, Axis, ClassicLimits
 from squid_layouts.planning.navigation import PlannedNav, materialized_navigation_state
-from squid_layouts.planning.target import TargetProfile
+from squid_layouts.planning.target import Target
 from squid_layouts.primitives.constraints import Never, Paginate
 from squid_layouts.primitives.nodes import (
     ActionGroup,
@@ -78,13 +80,14 @@ from squid_layouts.scene.model import (
     SceneSelect,
 )
 from squid_layouts.sources import Position
+from squid_layouts.target_types import ClassicTarget
 from squid_layouts.temporal import ZonedDateTime
 
 BLOCK_JOIN = "\n\n"
 """How a card's description blocks are joined. One rule, so one card is one string."""
 
 
-def _lower(nodes: Sequence[Node], target: TargetProfile, limits: ClassicLimits) -> tuple[Node, ...]:
+def _lower(nodes: Sequence[Node], target: Target, limits: ClassicLimits) -> tuple[Node, ...]:
     lowered: list[Node] = []
     for node in nodes:
         match node:
@@ -452,8 +455,31 @@ def _as_control(node: object, path: str) -> SceneControl:
 class ClassicDialect:
     """Pre-Components-V2 message shape. Everything else about planning is shared."""
 
-    def normalize(self, nodes: Sequence[Node], target: TargetProfile, limits: ClassicLimits) -> tuple[Node, ...]:
-        return _lower(nodes, target, limits)
+    id = "discord.components-v1"
+    version = 1
+    capabilities = frozenset(
+        {
+            Capability.ACTIONS_BUTTONS,
+            Capability.ACTIONS_DISCORD_PREMIUM,
+            Capability.ACTIONS_SELECT,
+            Capability.ACTIONS_DISCORD_ENTITY,
+            Capability.FORMS_MODAL,
+            Capability.FORMS_DISCORD_CHECKBOX_GROUP,
+            Capability.LAYOUT_EMBED,
+            Capability.LAYOUT_EMBED_FIELDS,
+            Capability.MESSAGE_CONTENT,
+        }
+    )
+    mode = ClassicTarget
+    body_type = SceneClassicMessage
+    default_limits = CLASSIC_LIMITS
+    # A classic message has no component that can hold a native discord.py item.
+    realizes_extensions = False
+
+    def normalize(
+        self, nodes: Sequence[Node], target: Target[ClassicLimits, SceneClassicMessage, ClassicTarget, Any]
+    ) -> tuple[Node, ...]:
+        return _lower(nodes, target, target.limits)
 
     def validate(self, nodes: Sequence[Node], limits: ClassicLimits) -> None:
         _validate(nodes, limits)
@@ -463,7 +489,7 @@ class ClassicDialect:
         nodes: Sequence[Node],
         *,
         key: str,
-        capacities: Mapping[str, int],
+        capacities: Mapping[Axis, int],
         limits: ClassicLimits,
         chrome: Chrome,
         nav: PlannedNav,

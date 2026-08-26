@@ -3,6 +3,7 @@
 from collections.abc import Sequence
 from dataclasses import replace
 
+from squid_layouts.planning.adapter import ResourceCost
 from squid_layouts.planning.layout_measurement.model import (
     RCard,
     RContent,
@@ -15,7 +16,6 @@ from squid_layouts.planning.layout_measurement.model import (
 from squid_layouts.planning.layout_measurement.realization import Builder
 from squid_layouts.planning.limits import LIMITS, Axis, DiscordLimits
 from squid_layouts.planning.navigation import NavNode
-from squid_layouts.planning.target import ResourceCost
 from squid_layouts.primitives.nodes import (
     ActionGroup,
     Break,

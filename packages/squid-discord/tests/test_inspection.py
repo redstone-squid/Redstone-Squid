@@ -8,6 +8,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 import squid_discord
+import squid_discord.target
 import squid_layouts as sl
 from squid_discord import V2_LIMITS as LIMITS
 from squid_discord import ExistingLayoutError, LimitViolationError, conform
@@ -222,17 +223,17 @@ class TestReservationAxes:
     """A reservation is a smaller target, so every axis behaves the same way."""
 
     def test_text_reservation_shrinks_the_text_budget(self):
-        target = squid_discord.Target.v2().reserve(squid_discord.ResourceCost({"display_text": 1000}))
+        target = squid_discord.target.v2().reserve(squid_discord.ResourceCost({"display_text": 1000}))
         assert isinstance(target.limits, type(LIMITS))
         assert target.limits.total_text == LIMITS.total_text - 1000
 
     def test_component_reservation_shrinks_the_component_budget(self):
-        target = squid_discord.Target.v2().reserve(squid_discord.ResourceCost({"components": 6}))
+        target = squid_discord.target.v2().reserve(squid_discord.ResourceCost({"components": 6}))
         assert isinstance(target.limits, type(LIMITS))
         assert target.limits.total_components == LIMITS.total_components - 6
 
     def test_local_caps_are_untouched(self):
-        reserved = squid_discord.Target.v2().reserve(
+        reserved = squid_discord.target.v2().reserve(
             squid_discord.ResourceCost({"display_text": 500, "components": 5, "attachments": 2})
         )
         assert isinstance(reserved.limits, type(LIMITS))
@@ -242,19 +243,19 @@ class TestReservationAxes:
 
     def test_unknown_resources_are_rejected(self):
         with pytest.raises(sl.errors.LayoutInvariantError, match="no reservable resource"):
-            squid_discord.Target.v2().reserve(squid_discord.ResourceCost({"pixels": 1}))
+            squid_discord.target.v2().reserve(squid_discord.ResourceCost({"pixels": 1}))
 
     def test_reservation_never_goes_negative(self):
-        reserved = squid_discord.Target.v2().reserve(
+        reserved = squid_discord.target.v2().reserve(
             squid_discord.ResourceCost({"display_text": LIMITS.total_text * 2})
         )
         assert isinstance(reserved.limits, type(LIMITS))
         assert reserved.limits.total_text == 0
 
     def test_identity_is_preserved(self):
-        reserved = squid_discord.Target.v2().reserve(squid_discord.ResourceCost({"components": 1}))
+        reserved = squid_discord.target.v2().reserve(squid_discord.ResourceCost({"components": 1}))
         assert reserved.id == "discord.components-v2"
-        assert reserved.capabilities == squid_discord.Target.v2().capabilities
+        assert reserved.capabilities == squid_discord.target.v2().capabilities
         assert "discord.item" in reserved.extensions
 
 

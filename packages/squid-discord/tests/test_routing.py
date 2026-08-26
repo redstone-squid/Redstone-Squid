@@ -954,7 +954,7 @@ class TestDrawing:
     def test_a_routed_scene_round_trips_through_the_codec(self) -> None:
         document = sl.block(sl.actions(sl.routed_action("Edit", EDIT_BUILD.id(build_id=3), key="e"), key="c"))
 
-        scene = sl.planning.plan(document, target=squid_discord.V2_TARGET).scene
+        scene = sl.planning.plan(document, target=squid_discord.DISCORD_V2_DPY27).scene
         payload = sl.scene.Codec.dumps(scene)
 
         assert "routed_button" in sl.scene.Codec.schema()["$defs"]
@@ -967,7 +967,7 @@ class TestDrawing:
 
     def test_the_old_scene_custom_id_field_is_not_accepted(self) -> None:
         document = sl.actions(sl.routed_action("Close", POLL_CLOSE.id(), key="close"), key="c")
-        payload = sl.scene.Codec.to_dict(sl.planning.plan(document, target=squid_discord.V2_TARGET).scene)
+        payload = sl.scene.Codec.to_dict(sl.planning.plan(document, target=squid_discord.DISCORD_V2_DPY27).scene)
         routed = payload["body"]["children"][0]["items"][0]
         routed["custom_id"] = routed.pop("route_id")
 
@@ -977,7 +977,7 @@ class TestDrawing:
     def test_the_html_preview_emits_the_route(self) -> None:
         document = sl.actions(sl.routed_action("Close", POLL_CLOSE.id(), key="close"), key="c")
 
-        html = sl.html.Renderer().draw(sl.planning.plan(document, target=squid_discord.V2_TARGET).scene)
+        html = sl.html.Renderer().draw(sl.planning.plan(document, target=squid_discord.DISCORD_V2_DPY27).scene)
 
         assert 'data-route-id="poll:close"' in html
 
@@ -990,7 +990,7 @@ class TestDrawing:
             placeholder="Choose",
         )
 
-        scene = sl.planning.plan(document, target=squid_discord.V2_TARGET).scene
+        scene = sl.planning.plan(document, target=squid_discord.DISCORD_V2_DPY27).scene
         assert scene.components_v2.children == (
             SceneRoutedSelect(
                 (sl.scene.SceneOption("One", "one", "First"), sl.scene.SceneOption("Two", "two")),
@@ -1027,7 +1027,7 @@ class TestDrawing:
         )
 
         with pytest.raises(LayoutInvariantError, match="split the routed picker"):
-            sl.planning.plan(document, target=squid_discord.V2_TARGET)
+            sl.planning.plan(document, target=squid_discord.DISCORD_V2_DPY27)
 
     def test_routed_choices_need_an_available_option(self) -> None:
         document = sl.routed_choices(
@@ -1037,7 +1037,7 @@ class TestDrawing:
         )
 
         with pytest.raises(LayoutInvariantError, match="at least one available"):
-            sl.planning.plan(document, target=squid_discord.V2_TARGET)
+            sl.planning.plan(document, target=squid_discord.DISCORD_V2_DPY27)
 
 
 class _FakeClient:

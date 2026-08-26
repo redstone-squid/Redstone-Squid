@@ -11,10 +11,10 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 import squid_layouts as sl
+from squid_discord import DISCORD_V2_DPY27, Everyone, Mount, conform
 from squid_discord import (
     V2_LIMITS as LIMITS,
 )
-from squid_discord import Everyone, Mount, conform
 from squid_discord.modal import LabelSpec, ModalSpec, TextInputSpec, build_modal
 from squid_discord.testing import assert_within_limits, commit_render, fake_interaction
 from squid_layouts import Component, field, fields, paragraph, section, truncate
@@ -232,17 +232,22 @@ class TestMountPagination:
 
     def test_the_mount_draws_once_per_render(self, monkeypatch):
         """The fingerprint dance used to make every flush plan twice."""
+        from dataclasses import replace as replace_binding
+
         from squid_discord import mount as mount_module
 
         calls = 0
-        original = mount_module.compose
+        binding = mount_module._BINDINGS[DISCORD_V2_DPY27.dialect.id]
 
         def counted(*args, **kwargs):
             nonlocal calls
             calls += 1
-            return original(*args, **kwargs)
+            return binding.composer(*args, **kwargs)
 
-        monkeypatch.setattr(mount_module, "compose", counted)
+        # The composer is a field of the target's binding, not a module global.
+        monkeypatch.setitem(
+            mount_module._BINDINGS, DISCORD_V2_DPY27.dialect.id, replace_binding(binding, composer=counted)
+        )
         mount = Mount(TwoBrowsers(), access=Everyone(), timeout=None)
         commit_render(mount)
         assert calls == 1
