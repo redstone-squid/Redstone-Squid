@@ -526,10 +526,16 @@ async def test_a_durable_join_is_checkpointed_and_survives_recovery() -> None:
         assert (await opened.session.join(8)).status is MembershipStatus.JOINED
 
         # Checkpointed by the join itself, with no maintenance sweep in between.
-        record = DurableSessionCodec.loads((await store.list())[0].snapshot_payload)
+        payload = (await store.list())[0].snapshot_payload
+        raw = json.loads(payload)
+        assert raw["protocol"] == DurableSessionCodec.protocol
+        assert {"state", "address"} <= raw["mounts"][0].keys()
+        assert "snapshot" not in raw["mounts"][0]
+        assert "locator" not in raw["mounts"][0]
+        record = DurableSessionCodec.loads(payload)
         assert record.members == frozenset({7, 8})
         assert record.capacity == 3
-        assert record.protocol == 2
+        assert record.protocol == 3
         tasks.cancel_scope.cancel()
 
     async with anyio.create_task_group() as tasks:
@@ -652,6 +658,9 @@ async def test_a_protocol_1_record_recovers_unbounded_with_its_opener_as_member(
     stored = (await store.list())[0]
     snapshot = json.loads(stored.snapshot_payload)
     snapshot["protocol"] = 1
+    for mount in snapshot["mounts"]:
+        mount["snapshot"] = mount.pop("state")
+        mount["locator"] = mount.pop("address")
     del snapshot["members"], snapshot["capacity"]
     summary = json.loads(stored.summary_payload)
     del summary["members"]
@@ -676,7 +685,7 @@ async def test_a_protocol_1_record_recovers_unbounded_with_its_opener_as_member(
         # Recovery requests a checkpoint, which rewrites the record at the current protocol.
         await second.flush()
         upgraded = DurableSessionCodec.loads((await store.list())[0].snapshot_payload)
-        assert upgraded.protocol == 2
+        assert upgraded.protocol == 3
         tasks.cancel_scope.cancel()
 
 
