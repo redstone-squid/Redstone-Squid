@@ -15,7 +15,7 @@ import time
 import weakref
 from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager, nullcontext
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, is_dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, Protocol, cast, runtime_checkable
@@ -28,7 +28,7 @@ from squid_discord import live
 from squid_discord.access import AccessPolicy, Allowed, Denied, Owner
 from squid_discord.actions import ActionResponder
 from squid_discord.adapter import require_discord_py_target
-from squid_discord.attachments import files_for
+from squid_discord.attachments import attachment_assets, files_for
 from squid_discord.classic import compose as classic_compose
 from squid_discord.classic_renderer import ClassicRenderer
 from squid_discord.composition import Composition, compose
@@ -70,6 +70,7 @@ from squid_layouts.planning.navigation import (
     NavigationState,
     default_nav,
 )
+from squid_layouts.planning.planner import plan as plan_document
 from squid_layouts.primitives.nodes import Button, Node, Row
 from squid_layouts.profiling import (
     ActionResult,
@@ -634,6 +635,58 @@ class _Candidate:
         """
         return self.composition.presentation
 
+    @property
+    def plan(self) -> PlanResult:
+        return self.composition.plan
+
+
+@dataclass(slots=True)
+class _PlannedCandidate:
+    """A staged application render whose visible identity was checked before drawing."""
+
+    plan: PlanResult
+    tree: ComponentTree
+    handlers: dict[str, ActionBinding]
+    form_bindings: Mapping[str, FormBinding]
+    revision: int
+    assets: tuple[Asset, ...]
+    session_updates: tuple[SessionUpdate, ...]
+    settled: bool = False
+
+
+type _ApplicationCandidate = _Candidate | _PlannedCandidate
+
+
+def _drawn(candidate: _ApplicationCandidate) -> _Candidate:
+    if not isinstance(candidate, _Candidate):
+        message = "an undrawn preflight candidate did not match the live scene"
+        raise LayoutInvariantError(message)
+    return candidate
+
+
+def _scene_action_keys(document: scene.Document) -> tuple[str, ...]:
+    """Collect visible action references without allocating frontend controls."""
+    found: list[str] = []
+
+    def walk(value: object) -> None:
+        if isinstance(value, scene.Button | scene.Select | scene.EntitySelect):
+            found.append(value.action)
+            return
+        if is_dataclass(value) and not isinstance(value, type):
+            for item in fields(value):
+                walk(getattr(value, item.name))
+            return
+        if isinstance(value, Mapping):
+            for item in value.values():
+                walk(item)
+            return
+        if isinstance(value, Sequence) and not isinstance(value, str | bytes):
+            for item in value:
+                walk(item)
+
+    walk(document.body)
+    return tuple(found)
+
 
 @dataclass(slots=True)
 class _LifecycleCandidate:
@@ -886,6 +939,20 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         self.palette = palette
         self.chrome = localize_chrome(chrome, localization)
         self.nav = nav if nav is not None else default_nav
+
+        def planned_nav(state: NavigationState) -> Sequence[Node]:
+            async def previous(_event: PressEvent) -> None:
+                await self._move_cursor(state.key, -1)
+
+            async def next_(_event: PressEvent) -> None:
+                await self._move_cursor(state.key, 1)
+
+            async def seek(page: int) -> None:
+                self._seek_cursor(state.key, page)
+
+            return self.nav(NavigationContext(state, previous, next_, seek))
+
+        self._planned_nav = planned_nav
         self.runtime = ComponentRuntime(
             component,
             on_invalidate=self._mark_dirty,
@@ -988,6 +1055,9 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         self._hooks_fired = False
         self._assets: tuple[Asset, ...] = ()
         self._plan: PlanResult | None = None
+        self._document_tree: ComponentTree | None = None
+        self._document_status: TextLike | None = None
+        self._document: Document | None = None
         # What the committed generation read, what its single staged successor read, and what
         # this mount managed to subscribe to are three different things. A mount with no bus
         # still knows what it is looking at, which lets its own writes repaint it. A follow is
@@ -1029,7 +1099,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             if self._lifecycle is MountLifecycle.RENEWAL_ARMED:
                 candidate: _Candidate | None = None
                 try:
-                    candidate = await self._stage_loaded()
+                    candidate = cast(_Candidate, await self._stage_loaded())
                     wrote = await self._deliver(candidate, through=handle)
                 except Exception:
                     if candidate is not None:
@@ -1222,18 +1292,92 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         """
         return self._draw(self.runtime.render(), disabled=disabled)
 
+    def _document_for(self, tree: ComponentTree) -> Document:
+        """Build the authored document once for an identical runtime tree and status."""
+        if tree is self._document_tree and self.status == self._document_status and self._document is not None:
+            return self._document
+        nodes = tree.nodes if self.status is None else (*tree.nodes, Status(self.status))
+        document = Document(nodes, tree.assets, tree.document_key)
+        self._document_tree = tree
+        self._document_status = self.status
+        self._document = document
+        return document
+
+    def _plan_tree(self, tree: ComponentTree, profile: OperationRecorder | None) -> _PlannedCandidate:
+        """Plan one complete component tree without constructing Discord objects."""
+        context = profile.span("planner") if profile is not None else nullcontext(None)
+        with context as planner_span:
+            result = plan_document(
+                self._document_for(tree),
+                target=self.target,
+                chrome=self._chrome,
+                localization=self.localization,
+                palette=self.palette,
+                strict=self.strict,
+                nav=self._planned_nav,
+                session=self.presentation,
+                cache=self.runtime.plan_cache,
+                memo=self.runtime.plan_memo,
+            )
+            if planner_span is not None:
+                planner_span.set_attribute("cache_hit", result.metrics.cache_hit)
+                planner_span.set_attribute("reuse", result.metrics.reuse.value)
+                planner_span.set_attribute("states_explored", result.metrics.states_explored)
+                planner_span.set_attribute("search_fallback", result.metrics.search_fallback)
+        if profile is not None:
+            profile.increment("planner.calls")
+            profile.increment("planner.cache_hits", int(result.metrics.cache_hit))
+            profile.increment("planner.search_fallbacks", int(result.metrics.search_fallback))
+            profile.increment("planner.states_explored", result.metrics.states_explored)
+        if result.report.events:
+            logger.warning("layout degraded: %s", "; ".join(event.message for event in result.report.events))
+        handlers: dict[str, ActionBinding] = {}
+        for key in _scene_action_keys(result.scene):
+            binding = result.bindings.get(key)
+            if binding is None:
+                message = f"scene action {key!r} has no binding"
+                raise LayoutInvariantError(message)
+            handlers[key] = binding
+        return _PlannedCandidate(
+            result,
+            tree,
+            handlers,
+            result.form_bindings,
+            self.runtime.revision,
+            attachment_assets(result),
+            result.session_updates,
+        )
+
+    def _stage_observations(self, tree: ComponentTree) -> None:
+        observed = tree.observations
+        if observed and self._subscriptions.bus is None and not self._follow_warned:
+            self._follow_warned = True
+            logger.warning(
+                "mount %s renders shared state or a watched topic but its scheduler has no "
+                "topic bus, so changes made elsewhere will not refresh it",
+                self.id,
+            )
+        self._subscriptions.stage(observed)
+
     def _draw(
         self,
         tree: ComponentTree,
         *,
         disabled: bool = False,
         profile: OperationRecorder | None = None,
+        planned: _PlannedCandidate | None = None,
+        subscriptions_staged: bool = False,
     ) -> _Candidate:
         """Plan and draw one rendered tree into a candidate generation."""
+        if not subscriptions_staged:
+            self._stage_observations(tree)
+        try:
+            staged = planned if planned is not None else self._plan_tree(tree, profile)
+        except BaseException:
+            self._subscriptions.discard()
+            raise
         self._issued += 1
         generation = self._issued
-        nodes = tree.nodes if self.status is None else (*tree.nodes, Status(self.status))
-        rendered = Document(nodes, tree.assets, tree.document_key)
         handlers: dict[str, ActionBinding] = {}
 
         def draw() -> tuple[MountedView, Composition]:
@@ -1254,55 +1398,28 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     item.disabled = True  # pyrefly: ignore  # both wired types have the attribute
                 return item
 
-            def nav(state: NavigationState) -> Sequence[Node]:
-                async def previous(event: PressEvent) -> None:
-                    await self._move_cursor(state.key, -1)
-
-                async def next_(event: PressEvent) -> None:
-                    await self._move_cursor(state.key, 1)
-
-                async def seek(page: int) -> None:
-                    self._seek_cursor(state.key, page)
-
-                # A materialized cursor always knows its own extent, so it can always seek.
-                return self.nav(NavigationContext(state, previous, next_, seek))
-
-            composition = self._composer()(
-                rendered,
-                wire=wire,
-                renderer=self._renderer(self._remaining_timeout()),
-                target=self.target,
-                chrome=self._chrome,
-                localization=self.localization,
-                palette=self.palette,
-                strict=self.strict,
-                nav=nav,
-                session=self.presentation,
-                cache=self.runtime.plan_cache,
-                memo=self.runtime.plan_memo,
-                profile=profile,
-            )
+            renderer = self._renderer(self._remaining_timeout())
+            context = profile.span("renderer") if profile is not None else nullcontext()
+            with context:
+                presentation = cast(Any, renderer).draw(staged.plan.scene, plan=staged.plan, wire=wire)
+            composition = Composition(presentation, staged.plan)
             view = composition.presentation.view
             if not isinstance(view, MountedView | ClassicMountedView):
                 message = "mounted Discord renderer returned the wrong view type"
                 raise TypeError(message)
             return view, composition
 
-        observed = tree.observations
-        if observed and self._subscriptions.bus is None and not self._follow_warned:
-            self._follow_warned = True
-            logger.warning(
-                "mount %s renders shared state or a watched topic but its scheduler has no "
-                "topic bus, so changes made elsewhere will not refresh it",
-                self.id,
-            )
-        self._subscriptions.stage(observed)
         try:
             view, composition = draw()
         except BaseException:
             self._subscriptions.discard()
             raise
         assets = composition.assets
+        if handlers.keys() != staged.handlers.keys() or assets != staged.assets:
+            self._subscriptions.discard()
+            view.stop()
+            message = "Discord drawing changed the planned action or attachment shape"
+            raise LayoutInvariantError(message)
         if disabled:
             _disable_all(view)
         return _Candidate(
@@ -1316,6 +1433,23 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             assets,
             composition.plan.session_updates,
         )
+
+    def _preflight(
+        self,
+        tree: ComponentTree,
+        *,
+        profile: OperationRecorder | None = None,
+    ) -> _ApplicationCandidate:
+        """Plan first, returning an undrawn candidate only when the live scene already matches."""
+        self._stage_observations(tree)
+        try:
+            planned = self._plan_tree(tree, profile)
+        except BaseException:
+            self._subscriptions.discard()
+            raise
+        if self._same_as_live(planned):
+            return planned
+        return self._draw(tree, profile=profile, planned=planned, subscriptions_staged=True)
 
     def _draw_renewal(self, *, disabled: bool = False, profile: OperationRecorder | None = None) -> _LifecycleCandidate:
         """Plan the compact framework-owned renewal generation without rendering the component."""
@@ -1480,7 +1614,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         self._commit_render(candidate)
         self._commit_delivery(candidate)
 
-    def _settle(self, candidate: _Candidate, ending: str) -> None:
+    def _settle(self, candidate: _ApplicationCandidate, ending: str) -> None:
         """Record that `candidate` has reached its one ending, refusing a second.
 
         The discipline `_Subscriptions.commit`/`discard` already keeps for the reactive
@@ -1491,7 +1625,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             raise LayoutInvariantError(message)
         candidate.settled = True
 
-    def _commit_render(self, candidate: _Candidate) -> None:
+    def _commit_render(self, candidate: _ApplicationCandidate) -> None:
         """Commit the candidate's application runtime; what the reader sees is untouched.
 
         `session_updates` apply here too: planning's clamps describe the scene that is on
@@ -1504,7 +1638,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         self.runtime.commit(candidate.tree, rendered_revision=candidate.revision)
         self._handlers = candidate.handlers
         self._form_bindings = candidate.form_bindings
-        self._plan = candidate.composition.plan
+        self._plan = candidate.plan
         self._dirty = self.runtime.dirty
         self._pending = None
 
@@ -1519,7 +1653,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         # so the first moment it is worth listing as live. Idempotent after the first.
         live.track(self)
 
-    def _same_as_live(self, candidate: _Candidate) -> bool:
+    def _same_as_live(self, candidate: _ApplicationCandidate) -> bool:
         """Whether delivering `candidate` would show the reader exactly what is already there.
 
         Decided at the scene, which is generation-free; control ids are minted at draw time,
@@ -1531,13 +1665,13 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         plan = self._plan
         if plan is None or self._lifecycle is not MountLifecycle.ACTIVE:
             return False
-        if candidate.composition.plan.report.scene_fingerprint != plan.report.scene_fingerprint:
+        if candidate.plan.report.scene_fingerprint != plan.report.scene_fingerprint:
             return False
         if candidate.assets != self._assets:
             return False
         return candidate.handlers.keys() == self._handlers.keys()
 
-    def _suppress(self, candidate: _Candidate, profile: OperationRecorder | None) -> None:
+    def _suppress(self, candidate: _ApplicationCandidate, profile: OperationRecorder | None) -> None:
         """Commit a render the reader already has, without an edit and without a new generation.
 
         The live generation keeps its control ids, so a click already in flight still lands.
@@ -1545,7 +1679,8 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         presentation observers are not because nothing visible moved.
         """
         self._commit_render(candidate)
-        candidate.view.stop()
+        if isinstance(candidate, _Candidate):
+            candidate.view.stop()
         self._notify_committed()
         self._suppressed += 1
         if profile is not None:
@@ -1667,7 +1802,8 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         *,
         disabled: bool = False,
         profile: OperationRecorder | None = None,
-    ) -> _Candidate:
+        preflight: bool = False,
+    ) -> _ApplicationCandidate:
         """Stage a candidate whose components and atomic resources are settled.
 
         One pass per embedding tier: the root is known without rendering anything, and each
@@ -1716,6 +1852,8 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     ):
                         await self._settle_resources(atomic)
                 continue
+            if preflight and not disabled:
+                return self._preflight(tree, profile=profile)
             return self._draw(tree, disabled=disabled, profile=profile)
         message = f"mount {self.id}: component and resource loading did not settle in {_MAX_LOAD_PASSES} passes"
         raise LayoutInvariantError(message)
@@ -1743,7 +1881,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
 
     async def _settle_visible(
         self,
-        committed: _Candidate,
+        committed: _ApplicationCandidate,
         *,
         through: deliver.EditHandle | None = None,
         profile: OperationRecorder | None = None,
@@ -1824,22 +1962,25 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
 
     async def _present_async_update(
         self,
-        committed: _Candidate,
+        committed: _ApplicationCandidate,
         *,
         through: deliver.EditHandle | None,
         profile: OperationRecorder | None,
-    ) -> _Candidate | None:
+    ) -> _ApplicationCandidate | None:
         """Present the latest coalesced status of async bindings, if it changed the scene."""
-        candidate: _Candidate | None = None
+        candidate: _ApplicationCandidate | None = None
         try:
-            candidate = await self._stage_loaded(profile=profile)
+            candidate = await self._stage_loaded(profile=profile, preflight=True)
             if self._same_as_live(candidate):
                 self._suppress(candidate, profile)
                 return candidate
+            candidate = _drawn(candidate)
             wrote = await self._deliver(candidate, through=through, profile=profile)
         except Exception:
-            if candidate is not None:
+            if isinstance(candidate, _Candidate):
                 self._rollback(candidate)
+            elif candidate is not None:
+                self._subscriptions.discard()
             logger.exception("mount %s could not deliver an async binding update", self.id)
             return None
         if wrote is None:
@@ -1898,7 +2039,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                         self._subscriptions.discard()
                 # Component on_load and atomic resources settle first. Visible resources
                 # deliberately make this the pending paint and settle after it commits.
-                candidate = await self._stage_loaded(profile=profile)
+                candidate = cast(_Candidate, await self._stage_loaded(profile=profile))
                 try:
                     destination_type = f"{type(destination).__module__}.{type(destination).__qualname__}"
                     with profile.span("discord_write", attributes={"destination": destination_type}):
@@ -2130,7 +2271,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                 self._handle = source
                 candidate: _Candidate | None = None
                 try:
-                    candidate = await self._stage_loaded(profile=profile.operation)
+                    candidate = cast(_Candidate, await self._stage_loaded(profile=profile.operation))
                     wrote = await self._deliver(candidate, through=source, profile=profile.operation)
                 except Exception as error:
                     if candidate is not None:
@@ -2865,7 +3006,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             elif self._lifecycle is MountLifecycle.ACTIVE:
                 # A component cannot enter the tree without a state write, so a click that
                 # changed nothing never reaches this at all.
-                candidate = await self._stage_loaded(profile=operation)
+                candidate = await self._stage_loaded(profile=operation, preflight=True)
                 source = self._source(interaction, resumed=dispatch is not None and dispatch.resumed)
                 if self._same_as_live(candidate):
                     with operation.span("suppress"):
@@ -2876,6 +3017,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     # their own comparison.
                     await self._settle_visible(candidate, through=source, profile=operation)
                 else:
+                    candidate = _drawn(candidate)
                     try:
                         wrote = await self._deliver(candidate, through=source, profile=operation)
                     except Exception:
@@ -2999,13 +3141,14 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     self._dirty = True
                     profile.set_result(TraceResult(TraceStatus.ABANDONED, presentation=PresentationStatus.ABANDONED))
                     return PresentationStatus.ABANDONED
-                candidate = await self._stage_loaded(profile=profile)
+                candidate = await self._stage_loaded(profile=profile, preflight=True)
                 if self._same_as_live(candidate):
                     with profile.span("suppress"):
                         self._suppress(candidate, profile)
                     await self._settle_visible(candidate, profile=profile)
                     profile.set_result(TraceResult(TraceStatus.COMPLETED, presentation=PresentationStatus.UNCHANGED))
                     return PresentationStatus.UNCHANGED
+                candidate = _drawn(candidate)
                 try:
                     delivered = await self._deliver(candidate, profile=profile) is not None
                 except Exception:

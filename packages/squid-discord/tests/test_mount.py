@@ -499,6 +499,7 @@ class TestDispatchProfiling:
         planner = next(span for span in trace.spans if span.name == "planner")
         assert {attribute.key for attribute in planner.attributes} == {
             "cache_hit",
+            "reuse",
             "states_explored",
             "search_fallback",
         }
@@ -2287,6 +2288,22 @@ class TestSend:
         await mount.dispatch("same", fake_interaction(), generation=generation)
 
         assert component.invoked == [1]
+
+    async def test_identical_refresh_is_suppressed_before_renderer_or_generation(self, monkeypatch) -> None:
+        mount = Mount(Counter(), access=Everyone(), timeout=None)
+        message: Any = fake_message()
+        await mount.send(_Destination(message))
+        issued = mount._issued
+
+        def unexpected_renderer(_timeout):
+            message = "an identical refresh must not construct a renderer"
+            raise AssertionError(message)
+
+        monkeypatch.setattr(mount, "_renderer", unexpected_renderer)
+
+        assert await mount.refresh() is PresentationStatus.UNCHANGED
+        assert mount._issued == issued
+        assert message.edit.await_count == 0
 
     async def test_suppression_publishes_runtime_only_action_semantics(self) -> None:
         class Guarded(Component):
