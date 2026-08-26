@@ -25,70 +25,70 @@ from squid_layouts.temporal import ZonedDateTime
 
 
 @dataclass(slots=True)
-class RText:
+class MeasuredText:
     content: str = ""
     dropped: bool = False
 
 
 @dataclass(frozen=True, slots=True)
-class RTime:
+class MeasuredTime:
     instant: datetime
     style: str
     prefix: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
-class RZonedTime:
+class MeasuredZonedTime:
     value: ZonedDateTime
     prefix: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
-class RSection:
-    texts: list[RText]
+class MeasuredSection:
+    texts: list[MeasuredText]
     accessory: Thumbnail | LinkButton | PremiumButton | RoutedButton | RawItem
 
 
 @dataclass(frozen=True, slots=True)
-class RPanel:
+class MeasuredPanel:
     children: list[Realized]
     accent: Color | None
     spoiler: bool = False
 
 
 @dataclass(frozen=True, slots=True)
-class RGroup:
+class MeasuredGroup:
     """A transparent realized group removed before scene conversion."""
 
     children: list[Realized]
 
 
 @dataclass(frozen=True, slots=True)
-class RContent:
+class MeasuredContent:
     """The realized `content` field, whose text was allocated from its own pool."""
 
-    slot: RText
+    slot: MeasuredText
 
 
 @dataclass(frozen=True, slots=True)
-class RCardField:
-    name: RText
-    value: RText
+class MeasuredCardField:
+    name: MeasuredText
+    value: MeasuredText
     inline: bool
 
 
 @dataclass(frozen=True, slots=True)
-class RCard:
+class MeasuredCard:
     """One realized embed. Every slot already holds its final, allocated string."""
 
-    title: RText | None
+    title: MeasuredText | None
     url: str | None
     blocks: list[Realized]
     """Description blocks, joined by the dialect once their text is allocated."""
-    fields: list[RCardField]
-    footer: RText | None
+    fields: list[MeasuredCardField]
+    footer: MeasuredText | None
     footer_icon: str | None
-    author: RText | None
+    author: MeasuredText | None
     author_url: str | None
     author_icon: str | None
     accent: Color | None
@@ -98,14 +98,14 @@ class RCard:
 
 
 type Realized = (
-    RText
-    | RTime
-    | RZonedTime
-    | RSection
-    | RPanel
-    | RGroup
-    | RCard
-    | RContent
+    MeasuredText
+    | MeasuredTime
+    | MeasuredZonedTime
+    | MeasuredSection
+    | MeasuredPanel
+    | MeasuredGroup
+    | MeasuredCard
+    | MeasuredContent
     | File
     | Sep
     | Row
@@ -126,11 +126,11 @@ class Pager:
     """Page state for one keyed Paginate node that overflowed."""
 
     key: str
-    slot: RText
+    slot: MeasuredText
     prefix: str
     suffix: str
     fragments: list[str]
-    footer_slot: RText
+    footer_slot: MeasuredText
     footer: Callable[[int, int], str]
     axis: str = Axis.DISPLAY_TEXT
     """The text pool this pager's body and footer draw from."""

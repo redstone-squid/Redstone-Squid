@@ -18,11 +18,11 @@ from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursor
 from squid_layouts.planning.dialect import SceneBindings
 from squid_layouts.planning.identity import stable_fingerprint
 from squid_layouts.planning.layout_measurement.model import (
-    RCard,
-    RContent,
+    MeasuredCard,
+    MeasuredContent,
+    MeasuredGroup,
+    MeasuredText,
     Realized,
-    RGroup,
-    RText,
 )
 from squid_layouts.planning.layout_measurement.solver import (
     MeasuredLayout,
@@ -296,11 +296,11 @@ class _ClassicConverter:
         for index, child in enumerate(children):
             here = f"{path}{index}"
             match child:
-                case RContent(slot=slot):
+                case MeasuredContent(slot=slot):
                     self.content = slot.content or None
-                case RCard():
+                case MeasuredCard():
                     self.embeds.append(self._embed(child))
-                case RGroup(children=inner):
+                case MeasuredGroup(children=inner):
                     self.convert(inner, f"{here}.")
                 case Row(items=items):
                     self.rows.append(
@@ -368,7 +368,7 @@ class _ClassicConverter:
                     message = f"{here}: {type(child).__name__} cannot appear in a classic message"
                     raise LayoutInvariantError(message)
 
-    def _embed(self, card: RCard) -> scene.Embed:
+    def _embed(self, card: MeasuredCard) -> scene.Embed:
         description = BLOCK_JOIN.join(text for block in card.blocks if (text := _block_text(block)))
         return scene.Embed(
             title=_text(card.title),
@@ -392,16 +392,16 @@ class _ClassicConverter:
 
 def _block_text(block: Realized) -> str:
     match block:
-        case RText(content=content, dropped=False):
+        case MeasuredText(content=content, dropped=False):
             return content
-        case RGroup(children=children):
+        case MeasuredGroup(children=children):
             return BLOCK_JOIN.join(text for child in children if (text := _block_text(child)))
         case _:
             message = f"{type(block).__name__} cannot appear in a card description"
             raise LayoutInvariantError(message)
 
 
-def _text(slot: RText | None) -> str | None:
+def _text(slot: MeasuredText | None) -> str | None:
     """An embed value, or None where it is empty. Discord trims these server-side anyway."""
     if slot is None or slot.dropped:
         return None
