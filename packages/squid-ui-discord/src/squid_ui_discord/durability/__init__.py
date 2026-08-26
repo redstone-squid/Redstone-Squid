@@ -27,7 +27,7 @@ from squid_storage import (
     PostgresSessionStore,
     PostgresTopicBridge,
     SQLiteSessionStore,
-    StoredSessionRecord,
+    SessionRecord,
     TopicBridgeSnapshot,
 )
 
@@ -69,7 +69,7 @@ __all__ = [
     "RestoreContext",
     "SQLiteSessionStore",
     "SessionMountRecord",
-    "StoredSessionRecord",
+    "SessionRecord",
     "TargetRegistry",
     "TopicBridgeSnapshot",
     "Unreachable",
