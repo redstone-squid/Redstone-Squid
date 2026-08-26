@@ -12,7 +12,7 @@ _MAX_ENVELOPE_BYTES = 1_500_000
 
 
 @dataclass(frozen=True, slots=True)
-class ReplicatedUpdate:
+class ReplicationUpdate:
     """A routed, integrity-checked backend update safe to hand to an application transport."""
 
     document_id: str
@@ -32,7 +32,7 @@ class ReplicatedUpdate:
         source_replica_id: str,
         payload: bytes,
         origin_action_id: uuid.UUID | None,
-    ) -> ReplicatedUpdate:
+    ) -> ReplicationUpdate:
         return cls(document_id, backend_id, source_replica_id, uuid.uuid7(), payload, origin_action_id)
 
     def encode(self) -> bytes:
@@ -54,7 +54,7 @@ class ReplicatedUpdate:
         return encoded
 
     @classmethod
-    def decode(cls, encoded: bytes) -> ReplicatedUpdate:
+    def decode(cls, encoded: bytes) -> ReplicationUpdate:
         """Decode and verify an untrusted envelope before it reaches the commit gate."""
         if len(encoded) > _MAX_ENVELOPE_BYTES:
             message = "replicated envelope exceeds the maximum encoded size"
@@ -84,4 +84,4 @@ class ReplicatedUpdate:
         return cls(body["document"], body["backend"], body["source_replica"], update_id, payload, origin)
 
 
-__all__ = ["ReplicatedUpdate"]
+__all__ = ["ReplicationUpdate"]

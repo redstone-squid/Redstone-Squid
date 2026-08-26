@@ -25,7 +25,7 @@ class OperationId:
 
 
 @dataclass(frozen=True, slots=True)
-class FakeOperation:
+class ReferenceOperation:
     identity: OperationId
     kind: str
     path: str
@@ -36,12 +36,12 @@ class FakeOperation:
 
 
 @dataclass(frozen=True, slots=True)
-class FakeVersion:
+class ReferenceVersion:
     operations: frozenset[OperationId]
 
 
 @dataclass(frozen=True, slots=True)
-class FakeSnapshot:
+class ReferenceSnapshot:
     counters: tuple[tuple[str, int], ...]
     sets: tuple[tuple[str, frozenset[str]], ...]
 
@@ -53,50 +53,50 @@ class FakeSnapshot:
 
 
 @dataclass(frozen=True, slots=True)
-class PreparedFakeUpdate:
-    base: FakeVersion | None
-    operations: tuple[FakeOperation, ...]
+class PreparedReferenceUpdate:
+    base: ReferenceVersion | None
+    operations: tuple[ReferenceOperation, ...]
 
 
 @dataclass(frozen=True, slots=True)
-class FakeChange:
-    operations: tuple[FakeOperation, ...]
+class ReferenceChange:
+    operations: tuple[ReferenceOperation, ...]
 
 
-class FakeBranch:
-    def __init__(self, engine: FakeEngine) -> None:
+class ReferenceBranch:
+    def __init__(self, engine: ReferenceEngine) -> None:
         self._engine = engine
         self._base = engine.version()
-        self._operations: list[FakeOperation] = []
+        self._operations: list[ReferenceOperation] = []
 
     @property
-    def base(self) -> FakeVersion:
+    def base(self) -> ReferenceVersion:
         return self._base
 
     @property
-    def operations(self) -> tuple[FakeOperation, ...]:
+    def operations(self) -> tuple[ReferenceOperation, ...]:
         return tuple(self._operations)
 
-    def apply(self, operation: FakeOperation) -> None:
+    def apply(self, operation: ReferenceOperation) -> None:
         self._operations.append(operation)
 
-    def snapshot(self) -> FakeSnapshot:
+    def snapshot(self) -> ReferenceSnapshot:
         return self._engine.snapshot_with(self._operations)
 
-    def prepare(self, base: object) -> PreparedFakeUpdate:
-        assert isinstance(base, FakeVersion)
-        return PreparedFakeUpdate(base, tuple(self._operations))
+    def prepare(self, base: object) -> PreparedReferenceUpdate:
+        assert isinstance(base, ReferenceVersion)
+        return PreparedReferenceUpdate(base, tuple(self._operations))
 
 
-class FakeEngine:
+class ReferenceEngine:
     """A deterministic convergent operation set used to prove Squid integration semantics."""
 
-    backend_id = "squid-fake-v1"
+    backend_id = "squid-reference-v1"
 
     def __init__(self, replica_id: str) -> None:
         self.replica_id = replica_id
         self._next_sequence = 0
-        self._operations: dict[OperationId, FakeOperation] = {}
+        self._operations: dict[OperationId, ReferenceOperation] = {}
 
     def operation(
         self,
@@ -105,20 +105,20 @@ class FakeEngine:
         value: str | int,
         tags: tuple[OperationId, ...] = (),
         undoes: OperationId | None = None,
-    ) -> FakeOperation:
+    ) -> ReferenceOperation:
         self._next_sequence += 1
-        return FakeOperation(OperationId(self.replica_id, self._next_sequence), kind, path, value, tags, undoes)
+        return ReferenceOperation(OperationId(self.replica_id, self._next_sequence), kind, path, value, tags, undoes)
 
-    def version(self) -> FakeVersion:
-        return FakeVersion(frozenset(self._operations))
+    def version(self) -> ReferenceVersion:
+        return ReferenceVersion(frozenset(self._operations))
 
-    def branch(self) -> FakeBranch:
-        return FakeBranch(self)
+    def branch(self) -> ReferenceBranch:
+        return ReferenceBranch(self)
 
-    def snapshot(self) -> FakeSnapshot:
+    def snapshot(self) -> ReferenceSnapshot:
         return self.snapshot_with(())
 
-    def snapshot_with(self, additions: tuple[FakeOperation, ...] | list[FakeOperation]) -> FakeSnapshot:
+    def snapshot_with(self, additions: tuple[ReferenceOperation, ...] | list[ReferenceOperation]) -> ReferenceSnapshot:
         operations = {**self._operations, **{operation.identity: operation for operation in additions}}
         ordered = sorted(operations.values(), key=lambda item: item.identity)
         counters: dict[str, int] = {}
@@ -135,12 +135,12 @@ class FakeEngine:
         for (path, value), tags in added.items():
             if any(not standing.get(tag) for tag in tags):
                 sets.setdefault(path, set()).add(value)
-        return FakeSnapshot(
+        return ReferenceSnapshot(
             tuple(sorted(counters.items())),
             tuple((path, frozenset(values)) for path, values in sorted(sets.items())),
         )
 
-    def visible_tags(self, path: str, value: str, additions: tuple[FakeOperation, ...] = ()) -> tuple[OperationId, ...]:
+    def visible_tags(self, path: str, value: str, additions: tuple[ReferenceOperation, ...] = ()) -> tuple[OperationId, ...]:
         operations = {**self._operations, **{operation.identity: operation for operation in additions}}
         standing = self._standing_removals(operations.values())
         return tuple(
@@ -152,7 +152,7 @@ class FakeEngine:
             and not standing.get(operation.identity)
         )
 
-    def _standing_removals(self, operations: Iterable[FakeOperation]) -> dict[OperationId, set[OperationId]]:
+    def _standing_removals(self, operations: Iterable[ReferenceOperation]) -> dict[OperationId, set[OperationId]]:
         """Map each removed add-tag to the removals still standing against it.
 
         A tag is live when its entry is empty or absent. Keyed by which removal killed it
@@ -170,7 +170,7 @@ class FakeEngine:
                 reversed_removals.add(operation.undoes)
         return {tag: killers - reversed_removals for tag, killers in removals.items()}
 
-    def apply(self, prepared: PreparedFakeUpdate) -> FakeChange:
+    def apply(self, prepared: PreparedReferenceUpdate) -> ReferenceChange:
         # Checked before anything is recorded, so a rejected update leaves the log untouched.
         for operation in prepared.operations:
             existing = self._operations.get(operation.identity)
@@ -184,32 +184,32 @@ class FakeEngine:
                 # would otherwise re-mint identities its peers already hold, and the duplicate
                 # dropped as already-known is its own new work rather than the stale copy.
                 self._next_sequence = max(self._next_sequence, operation.identity.sequence)
-        return FakeChange(prepared.operations)
+        return ReferenceChange(prepared.operations)
 
-    def prepare_remote(self, update: bytes) -> PreparedFakeUpdate:
+    def prepare_remote(self, update: bytes) -> PreparedReferenceUpdate:
         operations = self._decode_envelope(update, kind="update")
-        return PreparedFakeUpdate(None, operations)
+        return PreparedReferenceUpdate(None, operations)
 
-    def encode_token(self, operations: tuple[FakeOperation, ...]) -> bytes:
+    def encode_token(self, operations: tuple[ReferenceOperation, ...]) -> bytes:
         """Encode one action's opaque change token for durable history tests."""
         return self._encode_envelope("history-token", operations)
 
-    def decode_token(self, token: bytes) -> tuple[FakeOperation, ...]:
+    def decode_token(self, token: bytes) -> tuple[ReferenceOperation, ...]:
         """Decode a schema-checked action token without applying it."""
         return self._decode_envelope(token, kind="history-token")
 
     def export_since(self, version: object | None = None) -> bytes:
-        known = version.operations if isinstance(version, FakeVersion) else frozenset()
+        known = version.operations if isinstance(version, ReferenceVersion) else frozenset()
         operations = tuple(
             operation for identity, operation in sorted(self._operations.items()) if identity not in known
         )
         return self._encode_envelope("update", operations)
 
-    def encode_update(self, operations: tuple[FakeOperation, ...]) -> bytes:
+    def encode_update(self, operations: tuple[ReferenceOperation, ...]) -> bytes:
         """Encode exactly one committed participant change for outbound transport."""
         return self._encode_envelope("update", operations)
 
-    def _decode_envelope(self, data: bytes, *, kind: str) -> tuple[FakeOperation, ...]:
+    def _decode_envelope(self, data: bytes, *, kind: str) -> tuple[ReferenceOperation, ...]:
         if len(data) > _MAX_UPDATE_BYTES:
             message = "replicated update exceeds the maximum encoded size"
             raise ValueError(message)
@@ -224,8 +224,8 @@ class FakeEngine:
         if not isinstance(encoded, list) or len(encoded) > _MAX_OPERATIONS:
             message = "replicated update has an invalid operation collection"
             raise ValueError(message)
-        operations: list[FakeOperation] = []
-        identities: dict[OperationId, FakeOperation] = {}
+        operations: list[ReferenceOperation] = []
+        identities: dict[OperationId, ReferenceOperation] = {}
         for item in encoded:
             if not isinstance(item, dict):
                 message = "replicated operation must be an object"
@@ -239,7 +239,7 @@ class FakeEngine:
             operations.append(operation)
         return tuple(operations)
 
-    def _decode_operation(self, item: dict[str, Any]) -> FakeOperation:
+    def _decode_operation(self, item: dict[str, Any]) -> ReferenceOperation:
         identity = OperationId.decode(item["id"])
         kind = item["kind"]
         path = item["path"]
@@ -264,7 +264,7 @@ class FakeEngine:
         if (kind == "restore") != (undoes is not None):
             message = "replicated operation names a reversed removal it does not match"
             raise ValueError(message)
-        return FakeOperation(
+        return ReferenceOperation(
             identity,
             kind,
             path,
@@ -273,7 +273,7 @@ class FakeEngine:
             None if undoes is None else OperationId.decode(undoes),
         )
 
-    def _encode_envelope(self, kind: str, operations: tuple[FakeOperation, ...]) -> bytes:
+    def _encode_envelope(self, kind: str, operations: tuple[ReferenceOperation, ...]) -> bytes:
         payload = {
             "backend": self.backend_id,
             "schema": 1,
