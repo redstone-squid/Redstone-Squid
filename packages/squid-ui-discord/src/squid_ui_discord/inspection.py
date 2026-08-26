@@ -174,7 +174,7 @@ def cost(*items: discord.ui.Item[Any]) -> ResourceCost:
             components += 1
             if isinstance(child, discord.ui.TextDisplay):
                 text += len(child.content)
-    return ResourceCost({"components": components, "display_text": text})
+    return ResourceCost({Axis.COMPONENTS: components, Axis.DISPLAY_TEXT: text})
 
 
 def measure(

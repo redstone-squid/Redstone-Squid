@@ -20,7 +20,7 @@ class TextUnit:
     node: TextBearing
     slot: MeasuredText
     index: int
-    axis: str
+    axis: Axis
     """Which message-wide text pool this unit draws from."""
     prefix: str
     suffix: str
@@ -70,7 +70,7 @@ def _escape_fences(content: str) -> str:
     return content.replace("```", "``\N{ZERO WIDTH SPACE}`")
 
 
-def make_unit(node: TextBearing, slot: MeasuredText, index: int, axis: str = Axis.DISPLAY_TEXT) -> TextUnit | None:
+def make_unit(node: TextBearing, slot: MeasuredText, index: int, axis: Axis = Axis.DISPLAY_TEXT) -> TextUnit | None:
     """Create the allocation unit for one text-bearing primitive."""
     prefix, suffix, ladders, join = "", "", None, "\n"
     ranks: tuple[int, ...] = ()

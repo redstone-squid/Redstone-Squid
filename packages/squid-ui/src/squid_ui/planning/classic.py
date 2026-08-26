@@ -230,7 +230,7 @@ def _paginate(
     nodes: Sequence[Node],
     *,
     key: str,
-    capacities: Mapping[str, int],
+    capacities: Mapping[Axis, int],
     limits: ClassicLimits,
     chrome: Chrome,
     nav: PlannedNav,
