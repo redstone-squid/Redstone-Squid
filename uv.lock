@@ -12,7 +12,7 @@ nucleation = "2026-08-16T00:00:00Z"
 [manifest]
 members = [
     "redstone-squid",
-    "squid-discord",
+    "squid-ui-discord",
     "squid-ui",
     "squid-ui-widgets",
     "squid-reactivity",
@@ -2314,7 +2314,7 @@ dependencies = [
     { name = "rapidfuzz" },
     { name = "redis" },
     { name = "sqlalchemy", extra = ["postgresql-asyncpg", "postgresql-psycopg2binary"] },
-    { name = "squid-discord" },
+    { name = "squid-ui-discord" },
     { name = "squid-ui" },
     { name = "squid-ui-widgets" },
     { name = "squid-replication" },
@@ -2399,7 +2399,7 @@ requires-dist = [
     { name = "rapidfuzz", specifier = ">=3.13.0" },
     { name = "redis", specifier = ">=8,<9" },
     { name = "sqlalchemy", extras = ["postgresql-asyncpg", "postgresql-psycopg2binary"], specifier = ">=2.0.41" },
-    { name = "squid-discord", editable = "packages/squid-discord" },
+    { name = "squid-ui-discord", editable = "packages/squid-ui-discord" },
     { name = "squid-ui", editable = "packages/squid-ui" },
     { name = "squid-ui-widgets", editable = "packages/squid-ui-widgets" },
     { name = "squid-replication", editable = "packages/squid-replication" },
@@ -2716,9 +2716,9 @@ postgresql-psycopg2binary = [
 ]
 
 [[package]]
-name = "squid-discord"
+name = "squid-ui-discord"
 version = "0.1.0"
-source = { editable = "packages/squid-discord" }
+source = { editable = "packages/squid-ui-discord" }
 dependencies = [
     { name = "anyio" },
     { name = "discord-py" },

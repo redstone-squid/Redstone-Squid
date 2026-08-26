@@ -10,7 +10,7 @@ import discord
 from discord import Message, app_commands
 from discord.ext.commands import Cog
 
-import squid_discord as sd
+import squid_ui_discord as sd
 import squid_ui as sl
 from squid.accounts.domain import IdentityProvider
 from squid.bot.consent import ensure_consented_account

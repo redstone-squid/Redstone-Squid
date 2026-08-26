@@ -66,7 +66,7 @@ import sys
 
 class BlockTransport(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
-        if fullname.split(".", 1)[0] in {"discord", "anyio", "squid_storage", "squid_discord"}:
+        if fullname.split(".", 1)[0] in {"discord", "anyio", "squid_storage", "squid_ui_discord"}:
             raise ModuleNotFoundError(fullname)
         return None
 
@@ -74,7 +74,7 @@ sys.meta_path.insert(0, BlockTransport())
 import squid_ui_widgets
 assert squid_ui_widgets.Wizard
 assert squid_ui_widgets.guards.confirm
-assert not {"discord", "anyio", "squid_storage", "squid_discord"} & set(sys.modules)
+assert not {"discord", "anyio", "squid_storage", "squid_ui_discord"} & set(sys.modules)
 """
     subprocess.run([sys.executable, "-c", code], check=True)
 

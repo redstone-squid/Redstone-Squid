@@ -5,9 +5,9 @@ from typing import Any, cast
 
 import discord
 
-import squid_discord as sd
+import squid_ui_discord as sd
 from squid.bot.voting.poll_wizard import POLL_SCREEN, PollConfirmationComponent, PollDraft
-from squid_discord.testing import delivered_to, fake_interaction, fake_message
+from squid_ui_discord.testing import delivered_to, fake_interaction, fake_message
 from tests.helpers.discord import make_layout_bot
 from tests.helpers.voting import GENERIC_OPTIONS
 

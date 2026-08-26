@@ -32,7 +32,7 @@ dependencies = [
     "cryptography>=50,<51",
     "beartype>=0.19.0",
     "rapidfuzz>=3.13.0",
-    "squid-discord",
+    "squid-ui-discord",
     "squid-ui",
     "squid-ui-widgets",
     "squid-replication",
@@ -126,7 +126,7 @@ packages = []
 members = ["packages/*"]
 
 [tool.uv.sources]
-squid-discord = { workspace = true }
+squid-ui-discord = { workspace = true }
 squid-ui = { workspace = true }
 squid-ui-widgets = { workspace = true }
 squid-reactivity = { workspace = true }
@@ -282,7 +282,7 @@ ignore = [
 [tool.ruff.lint.isort]
 # The workspace member's src layout is outside ruff's first-party detection at the repo root.
 known-first-party = [
-    "squid_discord",
+    "squid_ui_discord",
     "squid_ui",
     "squid_ui_widgets",
     "squid_reactivity",
@@ -399,7 +399,7 @@ testpaths = [
     "packages/squid-reactivity/tests",
     "packages/squid-storage/tests",
     "packages/squid-ui/tests",
-    "packages/squid-discord/tests",
+    "packages/squid-ui-discord/tests",
     "packages/squid-ui-widgets/tests",
     "packages/squid-replication/tests",
 ]
@@ -417,7 +417,7 @@ addopts = [
     "--cov=squid_storage",
     "--cov=squid_ui",
     "--cov=squid_replication",
-    "--cov=squid_discord",
+    "--cov=squid_ui_discord",
     "--cov=squid_ui_widgets",
 ]
 # https://docs.pytest.org/en/stable/how-to/capture-warnings.html#controlling-warnings

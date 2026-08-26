@@ -16,7 +16,7 @@ from typing import Any, Literal
 import discord
 from discord.ext.commands import Context
 
-import squid_discord as sd
+import squid_ui_discord as sd
 import squid_ui as ui
 from squid.core.i18n import catalog_for, negotiate_locale
 

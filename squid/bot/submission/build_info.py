@@ -3,7 +3,7 @@
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
-import squid_discord as sd
+import squid_ui_discord as sd
 import squid_ui as sl
 from squid.bot.i18n import t
 from squid.bot.routes.builds import build_edit

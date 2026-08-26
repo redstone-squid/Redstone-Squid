@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Literal, cast, override
 import discord
 from discord.utils import escape_markdown
 
-import squid_discord as sd
+import squid_ui_discord as sd
 import squid_ui as sl
 from squid.bot._types import GuildMessageable
 from squid.bot.ui import (

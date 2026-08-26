@@ -3,7 +3,7 @@
 from discord.ext.commands import Context
 
 import squid.bot.app
-import squid_discord as sd
+import squid_ui_discord as sd
 
 
 async def _authorized(ctx: Context[squid.bot.app.RedstoneSquid]) -> bool:

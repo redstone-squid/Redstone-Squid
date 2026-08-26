@@ -9,7 +9,7 @@ package prevents known target-limit violations before delivery: views describe *
 every markdown prefix and code fence exactly, allocates the shared budgets by priority, and
 degrades content the way its author said it should degrade.
 
-> **The discord.py runtime lives in [`squid-discord`](../squid-discord/README.md), and the
+> **The discord.py runtime lives in [`squid-ui-discord`](../squid-ui-discord/README.md), and the
 > reusable application patterns in [`squid-ui-widgets`](../squid-ui-widgets/README.md).** Mounts,
 > sessions, routing, delivery, adoption, roles, devtools and durable panels moved there; the
 > examples below that call `sd.Mount(...)` need it installed. What stays here is Discord
@@ -38,7 +38,7 @@ class Counter(sl.Component):
 
 See [the architecture and API interaction guide](../../docs/squid-ui-architecture.md)
 for component composition, planning, renderers, action policies, and durable mounts, and
-[Classic Discord messages](../squid-discord/docs/classic-messages.md) for the second target: content, embeds,
+[Classic Discord messages](../squid-ui-discord/docs/classic-messages.md) for the second target: content, embeds,
 and action rows, from the same semantic document.
 
 ## The layers
@@ -82,7 +82,7 @@ There are four ways to adopt the package, and they can be mixed in one bot:
    that would make the legacy object a second writer raises `AdoptionError`.
 4. **The whole message.** Hand it to `Mount` when component state or callbacks move into Squid.
 
-See [Migrating an existing discord.py bot](../squid-discord/docs/migrating.md) for an incremental path covering
+See [Migrating an existing discord.py bot](../squid-ui-discord/docs/migrating.md) for an incremental path covering
 V2 and classic contributions, persistent routes, mounts, sessions, forms, and durability.
 
 A fragment is not a miniature mount. If two independently stateful regions need to edit one
@@ -744,7 +744,7 @@ then drive it through `Mount.dispatch` — the same funnel a real press takes, s
 policies, guards, the action transaction and the repaint all run:
 
 ```python
-from squid_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
+from squid_ui_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 
 mount = sd.Mount(Settings(), access=sd.Everyone())
 await mount.send(delivered_to(fake_message()))
@@ -766,7 +766,7 @@ list rather than an assertion.
 ## Host integration rules
 
 - The base package depends only on the zero-dependency `squid-reactivity` kernel. Install
-  `squid-discord` for the discord.py adapter. The adapter never starts background work on its own;
+  `squid-ui-discord` for the discord.py adapter. The adapter never starts background work on its own;
   start `sd.MountScheduler.run()` and any external bridge under your own supervisor.
 - Factories take content positionally and everything else by keyword. `None` and `False`
   children are skipped, so `cond and node` is the way to include something conditionally;

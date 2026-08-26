@@ -13,7 +13,7 @@ Discord message shape am I compiling to* — is therefore encoded five times and
 | `mode` marker type (`ComponentsV2Target`) | `target_types.py:11-16` |
 | `limits` subclass (`V2Limits`) | `planning/limits.py:112,143` |
 | `dialect` singleton (`V2_DIALECT`) | `planning/v2.py:442`, `planning/classic.py:479` |
-| `DiscordMode` enum | `squid_discord/presentation.py:29` |
+| `DiscordMode` enum | `squid_ui_discord/presentation.py:29` |
 
 Nothing keeps them in step, so use sites re-derive the axis from whichever encoding is nearest —
 and they reach for the worst one. `mount.py:874-875` recovers the mode by `isinstance`-ing the
@@ -70,7 +70,7 @@ confined to the two packages and their tests, and there are no live durable snap
 ## Two things that are not wrong and must survive
 
 - **The `ComponentsV2Target` / `ClassicTarget` marker hierarchy is load-bearing.** It types *nodes*,
-  not targets: `packages/squid-discord/tests/typing_targets.py` pins
+  not targets: `packages/squid-ui-discord/tests/typing_targets.py` pins
   `Variants.of(v2_only, classic_only) -> Variants[ComponentsV2Target | ClassicTarget]` and that
   `plan(v2_only, target=classic())` is a type error. That file keeps passing unchanged but for
   renames.
@@ -130,7 +130,7 @@ refactor.
   existing `fits_controls`: "the most components one page of this mode may spend."
   `V2Limits` answers `total_components` (40); `ClassicLimits` answers `controls` (25).
 - Replace both reads at `semantic_adaptation/regions.py:250,295`.
-- Regression test in `packages/squid-discord/tests/test_classic_target.py`: plan a document
+- Regression test in `packages/squid-ui-discord/tests/test_classic_target.py`: plan a document
   containing `sl.paged(...)` against the classic target and assert a `SceneClassicMessage` rather
   than a raise. It must fail before the change.
 
@@ -218,9 +218,9 @@ class DiscordLimits:                       # abstract; message-wide budgets live
 
 - Rename `TargetProfile` to `Target` in `squid_ui.planning`; it becomes the only such class.
 - Fields collapse to the four above; the rest become derived properties.
-- Delete `squid_discord.Target` (`squid-discord/src/squid_discord/target.py:31-88`) — its only job
+- Delete `squid_ui_discord.Target` (`squid-ui-discord/src/squid_ui_discord/target.py:31-88`) — its only job
   was two classmethods plus `_from`, an eleven-field manual copy that silently drops any new base
-  field. The conveniences become module-level `v2()` / `classic()` constructors in `squid_discord`,
+  field. The conveniences become module-level `v2()` / `classic()` constructors in `squid_ui_discord`,
   keeping their `@overload` pairs so the adapter-less call still infers `DiscordPy27Adapter`.
 - Delete, with reasons:
   - `TargetProfile.resources` (`target.py:47`) — never populated; `budgets` always falls through to
@@ -265,7 +265,7 @@ class DiscordLimits:                       # abstract; message-wide budgets live
   `Renderer[...]` at the type level. A declared protocol nothing implements is how defect 3 survived.
 - **Dedupe `Wire`.** The identical
   `type Wire = Callable[[Control, ActionBinding], discord.ui.Item[Any]]` at `renderer.py:51` and
-  `classic_renderer.py:54` collapses into one definition. It stays in `squid_discord` — it returns a
+  `classic_renderer.py:54` collapses into one definition. It stays in `squid_ui_discord` — it returns a
   discord.py object and cannot move into the portable package.
 - **Drop `html/renderer.py:87`'s `scene.target != V2_TARGET_ID` check.** The body-type check two
   lines below (`isinstance(scene.body, SceneComponentsV2)`) is the real gate, and it is both
@@ -312,7 +312,7 @@ types that merely share words with this vocabulary; they are untouched and unrel
 
 1. **Baseline first.** These packages have known pre-existing failures and a hang in `test_lookup`,
    so record a pre-change run before attributing anything:
-   `uv run pytest packages/squid-ui/tests packages/squid-discord/tests --no-cov -q`.
+   `uv run pytest packages/squid-ui/tests packages/squid-ui-discord/tests --no-cov -q`.
    Same for `just typecheck` — the tree is not at zero Pyrefly errors, so diff against a pre-change
    run and read only the files you touched.
 2. **0 proves itself**: the new `sl.paged` + classic test fails before and passes after.
@@ -320,7 +320,7 @@ types that merely share words with this vocabulary; they are untouched and unrel
    `mount.limits` must be a Pyrefly error. If it is not, the split did not do its job.
 4. **Defect 3 becomes checked**: the new renderer-satisfies-protocol pin fails against today's
    `Renderer[OutputT]` and passes after 5.
-5. **Type-level contract**: `packages/squid-discord/tests/typing_targets.py` still pins the same
+5. **Type-level contract**: `packages/squid-ui-discord/tests/typing_targets.py` still pins the same
    variance and the same two `pyrefly: ignore` expectations after renaming. If an ignore becomes
    unnecessary, the node-typing guarantee has been weakened, not improved.
 6. **Limits are still Discord's**: `test_limits_crosscheck.py` and `test_limits.py` unchanged in

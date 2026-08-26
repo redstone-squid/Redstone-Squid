@@ -369,7 +369,7 @@ The scope a pool keys on is the one a `ScreenSpec` already computes. `Opener.of(
 opener, and asking it for a kind statically -- `opener.user_guild()` is a `UserGuildScope` -- is what
 lets a `Shared[UserGuildScope]` pool refuse the wrong scope at the call site. A panel holding its
 session key reaches a pool through `key.scope` with nothing to convert. `Opener` and `Scope` are
-deliberately not on `sd`; import them from `squid_discord.screens`.
+deliberately not on `sd`; import them from `squid_ui_discord.screens`.
 
 `squid_storage.PersistedPool` is the hydrating variant, for a namespace that should survive a
 restart: `await load(scope)` in place of `get(scope)`, `run()` as the background writer, and
@@ -714,7 +714,7 @@ is the single framework boundary outside the whole user onion.
 ## Library binding: discord.py, not Discord alone
 
 For an ownership-first path from existing views and persistent controls into these adapter
-boundaries, see [Migrating an existing discord.py bot](../packages/squid-discord/docs/migrating.md).
+boundaries, see [Migrating an existing discord.py bot](../packages/squid-ui-discord/docs/migrating.md).
 
 The portable seam is the scene. Everything above it — semantic vocabulary, planner,
 `measure()`, `CursorCoordinator`, components — binds to Discord's *shape* (budgets, option windows,
@@ -831,7 +831,7 @@ distinct last words, 179 used exactly once, so the table would have had to rejec
 owe instead is consistency, which needs no dictionary:
 
 1. **One meaning per word.** `MountSnapshot` named both a view of a live mount and the
-   serialized state that outlives it, and both were exported from `squid_discord`.
+   serialized state that outlives it, and both were exported from `squid_ui_discord`.
 2. **A name uses the same word its own members use.** `MemorySnapshotStore`'s methods were
    `list_records`/`load` and its field was `_records`; only the class name said "snapshot".
 3. **Identity and authority are never one type**, as above.
@@ -859,4 +859,4 @@ to describe, and saying so is noise.
   use is unaffected, and `Mount.pending` reports a render held back for this reason.
 - HTML action transport is not prescribed. Markup exposes action IDs; HTTP or WebSocket
   routing and authentication belong to the host.
-- The engine depends only on `squid-reactivity`. Two leaf packages sit on it as independent siblings: `squid-discord` for the discord.py adapter -- mounts, sessions, routing, durability, with `squid-discord[durable]` adding `squid-storage` -- and `squid-ui-widgets` for the reusable application state machines. Neither imports the other. Discord *protocol* knowledge stays in the engine: the planner plans against Components V2 limits and dialects, and the HTML renderer reads the same target ids.
+- The engine depends only on `squid-reactivity`. Two leaf packages sit on it as independent siblings: `squid-ui-discord` for the discord.py adapter -- mounts, sessions, routing, durability, with `squid-ui-discord[durable]` adding `squid-storage` -- and `squid-ui-widgets` for the reusable application state machines. Neither imports the other. Discord *protocol* knowledge stays in the engine: the planner plans against Components V2 limits and dialects, and the HTML renderer reads the same target ids.

@@ -8,7 +8,7 @@ from discord import app_commands
 from discord.ext import commands
 from pytest_mock import MockerFixture
 
-import squid_discord as sd
+import squid_ui_discord as sd
 from squid.bot.errors import (
     SquidCommandTree,
     build_error_presentation,

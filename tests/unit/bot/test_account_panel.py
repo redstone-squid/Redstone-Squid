@@ -10,7 +10,7 @@ import discord
 import pytest
 from whenever import Instant
 
-import squid_discord as sd
+import squid_ui_discord as sd
 import squid_ui as sl
 import squid_ui_widgets as sp
 from squid.accounts.domain import (
@@ -23,7 +23,7 @@ from squid.accounts.domain import (
 )
 from squid.bot.account_view import AccountPanel
 from squid.bot.verify import VerifyCog
-from squid_discord.testing import commit_render, fake_interaction
+from squid_ui_discord.testing import commit_render, fake_interaction
 
 ACCOUNT_ID = 42
 AUTHOR_ID = 555
@@ -205,8 +205,8 @@ async def test_a_press_needing_consent_ends_instead_of_holding_the_panel(
     -- up to two minutes. Nothing here waits, so the editor is simply not open yet.
     """
     panel, opened = _gated_panel(monkeypatch)
-    monkeypatch.setattr("squid_discord.native", lambda event: event.responder.interaction)
-    monkeypatch.setattr("squid_discord.responder", lambda event: event.responder)
+    monkeypatch.setattr("squid_ui_discord.native", lambda event: event.responder.interaction)
+    monkeypatch.setattr("squid_ui_discord.responder", lambda event: event.responder)
     mount = SimpleNamespace(schedule=AsyncMock())
 
     await panel._edit_page(cast(Any, _press(mount)))
@@ -225,8 +225,8 @@ async def test_a_press_needing_consent_ends_instead_of_holding_the_panel(
 async def test_declining_leaves_the_panel_exactly_as_it_was(monkeypatch: pytest.MonkeyPatch) -> None:
     """Cancelling stores nothing, changes nothing, and does not redraw anything."""
     panel, opened = _gated_panel(monkeypatch)
-    monkeypatch.setattr("squid_discord.native", lambda event: event.responder.interaction)
-    monkeypatch.setattr("squid_discord.responder", lambda event: event.responder)
+    monkeypatch.setattr("squid_ui_discord.native", lambda event: event.responder.interaction)
+    monkeypatch.setattr("squid_ui_discord.responder", lambda event: event.responder)
     mount = SimpleNamespace(schedule=AsyncMock())
 
     await panel._edit_page(cast(Any, _press(mount)))
@@ -247,8 +247,8 @@ async def test_a_toggle_needing_consent_still_applies_once_the_reader_agrees(
     to sit in the handler rather than in the control declaration.
     """
     panel, opened = _gated_panel(monkeypatch)
-    monkeypatch.setattr("squid_discord.native", lambda event: event.responder.interaction)
-    monkeypatch.setattr("squid_discord.responder", lambda event: event.responder)
+    monkeypatch.setattr("squid_ui_discord.native", lambda event: event.responder.interaction)
+    monkeypatch.setattr("squid_ui_discord.responder", lambda event: event.responder)
     panel._identities = (DISCORD,)
     panel.selected_id = DISCORD.id
     mount = SimpleNamespace(schedule=AsyncMock())
