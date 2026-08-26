@@ -41,7 +41,7 @@ def make_component_panel(
     *,
     stored: dict[str, int | None] | None = None,
     channels: dict[int, str] | None = None,
-) -> tuple[SettingsPanel, Any]:
+) -> tuple[SettingsPanel, Any, sd.Mount]:
     """The mounted panel and the settings service behind it."""
     settings = SimpleNamespace(
         get_all=AsyncMock(return_value=stored or {}),
@@ -58,15 +58,15 @@ def make_component_panel(
         settings=cast(Any, settings),
         votes=cast(Any, votes),
         guild=make_guild(channels=channels if channels is not None else {12: "general"}),
-        author_id=1,
         capabilities=EVERYTHING,
     )
-    panel.mount(source=make_layout_bot())
-    return panel, settings
+    bot = make_layout_bot()
+    mount = sd.LayoutHost.of(bot).defaults.mount(panel, access=sd.Owner(1), timeout=300)
+    return panel, settings, mount
 
 
 async def test_a_saved_channel_is_kept_without_a_hand_written_invalidate() -> None:
-    panel, _ = make_component_panel()
+    panel, _, _ = make_component_panel()
     with sl.runtime.transaction():
         await panel.set_channel("Vote", 12)
     assert panel.channel_id("Vote") == 12
@@ -77,7 +77,7 @@ async def test_a_channel_saved_before_a_later_failure_is_not_left_applied() -> N
 
     set_channel writes into a dict, which is the shape assignment-level rollback would miss.
     """
-    panel, _ = make_component_panel(stored={"Vote": 3})
+    panel, _, _ = make_component_panel(stored={"Vote": 3})
     await panel.open_server()
 
     async def save_the_channel_then_fail() -> None:
@@ -92,7 +92,7 @@ async def test_a_channel_saved_before_a_later_failure_is_not_left_applied() -> N
 
 
 async def test_a_half_loaded_voting_page_is_not_left_applied() -> None:
-    panel, _ = make_component_panel()
+    panel, _, _ = make_component_panel()
     await panel.open_voting(VoteKind.BUILD)
     loaded_preset = panel._preset
     panel._votes.get_role_weights = AsyncMock(side_effect=RuntimeError("database is down"))
@@ -105,7 +105,7 @@ async def test_a_half_loaded_voting_page_is_not_left_applied() -> None:
 
 
 async def test_a_read_only_action_cannot_change_a_channel() -> None:
-    panel, _ = make_component_panel(stored={"Vote": 3})
+    panel, _, _ = make_component_panel(stored={"Vote": 3})
     await panel.open_server()
     with pytest.raises(sl.runtime.ReactiveWriteError), readonly_transaction():
         await panel.set_channel("Vote", 12)
@@ -113,10 +113,9 @@ async def test_a_read_only_action_cannot_change_a_channel() -> None:
 
 
 async def test_changing_language_relocalizes_the_live_mount(monkeypatch: pytest.MonkeyPatch) -> None:
-    panel, _ = make_component_panel()
-    mount = panel._mount
-    assert mount is not None
+    panel, _, mount = make_component_panel()
     commit_render(mount)
+    original_localization = mount.localization
     translations = {"Server settings": "Paramètres du serveur", "Close": "Fermer"}
     monkeypatch.setattr(
         settings_view,
@@ -125,7 +124,7 @@ async def test_changing_language_relocalizes_the_live_mount(monkeypatch: pytest.
     )
 
     with sl.runtime.transaction():
-        await panel.set_locale("fr")
+        await panel.set_locale("fr", mount=mount)
     view = commit_render(mount)
 
     text = "\n".join(item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay))
@@ -133,9 +132,15 @@ async def test_changing_language_relocalizes_the_live_mount(monkeypatch: pytest.
     assert "Paramètres du serveur" in text
     assert "Fermer" in labels
 
+    with sl.runtime.transaction():
+        result = await panel.history.undo()
+
+    assert result.applied
+    assert mount.localization.locale == original_localization.locale
+
 
 async def test_a_channel_change_can_be_undone() -> None:
-    panel, settings = make_component_panel(stored={"Vote": 3})
+    panel, settings, _ = make_component_panel(stored={"Vote": 3})
     await panel.open_server()
 
     with sl.runtime.transaction():
@@ -151,7 +156,7 @@ async def test_a_channel_change_can_be_undone() -> None:
 
 
 async def test_an_effectful_undone_channel_change_is_not_falsely_redoable() -> None:
-    panel, settings = make_component_panel(stored={"Vote": 3})
+    panel, settings, _ = make_component_panel(stored={"Vote": 3})
     await panel.open_server()
 
     with sl.runtime.transaction():
@@ -167,7 +172,7 @@ async def test_an_effectful_undone_channel_change_is_not_falsely_redoable() -> N
 
 
 async def test_a_failed_action_records_no_history() -> None:
-    panel, _ = make_component_panel(stored={"Vote": 3})
+    panel, _, _ = make_component_panel(stored={"Vote": 3})
     await panel.open_server()
 
     async def save_the_channel_then_fail() -> None:
@@ -182,9 +187,7 @@ async def test_a_failed_action_records_no_history() -> None:
 
 
 async def test_the_undo_control_appears_only_once_there_is_something_to_undo() -> None:
-    panel, _ = make_component_panel()
-    mount = panel._mount
-    assert mount is not None
+    panel, _, mount = make_component_panel()
 
     assert "Undo" not in _button_labels(commit_render(mount))
     with sl.runtime.transaction():
@@ -193,7 +196,7 @@ async def test_the_undo_control_appears_only_once_there_is_something_to_undo() -
 
 
 async def test_undo_is_refused_when_the_permission_was_revoked(monkeypatch: pytest.MonkeyPatch) -> None:
-    panel, settings = make_component_panel(stored={"Vote": 3})
+    panel, settings, _ = make_component_panel(stored={"Vote": 3})
     await panel.open_server()
     with sl.runtime.transaction():
         await panel.set_channel("Vote", 12)
@@ -221,10 +224,8 @@ async def test_undo_is_refused_when_the_permission_was_revoked(monkeypatch: pyte
 
 async def test_a_large_guild_still_fits_one_message() -> None:
     """Five native channel pickers cost ten V2 components regardless of guild size."""
-    panel, _ = make_component_panel(channels={index: f"channel-{index}" for index in range(1, 200)})
+    panel, _, mount = make_component_panel(channels={index: f"channel-{index}" for index in range(1, 200)})
     await panel.open_server()
-    mount = panel._mount
-    assert mount is not None
 
     view = commit_render(mount)
 
@@ -235,7 +236,7 @@ async def test_a_large_guild_still_fits_one_message() -> None:
 async def test_each_channel_picker_writes_its_own_setting(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings_view, "allows", AsyncMock(return_value=True))
     monkeypatch.setattr(sd, "native", lambda _event: SimpleNamespace())
-    panel, settings = make_component_panel(stored={"Vote": 3}, channels={3: "vote", 12: "general"})
+    panel, settings, _ = make_component_panel(stored={"Vote": 3}, channels={3: "vote", 12: "general"})
     await panel.open_server()
 
     with sl.runtime.transaction():
