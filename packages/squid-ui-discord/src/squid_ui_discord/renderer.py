@@ -3,8 +3,7 @@
 from collections.abc import Callable, Hashable
 from dataclasses import dataclass
 from datetime import datetime
-from enum import StrEnum
-from typing import Any, cast, override
+from typing import Any, Protocol, override
 from urllib.parse import urlsplit
 
 import discord
@@ -15,6 +14,7 @@ from squid_ui.errors import DrawInvariantError
 from squid_ui.interactions import ActionBinding
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.limits import LIMITS, V2Limits
+from squid_ui.renderer import Renderer
 from squid_ui.scene.model import PlanResult
 from squid_ui.target_types import DiscordPyAdapter
 from squid_ui.temporal import ZonedDateTime
@@ -28,35 +28,133 @@ from squid_ui_discord.render_cache import RenderProgramCache
 from squid_ui_discord.target import DISCORD_V2_DPY27
 
 type Control = scene.Button | scene.Select | scene.EntitySelect
+type Accessory = (
+    scene.Thumbnail | scene.Link | scene.PremiumButton | scene.Button | scene.RoutedButton | scene.Extension
+)
+"""What may sit beside a section or inside a row -- `scene.Section.accessory`'s own type."""
 type Wire = Callable[[Control, ActionBinding], discord.ui.Item[Any]]
 type ViewFactory = Callable[[], discord.ui.LayoutView]
 
 
-class _V2Op(StrEnum):
-    TEXT = "text"
-    FILE = "file"
-    PANEL = "panel"
-    SECTION = "section"
-    SEPARATOR = "separator"
-    ROW = "row"
-    CONTROL_ROW = "control_row"
-    ROUTED_SELECT = "routed_select"
-    GALLERY = "gallery"
-    THUMBNAIL = "thumbnail"
-    LINK = "link"
-    PREMIUM = "premium"
-    CONTROL = "control"
-    ROUTED_BUTTON = "routed_button"
-    EXTENSION = "extension"
+class MountedRenderer[BodyT: scene.Body](Renderer[BodyT, MessagePayload], Protocol):
+    """A renderer a live `MessageRoot` can hand its dispatch to.
+
+    `Renderer` is the mechanical contract: a scene in, a drawn thing out. A mount needs one
+    more thing from it -- `wire`, which turns each interactive control into an item bound to
+    that mount's generation -- and a mount picks its renderer by dialect id at runtime, so
+    the two concrete renderers have to be reachable through one type. Without this, the call
+    went through `cast(Any, renderer)` and nothing checked either half.
+    """
+
+    def draw(
+        self,
+        document: scene.Scene[BodyT],
+        *,
+        plan: PlanResult[BodyT] | None = None,
+        wire: Wire | None = None,
+    ) -> MessagePayload: ...
 
 
 @dataclass(frozen=True, slots=True)
-class _V2Instruction:
-    op: _V2Op
-    source: scene.Node | None = None
-    text: str | None = None
-    texts: tuple[str, ...] = ()
-    children: tuple[_V2Instruction, ...] = ()
+class _V2Text:
+    text: str
+
+
+@dataclass(frozen=True, slots=True)
+class _V2File:
+    node: scene.File
+
+
+@dataclass(frozen=True, slots=True)
+class _V2Panel:
+    node: scene.Panel
+    children: tuple[_V2Instruction, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _V2Section:
+    texts: tuple[str, ...]
+    accessory: _V2Instruction
+
+
+@dataclass(frozen=True, slots=True)
+class _V2Separator:
+    node: scene.Separator
+
+
+@dataclass(frozen=True, slots=True)
+class _V2Row:
+    children: tuple[_V2Instruction, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _V2ControlRow:
+    node: Control
+
+
+@dataclass(frozen=True, slots=True)
+class _V2RoutedSelect:
+    node: scene.RoutedSelect
+
+
+@dataclass(frozen=True, slots=True)
+class _V2Gallery:
+    node: scene.Gallery
+
+
+@dataclass(frozen=True, slots=True)
+class _V2Thumbnail:
+    node: scene.Thumbnail
+
+
+@dataclass(frozen=True, slots=True)
+class _V2Link:
+    node: scene.Link
+
+
+@dataclass(frozen=True, slots=True)
+class _V2Premium:
+    node: scene.PremiumButton
+
+
+@dataclass(frozen=True, slots=True)
+class _V2Control:
+    node: Control
+
+
+@dataclass(frozen=True, slots=True)
+class _V2RoutedButton:
+    node: scene.RoutedButton
+
+
+@dataclass(frozen=True, slots=True)
+class _V2Extension:
+    node: scene.Extension
+
+
+type _V2Instruction = (
+    _V2Text
+    | _V2File
+    | _V2Panel
+    | _V2Section
+    | _V2Separator
+    | _V2Row
+    | _V2ControlRow
+    | _V2RoutedSelect
+    | _V2Gallery
+    | _V2Thumbnail
+    | _V2Link
+    | _V2Premium
+    | _V2Control
+    | _V2RoutedButton
+    | _V2Extension
+)
+"""One drawing step, holding the exact scene node it draws.
+
+A tag plus a widened `source: scene.Node` would make `_execute` re-assert a node type the
+compiler already proved, once per arm. Each step carrying its own node means the match
+narrows and the arms read what they were handed.
+"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,20 +200,20 @@ class StaticView(discord.ui.LayoutView):
         super().__init__(timeout=None)
 
 
-def _compile_accessory(node: scene.Node) -> _V2Instruction:
+def _compile_accessory(node: Accessory) -> _V2Instruction:
     match node:
         case scene.Thumbnail():
-            return _V2Instruction(_V2Op.THUMBNAIL, source=node)
+            return _V2Thumbnail(node)
         case scene.Link():
-            return _V2Instruction(_V2Op.LINK, source=node)
+            return _V2Link(node)
         case scene.PremiumButton():
-            return _V2Instruction(_V2Op.PREMIUM, source=node)
+            return _V2Premium(node)
         case scene.RoutedButton():
-            return _V2Instruction(_V2Op.ROUTED_BUTTON, source=node)
+            return _V2RoutedButton(node)
         case scene.Button():
-            return _V2Instruction(_V2Op.CONTROL, source=node)
+            return _V2Control(node)
         case scene.Extension():
-            return _V2Instruction(_V2Op.EXTENSION, source=node)
+            return _V2Extension(node)
     message = f"unsupported Components V2 accessory {type(node).__name__}"
     raise DrawInvariantError(message)
 
@@ -123,49 +221,56 @@ def _compile_accessory(node: scene.Node) -> _V2Instruction:
 def _compile_item(node: scene.Node) -> _V2Instruction:
     match node:
         case scene.Text() as text:
-            return _V2Instruction(_V2Op.TEXT, text=discord_text(text))
+            return _V2Text(discord_text(text))
         case scene.Time(instant=instant, style=style, prefix=prefix):
             unix = int(datetime.fromisoformat(instant).timestamp())
-            return _V2Instruction(_V2Op.TEXT, text=f"{prefix or ''}<t:{unix}:{style}>")
+            return _V2Text(f"{prefix or ''}<t:{unix}:{style}>")
         case scene.ZonedTime(instant=instant, timezone=timezone, prefix=prefix):
             value = ZonedDateTime(datetime.fromisoformat(instant), timezone)
-            return _V2Instruction(_V2Op.TEXT, text=f"{prefix or ''}{value.isoformat()}")
+            return _V2Text(f"{prefix or ''}{value.isoformat()}")
         case scene.File():
-            return _V2Instruction(_V2Op.FILE, source=node)
+            return _V2File(node)
         case scene.Panel(children=children):
-            return _V2Instruction(_V2Op.PANEL, source=node, children=tuple(map(_compile_item, children)))
+            return _V2Panel(node, tuple(map(_compile_item, children)))
         case scene.Section(texts=texts, accessory=accessory):
-            return _V2Instruction(
-                _V2Op.SECTION,
-                source=node,
-                texts=tuple(discord_text(text) for text in texts),
-                children=(_compile_accessory(accessory),),
+            return _V2Section(
+                tuple(discord_text(text) for text in texts),
+                _compile_accessory(accessory),
             )
         case scene.Separator():
-            return _V2Instruction(_V2Op.SEPARATOR, source=node)
+            return _V2Separator(node)
         case scene.Row(items=items):
-            return _V2Instruction(_V2Op.ROW, source=node, children=tuple(map(_compile_accessory, items)))
+            return _V2Row(tuple(map(_compile_accessory, items)))
         case scene.Select() | scene.EntitySelect():
-            return _V2Instruction(_V2Op.CONTROL_ROW, source=node)
+            return _V2ControlRow(node)
         case scene.RoutedSelect():
-            return _V2Instruction(_V2Op.ROUTED_SELECT, source=node)
+            return _V2RoutedSelect(node)
         case scene.Gallery():
-            return _V2Instruction(_V2Op.GALLERY, source=node)
+            return _V2Gallery(node)
         case scene.Thumbnail() | scene.Link() | scene.PremiumButton() | scene.Button() | scene.RoutedButton():
             return _compile_accessory(node)
         case scene.Extension():
-            return _V2Instruction(_V2Op.EXTENSION, source=node)
+            return _V2Extension(node)
     message = f"unsupported Components V2 scene node {type(node).__name__}"
     raise DrawInvariantError(message)
 
 
+def _opaque(instruction: _V2Instruction) -> bool:
+    """Whether drawing this step needs a plan resource, so its program cannot be certified."""
+    match instruction:
+        case _V2Extension():
+            return True
+        case _V2Panel(children=children) | _V2Row(children=children):
+            return any(map(_opaque, children))
+        case _V2Section(accessory=accessory):
+            return _opaque(accessory)
+        case _:
+            return False
+
+
 def _compile_program(document: scene.Scene[scene.ComponentsV2]) -> _V2Program:
     children = tuple(_compile_item(child) for child in document.components_v2.children)
-
-    def opaque(instruction: _V2Instruction) -> bool:
-        return instruction.op is _V2Op.EXTENSION or any(map(opaque, instruction.children))
-
-    return _V2Program(children, any(map(opaque, children)))
+    return _V2Program(children, any(map(_opaque, children)))
 
 
 class V2Renderer:
@@ -292,12 +397,10 @@ class V2Renderer:
         plan: PlanResult[scene.ComponentsV2] | None,
         wire: Wire | None,
     ) -> discord.ui.Item[Any]:
-        source = instruction.source
-        match instruction.op:
-            case _V2Op.TEXT:
-                return discord.ui.TextDisplay(cast(str, instruction.text))
-            case _V2Op.FILE:
-                node = cast(scene.File, source)
+        match instruction:
+            case _V2Text(text=text):
+                return discord.ui.TextDisplay(text)
+            case _V2File(node=node):
                 resource = plan.resources.get(f"asset:{node.asset_key}") if plan is not None else None
                 if isinstance(resource, Asset) and isinstance(resource.source, StoredAsset):
                     parsed = urlsplit(resource.source.reference)
@@ -311,30 +414,25 @@ class V2Renderer:
                             url=resource.source.reference,
                         )
                 return discord.ui.File(f"attachment://{node.name}", spoiler=node.spoiler)
-            case _V2Op.PANEL:
-                node = cast(scene.Panel, source)
+            case _V2Panel(node=node, children=children):
                 return discord.ui.Container(
-                    *(self._execute(child, plan=plan, wire=wire) for child in instruction.children),
+                    *(self._execute(child, plan=plan, wire=wire) for child in children),
                     accent_colour=node.accent,
                     spoiler=node.spoiler,
                 )
-            case _V2Op.SECTION:
+            case _V2Section(texts=texts, accessory=accessory):
                 return discord.ui.Section(
-                    *(discord.ui.TextDisplay(text) for text in instruction.texts),
-                    accessory=self._execute(instruction.children[0], plan=plan, wire=wire),
+                    *(discord.ui.TextDisplay(text) for text in texts),
+                    accessory=self._execute(accessory, plan=plan, wire=wire),
                 )
-            case _V2Op.SEPARATOR:
-                node = cast(scene.Separator, source)
+            case _V2Separator(node=node):
                 spacing = discord.SeparatorSpacing.large if node.large else discord.SeparatorSpacing.small
                 return discord.ui.Separator(visible=node.visible, spacing=spacing)
-            case _V2Op.ROW:
-                return discord.ui.ActionRow(
-                    *(self._execute(child, plan=plan, wire=wire) for child in instruction.children)
-                )
-            case _V2Op.CONTROL_ROW:
-                return discord.ui.ActionRow(self._control(cast(Control, source), plan=plan, wire=wire))
-            case _V2Op.ROUTED_SELECT:
-                node = cast(scene.RoutedSelect, source)
+            case _V2Row(children=children):
+                return discord.ui.ActionRow(*(self._execute(child, plan=plan, wire=wire) for child in children))
+            case _V2ControlRow(node=node):
+                return discord.ui.ActionRow(self._control(node, plan=plan, wire=wire))
+            case _V2RoutedSelect(node=node):
                 select = RoutedSelectItem(
                     options=[
                         discord.SelectOption(
@@ -353,19 +451,16 @@ class V2Renderer:
                     disabled=node.disabled,
                 )
                 return discord.ui.ActionRow(select)
-            case _V2Op.GALLERY:
-                node = cast(scene.Gallery, source)
+            case _V2Gallery(node=node):
                 return discord.ui.MediaGallery(
                     *(
                         discord.MediaGalleryItem(entry.url, description=entry.description, spoiler=entry.spoiler)
                         for entry in node.items
                     )
                 )
-            case _V2Op.THUMBNAIL:
-                node = cast(scene.Thumbnail, source)
+            case _V2Thumbnail(node=node):
                 return discord.ui.Thumbnail(node.url, description=node.description, spoiler=node.spoiler)
-            case _V2Op.LINK:
-                node = cast(scene.Link, source)
+            case _V2Link(node=node):
                 return discord.ui.Button(
                     style=discord.ButtonStyle.link,
                     label=node.label,
@@ -373,12 +468,11 @@ class V2Renderer:
                     emoji=discord_emoji(node.emoji),
                     disabled=node.disabled,
                 )
-            case _V2Op.PREMIUM:
-                return discord.ui.Button(sku_id=cast(scene.PremiumButton, source).sku_id)
-            case _V2Op.CONTROL:
-                return self._control(cast(Control, source), plan=plan, wire=wire)
-            case _V2Op.ROUTED_BUTTON:
-                node = cast(scene.RoutedButton, source)
+            case _V2Premium(node=node):
+                return discord.ui.Button(sku_id=node.sku_id)
+            case _V2Control(node=node):
+                return self._control(node, plan=plan, wire=wire)
+            case _V2RoutedButton(node=node):
                 return RoutedItem(
                     style=getattr(discord.ButtonStyle, node.style.value),
                     label=node.label,
@@ -386,5 +480,5 @@ class V2Renderer:
                     emoji=discord_emoji(node.emoji),
                     disabled=node.disabled,
                 )
-            case _V2Op.EXTENSION:
-                return self._extension(cast(scene.Extension, source), plan)
+            case _V2Extension(node=node):
+                return self._extension(node, plan)

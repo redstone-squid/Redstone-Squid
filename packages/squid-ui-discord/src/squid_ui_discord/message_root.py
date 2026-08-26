@@ -107,7 +107,7 @@ from squid_ui_discord.classic_renderer import ClassicRenderer
 from squid_ui_discord.emoji import discord_emoji
 from squid_ui_discord.message_payload import MessageMode, MessagePayload
 from squid_ui_discord.render_cache import RenderProgramCache, RenderProgramCacheSnapshot
-from squid_ui_discord.renderer import V2Renderer
+from squid_ui_discord.renderer import MountedRenderer, V2Renderer
 from squid_ui_discord.rendering import RenderedMessage, render_message
 from squid_ui_discord.target import DISCORD_V2_DPY27, Target
 
@@ -127,7 +127,7 @@ class _DiscordBinding:
     render_message: Callable[..., RenderedMessage[Any]]
     mode: MessageMode
     render_capability: str
-    renderer: Callable[[MessageRoot[Any, Any], float | None], V2Renderer | ClassicRenderer]
+    renderer: Callable[[MessageRoot[Any, Any], float | None], MountedRenderer[Any]]
 
 
 _BINDINGS: dict[str, _DiscordBinding] = {
@@ -1451,7 +1451,7 @@ class MessageRoot[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             before = self.render_cache.snapshot()
             context = profile.span("renderer") if profile is not None else nullcontext(None)
             with context as renderer_span:
-                presentation = cast(Any, renderer).draw(staged.plan.scene, plan=staged.plan, wire=wire)
+                presentation = renderer.draw(staged.plan.scene, plan=staged.plan, wire=wire)
                 after = self.render_cache.snapshot()
                 hit = after.hits > before.hits
                 if renderer_span is not None:
