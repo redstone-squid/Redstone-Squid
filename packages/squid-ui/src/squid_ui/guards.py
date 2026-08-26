@@ -101,7 +101,7 @@ class GuardScope(StrEnum):
 class _Staged:
     """One admission pass's ledger writes, held back until its decision is known.
 
-    A pass that ends in a challenge must record nothing: `squid_patterns.guards.confirm`
+    A pass that ends in a challenge must record nothing: `squid_ui_widgets.guards.confirm`
     belongs last in a chain, so it is exactly the guard whose non-admit decision would
     otherwise spend every earlier one, and the actor who cancelled would be the one paying
     the cooldown. Buffering sits here rather than at the decision because a guard may write
@@ -381,7 +381,7 @@ def all_of(*guards: Guard) -> Guard:
 
     Order matters for stateful guards: an earlier `cooldown` records its press before a
     later `permission` gets to deny it, so put the cheap unconditional checks first. That
-    advice cannot work for `squid_patterns.guards.confirm`, which belongs last -- so a pass
+    advice cannot work for `squid_ui_widgets.guards.confirm`, which belongs last -- so a pass
     ending in a challenge records nothing at all, and the guards run again on approval.
     """
     return _AllOf(guards)
@@ -393,7 +393,7 @@ def any_of(*guards: Guard) -> Guard:
     Stateful guards ahead of the admitting one still record their press, for the same
     reason `all_of` cares about order. A challenge from any member is returned as one --
     a question is not a "no" -- which gives this composite an ordering rule opposite to
-    `all_of`'s: `any_of(squid_patterns.guards.confirm(...), permission(admin))` asks an admin
+    `all_of`'s: `any_of(squid_ui_widgets.guards.confirm(...), permission(admin))` asks an admin
     the permission branch would have admitted for free, so it belongs last here too.
     """
     return _AnyOf(guards)

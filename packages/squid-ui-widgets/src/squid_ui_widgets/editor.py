@@ -22,9 +22,9 @@ from squid_ui.semantic import (
     Tone,
 )
 from squid_ui.text import TextLike
-from squid_patterns._content import ContentLike, display_text, normalize_content, require_key
-from squid_patterns.commit import CommitMode
-from squid_patterns.shells import ComponentShell, Pattern, PatternControls, PatternEvent
+from squid_ui_widgets._content import ContentLike, display_text, normalize_content, require_key
+from squid_ui_widgets.commit import CommitMode
+from squid_ui_widgets.shells import ComponentShell, Pattern, PatternControls, PatternEvent
 
 type EditorValues = Mapping[str, object]
 type EditorCommitHandler = Callable[[PatternEvent[EditorState], EditorValues, frozenset[str]], Awaitable[None]]

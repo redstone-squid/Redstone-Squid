@@ -11,8 +11,8 @@ from squid_ui.runtime.component import RenderResult
 from squid_ui.semantic import ActionDisplay, FormTrigger, Tone
 from squid_ui.sources import Position
 from squid_ui.text import TextLike
-from squid_patterns._paging import window
-from squid_patterns.shells import ComponentShell, PatternControls, PatternEvent
+from squid_ui_widgets._paging import window
+from squid_ui_widgets.shells import ComponentShell, PatternControls, PatternEvent
 
 
 @dataclass(frozen=True, slots=True)

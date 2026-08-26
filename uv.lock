@@ -14,7 +14,7 @@ members = [
     "redstone-squid",
     "squid-discord",
     "squid-ui",
-    "squid-patterns",
+    "squid-ui-widgets",
     "squid-reactivity",
     "squid-replication",
     "squid-storage",
@@ -2316,7 +2316,7 @@ dependencies = [
     { name = "sqlalchemy", extra = ["postgresql-asyncpg", "postgresql-psycopg2binary"] },
     { name = "squid-discord" },
     { name = "squid-ui" },
-    { name = "squid-patterns" },
+    { name = "squid-ui-widgets" },
     { name = "squid-replication" },
     { name = "squid-storage", extra = ["postgres"] },
     { name = "uvicorn" },
@@ -2401,7 +2401,7 @@ requires-dist = [
     { name = "sqlalchemy", extras = ["postgresql-asyncpg", "postgresql-psycopg2binary"], specifier = ">=2.0.41" },
     { name = "squid-discord", editable = "packages/squid-discord" },
     { name = "squid-ui", editable = "packages/squid-ui" },
-    { name = "squid-patterns", editable = "packages/squid-patterns" },
+    { name = "squid-ui-widgets", editable = "packages/squid-ui-widgets" },
     { name = "squid-replication", editable = "packages/squid-replication" },
     { name = "squid-storage", extras = ["postgres"], editable = "packages/squid-storage" },
     { name = "uvicorn", specifier = ">=0.34.0" },
@@ -2757,9 +2757,9 @@ dependencies = [
 requires-dist = [{ name = "squid-reactivity", editable = "packages/squid-reactivity" }]
 
 [[package]]
-name = "squid-patterns"
+name = "squid-ui-widgets"
 version = "0.1.0"
-source = { editable = "packages/squid-patterns" }
+source = { editable = "packages/squid-ui-widgets" }
 dependencies = [
     { name = "squid-ui" },
 ]
