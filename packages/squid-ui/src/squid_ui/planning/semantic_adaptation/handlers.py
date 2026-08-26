@@ -15,7 +15,7 @@ from squid_ui.interactions import (
     SelectionEvent,
 )
 from squid_ui.planning.generated import GeneratedHandler
-from squid_ui.runtime.presentation import PresentationSession
+from squid_ui.runtime.presentation_state import PresentationState
 from squid_ui.semantic import (
     ChoiceEvent,
     ChoiceOwnership,
@@ -24,12 +24,12 @@ from squid_ui.semantic import (
     EntityEvent,
     EntityOwnership,
     ItemOwnership,
-    Managed,
     NavigateEvent,
     NavOwnership,
     OpenEvent,
     Toggle,
     ToggleEvent,
+    Uncontrolled,
 )
 from squid_ui.text import TextLike
 
@@ -62,7 +62,7 @@ class ChoiceCommit:
     ownership: ChoiceOwnership
     key: str
     previous: tuple[str, ...]
-    session: PresentationSession
+    session: PresentationState
 
     async def commit(self, event: ActionEvent, selected: tuple[str, ...]) -> None:
         match self.ownership:
@@ -78,7 +78,7 @@ class ChoiceCommit:
                         tuple(key for key in self.previous if key not in selected),
                     )
                 )
-            case Managed():
+            case Uncontrolled():
                 await event.acknowledge()
                 self.session.select(self.key, selected)
                 event.invalidate()
@@ -106,7 +106,7 @@ class EntityCommit:
     ownership: EntityOwnership
     key: str
     previous: tuple[EntityRef, ...]
-    session: PresentationSession
+    session: PresentationState
 
     async def commit(self, event: ActionEvent, selected: tuple[EntityRef, ...]) -> None:
         match self.ownership:
@@ -122,7 +122,7 @@ class EntityCommit:
                         tuple(value for value in self.previous if value not in selected),
                     )
                 )
-            case Managed():
+            case Uncontrolled():
                 await event.acknowledge()
                 self.session.select(self.key, tuple(_entity_key(value) for value in selected))
                 event.invalidate()
@@ -149,13 +149,13 @@ class SelectEntityFallback(GeneratedHandler[ChoiceEvent]):
 class ItemCommit:
     ownership: ItemOwnership
     key: str
-    session: PresentationSession
+    session: PresentationState
 
     async def commit(self, event: ActionEvent, opened: str | None) -> None:
         match self.ownership:
             case Controlled(on_change=on_change):
                 await on_change(OpenEvent(event.actor, event.responder, event.locale, event.context, opened=opened))
-            case Managed():
+            case Uncontrolled():
                 await event.acknowledge()
                 self.session.select(self.key, () if opened is None else (opened,))
                 event.invalidate()
@@ -181,13 +181,13 @@ class FocusItem(GeneratedHandler[SelectionEvent]):
 class NavigationCommit:
     ownership: NavOwnership
     key: str
-    session: PresentationSession
+    session: PresentationState
 
     async def commit(self, event: ActionEvent, destination: str) -> None:
         match self.ownership:
             case Controlled(on_change=on_change):
                 await on_change(NavigateEvent(event.actor, event.responder, event.locale, event.context, destination))
-            case Managed():
+            case Uncontrolled():
                 await event.acknowledge()
                 self.session.select(self.key, (destination,))
                 event.invalidate()
@@ -215,7 +215,7 @@ class GoToDestination(GeneratedHandler[PressEvent]):
 class ToggleDetails(GeneratedHandler[PressEvent]):
     node: Details
     open: bool
-    session: PresentationSession
+    session: PresentationState
 
     async def __call__(self, event: PressEvent) -> None:
         match self.node.open:
@@ -223,7 +223,7 @@ class ToggleDetails(GeneratedHandler[PressEvent]):
                 await on_change(
                     OpenEvent(event.actor, event.responder, event.locale, event.context, opened=not self.open)
                 )
-            case Managed(initial=seed):
+            case Uncontrolled(initial=seed):
                 await event.acknowledge()
                 current = self.session.disclosure(self.node.key, initial=seed).open
                 self.session.disclose(self.node.key, not current)
@@ -234,13 +234,13 @@ class ToggleDetails(GeneratedHandler[PressEvent]):
 class FlipToggle(GeneratedHandler[PressEvent]):
     node: Toggle
     on: bool
-    session: PresentationSession
+    session: PresentationState
 
     async def __call__(self, event: PressEvent) -> None:
         match self.node.on:
             case Controlled(on_change=on_change):
                 await on_change(ToggleEvent(event.actor, event.responder, event.locale, event.context, not self.on))
-            case Managed(initial=initial):
+            case Uncontrolled(initial=initial):
                 await event.acknowledge()
                 current = self.session.toggle(self.node.key, initial=initial).on
                 self.session.set_toggle(self.node.key, on=not current)

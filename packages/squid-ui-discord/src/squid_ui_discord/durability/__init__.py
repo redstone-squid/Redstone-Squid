@@ -5,20 +5,6 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from typing import Any
 
-from squid_ui_discord.mount import Mount
-from squid_ui_discord.sessions import SessionKey
-from squid_ui_discord.target import DISCORD_V2_DPY27
-from squid_ui_discord.targets import DEFAULT_TARGETS, TargetRegistry
-from squid_ui.runtime.component import Component, render_component_tree
-from squid_ui.runtime.presentation import (
-    CursorState,
-    DisclosureState,
-    PresentationSession,
-    SelectionState,
-    StrategyState,
-)
-from squid_ui.runtime.reactivity import export_state, restore_state
-from squid_ui.sources import Direction, Position
 from squid_storage import (
     AdmissionToken,
     ClaimToken,
@@ -26,10 +12,24 @@ from squid_storage import (
     MemorySessionStore,
     PostgresSessionStore,
     PostgresTopicBridge,
-    SQLiteSessionStore,
     SessionRecord,
+    SQLiteSessionStore,
     TopicBridgeSnapshot,
 )
+from squid_ui.runtime.component import Component, render_component_tree
+from squid_ui.runtime.presentation_state import (
+    CursorState,
+    DisclosureState,
+    PresentationState,
+    SelectionState,
+    StrategyState,
+)
+from squid_ui.runtime.reactivity import export_state, restore_state
+from squid_ui.sources import Direction, Position
+from squid_ui_discord.mount import Mount
+from squid_ui_discord.sessions import SessionKey
+from squid_ui_discord.target import DISCORD_V2_DPY27
+from squid_ui_discord.targets import DEFAULT_TARGETS, TargetRegistry
 
 __all__ = [
     "DEFAULT_TARGETS",
@@ -59,7 +59,7 @@ __all__ = [
     "NotDurable",
     "PostgresSessionStore",
     "PostgresTopicBridge",
-    "PresentationState",
+    "PresentationSnapshot",
     "Promoted",
     "PurgeResult",
     "Reconnected",
@@ -90,7 +90,7 @@ class ComponentState:
 
 
 @dataclass(frozen=True, slots=True)
-class PresentationState:
+class PresentationSnapshot:
     cursors: Mapping[str, CursorState]
     selections: Mapping[str, SelectionState]
     disclosures: Mapping[str, DisclosureState]
@@ -103,7 +103,7 @@ class MountState:
     component_key: str
     component_version: int
     components: tuple[ComponentState, ...]
-    presentation: PresentationState
+    presentation: PresentationSnapshot
     target_triple: str = DISCORD_V2_DPY27.triple
     target_version: int = DISCORD_V2_DPY27.version
     target_fingerprint: str = ""
@@ -287,15 +287,18 @@ def migrate_component_state(
     matches = [index for index, component in enumerate(isolated.components) if component.path == path]
     if len(matches) != 1:
         detail = "missing" if not matches else "duplicate"
-        raise MountStateError(f"component path {path!r} is {detail} in the mount state")
+        message = f"component path {path!r} is {detail} in the mount state"
+        raise MountStateError(message)
     if type_id == "":
-        raise MountStateError("component type identity must not be empty")
+        message = "component type identity must not be empty"
+        raise MountStateError(message)
 
     index = matches[0]
     component = current.components[index]
     transformed = transform(isolated.components[index].state)
     if not isinstance(transformed, Mapping) or not all(isinstance(key, str) for key in transformed):
-        raise MountStateError("component migration result must be a mapping with string keys")
+        message = "component migration result must be a mapping with string keys"
+        raise MountStateError(message)
     components = list(current.components)
     components[index] = ComponentState(
         component.path,
@@ -311,7 +314,7 @@ def migrate_component_state(
     return migrated
 
 
-def _presentation_to_dict(state: PresentationState) -> dict[str, object]:
+def _presentation_to_dict(state: PresentationSnapshot) -> dict[str, object]:
     return {
         "cursors": {
             key: {
@@ -339,12 +342,12 @@ def _presentation_to_dict(state: PresentationState) -> dict[str, object]:
     }
 
 
-def _presentation_from_dict(raw: Mapping[str, object]) -> PresentationState:
+def _presentation_from_dict(raw: Mapping[str, object]) -> PresentationSnapshot:
     cursors = _object(raw.get("cursors"))
     selections = _object(raw.get("selections"))
     disclosures = _object(raw.get("disclosures"))
     strategies = _object(raw.get("strategies"))
-    return PresentationState(
+    return PresentationSnapshot(
         cursors={
             key: CursorState(
                 Position(
@@ -452,7 +455,7 @@ class ComponentRegistry:
             component_key,
             registration.version,
             components,
-            PresentationState(
+            PresentationSnapshot(
                 dict(mount.presentation.cursors),
                 dict(mount.presentation.selections),
                 dict(mount.presentation.disclosures),
@@ -518,7 +521,7 @@ class ComponentRegistry:
         for path, component in tree.components.items():
             if path != "$":
                 _restore_component(component, by_path[path])
-        mount.presentation = PresentationSession(
+        mount.presentation = PresentationState(
             cursors=dict(state.presentation.cursors),
             selections=dict(state.presentation.selections),
             disclosures=dict(state.presentation.disclosures),

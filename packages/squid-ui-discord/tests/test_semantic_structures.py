@@ -4,11 +4,10 @@ import discord
 import pytest
 
 import squid_ui as sl
-from squid_ui_discord import DISCORD_V2_DPY27, render_static
 from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning import plan
-from squid_ui.runtime import PresentationSession, apply_updates
+from squid_ui.runtime import PresentationState, apply_updates
 from squid_ui.semantic import (
     Choice,
     Choices,
@@ -29,6 +28,7 @@ from squid_ui.semantic import (
     TableRow,
 )
 from squid_ui.sources import Position
+from squid_ui_discord import DISCORD_V2_DPY27, render_static
 
 
 async def _change(_event) -> None: ...
@@ -43,7 +43,7 @@ def test_small_single_choices_use_buttons_and_larger_sets_use_a_picker() -> None
 
 
 def test_items_switch_from_overview_to_focused_content_through_session_state() -> None:
-    session = PresentationSession()
+    session = PresentationState()
     document = Items(
         "catalog",
         (
@@ -63,7 +63,7 @@ def test_items_switch_from_overview_to_focused_content_through_session_state() -
 
 
 def test_details_disclosure_is_presentation_state() -> None:
-    session = PresentationSession()
+    session = PresentationState()
     document = Details("debug", sl.semantic.Summary("Debug details"), (Paragraph("hidden body"),))
 
     closed = plan(document, target=DISCORD_V2_DPY27, session=session)
@@ -79,7 +79,7 @@ def test_details_disclosure_is_presentation_state() -> None:
 
 
 def test_an_unset_selection_is_distinguishable_from_an_empty_one() -> None:
-    session = PresentationSession()
+    session = PresentationState()
 
     assert session.selection("catalog", initial=("two",)).selected == ("two",)
     session.select("catalog", ())
@@ -121,7 +121,7 @@ def test_large_semantic_pickers_fold_into_keyed_25_and_11_pages() -> None:
 
 
 def test_keyed_item_page_stays_with_its_anchor_when_entries_are_inserted() -> None:
-    session = PresentationSession()
+    session = PresentationState()
     original = tuple(
         Item(str(index), sl.semantic.ItemLabel(f"Item {index}"), (Paragraph("detail"),)) for index in range(36)
     )

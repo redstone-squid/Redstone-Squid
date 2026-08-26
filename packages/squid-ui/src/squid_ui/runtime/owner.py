@@ -13,7 +13,7 @@ from squid_ui.runtime.component import (
     render_component_tree,
 )
 from squid_ui.runtime.context import ContextKey
-from squid_ui.runtime.presentation import PresentationSession
+from squid_ui.runtime.presentation_state import PresentationState
 from squid_ui.runtime.topics import Address
 
 
@@ -24,14 +24,14 @@ class ComponentRuntime:
         self,
         root: Component,
         *,
-        presentation: PresentationSession | None = None,
+        presentation: PresentationState | None = None,
         on_invalidate: Callable[[], None] | None = None,
         context: Mapping[ContextKey[Any], object] | None = None,
         plan_cache: PlanCache | None = None,
     ) -> None:
         self.root = root
         root._runtime = self
-        self.presentation = presentation if presentation is not None else PresentationSession()
+        self.presentation = presentation if presentation is not None else PresentationState()
         self.on_invalidate = on_invalidate
         self.context = dict(context or {})
         self.plan_cache = plan_cache if plan_cache is not None else PlanCache(32)

@@ -3,12 +3,11 @@
 from collections.abc import Awaitable, Callable
 
 import squid_ui as sl
-from squid_ui_discord import DISCORD_V2_DPY27
 from squid_ui import TextLike, scene
 from squid_ui.forms import FormLike, SubmitHandler
 from squid_ui.interactions import ActionMode, Actor, SelectionEvent, Visibility
 from squid_ui.planning import plan
-from squid_ui.runtime import PresentationSession
+from squid_ui.runtime import PresentationState
 from squid_ui.semantic import (
     Choice,
     ChoiceEvent,
@@ -17,11 +16,12 @@ from squid_ui.semantic import (
     Details,
     Item,
     Items,
-    Managed,
     Navigation,
     NavOption,
     Paragraph,
+    Uncontrolled,
 )
+from squid_ui_discord import DISCORD_V2_DPY27
 
 
 class _Responder:
@@ -85,8 +85,8 @@ def _opened(result) -> bool:
 
 async def test_a_managed_items_seed_opens_an_entry_and_back_gets_out_of_it() -> None:
     """The seed must not re-apply after Back, or the reader is trapped in the entry."""
-    session = PresentationSession()
-    document = Items("catalog", ENTRIES, Managed("two"))
+    session = PresentationState()
+    document = Items("catalog", ENTRIES, Uncontrolled("two"))
 
     assert _opened(plan(document, target=DISCORD_V2_DPY27, session=session))
 
@@ -96,7 +96,7 @@ async def test_a_managed_items_seed_opens_an_entry_and_back_gets_out_of_it() -> 
 
 
 async def test_a_controlled_items_never_reads_the_session() -> None:
-    session = PresentationSession()
+    session = PresentationState()
     session.select("catalog", ("two",))
 
     _, record = _recorder()
@@ -107,7 +107,7 @@ async def test_a_controlled_items_never_reads_the_session() -> None:
 
 
 async def test_a_controlled_items_reports_both_opening_and_backing_out() -> None:
-    session = PresentationSession()
+    session = PresentationState()
     seen, record = _recorder()
 
     listing = plan(Items("catalog", ENTRIES, Controlled(None, record)), target=DISCORD_V2_DPY27, session=session)
@@ -130,9 +130,9 @@ def _disclosed(result) -> bool:
 
 
 async def test_a_managed_details_seed_applies_once_and_then_the_session_owns_it() -> None:
-    session = PresentationSession()
+    session = PresentationState()
     document = Details(
-        "debug", sl.semantic.Summary("Debug details"), (Paragraph("hidden body"),), Managed(initial=True)
+        "debug", sl.semantic.Summary("Debug details"), (Paragraph("hidden body"),), Uncontrolled(initial=True)
     )
 
     assert _disclosed(plan(document, target=DISCORD_V2_DPY27, session=session))
@@ -143,7 +143,7 @@ async def test_a_managed_details_seed_applies_once_and_then_the_session_owns_it(
 
 
 async def test_a_controlled_details_reports_the_requested_state_and_ignores_the_session() -> None:
-    session = PresentationSession()
+    session = PresentationState()
     session.disclose("debug", open_=True)
     seen, record = _recorder()
     document = Details(
@@ -169,7 +169,7 @@ def _chosen(result) -> tuple[str, ...]:
 
 
 async def test_a_managed_choices_remembers_a_selection_with_no_author_state() -> None:
-    session = PresentationSession()
+    session = PresentationState()
     document = Choices("size", tuple(Choice(str(index), f"Choice {index}") for index in range(6)))
 
     await _fire(plan(document, target=DISCORD_V2_DPY27, session=session), "size", _select(("3",)))
@@ -178,7 +178,7 @@ async def test_a_managed_choices_remembers_a_selection_with_no_author_state() ->
 
 
 async def test_a_controlled_choices_still_reports_what_changed() -> None:
-    session = PresentationSession()
+    session = PresentationState()
     seen, record = _recorder()
     document = Choices(
         "size",
@@ -194,7 +194,7 @@ async def test_a_controlled_choices_still_reports_what_changed() -> None:
 
 
 async def test_a_managed_navigation_remembers_the_destination_and_defaults_to_the_first() -> None:
-    session = PresentationSession()
+    session = PresentationState()
     document = Navigation("tabs", tuple(NavOption(str(index), f"Tab {index}") for index in range(6)))
 
     assert _chosen(plan(document, target=DISCORD_V2_DPY27, session=session)) == ("0",)
@@ -205,7 +205,7 @@ async def test_a_managed_navigation_remembers_the_destination_and_defaults_to_th
 
 
 async def test_a_managed_navigation_forgets_a_destination_that_went_away() -> None:
-    session = PresentationSession()
+    session = PresentationState()
     session.select("tabs", ("4",))
     document = Navigation("tabs", tuple(NavOption(str(index), f"Tab {index}") for index in range(6, 12)))
 

@@ -82,10 +82,10 @@ from squid_ui.semantic import (
     FormTrigger,
     Items,
     LayoutNode,
-    Managed,
     Navigation,
     RoutedChoices,
     Toggle,
+    Uncontrolled,
 )
 from squid_ui.sources import Position
 
@@ -144,7 +144,7 @@ def _choices(node: Choices, path: str, context: _Context) -> list[Node]:
     match node.selection:
         case Controlled(value=value):
             previous = tuple(value)
-        case Managed(initial=initial):
+        case Uncontrolled(initial=initial):
             previous = context.session.selection(node.key, initial=tuple(initial)).selected
 
     commit = ChoiceCommit(node.selection, node.key, previous, context.session)
@@ -204,7 +204,7 @@ def _entities(node: Entities, path: str, context: _Context) -> list[Node]:
     match node.selection:
         case Controlled(value=value):
             previous = tuple(value)
-        case Managed(initial=initial):
+        case Uncontrolled(initial=initial):
             initial_keys = tuple(_entity_key(value) for value in initial)
             stored = context.session.selection(node.key, initial=initial_keys).selected
             previous = tuple(_entity_ref(key) for key in stored)
@@ -324,7 +324,7 @@ def _navigation(node: Navigation, path: str, context: _Context) -> list[Node]:
     match node.current:
         case Controlled(value=value):
             current = value
-        case Managed(initial=initial):
+        case Uncontrolled(initial=initial):
             # A remembered destination that has since gone unavailable is the engine's own
             # stale data, so drop it. An author's value is theirs to be wrong about.
             keys = {destination.key for destination in available}
@@ -376,7 +376,7 @@ def _details(
     match node.open:
         case Controlled(value=value):
             open_ = value
-        case Managed(initial=initial):
+        case Uncontrolled(initial=initial):
             open_ = context.session.disclosure(node.key, initial=initial).open
 
     result: list[Node] = [
@@ -399,7 +399,7 @@ def _toggle(node: Toggle, context: _Context) -> list[Node]:
     match node.on:
         case Controlled(value=value):
             on = value
-        case Managed(initial=initial):
+        case Uncontrolled(initial=initial):
             on = context.session.toggle(node.key, initial=initial).on
 
     state_label = node.on_label if on else node.off_label
