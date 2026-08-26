@@ -6,10 +6,10 @@ from squid_discord import V2_LIMITS as LIMITS
 from squid_discord import V2_TARGET
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.planning import TargetProfile, measure, plan
+from squid_layouts.planning.layout_measurement.costing import measure_nodes
 from squid_layouts.planning.layout_measurement.model import RText
 from squid_layouts.planning.layout_measurement.text import BudgetRegion, make_unit, text_total
 from squid_layouts.planning.limits import ATTACHMENTS, COMPONENTS, DISPLAY_TEXT
-from squid_layouts.planning.measurement import measure_nodes
 from squid_layouts.planning.target import ResourceCost
 from squid_layouts.primitives import Never, Panel, Text, Variants
 
