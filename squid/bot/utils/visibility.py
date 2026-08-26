@@ -66,16 +66,16 @@ async def deliver_privately(
     channel, because the channel is exactly what the payload must not reach.
     """
     if ctx.interaction is not None or ctx.guild is None:
-        receipt = await sd.reply_to(
+        result = await sd.reply_to(
             ctx,
             ephemeral=True,
             files=files,
             allowed_mentions=allowed_mentions,
         )(presentation)
-        return receipt.message
+        return result.message
 
     try:
-        receipt = await send_to(ctx.author, files=files, allowed_mentions=allowed_mentions)(presentation)
+        result = await send_to(ctx.author, files=files, allowed_mentions=allowed_mentions)(presentation)
     except discord.Forbidden:
         await reply_presentation(
             ctx,
@@ -95,4 +95,4 @@ async def deliver_privately(
         ctx,
         info_layout(t(locale, _("Sent by direct message")), reason),
     )
-    return receipt.message
+    return result.message

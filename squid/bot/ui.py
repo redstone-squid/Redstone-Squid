@@ -191,8 +191,8 @@ async def reply(
             files=files,
         )
     ephemeral = visibility == "personal" and personal(ctx)
-    receipt = await sd.reply_to(ctx, ephemeral=ephemeral, files=files)(presentation)
-    return receipt.message
+    result = await sd.reply_to(ctx, ephemeral=ephemeral, files=files)(presentation)
+    return result.message
 
 
 async def reply_presentation(
@@ -202,7 +202,7 @@ async def reply_presentation(
     visibility: Visibility = "public",
     allowed_mentions: discord.AllowedMentions | None = None,
     files: Sequence[discord.File] = (),
-) -> sd.delivery.DeliveryReceipt:
+) -> sd.delivery.DeliveryResult:
     """Deliver a complete Squid presentation through the selected command audience."""
     from squid.bot.utils.visibility import personal
 
@@ -219,7 +219,7 @@ async def reply_presentation(
         if message is None:
             raise sd.delivery.DeliveryAbandoned
         handle = sd.delivery.handle_for(message, mode=presentation.mode)
-        return sd.delivery.DeliveryReceipt(message, handle)
+        return sd.delivery.DeliveryResult(message, handle)
 
     destination = sd.reply_to(
         ctx,
@@ -237,7 +237,7 @@ async def respond_presentation(
     ephemeral: bool = True,
     wait: bool = False,
     allowed_mentions: discord.AllowedMentions | None = None,
-) -> sd.delivery.DeliveryReceipt:
+) -> sd.delivery.DeliveryResult:
     """Deliver a complete presentation as an interaction response or follow-up."""
     return await sd.respond_to(
         interaction,
@@ -272,7 +272,7 @@ def destination(
 
         async def privately(
             presentation: sd.presentation.DiscordPresentation,
-        ) -> sd.delivery.DeliveryReceipt:
+        ) -> sd.delivery.DeliveryResult:
             message = await deliver_privately(
                 ctx,
                 presentation,
@@ -283,7 +283,7 @@ def destination(
             if message is None:
                 raise sd.delivery.DeliveryAbandoned
             handle = sd.delivery.handle_for(message, mode=presentation.mode)
-            return sd.delivery.DeliveryReceipt(message, handle)
+            return sd.delivery.DeliveryResult(message, handle)
 
         return privately
 

@@ -104,8 +104,8 @@ class DiscordPollPublisher:
 
     async def attach(self, vote_session_id: int, channel: GuildMessageable) -> discord.Message:
         """Post one card for an existing poll and let the reconcile loop own it."""
-        receipt = await send_to(channel)(text_layout("Publishing poll…"))
-        message = receipt.message
+        result = await send_to(channel)(text_layout("Publishing poll…"))
+        message = result.message
         if message is None:
             detail = "poll placeholder delivery returned no message"
             raise RuntimeError(detail)

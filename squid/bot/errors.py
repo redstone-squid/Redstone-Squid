@@ -370,7 +370,7 @@ async def record_operation_error(
     error: BaseException,
     *,
     locale: str | None,
-    receipt: sd.delivery.DeliveryReceipt | None,
+    result: sd.delivery.DeliveryResult | None,
     presented: bool,
     reports: ErrorReportService | None = None,
 ) -> None:
@@ -380,8 +380,8 @@ async def record_operation_error(
     original = unwrap_error(error)
     presentation = build_error_presentation(original, locale)
     context = {
-        "channel_id": receipt.message.channel.id if receipt is not None and receipt.message is not None else None,
-        "message_id": receipt.message_id if receipt is not None else None,
+        "channel_id": result.message.channel.id if result is not None and result.message is not None else None,
+        "message_id": result.message_id if result is not None else None,
     }
     if presentation.error_id is not None:
         application_context = _safe_log_context(original.context) if isinstance(original, SquidError) else None

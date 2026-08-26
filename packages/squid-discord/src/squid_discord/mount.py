@@ -1901,7 +1901,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                 try:
                     destination_type = f"{type(destination).__module__}.{type(destination).__qualname__}"
                     with profile.span("discord_write", attributes={"destination": destination_type}):
-                        receipt = await destination(candidate.presentation)
+                        result = await destination(candidate.presentation)
                 except deliver.DeliveryAbandoned:
                     logger.debug("mount %s was not delivered: the destination abandoned it", self.id)
                     with profile.span("rollback"):
@@ -1912,11 +1912,11 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     with profile.span("rollback"):
                         self._rollback(candidate)
                     raise
-                self._handle = receipt.handle
-                self._delete_handle = receipt.delete_handle
-                self._ephemeral = receipt.ephemeral
-                if receipt.message is not None:
-                    self._note_address(receipt.message)
+                self._handle = result.handle
+                self._delete_handle = result.delete_handle
+                self._ephemeral = result.ephemeral
+                if result.message is not None:
+                    self._note_address(result.message)
                 self._active = self.clock()
                 with profile.span("commit"):
                     self._commit_presented(candidate)
@@ -1925,7 +1925,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                 await self._settle_visible(candidate, profile=profile)
                 profile.set_result(TraceResult(TraceStatus.COMPLETED, presentation=PresentationStatus.WRITTEN))
                 settled = all(not binding.pending for binding in candidate.tree.async_bindings)
-                return deliver.Delivered(receipt, settled=settled)
+                return deliver.Delivered(result, settled=settled)
             finally:
                 self._render_lock.release()
 
