@@ -22,7 +22,7 @@ from squid_layouts.chrome import DEFAULT_CHROME
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning import SolveNoteCode, measure
 from squid_layouts.planning.layout_measurement.costing import component_count
-from squid_layouts.planning.layout_measurement.model import RText
+from squid_layouts.planning.layout_measurement.model import MeasuredText
 from squid_layouts.planning.layout_measurement.text import split_pages
 from squid_layouts.planning.limits import Axis
 from squid_layouts.planning.navigation import NavigationContext, default_nav, page_select_nav
@@ -158,7 +158,7 @@ def _total_text(solved) -> int:
     def walk(children) -> int:
         total = 0
         for child in children:
-            if isinstance(child, RText):
+            if isinstance(child, MeasuredText):
                 total += len(child.content)
             elif hasattr(child, "texts"):
                 total += sum(len(text.content) for text in child.texts)
@@ -402,7 +402,7 @@ class TestCountPages:
     def test_the_node_footer_overrides_chrome(self):
         solved = measure([Lines(self._entries(25), overflow=Paginate(per=10, footer=lambda p, n: f"{p}/{n} · 25"))])
         assert solved.pager is not None
-        assert any("1/3 · 25" in child.content for child in solved.children if isinstance(child, RText))
+        assert any("1/3 · 25" in child.content for child in solved.children if isinstance(child, MeasuredText))
 
     def test_count_pages_on_a_non_lines_node_fall_back_to_budget_pages(self):
         solved = measure([Text("short", overflow=Paginate(per=10))])

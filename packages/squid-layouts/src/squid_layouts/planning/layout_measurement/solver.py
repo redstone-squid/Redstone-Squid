@@ -38,11 +38,11 @@ from squid_layouts.planning.layout_measurement.diagnostics import (
 )
 from squid_layouts.planning.layout_measurement.model import (
     PAGE_FOOTER_PREFIX,
+    MeasuredGroup,
+    MeasuredPanel,
+    MeasuredText,
     Pager,
     Realized,
-    RGroup,
-    RPanel,
-    RText,
 )
 from squid_layouts.planning.layout_measurement.realization import Builder
 from squid_layouts.planning.layout_measurement.text import TextUnit
@@ -235,7 +235,7 @@ def _configure_paginators(
 
 
 def _insert_after(
-    children: list[Realized], target: RText, additions: list[Realized]
+    children: list[Realized], target: MeasuredText, additions: list[Realized]
 ) -> tuple[list[Realized], int] | None:
     """Splice `additions` in after `target`, reporting the list and offset they landed at."""
     for index, child in enumerate(children):
@@ -243,7 +243,7 @@ def _insert_after(
             children[index + 1 : index + 1] = additions
             return children, index + 1
         if (
-            isinstance(child, RPanel | RGroup)
+            isinstance(child, MeasuredPanel | MeasuredGroup)
             and (found := _insert_after(child.children, target, additions)) is not None
         ):
             return found
@@ -343,7 +343,7 @@ def _measure_once(
         policy = unit.overflow
         assert isinstance(policy, Paginate)
         key = final.keys[unit.index]
-        footer_slot = RText()
+        footer_slot = MeasuredText()
         initial = len(unit.fragments) - 1 if policy.initial == "end" else 0
         pager = Pager(
             key=key,

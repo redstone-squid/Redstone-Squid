@@ -5,13 +5,13 @@ from dataclasses import replace
 
 from squid_layouts.planning.adapter import ResourceCost
 from squid_layouts.planning.layout_measurement.model import (
-    RCard,
-    RContent,
+    MeasuredCard,
+    MeasuredContent,
+    MeasuredGroup,
+    MeasuredPanel,
+    MeasuredSection,
+    MeasuredText,
     Realized,
-    RGroup,
-    RPanel,
-    RSection,
-    RText,
 )
 from squid_layouts.planning.layout_measurement.realization import Builder
 from squid_layouts.planning.limits import LIMITS, Axis, DiscordLimits
@@ -77,22 +77,22 @@ def prune(children: list[Realized]) -> list[Realized]:
     pruned: list[Realized] = []
     for child in children:
         match child:
-            case RText(dropped=True):
+            case MeasuredText(dropped=True):
                 continue
-            case RCard(blocks=blocks):
+            case MeasuredCard(blocks=blocks):
                 pruned.append(replace(child, blocks=prune(blocks)))
-            case RContent(slot=slot) if slot.dropped:
+            case MeasuredContent(slot=slot) if slot.dropped:
                 continue
-            case RPanel(children=inner, accent=accent, spoiler=spoiler):
+            case MeasuredPanel(children=inner, accent=accent, spoiler=spoiler):
                 kept = prune(inner)
                 if kept:
-                    pruned.append(RPanel(children=kept, accent=accent, spoiler=spoiler))
-            case RGroup(children=inner):
+                    pruned.append(MeasuredPanel(children=kept, accent=accent, spoiler=spoiler))
+            case MeasuredGroup(children=inner):
                 pruned.extend(prune(inner))
-            case RSection(texts=texts, accessory=accessory):
+            case MeasuredSection(texts=texts, accessory=accessory):
                 kept_texts = [slot for slot in texts if not slot.dropped]
                 if kept_texts:
-                    pruned.append(RSection(texts=kept_texts, accessory=accessory))
+                    pruned.append(MeasuredSection(texts=kept_texts, accessory=accessory))
             case Gallery(items=()) | Row(items=()):
                 continue
             case _:
@@ -127,18 +127,18 @@ def structural_cost(children: Sequence[Realized]) -> dict[str, int]:
     def walk(nodes: Sequence[Realized]) -> None:
         for child in nodes:
             match child:
-                case RPanel(children=inner):
+                case MeasuredPanel(children=inner):
                     totals[Axis.COMPONENTS] += 1
                     walk(inner)
-                case RGroup(children=inner):
+                case MeasuredGroup(children=inner):
                     walk(inner)
-                case RCard(blocks=blocks):
+                case MeasuredCard(blocks=blocks):
                     totals[Axis.EMBEDS] += 1
                     totals[Axis.COMPONENTS] += 1
                     walk(blocks)
-                case RContent():
+                case MeasuredContent():
                     continue
-                case RSection(texts=texts, accessory=accessory):
+                case MeasuredSection(texts=texts, accessory=accessory):
                     totals[Axis.COMPONENTS] += 1 + len(texts) + _item_component_cost(accessory)
                 case Row(items=items):
                     totals[Axis.COMPONENTS] += 1 + sum(_item_component_cost(item) for item in items)
