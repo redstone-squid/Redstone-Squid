@@ -257,7 +257,7 @@ async def test_presented_error_is_not_rendered_or_logged_twice() -> None:
         await record_operation_error(
             error,
             locale=None,
-            receipt=sd.delivery.DeliveryReceipt(message.message, None),
+            result=sd.delivery.DeliveryResult(message.message, None),
             presented=True,
         )
         await handle_interaction_error(interaction.interaction, error, surface="command")
