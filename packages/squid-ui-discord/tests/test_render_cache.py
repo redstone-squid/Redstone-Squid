@@ -199,3 +199,21 @@ def test_100_component_unchanged_hot_path_meets_latency_budget() -> None:
 
     assert result.unchanged_p95_ms <= 2
     assert result.unchanged_fraction <= 0.25
+
+
+async def test_representative_change_benchmarks_exercise_their_expected_paths() -> None:
+    from benchmarks.plan72_render_caching import measure_change_scenarios
+
+    results = await measure_change_scenarios(20, samples=2)
+
+    assert [result.name for result in results] == [
+        "1_leaf_change",
+        "10_leaf_change",
+        "conditional_branch_swap",
+        "planner_text_limit_crossing",
+        "atomic_resource_resolution",
+        "subtree_mount_unmount",
+    ]
+    assert all(result.components == 20 for result in results)
+    assert all(result.samples == 2 for result in results)
+    assert all(result.p50_ms >= 0 and result.p95_ms >= result.p50_ms for result in results)
