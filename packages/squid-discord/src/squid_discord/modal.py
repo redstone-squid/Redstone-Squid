@@ -40,7 +40,7 @@ from squid_layouts.forms import (
     UploadedFile,
     ZonedDateTimeField,
 )
-from squid_layouts.planning.adapter import ADAPTER_MODAL_FORMS, AdapterProfile
+from squid_layouts.planning.adapter import AdapterCapability, AdapterProfile
 from squid_layouts.planning.limits import COMPONENT_LIMITS, ComponentLimits
 from squid_layouts.target_types import DiscordPyAdapter
 from squid_layouts.text import NEUTRAL, Localization, TextLike, resolve_text
@@ -448,7 +448,7 @@ def build_modal(
 
     ``on_submit`` receives the input values keyed by each field's ``key`` (or label).
     """
-    require_discord_py_capability(adapter, ADAPTER_MODAL_FORMS, "build a modal form")
+    require_discord_py_capability(adapter, AdapterCapability.MODAL_FORMS, "build a modal form")
     modal = _SpecModal(spec, on_submit, timeout)
     interventions = conform_modal(modal, strict=strict, limits=limits)
     if interventions:
@@ -467,7 +467,7 @@ def build_form_modal(
     adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
 ) -> discord.ui.Modal:
     """Build a Discord modal from a portable form schema."""
-    require_discord_py_capability(adapter, ADAPTER_MODAL_FORMS, "build a modal form")
+    require_discord_py_capability(adapter, AdapterCapability.MODAL_FORMS, "build a modal form")
     adapted = spec.adapt(
         frozenset(
             {Capability.FORMS_MODAL, EntityField.capability, FileField.capability, CheckboxGroupField.capability}

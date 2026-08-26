@@ -1,7 +1,7 @@
 """Discord target conveniences bound to the shipped discord.py adapter."""
 
 from collections.abc import Callable
-from typing import Any, overload
+from typing import overload
 
 import discord
 
@@ -14,7 +14,7 @@ from squid_layouts.planning.discord import (
     components_v2_target,
 )
 from squid_layouts.planning.limits import CLASSIC_LIMITS, LIMITS, ClassicLimits, V2Limits
-from squid_layouts.planning.target import TargetProfile
+from squid_layouts.planning.target import Target
 from squid_layouts.primitives.nodes import Extension, PrimitiveNode
 from squid_layouts.scene.model import SceneClassicMessage, SceneComponentsV2
 from squid_layouts.target_types import (
@@ -28,63 +28,36 @@ V2_CAPABILITIES = DISCORD_PY_27_ADAPTER.combine_capabilities(V2_PROTOCOL_CAPABIL
 CLASSIC_CAPABILITIES = CLASSIC_PROTOCOL_CAPABILITIES
 
 
-class Target[ModeT = Any, AdapterT = Any, BodyT = Any](TargetProfile[ModeT, AdapterT, BodyT]):
-    """A Discord protocol mode paired with the adapter that realizes it."""
+@overload
+def v2(*, limits: V2Limits = LIMITS) -> Target[V2Limits, SceneComponentsV2, ComponentsV2Target, DiscordPy27Adapter]: ...
+@overload
+def v2[ProfileT: DiscordPyAdapter](
+    *, adapter: AdapterProfile[ProfileT], limits: V2Limits = LIMITS
+) -> Target[V2Limits, SceneComponentsV2, ComponentsV2Target, ProfileT]: ...
+def v2(
+    *,
+    adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
+    limits: V2Limits = LIMITS,
+) -> Target[V2Limits, SceneComponentsV2, ComponentsV2Target, DiscordPyAdapter]:
+    """A Components V2 target realized by discord.py."""
+    return components_v2_target(adapter, limits=limits)
 
-    @overload
-    @classmethod
-    def v2(cls, *, limits: V2Limits = LIMITS) -> Target[ComponentsV2Target, DiscordPy27Adapter, SceneComponentsV2]: ...
 
-    @overload
-    @classmethod
-    def v2[ProfileT: DiscordPyAdapter](
-        cls, *, adapter: AdapterProfile[ProfileT], limits: V2Limits = LIMITS
-    ) -> Target[ComponentsV2Target, ProfileT, SceneComponentsV2]: ...
-
-    @classmethod
-    def v2(
-        cls,
-        *,
-        adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
-        limits: V2Limits = LIMITS,
-    ) -> Target:
-        return cls._from(components_v2_target(adapter, limits=limits))
-
-    @overload
-    @classmethod
-    def classic(
-        cls, *, limits: ClassicLimits = CLASSIC_LIMITS
-    ) -> Target[ClassicTarget, DiscordPy27Adapter, SceneClassicMessage]: ...
-
-    @overload
-    @classmethod
-    def classic[ProfileT: DiscordPyAdapter](
-        cls, *, adapter: AdapterProfile[ProfileT], limits: ClassicLimits = CLASSIC_LIMITS
-    ) -> Target[ClassicTarget, ProfileT, SceneClassicMessage]: ...
-
-    @classmethod
-    def classic(
-        cls,
-        *,
-        adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
-        limits: ClassicLimits = CLASSIC_LIMITS,
-    ) -> Target:
-        return cls._from(classic_target(adapter, limits=limits))
-
-    @classmethod
-    def _from(cls, target: TargetProfile) -> Target:
-        return cls(
-            id=target.id,
-            version=target.version,
-            capabilities=target.capabilities,
-            limits=target.limits,
-            extensions=target.extensions,
-            dialect=target.dialect,
-            mode=target.mode,
-            adapter=target.adapter,
-            body_type=target.body_type,
-            selected_adapter_capabilities=target.selected_adapter_capabilities,
-        )
+@overload
+def classic(
+    *, limits: ClassicLimits = CLASSIC_LIMITS
+) -> Target[ClassicLimits, SceneClassicMessage, ClassicTarget, DiscordPy27Adapter]: ...
+@overload
+def classic[ProfileT: DiscordPyAdapter](
+    *, adapter: AdapterProfile[ProfileT], limits: ClassicLimits = CLASSIC_LIMITS
+) -> Target[ClassicLimits, SceneClassicMessage, ClassicTarget, ProfileT]: ...
+def classic(
+    *,
+    adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
+    limits: ClassicLimits = CLASSIC_LIMITS,
+) -> Target[ClassicLimits, SceneClassicMessage, ClassicTarget, DiscordPyAdapter]:
+    """A classic-message target realized by discord.py."""
+    return classic_target(adapter, limits=limits)
 
 
 def NativeItem[FallbackT](
@@ -94,5 +67,8 @@ def NativeItem[FallbackT](
     return Extension(kind="discord.item", version=1, payload=factory, fallback=fallback)
 
 
-V2_TARGET = Target.v2()
-CLASSIC_TARGET = Target.classic()
+DISCORD_V2_DPY27 = v2()
+"""The default target: Components V2 over discord.py 2.7."""
+
+DISCORD_V1_DPY27 = classic()
+"""A classic Discord message over discord.py 2.7."""

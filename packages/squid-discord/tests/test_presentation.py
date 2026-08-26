@@ -441,7 +441,7 @@ class TestDurableMode:
                 component_version=1,
                 components=(),
                 presentation=squid_discord.durability.PresentationState({}, {}, {}, {}),
-                target_fingerprint=squid_discord.V2_TARGET.fingerprint,
+                target_fingerprint=squid_discord.DISCORD_V2_DPY27.fingerprint,
             ),
             locator=locator,
         )

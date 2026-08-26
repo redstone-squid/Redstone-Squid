@@ -26,13 +26,13 @@ from squid_discord.inspection import (
     measure_classic,
 )
 from squid_discord.presentation import DiscordMode, DiscordModeError, DiscordPresentation
-from squid_discord.target import CLASSIC_TARGET, Target
+from squid_discord.target import DISCORD_V1_DPY27, Target
 from squid_layouts.assets import Asset
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.document import DocumentLike
 from squid_layouts.errors import ExistingLayoutError
 from squid_layouts.palette import DEFAULT_PALETTE, Palette
-from squid_layouts.planning.adapter import ADAPTER_RENDER_CLASSIC
+from squid_layouts.planning.adapter import AdapterCapability
 from squid_layouts.planning.cache import PlanCache
 from squid_layouts.planning.limits import CLASSIC_LIMITS, Axis, ClassicLimits
 from squid_layouts.planning.navigation import PlannedNav
@@ -51,19 +51,12 @@ from squid_layouts.text import NEUTRAL, Localization
 logger = logging.getLogger(__name__)
 
 
-def _classic_limits(target: Target) -> ClassicLimits:
-    if not isinstance(target.limits, ClassicLimits):
-        message = f"squid_discord.classic plans classic messages; {target.id!r} is not a classic target"
-        raise DiscordModeError(message)
-    return target.limits
-
-
 def compose(
     rendered: DocumentLike,
     *,
     wire: Wire | None = None,
     renderer: ClassicRenderer | None = None,
-    target: Target[ClassicTarget, DiscordPyAdapter, SceneClassicMessage] = CLASSIC_TARGET,
+    target: Target[ClassicLimits, SceneClassicMessage, ClassicTarget, DiscordPyAdapter] = DISCORD_V1_DPY27,
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,
@@ -79,7 +72,7 @@ def compose(
     """Plan a logical document, then draw the complete classic message it resolves to."""
     from squid_discord.composition import Composition, _span
 
-    adapter = require_discord_py_target(target, ADAPTER_RENDER_CLASSIC, "compose a classic message")
+    adapter = require_discord_py_target(target, AdapterCapability.RENDER_CLASSIC, "compose a classic message")
     with _span(profile, "planner") as planner_span:
         result = plan_document(
             rendered,
@@ -104,7 +97,7 @@ def compose(
             profile.increment("planner.cache_hits", int(result.metrics.cache_hit))
             profile.increment("planner.search_fallbacks", int(result.metrics.search_fallback))
             profile.increment("planner.states_explored", result.metrics.states_explored)
-    drawer = renderer if renderer is not None else ClassicRenderer(limits=_classic_limits(target), adapter=adapter)
+    drawer = renderer if renderer is not None else ClassicRenderer(limits=target.limits, adapter=adapter)
     with _span(profile, "renderer"):
         presentation = drawer.draw(result.scene, plan=result, wire=wire)
     if result.report.events:
@@ -115,7 +108,7 @@ def compose(
 def render_static(
     nodes: DocumentLike | Component,
     *,
-    target: Target[ClassicTarget, DiscordPyAdapter, SceneClassicMessage] = CLASSIC_TARGET,
+    target: Target[ClassicLimits, SceneClassicMessage, ClassicTarget, DiscordPyAdapter] = DISCORD_V1_DPY27,
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,
@@ -199,7 +192,7 @@ def contribute(
     followed_by_controls: Sequence[discord.ui.Item[Any]] = (),
     reserve: ResourceCost = EMPTY_RESERVATION,
     attachments: int = 0,
-    target: Target = CLASSIC_TARGET,
+    target: Target = DISCORD_V1_DPY27,
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,
@@ -222,7 +215,7 @@ def contribute(
     if to.mode is not DiscordMode.CLASSIC:
         message = f"classic.contribute needs a classic host presentation, not {to.mode.value}"
         raise DiscordModeError(message)
-    limits = _classic_limits(target)
+    limits = target.limits
     trailing_embeds = tuple(followed_by)
     trailing_controls = tuple(followed_by_controls)
 

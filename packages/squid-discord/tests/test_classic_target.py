@@ -4,9 +4,10 @@ import discord
 import pytest
 
 import squid_layouts as sl
-from squid_discord import CLASSIC_TARGET, V2_LIMITS, V2_TARGET, Target
+from squid_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, V2_LIMITS
+from squid_discord.target import classic
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
-from squid_layouts.planning import plan
+from squid_layouts.planning import Target, plan
 from squid_layouts.planning.limits import CLASSIC_LIMITS, Axis
 from squid_layouts.primitives import (
     Card,
@@ -28,7 +29,7 @@ from squid_layouts.primitives import (
 from squid_layouts.scene.model import SceneClassicMessage, SceneEmbedField
 
 
-def body(document, target=CLASSIC_TARGET) -> SceneClassicMessage:
+def body(document, target=DISCORD_V1_DPY27) -> SceneClassicMessage:
     resolved = plan(document, target=target).scene.body
     assert isinstance(resolved, SceneClassicMessage)
     return resolved
@@ -36,16 +37,16 @@ def body(document, target=CLASSIC_TARGET) -> SceneClassicMessage:
 
 class TestTargets:
     def test_the_two_targets_are_separate_identities(self) -> None:
-        assert V2_TARGET.id == "discord.components-v2"
-        assert CLASSIC_TARGET.id == "discord.components-v1"
+        assert DISCORD_V2_DPY27.id == "discord.components-v2"
+        assert DISCORD_V1_DPY27.id == "discord.components-v1"
 
-    def test_a_target_cannot_be_built_without_saying_which_mode_it_is(self) -> None:
-        """The mode decides the dialect, the renderer, and the view type. It is not optional."""
+    def test_a_target_cannot_be_built_without_both_of_its_axes(self) -> None:
+        """A target is a product: neither the dialect nor the adapter is optional."""
         with pytest.raises(TypeError):
             Target()  # type: ignore[call-arg]
 
     def test_custom_limits_arrive_through_a_custom_target(self) -> None:
-        target = Target.classic(limits=CLASSIC_LIMITS.__class__(embed_count=2))
+        target = classic(limits=CLASSIC_LIMITS.__class__(embed_count=2))
 
         assert target.capacity(Axis.EMBEDS) == 2
         assert target.capacity(Axis.EMBED_TEXT) == CLASSIC_LIMITS.embed_text
@@ -53,17 +54,17 @@ class TestTargets:
 
 class TestCapabilities:
     def test_classic_declares_content_and_embeds_and_v2_does_not(self) -> None:
-        assert {"message.content", "layout.embed", "layout.embed_fields"} <= CLASSIC_TARGET.capabilities
-        assert not {"message.content", "layout.embed"} & V2_TARGET.capabilities
+        assert {"message.content", "layout.embed", "layout.embed_fields"} <= DISCORD_V1_DPY27.capabilities
+        assert not {"message.content", "layout.embed"} & DISCORD_V2_DPY27.capabilities
 
     def test_classic_declares_no_v2_container_structures(self) -> None:
-        assert not {"layout.container", "layout.section", "layout.gallery"} & CLASSIC_TARGET.capabilities
+        assert not {"layout.container", "layout.section", "layout.gallery"} & DISCORD_V1_DPY27.capabilities
 
     def test_both_targets_share_the_control_and_form_capabilities(self) -> None:
         shared = {"actions.buttons", "actions.select", "forms.modal"}
 
-        assert shared <= CLASSIC_TARGET.capabilities
-        assert shared <= V2_TARGET.capabilities
+        assert shared <= DISCORD_V1_DPY27.capabilities
+        assert shared <= DISCORD_V2_DPY27.capabilities
 
 
 class TestBudgets:
@@ -74,7 +75,7 @@ class TestBudgets:
         assert V2_LIMITS.text_axes == {Axis.DISPLAY_TEXT: 4000}
 
     def test_classic_budgets_the_axes_a_classic_message_actually_has(self) -> None:
-        assert CLASSIC_TARGET.capacities == {
+        assert DISCORD_V1_DPY27.capacities == {
             Axis.CONTENT_TEXT: 2000,
             Axis.EMBED_TEXT: 6000,
             Axis.EMBEDS: 10,
@@ -84,8 +85,8 @@ class TestBudgets:
         }
 
     def test_no_classic_strategy_can_borrow_the_v2_totals(self) -> None:
-        assert Axis.COMPONENTS not in CLASSIC_TARGET.capacities
-        assert Axis.DISPLAY_TEXT not in CLASSIC_TARGET.capacities
+        assert Axis.COMPONENTS not in DISCORD_V1_DPY27.capacities
+        assert Axis.DISPLAY_TEXT not in DISCORD_V1_DPY27.capacities
 
     def test_row_and_control_shape_is_stated_once_for_both_modes(self) -> None:
         """Not merely equal: the same object, so the two can no longer drift apart."""
@@ -128,7 +129,7 @@ class TestClassicShape:
 
     def test_a_document_may_carry_only_one_content_field(self) -> None:
         with pytest.raises(LayoutInvariantError, match="only one Content node is legal"):
-            plan([Content("a"), Content("b")], target=CLASSIC_TARGET)
+            plan([Content("a"), Content("b")], target=DISCORD_V1_DPY27)
 
     def test_rows_become_classic_rows(self) -> None:
         message = body(Row((LinkButton("Docs", "https://example.invalid"),)))
@@ -144,27 +145,27 @@ class TestClassicShape:
 
     def test_a_field_that_trims_to_nothing_is_rejected_rather_than_dropped(self) -> None:
         with pytest.raises(LayoutInvariantError, match="non-empty name and value"):
-            plan(Card(fields=(CardField("  ", "value"),)), target=CLASSIC_TARGET)
+            plan(Card(fields=(CardField("  ", "value"),)), target=DISCORD_V1_DPY27)
 
 
 class TestGating:
     def test_a_v2_container_has_no_classic_form_and_says_so(self) -> None:
         for node in (Panel(children=(Text("x"),)), Gallery(("https://example.invalid/a.png",))):
             with pytest.raises(LayoutInvariantError, match="no classic form"):
-                plan(node, target=CLASSIC_TARGET)  # pyrefly: ignore[bad-argument-type]
+                plan(node, target=DISCORD_V1_DPY27)  # pyrefly: ignore[bad-argument-type]
 
     def test_a_section_is_never_silently_reinterpreted_as_a_card(self) -> None:
         section = Section((Text("x"),), accessory=Thumbnail("https://example.invalid/a.png"))
 
         with pytest.raises(LayoutInvariantError, match="no classic form"):
-            plan(section, target=CLASSIC_TARGET)  # pyrefly: ignore[bad-argument-type]
+            plan(section, target=DISCORD_V1_DPY27)  # pyrefly: ignore[bad-argument-type]
 
 
 class TestLocalCaps:
     def test_a_direct_value_over_its_cap_is_a_planning_error(self) -> None:
         """Silently clipping a title the author wrote whole is worse than refusing it."""
         with pytest.raises(LayoutInvariantError, match="embed title is 300 characters; the cap is 256"):
-            plan(Card(title="x" * 300), target=CLASSIC_TARGET)
+            plan(Card(title="x" * 300), target=DISCORD_V1_DPY27)
 
     def test_an_explicit_policy_makes_the_same_value_legal(self) -> None:
         title = body(Card(title=Text("x" * 300, overflow=Truncate()))).embeds[0].title
@@ -174,13 +175,13 @@ class TestLocalCaps:
 
     def test_a_field_value_over_its_cap_names_the_field_and_the_cap(self) -> None:
         with pytest.raises(LayoutInvariantError, match="field value is 2000 characters; the cap is 1024"):
-            plan(Card(fields=(CardField("n", "x" * 2000),)), target=CLASSIC_TARGET)
+            plan(Card(fields=(CardField("n", "x" * 2000),)), target=DISCORD_V1_DPY27)
 
     def test_more_than_twenty_five_fields_is_refused_at_the_card(self) -> None:
         fields = tuple(CardField(f"n{index}", "v") for index in range(26))
 
         with pytest.raises(LayoutInvariantError, match="card has 26 fields; the cap is 25"):
-            plan(Card(fields=fields), target=CLASSIC_TARGET)
+            plan(Card(fields=fields), target=DISCORD_V1_DPY27)
 
 
 class TestIndependentTextPools:
@@ -202,14 +203,14 @@ class TestIndependentTextPools:
 
     def test_content_that_cannot_shrink_and_does_not_fit_is_a_failure(self) -> None:
         with pytest.raises(UnsolvableLayoutError, match="Never nodes need"):
-            plan(Content("y" * 3000), target=CLASSIC_TARGET)
+            plan(Content("y" * 3000), target=DISCORD_V1_DPY27)
 
     def test_the_pools_do_not_lend_to_each_other(self) -> None:
         """An empty content field does not buy an embed a single extra character."""
         overlong = Card(children=(Text("x" * 6100, overflow=Never()),))
 
         with pytest.raises(UnsolvableLayoutError, match="Never nodes need"):
-            plan(overlong, target=CLASSIC_TARGET)
+            plan(overlong, target=DISCORD_V1_DPY27)
 
 
 class TestPagedRegions:
@@ -221,7 +222,7 @@ class TestPagedRegions:
             chars=200,
         )
 
-        assert isinstance(plan(document, target=CLASSIC_TARGET).scene.body, SceneClassicMessage)
+        assert isinstance(plan(document, target=DISCORD_V1_DPY27).scene.body, SceneClassicMessage)
 
 
 class TestDiscordPyCrossChecks:

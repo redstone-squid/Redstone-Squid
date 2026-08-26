@@ -6,10 +6,10 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+from squid_discord import DISCORD_V2_DPY27, render_static
 from squid_discord import (
     V2_LIMITS as LIMITS,
 )
-from squid_discord import V2_TARGET, render_static
 from squid_layouts.errors import LayoutDegradedError
 from squid_layouts.planning import (
     SolveNoteCode,
@@ -63,7 +63,7 @@ def _rendered(solved) -> str:
 
 def _planned(nodes: Sequence[Node], **options) -> PlanResult:
     """Ladders are planner decisions, so structural behaviour is observed through plan()."""
-    return plan(nodes, target=V2_TARGET, **options)
+    return plan(nodes, target=DISCORD_V2_DPY27, **options)
 
 
 def _text(result: PlanResult) -> str:
@@ -353,7 +353,7 @@ def test_a_rung_may_lower_to_several_nodes() -> None:
         ActionGroup(buttons),
         SelectMenu(tuple(Option(f"b{index}", str(index)) for index in range(8)), choose, key="k"),
     )
-    scene = plan([ladder], target=V2_TARGET).scene
+    scene = plan([ladder], target=DISCORD_V2_DPY27).scene
     # Two rows of five and three spliced in place, not wrapped in a Panel that would cost
     # the very container component the ladder exists to save.
     assert [len(child.items) for child in scene.components_v2.children if isinstance(child, SceneRow)] == [5, 3]

@@ -3,7 +3,7 @@
 from collections.abc import Awaitable, Callable
 
 import squid_layouts as sl
-from squid_discord import V2_TARGET
+from squid_discord import DISCORD_V2_DPY27
 from squid_layouts import TextLike
 from squid_layouts.forms import FormLike, SubmitHandler
 from squid_layouts.interactions import ActionPolicy, Actor, SelectionEvent, Visibility
@@ -89,11 +89,11 @@ async def test_a_managed_items_seed_opens_an_entry_and_back_gets_out_of_it() -> 
     session = PresentationSession()
     document = Items("catalog", ENTRIES, Managed("two"))
 
-    assert _opened(plan(document, target=V2_TARGET, session=session))
+    assert _opened(plan(document, target=DISCORD_V2_DPY27, session=session))
 
-    await _fire(plan(document, target=V2_TARGET, session=session), "catalog.back", _select(()))
+    await _fire(plan(document, target=DISCORD_V2_DPY27, session=session), "catalog.back", _select(()))
 
-    assert not _opened(plan(document, target=V2_TARGET, session=session))
+    assert not _opened(plan(document, target=DISCORD_V2_DPY27, session=session))
 
 
 async def test_a_controlled_items_never_reads_the_session() -> None:
@@ -102,17 +102,19 @@ async def test_a_controlled_items_never_reads_the_session() -> None:
 
     _, record = _recorder()
 
-    assert not _opened(plan(Items("catalog", ENTRIES, Controlled(None, record)), target=V2_TARGET, session=session))
+    assert not _opened(
+        plan(Items("catalog", ENTRIES, Controlled(None, record)), target=DISCORD_V2_DPY27, session=session)
+    )
 
 
 async def test_a_controlled_items_reports_both_opening_and_backing_out() -> None:
     session = PresentationSession()
     seen, record = _recorder()
 
-    listing = plan(Items("catalog", ENTRIES, Controlled(None, record)), target=V2_TARGET, session=session)
+    listing = plan(Items("catalog", ENTRIES, Controlled(None, record)), target=DISCORD_V2_DPY27, session=session)
     await _fire(listing, "catalog.focus", _select(("two",)))
 
-    detail = plan(Items("catalog", ENTRIES, Controlled("two", record)), target=V2_TARGET, session=session)
+    detail = plan(Items("catalog", ENTRIES, Controlled("two", record)), target=DISCORD_V2_DPY27, session=session)
     await _fire(detail, "catalog.back", _select(()))
 
     assert [event.opened for event in seen] == ["two", None]
@@ -134,11 +136,11 @@ async def test_a_managed_details_seed_applies_once_and_then_the_session_owns_it(
         "debug", sl.semantic.Summary("Debug details"), (Paragraph("hidden body"),), Managed(initial=True)
     )
 
-    assert _disclosed(plan(document, target=V2_TARGET, session=session))
+    assert _disclosed(plan(document, target=DISCORD_V2_DPY27, session=session))
 
-    await _fire(plan(document, target=V2_TARGET, session=session), "debug.toggle", _select(()))
+    await _fire(plan(document, target=DISCORD_V2_DPY27, session=session), "debug.toggle", _select(()))
 
-    assert not _disclosed(plan(document, target=V2_TARGET, session=session))
+    assert not _disclosed(plan(document, target=DISCORD_V2_DPY27, session=session))
 
 
 async def test_a_controlled_details_reports_the_requested_state_and_ignores_the_session() -> None:
@@ -152,7 +154,7 @@ async def test_a_controlled_details_reports_the_requested_state_and_ignores_the_
         Controlled(value=False, on_change=record),
     )
 
-    result = plan(document, target=V2_TARGET, session=session)
+    result = plan(document, target=DISCORD_V2_DPY27, session=session)
     await _fire(result, "debug.toggle", _select(()))
 
     assert not _disclosed(result)
@@ -171,9 +173,9 @@ async def test_a_managed_choices_remembers_a_selection_with_no_author_state() ->
     session = PresentationSession()
     document = Choices("size", tuple(Choice(str(index), f"Choice {index}") for index in range(6)))
 
-    await _fire(plan(document, target=V2_TARGET, session=session), "size", _select(("3",)))
+    await _fire(plan(document, target=DISCORD_V2_DPY27, session=session), "size", _select(("3",)))
 
-    assert _chosen(plan(document, target=V2_TARGET, session=session)) == ("3",)
+    assert _chosen(plan(document, target=DISCORD_V2_DPY27, session=session)) == ("3",)
 
 
 async def test_a_controlled_choices_still_reports_what_changed() -> None:
@@ -185,7 +187,7 @@ async def test_a_controlled_choices_still_reports_what_changed() -> None:
         Controlled(("1",), record),
     )
 
-    await _fire(plan(document, target=V2_TARGET, session=session), "size", _select(("3",)))
+    await _fire(plan(document, target=DISCORD_V2_DPY27, session=session), "size", _select(("3",)))
 
     assert isinstance(seen[0], ChoiceEvent)
     assert (seen[0].selected, seen[0].added, seen[0].removed) == (("3",), ("3",), ("1",))
@@ -196,11 +198,11 @@ async def test_a_managed_navigation_remembers_the_destination_and_defaults_to_th
     session = PresentationSession()
     document = Navigation("tabs", tuple(Destination(str(index), f"Tab {index}") for index in range(6)))
 
-    assert _chosen(plan(document, target=V2_TARGET, session=session)) == ("0",)
+    assert _chosen(plan(document, target=DISCORD_V2_DPY27, session=session)) == ("0",)
 
-    await _fire(plan(document, target=V2_TARGET, session=session), "tabs", _select(("4",)))
+    await _fire(plan(document, target=DISCORD_V2_DPY27, session=session), "tabs", _select(("4",)))
 
-    assert _chosen(plan(document, target=V2_TARGET, session=session)) == ("4",)
+    assert _chosen(plan(document, target=DISCORD_V2_DPY27, session=session)) == ("4",)
 
 
 async def test_a_managed_navigation_forgets_a_destination_that_went_away() -> None:
@@ -208,4 +210,4 @@ async def test_a_managed_navigation_forgets_a_destination_that_went_away() -> No
     session.select("tabs", ("4",))
     document = Navigation("tabs", tuple(Destination(str(index), f"Tab {index}") for index in range(6, 12)))
 
-    assert _chosen(plan(document, target=V2_TARGET, session=session)) == ("6",)
+    assert _chosen(plan(document, target=DISCORD_V2_DPY27, session=session)) == ("6",)

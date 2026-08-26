@@ -1,6 +1,6 @@
 """How each semantic node reaches a classic message. One test per row of the mapping."""
 
-from squid_discord import CLASSIC_TARGET
+from squid_discord import DISCORD_V1_DPY27
 from squid_layouts import Tone
 from squid_layouts.document import Asset, InlineAsset
 from squid_layouts.planning import plan
@@ -24,13 +24,13 @@ from squid_layouts.semantic import (
 
 
 def message(document, **kwargs) -> SceneClassicMessage:
-    body = plan(document, target=CLASSIC_TARGET, **kwargs).scene.body
+    body = plan(document, target=DISCORD_V1_DPY27, **kwargs).scene.body
     assert isinstance(body, SceneClassicMessage)
     return body
 
 
 def codes(document) -> list[str]:
-    return [event.code for event in plan(document, target=CLASSIC_TARGET).report.events]
+    return [event.code for event in plan(document, target=DISCORD_V1_DPY27).report.events]
 
 
 class TestLooseProse:

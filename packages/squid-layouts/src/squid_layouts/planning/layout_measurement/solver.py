@@ -16,6 +16,7 @@ from dataclasses import dataclass, field, replace
 
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome, localize_chrome
 from squid_layouts.errors import LayoutInvariantError
+from squid_layouts.planning.adapter import EMPTY_COST, ResourceCost
 from squid_layouts.planning.degradation import DegradationProfile, DegradationRecorder
 from squid_layouts.planning.layout_measurement.allocation import (
     allocate,
@@ -50,7 +51,6 @@ from squid_layouts.planning.navigation import (
     PlannedNav,
     materialized_navigation_state,
 )
-from squid_layouts.planning.target import EMPTY_COST, ResourceCost
 from squid_layouts.primitives.constraints import Paginate
 from squid_layouts.primitives.nodes import (
     Lines,

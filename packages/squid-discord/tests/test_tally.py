@@ -27,7 +27,7 @@ def _walk(value: object):
 
 
 def test_inert_tally_renders_counts_bars_and_reader_emphasis() -> None:
-    result = sl.planning.plan(sl.tally(OPTIONS, key="vote"), target=squid_discord.V2_TARGET)
+    result = sl.planning.plan(sl.tally(OPTIONS, key="vote"), target=squid_discord.DISCORD_V2_DPY27)
     text = [item.content for item in _walk(result.scene.body) if isinstance(item, SceneText)]
 
     assert any(value.startswith("Yes:") and value.endswith("75%") for value in text)
@@ -42,7 +42,7 @@ async def test_mounted_tally_inherits_button_adaptation_and_reports_one_key() ->
     async def vote(event: sl.SelectionEvent) -> None:
         seen.append(event)
 
-    result = sl.planning.plan(sl.tally(OPTIONS, key="vote", on_vote=vote), target=squid_discord.V2_TARGET)
+    result = sl.planning.plan(sl.tally(OPTIONS, key="vote", on_vote=vote), target=squid_discord.DISCORD_V2_DPY27)
     button = next(
         item
         for item in _walk(result.scene.body)
@@ -59,7 +59,7 @@ def test_mounted_tally_inherits_select_adaptation_for_many_options() -> None:
     async def vote(_event: sl.SelectionEvent) -> None: ...
 
     options = tuple(sp.TallyOption(str(index), f"Option {index}", index) for index in range(6))
-    result = sl.planning.plan(sl.tally(options, key="vote", on_vote=vote), target=squid_discord.V2_TARGET)
+    result = sl.planning.plan(sl.tally(options, key="vote", on_vote=vote), target=squid_discord.DISCORD_V2_DPY27)
 
     assert any(isinstance(item, SceneSelect) for item in _walk(result.scene.body))
 
@@ -67,7 +67,7 @@ def test_mounted_tally_inherits_select_adaptation_for_many_options() -> None:
 def test_routed_tally_uses_one_restart_surviving_selection_route() -> None:
     result = sl.planning.plan(
         sl.tally(OPTIONS, key="vote", route_id="poll:vote"),
-        target=squid_discord.V2_TARGET,
+        target=squid_discord.DISCORD_V2_DPY27,
     )
     select = next(item for item in _walk(result.scene.body) if isinstance(item, SceneRoutedSelect))
 

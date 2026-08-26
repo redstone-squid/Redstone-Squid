@@ -133,10 +133,12 @@ from squid_discord.sessions import (
     SessionRegistry,
 )
 from squid_discord.target import (
-    CLASSIC_TARGET,
-    V2_TARGET,
-    Target,
+    DISCORD_V1_DPY27,
+    DISCORD_V2_DPY27,
 )
+
+# `target.v2()` and `target.classic()` are deliberately not promoted here: `classic` at this
+# level already names the classic-composition submodule, and one name may not mean two things.
 from squid_layouts.errors import (
     ExistingLayoutError,
     LimitViolationError,
@@ -176,11 +178,11 @@ __all__ = [
     "ANY",
     "AT_LEAST_ONE",
     "AT_MOST_ONE",
-    "CLASSIC_TARGET",
+    "DISCORD_V1_DPY27",
+    "DISCORD_V2_DPY27",
     "EMPTY_RESERVATION",
     "EXACTLY_ONE",
     "V2_LIMITS",
-    "V2_TARGET",
     "AccessPolicy",
     "AdoptionError",
     "Cardinality",
@@ -228,7 +230,6 @@ __all__ = [
     "SessionKey",
     "SessionRegistry",
     "SuccessRenderer",
-    "Target",
     "Users",
     "Work",
     "access",

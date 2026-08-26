@@ -20,7 +20,7 @@ import discord
 from squid_discord.attachments import files_for
 from squid_discord.composition import compose
 from squid_discord.inspection import DiscordReservation, audit, cost, measure
-from squid_discord.target import V2_TARGET, Target
+from squid_discord.target import DISCORD_V2_DPY27, Target
 from squid_layouts.assets import Asset
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.document import DocumentLike
@@ -189,7 +189,7 @@ def fragment(
     reserve: ResourceCost = EMPTY_RESERVATION,
     followed_by: Sequence[discord.ui.Item[Any]] = (),
     attachments: int = 0,
-    target: Target = V2_TARGET,
+    target: Target = DISCORD_V2_DPY27,
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,
@@ -239,7 +239,7 @@ def contribute(
     followed_by: Sequence[discord.ui.Item[Any]] = (),
     reserve: ResourceCost = EMPTY_RESERVATION,
     attachments: int = 0,
-    target: Target = V2_TARGET,
+    target: Target = DISCORD_V2_DPY27,
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,
