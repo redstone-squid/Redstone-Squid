@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-from squid_ui.sources import ORIGIN, POSITION_POLICY, Direction, Position
+from squid_ui.sources import ORIGIN, POSITION_RESOLVER, Direction, Position
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,7 +39,7 @@ class StrategyState:
 
 
 @dataclass(slots=True)
-class PresentationSession:
+class PresentationState:
     """Presentation state shared by a runtime and independent of domain state."""
 
     cursors: dict[str, CursorState] = field(default_factory=dict)
@@ -63,7 +63,7 @@ class PresentationSession:
     def move_cursor(self, key: str, position: Position) -> None:
         """Store one resolved position within the cursor's known extent."""
         current = self.cursor(key)
-        selected = POSITION_POLICY.resolve(override=position, upper_bound=current.extent - 1)
+        selected = POSITION_RESOLVER.resolve(override=position, upper_bound=current.extent - 1)
         updated = CursorState(
             Position(selected.anchor, selected.offset, Direction.AROUND),
             extent=current.extent,
@@ -171,7 +171,7 @@ the reader exactly where the message still shows them.
 """
 
 
-def apply_updates(session: PresentationSession, updates: Sequence[SessionUpdate]) -> None:
+def apply_updates(session: PresentationState, updates: Sequence[SessionUpdate]) -> None:
     """Commit planning's presentation writes, in the order planning made them."""
     changed = False
     for update in updates:

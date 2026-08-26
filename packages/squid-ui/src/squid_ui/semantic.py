@@ -100,7 +100,7 @@ class Controlled[ValueT, EventT]:
 
 
 @dataclass(frozen=True, slots=True)
-class Managed[ValueT]:
+class Uncontrolled[ValueT]:
     """The engine owns this value, in the presentation session under the node's key.
 
     ``initial`` is a seed, not a value: it applies on a session miss and is ignored from
@@ -110,7 +110,7 @@ class Managed[ValueT]:
     initial: ValueT
 
 
-type Ownership[ValueT, EventT] = Controlled[ValueT, EventT] | Managed[ValueT]
+type Ownership[ValueT, EventT] = Controlled[ValueT, EventT] | Uncontrolled[ValueT]
 """Every stateful semantic node takes one of these, and it is the whole ownership story.
 
 Ownership is a value rather than something inferred from whether a handler was passed,
@@ -127,13 +127,13 @@ type ScaleOwnership = Ownership[int | None, ScaleEvent]
 type NavOwnership = Ownership[str | None, NavigateEvent]
 
 # The engine-managed default of each stateful node, named for the state it seeds.
-UNSELECTED: ChoiceOwnership = Managed(())
-NO_ENTITIES: EntityOwnership = Managed(())
-UNOPENED: ItemOwnership = Managed(None)
-CLOSED: DisclosureOwnership = Managed(initial=False)
-OFF: ToggleOwnership = Managed(initial=False)
-UNRATED: ScaleOwnership = Managed(None)
-FIRST_OPTION: NavOwnership = Managed(None)
+UNSELECTED: ChoiceOwnership = Uncontrolled(())
+NO_ENTITIES: EntityOwnership = Uncontrolled(())
+UNOPENED: ItemOwnership = Uncontrolled(None)
+CLOSED: DisclosureOwnership = Uncontrolled(initial=False)
+OFF: ToggleOwnership = Uncontrolled(initial=False)
+UNRATED: ScaleOwnership = Uncontrolled(None)
+FIRST_OPTION: NavOwnership = Uncontrolled(None)
 
 
 @dataclass(frozen=True, slots=True)
@@ -963,7 +963,6 @@ __all__ = [
     "Link",
     "List",
     "ListItem",
-    "Managed",
     "Measure",
     "Media",
     "MediaDisplay",
@@ -1004,6 +1003,7 @@ __all__ = [
     "Tone",
     "Truncated",
     "Unbreakable",
+    "Uncontrolled",
     "ZonedTimestamp",
     "best_effort",
     "budget",

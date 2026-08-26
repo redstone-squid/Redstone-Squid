@@ -6,8 +6,8 @@ from typing import cast
 import pytest
 
 import squid_ui as sl
-from squid_ui_discord import DISCORD_V2_DPY27
 from squid_ui.semantic import SemanticNode
+from squid_ui_discord import DISCORD_V2_DPY27
 
 
 async def _noop(_event) -> None: ...
@@ -115,8 +115,8 @@ class TestParity:
             sl.semantic.Heading("H"), (sl.semantic.Paragraph("a"),)
         )
         assert sl.aside("a", tone=sl.Tone.WARNING) == sl.semantic.Aside((sl.semantic.Paragraph("a"),), sl.Tone.WARNING)
-        assert sl.details(sl.summary("S"), "a", key="k", open=sl.managed(initial=True)) == sl.semantic.Details(
-            "k", sl.semantic.Summary("S"), (sl.semantic.Paragraph("a"),), sl.semantic.Managed(initial=True)
+        assert sl.details(sl.summary("S"), "a", key="k", open=sl.uncontrolled(initial=True)) == sl.semantic.Details(
+            "k", sl.semantic.Summary("S"), (sl.semantic.Paragraph("a"),), sl.semantic.Uncontrolled(initial=True)
         )
         assert sl.item(sl.item_label("L"), "a", key="k") == sl.semantic.Item(
             "k", sl.semantic.ItemLabel("L"), (sl.semantic.Paragraph("a"),)
@@ -249,8 +249,8 @@ class TestRating:
         assert node.choices[4].label == sl.md(t"Excellent")
 
     def test_a_managed_value_seeds_the_selection_as_its_option_key(self) -> None:
-        assert sl.rating(key="stars").selection == sl.semantic.Managed(())
-        assert sl.rating(key="stars", value=sl.managed(3)).selection == sl.semantic.Managed(("3",))
+        assert sl.rating(key="stars").selection == sl.semantic.Uncontrolled(())
+        assert sl.rating(key="stars", value=sl.uncontrolled(3)).selection == sl.semantic.Uncontrolled(("3",))
 
     async def test_a_controlled_value_round_trips_through_a_typed_event(self) -> None:
         seen: list[int] = []

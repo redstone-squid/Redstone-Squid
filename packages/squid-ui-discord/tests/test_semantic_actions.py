@@ -4,14 +4,13 @@ from collections.abc import Awaitable, Callable
 
 import pytest
 
-from squid_ui_discord import DISCORD_V2_DPY27
 from squid_ui import fallback, scene, truncate
 from squid_ui.document import Asset, InlineAsset
 from squid_ui.interactions import ActionEvent, ActionMode
 from squid_ui.planning import plan
 from squid_ui.primitives import Lines, Paginate, Panel, Sep, Text, Variant, Variants, alts
-from squid_ui.runtime import PresentationSession, apply_updates
-from squid_ui.runtime.presentation import StrategyState
+from squid_ui.runtime import PresentationState, apply_updates
+from squid_ui.runtime.presentation_state import StrategyState
 from squid_ui.semantic import (
     Action,
     ActionDisplay,
@@ -27,6 +26,7 @@ from squid_ui.semantic import (
     Stack,
 )
 from squid_ui.sources import Position
+from squid_ui_discord import DISCORD_V2_DPY27
 
 
 async def _act(event: ActionEvent) -> None: ...
@@ -130,7 +130,7 @@ def test_actions_find_a_global_fit_alongside_a_local_pager() -> None:
 
 
 def test_inactive_fallback_axes_do_not_spend_the_global_search_budget() -> None:
-    session = PresentationSession(strategies={"visible": StrategyState("visible", "discord.actions", 1, "individual")})
+    session = PresentationState(strategies={"visible": StrategyState("visible", "discord.actions", 1, "individual")})
     inactive = Stack(tuple(Actions(_actions(1), key=f"inactive-{index}") for index in range(9)))
     document = (
         *(Paragraph(f"component {index}") for index in range(35)),
@@ -183,7 +183,7 @@ def test_degraded_global_fit_prefers_less_loss_before_display_preference() -> No
 
 
 def test_action_strategy_is_sticky_while_it_remains_valid() -> None:
-    session = PresentationSession()
+    session = PresentationState()
     first = plan(Actions(_actions(36), key="demo"), target=DISCORD_V2_DPY27, session=session)
     apply_updates(session, first.session_updates)
     second = plan(Actions(_actions(5), key="demo"), target=DISCORD_V2_DPY27, session=session)
@@ -197,7 +197,7 @@ def test_action_strategy_is_sticky_while_it_remains_valid() -> None:
     [(5, "actions.individual"), (36, "actions.grouped"), (76, "actions.paged")],
 )
 def test_fresh_action_strategy_matrix(count: int, expected: str) -> None:
-    result = plan(Actions(_actions(count), key="demo"), target=DISCORD_V2_DPY27, session=PresentationSession())
+    result = plan(Actions(_actions(count), key="demo"), target=DISCORD_V2_DPY27, session=PresentationState())
 
     assert result.report.events[0].code == expected
 
@@ -213,7 +213,7 @@ def test_fresh_action_strategy_matrix(count: int, expected: str) -> None:
     ],
 )
 def test_sticky_action_strategy_grow_and_shrink_matrix(initial: int, changed: int, expected: str) -> None:
-    session = PresentationSession()
+    session = PresentationState()
     first = plan(Actions(_actions(initial), key="demo"), target=DISCORD_V2_DPY27, session=session)
     apply_updates(session, first.session_updates)
 
@@ -223,7 +223,7 @@ def test_sticky_action_strategy_grow_and_shrink_matrix(initial: int, changed: in
 
 
 def test_reordering_actions_does_not_change_a_sticky_strategy() -> None:
-    session = PresentationSession()
+    session = PresentationState()
     actions = _actions(36)
     first = plan(Actions(actions, key="demo"), target=DISCORD_V2_DPY27, session=session)
     apply_updates(session, first.session_updates)
@@ -234,7 +234,7 @@ def test_reordering_actions_does_not_change_a_sticky_strategy() -> None:
 
 
 def test_adapter_version_change_resets_only_that_strategy() -> None:
-    session = PresentationSession(strategies={"demo": StrategyState("demo", "discord.actions", 0, "individual")})
+    session = PresentationState(strategies={"demo": StrategyState("demo", "discord.actions", 0, "individual")})
 
     result = plan(Actions(_actions(36), key="demo"), target=DISCORD_V2_DPY27, session=session)
     apply_updates(session, result.session_updates)
@@ -244,7 +244,7 @@ def test_adapter_version_change_resets_only_that_strategy() -> None:
 
 
 def test_more_than_seventy_five_actions_use_a_keyed_paged_picker() -> None:
-    session = PresentationSession()
+    session = PresentationState()
     document = Actions(_actions(76), key="demo")
     first = plan(document, target=DISCORD_V2_DPY27, session=session)
     apply_updates(session, first.session_updates)
@@ -311,7 +311,7 @@ def test_an_unopened_branch_leaves_no_trace_of_itself() -> None:
             ),
         )
     )
-    session = PresentationSession()
+    session = PresentationState()
 
     result = plan(fallback(Paragraph("visible"), hidden), target=DISCORD_V2_DPY27, session=session)
 

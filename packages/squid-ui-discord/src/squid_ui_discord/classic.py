@@ -13,20 +13,6 @@ from typing import Any
 
 import discord
 
-from squid_ui_discord.adapter import require_discord_py_target
-from squid_ui_discord.attachments import files_for
-from squid_ui_discord.classic_renderer import ClassicRenderer, Wire
-from squid_ui_discord.fragments import _reject_dispatchable
-from squid_ui_discord.inspection import (
-    CustomIdSite,
-    DiscordReservation,
-    audit_classic_payload,
-    effective_rows,
-    measure,
-    measure_classic,
-)
-from squid_ui_discord.presentation import DiscordMode, DiscordModeError, DiscordPresentation
-from squid_ui_discord.target import DISCORD_V1_DPY27, Target
 from squid_ui import scene
 from squid_ui.assets import Asset
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
@@ -43,11 +29,25 @@ from squid_ui.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_ui.planning.target import ResourceCost
 from squid_ui.profiling import OperationRecorder
 from squid_ui.runtime.component import Component
-from squid_ui.runtime.presentation import PresentationSession
+from squid_ui.runtime.presentation_state import PresentationState
 from squid_ui.scene.model import PlanReport, PlanResult
 from squid_ui.sources import Position
 from squid_ui.target_types import ClassicTarget, DiscordPyAdapter
 from squid_ui.text import NEUTRAL, Localization
+from squid_ui_discord.adapter import require_discord_py_target
+from squid_ui_discord.attachments import files_for
+from squid_ui_discord.classic_renderer import ClassicRenderer, Wire
+from squid_ui_discord.fragments import _reject_dispatchable
+from squid_ui_discord.inspection import (
+    CustomIdSite,
+    DiscordReservation,
+    audit_classic_payload,
+    effective_rows,
+    measure,
+    measure_classic,
+)
+from squid_ui_discord.presentation import DiscordMode, DiscordModeError, DiscordPresentation
+from squid_ui_discord.target import DISCORD_V1_DPY27, Target
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +65,7 @@ def compose(
     reservation: ResourceCost = EMPTY_RESERVATION,
     positions: Mapping[str, Position] | None = None,
     nav: PlannedNav | None = None,
-    session: PresentationSession | None = None,
+    session: PresentationState | None = None,
     cache: PlanCache | None = None,
     memo: PlanMemo | None = None,
     search_budget: int = DEFAULT_SEARCH_BUDGET,

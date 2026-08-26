@@ -102,8 +102,8 @@ from squid_ui.primitives.nodes import (
 from squid_ui.primitives.nodes import (
     Section as PrimitiveSection,
 )
-from squid_ui.runtime.presentation import (
-    PresentationSession,
+from squid_ui.runtime.presentation_state import (
+    PresentationState,
 )
 from squid_ui.scene.model import PlanEvent, PlanSeverity
 from squid_ui.semantic import (
@@ -165,7 +165,7 @@ def lower_semantics(
     limits: DiscordLimits,
     chrome: Chrome,
     localization: Localization,
-    session: PresentationSession,
+    session: PresentationState,
     palette: Palette = DEFAULT_PALETTE,
     pages: CursorCoordinator | None = None,
     capabilities: frozenset[str] = frozenset(),

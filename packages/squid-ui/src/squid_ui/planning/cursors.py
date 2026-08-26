@@ -11,14 +11,14 @@ from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.navigation import PlannedNav, materialized_navigation_state
 from squid_ui.primitives.constraints import Never
 from squid_ui.primitives.nodes import Footer, Node
-from squid_ui.runtime.presentation import (
+from squid_ui.runtime.presentation_state import (
     ActivePagers,
     CursorState,
     CursorUpdate,
-    PresentationSession,
+    PresentationState,
     SessionUpdate,
 )
-from squid_ui.sources import POSITION_POLICY, Direction, Position, PositionPolicy
+from squid_ui.sources import POSITION_RESOLVER, Direction, Position, PositionResolver
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,11 +47,11 @@ def content_fingerprint(parts: Sequence[str]) -> str:
 class CursorCoordinator:
     """Resolve, stage, and draw every materialized cursor in one plan."""
 
-    session: PresentationSession
+    session: PresentationState
     chrome: Chrome
     nav: PlannedNav | None = None
     overrides: Mapping[str, Position] | None = None
-    policy: PositionPolicy = POSITION_POLICY
+    policy: PositionResolver = POSITION_RESOLVER
     _pagers: list[scene.Pager] = field(default_factory=list, init=False)
     _granted: set[str] = field(default_factory=set, init=False)
     _updates: list[SessionUpdate] = field(default_factory=list, init=False)

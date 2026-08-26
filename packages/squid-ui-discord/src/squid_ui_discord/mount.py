@@ -24,20 +24,7 @@ from typing import Any, Protocol, cast, runtime_checkable
 import anyio
 import discord
 
-from squid_ui_discord import delivery as deliver
-from squid_ui_discord import live
-from squid_ui_discord.access import AccessPolicy, Allowed, Denied, Owner
-from squid_ui_discord.actions import ActionResponder
-from squid_ui_discord.adapter import require_discord_py_target
-from squid_ui_discord.attachments import attachment_assets, files_for
-from squid_ui_discord.classic import compose as classic_compose
-from squid_ui_discord.classic_renderer import ClassicRenderer
-from squid_ui_discord.composition import Composition, compose
-from squid_ui_discord.emoji import discord_emoji
-from squid_ui_discord.presentation import DiscordMode, DiscordPresentation
-from squid_ui_discord.render_cache import RenderProgramCache, RenderProgramCacheSnapshot
-from squid_ui_discord.renderer import V2Renderer
-from squid_ui_discord.target import DISCORD_V2_DPY27, Target
+from squid_reactivity.actions import ActionContext, ActorRef
 from squid_ui import scene
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME, LOCALIZATION_CONTEXT, Chrome, localize_chrome
 from squid_ui.document import Asset, Document
@@ -48,7 +35,6 @@ from squid_ui.guards import Challenge, GuardLedger, approvals
 from squid_ui.interactions import (
     ActionBinding,
     ActionEvent,
-    InteractionKind,
     ActionMiddleware,
     ActionMode,
     ActionProceed,
@@ -56,6 +42,7 @@ from squid_ui.interactions import (
     Actor,
     BusySpec,
     EntitySelectionEvent,
+    InteractionKind,
     PressEvent,
     SelectionEvent,
     SubmitEvent,
@@ -94,7 +81,7 @@ from squid_ui.profiling import (
 from squid_ui.runtime.component import Component, ComponentTree
 from squid_ui.runtime.histories import History
 from squid_ui.runtime.owner import ComponentRuntime
-from squid_ui.runtime.presentation import PresentationSession, SessionUpdate, apply_updates
+from squid_ui.runtime.presentation_state import PresentationState, SessionUpdate, apply_updates
 from squid_ui.runtime.reactivity import (
     ActionCommit,
     ActionContinuation,
@@ -109,7 +96,20 @@ from squid_ui.semantic import Status
 from squid_ui.sources import Position
 from squid_ui.target_types import DiscordPyAdapter
 from squid_ui.text import NEUTRAL, Localization, TextLike, resolve_text
-from squid_reactivity.actions import ActionContext, ActorRef
+from squid_ui_discord import delivery as deliver
+from squid_ui_discord import live
+from squid_ui_discord.access import AccessPolicy, Allowed, Denied, Owner
+from squid_ui_discord.actions import ActionResponder
+from squid_ui_discord.adapter import require_discord_py_target
+from squid_ui_discord.attachments import attachment_assets, files_for
+from squid_ui_discord.classic import compose as classic_compose
+from squid_ui_discord.classic_renderer import ClassicRenderer
+from squid_ui_discord.composition import Composition, compose
+from squid_ui_discord.emoji import discord_emoji
+from squid_ui_discord.presentation import DiscordMode, DiscordPresentation
+from squid_ui_discord.render_cache import RenderProgramCache, RenderProgramCacheSnapshot
+from squid_ui_discord.renderer import V2Renderer
+from squid_ui_discord.target import DISCORD_V2_DPY27, Target
 
 logger = logging.getLogger(__name__)
 
@@ -1813,11 +1813,11 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             self._pending = None
 
     @property
-    def presentation(self) -> PresentationSession:
+    def presentation(self) -> PresentationState:
         return self.runtime.presentation
 
     @presentation.setter
-    def presentation(self, value: PresentationSession) -> None:
+    def presentation(self, value: PresentationState) -> None:
         self.runtime.presentation = value
 
     def _mark_dirty(self) -> None:

@@ -11,7 +11,7 @@ from squid_ui.planning.cursors import CursorCoordinator
 from squid_ui.planning.limits import DiscordLimits
 from squid_ui.planning.search import DEFAULT_SEARCH_BUDGET, StrategyAxis
 from squid_ui.primitives.nodes import Node
-from squid_ui.runtime.presentation import PresentationSession, SessionUpdate
+from squid_ui.runtime.presentation_state import PresentationState, SessionUpdate
 from squid_ui.scene.model import PlanEvent
 from squid_ui.text import Localization
 
@@ -33,7 +33,7 @@ class LoweringContext:
     chrome: Chrome
     localization: Localization
     palette: Palette
-    session: PresentationSession
+    session: PresentationState
     pages: CursorCoordinator
     capabilities: frozenset[str]
     assets: list[Asset]

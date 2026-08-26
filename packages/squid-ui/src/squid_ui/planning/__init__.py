@@ -40,12 +40,12 @@ from squid_ui.planning.types import (
     DiscordTarget,
     Renderable,
 )
-from squid_ui.sources import POSITION_POLICY, Position, PositionPolicy
+from squid_ui.sources import POSITION_RESOLVER, Position, PositionResolver
 
 __all__ = [
     "CLASSIC_PROTOCOL_CAPABILITIES",
     "DEFAULT_SEARCH_BUDGET",
-    "POSITION_POLICY",
+    "POSITION_RESOLVER",
     "V2_PROTOCOL_CAPABILITIES",
     "AdapterProfile",
     "ClassicTarget",
@@ -59,7 +59,7 @@ __all__ = [
     "PlanCache",
     "PlanMemo",
     "Position",
-    "PositionPolicy",
+    "PositionResolver",
     "PreparedExtension",
     "Renderable",
     "ResourceCost",
