@@ -23,7 +23,41 @@ from squid_replication.model import (
 _MAX_UPDATE_BYTES = 1_048_576
 _MAX_OPERATIONS = 10_000
 _MAX_PATH_BYTES = 512
+_MAX_ROOTS = 256
+_MAX_CONTAINER_ITEMS = 100_000
 _ROOT_PREFIX = "$squid$"
+_OPERATION_FIELDS = {
+    "increment": frozenset({"value"}),
+    "add": frozenset({"value"}),
+    "remove": frozenset({"value", "tags"}),
+    "restore": frozenset({"value", "tags", "undoes"}),
+    "text_insert": frozenset({"index", "value"}),
+    "text_delete": frozenset({"index", "count"}),
+    "list_insert": frozenset({"index", "value", "item_id"}),
+    "list_delete": frozenset({"items"}),
+    "list_delete_ids": frozenset({"items"}),
+    "list_restore": frozenset({"items", "item_ids"}),
+    "list_replace": frozenset({"item_id", "previous_value"}),
+    "list_replace_by_id": frozenset({"item_id", "previous_value"}),
+    "movable_insert": frozenset({"item_id", "value"}),
+    "movable_delete": frozenset({"item_ids", "items"}),
+    "movable_delete_ids": frozenset({"item_ids", "items"}),
+    "movable_restore": frozenset({"item_ids", "items"}),
+    "movable_move": frozenset({"item_id", "previous_before_id", "previous_after_id"}),
+    "movable_move_between": frozenset({"item_id", "previous_before_id", "previous_after_id"}),
+    "movable_replace": frozenset({"item_id", "previous_value"}),
+    "movable_replace_by_id": frozenset({"item_id", "previous_value"}),
+    "map_set": frozenset({"key", "previous_present", "previous_value"}),
+    "map_delete": frozenset({"key", "previous_present", "previous_value"}),
+    "map_restore": frozenset({"key", "previous_present", "previous_value"}),
+    "tree_create": frozenset({"node_id"}),
+    "tree_move": frozenset({"node_id", "previous_parent_id", "previous_index"}),
+    "tree_move_between": frozenset({"node_id", "previous_parent_id", "previous_index"}),
+    "tree_metadata": frozenset({"node_id", "key", "previous_present", "previous_value"}),
+    "tree_metadata_restore": frozenset({"node_id", "key", "previous_present", "previous_value"}),
+    "tree_delete": frozenset({"node_id", "subtree"}),
+    "tree_restore": frozenset({"node_id"}),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -196,6 +230,22 @@ def _json_object(value: Mapping[str, object]) -> dict[str, Any]:
     return {key: _json_value(item) for key, item in value.items()}
 
 
+def _token_operations_valid(operations: tuple[LoroOperation, ...]) -> bool:
+    if len(operations) > _MAX_OPERATIONS:
+        return False
+    for operation in operations:
+        required = _OPERATION_FIELDS.get(operation.kind)
+        if required is None or not required <= operation.data.keys():
+            return False
+        try:
+            uuid.UUID(operation.identity)
+        except AttributeError, TypeError, ValueError:
+            return False
+        if not isinstance(operation.path, str) or len(operation.path.encode()) > _MAX_PATH_BYTES:
+            return False
+    return True
+
+
 def _root_name(kind: str, path: str) -> str:
     encoded = base64.urlsafe_b64encode(path.encode()).decode().rstrip("=")
     return f"{_ROOT_PREFIX}{kind}${encoded}"
@@ -266,15 +316,31 @@ def _authority_root(kind: str, path: str) -> str:
     return _root_name(f"{kind}-authority", path)
 
 
-def _find_item(container: Any, item_id: str) -> tuple[int, tuple[str, str, object]] | None:
+def _find_item(
+    container: Any,
+    item_id: str,
+    authority: str | None = None,
+) -> tuple[int, tuple[str, str, object]] | None:
     values = container.get_deep_value()
     if not isinstance(values, list):
         return None
     for index, value in enumerate(values):
         decoded = _decode_item(value)
-        if decoded is not None and decoded[0] == item_id:
+        if decoded is not None and decoded[0] == item_id and (authority is None or decoded[1] == authority):
             return index, decoded
     return None
+
+
+def _visible_items(container: Any, authorities: Mapping[str, object]) -> list[tuple[int, tuple[str, str, object]]]:
+    values = container.get_deep_value()
+    if not isinstance(values, list):
+        return []
+    visible: list[tuple[int, tuple[str, str, object]]] = []
+    for index, value in enumerate(values):
+        decoded = _decode_item(value)
+        if decoded is not None and authorities.get(decoded[0]) == decoded[1]:
+            visible.append((index, decoded))
+    return visible
 
 
 def _anchors(container: Any, index: int, count: int = 1) -> tuple[str | None, str | None]:
@@ -372,13 +438,25 @@ class LoroDocumentBranch:
         return tuple(self._operations)
 
     def apply(self, operation: LoroOperation) -> None:
-        applied = self._apply(operation)
+        try:
+            applied = self._apply(operation)
+        except BaseException as error:
+            if type(error) is BaseException:
+                message = f"Loro rejected staged {operation.kind!r} operation"
+                raise ValueError(message) from error
+            raise
         self._operations.append(applied)
 
     def _apply(self, operation: LoroOperation) -> LoroOperation:
         data = dict(operation.data)
         if operation.kind == "increment":
-            self.doc.get_map(_root_name("counter", operation.path)).insert(operation.identity, data["value"])
+            container = self.doc.get_map(_root_name("counter", operation.path))
+            peer = str(self._engine.peer_id)
+            current = container.get_value().get(peer, "0")
+            if not isinstance(current, str):
+                message = f"counter {operation.path!r} contains a malformed peer total"
+                raise TypeError(message)
+            container.insert(peer, str(int(current) + data["value"]))
         elif operation.kind == "add":
             self.doc.get_map(_root_name("set", operation.path)).insert(f"a:{operation.identity}", data["value"])
         elif operation.kind == "remove":
@@ -397,29 +475,46 @@ class LoroDocumentBranch:
             self.doc.get_text(_root_name("text", operation.path)).delete(data["index"], data["count"])
         elif operation.kind == "list_insert":
             container = self.doc.get_list(_root_name("list", operation.path))
+            authority = self.doc.get_map(_authority_root("list", operation.path))
+            visible = _visible_items(container, authority.get_value())
+            requested = data["index"]
+            index = len(container) if requested == len(visible) else visible[requested][0]
             item_id = str(data.get("item_id") or uuid.uuid7())
             data["item_id"] = item_id
-            container.insert(data["index"], _item_value(operation, item_id, data["value"]))
-            self.doc.get_map(_authority_root("list", operation.path)).insert(item_id, operation.identity)
+            container.insert(index, _item_value(operation, item_id, data["value"]))
+            authority.insert(item_id, operation.identity)
         elif operation.kind == "list_delete":
             container = self.doc.get_list(_root_name("list", operation.path))
-            before_id, after_id = _anchors(container, data["index"], data["count"])
-            values = container.get_deep_value()[data["index"] : data["index"] + data["count"]]
-            decoded = [_decode_item(value) for value in values]
-            if any(item is None for item in decoded):
-                message = f"list {operation.path!r} contains a malformed item"
-                raise TypeError(message)
-            data.update(before_id=before_id, after_id=after_id, items=decoded)
             authority = self.doc.get_map(_authority_root("list", operation.path))
+            visible = _visible_items(container, authority.get_value())
+            start = data["index"]
+            selected = visible[start : start + data["count"]]
+            decoded = [item for _, item in selected]
+            before_id = visible[start - 1][1][0] if start > 0 else None
+            after = start + len(selected)
+            after_id = visible[after][1][0] if after < len(visible) else None
+            data.update(before_id=before_id, after_id=after_id, items=decoded)
             for item in decoded:
-                assert item is not None
                 authority.insert(item[0], operation.identity)
-            container.delete(data["index"], len(decoded))
+            for position, _ in reversed(selected):
+                container.delete(position, 1)
         elif operation.kind == "list_delete_ids":
             container = self.doc.get_list(_root_name("list", operation.path))
             deleted: list[tuple[str, str, object]] = []
+            authority_values = self.doc.get_map(_authority_root("list", operation.path)).get_value()
             positions = sorted(
-                (found for item_id in data["item_ids"] if (found := _find_item(container, item_id)) is not None),
+                (
+                    found
+                    for item_id in data["item_ids"]
+                    if (
+                        found := _find_item(
+                            container,
+                            item_id,
+                            authority_values.get(item_id),
+                        )
+                    )
+                    is not None
+                ),
                 reverse=True,
             )
             if positions:
@@ -443,10 +538,11 @@ class LoroDocumentBranch:
             data["item_ids"] = [item[0] for item in data["items"]]
         elif operation.kind in {"list_replace", "list_replace_by_id"}:
             container = self.doc.get_list(_root_name("list", operation.path))
+            authority_values = self.doc.get_map(_authority_root("list", operation.path)).get_value()
             found = (
-                _find_item(container, data["item_id"])
+                _find_item(container, data["item_id"], authority_values.get(data["item_id"]))
                 if operation.kind == "list_replace_by_id"
-                else (data["index"], _decode_item(container.get_deep_value()[data["index"]]))
+                else _visible_items(container, authority_values)[data["index"]]
             )
             if found is None or found[1] is None:
                 message = f"list item is unavailable in {operation.path!r}"
@@ -619,6 +715,12 @@ class LoroDocumentBranch:
             raise RuntimeError(message)
         self.doc.commit()
         update = self.doc.export(self._engine.module.ExportMode.Updates(self._base_vv))
+        if len(update) > _MAX_UPDATE_BYTES:
+            message = "Loro update exceeds the maximum encoded size"
+            raise ValueError(message)
+        if len(self._operations) > _MAX_OPERATIONS:
+            message = "Loro action exceeds the maximum operation count"
+            raise ValueError(message)
         return LoroDocumentPrepared(
             self._before,
             update,
@@ -643,6 +745,9 @@ def _snapshot(document: Any) -> ReplicatedSnapshot:
     if not isinstance(deep, dict):
         message = "Loro document root is not an object"
         raise TypeError(message)
+    if len(deep) > _MAX_ROOTS:
+        message = f"Loro document exceeds the {_MAX_ROOTS}-container limit"
+        raise ValueError(message)
     counters: list[tuple[str, int]] = []
     sets: list[tuple[str, frozenset[str]]] = []
     texts: list[tuple[str, str]] = []
@@ -656,7 +761,14 @@ def _snapshot(document: Any) -> ReplicatedSnapshot:
         kind, path = parsed
         if kind == "counter":
             values = document.get_map(root).get_value().values()
-            counters.append((path, sum(value for value in values if isinstance(value, int))))
+            if len(values) > _MAX_CONTAINER_ITEMS or any(not isinstance(value, str) for value in values):
+                message = f"counter {path!r} contains malformed or excessive peer totals"
+                raise TypeError(message)
+            try:
+                counters.append((path, sum(int(value) for value in values)))
+            except ValueError as error:
+                message = f"counter {path!r} contains a malformed peer total"
+                raise TypeError(message) from error
         elif kind == "set":
             sets.append((path, _set_snapshot(document.get_map(root).get_value())))
         elif kind == "text":
@@ -664,14 +776,30 @@ def _snapshot(document: Any) -> ReplicatedSnapshot:
         elif kind == "list":
             value = document.get_list(root).get_deep_value()
             assert isinstance(value, list)
+            if len(value) > _MAX_CONTAINER_ITEMS:
+                message = f"list {path!r} exceeds the item limit"
+                raise ValueError(message)
             decoded = [_decode_item(item) for item in value]
             if any(item is None for item in decoded):
                 message = f"list {path!r} contains a malformed item"
                 raise TypeError(message)
-            lists.append((path, tuple(freeze_value(item[2]) for item in decoded if item is not None)))
+            authorities = document.get_map(_authority_root("list", path)).get_value()
+            lists.append(
+                (
+                    path,
+                    tuple(
+                        freeze_value(item[2])
+                        for item in decoded
+                        if item is not None and authorities.get(item[0]) == item[1]
+                    ),
+                )
+            )
         elif kind == "movable":
             value = document.get_movable_list(root).get_deep_value()
             assert isinstance(value, list)
+            if len(value) > _MAX_CONTAINER_ITEMS:
+                message = f"movable list {path!r} exceeds the item limit"
+                raise ValueError(message)
             items: list[ReplicatedItem] = []
             for item in value:
                 decoded = _decode_item(item)
@@ -682,6 +810,9 @@ def _snapshot(document: Any) -> ReplicatedSnapshot:
             movable.append((path, tuple(items)))
         elif kind == "map":
             value = document.get_map(root).get_value()
+            if len(value) > _MAX_CONTAINER_ITEMS:
+                message = f"map {path!r} exceeds the item limit"
+                raise ValueError(message)
             entries: list[tuple[str, Any]] = []
             for key, encoded in value.items():
                 register = _decode_register(encoded)
@@ -698,6 +829,9 @@ def _snapshot(document: Any) -> ReplicatedSnapshot:
             continue
         path = parsed[1]
         tree = document.get_tree(root)
+        if len(tree.nodes()) > _MAX_CONTAINER_ITEMS:
+            message = f"tree {path!r} exceeds the node limit"
+            raise ValueError(message)
         nodes: list[ReplicatedTreeNode] = []
         for item in tree.get_nodes(with_deleted=False):
             metadata = tree.get_meta(item.id).get_value()
@@ -866,12 +1000,15 @@ class LoroEngine:
         branch = self.doc.fork()
         try:
             branch.import_(update)
+            _snapshot(branch)
+        except (AssertionError, TypeError, ValueError) as error:
+            message = "Loro update contains invalid replicated state"
+            raise ReplicationCorruptUpdateError(message) from error
         except BaseException as error:
             if type(error) is BaseException:
                 message = "Loro update bytes are corrupt or incompatible"
                 raise ReplicationCorruptUpdateError(message) from error
             raise
-        _snapshot(branch)
         return LoroDocumentPrepared(None, update, before, branch.oplog_frontiers.encode(), ())
 
     def export_since(self, version: object | None = None) -> bytes:
@@ -941,6 +1078,13 @@ class LoroEngine:
         if not isinstance(payload, dict) or payload.get("schema") != 1:
             message = "Loro token has an unsupported schema"
             raise ValueError(message)
+        if not isinstance(payload.get("backend_version"), str):
+            message = "Loro token has an invalid backend version"
+            raise TypeError(message)
+        for field in ("before", "after", "shallow_root"):
+            if not isinstance(payload.get(field), str):
+                message = f"Loro token has an invalid {field} frontier"
+                raise TypeError(message)
         operations = payload.get("operations")
         if not isinstance(operations, list) or len(operations) > _MAX_OPERATIONS:
             message = "Loro token has invalid operations"
@@ -950,17 +1094,33 @@ class LoroEngine:
             if not isinstance(item, dict) or not isinstance(item.get("data"), dict):
                 message = "Loro token has an invalid operation"
                 raise TypeError(message)
-            decoded.append(LoroOperation(item["id"], item["kind"], item["path"], item["data"]))
-        return LoroDocumentToken(
-            base64.b64decode(payload["before"], validate=True),
-            base64.b64decode(payload["after"], validate=True),
-            tuple(decoded),
-            base64.b64decode(payload["shallow_root"], validate=True),
-            payload["backend_version"],
-        )
+            identity = item.get("id")
+            kind = item.get("kind")
+            path = item.get("path")
+            if not isinstance(identity, str) or not isinstance(kind, str) or not isinstance(path, str):
+                message = "Loro token operation fields have invalid types"
+                raise TypeError(message)
+            uuid.UUID(identity)
+            if len(path.encode()) > _MAX_PATH_BYTES:
+                message = "Loro token operation path exceeds the encoded limit"
+                raise ValueError(message)
+            decoded.append(LoroOperation(identity, kind, path, item["data"]))
+        try:
+            return LoroDocumentToken(
+                base64.b64decode(payload["before"], validate=True),
+                base64.b64decode(payload["after"], validate=True),
+                tuple(decoded),
+                base64.b64decode(payload["shallow_root"], validate=True),
+                payload["backend_version"],
+            )
+        except (ValueError, TypeError) as error:
+            message = "Loro token contains corrupt frontier data"
+            raise ReplicationCorruptUpdateError(message) from error
 
     def plan_inverse(self, token: object) -> object | ConflictDetail:
         if not isinstance(token, LoroDocumentToken):
+            return ConflictDetail("replicated:loro:token", 0, 0)
+        if not _token_operations_valid(token.operations):
             return ConflictDetail("replicated:loro:token", 0, 0)
         if token.backend_version != self.backend_version:
             return ConflictDetail("replicated:loro:backend-version", 0, 0)
@@ -1051,7 +1211,13 @@ class LoroEngine:
                     return conflict
                 inverse.append(_operation("movable_delete_ids", operation.path, item_ids=data["item_ids"]))
             elif operation.kind in {"movable_move", "movable_move_between"}:
-                conflict = self._authority_conflict("movable", operation, [data["item_id"]], present=True)
+                conflict = self._authority_conflict(
+                    "movable",
+                    operation,
+                    [data["item_id"]],
+                    present=True,
+                    match_value_authority=False,
+                )
                 if conflict is not None:
                     return conflict
                 inverse.append(
@@ -1177,6 +1343,7 @@ class LoroEngine:
         item_ids: list[str],
         *,
         present: bool,
+        match_value_authority: bool = True,
     ) -> ConflictDetail | None:
         authority = self.doc.get_map(_authority_root(kind, operation.path)).get_value()
         container = (
@@ -1186,7 +1353,8 @@ class LoroEngine:
         )
         for item_id in item_ids:
             actual = authority.get(item_id)
-            found = _find_item(container, item_id)
+            expected = actual if match_value_authority and isinstance(actual, str) else None
+            found = _find_item(container, item_id, expected)
             if actual != operation.identity or (found is not None) != present:
                 return ConflictDetail(
                     f"replicated:{operation.path}:{item_id}",

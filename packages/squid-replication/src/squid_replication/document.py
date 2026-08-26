@@ -103,7 +103,7 @@ class ReplicationChangeToken:
             raise ValueError(message) from error
         if not isinstance(payload, dict) or payload.get("schema") != 1:
             message = "replicated history token has an unsupported or corrupt schema"
-            raise TypeError(message)
+            raise ValueError(message)
         if payload.get("backend") != document.engine.backend_id or payload.get("document") != document.document_id:
             message = "replicated history token targets the wrong backend or document"
             raise ValueError(message)
@@ -310,6 +310,11 @@ class ReplicatedDocument:
             origin_action_id=None,
         )
         return update.encode()
+
+    def version(self) -> object:
+        """Return the backend-opaque version a peer can pass back to :meth:`export_since`."""
+        self._ensure_open()
+        return self.engine.version()
 
     def import_update(self, update: bytes) -> None:
         self._ensure_open()
