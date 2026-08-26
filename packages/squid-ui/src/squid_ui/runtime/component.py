@@ -37,7 +37,13 @@ from squid_ui.primitives.nodes import (
     SelectMenu,
     Text,
 )
-from squid_ui.runtime._tree import map_layout_children
+from squid_ui.runtime._tree import (
+    _IndexStep,
+    _LayoutRoute,
+    _map_layout_children_routed,
+    _SequenceStep,
+    map_layout_children,
+)
 from squid_ui.runtime.context import ContextKey
 from squid_ui.runtime.resources import (
     AsyncBinding,
@@ -156,6 +162,14 @@ class _ExpandedSubtree:
     assets: tuple[Asset, ...]
     async_bindings: tuple[AsyncBinding, ...]
     observations: tuple[Address, ...]
+    child_splices: dict[str, _NodeSplice]
+
+
+@dataclass(frozen=True, slots=True)
+class _NodeSplice:
+    route: _LayoutRoute
+    count: int
+    key: str
 
 
 class Component[ModeT = Any](StateOwner):
@@ -263,6 +277,7 @@ def render_component_tree(
     _force_all: bool = False,
     _subtree_cache: dict[str, _ExpandedSubtree] | None = None,
     _dirty_paths: set[str] | None = None,
+    _component_paths: dict[Component, str] | None = None,
 ) -> ComponentTree:
     """Render and expand a component tree, preserving keyed component identity.
 
@@ -285,6 +300,12 @@ def render_component_tree(
     forced = set() if _forced is None else _forced
     subtree_cache = {} if _subtree_cache is None else _subtree_cache
     dirty_paths = set() if _dirty_paths is None else _dirty_paths
+
+    def inside(route: _LayoutRoute) -> _LayoutRoute:
+        last = route[-1]
+        if isinstance(last, _SequenceStep):
+            return (*route[:-1], _IndexStep(last.field, last.start))
+        return route
 
     def items(rendered: RenderResult, path: str) -> tuple[tuple[RenderNode, ...], tuple[Asset, ...], str | None]:
         if isinstance(rendered, Document):
@@ -409,10 +430,11 @@ def render_component_tree(
         component._runtime = runtime
         active.add(identity)
         embed_keys: set[str] = set()
+        child_splices: dict[str, _NodeSplice] = {}
         snapshot = rendered(component, path, inherited_context)
         context = snapshot.child_context
 
-        def expand_item(item: RenderNode, item_path: str) -> list[LayoutNode]:
+        def expand_item(item: RenderNode, item_path: str, route: _LayoutRoute) -> list[LayoutNode]:
             if isinstance(item, Boundary):
                 if item.key in embed_keys:
                     message = f"{item_path}: duplicate Boundary key {item.key!r}"
@@ -428,13 +450,15 @@ def render_component_tree(
                     deferred.append(item.component)
                     return []
                 child_path = item.key if path == "$" else f"{path}.{item.key}"
-                return _namespace(expand(item.component, child_path, context), item.key)
-            return [map_layout_children(item, item_path, expand_item)]
+                expanded = _namespace(expand(item.component, child_path, context), item.key)
+                child_splices[child_path] = _NodeSplice(route, len(expanded), item.key)
+                return expanded
+            return [_map_layout_children_routed(item, item_path, inside(route), expand_item)]
 
         try:
             nodes: list[LayoutNode] = []
             for index, item in enumerate(snapshot.nodes):
-                nodes.extend(expand_item(item, f"{path}.{index}"))
+                nodes.extend(expand_item(item, f"{path}.{index}", (_SequenceStep(None, len(nodes)),)))
             if snapshot.document_key is not None:
                 document_key = snapshot.document_key
             if len(deferred) == deferred_start:
@@ -450,6 +474,7 @@ def render_component_tree(
                     tuple(assets[asset_start:]),
                     unique_async_bindings(observed_bindings[binding_start:]),
                     tuple(dict.fromkeys(observed_addresses[observation_start:])),
+                    child_splices,
                 )
             else:
                 subtree_cache.pop(path, None)
@@ -457,13 +482,50 @@ def render_component_tree(
         finally:
             active.remove(identity)
 
+    spliced: _ExpandedSubtree | None = None
+    attempted_splices: set[Component] = set()
     try:
-        nodes = tuple(expand(root, "$", context or {}))
+        spliced = _splice_dirty_subtrees(
+            root,
+            _force_all,
+            dirty,
+            _component_paths,
+            render_cache,
+            subtree_cache,
+            expand,
+            attempted_splices,
+        )
+        if spliced is None:
+            dirty.difference_update(attempted_splices)
+            forced.difference_update(attempted_splices)
+            components.clear()
+            assets.clear()
+            identities.clear()
+            active.clear()
+            deferred.clear()
+            observed_addresses.clear()
+            observed_bindings.clear()
+            document_key = None
+            nodes = tuple(expand(root, "$", context or {}))
+        else:
+            nodes = spliced.nodes
     except _AtomicResourcePending as pending:
         # Atomic state is never rendered while pending. Keep the resource observation from
         # the aborted discovery pass so the frontend can settle it before retrying.
         observed_bindings.append(pending.resource)
         nodes = ()
+    if spliced is not None:
+        for held in spliced.components.values():
+            held._runtime = runtime
+        return ComponentTree(
+            spliced.nodes,
+            spliced.components,
+            spliced.assets,
+            render_cache[root].document_key,
+            (),
+            spliced.async_bindings,
+            spliced.observations,
+        )
     return ComponentTree(
         nodes,
         components,
@@ -473,6 +535,112 @@ def render_component_tree(
         unique_async_bindings(observed_bindings),
         tuple(dict.fromkeys(observed_addresses)),
     )
+
+
+def _splice_dirty_subtrees(
+    root: Component,
+    force_all: bool,
+    dirty: set[Component],
+    component_paths: dict[Component, str] | None,
+    render_cache: dict[Component, _ComponentRender],
+    subtree_cache: dict[str, _ExpandedSubtree],
+    expand: Callable[[Component, str, dict[ContextKey[Any], object]], list[LayoutNode]],
+    attempted: set[Component],
+) -> _ExpandedSubtree | None:
+    """Patch independently dirty cached subtrees through their structural parent routes."""
+    if force_all or not dirty or root not in render_cache:
+        return None
+    selected_paths = (
+        {component: path for component in dirty if (path := component_paths.get(component)) is not None}
+        if component_paths is not None
+        else {snapshot.component: path for path, snapshot in subtree_cache.items() if snapshot.component in dirty}
+    )
+    if len(selected_paths) != len(dirty) or "$" in selected_paths.values():
+        return None
+    topmost = {
+        component: path
+        for component, path in selected_paths.items()
+        if not any(
+            ancestor is not component and (ancestor_path == "$" or path.startswith(f"{ancestor_path}."))
+            for ancestor, ancestor_path in selected_paths.items()
+        )
+    }
+    for component, path in sorted(topmost.items(), key=lambda item: item[1].count("."), reverse=True):
+        previous = subtree_cache[path]
+        candidate_nodes = tuple(expand(component, path, previous.inherited_context))
+        attempted.update(
+            candidate
+            for candidate in dirty
+            if candidate in render_cache
+            and (candidate_path := selected_paths.get(candidate)) is not None
+            and (candidate_path == path or candidate_path.startswith(f"{path}."))
+        )
+        candidate = subtree_cache.get(path)
+        if candidate is None:
+            return None
+        if candidate_nodes != candidate.nodes:
+            candidate.nodes = candidate_nodes
+        if not _same_subtree_metadata(previous, candidate) or len(previous.nodes) != len(candidate.nodes):
+            return None
+        child_path = path
+        while child_path != "$":
+            parent_path = "$" if "." not in child_path else child_path.rsplit(".", 1)[0]
+            parent = subtree_cache.get(parent_path)
+            if (
+                parent is None
+                or parent.component not in render_cache
+                or (splice := parent.child_splices.get(child_path)) is None
+            ):
+                return None
+            replacement = tuple(_namespace(list(subtree_cache[child_path].nodes), splice.key))
+            if len(replacement) != splice.count:
+                return None
+            parent = _ExpandedSubtree(
+                parent.component,
+                parent.inherited_context,
+                _splice_nodes(parent.nodes, splice, replacement),
+                parent.components,
+                parent.assets,
+                parent.async_bindings,
+                parent.observations,
+                parent.child_splices,
+            )
+            subtree_cache[parent_path] = parent
+            child_path = parent_path
+    return subtree_cache.get("$")
+
+
+def _same_subtree_metadata(left: _ExpandedSubtree, right: _ExpandedSubtree) -> bool:
+    return (
+        left.components.keys() == right.components.keys()
+        and all(left.components[path] is right.components[path] for path in left.components)
+        and left.assets == right.assets
+        and left.async_bindings == right.async_bindings
+        and left.observations == right.observations
+    )
+
+
+def _splice_nodes(
+    nodes: tuple[LayoutNode, ...],
+    splice: _NodeSplice,
+    replacement: tuple[LayoutNode, ...],
+) -> tuple[LayoutNode, ...]:
+    def rewrite(value: Any, steps: _LayoutRoute) -> Any:
+        step = steps[0]
+        rest = steps[1:]
+        if isinstance(step, _SequenceStep):
+            sequence = value if step.field is None else getattr(value, step.field)
+            changed = (*sequence[: step.start], *replacement, *sequence[step.start + splice.count :])
+            return changed if step.field is None else replace(value, **{step.field: changed})
+        if isinstance(step, _IndexStep):
+            sequence = value if step.field is None else getattr(value, step.field)
+            changed_item = replacement[0] if not rest else rewrite(sequence[step.index], rest)
+            changed = (*sequence[: step.index], changed_item, *sequence[step.index + 1 :])
+            return changed if step.field is None else replace(value, **{step.field: changed})
+        changed_item = replacement[0] if not rest else rewrite(getattr(value, step.field), rest)
+        return replace(value, **{step.field: changed_item})
+
+    return rewrite(nodes, splice.route)
 
 
 def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
