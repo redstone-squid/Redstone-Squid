@@ -388,6 +388,20 @@ enableExperimentalFeatures = true  # For `TypeForm` support
 project-includes = ["squid/**/*.py", "tests/**/*.py", "packages/**/*.py", "app.py"]
 project-excludes = ["alembic/**/*.py", "scripts/migrations/**/*.py"]
 python-version = "3.14"
+# uv installs the workspace packages as editable `.pth` files pointing at `packages/*/src`, which
+# puts those directories on Pyrefly's site-package path. Anything reachable from there counts as
+# third-party and is skipped, so `project-includes` alone silently left every package source file
+# unchecked. `search-path` is consulted before the site-package path, which claims them as
+# first-party again. Keep this list in sync with `[tool.uv.workspace] members`.
+search-path = [
+    ".",
+    "packages/squid-reactivity/src",
+    "packages/squid-replication/src",
+    "packages/squid-storage/src",
+    "packages/squid-ui/src",
+    "packages/squid-ui-discord/src",
+    "packages/squid-ui-widgets/src",
+]
 # `observability` is an optional extra (see the dependency group below) that isn't installed in
 # every environment; these imports are already guarded by `try`/`ModuleNotFoundError` at runtime.
 ignore-missing-imports = ["opentelemetry", "opentelemetry.*"]
