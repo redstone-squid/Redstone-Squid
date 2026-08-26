@@ -25,7 +25,7 @@ on_action_rollback(lambda rollback, aftermath: report(rollback.reason))
 ```
 
 `StateDelta`, `restore_before()`, and `restore_after()` no longer exist. Use `CellPatchSet` for lineage,
-`ActionOutcomeSnapshot` for safe retention, and `UndoPlan` through `History` for inversion.
+`ActionResultSnapshot` for safe retention, and `UndoPlan` through `History` for inversion.
 
 ## History and conflicts
 
@@ -55,7 +55,7 @@ elif result.status is HistoryResultStatus.NEEDS_RECONCILIATION:
 ```
 
 The default changed from “undo always restores” to “undo preserves later work or reports conflict.”
-`UndoStrategy.LOCAL_OVERWRITE` is the named escape hatch for ephemeral component-local registers; it
+`UndoMode.LOCAL_OVERWRITE` is the named escape hatch for ephemeral component-local registers; it
 rejects `Shared` and participant changes. Redo is freshly based on the committed undo and may conflict
 after another same-target write.
 

@@ -202,7 +202,7 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   escape hatch instead. If a second frontend ever dispatches events, design the portable
   capability surface against its actual requirements.
   **Revisited 2026-08-22**: partially superseded by [31](31-action-ergonomics.md) — the
-  portable admission surface is `Guard`/`GuardVerdict`; frontend facts still enter through
+  portable admission surface is `Guard`/`GuardDecision`; frontend facts still enter through
   plan 02's native access (`requires_role` lives in `sl.discord.guards`).
 - **Multi-message rendering — the *spanning* half** *(still deferred; the branching half already shipped, see below)* —
   one logical UI spanning several messages, deferred until a consumer exists (the audit

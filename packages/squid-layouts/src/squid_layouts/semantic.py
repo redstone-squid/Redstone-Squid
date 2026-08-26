@@ -11,7 +11,7 @@ from squid_layouts.entity import ChannelType, EntityRef, EntityType, supports_en
 from squid_layouts.forms import FormSpec, SubmitHandler
 from squid_layouts.grids import GridCell, validate_grid
 from squid_layouts.guards import Guard
-from squid_layouts.interactions import ActionEvent, ActionPolicy, Feedback, PressHandler, SelectionEvent
+from squid_layouts.interactions import ActionEvent, ActionPolicy, BusySpec, PressHandler, SelectionEvent
 from squid_layouts.palette import INHERIT, Accent, Palette, Tone
 from squid_layouts.primitives.nodes import Node as PrimitiveNode
 from squid_layouts.rosters import RosterPlacement
@@ -481,8 +481,8 @@ class Action:
     policy: ActionPolicy = ActionPolicy.EXCLUSIVE
     guard: Guard | None = None
     """Whether this press may execute now. `available` is the render-time question."""
-    feedback: Feedback | None = None
-    """Busy feedback for a handler slow enough that the reader needs to see it running."""
+    busy: BusySpec | None = None
+    """Busy busy for a handler slow enough that the reader needs to see it running."""
     record: History | None = None
     """History this press enters itself into, under `label`, before `on_trigger` runs."""
 

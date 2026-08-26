@@ -34,12 +34,12 @@ from squid_layouts.runtime.topics import BusSnapshot, TopicBus
 from squid_layouts.semantic import LayoutNode
 from squid_reactive.actions import (
     ActionLedger,
-    ActionOutcomeSnapshot,
+    ActionResultSnapshot,
     AftermathFailureSnapshot,
     CausalEventSnapshot,
     OperationEventSnapshot,
     ResourceEventSnapshot,
-    add_action_outcome_sink,
+    add_action_result_sink,
 )
 
 if TYPE_CHECKING:
@@ -85,7 +85,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         self._action_ledger = action_ledger or ActionLedger(limit=200)
         self._owns_action_ledger = action_ledger is None
         if self._owns_action_ledger:
-            add_action_outcome_sink(self._action_ledger)
+            add_action_result_sink(self._action_ledger)
 
     def cog_unload(self) -> None:
         """Close the DevTools-owned action ledger when Discord unloads this cog."""
@@ -236,10 +236,10 @@ class DevTools[BotT: commands.Bot](commands.Cog):
 
     @ui_group.command(name="actions")
     async def inspect_actions(self, ctx: Context[BotT], limit: int = 20) -> None:
-        """Show causal action outcomes independently of profiler retention."""
+        """Show causal action results independently of profiler retention."""
         events = self._action_ledger.events[-max(1, limit) :]
         body = "No retained causal events." if not events else "\n".join(_causal_event_text(item) for item in events)
-        await self._send(ctx, [section(sl.heading("Action outcomes"), code(body))])
+        await self._send(ctx, [section(sl.heading("Action results"), code(body))])
 
     @ui_group.command(name="persistence")
     async def inspect_persistence(self, ctx: Context[BotT]) -> None:
@@ -443,26 +443,26 @@ def _history_text(history: HistorySnapshot) -> str:
     return f"{name}: undo={len(undo)} redo={len(redo)}\n" + "\n".join(entries or ["(empty)"])
 
 
-def _action_text(outcome: ActionOutcomeSnapshot) -> str:
-    cause = "root" if outcome.cause is None else f"{outcome.cause.kind}:{outcome.cause.identity}"
-    detail = outcome.terminal if outcome.reason is None else f"{outcome.terminal}:{outcome.reason}"
+def _action_text(status: ActionResultSnapshot) -> str:
+    cause = "root" if status.cause is None else f"{status.cause.kind}:{status.cause.identity}"
+    detail = status.terminal if status.reason is None else f"{status.terminal}:{status.reason}"
     relation = ""
-    if outcome.reverses_action_id is not None:
-        relation = f" reverses={outcome.reverses_action_id}"
-    elif outcome.reapplies_action_id is not None:
-        relation = f" reapplies={outcome.reapplies_action_id}"
-    elif outcome.compensates_action_id is not None:
-        relation = f" compensates={outcome.compensates_action_id}"
-    conflict = "" if outcome.conflict is None else f" conflict={outcome.conflict.target_id}"
+    if status.reverses_action_id is not None:
+        relation = f" reverses={status.reverses_action_id}"
+    elif status.reapplies_action_id is not None:
+        relation = f" reapplies={status.reapplies_action_id}"
+    elif status.compensates_action_id is not None:
+        relation = f" compensates={status.compensates_action_id}"
+    conflict = "" if status.conflict is None else f" conflict={status.conflict.target_id}"
     return (
-        f"{outcome.action_id} {outcome.kind} {outcome.name} {detail} cause={cause} "
-        f"cells={outcome.changes.cells} participants={outcome.changes.participants}{relation}{conflict}"
+        f"{status.action_id} {status.kind} {status.name} {detail} cause={cause} "
+        f"cells={status.changes.cells} participants={status.changes.participants}{relation}{conflict}"
     )
 
 
 def _causal_event_text(event: CausalEventSnapshot) -> str:
     match event:
-        case ActionOutcomeSnapshot():
+        case ActionResultSnapshot():
             return _action_text(event)
         case OperationEventSnapshot():
             cause = "root" if event.cause is None else f"{event.cause.kind}:{event.cause.identity}"
@@ -499,10 +499,10 @@ def _trace_text(trace: RuntimeTrace) -> str:
     disposition = "" if trace.result.dispatch is None else f" {trace.result.dispatch.disposition}"
     flags = " deadline-missed" if trace.deadline_missed else ""
     lines = [
-        f"{trace.operation} {trace.name} {trace.result.outcome}{disposition} {_milliseconds(trace.duration)}{flags}"
+        f"{trace.operation} {trace.name} {trace.result.status}{disposition} {_milliseconds(trace.duration)}{flags}"
     ]
     lines.extend(
-        f"  {span.name} {span.outcome} {_milliseconds(span.duration)}"
+        f"  {span.name} {span.status} {_milliseconds(span.duration)}"
         for span in trace.spans
         if span.parent_span_id is not None
     )
@@ -541,7 +541,7 @@ def _timeline_text(trace: RuntimeTrace, origin: datetime) -> str:
     at = (origin + timedelta(seconds=trace.started)).strftime("%H:%M:%S")
     mount_id = _root_attribute(trace, "mount_id")
     where = "route" if mount_id is None else f"mount={mount_id}"
-    status = trace.result.outcome if trace.result.dispatch is None else trace.result.dispatch.disposition
+    status = trace.result.status if trace.result.dispatch is None else trace.result.dispatch.disposition
     return (
         f"{at} {trace.name:<28.28} actor={_root_attribute(trace, 'actor')} "
         f"{where} {status} {_milliseconds(trace.duration)}"

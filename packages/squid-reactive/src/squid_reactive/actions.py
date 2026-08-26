@@ -1,4 +1,4 @@
-"""Action identity, immutable outcomes, and bounded diagnostic retention."""
+"""Action identity, immutable results, and bounded diagnostic retention."""
 
 import json
 import logging
@@ -119,14 +119,14 @@ class CommitSequence:
 
 
 @dataclass(frozen=True, slots=True)
-class ExceptionSummary:
+class ExceptionReport:
     """A retention-safe exception description without traceback or arbitrary values."""
 
     type_name: str
     message: str
 
     @classmethod
-    def capture(cls, error: BaseException) -> ExceptionSummary:
+    def capture(cls, error: BaseException) -> ExceptionReport:
         return cls(type(error).__name__, str(error))
 
 
@@ -139,7 +139,7 @@ class ObservedRead:
 
 
 @dataclass(frozen=True, slots=True)
-class ChangeSummary:
+class ChangeReport:
     """A safe count-only projection of staged or committed changes."""
 
     cells: int = 0
@@ -161,7 +161,7 @@ class ParticipantChange:
 
     participant_id: str
     token: Any
-    summary: ChangeSummary = ChangeSummary(participants=1)
+    summary: ChangeReport = ChangeReport(participants=1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,17 +188,17 @@ class ActionRollback:
     reason: RollbackReason
     reads: tuple[ObservedRead, ...]
     conflict: ConflictDetail | None
-    exception: ExceptionSummary | None
-    staged_summary: ChangeSummary
-    cleanup_errors: tuple[ExceptionSummary, ...] = ()
+    exception: ExceptionReport | None
+    staged_summary: ChangeReport
+    cleanup_errors: tuple[ExceptionReport, ...] = ()
 
 
-type ActionOutcome = ActionCommit | ActionRollback
+type ActionResult = ActionCommit | ActionRollback
 
 
 @dataclass(frozen=True, slots=True)
-class ActionOutcomeSnapshot:
-    """The bounded, portable default projection of an outcome."""
+class ActionResultSnapshot:
+    """The bounded, portable default projection of an result."""
 
     action_id: str
     root_action_id: str
@@ -209,7 +209,7 @@ class ActionOutcomeSnapshot:
     timestamp: datetime
     sequence: CommitSequence | None
     reason: str | None
-    changes: ChangeSummary
+    changes: ChangeReport
     tags: frozenset[str] = frozenset()
     actor: ActorRef | None = None
     metadata: tuple[tuple[str, str], ...] = ()
@@ -217,16 +217,16 @@ class ActionOutcomeSnapshot:
     reapplies_action_id: str | None = None
     compensates_action_id: str | None = None
     conflict: ConflictDetail | None = None
-    exception: ExceptionSummary | None = None
+    exception: ExceptionReport | None = None
 
     @classmethod
-    def from_outcome(
+    def from_result(
         cls,
-        outcome: ActionOutcome,
+        result: ActionResult,
         policy: RedactionPolicy | None = None,
-    ) -> ActionOutcomeSnapshot:
+    ) -> ActionResultSnapshot:
         policy = DEFAULT_REDACTION if policy is None else policy
-        context = outcome.context
+        context = result.context
         common = (
             context.actor if policy.include_actor else None,
             tuple(sorted(context.metadata.items())) if policy.include_metadata else (),
@@ -234,8 +234,8 @@ class ActionOutcomeSnapshot:
             None if context.reapplies_action_id is None else str(context.reapplies_action_id),
             None if context.compensates_action_id is None else str(context.compensates_action_id),
         )
-        if isinstance(outcome, ActionCommit):
-            changes = ChangeSummary(len(outcome.patches), len(outcome.participant_changes))
+        if isinstance(result, ActionCommit):
+            changes = ChangeReport(len(result.patches), len(result.participant_changes))
             return cls(
                 str(context.action_id),
                 str(context.root_action_id),
@@ -243,11 +243,11 @@ class ActionOutcomeSnapshot:
                 context.kind.value,
                 context.name,
                 "committed",
-                outcome.committed_at,
-                outcome.sequence,
+                result.committed_at,
+                result.sequence,
                 None,
                 changes,
-                outcome.tags,
+                result.tags,
                 *common,
             )
         return cls(
@@ -257,29 +257,29 @@ class ActionOutcomeSnapshot:
             context.kind.value,
             context.name,
             "rolled_back",
-            outcome.rolled_back_at,
+            result.rolled_back_at,
             None,
-            outcome.reason.value,
-            outcome.staged_summary,
+            result.reason.value,
+            result.staged_summary,
             frozenset(),
             *common,
-            outcome.conflict,
-            policy.exception(outcome.exception),
+            result.conflict,
+            policy.exception(result.exception),
         )
 
 
 @dataclass(frozen=True, slots=True)
 class RedactionPolicy:
-    """Explicit portable-outcome policy for metadata and exception messages."""
+    """Explicit portable-result policy for metadata and exception messages."""
 
     include_actor: bool = True
     include_metadata: bool = False
     include_exception_messages: bool = False
 
-    def exception(self, summary: ExceptionSummary | None) -> ExceptionSummary | None:
+    def exception(self, summary: ExceptionReport | None) -> ExceptionReport | None:
         if summary is None or self.include_exception_messages:
             return summary
-        return ExceptionSummary(summary.type_name, "[redacted]")
+        return ExceptionReport(summary.type_name, "[redacted]")
 
 
 DEFAULT_REDACTION = RedactionPolicy()
@@ -295,7 +295,7 @@ class OperationEventSnapshot:
     name: str
     status: str
     timestamp: datetime
-    exception: ExceptionSummary | None = None
+    exception: ExceptionReport | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -308,12 +308,12 @@ class ResourceEventSnapshot:
     name: str
     status: str
     timestamp: datetime
-    exception: ExceptionSummary | None = None
+    exception: ExceptionReport | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class AftermathFailureSnapshot:
-    """A post-outcome failure that cannot alter the immutable action result."""
+    """A post-result failure that cannot alter the immutable action result."""
 
     failure_id: str
     root_action_id: str
@@ -321,82 +321,78 @@ class AftermathFailureSnapshot:
     stage: str
     callback: str
     timestamp: datetime
-    exception: ExceptionSummary
+    exception: ExceptionReport
 
 
 type CausalEventSnapshot = (
-    ActionOutcomeSnapshot | OperationEventSnapshot | ResourceEventSnapshot | AftermathFailureSnapshot
+    ActionResultSnapshot | OperationEventSnapshot | ResourceEventSnapshot | AftermathFailureSnapshot
 )
 
 
-class ActionOutcomeCodec:
-    """Schema-versioned count-only JSON codec for portable outcome snapshots."""
+class ActionResultCodec:
+    """Schema-versioned count-only JSON codec for portable result snapshots."""
 
     schema_version = 1
     max_encoded_bytes = 1_048_576
 
-    def encode(self, outcome: ActionOutcomeSnapshot) -> bytes:
+    def encode(self, result: ActionResultSnapshot) -> bytes:
         payload = {
             "schema": self.schema_version,
-            "action_id": outcome.action_id,
-            "root_action_id": outcome.root_action_id,
-            "cause": None
-            if outcome.cause is None
-            else {"kind": outcome.cause.kind, "identity": outcome.cause.identity},
-            "kind": outcome.kind,
-            "name": outcome.name,
-            "terminal": outcome.terminal,
-            "timestamp": outcome.timestamp.isoformat(),
+            "action_id": result.action_id,
+            "root_action_id": result.root_action_id,
+            "cause": None if result.cause is None else {"kind": result.cause.kind, "identity": result.cause.identity},
+            "kind": result.kind,
+            "name": result.name,
+            "terminal": result.terminal,
+            "timestamp": result.timestamp.isoformat(),
             "sequence": None
-            if outcome.sequence is None
-            else {"runtime_id": str(outcome.sequence.runtime_id), "value": outcome.sequence.value},
-            "reason": outcome.reason,
-            "changes": {"cells": outcome.changes.cells, "participants": outcome.changes.participants},
-            "tags": sorted(outcome.tags),
-            "actor": None
-            if outcome.actor is None
-            else {"kind": outcome.actor.kind, "identity": outcome.actor.identity},
-            "metadata": dict(outcome.metadata),
+            if result.sequence is None
+            else {"runtime_id": str(result.sequence.runtime_id), "value": result.sequence.value},
+            "reason": result.reason,
+            "changes": {"cells": result.changes.cells, "participants": result.changes.participants},
+            "tags": sorted(result.tags),
+            "actor": None if result.actor is None else {"kind": result.actor.kind, "identity": result.actor.identity},
+            "metadata": dict(result.metadata),
             "relations": {
-                "reverses": outcome.reverses_action_id,
-                "reapplies": outcome.reapplies_action_id,
-                "compensates": outcome.compensates_action_id,
+                "reverses": result.reverses_action_id,
+                "reapplies": result.reapplies_action_id,
+                "compensates": result.compensates_action_id,
             },
             "conflict": None
-            if outcome.conflict is None
+            if result.conflict is None
             else {
-                "target_id": outcome.conflict.target_id,
-                "expected_version": outcome.conflict.expected_version,
-                "actual_version": outcome.conflict.actual_version,
+                "target_id": result.conflict.target_id,
+                "expected_version": result.conflict.expected_version,
+                "actual_version": result.conflict.actual_version,
             },
             "exception": None
-            if outcome.exception is None
-            else {"type_name": outcome.exception.type_name, "message": outcome.exception.message},
+            if result.exception is None
+            else {"type_name": result.exception.type_name, "message": result.exception.message},
         }
         return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
 
-    def decode(self, data: bytes) -> ActionOutcomeSnapshot:
+    def decode(self, data: bytes) -> ActionResultSnapshot:
         if len(data) > self.max_encoded_bytes:
-            message = "action outcome exceeds the maximum encoded size"
+            message = "action result exceeds the maximum encoded size"
             raise ValueError(message)
         try:
             return self._decode(data)
         except (KeyError, TypeError, AttributeError, UnicodeDecodeError, json.JSONDecodeError) as error:
-            message = "action outcome has a corrupt schema"
+            message = "action result has a corrupt schema"
             raise ValueError(message) from error
         except ValueError as error:
-            if str(error).startswith("unsupported action outcome schema"):
+            if str(error).startswith("unsupported action result schema"):
                 raise
-            message = "action outcome has a corrupt schema"
+            message = "action result has a corrupt schema"
             raise ValueError(message) from error
 
-    def _decode(self, data: bytes) -> ActionOutcomeSnapshot:
+    def _decode(self, data: bytes) -> ActionResultSnapshot:
         payload = json.loads(data)
         if not isinstance(payload, dict):
-            message = "action outcome has a corrupt schema"
+            message = "action result has a corrupt schema"
             raise TypeError(message)
         if payload.get("schema") != self.schema_version:
-            message = f"unsupported action outcome schema {payload.get('schema')!r}"
+            message = f"unsupported action result schema {payload.get('schema')!r}"
             raise ValueError(message)
         cause = payload["cause"]
         sequence = payload["sequence"]
@@ -404,7 +400,7 @@ class ActionOutcomeCodec:
         relations = payload["relations"]
         conflict = payload["conflict"]
         exception = payload["exception"]
-        return ActionOutcomeSnapshot(
+        return ActionResultSnapshot(
             payload["action_id"],
             payload["root_action_id"],
             None if cause is None else CausalRef(cause["kind"], cause["identity"]),
@@ -414,7 +410,7 @@ class ActionOutcomeCodec:
             datetime.fromisoformat(payload["timestamp"]),
             None if sequence is None else CommitSequence(uuid.UUID(sequence["runtime_id"]), sequence["value"]),
             payload["reason"],
-            ChangeSummary(payload["changes"]["cells"], payload["changes"]["participants"]),
+            ChangeReport(payload["changes"]["cells"], payload["changes"]["participants"]),
             frozenset(payload.get("tags", ())),
             None if actor is None else ActorRef(actor["kind"], actor["identity"]),
             tuple(sorted(payload["metadata"].items())),
@@ -424,19 +420,19 @@ class ActionOutcomeCodec:
             None
             if conflict is None
             else ConflictDetail(conflict["target_id"], conflict["expected_version"], conflict["actual_version"]),
-            None if exception is None else ExceptionSummary(exception["type_name"], exception["message"]),
+            None if exception is None else ExceptionReport(exception["type_name"], exception["message"]),
         )
 
 
-class ActionOutcomeSink(Protocol):
+class ActionResultSink(Protocol):
     """A synchronous consumer of retention-safe causal events."""
 
-    def accept(self, outcome: CausalEventSnapshot) -> None: ...
+    def accept(self, result: CausalEventSnapshot) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
-class DurableOutcomePolicy:
-    """The privacy, storage, and retention declaration for an encoded outcome sink."""
+class DurableResultPolicy:
+    """The privacy, storage, and retention declaration for an encoded result sink."""
 
     redaction: RedactionPolicy = DEFAULT_REDACTION
     value_serialization: str = "summaries-only"
@@ -445,29 +441,29 @@ class DurableOutcomePolicy:
     retention: str = "host-defined"
 
 
-class DurableOutcomeSink:
-    """Encode committed/rolled-back outcomes for a host store. Calling :meth:`close` unregisters it."""
+class DurableResultSink:
+    """Encode committed/rolled-back results for a host store. Calling :meth:`close` unregisters it."""
 
     def __init__(
         self,
         append: Callable[[bytes], None],
         *,
-        policy: DurableOutcomePolicy | None = None,
-        codec: ActionOutcomeCodec | None = None,
+        policy: DurableResultPolicy | None = None,
+        codec: ActionResultCodec | None = None,
     ) -> None:
         self.append = append
-        self.policy = DurableOutcomePolicy() if policy is None else policy
-        self.codec = codec or ActionOutcomeCodec()
+        self.policy = DurableResultPolicy() if policy is None else policy
+        self.codec = codec or ActionResultCodec()
         self.closed = False
-        add_action_outcome_sink(self, policy=self.policy.redaction)
+        add_action_result_sink(self, policy=self.policy.redaction)
 
-    def accept(self, outcome: CausalEventSnapshot) -> None:
-        if isinstance(outcome, ActionOutcomeSnapshot):
-            self.append(self.codec.encode(outcome))
+    def accept(self, result: CausalEventSnapshot) -> None:
+        if isinstance(result, ActionResultSnapshot):
+            self.append(self.codec.encode(result))
 
     def close(self) -> None:
         self.closed = True
-        remove_action_outcome_sink(self)
+        remove_action_result_sink(self)
 
 
 class ActionLedger:
@@ -475,23 +471,23 @@ class ActionLedger:
 
     def __init__(self, limit: int = 100) -> None:
         if limit < 1:
-            message = "an action ledger needs room for at least one outcome"
+            message = "an action ledger needs room for at least one result"
             raise ValueError(message)
         self._events: deque[CausalEventSnapshot] = deque(maxlen=limit)
 
-    def accept(self, outcome: CausalEventSnapshot) -> None:
-        self._events.append(outcome)
+    def accept(self, result: CausalEventSnapshot) -> None:
+        self._events.append(result)
 
     @property
     def events(self) -> tuple[CausalEventSnapshot, ...]:
         return tuple(self._events)
 
     @property
-    def outcomes(self) -> tuple[ActionOutcomeSnapshot, ...]:
-        return tuple(event for event in self._events if isinstance(event, ActionOutcomeSnapshot))
+    def results(self) -> tuple[ActionResultSnapshot, ...]:
+        return tuple(event for event in self._events if isinstance(event, ActionResultSnapshot))
 
     def close(self) -> None:
-        remove_action_outcome_sink(self)
+        remove_action_result_sink(self)
 
 
 _RUNTIME_ID = uuid.uuid4()
@@ -500,7 +496,7 @@ _sequence = 0
 
 @dataclass(frozen=True, slots=True)
 class _SinkRegistration:
-    reference: weakref.ReferenceType[ActionOutcomeSink]
+    reference: weakref.ReferenceType[ActionResultSink]
     policy: RedactionPolicy
 
 
@@ -550,12 +546,12 @@ def causal_scope(cause: CausalRef, root_action_id: ActionId | None):
         _CURRENT_CAUSALITY.reset(token)
 
 
-def add_action_outcome_sink(sink: ActionOutcomeSink, *, policy: RedactionPolicy = DEFAULT_REDACTION) -> None:
+def add_action_result_sink(sink: ActionResultSink, *, policy: RedactionPolicy = DEFAULT_REDACTION) -> None:
     if not any(registration.reference() is sink for registration in _sinks):
         _sinks.append(_SinkRegistration(weakref.ref(sink), policy))
 
 
-def remove_action_outcome_sink(sink: ActionOutcomeSink) -> None:
+def remove_action_result_sink(sink: ActionResultSink) -> None:
     _sinks[:] = [
         registration
         for registration in _sinks
@@ -563,12 +559,12 @@ def remove_action_outcome_sink(sink: ActionOutcomeSink) -> None:
     ]
 
 
-def emit_outcome(outcome: ActionOutcome) -> None:
+def emit_outcome(result: ActionResult) -> None:
     if not _sinks:
         return
     live: list[_SinkRegistration] = []
-    snapshots: dict[RedactionPolicy, ActionOutcomeSnapshot] = {}
-    failures: list[tuple[ActionOutcomeSink, Exception]] = []
+    snapshots: dict[RedactionPolicy, ActionResultSnapshot] = {}
+    failures: list[tuple[ActionResultSink, Exception]] = []
     for registration in _sinks:
         sink = registration.reference()
         if sink is None:
@@ -577,15 +573,15 @@ def emit_outcome(outcome: ActionOutcome) -> None:
         try:
             snapshot = snapshots.get(registration.policy)
             if snapshot is None:
-                snapshot = ActionOutcomeSnapshot.from_outcome(outcome, registration.policy)
+                snapshot = ActionResultSnapshot.from_result(result, registration.policy)
                 snapshots[registration.policy] = snapshot
             sink.accept(snapshot)
         except Exception as error:
-            _log.exception("an action outcome sink failed")
+            _log.exception("an action result sink failed")
             failures.append((sink, error))
     _sinks[:] = live
     for sink, error in failures:
-        emit_aftermath_failure(outcome, "outcome_sink", type(sink).__qualname__, error)
+        emit_aftermath_failure(result, "result_sink", type(sink).__qualname__, error)
 
 
 def emit_causal_event(snapshot: CausalEventSnapshot) -> None:
@@ -599,19 +595,19 @@ def emit_causal_event(snapshot: CausalEventSnapshot) -> None:
         try:
             sink.accept(snapshot)
         except Exception:
-            _log.exception("an action outcome sink failed")
+            _log.exception("an action result sink failed")
     _sinks[:] = live
 
 
-def emit_aftermath_failure(outcome: ActionOutcome, stage: str, callback: str, error: BaseException) -> None:
-    """Record a redacted post-outcome failure causally beneath its immutable outcome."""
-    exception = DEFAULT_REDACTION.exception(ExceptionSummary.capture(error))
+def emit_aftermath_failure(result: ActionResult, stage: str, callback: str, error: BaseException) -> None:
+    """Record a redacted post-result failure causally beneath its immutable result."""
+    exception = DEFAULT_REDACTION.exception(ExceptionReport.capture(error))
     assert exception is not None
     emit_causal_event(
         AftermathFailureSnapshot(
             str(uuid.uuid7()),
-            str(outcome.context.root_action_id),
-            outcome.context.causal_ref(),
+            str(result.context.root_action_id),
+            result.context.causal_ref(),
             stage,
             callback,
             datetime.now(UTC),
@@ -621,10 +617,10 @@ def emit_aftermath_failure(outcome: ActionOutcome, stage: str, callback: str, er
 
 
 class Aftermath:
-    """Authority to start fresh causal work after an outcome; the callback ends it."""
+    """Authority to start fresh causal work after an result; the callback ends it."""
 
-    def __init__(self, outcome: ActionOutcome) -> None:
-        self.outcome = outcome
+    def __init__(self, result: ActionResult) -> None:
+        self.result = result
 
     @contextmanager
     def start_action(self, name: str, *, kind: ActionKind = ActionKind.RECOVERY):
@@ -634,15 +630,15 @@ class Aftermath:
         context = ActionContext.create(
             name,
             kind=kind,
-            cause=self.outcome.context.causal_ref(),
-            root_action_id=self.outcome.context.root_action_id,
+            cause=self.result.context.causal_ref(),
+            root_action_id=self.result.context.root_action_id,
         )
         with fresh_action_transaction(action_context=context):
             yield context
 
     def start_operation(self, start: Callable[[CausalRef, ActionId], Any]) -> Any:
         """Start application-owned work with immutable cause and root identifiers."""
-        return start(self.outcome.context.causal_ref(), self.outcome.context.root_action_id)
+        return start(self.result.context.causal_ref(), self.result.context.root_action_id)
 
 
 @contextmanager
@@ -663,5 +659,5 @@ def elapsed(context: ActionContext) -> timedelta:
 
 
 def monotonic_started() -> float:
-    """Return a monotonic marker for adapters that need one without retaining it in outcomes."""
+    """Return a monotonic marker for adapters that need one without retaining it in results."""
     return time.monotonic()

@@ -66,7 +66,7 @@ class Chrome:
     try_again_in: Callable[[float], TextLike] = _default_try_again_in
     """Denial wording when the guard said how long to wait; called with seconds."""
     working: TextLike = "Working\N{HORIZONTAL ELLIPSIS}"
-    """What a control with `Feedback` says while its handler runs."""
+    """What a control with `BusySpec` says while its handler runs."""
     updates_paused: TextLike = "Live updates paused — press any control to resume."
     """Status shown before an interaction edit token expires and unattended refreshes pause."""
     session_expiring: TextLike = "This session is about to expire."

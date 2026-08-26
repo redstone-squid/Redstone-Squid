@@ -162,9 +162,9 @@ async def test_a_chain_settles_in_one_send_and_draws_once() -> None:
 
     async def destination(presentation) -> Any:
         sent.append(presentation.layout)
-        from squid_discord.delivery import DeliveryReceipt, handle_for
+        from squid_discord.delivery import DeliveryResult, handle_for
 
-        return DeliveryReceipt(message, handle_for(message))
+        return DeliveryResult(message, handle_for(message))
 
     mount = Mount(panel, access=Everyone(), timeout=None)
     await mount.send(destination)

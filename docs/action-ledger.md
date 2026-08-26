@@ -227,7 +227,7 @@ coroutine from a hook is an error.
 ## Retention and privacy
 
 `ActionCommit` is an ephemeral in-process event and may carry opaque inverse handles. The bounded
-`ActionOutcomeSnapshot` and JSON schema 1 retain only stable IDs, causality, times, terminal status,
+`ActionResultSnapshot` and JSON schema 1 retain only stable IDs, causality, times, terminal status,
 safe tags, and change counts. They retain no values, owners, mutable backend objects, closures,
 tracebacks, or arbitrary `repr()`. Unknown schemas are rejected. A durable application must separately
 define codecs, redaction, actor privacy, access, encryption, retention, and deletion policy. Use

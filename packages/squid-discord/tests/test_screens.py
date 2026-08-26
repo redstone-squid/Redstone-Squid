@@ -24,9 +24,9 @@ class Panel(sl.Component):
 def to_message() -> squid_discord.Destination:
     async def send(
         presentation: squid_discord.presentation.DiscordPresentation,
-    ) -> squid_discord.delivery.DeliveryReceipt:
+    ) -> squid_discord.delivery.DeliveryResult:
         message = fake_message()
-        return squid_discord.delivery.DeliveryReceipt(message, squid_discord.delivery.handle_for(message))
+        return squid_discord.delivery.DeliveryResult(message, squid_discord.delivery.handle_for(message))
 
     return send
 

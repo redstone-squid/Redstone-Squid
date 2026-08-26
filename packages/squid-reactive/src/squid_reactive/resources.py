@@ -15,7 +15,7 @@ from squid_reactive.actions import (
     DEFAULT_REDACTION,
     ActionId,
     CausalRef,
-    ExceptionSummary,
+    ExceptionReport,
     ResourceEventSnapshot,
     current_causality,
     emit_causal_event,
@@ -613,7 +613,7 @@ class Resource[ValueT](AsyncBinding):
         error: BaseException | None = None,
     ) -> None:
         generation_id, cause, root_action_id = generation
-        exception = None if error is None else DEFAULT_REDACTION.exception(ExceptionSummary.capture(error))
+        exception = None if error is None else DEFAULT_REDACTION.exception(ExceptionReport.capture(error))
         emit_causal_event(
             ResourceEventSnapshot(
                 str(generation_id),

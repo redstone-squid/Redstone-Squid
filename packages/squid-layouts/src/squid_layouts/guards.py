@@ -33,7 +33,7 @@ def _monotonic() -> float:
 
 
 @dataclass(frozen=True, slots=True)
-class GuardVerdict:
+class GuardDecision:
     """One guard's answer, and the wording a denial is entitled to."""
 
     allowed: bool
@@ -43,17 +43,17 @@ class GuardVerdict:
     """Seconds until the same press would be admitted, when the guard can say."""
 
 
-ADMIT = GuardVerdict(allowed=True)
+ADMIT = GuardDecision(allowed=True)
 """The shared admission verdict; guards return this rather than building one."""
 
 
-def deny(reason: TextLike | None = None, *, retry_after: float | None = None) -> GuardVerdict:
+def deny(reason: TextLike | None = None, *, retry_after: float | None = None) -> GuardDecision:
     """Refuse a press, optionally with wording and a delay.
 
     `reason` wins over `retry_after` when both are given: explicit author wording beats
     generated wording, and the delay is then advisory metadata for a host reading verdicts.
     """
-    return GuardVerdict(False, reason, retry_after)  # noqa: FBT003
+    return GuardDecision(False, reason, retry_after)  # noqa: FBT003
 
 
 class ChallengeResolver(Protocol):
@@ -86,7 +86,7 @@ class Challenge:
     that closes is already the answer."""
 
 
-type GuardOutcome = GuardVerdict | Challenge
+type GuardResult = GuardDecision | Challenge
 """What one admission pass may answer: yes, no, or a question."""
 
 
@@ -99,10 +99,10 @@ class GuardScope(StrEnum):
 
 @dataclass(slots=True)
 class _Staged:
-    """One admission pass's ledger writes, held back until its outcome is known.
+    """One admission pass's ledger writes, held back until its decision is known.
 
     A pass that ends in a challenge must record nothing: `squid_patterns.guards.confirm`
-    belongs last in a chain, so it is exactly the guard whose non-admit outcome would
+    belongs last in a chain, so it is exactly the guard whose non-admit decision would
     otherwise spend every earlier one, and the actor who cancelled would be the one paying
     the cooldown. Buffering sits here rather than at the verdict because a guard may write
     and then deny in the same call. The challenge mechanism is this module's; the one guard
@@ -212,7 +212,7 @@ def approvals(ledger: GuardLedger, actor: str, *, key: str | None = None) -> str
 class Guard(Protocol):
     """Decide whether one press may execute, given the mount's guard ledger."""
 
-    async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardOutcome: ...
+    async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardResult: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -221,7 +221,7 @@ class _Cooldown:
     per: GuardScope
     key: str | None
 
-    async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardVerdict:
+    async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardDecision:
         bucket = ledger.bucket("cooldown", per=self.per, actor=event.actor.id, key=self.key)
         now = ledger.now()
         last: float | None = ledger.read(bucket, None)
@@ -236,10 +236,10 @@ class _When:
     predicate: Callable[[ActionEvent], bool | Awaitable[bool]]
     reason: TextLike
 
-    async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardVerdict:
+    async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardDecision:
         del ledger
-        outcome = self.predicate(event)
-        allowed = await outcome if isawaitable(outcome) else outcome
+        decision = self.predicate(event)
+        allowed = await decision if isawaitable(decision) else decision
         return ADMIT if allowed else deny(self.reason)
 
 
@@ -248,7 +248,7 @@ class _Permission:
     check: Callable[[ActionEvent], Awaitable[bool]]
     reason: TextLike | None
 
-    async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardVerdict:
+    async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardDecision:
         del ledger
         return ADMIT if await self.check(event) else deny(self.reason)
 
@@ -258,7 +258,7 @@ class _Once:
     per: GuardScope
     key: str | None
 
-    async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardVerdict:
+    async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardDecision:
         bucket = ledger.bucket("once", per=self.per, actor=event.actor.id, key=self.key)
         if ledger.read(bucket, default=False):
             return deny()
@@ -273,7 +273,7 @@ class _RateLimit:
     per: GuardScope
     key: str | None
 
-    async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardVerdict:
+    async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardDecision:
         bucket = ledger.bucket("rate_limit", per=self.per, actor=event.actor.id, key=self.key)
         now = ledger.now()
         recent = tuple(stamp for stamp in ledger.read(bucket, ()) if stamp > now - self.per_seconds)
@@ -294,7 +294,7 @@ class _Until:
             message = "until() needs an aware deadline; a naive one has no instant to compare against"
             raise ValueError(message)
 
-    async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardVerdict:
+    async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardDecision:
         del event, ledger
         # Wall clock, unlike the elapsed-interval guards: a deadline is a fact about the
         # world, not about how long this process has been running.
@@ -305,13 +305,13 @@ class _Until:
 class _AllOf:
     guards: tuple[Guard, ...]
 
-    async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardOutcome:
+    async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardResult:
         for guard in self.guards:
-            outcome = await guard.admit(event, ledger)
+            decision = await guard.admit(event, ledger)
             # Denial and challenge both stop the chain: it never asks a question it is about
             # to deny anyway.
-            if isinstance(outcome, Challenge) or not outcome.allowed:
-                return outcome
+            if isinstance(decision, Challenge) or not decision.allowed:
+                return decision
         return ADMIT
 
 
@@ -319,17 +319,17 @@ class _AllOf:
 class _AnyOf:
     guards: tuple[Guard, ...]
 
-    async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardOutcome:
+    async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardResult:
         last = deny()
         for guard in self.guards:
-            outcome = await guard.admit(event, ledger)
+            decision = await guard.admit(event, ledger)
             # Unlike `all_of`, this one walks past denials -- that is what makes it `any_of`.
             # A challenge is not a "no", so it is returned rather than counted as one.
-            if isinstance(outcome, Challenge):
-                return outcome
-            if outcome.allowed:
-                return outcome
-            last = outcome
+            if isinstance(decision, Challenge):
+                return decision
+            if decision.allowed:
+                return decision
+            last = decision
         return last
 
 
@@ -404,10 +404,10 @@ __all__ = [
     "Challenge",
     "ChallengeResolver",
     "Guard",
+    "GuardDecision",
     "GuardLedger",
-    "GuardOutcome",
+    "GuardResult",
     "GuardScope",
-    "GuardVerdict",
     "all_of",
     "any_of",
     "approvals",
