@@ -155,7 +155,7 @@ class AttachedClassicContribution:
         """The plan's degradation report, so a one-call contribution never hides one."""
         return self.plan.report
 
-    def files(self) -> list[discord.File]:
+    def build_files(self) -> list[discord.File]:
         return files_for(self.assets)
 
     def stale(self) -> bool:

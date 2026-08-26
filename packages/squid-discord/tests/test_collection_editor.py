@@ -58,7 +58,7 @@ async def test_add_appends_a_minted_entry_and_reports_the_full_ordered_collectio
     async def changed(_event: sp.PatternEvent[sp.CollectionState], values: tuple[Mapping[str, object], ...]) -> None:
         changes.append(values)
 
-    component = _editor().component(on_change=changed)
+    component = _editor().build_component(on_change=changed)
     mount = Mount(component, access=Everyone(), timeout=None)
     commit_render(mount)
 
@@ -70,7 +70,7 @@ async def test_add_appends_a_minted_entry_and_reports_the_full_ordered_collectio
 
 async def test_edit_prefills_and_retains_the_entry_identity() -> None:
     editor = _editor()
-    component = editor.component(initial=editor.initial_from(({"name": "Old"},)))
+    component = editor.build_component(initial=editor.initial_from(({"name": "Old"},)))
     component.pattern_state = editor.transition(component.pattern_state, "select", values=("1",))
     mount = Mount(component, access=Everyone(), timeout=None)
     commit_render(mount)
@@ -90,7 +90,7 @@ def test_remove_and_add_are_gated_by_minimum_and_maximum() -> None:
     assert editor.transition(selected, "add", submitted={"name": "Extra"}) is selected
     assert editor.form_for(selected, "add") is None
 
-    rendered = editor.component(initial=selected).render()
+    rendered = editor.build_component(initial=selected).render()
     add = next(
         item for item in _walk(rendered) if isinstance(item, sl.semantic.Action) and item.key == "collection.add"
     )
@@ -120,7 +120,7 @@ def test_window_pages_past_twenty_five_and_clamps_after_removal() -> None:
     second = editor.transition(state, "page:next")
 
     assert second.page == 1
-    rendered = editor.component(initial=second).render()
+    rendered = editor.build_component(initial=second).render()
     picker = next(item for item in _walk(rendered) if isinstance(item, sl.semantic.Choices))
     assert [choice.label for choice in picker.choices] == ["Entry 25"]
 

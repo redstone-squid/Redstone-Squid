@@ -116,7 +116,7 @@ class TestPayload:
     def test_files_are_repeatable_and_fresh_every_call(self) -> None:
         presentation = v2(assets=(an_asset(),))
 
-        first, second = presentation.files(), presentation.files()
+        first, second = presentation.build_files(), presentation.build_files()
 
         assert [file.filename for file in first] == ["report.txt"]
         assert first[0] is not second[0]

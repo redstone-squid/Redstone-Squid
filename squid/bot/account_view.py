@@ -244,7 +244,7 @@ class AccountPanel(sl.Component):
         await self._with_consent(event, apply)
 
     def _build_profile_editor(self) -> sp.ComponentShell[sp.EditorState]:
-        profile_section = sp.EditorSection.form(
+        profile_section = sp.EditorSection.from_form(
             "profile",
             t(self.locale, _("Profile")),
             sl.forms.FormSpec(
@@ -293,7 +293,7 @@ class AccountPanel(sl.Component):
             minimum=0,
             maximum=MAX_PROFILE_LINKS,
         )
-        links_section = sp.EditorSection.pattern(
+        links_section = sp.EditorSection.from_pattern(
             "links",
             t(self.locale, _("Links")),
             links,
@@ -317,7 +317,7 @@ class AccountPanel(sl.Component):
             },
             "links": tuple({"label": link.label, "url": link.url} for link in self._profile.links),
         }
-        return editor.component(initial=initial, on_commit=self._profile_committed)
+        return editor.build_component(initial=initial, on_commit=self._profile_committed)
 
     def _validate_link(self, values: Mapping[str, object]) -> tuple[sl.forms.FormIssue, ...]:
         try:
@@ -392,7 +392,7 @@ class AccountPanel(sl.Component):
             await self._accounts.grant_current_consent(self._account_id)
             self._needs_consent = False
             await work()
-            await mount.refresh()
+            await mount.schedule()
 
         await request_consent(
             sd.native(event),

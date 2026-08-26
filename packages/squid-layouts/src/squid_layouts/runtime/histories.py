@@ -829,7 +829,7 @@ class History:
         assert entry.last_result is not None
         return entry.last_result
 
-    def drop_conflicted(self, action_id: object | None = None) -> HistoryEntry | None:
+    def delete_conflicted(self, action_id: object | None = None) -> HistoryEntry | None:
         """Forget a conflicted entry without touching application state."""
         for stack in (self._undone, self._redoable):
             entry = self._select(stack, action_id)

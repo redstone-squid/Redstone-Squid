@@ -55,7 +55,7 @@ def test_branch_flip_retains_orphans_but_finish_collects_only_live_steps() -> No
     state = wizard.transition(state, "back")
     state = wizard.transition(state, "submit:kind", submitted={"kind": "advanced"})
     assert state.current == "detail"
-    component = wizard.component(initial=state)
+    component = wizard.build_component(initial=state)
     rendered = component.render()
     assert isinstance(rendered, Stack)
     trigger = next(child for child in rendered.children if isinstance(child, FormTrigger))
@@ -63,7 +63,7 @@ def test_branch_flip_retains_orphans_but_finish_collects_only_live_steps() -> No
 
 
 async def test_consecutive_forms_use_the_framework_owned_interstitial_hop() -> None:
-    wizard = sp.Wizard("Build", _steps).component()
+    wizard = sp.Wizard("Build", _steps).build_component()
     mount = Mount(wizard, access=Everyone(), timeout=None)
     commit_render(mount)
 
@@ -85,7 +85,7 @@ async def test_plain_next_opens_the_following_form_without_an_intermediate_rende
             sp.WizardStep("name", "Name", _form("Name", "name")),
             sp.WizardStep("done", "Done", "Review"),
         ),
-    ).component()
+    ).build_component()
     mount = Mount(wizard, access=Everyone(), timeout=None)
     commit_render(mount)
 
@@ -102,7 +102,7 @@ async def test_last_form_dispatches_finish_once_with_live_answers() -> None:
     async def finish(_event: sp.PatternEvent[sp.WizardState], answers: sp.WizardAnswers) -> None:
         completed.append(answers)
 
-    wizard = sp.Wizard("One", (sp.WizardStep("name", "Name", _form("Name", "name")),)).component(on_finish=finish)
+    wizard = sp.Wizard("One", (sp.WizardStep("name", "Name", _form("Name", "name")),)).build_component(on_finish=finish)
     mount = Mount(wizard, access=Everyone(), timeout=None)
     commit_render(mount)
 
@@ -222,7 +222,7 @@ def test_review_rows_summarize_answers_and_mark_the_unanswered_ones() -> None:
     state = _answer(wizard, wizard.transition(state, "goto:kind"), "kind", "advanced")
     assert state.current == REVIEW_STEP
 
-    rendered = wizard.component(initial=state).render()
+    rendered = wizard.build_component(initial=state).render()
     values = [node.value for node in _walk(rendered) if isinstance(node, sl.semantic.Field)]
 
     assert values == ["Ada", "advanced", sl.chrome.DEFAULT_CHROME.unanswered]
@@ -235,7 +235,7 @@ def test_a_summarize_callback_replaces_the_default_rows() -> None:
     state = _answer(wizard, wizard.initial_state, "name", "Ada")
     state = _answer(wizard, state, "kind", "basic")
 
-    rendered = wizard.component(initial=state).render()
+    rendered = wizard.build_component(initial=state).render()
 
     assert not [node for node in _walk(rendered) if isinstance(node, sl.semantic.Field)]
     assert any(isinstance(node, sl.semantic.Paragraph) and node.content == "2 answers" for node in _walk(rendered))
@@ -248,7 +248,7 @@ async def test_finish_dispatches_once_from_the_review_screen() -> None:
         completed.append(dict(answers))
 
     wizard = sp.Wizard("One", (sp.WizardStep("name", "Name", _form("Name", "name")),), review=True)
-    shell = wizard.component(on_finish=finish)
+    shell = wizard.build_component(on_finish=finish)
     mount = Mount(shell, access=Everyone(), timeout=None)
     commit_render(mount)
 

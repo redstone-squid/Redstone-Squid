@@ -121,7 +121,7 @@ class MultiChoicePanel:
     def initial_state(self) -> MultiChoiceState:
         return self._initial_state
 
-    def component(
+    def build_component(
         self,
         *,
         initial: MultiChoiceState | None = None,

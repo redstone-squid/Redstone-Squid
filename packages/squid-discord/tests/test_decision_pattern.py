@@ -39,7 +39,7 @@ def test_choose_sets_decided_once_and_later_transitions_are_noops() -> None:
 def test_options_disable_and_status_appears_after_deciding() -> None:
     pattern = _decision()
     decided = pattern.transition(pattern.initial_state, "choose:delete")
-    component = pattern.component()
+    component = pattern.build_component()
     component.pattern_state = decided
 
     rendered = component.render()
@@ -55,7 +55,7 @@ async def test_component_handler_receives_the_option_and_finish_action_ends_moun
     async def decided(event: sp.PatternEvent[sp.DecisionState], key: str) -> None:
         seen.append((key, event.state))
 
-    component = _decision().component(on_decide=decided, finish_on={"delete"})
+    component = _decision().build_component(on_decide=decided, finish_on={"delete"})
     mount = Mount(component, access=Everyone(), timeout=None)
     commit_render(mount)
 

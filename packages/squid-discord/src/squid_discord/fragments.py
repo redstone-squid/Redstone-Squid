@@ -56,17 +56,17 @@ class AttachedFragment:
         """The plan's degradation report, so a one-call contribution never hides one."""
         return self.plan.report
 
-    def files(self) -> list[discord.File]:
+    def build_files(self) -> list[discord.File]:
         """Materialize fresh file wrappers; repeatable, because a sent file cannot be re-sent."""
         return files_for(self.assets)
 
     def attachments(self, host_files: Sequence[discord.File] = ()) -> list[discord.File]:
         """Merge the host's files with the fragment's, in that order.
 
-        Exists because `[*host_files, *fragment.files()]` is the one line a host can forget,
+        Exists because `[*host_files, *fragment.build_files()]` is the one line a host can forget,
         and forgetting it breaks `attachment://` references rather than raising.
         """
-        return [*host_files, *self.files()]
+        return [*host_files, *self.build_files()]
 
     def stale(self) -> bool:
         """Whether the host has changed since this fragment was planned against it."""
@@ -100,7 +100,7 @@ class Fragment:
         """The plan's degradation report; `contribute` passes it through unchanged."""
         return self.plan.report
 
-    def files(self) -> list[discord.File]:
+    def build_files(self) -> list[discord.File]:
         return files_for(self.assets)
 
     def release(self) -> tuple[discord.ui.Item[Any], ...]:

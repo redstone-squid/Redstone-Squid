@@ -121,7 +121,7 @@ async def test_a_mount_reading_a_namespace_computed_follows_the_cells_behind_it(
     with sl.runtime.transaction():
         prefs.first = "Grace"
     await drain(reactor, bus)
-    await mount.refresh_now()
+    await mount.refresh()
 
     assert texts(message.edit.await_args.kwargs["view"]) == ["Grace Lovelace"]
 
