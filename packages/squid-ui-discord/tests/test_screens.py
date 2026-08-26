@@ -7,11 +7,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-import squid_ui_discord
 import squid_ui as sl
+import squid_ui_discord
+from squid_ui.primitives import Heading
 from squid_ui_discord import (
     Everyone,
-    MountDefaults,
+    MessageRootDefaults,
     Opener,
     Owner,
     Scope,
@@ -21,7 +22,6 @@ from squid_ui_discord import (
 )
 from squid_ui_discord.sessions import Opened, Rejected, RejectionReason
 from squid_ui_discord.testing import fake_interaction, fake_message
-from squid_ui.primitives import Heading
 
 
 class Panel(sl.Component):
@@ -48,7 +48,9 @@ def to_message() -> squid_ui_discord.Destination:
         (Scope.GLOBAL, Opener(7, 42), squid_ui_discord.SessionKey.global_("panel")),
     ],
 )
-def test_screen_key_uses_its_declared_scope(scope: Scope, opener: Opener, expected: squid_ui_discord.SessionKey) -> None:
+def test_screen_key_uses_its_declared_scope(
+    scope: Scope, opener: Opener, expected: squid_ui_discord.SessionKey
+) -> None:
     assert ScreenSpec("panel", scope=scope).key(opener) == expected
 
 
@@ -121,7 +123,7 @@ def test_screen_options_are_defensively_copied_and_read_only() -> None:
 
 async def test_screen_applies_options_overrides_and_access() -> None:
     on_error = AsyncMock()
-    registry = SessionRegistry(MountDefaults(timeout=30, strict=True, on_error=on_error))
+    registry = SessionRegistry(MessageRootDefaults(timeout=30, strict=True, on_error=on_error))
     screen = ScreenSpec("panel", access=lambda opener: Everyone(), options={"timeout": 20})
 
     result = await screen.open(Panel(), to_message(), sessions=registry, opener=Opener(7), timeout=None)
@@ -138,11 +140,11 @@ async def test_screen_applies_options_overrides_and_access() -> None:
 async def test_screen_resolves_options_once_between_static_options_and_overrides() -> None:
     calls: list[Opener] = []
 
-    async def resolve(opener: Opener) -> squid_ui_discord.MountOptions:
+    async def resolve(opener: Opener) -> squid_ui_discord.MessageRootOptions:
         calls.append(opener)
         return {"timeout": 10, "strict": False}
 
-    registry = SessionRegistry(MountDefaults(timeout=30, strict=True))
+    registry = SessionRegistry(MessageRootDefaults(timeout=30, strict=True))
     screen = ScreenSpec("panel", options={"timeout": 20}, resolve_options=resolve)
 
     result = await screen.open(Panel(), to_message(), sessions=registry, opener=Opener(7), strict=True)
@@ -153,10 +155,10 @@ async def test_screen_resolves_options_once_between_static_options_and_overrides
     assert result.session.root.strict is True
 
 
-async def test_screen_resolver_failure_does_not_construct_or_deliver_a_mount() -> None:
+async def test_screen_resolver_failure_does_not_construct_or_deliver_a_root() -> None:
     destination = AsyncMock()
 
-    async def fail(_opener: Opener) -> squid_ui_discord.MountOptions:
+    async def fail(_opener: Opener) -> squid_ui_discord.MessageRootOptions:
         raise RuntimeError("cannot resolve screen")
 
     screen = ScreenSpec("panel", resolve_options=fail)
@@ -168,7 +170,7 @@ async def test_screen_resolver_failure_does_not_construct_or_deliver_a_mount() -
 
 
 async def test_screen_respond_derives_identity_and_delivery_from_the_interaction() -> None:
-    registry = SessionRegistry(MountDefaults(timeout=30))
+    registry = SessionRegistry(MessageRootDefaults(timeout=30))
     interaction = fake_interaction(user_id=7)
     interaction.guild_id = 42
     screen = ScreenSpec("panel", scope=Scope.USER_GUILD)
@@ -191,10 +193,10 @@ async def test_screen_respond_derives_identity_and_delivery_from_the_interaction
     interaction.original_response.assert_awaited_once_with()
 
 
-async def test_screen_responds_with_an_attached_mount() -> None:
+async def test_screen_responds_with_an_attached_root() -> None:
     registry = SessionRegistry()
-    root_mount = registry.defaults.mount(Panel(), access=Owner(7), timeout=None)
-    root = await registry.open(root_mount, to_message())
+    root_root = registry.defaults.mount(Panel(), access=Owner(7), timeout=None)
+    root = await registry.open(root_root, to_message())
     assert isinstance(root, Opened)
     interaction = fake_interaction(user_id=7)
     interaction.guild_id = None
@@ -210,13 +212,13 @@ async def test_screen_responds_with_an_attached_mount() -> None:
     assert isinstance(attached, Opened)
     assert attached.session is root.session
     assert attached.session.root is root.session.root
-    assert len(attached.session.mounts) == 2
+    assert len(attached.session.message_roots) == 2
 
 
 async def test_screen_attaches_to_a_live_parent_session() -> None:
     registry = SessionRegistry()
-    root_mount = registry.defaults.mount(Panel(), access=Owner(7), timeout=None)
-    root = await registry.open(root_mount, to_message())
+    root_root = registry.defaults.mount(Panel(), access=Owner(7), timeout=None)
+    root = await registry.open(root_root, to_message())
     assert isinstance(root, Opened)
     screen = ScreenSpec("child", options={"timeout": None})
 
@@ -224,13 +226,13 @@ async def test_screen_attaches_to_a_live_parent_session() -> None:
 
     assert isinstance(attached, Opened)
     assert attached.session is root.session
-    assert len(attached.session.mounts) == 2
+    assert len(attached.session.message_roots) == 2
     assert registry.get(screen.key(Opener(7))) == ()
 
 
 async def test_screen_rejects_an_unknown_parent_without_delivery() -> None:
     registry = SessionRegistry()
-    unknown_parent = MountDefaults(timeout=None).mount(Panel(), access=Owner(7))
+    unknown_parent = MessageRootDefaults(timeout=None).mount(Panel(), access=Owner(7))
     screen = ScreenSpec("child", options={"timeout": None})
 
     destination = AsyncMock()
@@ -244,14 +246,14 @@ async def test_screen_rejects_an_unknown_parent_without_delivery() -> None:
 
 async def test_screen_rejects_a_finished_parent_without_delivery() -> None:
     registry = SessionRegistry()
-    root_mount = registry.defaults.mount(Panel(), access=Owner(7), timeout=None)
-    root = await registry.open(root_mount, to_message())
+    root_root = registry.defaults.mount(Panel(), access=Owner(7), timeout=None)
+    root = await registry.open(root_root, to_message())
     assert isinstance(root, Opened)
     await root.session.finish()
     destination = AsyncMock()
 
     opened = await ScreenSpec("child").attach(
-        Panel(), destination, sessions=registry, opener=Opener(7), parent=root_mount
+        Panel(), destination, sessions=registry, opener=Opener(7), parent=root_root
     )
 
     assert isinstance(opened, Rejected)
@@ -261,17 +263,17 @@ async def test_screen_rejects_a_finished_parent_without_delivery() -> None:
 
 async def test_screen_rejects_a_detached_parent_without_delivery() -> None:
     registry = SessionRegistry()
-    root_mount = registry.defaults.mount(Panel(), access=Owner(7), timeout=None)
-    root = await registry.open(root_mount, to_message())
+    root_root = registry.defaults.mount(Panel(), access=Owner(7), timeout=None)
+    root = await registry.open(root_root, to_message())
     assert isinstance(root, Opened)
-    child_mount = registry.defaults.mount(Panel(), access=Owner(7), timeout=None)
-    child = await root.session.attach(child_mount, to_message())
+    child_root = registry.defaults.mount(Panel(), access=Owner(7), timeout=None)
+    child = await root.session.attach(child_root, to_message())
     assert isinstance(child, Opened)
-    await child_mount.finish()
+    await child_root.finish()
     destination = AsyncMock()
 
     opened = await ScreenSpec("grandchild").attach(
-        Panel(), destination, sessions=registry, opener=Opener(7), parent=child_mount
+        Panel(), destination, sessions=registry, opener=Opener(7), parent=child_root
     )
 
     assert isinstance(opened, Rejected)

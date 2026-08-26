@@ -8,8 +8,8 @@ import discord
 from discord import app_commands
 from discord.ext.commands import Cog, Context, hybrid_group
 
-import squid_ui_discord as sd
 import squid_ui as sl
+import squid_ui_discord as sd
 from squid.accounts.domain import (
     CURRENT_CONSENT_VERSION,
     Account,
@@ -26,7 +26,7 @@ from squid.bot.i18n import resolve_locale, t
 from squid.bot.profile_render import (
     public_profile_fields,
 )
-from squid.bot.ui import card_layout, create_mount, destination, reply_presentation, text_layout
+from squid.bot.ui import card_layout, create_message_root, destination, reply_presentation, text_layout
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.permissions import PermissionNodeRequired, requires, subject_for
 from squid.bot.utils.visibility import deliver_privately, personal
@@ -57,14 +57,14 @@ class MergeConfirmation(sl.Component):
     def render(self) -> tuple[sl.LayoutNode, ...]:
         return (
             sl.section(sl.heading(t(self.locale, _("Confirm account merge"))), sl.paragraph(self.prompt)),
-            sl.actions(
-                sl.action(
+            sl.action_controls(
+                sl.action_control(
                     t(self.locale, _("Confirm")),
                     self._confirm,
                     key="confirm",
                     tone=sl.Tone.SUCCESS,
                 ),
-                sl.action(t(self.locale, _("Cancel")), self._cancel, key="cancel"),
+                sl.action_control(t(self.locale, _("Cancel")), self._cancel, key="cancel"),
                 key="merge-actions",
             ),
         )
@@ -84,8 +84,8 @@ class MergeConfirmation(sl.Component):
             await self._done.wait()
         return None if scope.cancel_called else self.value
 
-    def mount(self, *, source: sd.host.HostSource) -> sd.Mount:
-        return create_mount(
+    def mount(self, *, source: sd.host.HostSource) -> sd.MessageRoot:
+        return create_message_root(
             self,
             source=source,
             access=sd.Owner(self.author_id),
@@ -126,8 +126,8 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             author_id=ctx.author.id,
             locale=locale,
         )
-        mount = component.mount(source=ctx)
-        await mount.send(destination(ctx, visibility="personal", locale=locale))
+        message_root = component.mount(source=ctx)
+        await message_root.send(destination(ctx, visibility="personal", locale=locale))
 
     async def _show_creator_page(self, ctx: Context[BotT], user: discord.Member | discord.User, locale: str) -> None:
         """Show somebody else's page, which is shared content and answers where the channel sees it."""
@@ -424,8 +424,8 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             can_approve=approve.allowed,
             can_reject=reject.allowed,
         )
-        mount = component.mount(source=ctx)
-        await mount.send(destination(ctx, visibility="personal", locale=locale))
+        message_root = component.mount(source=ctx)
+        await message_root.send(destination(ctx, visibility="personal", locale=locale))
 
 
 def _link_conflict(preview: LinkPreview, existing_java: AccountIdentity | None) -> UUID | None:

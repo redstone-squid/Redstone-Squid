@@ -8,12 +8,12 @@ import discord
 import pytest
 
 import squid.bot.settings_view as settings_view
-import squid_ui_discord as sd
 import squid_ui as sl
+import squid_ui_discord as sd
 from squid.bot.settings_view import SettingsCapabilities, SettingsPanel
 from squid.voting.domain import VoteKind
-from squid_ui_discord.testing import commit_render
 from squid_ui.runtime.reactivity import readonly_transaction
+from squid_ui_discord.testing import commit_render
 from tests.helpers.discord import make_layout_bot
 
 GUILD_ID = 7
@@ -41,7 +41,7 @@ def make_component_panel(
     *,
     stored: dict[str, int | None] | None = None,
     channels: dict[int, str] | None = None,
-) -> tuple[SettingsPanel, Any, sd.Mount]:
+) -> tuple[SettingsPanel, Any, sd.MessageRoot]:
     """The mounted panel and the settings service behind it."""
     settings = SimpleNamespace(
         get_all=AsyncMock(return_value=stored or {}),
@@ -61,8 +61,8 @@ def make_component_panel(
         capabilities=EVERYTHING,
     )
     bot = make_layout_bot()
-    mount = sd.LayoutHost.of(bot).defaults.mount(panel, access=sd.Owner(1), timeout=300)
-    return panel, settings, mount
+    message_root = sd.LayoutHost.of(bot).defaults.mount(panel, access=sd.Owner(1), timeout=300)
+    return panel, settings, message_root
 
 
 async def test_a_saved_channel_is_kept_without_a_hand_written_invalidate() -> None:
@@ -112,10 +112,10 @@ async def test_a_read_only_action_cannot_change_a_channel() -> None:
     assert panel.channel_id("Vote") == 3
 
 
-async def test_changing_language_relocalizes_the_live_mount(monkeypatch: pytest.MonkeyPatch) -> None:
-    panel, _, mount = make_component_panel()
-    commit_render(mount)
-    original_localization = mount.localization
+async def test_changing_language_relocalizes_the_live_root(monkeypatch: pytest.MonkeyPatch) -> None:
+    panel, _, message_root = make_component_panel()
+    commit_render(message_root)
+    original_localization = message_root.localization
     translations = {"Server settings": "Paramètres du serveur", "Close": "Fermer"}
     monkeypatch.setattr(
         settings_view,
@@ -124,8 +124,8 @@ async def test_changing_language_relocalizes_the_live_mount(monkeypatch: pytest.
     )
 
     with sl.runtime.transaction():
-        await panel.set_locale("fr", mount=mount)
-    view = commit_render(mount)
+        await panel.set_locale("fr", message_root=message_root)
+    view = commit_render(message_root)
 
     text = "\n".join(item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay))
     labels = [item.label for item in view.walk_children() if isinstance(item, discord.ui.Button)]
@@ -136,7 +136,7 @@ async def test_changing_language_relocalizes_the_live_mount(monkeypatch: pytest.
         result = await panel.history.undo()
 
     assert result.applied
-    assert mount.localization.locale == original_localization.locale
+    assert message_root.localization.locale == original_localization.locale
 
 
 async def test_a_channel_change_can_be_undone() -> None:
@@ -187,12 +187,12 @@ async def test_a_failed_action_records_no_history() -> None:
 
 
 async def test_the_undo_control_appears_only_once_there_is_something_to_undo() -> None:
-    panel, _, mount = make_component_panel()
+    panel, _, message_root = make_component_panel()
 
-    assert "Undo" not in _button_labels(commit_render(mount))
+    assert "Undo" not in _button_labels(commit_render(message_root))
     with sl.runtime.transaction():
         await panel.set_channel("Vote", 12)
-    assert "Undo" in _button_labels(commit_render(mount))
+    assert "Undo" in _button_labels(commit_render(message_root))
 
 
 async def test_undo_is_refused_when_the_permission_was_revoked(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -224,10 +224,10 @@ async def test_undo_is_refused_when_the_permission_was_revoked(monkeypatch: pyte
 
 async def test_a_large_guild_still_fits_one_message() -> None:
     """Five native channel pickers cost ten V2 components regardless of guild size."""
-    panel, _, mount = make_component_panel(channels={index: f"channel-{index}" for index in range(1, 200)})
+    panel, _, message_root = make_component_panel(channels={index: f"channel-{index}" for index in range(1, 200)})
     await panel.open_server()
 
-    view = commit_render(mount)
+    view = commit_render(message_root)
 
     assert len(list(view.walk_children())) <= 40
     assert len([item for item in view.walk_children() if isinstance(item, discord.ui.ChannelSelect)]) == 5

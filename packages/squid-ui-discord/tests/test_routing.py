@@ -259,11 +259,11 @@ class TestRouter:
         router.add(sl.routing.Route("r:polls:close", aliases=("poll:close",)), _noop)
 
     @pytest.mark.parametrize("route", ["ctl:fixed:route", "{prefix}:fixed:route"])
-    def test_routes_cannot_enter_the_mount_namespace(self, route: str) -> None:
+    def test_routes_cannot_enter_the_message_root_namespace(self, route: str) -> None:
         with pytest.raises(ValueError, match="mount namespace"):
             Router().add(sl.routing.Route(route), _noop)
 
-    def test_aliases_cannot_enter_the_mount_namespace(self) -> None:
+    def test_aliases_cannot_enter_the_message_root_namespace(self) -> None:
         with pytest.raises(ValueError, match="mount namespace"):
             Router().add(sl.routing.Route("new:{value}", aliases=("ctl:{value}",)), _noop)
 

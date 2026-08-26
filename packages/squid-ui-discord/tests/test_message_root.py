@@ -68,9 +68,18 @@ from squid_ui.runtime import (
 from squid_ui.runtime.reactivity import _CURRENT
 from squid_ui.semantic import Paragraph
 from squid_ui.text import Localization, Message
-from squid_ui_discord import Everyone, Mount, MountScheduler, Owner, PauseUpdates, RenewEphemeral, Users, delivery
+from squid_ui_discord import (
+    Everyone,
+    MessageRoot,
+    MessageRootScheduler,
+    Owner,
+    PauseUpdates,
+    RenewEphemeral,
+    Users,
+    delivery,
+)
 from squid_ui_discord.access import Allowed, Check, Denied
-from squid_ui_discord.mount import MountLifecycle, _BusyPaint, _custom_id
+from squid_ui_discord.message_root import MessageRootStatus, _BusyPaint, _custom_id
 from squid_ui_discord.testing import (
     assert_within_limits,
     commit_render,
@@ -104,20 +113,20 @@ def test_expiry_policies_require_a_finite_positive_warning(warning: float) -> No
 
 def test_renewal_policy_requires_an_expiry_supervisor() -> None:
     with pytest.raises(TypeError, match="scheduler"):
-        Mount(Counter(), access=Everyone(), expiry=RenewEphemeral())
+        MessageRoot(Counter(), access=Everyone(), expiry=RenewEphemeral())
 
 
-async def test_mount_snapshot_reports_lifecycle_and_handle_expiry() -> None:
+async def test_message_root_snapshot_reports_lifecycle_and_handle_expiry() -> None:
     now = datetime.now(UTC)
-    scheduler = MountScheduler(clock=lambda: now)
+    scheduler = MessageRootScheduler(clock=lambda: now)
     interaction = fake_interaction()
     interaction.expires_at = now + timedelta(seconds=45)
-    mount = Mount(Counter(), access=Everyone(), scheduler=scheduler)
-    await mount.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
+    message_root = MessageRoot(Counter(), access=Everyone(), scheduler=scheduler)
+    await message_root.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
 
-    snapshot = mount.snapshot()
+    snapshot = message_root.snapshot()
 
-    assert snapshot.lifecycle is MountLifecycle.ACTIVE
+    assert snapshot.lifecycle is MessageRootStatus.ACTIVE
     assert snapshot.handle_expires_in == pytest.approx(45)
 
 
@@ -125,46 +134,46 @@ class TestCandidateSettlement:
     """A drawn candidate owes the mount exactly one ending: committed, or rolled back."""
 
     async def test_a_candidate_cannot_be_rolled_back_twice(self) -> None:
-        mount = Mount(Counter(), access=Everyone())
-        await mount.send(delivered_to(fake_message()))
-        candidate = mount._stage()
+        message_root = MessageRoot(Counter(), access=Everyone())
+        await message_root.send(delivered_to(fake_message()))
+        candidate = message_root._stage()
 
-        mount._rollback(candidate)
+        message_root._rollback(candidate)
 
         with pytest.raises(LayoutInvariantError, match="already settled"):
-            mount._rollback(candidate)
+            message_root._rollback(candidate)
 
     async def test_a_committed_candidate_cannot_be_rolled_back(self) -> None:
-        mount = Mount(Counter(), access=Everyone())
-        await mount.send(delivered_to(fake_message()))
-        candidate = mount._stage()
+        message_root = MessageRoot(Counter(), access=Everyone())
+        await message_root.send(delivered_to(fake_message()))
+        candidate = message_root._stage()
 
-        mount._commit(candidate)
+        message_root._commit(candidate)
 
         with pytest.raises(LayoutInvariantError, match="already settled"):
-            mount._rollback(candidate)
+            message_root._rollback(candidate)
 
     async def test_only_one_candidate_may_be_outstanding_at_a_time(self) -> None:
         """The reconciler owns this half: a second draw cannot stage over the first."""
-        mount = Mount(Counter(), access=Everyone())
-        await mount.send(delivered_to(fake_message()))
-        mount._stage()
+        message_root = MessageRoot(Counter(), access=Everyone())
+        await message_root.send(delivered_to(fake_message()))
+        message_root._stage()
 
         with pytest.raises(RuntimeError, match="already staged"):
-            mount._stage()
+            message_root._stage()
 
 
-async def _armed_mount(
+async def _armed_root(
     component: Component | None = None,
     *,
     access: squid_ui_discord.AccessPolicy | None = None,
-    on_error: squid_ui_discord.mount.ErrorHook | None = None,
-) -> tuple[Mount, Any, MountScheduler]:
+    on_error: squid_ui_discord.message_root.ErrorHook | None = None,
+) -> tuple[MessageRoot, Any, MessageRootScheduler]:
     now = datetime.now(UTC)
-    scheduler = MountScheduler(clock=lambda: now)
+    scheduler = MessageRootScheduler(clock=lambda: now)
     interaction = fake_interaction()
     interaction.expires_at = now + timedelta(seconds=30)
-    mount = Mount(
+    message_root = MessageRoot(
         Counter() if component is None else component,
         access=Everyone() if access is None else access,
         scheduler=scheduler,
@@ -172,17 +181,17 @@ async def _armed_mount(
         expiry=RenewEphemeral(warning=60),
         on_error=on_error,
     )
-    await mount.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
-    assert mount.handle is not None
-    mount._queue_expiry_arm(mount.handle)
-    await mount.refresh()
-    return mount, interaction, scheduler
+    await message_root.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
+    assert message_root.handle is not None
+    message_root._queue_expiry_arm(message_root.handle)
+    await message_root.refresh()
+    return message_root, interaction, scheduler
 
 
 class TestEphemeralRenewal:
     async def test_arming_replaces_a_full_layout_without_committing_application_state(self) -> None:
         component = RootToolbar()
-        subject, interaction, _ = await _armed_mount(component)
+        subject, interaction, _ = await _armed_root(component)
         runtime_revision = subject.runtime.revision
 
         written = interaction.response.edit_message.await_args.kwargs
@@ -191,7 +200,7 @@ class TestEphemeralRenewal:
         assert "This session is about to expire" in payload
         assert "Continue Session" in payload
         assert "attachments" not in written
-        assert subject.snapshot().lifecycle is MountLifecycle.RENEWAL_ARMED
+        assert subject.snapshot().lifecycle is MessageRootStatus.RENEWAL_ARMED
         assert subject.runtime.revision == runtime_revision
         assert subject.pending is False
         assert subject.generation == 2
@@ -206,89 +215,89 @@ class TestEphemeralRenewal:
                 return Text(f"render {self.renders}")
 
         component = Counting()
-        mount, interaction, _ = await _armed_mount(component)
+        message_root, interaction, _ = await _armed_root(component)
         rendered = component.renders
         interaction.response.edit_message.reset_mock()
 
-        mount.invalidate()
-        await mount.refresh()
+        message_root.invalidate()
+        await message_root.refresh()
 
         assert component.renders == rendered
-        assert mount.pending
+        assert message_root.pending
         interaction.response.edit_message.assert_not_awaited()
-        assert mount.snapshot().lifecycle is MountLifecycle.RENEWAL_ARMED
+        assert message_root.snapshot().lifecycle is MessageRootStatus.RENEWAL_ARMED
 
     async def test_renewal_restores_latest_state_on_the_same_message(self) -> None:
         component = Counter()
-        mount, _, _ = await _armed_mount(component)
+        message_root, _, _ = await _armed_root(component)
         component.count = 7
-        generation = mount.generation
+        generation = message_root.generation
         interaction = fake_interaction(message_id=99)
 
-        await mount.dispatch("__squid_continue_session", interaction, generation=generation)
+        await message_root.dispatch("__squid_continue_session", interaction, generation=generation)
 
         payload = str(interaction.response.edit_message.await_args.kwargs["view"].to_components())
         assert "count: 7" in payload
-        assert mount.snapshot().lifecycle is MountLifecycle.ACTIVE
-        assert mount.handle is not None and mount.handle.expires_at == interaction.expires_at
-        assert not mount.pending
+        assert message_root.snapshot().lifecycle is MessageRootStatus.ACTIVE
+        assert message_root.handle is not None and message_root.handle.expires_at == interaction.expires_at
+        assert not message_root.pending
 
     async def test_denied_renewal_keeps_the_screen_and_old_authority(self) -> None:
-        mount, _, _ = await _armed_mount(access=Owner(1))
-        original = mount.handle
+        message_root, _, _ = await _armed_root(access=Owner(1))
+        original = message_root.handle
         interaction = fake_interaction(user_id=2)
 
-        await mount.dispatch("__squid_continue_session", interaction, generation=mount.generation)
+        await message_root.dispatch("__squid_continue_session", interaction, generation=message_root.generation)
 
         interaction.response.send_message.assert_awaited_once()
-        assert mount.handle is original
-        assert mount.snapshot().lifecycle is MountLifecycle.RENEWAL_ARMED
+        assert message_root.handle is original
+        assert message_root.snapshot().lifecycle is MessageRootStatus.RENEWAL_ARMED
 
     async def test_failed_renewal_keeps_fresh_authority_and_is_retryable(self) -> None:
         errors = AsyncMock()
-        mount, _, _ = await _armed_mount(on_error=errors)
-        generation = mount.generation
+        message_root, _, _ = await _armed_root(on_error=errors)
+        generation = message_root.generation
         failed = fake_interaction()
         failed.response.edit_message.side_effect = RuntimeError("Discord refused the restore")
 
-        await mount.dispatch("__squid_continue_session", failed, generation=generation)
+        await message_root.dispatch("__squid_continue_session", failed, generation=generation)
 
         errors.assert_awaited_once()
         assert errors.await_args is not None
         assert errors.await_args.args[2] == "renewal"
-        assert mount.handle is not None and mount.handle.expires_at == failed.expires_at
-        assert mount.snapshot().lifecycle is MountLifecycle.RENEWAL_ARMED
+        assert message_root.handle is not None and message_root.handle.expires_at == failed.expires_at
+        assert message_root.snapshot().lifecycle is MessageRootStatus.RENEWAL_ARMED
         retry = fake_interaction()
-        await mount.dispatch("__squid_continue_session", retry, generation=generation)
+        await message_root.dispatch("__squid_continue_session", retry, generation=generation)
         retry.response.edit_message.assert_awaited_once()
-        assert mount.snapshot().lifecycle is MountLifecycle.ACTIVE
+        assert message_root.snapshot().lifecycle is MessageRootStatus.ACTIVE
 
     async def test_repeated_renewal_click_is_acknowledged_without_a_second_commit(self) -> None:
-        mount, _, _ = await _armed_mount()
-        generation = mount.generation
+        message_root, _, _ = await _armed_root()
+        generation = message_root.generation
         first = fake_interaction()
-        await mount.dispatch("__squid_continue_session", first, generation=generation)
-        active_generation = mount.generation
+        await message_root.dispatch("__squid_continue_session", first, generation=generation)
+        active_generation = message_root.generation
         repeated = fake_interaction()
 
-        await mount.dispatch("__squid_continue_session", repeated, generation=generation)
+        await message_root.dispatch("__squid_continue_session", repeated, generation=generation)
 
         repeated.response.defer.assert_awaited_once()
         repeated.response.edit_message.assert_not_awaited()
-        assert mount.generation == active_generation
+        assert message_root.generation == active_generation
 
     async def test_permanent_authority_disarms_and_restores_the_application(self) -> None:
         component = Counter()
-        mount, _, _ = await _armed_mount(component)
+        message_root, _, _ = await _armed_root(component)
         component.count = 4
         message = fake_message(ephemeral=False)
 
-        await mount.adopt_handle(delivery.handle_for(message))
+        await message_root.adopt_handle(delivery.handle_for(message))
 
         payload = str(message.edit.await_args.kwargs["view"].to_components())
         assert "count: 4" in payload
-        assert mount.handle is not None and mount.handle.permanent
-        assert mount.snapshot().lifecycle is MountLifecycle.ACTIVE
+        assert message_root.handle is not None and message_root.handle.permanent
+        assert message_root.snapshot().lifecycle is MessageRootStatus.ACTIVE
 
     async def test_finishing_while_armed_does_not_reconstruct_the_hidden_tree(self) -> None:
         class Counting(Component):
@@ -300,19 +309,19 @@ class TestEphemeralRenewal:
                 return Text(f"render {self.renders}")
 
         component = Counting()
-        mount, _, _ = await _armed_mount(component)
+        message_root, _, _ = await _armed_root(component)
         rendered = component.renders
 
-        await mount.finish()
+        await message_root.finish()
 
         assert component.renders == rendered
-        assert mount.finished
+        assert message_root.finished
 
     async def test_stale_arming_leaves_the_application_generation_pending(self) -> None:
-        mount, interaction, _ = await _armed_mount()
+        message_root, interaction, _ = await _armed_root()
         # Restore active state so this test can exercise the stale arm branch independently.
-        await mount.dispatch("__squid_continue_session", fake_interaction(), generation=mount.generation)
-        active_generation = mount.generation
+        await message_root.dispatch("__squid_continue_session", fake_interaction(), generation=message_root.generation)
+        active_generation = message_root.generation
 
         class StaleHandle:
             permanent = False
@@ -326,16 +335,16 @@ class TestEphemeralRenewal:
                 raise delivery.StaleHandleError("expired")
 
         stale = StaleHandle()
-        mount._handle = stale
-        mount._queue_expiry_arm(stale)
+        message_root._handle = stale
+        message_root._queue_expiry_arm(stale)
         interaction.response.edit_message.reset_mock()
 
-        await mount.refresh()
+        await message_root.refresh()
 
-        assert mount.snapshot().lifecycle is MountLifecycle.ACTIVE
-        assert mount.generation == active_generation
-        assert mount.pending
-        assert mount.handle is None
+        assert message_root.snapshot().lifecycle is MessageRootStatus.ACTIVE
+        assert message_root.generation == active_generation
+        assert message_root.pending
+        assert message_root.handle is None
 
 
 class RootToolbar(Component):
@@ -437,10 +446,10 @@ def _operation_trace(profiler: MemoryProfiler, operation: OperationKind) -> Runt
 class TestDispatchProfiling:
     async def test_dispatch_names_the_actor_on_the_root_span(self) -> None:
         profiler = MemoryProfiler()
-        mount = Mount(Counter(), access=Everyone(), profiler=profiler, timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(Counter(), access=Everyone(), profiler=profiler, timeout=None)
+        commit_render(message_root)
 
-        await mount.dispatch("inc", fake_interaction(user_id=77))
+        await message_root.dispatch("inc", fake_interaction(user_id=77))
 
         root = next(span for span in _profile_trace(profiler).spans if span.parent_span_id is None)
         assert ("actor", 77) in {(attribute.key, attribute.value) for attribute in root.attributes}
@@ -449,11 +458,11 @@ class TestDispatchProfiling:
         profiler = MemoryProfiler()
         ledger = ActionLedger()
         add_action_result_sink(ledger)
-        mount = Mount(Counter(), access=Everyone(), profiler=profiler, timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(Counter(), access=Everyone(), profiler=profiler, timeout=None)
+        commit_render(message_root)
 
         try:
-            await mount.dispatch("inc", fake_interaction())
+            await message_root.dispatch("inc", fake_interaction())
         finally:
             ledger.close()
 
@@ -464,11 +473,11 @@ class TestDispatchProfiling:
     async def test_success_records_action_presentation_generation_and_stages(self) -> None:
         profiler = MemoryProfiler()
         component = Counter()
-        mount = Mount(component, access=Everyone(), profiler=profiler, timeout=None)
-        commit_render(mount)
-        submitted = mount.generation
+        message_root = MessageRoot(component, access=Everyone(), profiler=profiler, timeout=None)
+        commit_render(message_root)
+        submitted = message_root.generation
 
-        await mount.dispatch("inc", fake_interaction(), generation=submitted)
+        await message_root.dispatch("inc", fake_interaction(), generation=submitted)
 
         trace = _profile_trace(profiler)
         result = trace.result.dispatch
@@ -510,12 +519,12 @@ class TestDispatchProfiling:
 
     async def test_stale_and_rebased_are_distinct_generation_metadata(self) -> None:
         stale_profiler = MemoryProfiler()
-        stale_mount = Mount(Counter(), access=Everyone(), profiler=stale_profiler, timeout=None)
-        commit_render(stale_mount)
-        submitted = stale_mount.generation
-        commit_render(stale_mount)
+        stale_root = MessageRoot(Counter(), access=Everyone(), profiler=stale_profiler, timeout=None)
+        commit_render(stale_root)
+        submitted = stale_root.generation
+        commit_render(stale_root)
 
-        await stale_mount.dispatch("inc", fake_interaction(), generation=submitted)
+        await stale_root.dispatch("inc", fake_interaction(), generation=submitted)
 
         stale = _profile_trace(stale_profiler).result.dispatch
         assert stale is not None
@@ -529,12 +538,12 @@ class TestDispatchProfiling:
             async def run(self, event: PressEvent) -> None: ...
 
         rebase_profiler = MemoryProfiler()
-        rebase_mount = Mount(Rebased(), access=Everyone(), profiler=rebase_profiler, timeout=None)
-        commit_render(rebase_mount)
-        submitted = rebase_mount.generation
-        commit_render(rebase_mount)
+        rebase_root = MessageRoot(Rebased(), access=Everyone(), profiler=rebase_profiler, timeout=None)
+        commit_render(rebase_root)
+        submitted = rebase_root.generation
+        commit_render(rebase_root)
 
-        await rebase_mount.dispatch("run", fake_interaction(), generation=submitted)
+        await rebase_root.dispatch("run", fake_interaction(), generation=submitted)
 
         rebased = _profile_trace(rebase_profiler).result.dispatch
         assert rebased is not None
@@ -546,7 +555,7 @@ class TestDispatchProfiling:
             async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None: ...
 
         stopped_profiler = MemoryProfiler()
-        stopped = Mount(
+        stopped = MessageRoot(
             Counter(),
             access=Everyone(),
             middleware=(Stop(),),
@@ -571,7 +580,7 @@ class TestDispatchProfiling:
                     await proceed()
 
         recovered_profiler = MemoryProfiler()
-        recovered = Mount(
+        recovered = MessageRoot(
             Broken(),
             access=Everyone(),
             middleware=(Catch(),),
@@ -595,7 +604,7 @@ class TestDispatchProfiling:
                 raise RuntimeError("action failed")
 
         action_profiler = MemoryProfiler()
-        failed_action = Mount(
+        failed_action = MessageRoot(
             Broken(),
             access=Everyone(),
             profiler=action_profiler,
@@ -611,7 +620,7 @@ class TestDispatchProfiling:
         assert action.action is ActionStatus.FAILED
 
         delivery_profiler = MemoryProfiler()
-        failed_delivery = Mount(Counter(), access=Everyone(), profiler=delivery_profiler, timeout=None)
+        failed_delivery = MessageRoot(Counter(), access=Everyone(), profiler=delivery_profiler, timeout=None)
         commit_render(failed_delivery)
         monkeypatch.setattr(delivery, "handle_from", _refuse_handle)
         with pytest.raises(discord.HTTPException):
@@ -636,18 +645,18 @@ class TestDispatchProfiling:
                 await release.wait()
 
         profiler = MemoryProfiler()
-        mount = Mount(
+        message_root = MessageRoot(
             Slow(),
             access=Everyone(),
             profiler=profiler,
             timeout=None,
             acknowledgement_timeout=0.01,
         )
-        commit_render(mount)
+        commit_render(message_root)
         interaction = fake_interaction()
 
         async def dispatch() -> None:
-            await mount.dispatch("slow", interaction)
+            await message_root.dispatch("slow", interaction)
 
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(dispatch)
@@ -665,18 +674,18 @@ class TestDispatchProfiling:
 
 class TestRenderAndWire:
     def test_stage_view_wires_handlers(self):
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
-        view = commit_render(mount)
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
+        view = commit_render(message_root)
         button = _button(view)
-        assert button.custom_id is not None and button.custom_id.startswith(f"ctl:{mount.id}:1:inc")
-        assert "inc" in mount._handlers
+        assert button.custom_id is not None and button.custom_id.startswith(f"ctl:{message_root.id}:1:inc")
+        assert "inc" in message_root._handlers
         assert_within_limits(view)
 
     def test_render_generations_have_distinct_control_ids(self):
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
 
-        first = _button(commit_render(mount))
-        second = _button(commit_render(mount))
+        first = _button(commit_render(message_root))
+        second = _button(commit_render(message_root))
 
         assert first.custom_id != second.custom_id
 
@@ -689,21 +698,21 @@ class TestRenderAndWire:
         assert len(second) <= 100
         assert first != second
 
-    async def test_keyed_document_root_pages_are_live_mount_navigation(self):
-        mount = Mount(RootToolbar(), access=Everyone(), timeout=None)
-        commit_render(mount)
+    async def test_keyed_document_root_pages_are_live_message_root_navigation(self):
+        message_root = MessageRoot(RootToolbar(), access=Everyone(), timeout=None)
+        commit_render(message_root)
 
-        assert mount.presentation.cursor("toolbar").extent > 1
-        await mount.dispatch("__cursor_next.toolbar", fake_interaction())
-        assert mount.presentation.cursor("toolbar").position.offset == 1
+        assert message_root.presentation.cursor("toolbar").extent > 1
+        await message_root.dispatch("__cursor_next.toolbar", fake_interaction())
+        assert message_root.presentation.cursor("toolbar").position.offset == 1
 
     async def test_click_mutates_state_and_edits(self):
         component = Counter()
-        mount = Mount(component, access=Everyone(), timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
+        commit_render(message_root)
         interaction = fake_interaction()
 
-        await mount.dispatch("inc", interaction)
+        await message_root.dispatch("inc", interaction)
 
         assert component.count == 1
         edited_view = interaction.response.edit_message.await_args.kwargs["view"]
@@ -720,10 +729,10 @@ class TestRenderAndWire:
             async def inspect(self, event: PressEvent) -> None:
                 seen.append(event)
 
-        mount = Mount(Inspect(), access=Everyone(), timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(Inspect(), access=Everyone(), timeout=None)
+        commit_render(message_root)
 
-        await mount.dispatch("inspect", fake_interaction(user_id=42))
+        await message_root.dispatch("inspect", fake_interaction(user_id=42))
 
         assert seen[0].actor.id == "42"
         assert seen[0].context == {"frontend": "discord"}
@@ -738,10 +747,10 @@ class TestRenderAndWire:
             async def inspect(self, event: PressEvent) -> None:
                 seen.append(event)
 
-        mount = Mount(Inspect(), access=Everyone(), localization=Localization("zh-CN"), timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(Inspect(), access=Everyone(), localization=Localization("zh-CN"), timeout=None)
+        commit_render(message_root)
 
-        await mount.dispatch("inspect", fake_interaction())
+        await message_root.dispatch("inspect", fake_interaction())
 
         assert seen[0].locale == "zh-CN"
 
@@ -755,20 +764,22 @@ class TestRenderAndWire:
 
         translated = {"Hello": "Bonjour", "Previous": "Précédent", "Next": "Suivant"}
         chrome = Chrome(previous=Message("Previous"), next=Message("Next"))
-        mount = Mount(Localized(), access=Everyone(), chrome=chrome, localization=Localization("en"), timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(
+            Localized(), access=Everyone(), chrome=chrome, localization=Localization("en"), timeout=None
+        )
+        commit_render(message_root)
 
         localization = Localization("fr", gettext=lambda message: translated.get(message, message))
-        mount.localize(localization)
-        view = commit_render(mount)
+        message_root.localize(localization)
+        view = commit_render(message_root)
 
         texts = [item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)]
         labels = [item.label for item in view.walk_children() if isinstance(item, discord.ui.Button)]
         assert "Bonjour" in texts
         assert labels == ["Précédent", "Suivant"]
-        assert mount.runtime.context[LOCALIZATION_CONTEXT] is localization
+        assert message_root.runtime.context[LOCALIZATION_CONTEXT] is localization
 
-    async def test_notice_resolves_deferred_text_with_mount_localization(self):
+    async def test_notice_resolves_deferred_text_with_message_root_localization(self):
         class Notify(Component):
             def render(self):
                 return Row((Button(label="notify", on_click=self.notify, key="notify"),))
@@ -777,11 +788,11 @@ class TestRenderAndWire:
                 await event.notice(Message("Notice"))
 
         localization = Localization("fr", gettext=lambda message: "Avis" if message == "Notice" else message)
-        mount = Mount(Notify(), access=Everyone(), localization=localization, timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(Notify(), access=Everyone(), localization=localization, timeout=None)
+        commit_render(message_root)
         interaction = fake_interaction()
 
-        await mount.dispatch("notify", interaction)
+        await message_root.dispatch("notify", interaction)
 
         interaction.response.send_message.assert_awaited_once()
         notice = interaction.response.send_message.await_args.kwargs["view"]
@@ -792,21 +803,21 @@ class TestRenderAndWire:
             async def increment(self, event: PressEvent) -> None:
                 pass  # no state change
 
-        mount = Mount(Static(), access=Everyone(), timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(Static(), access=Everyone(), timeout=None)
+        commit_render(message_root)
         interaction = fake_interaction()
 
-        await mount.dispatch("inc", interaction)
+        await message_root.dispatch("inc", interaction)
 
         interaction.response.defer.assert_awaited_once()
         interaction.response.edit_message.assert_not_awaited()
 
     async def test_stale_key_is_acknowledged_not_crashed(self):
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
+        commit_render(message_root)
         interaction = fake_interaction()
 
-        await mount.dispatch("gone", interaction)
+        await message_root.dispatch("gone", interaction)
 
         interaction.response.defer.assert_awaited_once()
 
@@ -822,12 +833,12 @@ class TestRenderAndWire:
                 started.set()
                 await release.wait()
 
-        mount = Mount(Slow(), access=Everyone(), timeout=None, acknowledgement_timeout=0.01)
-        commit_render(mount)
+        message_root = MessageRoot(Slow(), access=Everyone(), timeout=None, acknowledgement_timeout=0.01)
+        commit_render(message_root)
         interaction = fake_interaction()
 
         async def dispatch() -> None:
-            await mount.dispatch("slow", interaction)
+            await message_root.dispatch("slow", interaction)
 
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(dispatch)
@@ -840,72 +851,72 @@ class TestRenderAndWire:
 
 class TestAccessPolicy:
     def test_access_is_a_required_keyword(self) -> None:
-        assert inspect.signature(Mount).parameters["access"].default is inspect.Parameter.empty
+        assert inspect.signature(MessageRoot).parameters["access"].default is inspect.Parameter.empty
 
     async def test_everyone_admits_any_user(self) -> None:
         component = Counter()
-        mount = Mount(component, access=Everyone(), timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
+        commit_render(message_root)
 
-        await mount.dispatch("inc", fake_interaction(user_id=99))
+        await message_root.dispatch("inc", fake_interaction(user_id=99))
 
         assert component.count == 1
 
     async def test_wrong_user_is_rejected_ephemerally(self):
         now = 0.0
         component = Counter()
-        mount = Mount(component, access=Owner(42), timeout=30, clock=lambda: now)
-        commit_render(mount)
+        message_root = MessageRoot(component, access=Owner(42), timeout=30, clock=lambda: now)
+        commit_render(message_root)
         now = 10.0
         interaction = fake_interaction(user_id=99)
 
-        await mount.dispatch("inc", interaction)
+        await message_root.dispatch("inc", interaction)
 
         assert component.count == 0
-        assert mount.snapshot().idle == 10
+        assert message_root.snapshot().idle == 10
         send = interaction.response.send_message
         assert send.await_args.kwargs["ephemeral"] is True
 
     async def test_owner_passes(self):
         component = Counter()
-        mount = Mount(component, access=Owner(42), timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(component, access=Owner(42), timeout=None)
+        commit_render(message_root)
 
-        await mount.dispatch("inc", fake_interaction(user_id=42))
+        await message_root.dispatch("inc", fake_interaction(user_id=42))
 
         assert component.count == 1
 
     async def test_a_set_admits_every_member(self):
         component = Counter()
-        mount = Mount(component, access=Users({42, 43}), timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(component, access=Users({42, 43}), timeout=None)
+        commit_render(message_root)
 
-        await mount.dispatch("inc", fake_interaction(user_id=42))
-        await mount.dispatch("inc", fake_interaction(user_id=43))
+        await message_root.dispatch("inc", fake_interaction(user_id=42))
+        await message_root.dispatch("inc", fake_interaction(user_id=43))
 
         assert component.count == 2
 
     async def test_a_set_still_rejects_a_stranger(self):
         component = Counter()
-        mount = Mount(component, access=Users({42, 43}), timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(component, access=Users({42, 43}), timeout=None)
+        commit_render(message_root)
 
-        await mount.dispatch("inc", fake_interaction(user_id=99))
+        await message_root.dispatch("inc", fake_interaction(user_id=99))
 
         assert component.count == 0
 
     async def test_access_policies_are_visible_in_snapshots(self):
-        assert isinstance(Mount(Counter(), access=Owner(42), timeout=None).snapshot().access, Owner)
-        assert Mount(Counter(), access=Users({42, 43}), timeout=None).snapshot().access == Users({42, 43})
+        assert isinstance(MessageRoot(Counter(), access=Owner(42), timeout=None).snapshot().access, Owner)
+        assert MessageRoot(Counter(), access=Users({42, 43}), timeout=None).snapshot().access == Users({42, 43})
 
     async def test_async_check_can_admit_an_interaction(self) -> None:
         check = AsyncMock(return_value=Allowed())
         component = Counter()
-        mount = Mount(component, access=Check(check), timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(component, access=Check(check), timeout=None)
+        commit_render(message_root)
         interaction = fake_interaction(user_id=42)
 
-        await mount.dispatch("inc", interaction)
+        await message_root.dispatch("inc", interaction)
 
         assert component.count == 1
         check.assert_awaited_once_with(interaction)
@@ -915,25 +926,25 @@ class TestAccessPolicy:
             return Denied(Message("Policy denied"))
 
         localization = Localization("fr", gettext=lambda text: "Refusé" if text == "Policy denied" else text)
-        mount = Mount(Counter(), access=Check(deny), localization=localization, timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(Counter(), access=Check(deny), localization=localization, timeout=None)
+        commit_render(message_root)
         interaction = fake_interaction()
 
-        await mount.dispatch("inc", interaction)
+        await message_root.dispatch("inc", interaction)
 
         view = interaction.response.send_message.await_args.kwargs["view"]
         assert [item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)] == ["Refusé"]
 
-    async def test_policy_errors_use_the_mount_error_funnel_without_admitting(self) -> None:
+    async def test_policy_errors_use_the_message_root_error_funnel_without_admitting(self) -> None:
         error = RuntimeError("authorization service unavailable")
         check = AsyncMock(side_effect=error)
         hook = AsyncMock()
         component = Counter()
-        mount = Mount(component, access=Check(check), timeout=None, on_error=hook)
-        commit_render(mount)
+        message_root = MessageRoot(component, access=Check(check), timeout=None, on_error=hook)
+        commit_render(message_root)
         interaction = fake_interaction()
 
-        await mount.dispatch("inc", interaction)
+        await message_root.dispatch("inc", interaction)
 
         assert component.count == 0
         hook.assert_awaited_once_with(interaction, error, "access")
@@ -941,10 +952,10 @@ class TestAccessPolicy:
     async def test_modal_submissions_pass_through_the_same_policy(self) -> None:
         submitted = AsyncMock()
         spec = FormSpec("Rename", (TextField(key="name", label="Name"),))
-        mount = Mount(Counter(), access=Owner(42), timeout=None)
+        message_root = MessageRoot(Counter(), access=Owner(42), timeout=None)
         interaction = fake_interaction(user_id=99)
 
-        await mount.dispatch_submit("rename", interaction, spec, {"name": "Ada"}, submitted)
+        await message_root.dispatch_submit("rename", interaction, spec, {"name": "Ada"}, submitted)
 
         submitted.assert_not_awaited()
         assert interaction.response.send_message.await_args.kwargs["ephemeral"] is True
@@ -952,88 +963,88 @@ class TestAccessPolicy:
 
 class TestFinishHooks:
     async def test_a_hook_fires_on_finish(self):
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
-        seen: list[Mount] = []
-        mount.on_finish(lambda finished: _record(seen, finished))
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
+        seen: list[MessageRoot] = []
+        message_root.on_finish(lambda finished: _record(seen, finished))
 
-        await mount.finish(disable=False)
+        await message_root.finish(disable=False)
 
-        assert seen == [mount]
+        assert seen == [message_root]
 
     async def test_a_hook_fires_on_finish_via(self):
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
-        seen: list[Mount] = []
-        mount.on_finish(lambda finished: _record(seen, finished))
-        commit_render(mount)
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
+        seen: list[MessageRoot] = []
+        message_root.on_finish(lambda finished: _record(seen, finished))
+        commit_render(message_root)
 
-        await mount.finish_via(fake_interaction())
+        await message_root.finish_via(fake_interaction())
 
-        assert seen == [mount]
+        assert seen == [message_root]
 
     async def test_a_hook_fires_on_timeout(self):
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
-        seen: list[Mount] = []
-        mount.on_finish(lambda finished: _record(seen, finished))
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
+        seen: list[MessageRoot] = []
+        message_root.on_finish(lambda finished: _record(seen, finished))
 
-        await mount.handle_timeout()
+        await message_root.handle_timeout()
 
-        assert seen == [mount]
+        assert seen == [message_root]
 
     async def test_a_hook_fires_once_across_repeated_finishes(self):
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
-        seen: list[Mount] = []
-        mount.on_finish(lambda finished: _record(seen, finished))
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
+        seen: list[MessageRoot] = []
+        message_root.on_finish(lambda finished: _record(seen, finished))
 
-        await mount.finish(disable=False)
-        await mount.finish(disable=False)
-        await mount.handle_timeout()
+        await message_root.finish(disable=False)
+        await message_root.finish(disable=False)
+        await message_root.handle_timeout()
 
-        assert seen == [mount]
+        assert seen == [message_root]
 
     async def test_hooks_run_in_registration_order(self):
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
         order: list[str] = []
-        mount.on_finish(lambda _: _note(order, "first"))
-        mount.on_finish(lambda _: _note(order, "second"))
+        message_root.on_finish(lambda _: _note(order, "first"))
+        message_root.on_finish(lambda _: _note(order, "second"))
 
-        await mount.finish(disable=False)
+        await message_root.finish(disable=False)
 
         assert order == ["first", "second"]
 
     async def test_a_raising_hook_does_not_stop_the_others_or_teardown(self):
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
-        seen: list[Mount] = []
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
+        seen: list[MessageRoot] = []
 
-        async def explode(_: Mount) -> None:
+        async def explode(_: MessageRoot) -> None:
             raise RuntimeError("observer is broken")
 
-        mount.on_finish(explode)
-        mount.on_finish(lambda finished: _record(seen, finished))
-        commit_render(mount)
+        message_root.on_finish(explode)
+        message_root.on_finish(lambda finished: _record(seen, finished))
+        commit_render(message_root)
 
-        await mount.finish(disable=False)
+        await message_root.finish(disable=False)
 
-        assert seen == [mount]
-        assert mount.finished
-        assert mount._view is None
+        assert seen == [message_root]
+        assert message_root.finished
+        assert message_root._view is None
 
     async def test_a_hook_fires_even_when_the_disable_edit_raises(self):
         """The mount is finished and torn down either way, so an observer must hear about it.
 
         `finish_via` re-raises past its own `finally`, which is where the hooks have to run.
         """
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
-        seen: list[Mount] = []
-        mount.on_finish(lambda finished: _record(seen, finished))
-        commit_render(mount)
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
+        seen: list[MessageRoot] = []
+        message_root.on_finish(lambda finished: _record(seen, finished))
+        commit_render(message_root)
         interaction = fake_interaction()
         interaction.response.edit_message = AsyncMock(side_effect=RuntimeError("gateway is down"))
 
         with pytest.raises(RuntimeError):
-            await mount.finish_via(interaction)
+            await message_root.finish_via(interaction)
 
-        assert seen == [mount]
-        assert mount.finished
+        assert seen == [message_root]
+        assert message_root.finished
 
     async def test_a_hook_fires_even_when_finish_hits_an_unanticipated_error(self):
         """`finish` anticipates `HTTPException` from its disable-edit and nothing else.
@@ -1041,52 +1052,52 @@ class TestFinishHooks:
         Anything it did not anticipate used to propagate past the teardown as well as the
         hooks, leaving the mount half-finished and every observer holding it.
         """
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
-        seen: list[Mount] = []
-        mount.on_finish(lambda finished: _record(seen, finished))
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
+        seen: list[MessageRoot] = []
+        message_root.on_finish(lambda finished: _record(seen, finished))
         message: Any = fake_message()
         message.edit = AsyncMock(side_effect=RuntimeError("message is gone"))
-        await mount.send(delivered_to(message))
+        await message_root.send(delivered_to(message))
 
         with pytest.raises(RuntimeError):
-            await mount.finish()
+            await message_root.finish()
 
-        assert seen == [mount]
-        assert mount.finished
-        assert mount._view is None
+        assert seen == [message_root]
+        assert message_root.finished
+        assert message_root._view is None
 
     async def test_finishing_from_inside_a_hook_does_not_recurse(self):
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
         calls: list[int] = []
 
-        async def finish_again(finished: Mount) -> None:
+        async def finish_again(finished: MessageRoot) -> None:
             calls.append(1)
             await finished.finish(disable=False)
 
-        mount.on_finish(finish_again)
+        message_root.on_finish(finish_again)
 
-        await mount.finish(disable=False)
+        await message_root.finish(disable=False)
 
         assert calls == [1]
 
-    async def test_finished_flips_only_once_the_mount_is_done(self):
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
+    async def test_finished_flips_only_once_the_message_root_is_done(self):
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
 
-        assert not mount.finished
+        assert not message_root.finished
 
-        await mount.finish(disable=False)
+        await message_root.finish(disable=False)
 
-        assert mount.finished
+        assert message_root.finished
 
     async def test_a_late_click_never_reaches_the_handler(self):
         """`view.stop()` hides this in production; a superseded-but-visible message does not."""
         component = Counter()
-        mount = Mount(component, access=Everyone(), timeout=None)
-        commit_render(mount)
-        await mount.finish(disable=False)
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
+        commit_render(message_root)
+        await message_root.finish(disable=False)
         interaction = fake_interaction()
 
-        await mount.dispatch("inc", interaction)
+        await message_root.dispatch("inc", interaction)
 
         assert component.count == 0
         assert interaction.response.send_message.await_args.kwargs["ephemeral"] is True
@@ -1094,78 +1105,78 @@ class TestFinishHooks:
 
 class TestPresentedHooks:
     async def test_written_and_suppressed_renders_have_distinct_observer_boundaries(self) -> None:
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
-        committed: list[Mount] = []
-        presented: list[Mount] = []
-        mount.on_committed(committed.append)
-        mount.on_presented(presented.append)
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
+        committed: list[MessageRoot] = []
+        presented: list[MessageRoot] = []
+        message_root.on_committed(committed.append)
+        message_root.on_presented(presented.append)
 
-        await mount.send(delivered_to(fake_message()))
+        await message_root.send(delivered_to(fake_message()))
 
-        assert committed == [mount]
-        assert presented == [mount]
+        assert committed == [message_root]
+        assert presented == [message_root]
         committed.clear()
         presented.clear()
 
-        assert await mount.refresh() is PresentationStatus.UNCHANGED
-        assert committed == [mount]
+        assert await message_root.refresh() is PresentationStatus.UNCHANGED
+        assert committed == [message_root]
         assert presented == []
 
-    async def test_a_hook_can_invalidate_and_the_mount_remains_usable(self) -> None:
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
+    async def test_a_hook_can_invalidate_and_the_message_root_remains_usable(self) -> None:
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
         message = fake_message()
         calls = 0
 
-        def invalidate_once(presented: Mount) -> None:
+        def invalidate_once(presented: MessageRoot) -> None:
             nonlocal calls
             calls += 1
             if calls == 1:
                 presented.invalidate()
 
-        mount.on_presented(invalidate_once)
+        message_root.on_presented(invalidate_once)
 
-        await mount.send(delivered_to(message))
+        await message_root.send(delivered_to(message))
         assert calls == 1
-        assert mount.pending
+        assert message_root.pending
 
-        await mount.refresh()
+        await message_root.refresh()
         assert calls == 1
-        assert not mount.pending
-        assert mount.snapshot().suppressed == 1
+        assert not message_root.pending
+        assert message_root.snapshot().suppressed == 1
 
     async def test_a_suppressed_refresh_does_not_fire_presented_hooks(self) -> None:
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
-        presented: list[Mount] = []
-        mount.on_presented(presented.append)
-        await mount.send(delivered_to(fake_message()))
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
+        presented: list[MessageRoot] = []
+        message_root.on_presented(presented.append)
+        await message_root.send(delivered_to(fake_message()))
         presented.clear()
 
-        assert await mount.refresh() is PresentationStatus.UNCHANGED
+        assert await message_root.refresh() is PresentationStatus.UNCHANGED
 
         assert presented == []
 
     async def test_a_raising_hook_is_logged_and_does_not_stop_later_hooks(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
-        seen: list[Mount] = []
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
+        seen: list[MessageRoot] = []
 
-        def explode(_: Mount) -> None:
+        def explode(_: MessageRoot) -> None:
             raise RuntimeError("observer is broken")
 
-        mount.on_presented(explode)
-        mount.on_presented(seen.append)
+        message_root.on_presented(explode)
+        message_root.on_presented(seen.append)
 
         with caplog.at_level("ERROR"):
-            await mount.send(delivered_to(fake_message()))
+            await message_root.send(delivered_to(fake_message()))
 
-        assert seen == [mount]
+        assert seen == [message_root]
         assert "presented hook failed" in caplog.text
-        assert not mount.pending
+        assert not message_root.pending
 
 
-async def _record(seen: list[Mount], mount: Mount) -> None:
-    seen.append(mount)
+async def _record(seen: list[MessageRoot], message_root: MessageRoot) -> None:
+    seen.append(message_root)
 
 
 async def _note(order: list[str], label: str) -> None:
@@ -1175,13 +1186,13 @@ async def _note(order: list[str], label: str) -> None:
 class TestActionPolicy:
     async def test_exclusive_action_from_a_stale_view_is_acknowledged_without_running(self):
         component = Counter()
-        mount = Mount(component, access=Everyone(), timeout=None)
-        commit_render(mount)
-        stale_generation = mount._generation
-        commit_render(mount)
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
+        commit_render(message_root)
+        stale_generation = message_root._generation
+        commit_render(message_root)
         interaction = fake_interaction()
 
-        await mount.dispatch("inc", interaction, generation=stale_generation)
+        await message_root.dispatch("inc", interaction, generation=stale_generation)
 
         assert component.count == 0
         interaction.response.defer.assert_awaited_once()
@@ -1203,13 +1214,13 @@ class TestActionPolicy:
                 calls.append("new")
 
         component = Rebased()
-        mount = Mount(component, access=Everyone(), timeout=None)
-        commit_render(mount)
-        stale_generation = mount._generation
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
+        commit_render(message_root)
+        stale_generation = message_root._generation
         component.current = True
-        commit_render(mount)
+        commit_render(message_root)
 
-        await mount.dispatch("run", fake_interaction(), generation=stale_generation)
+        await message_root.dispatch("run", fake_interaction(), generation=stale_generation)
 
         assert calls == ["new"]
 
@@ -1231,13 +1242,13 @@ class TestActionPolicy:
                 calls.append("new")
 
         component = Rebased()
-        mount = Mount(component, access=Everyone(), timeout=None)
-        commit_render(mount)
-        stale = mount.generation
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
+        commit_render(message_root)
+        stale = message_root.generation
         component.current = True
-        commit_render(mount)
+        commit_render(message_root)
 
-        await mount.dispatch_submit(
+        await message_root.dispatch_submit(
             "rename",
             fake_interaction(),
             spec,
@@ -1269,11 +1280,11 @@ class TestActionPolicy:
                 self.name = event.values["name"]
 
         editor = Editor()
-        mount = Mount(editor, access=Everyone(), timeout=None)
-        commit_render(mount)
-        binding = mount._form_bindings["rename"]
+        message_root = MessageRoot(editor, access=Everyone(), timeout=None)
+        commit_render(message_root)
+        binding = message_root._form_bindings["rename"]
 
-        await mount.dispatch_submit(
+        await message_root.dispatch_submit(
             "rename",
             fake_interaction(),
             spec,
@@ -1301,18 +1312,18 @@ class TestActionPolicy:
                 submitted.append("submit")
 
         component = Trigger()
-        mount = Mount(component, access=Everyone(), timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
+        commit_render(message_root)
         interaction = fake_interaction()
 
-        await mount.dispatch_submit(
+        await message_root.dispatch_submit(
             "rename",
             interaction,
             spec,
             {"name": "Ada"},
             component.submit,
             mode=ActionMode.REBASE,
-            generation=mount.generation,
+            generation=message_root.generation,
         )
 
         # The presenting button would have reopened the modal instead of submitting it.
@@ -1335,17 +1346,17 @@ class TestActionPolicy:
                 calls.append("new")
 
         component = Reshaped()
-        mount = Mount(component, access=Everyone(), timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
+        commit_render(message_root)
 
-        await mount.dispatch_submit(
+        await message_root.dispatch_submit(
             "rename",
             fake_interaction(),
             filled,
             {"name": "Ada"},
             component.old,
             mode=ActionMode.REBASE,
-            generation=mount.generation,
+            generation=message_root.generation,
         )
 
         # Parsed against the schema the reader actually saw, not the one that replaced it.
@@ -1358,13 +1369,13 @@ class TestActionPolicy:
         async def submit(event) -> None:
             calls.append("submit")
 
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
-        commit_render(mount)
-        stale = mount.generation
-        commit_render(mount)
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
+        commit_render(message_root)
+        stale = message_root.generation
+        commit_render(message_root)
         interaction = fake_interaction()
 
-        await mount.dispatch_submit("rename", interaction, spec, {"name": "Ada"}, submit, generation=stale)
+        await message_root.dispatch_submit("rename", interaction, spec, {"name": "Ada"}, submit, generation=stale)
 
         assert calls == []
         interaction.response.defer.assert_awaited_once()
@@ -1384,11 +1395,11 @@ class TestActionPolicy:
                 await anyio.sleep(0)
                 active -= 1
 
-        mount = Mount(Serialized(), access=Everyone(), timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(Serialized(), access=Everyone(), timeout=None)
+        commit_render(message_root)
 
         async def dispatch(interaction) -> None:
-            await mount.dispatch("run", interaction)
+            await message_root.dispatch("run", interaction)
 
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(dispatch, fake_interaction())
@@ -1408,10 +1419,10 @@ class TestActionPolicy:
 
         component = Reader()
         hook = AsyncMock()
-        mount = Mount(component, access=Everyone(), timeout=None, on_error=hook)
-        commit_render(mount)
+        message_root = MessageRoot(component, access=Everyone(), timeout=None, on_error=hook)
+        commit_render(message_root)
 
-        await mount.dispatch("read", fake_interaction())
+        await message_root.dispatch("read", fake_interaction())
 
         assert component.count == 0
         assert hook.await_args is not None
@@ -1441,15 +1452,15 @@ class TestActionMiddleware:
                 await super().increment(event)
 
         first = Record("first")
-        mount = Mount(
+        message_root = MessageRoot(
             Subject(),
             access=Everyone(),
             middleware=(first, first, Record("second")),
             timeout=None,
         )
-        commit_render(mount)
+        commit_render(message_root)
 
-        await mount.dispatch("inc", fake_interaction())
+        await message_root.dispatch("inc", fake_interaction())
 
         assert seen == ["first:before", "second:before", "handler", "second:after", "first:after"]
 
@@ -1458,11 +1469,11 @@ class TestActionMiddleware:
             async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None: ...
 
         component = Counter()
-        mount = Mount(component, access=Everyone(), middleware=(Stop(),), timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(component, access=Everyone(), middleware=(Stop(),), timeout=None)
+        commit_render(message_root)
         interaction = fake_interaction()
 
-        await mount.dispatch("inc", interaction)
+        await message_root.dispatch("inc", interaction)
 
         assert component.count == 0
         interaction.response.defer.assert_awaited_once_with()
@@ -1489,16 +1500,16 @@ class TestActionMiddleware:
 
         component = Broken()
         hook = AsyncMock()
-        mount = Mount(component, access=Everyone(), middleware=(Catch(),), on_error=hook, timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(component, access=Everyone(), middleware=(Catch(),), on_error=hook, timeout=None)
+        commit_render(message_root)
 
-        await mount.dispatch("break", fake_interaction())
+        await message_root.dispatch("break", fake_interaction())
 
         assert seen == ["caught"]
         assert component.count == 0
         hook.assert_not_awaited()
 
-    async def test_unhandled_middleware_error_reaches_the_mount_error_hook(self) -> None:
+    async def test_unhandled_middleware_error_reaches_the_message_root_error_hook(self) -> None:
         error = RuntimeError("policy service unavailable")
 
         class Fail(ActionMiddleware):
@@ -1506,11 +1517,11 @@ class TestActionMiddleware:
                 raise error
 
         hook = AsyncMock()
-        mount = Mount(Counter(), access=Everyone(), middleware=(Fail(),), on_error=hook, timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(Counter(), access=Everyone(), middleware=(Fail(),), on_error=hook, timeout=None)
+        commit_render(message_root)
         interaction = fake_interaction()
 
-        await mount.dispatch("inc", interaction)
+        await message_root.dispatch("inc", interaction)
 
         hook.assert_awaited_once_with(interaction, error, "action:inc")
 
@@ -1525,10 +1536,12 @@ class TestActionMiddleware:
 
         hook = AsyncMock()
         component = Counter()
-        mount = Mount(component, access=Everyone(), middleware=(SaveAndRepeat(),), on_error=hook, timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(
+            component, access=Everyone(), middleware=(SaveAndRepeat(),), on_error=hook, timeout=None
+        )
+        commit_render(message_root)
 
-        await mount.dispatch("inc", fake_interaction())
+        await message_root.dispatch("inc", fake_interaction())
 
         assert component.count == 1
         assert hook.await_args is not None
@@ -1556,14 +1569,14 @@ class TestActionMiddleware:
             async def new(self, event: PressEvent) -> None: ...
 
         component = Rebased()
-        mount = Mount(component, access=Everyone(), middleware=(Capture(),), timeout=None)
-        commit_render(mount)
-        submitted = mount.generation
+        message_root = MessageRoot(component, access=Everyone(), middleware=(Capture(),), timeout=None)
+        commit_render(message_root)
+        submitted = message_root.generation
         component.current = True
-        commit_render(mount)
-        active = mount.generation
+        commit_render(message_root)
+        active = message_root.generation
 
-        await mount.dispatch("run", fake_interaction(), generation=submitted)
+        await message_root.dispatch("run", fake_interaction(), generation=submitted)
 
         assert requests == [
             ActionRequest(
@@ -1587,12 +1600,12 @@ class TestActionMiddleware:
                 entered = True
                 await proceed()
 
-        mount = Mount(Counter(), access=Everyone(), middleware=(Capture(),), timeout=None)
-        commit_render(mount)
-        stale = mount.generation
-        commit_render(mount)
+        message_root = MessageRoot(Counter(), access=Everyone(), middleware=(Capture(),), timeout=None)
+        commit_render(message_root)
+        stale = message_root.generation
+        commit_render(message_root)
 
-        await mount.dispatch("inc", fake_interaction(), generation=stale)
+        await message_root.dispatch("inc", fake_interaction(), generation=stale)
 
         assert not entered
 
@@ -1611,14 +1624,14 @@ class TestActionMiddleware:
             async def pick(self, event: SelectionEvent) -> None: ...
 
         middleware = Capture()
-        picker = Mount(Picker(), access=Everyone(), middleware=(middleware,), timeout=None)
+        picker = MessageRoot(Picker(), access=Everyone(), middleware=(middleware,), timeout=None)
         commit_render(picker)
         await picker.dispatch("pick", fake_interaction(), ["a"])
 
         submit = AsyncMock()
-        form_mount = Mount(Component(), access=Everyone(), middleware=(middleware,), timeout=None)
+        form_root = MessageRoot(Component(), access=Everyone(), middleware=(middleware,), timeout=None)
         spec = FormSpec("Rename", (TextField(key="name", label="Name"),))
-        await form_mount.dispatch_submit("rename", fake_interaction(), spec, {"name": "Ada"}, submit)
+        await form_root.dispatch_submit("rename", fake_interaction(), spec, {"name": "Ada"}, submit)
 
         assert kinds == [InteractionKind.SELECTION, InteractionKind.SUBMIT]
 
@@ -1634,10 +1647,10 @@ class TestErrors:
                 raise RuntimeError(message)
 
         hook = AsyncMock()
-        mount = Mount(Boom(), access=Everyone(), timeout=None, on_error=hook)
-        commit_render(mount)
+        message_root = MessageRoot(Boom(), access=Everyone(), timeout=None, on_error=hook)
+        commit_render(message_root)
 
-        await mount.dispatch("x", fake_interaction())
+        await message_root.dispatch("x", fake_interaction())
 
         assert hook.await_args is not None
         (_interaction, error, source), _ = hook.await_args
@@ -1654,9 +1667,9 @@ class TestErrors:
 
         spec = FormSpec("Broken", (Broken(key="broken", label="Broken"),))
         hook = AsyncMock()
-        mount = Mount(Component(), access=Everyone(), timeout=None, on_error=hook)
+        message_root = MessageRoot(Component(), access=Everyone(), timeout=None, on_error=hook)
 
-        await mount.dispatch_submit("f", fake_interaction(), spec, {"broken": "x"}, AsyncMock())
+        await message_root.dispatch_submit("f", fake_interaction(), spec, {"broken": "x"}, AsyncMock())
 
         assert hook.await_args is not None
         (_interaction, error, source), _ = hook.await_args
@@ -1679,14 +1692,14 @@ class TestErrors:
 
         component = Boom()
         hook = AsyncMock()
-        mount = Mount(component, access=Everyone(), timeout=None, on_error=hook)
-        commit_render(mount)
+        message_root = MessageRoot(component, access=Everyone(), timeout=None, on_error=hook)
+        commit_render(message_root)
 
-        await mount.dispatch("x", fake_interaction())
+        await message_root.dispatch("x", fake_interaction())
 
         assert component.count == 0
         assert component.entries == ()
-        assert not mount._dirty
+        assert not message_root._dirty
 
 
 class TestSelect:
@@ -1706,47 +1719,47 @@ class TestSelect:
             async def pick(self, event: SelectionEvent) -> None:
                 picked.extend(event.values)
 
-        mount = Mount(Picker(), access=Everyone(), timeout=None)
-        view = commit_render(mount)
+        message_root = MessageRoot(Picker(), access=Everyone(), timeout=None)
+        view = commit_render(message_root)
         assert any(isinstance(item, discord.ui.Select) for item in view.walk_children())
 
-        await mount.dispatch("pick", fake_interaction(), ["b"])
+        await message_root.dispatch("pick", fake_interaction(), ["b"])
 
         assert picked == ["b"]
 
 
 class TestLifecycle:
     async def test_finish_disables_controls(self):
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
         message: Any = fake_message()
-        await mount.send(delivered_to(message))
+        await message_root.send(delivered_to(message))
 
-        await mount.finish()
+        await message_root.finish()
 
         disabled_view = message.edit.await_args.kwargs["view"]
         assert _button(disabled_view).disabled
         interaction = fake_interaction()
-        await mount.dispatch("inc", interaction)  # finished mounts ignore late clicks
+        await message_root.dispatch("inc", interaction)  # finished mounts ignore late clicks
         interaction.response.edit_message.assert_not_awaited()
 
     async def test_refresh_edits_bound_message(self):
         component = Counter()
-        mount = Mount(component, access=Everyone(), timeout=None)
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
         message: Any = fake_message()
-        await mount.send(delivered_to(message))
+        await message_root.send(delivered_to(message))
         component.count = 7
 
-        await mount.refresh()
+        await message_root.refresh()
 
         message.edit.assert_awaited_once()
 
     async def test_reactor_coalesces_double_schedule(self):
         component = Counter()
-        mount = Mount(component, access=Everyone(), timeout=None)
-        mount.refresh = AsyncMock()  # pyrefly: ignore
-        scheduler = MountScheduler()
-        scheduler.schedule(mount)
-        scheduler.schedule(mount)
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
+        message_root.refresh = AsyncMock()  # pyrefly: ignore
+        scheduler = MessageRootScheduler()
+        scheduler.schedule(message_root)
+        scheduler.schedule(message_root)
         assert scheduler._queue.qsize() == 1
 
     async def test_expired_handle_marks_dirty_without_loading_or_staging(self):
@@ -1761,44 +1774,44 @@ class TestLifecycle:
                 return Text("loaded")
 
         component = Loaded()
-        mount = Mount(component, access=Everyone(), timeout=None)
-        await mount.send(delivered_to(fake_message()))
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
+        await message_root.send(delivered_to(fake_message()))
         component._loaded = False
-        mount._handle = delivery.handle_from(fake_interaction(expired=True))
-        issued = mount._issued
+        message_root._handle = delivery.handle_from(fake_interaction(expired=True))
+        issued = message_root._issued
 
-        await mount.refresh()
+        await message_root.refresh()
 
         assert component.loads == 1
-        assert mount._issued == issued
-        assert mount.pending
+        assert message_root._issued == issued
+        assert message_root.pending
 
     async def test_accepted_click_clears_status_and_flushes_without_it(self):
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
-        await mount.send(delivered_to(fake_message()))
-        mount.status = "Live updates paused"
-        mount.invalidate()
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
+        await message_root.send(delivered_to(fake_message()))
+        message_root.status = "Live updates paused"
+        message_root.invalidate()
         interaction = fake_interaction()
 
-        await mount.dispatch("inc", interaction)
+        await message_root.dispatch("inc", interaction)
 
         written = interaction.response.edit_message.await_args.kwargs["view"]
         assert "Live updates paused" not in str(written.to_components())
-        assert mount.status is None
+        assert message_root.status is None
 
     async def test_background_refreshes_preserve_the_interaction_idle_budget(self):
         now = 100.0
-        mount = Mount(Counter(), access=Everyone(), timeout=30, clock=lambda: now)
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=30, clock=lambda: now)
         message: Any = fake_message()
-        await mount.send(delivered_to(message))
+        await message_root.send(delivered_to(message))
 
         for elapsed in range(1, 11):
             now = 100.0 + elapsed
-            await mount.refresh()
+            await message_root.refresh()
 
         message.edit.assert_not_awaited()
-        assert mount.snapshot().idle == 10
-        assert mount.snapshot().expires_in == 20
+        assert message_root.snapshot().idle == 10
+        assert message_root.snapshot().expires_in == 20
 
 
 class TestDeliveryAtomicity:
@@ -1809,91 +1822,91 @@ class TestDeliveryAtomicity:
 
         Committing is `send`'s and `flush`'s job; `TestSend` covers the other half.
         """
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
 
-        mount._stage_view()
+        message_root._stage_view()
 
-        assert mount._handlers == {}
-        assert mount._generation == 0
-        assert mount._assets == ()
+        assert message_root._handlers == {}
+        assert message_root._generation == 0
+        assert message_root._assets == ()
 
     async def test_failed_edit_keeps_the_visible_generation_live(self, monkeypatch):
         mounted: list[str] = []
         panel = Panel(mounted)
-        mount = Mount(panel, access=Everyone(), timeout=None)
-        commit_render(mount)
-        await mount.dispatch("__cursor_next.entries", fake_interaction())
-        assert mount.presentation.cursor("entries").position.offset == 1
+        message_root = MessageRoot(panel, access=Everyone(), timeout=None)
+        commit_render(message_root)
+        await message_root.dispatch("__cursor_next.entries", fake_interaction())
+        assert message_root.presentation.cursor("entries").position.offset == 1
 
-        live_generation = mount._generation
-        live_handlers = mount._handlers
-        live_strategies = dict(mount.presentation.strategies)
+        live_generation = message_root._generation
+        live_handlers = message_root._handlers
+        live_strategies = dict(message_root.presentation.strategies)
         panel.entries = (*panel.entries, "entry 6")  # a new fingerprint: the staged render resets the cursor
         panel.show_child = True  # a component the failed generation must not mount
 
         monkeypatch.setattr(delivery, "handle_from", _refuse_handle)
         with pytest.raises(discord.HTTPException):
-            await mount.refresh(fake_interaction())
+            await message_root.refresh(fake_interaction())
 
-        assert mount._generation == live_generation
-        assert mount._handlers is live_handlers
-        assert mount._dirty
+        assert message_root._generation == live_generation
+        assert message_root._handlers is live_handlers
+        assert message_root._dirty
         assert mounted == []
-        assert mount.presentation.cursor("entries").position.offset == 1
+        assert message_root.presentation.cursor("entries").position.offset == 1
         # Planning only reads the session, so a discarded candidate leaves behind none of
         # its writes — not just the cursors the old snapshot happened to restore.
-        assert mount.presentation.strategies == live_strategies
+        assert message_root.presentation.strategies == live_strategies
 
     async def test_a_click_after_a_failed_edit_still_runs_and_repairs_the_message(self, monkeypatch):
         mounted: list[str] = []
         panel = Panel(mounted)
-        mount = Mount(panel, access=Everyone(), timeout=None)
-        commit_render(mount)
-        live_generation = mount._generation
+        message_root = MessageRoot(panel, access=Everyone(), timeout=None)
+        commit_render(message_root)
+        live_generation = message_root._generation
         panel.show_child = True
 
         monkeypatch.setattr(delivery, "handle_from", _refuse_handle)
         with pytest.raises(discord.HTTPException):
-            await mount.refresh(fake_interaction())
+            await message_root.refresh(fake_interaction())
         monkeypatch.undo()
 
         # The stale-generation guard would silently defer this click if the mount had
         # advanced past the generation the message is still showing.
         interaction = fake_interaction()
-        await mount.dispatch("add", interaction, generation=live_generation)
+        await message_root.dispatch("add", interaction, generation=live_generation)
 
         assert panel.entries[-1] == "added"
-        assert mount._generation > live_generation
-        assert not mount._dirty
+        assert message_root._generation > live_generation
+        assert not message_root._dirty
         assert mounted == ["child"]
         interaction.response.edit_message.assert_awaited_once()
 
-    async def test_failed_refresh_leaves_the_mount_repairable(self, monkeypatch):
+    async def test_failed_refresh_leaves_the_message_root_repairable(self, monkeypatch):
         component = Counter()
-        mount = Mount(component, access=Everyone(), timeout=None)
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
         message: Any = fake_message()
         message.edit = AsyncMock(side_effect=_http_error())
-        await mount.send(delivered_to(message))
+        await message_root.send(delivered_to(message))
         component.count = 7
-        live_generation = mount._generation
+        live_generation = message_root._generation
 
         with pytest.raises(discord.HTTPException):
-            await mount.refresh()
+            await message_root.refresh()
 
-        assert mount._generation == live_generation
-        assert mount._dirty
+        assert message_root._generation == live_generation
+        assert message_root._dirty
 
         message.edit = AsyncMock(return_value=message)
-        await mount.refresh()
+        await message_root.refresh()
 
-        assert mount._generation > live_generation
-        assert not mount._dirty
+        assert message_root._generation > live_generation
+        assert not message_root._dirty
 
     async def test_refresh_commit_preserves_invalidation_during_delivery(self):
         component = Counter()
-        mount = Mount(component, access=Everyone(), timeout=None)
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
         message: Any = fake_message()
-        await mount.send(delivered_to(message))
+        await message_root.send(delivered_to(message))
 
         started = asyncio.Event()
         release = asyncio.Event()
@@ -1907,20 +1920,20 @@ class TestDeliveryAtomicity:
         component.count = 1
 
         async with anyio.create_task_group() as tasks:
-            tasks.start_soon(mount.refresh)
+            tasks.start_soon(message_root.refresh)
             await started.wait()
             component.count = 2
             release.set()
 
-        assert mount.generation == 2
-        assert mount.pending
-        assert mount.runtime.dirty
+        assert message_root.generation == 2
+        assert message_root.pending
+        assert message_root.runtime.dirty
 
     async def test_two_refreshes_deliver_in_generation_order(self):
         component = Counter()
-        mount = Mount(component, access=Everyone(), timeout=None)
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
         message: Any = fake_message()
-        await mount.send(delivered_to(message))
+        await message_root.send(delivered_to(message))
 
         started = asyncio.Event()
         release = asyncio.Event()
@@ -1940,12 +1953,12 @@ class TestDeliveryAtomicity:
         component.count = 1
 
         async with anyio.create_task_group() as tasks:
-            tasks.start_soon(mount.refresh)
+            tasks.start_soon(message_root.refresh)
             await started.wait()
             component.count = 2
             interaction = fake_interaction()
             interaction.response.edit_message = AsyncMock(side_effect=edit)
-            tasks.start_soon(mount.refresh, interaction)
+            tasks.start_soon(message_root.refresh, interaction)
             await anyio.sleep(0)
             assert not second_started.is_set()
             release.set()
@@ -1954,8 +1967,8 @@ class TestDeliveryAtomicity:
         assert len(writes) == 2
         assert "count: 1" in str(writes[0].to_components())
         assert "count: 2" in str(writes[1].to_components())
-        assert mount.generation == 3
-        assert not mount.pending
+        assert message_root.generation == 3
+        assert not message_root.pending
 
     async def test_concurrent_immediate_actions_serialize_delivery(self):
         started = asyncio.Event()
@@ -1984,9 +1997,9 @@ class TestDeliveryAtomicity:
                 self.count += 1
 
         component = ImmediatePanel()
-        mount = Mount(component, access=Everyone(), timeout=None)
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
         message: Any = fake_message()
-        await mount.send(delivered_to(message))
+        await message_root.send(delivered_to(message))
 
         async def edit(*args: Any, **kwargs: Any) -> Any:
             nonlocal active, maximum_active
@@ -2002,10 +2015,10 @@ class TestDeliveryAtomicity:
         second.response.edit_message = AsyncMock(side_effect=edit)
 
         async def dispatch_first() -> None:
-            await mount.dispatch("a", first)
+            await message_root.dispatch("a", first)
 
         async def dispatch_second() -> None:
-            await mount.dispatch("b", second)
+            await message_root.dispatch("b", second)
 
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(dispatch_first)
@@ -2015,13 +2028,13 @@ class TestDeliveryAtomicity:
 
         assert component.count == 2
         assert maximum_active == 1
-        assert not mount.pending
+        assert not message_root.pending
 
     async def test_finish_waits_for_an_in_flight_refresh(self):
         component = Counter()
-        mount = Mount(component, access=Everyone(), timeout=None)
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
         message: Any = fake_message()
-        await mount.send(delivered_to(message))
+        await message_root.send(delivered_to(message))
 
         started = asyncio.Event()
         release = asyncio.Event()
@@ -2038,14 +2051,14 @@ class TestDeliveryAtomicity:
         component.count = 1
 
         async with anyio.create_task_group() as tasks:
-            tasks.start_soon(mount.refresh)
+            tasks.start_soon(message_root.refresh)
             await started.wait()
-            tasks.start_soon(mount.finish)
+            tasks.start_soon(message_root.finish)
             await anyio.sleep(0)
-            assert not mount.finished
+            assert not message_root.finished
             release.set()
 
-        assert mount.finished
+        assert message_root.finished
         assert len(writes) == 2
         assert all(item.disabled for item in writes[1].walk_children() if isinstance(item, discord.ui.Button))
 
@@ -2094,31 +2107,31 @@ class MutableReport(Component):
 
 
 class TestSend:
-    """`Mount.send` runs stage -> deliver -> commit; the destination only says where."""
+    """`MessageRoot.send` runs stage -> deliver -> commit; the destination only says where."""
 
     async def test_a_successful_send_commits_and_keeps_the_message_handle(self):
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
         message = fake_message()
         destination = _Destination(message)
 
-        sent = await mount.send(destination)
+        sent = await message_root.send(destination)
 
         assert isinstance(sent, delivery.Delivered)
         assert sent.settled
         assert sent.result.message is message
-        assert "inc" in mount._handlers
-        assert mount._generation == 1
-        assert not mount.pending
-        assert mount.handle is not None
-        assert mount.handle.permanent
+        assert "inc" in message_root._handlers
+        assert message_root._generation == 1
+        assert not message_root.pending
+        assert message_root.handle is not None
+        assert message_root.handle.permanent
 
     async def test_send_and_refresh_share_render_delivery_spans(self) -> None:
         profiler = MemoryProfiler()
         component = Counter()
-        mount = Mount(component, access=Everyone(), profiler=profiler, timeout=None)
+        message_root = MessageRoot(component, access=Everyone(), profiler=profiler, timeout=None)
         message = fake_message()
 
-        await mount.send(delivered_to(message))
+        await message_root.send(delivered_to(message))
 
         sent = _operation_trace(profiler, OperationKind.SEND)
         assert sent.result.presentation is PresentationStatus.WRITTEN
@@ -2132,7 +2145,7 @@ class TestSend:
         }
 
         component.count = 4
-        await mount.refresh()
+        await message_root.refresh()
 
         refreshed = _operation_trace(profiler, OperationKind.REFRESH)
         assert refreshed.result.presentation is PresentationStatus.WRITTEN
@@ -2146,100 +2159,100 @@ class TestSend:
         }
 
     async def test_a_successful_send_keeps_the_receipts_handle_without_reconstructing_it(self):
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
         message = fake_message()
         authority = _RefusingHandle()
 
-        await mount.send(_Destination(message, handle=authority))
+        await message_root.send(_Destination(message, handle=authority))
 
-        assert mount.handle is authority
+        assert message_root.handle is authority
 
     async def test_a_destination_with_no_message_commits_and_waits_for_the_first_click(self):
         component = Counter()
-        mount = Mount(component, access=Everyone(), timeout=None)
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
 
-        sent = await mount.send(_Destination(None))
+        sent = await message_root.send(_Destination(None))
 
         # Delivered, so the render is live -- but nothing came back to write through.
         assert isinstance(sent, delivery.Delivered)
         assert sent.result.message is None
-        assert mount._generation == 1
-        assert not mount.pending
-        assert mount.handle is None
+        assert message_root._generation == 1
+        assert not message_root.pending
+        assert message_root.handle is None
 
         # The first click renews the mount, exactly as an ephemeral send relies on.
-        await mount.dispatch("inc", fake_interaction())
+        await message_root.dispatch("inc", fake_interaction())
 
         assert component.count == 1
-        assert mount.handle is not None
+        assert message_root.handle is not None
 
     async def test_handleless_operation_settles_without_repainting(self) -> None:
         panel = OperationPanel()
-        mount = Mount(panel, access=Everyone(), timeout=None)
+        message_root = MessageRoot(panel, access=Everyone(), timeout=None)
 
-        sent = await mount.send(_Destination(None))
+        sent = await message_root.send(_Destination(None))
 
         assert isinstance(sent, delivery.Delivered)
         assert sent.settled
         assert panel.publication.status == sl.operations.Succeeded(42)
 
-    async def test_dismiss_deletes_the_message_and_finishes_the_mount(self) -> None:
+    async def test_dismiss_deletes_the_message_and_finishes_the_root(self) -> None:
         message = fake_message()
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
-        await mount.send(delivered_to(message))
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
+        await message_root.send(delivered_to(message))
 
-        await mount.dismiss()
+        await message_root.dismiss()
 
         message.delete.assert_awaited_once_with()
-        assert mount.finished
+        assert message_root.finished
 
-    async def test_an_abandoned_delivery_leaves_the_mount_resendable(self):
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
+    async def test_an_abandoned_delivery_leaves_the_message_root_resendable(self):
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
         abandoned = _Destination(raises=delivery.DeliveryAbandoned())
 
-        sent = await mount.send(abandoned)
+        sent = await message_root.send(abandoned)
 
         # Nothing reached Discord, so nothing is live: no handlers, no handle, still dirty.
         assert isinstance(sent, delivery.Abandoned)
-        assert mount._generation == 0
-        assert mount._handlers == {}
-        assert mount.handle is None
-        assert mount.pending
+        assert message_root._generation == 0
+        assert message_root._handlers == {}
+        assert message_root.handle is None
+        assert message_root.pending
 
         message = fake_message()
-        resent = await mount.send(_Destination(message))
+        resent = await message_root.send(_Destination(message))
         assert isinstance(resent, delivery.Delivered)
         assert resent.result.message is message
         # Generation 2, not 1: the abandoned candidate does not hand its control ids on.
-        assert mount._generation == 2
-        assert not mount.pending
+        assert message_root._generation == 2
+        assert not message_root.pending
 
     async def test_a_failed_delivery_propagates_and_the_next_send_recovers(self):
         mounted: list[str] = []
         panel = Panel(mounted)
-        mount = Mount(panel, access=Everyone(), timeout=None)
+        message_root = MessageRoot(panel, access=Everyone(), timeout=None)
         panel.show_child = True
 
         with pytest.raises(discord.HTTPException):
-            await mount.send(_Destination(raises=_http_error()))
+            await message_root.send(_Destination(raises=_http_error()))
 
-        assert mount._generation == 0
-        assert mount._handlers == {}
-        assert mount.pending
+        assert message_root._generation == 0
+        assert message_root._handlers == {}
+        assert message_root.pending
         # A candidate that was never delivered must not fire its lifecycle hooks.
         assert mounted == []
 
-        await mount.send(_Destination(fake_message()))
+        await message_root.send(_Destination(fake_message()))
 
-        assert mount._generation > 0
-        assert not mount.pending
+        assert message_root._generation > 0
+        assert not message_root.pending
         assert mounted == ["child"]
 
     async def test_the_staged_assets_reach_the_destination(self):
-        mount = Mount(Report(), access=Everyone(), timeout=None)
+        message_root = MessageRoot(Report(), access=Everyone(), timeout=None)
         destination = _Destination(fake_message())
 
-        await mount.send(destination)
+        await message_root.send(destination)
 
         _, files = destination.calls[0]
         assert [file.filename for file in files] == ["report.txt"]
@@ -2247,11 +2260,11 @@ class TestSend:
     async def test_changed_asset_content_prevents_scene_suppression(self) -> None:
         component = MutableReport()
         message: Any = fake_message()
-        mount = Mount(component, access=Everyone(), timeout=None)
-        await mount.send(_Destination(message))
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
+        await message_root.send(_Destination(message))
         component.contents = b"second"
 
-        result = await mount.refresh()
+        result = await message_root.refresh()
 
         assert result is PresentationStatus.WRITTEN
         message.edit.assert_awaited_once()
@@ -2271,38 +2284,38 @@ class TestSend:
 
         message: Any = fake_message()
         component = FreshHandler()
-        mount = Mount(component, access=Everyone(), timeout=None)
-        await mount.send(_Destination(message))
-        generation = mount._generation
-        view = mount._view
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
+        await message_root.send(_Destination(message))
+        generation = message_root._generation
+        view = message_root._view
         component.version = 1
-        mount.invalidate()
+        message_root.invalidate()
 
-        result = await mount.refresh()
+        result = await message_root.refresh()
 
         assert result is PresentationStatus.UNCHANGED
         message.edit.assert_not_awaited()
-        assert mount._generation == generation
-        assert mount._view is view
+        assert message_root._generation == generation
+        assert message_root._view is view
 
-        await mount.dispatch("same", fake_interaction(), generation=generation)
+        await message_root.dispatch("same", fake_interaction(), generation=generation)
 
         assert component.invoked == [1]
 
     async def test_identical_refresh_is_suppressed_before_renderer_or_generation(self, monkeypatch) -> None:
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
         message: Any = fake_message()
-        await mount.send(_Destination(message))
-        issued = mount._issued
+        await message_root.send(_Destination(message))
+        issued = message_root._issued
 
         def unexpected_renderer(_timeout):
             message = "an identical refresh must not construct a renderer"
             raise AssertionError(message)
 
-        monkeypatch.setattr(mount, "_renderer", unexpected_renderer)
+        monkeypatch.setattr(message_root, "_renderer", unexpected_renderer)
 
-        assert await mount.refresh() is PresentationStatus.UNCHANGED
-        assert mount._issued == issued
+        assert await message_root.refresh() is PresentationStatus.UNCHANGED
+        assert message_root._issued == issued
         assert message.edit.await_count == 0
 
     async def test_suppression_publishes_runtime_only_action_semantics(self) -> None:
@@ -2326,41 +2339,41 @@ class TestSend:
 
         component = Guarded()
         message: Any = fake_message()
-        mount = Mount(component, access=Everyone(), timeout=None)
-        await mount.send(_Destination(message))
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
+        await message_root.send(_Destination(message))
         component.allowed = False
-        mount.invalidate()
+        message_root.invalidate()
 
-        assert await mount.refresh() is PresentationStatus.UNCHANGED
+        assert await message_root.refresh() is PresentationStatus.UNCHANGED
 
         interaction = fake_interaction()
-        await mount.dispatch("same", interaction, generation=mount._generation)
+        await message_root.dispatch("same", interaction, generation=message_root._generation)
 
         assert component.invoked == 0
         interaction.response.send_message.assert_awaited_once()
 
     async def test_send_supersedes_a_render_that_was_only_staged(self):
         component = Counter()
-        mount = Mount(component, access=Everyone(), timeout=None)
-        staged = mount._stage_view()
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
+        staged = message_root._stage_view()
         component.count = 5
 
         destination = _Destination(fake_message())
-        await mount.send(destination)
+        await message_root.send(destination)
 
         delivered, _ = destination.calls[0]
         assert delivered is not staged
         assert staged.is_finished()
-        assert mount._pending is None
+        assert message_root._pending is None
         # The delivered generation is the one the mount is now live on.
-        assert mount._view is delivered
+        assert message_root._view is delivered
 
-    async def test_a_finished_mount_does_not_send(self):
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
-        await mount.finish(disable=False)
+    async def test_a_finished_message_root_does_not_send(self):
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
+        await message_root.finish(disable=False)
         destination = _Destination(fake_message())
 
-        assert isinstance(await mount.send(destination), delivery.Abandoned)
+        assert isinstance(await message_root.send(destination), delivery.Abandoned)
         assert destination.calls == []
 
 
@@ -2370,13 +2383,13 @@ class TestStateDescriptor:
         first.count = 5
         assert second.count == 0
 
-    def test_assignment_marks_mount_dirty(self):
+    def test_assignment_marks_message_root_dirty(self):
         component = Counter()
-        mount = Mount(component, access=Everyone(), timeout=None)
-        commit_render(mount)
-        assert not mount._dirty
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
+        commit_render(message_root)
+        assert not message_root._dirty
         component.count = 3
-        assert mount._dirty
+        assert message_root._dirty
 
     def test_a_factory_runs_once_per_instance(self):
         class Collection(Component):
@@ -2386,12 +2399,12 @@ class TestStateDescriptor:
                 return Text(str(self.entries))
 
         first, second = Collection(), Collection()
-        mount = Mount(first, access=Everyone(), timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(first, access=Everyone(), timeout=None)
+        commit_render(message_root)
 
         first.entries = ("one",)
 
-        assert mount._dirty
+        assert message_root._dirty
         assert second.entries == ()
 
     def test_computed_values_cache_until_state_changes(self):
@@ -2655,17 +2668,17 @@ class TestEditHandles:
         # response off the panel. Editing through it would overwrite the notice and leave
         # the panel stale, so the mount falls back to the message it holds.
         message = fake_message()
-        mount = Mount(Notifier(), access=Everyone(), timeout=None)
-        await mount.send(delivered_to(message))
+        message_root = MessageRoot(Notifier(), access=Everyone(), timeout=None)
+        await message_root.send(delivered_to(message))
 
         interaction = fake_interaction()
-        await mount.dispatch("go", interaction)
+        await message_root.dispatch("go", interaction)
 
         interaction.response.send_message.assert_awaited_once()
         interaction.edit_original_response.assert_not_awaited()
         interaction.followup.edit_message.assert_not_awaited()
         message.edit.assert_awaited_once()
-        assert not mount.pending
+        assert not message_root.pending
 
     async def test_a_flush_through_the_standing_handle_still_answers_the_click(self):
         # A modal submitted from a command rather than from a component carries no message,
@@ -2674,67 +2687,69 @@ class TestEditHandles:
         # the flush owes an acknowledgement -- without one Discord reports a failure at 3s.
         message = fake_message()
         component = Counter()
-        mount = Mount(component, access=Everyone(), timeout=None)
-        await mount.send(delivered_to(message))
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
+        await message_root.send(delivered_to(message))
 
         component.count = 3
         interaction = fake_interaction()
         interaction.message = None
 
-        await mount.refresh(interaction)
+        await message_root.refresh(interaction)
 
         message.edit.assert_awaited_once()
         interaction.response.defer.assert_awaited_once()
-        assert not mount.pending
+        assert not message_root.pending
 
-    async def test_a_click_renews_an_ephemeral_mount_for_background_refreshes(self):
+    async def test_a_click_renews_an_ephemeral_message_root_for_background_refreshes(self):
         component = Counter()
-        mount = Mount(component, access=Everyone(), timeout=None)
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
         initial = fake_interaction()
-        await mount.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(initial)))
-        assert mount.handle is not None and not mount.handle.permanent
+        await message_root.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(initial)))
+        assert message_root.handle is not None and not message_root.handle.permanent
 
         interaction = fake_interaction()
-        await mount.dispatch("inc", interaction)
-        assert mount.handle is not None
-        assert mount.handle.expires_at == interaction.expires_at
+        await message_root.dispatch("inc", interaction)
+        assert message_root.handle is not None
+        assert message_root.handle.expires_at == interaction.expires_at
 
         component.count += 1
-        await mount.refresh()
+        await message_root.refresh()
 
         interaction.followup.edit_message.assert_awaited_once()
         assert interaction.followup.edit_message.await_args.args[0] == interaction.message.id
-        assert not mount.pending
+        assert not message_root.pending
 
     async def test_a_click_does_not_trade_away_the_bots_own_credentials(self):
         message = fake_message()
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
-        await mount.send(delivered_to(message))
-        permanent = mount.handle
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
+        await message_root.send(delivered_to(message))
+        permanent = message_root.handle
 
-        await mount.dispatch("inc", fake_interaction())
+        await message_root.dispatch("inc", fake_interaction())
 
-        assert mount.handle is permanent
+        assert message_root.handle is permanent
 
-    async def test_an_unreachable_mount_holds_its_render_for_the_next_click(self):
+    async def test_an_unreachable_message_root_holds_its_render_for_the_next_click(self):
         component = Counter()
-        mount = Mount(component, access=Everyone(), timeout=None)
-        await mount.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(fake_interaction())))
-        mount._handle = delivery.handle_from(fake_interaction(expired=True))
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
+        await message_root.send(
+            delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(fake_interaction()))
+        )
+        message_root._handle = delivery.handle_from(fake_interaction(expired=True))
         component.count += 1
 
-        await mount.refresh()
+        await message_root.refresh()
 
         # Not an error and not the end of the mount: the message is simply out of reach
         # until someone clicks it again.
-        assert mount.pending
-        assert not mount._finished
+        assert message_root.pending
+        assert not message_root._finished
 
         interaction = fake_interaction()
-        await mount.dispatch("inc", interaction)
+        await message_root.dispatch("inc", interaction)
 
         interaction.response.edit_message.assert_awaited_once()
-        assert not mount.pending
+        assert not message_root.pending
         assert component.count == 2
 
     async def test_a_stale_handle_is_dropped_rather_than_reused(self):
@@ -2752,55 +2767,57 @@ class TestEditHandles:
                 raise delivery.StaleHandleError("gone")
 
         component = Counter()
-        mount = Mount(component, access=Everyone(), timeout=None)
-        await mount.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(fake_interaction())))
-        mount._handle = _Stale()
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
+        await message_root.send(
+            delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(fake_interaction()))
+        )
+        message_root._handle = _Stale()
         component.count += 1
 
-        await mount.refresh()
-        await mount.refresh()
+        await message_root.refresh()
+        await message_root.refresh()
 
         assert _Stale.writes == 1
-        assert mount.handle is None
-        assert mount.pending
+        assert message_root.handle is None
+        assert message_root.pending
 
 
 class TestDestinations:
     async def test_fresh_unwaited_response_commits_an_original_response_handle_without_fetching(self):
         interaction = fake_interaction()
         component = Counter()
-        mount = Mount(component, access=Everyone(), timeout=None)
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
 
-        sent = await mount.send(delivery.respond_to(interaction, wait=False))
+        sent = await message_root.send(delivery.respond_to(interaction, wait=False))
 
         assert isinstance(sent, delivery.Delivered)
         assert sent.result.message is None
-        assert mount.handle is not None and not mount.handle.permanent
-        assert mount.handle.expires_at == interaction.expires_at
+        assert message_root.handle is not None and not message_root.handle.permanent
+        assert message_root.handle.expires_at == interaction.expires_at
         interaction.original_response.assert_not_awaited()
 
         component.count += 1
-        await mount.refresh()
+        await message_root.refresh()
 
         interaction.edit_original_response.assert_awaited_once()
-        assert not mount.pending
+        assert not message_root.pending
 
     async def test_fresh_waited_public_response_keeps_token_authority_not_message_authority(self):
         interaction = fake_interaction()
         message = fake_message(ephemeral=False)
         interaction.original_response.return_value = message
         component = Counter()
-        mount = Mount(component, access=Everyone(), timeout=None)
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
 
-        sent = await mount.send(delivery.respond_to(interaction, ephemeral=False, wait=True))
+        sent = await message_root.send(delivery.respond_to(interaction, ephemeral=False, wait=True))
 
         assert isinstance(sent, delivery.Delivered)
         assert sent.result.message is message
-        assert mount.handle is not None and not mount.handle.permanent
-        assert mount.handle.expires_at == interaction.expires_at
+        assert message_root.handle is not None and not message_root.handle.permanent
+        assert message_root.handle.expires_at == interaction.expires_at
 
         component.count += 1
-        await mount.refresh()
+        await message_root.refresh()
 
         interaction.edit_original_response.assert_awaited_once()
         message.edit.assert_not_awaited()
@@ -2811,11 +2828,11 @@ class TestDestinations:
         message = fake_message(message_id=42)
         interaction.followup.send.return_value = message
         component = Counter()
-        mount = Mount(component, access=Everyone(), timeout=None)
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
 
-        await mount.send(delivery.respond_to(interaction, wait=True))
+        await message_root.send(delivery.respond_to(interaction, wait=True))
         component.count += 1
-        await mount.refresh()
+        await message_root.refresh()
 
         interaction.followup.edit_message.assert_awaited_once()
         assert interaction.followup.edit_message.await_args.args[0] == 42
@@ -2826,23 +2843,23 @@ class TestDestinations:
         interaction.response._done = True
         message = fake_message(message_id=42)
         interaction.followup.send.return_value = message
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
 
-        sent = await mount.send(delivery.respond_to(interaction, wait=False))
+        sent = await message_root.send(delivery.respond_to(interaction, wait=False))
 
         assert isinstance(sent, delivery.Delivered)
         assert sent.result.message is message
-        assert mount.handle is not None
-        assert not mount.handle.permanent
+        assert message_root.handle is not None
+        assert not message_root.handle.permanent
 
     async def test_plain_command_reply_keeps_permanent_channel_authority(self):
         message = fake_message()
         ctx = cast(delivery.Replyable, SimpleNamespace(send=AsyncMock(return_value=message)))
-        mount = Mount(Counter(), access=Everyone(), timeout=None)
+        message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
 
-        await mount.send(delivery.reply_to(ctx))
+        await message_root.send(delivery.reply_to(ctx))
 
-        assert mount.handle is not None and mount.handle.permanent
+        assert message_root.handle is not None and message_root.handle.permanent
 
     async def test_interaction_backed_context_reply_keeps_original_response_authority(self):
         interaction = fake_interaction()
@@ -2852,13 +2869,13 @@ class TestDestinations:
             SimpleNamespace(interaction=interaction, send=AsyncMock(return_value=message)),
         )
         component = Counter()
-        mount = Mount(component, access=Everyone(), timeout=None)
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
 
-        await mount.send(delivery.reply_to(ctx))
+        await message_root.send(delivery.reply_to(ctx))
 
-        assert mount.handle is not None and not mount.handle.permanent
+        assert message_root.handle is not None and not message_root.handle.permanent
         component.count += 1
-        await mount.refresh()
+        await message_root.refresh()
         interaction.edit_original_response.assert_awaited_once()
 
     async def test_stale_public_response_drops_then_renews_for_the_pending_render(self):
@@ -2866,20 +2883,20 @@ class TestDestinations:
         interaction.original_response.return_value = fake_message(ephemeral=False)
         interaction.edit_original_response.side_effect = _stale_http_error()
         component = Counter()
-        mount = Mount(component, access=Everyone(), timeout=None)
-        await mount.send(delivery.respond_to(interaction, ephemeral=False, wait=True))
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
+        await message_root.send(delivery.respond_to(interaction, ephemeral=False, wait=True))
         component.count += 1
 
-        await mount.refresh()
+        await message_root.refresh()
 
-        assert mount.handle is None
-        assert mount.pending
+        assert message_root.handle is None
+        assert message_root.pending
 
         click = fake_interaction()
-        await mount.dispatch("inc", click)
+        await message_root.dispatch("inc", click)
 
-        assert mount.handle is not None
-        assert not mount.pending
+        assert message_root.handle is not None
+        assert not message_root.pending
         click.response.edit_message.assert_awaited_once()
 
 
@@ -2989,9 +3006,9 @@ class TestResourceLoading:
     async def test_operation_delivers_pending_then_succeeded(self) -> None:
         message: Any = fake_message()
         destination = _Destination(message)
-        mount = Mount(OperationPanel(), access=Everyone(), timeout=None)
+        message_root = MessageRoot(OperationPanel(), access=Everyone(), timeout=None)
 
-        await mount.send(destination)
+        await message_root.send(destination)
 
         assert "pending:starting" in str(destination.calls[0][0].to_components())
         message.edit.assert_awaited_once()
@@ -3008,10 +3025,10 @@ class TestResourceLoading:
             return message
 
         message.edit.side_effect = record_edit
-        mount = Mount(ProgressiveOperationPanel(progressed, resume), access=Everyone(), timeout=None)
+        message_root = MessageRoot(ProgressiveOperationPanel(progressed, resume), access=Everyone(), timeout=None)
 
         async with anyio.create_task_group() as tasks:
-            tasks.start_soon(mount.send, _Destination(message))
+            tasks.start_soon(message_root.send, _Destination(message))
             await progressed.wait()
             await painted.wait()
             assert "pending:publishing" in str(message.edit.await_args_list[0].kwargs["view"].to_components())
@@ -3028,15 +3045,15 @@ class TestResourceLoading:
         message: Any = fake_message()
         destination = _Destination(message)
         profiler = MemoryProfiler()
-        mount = Mount(panel, access=Everyone(), profiler=profiler, timeout=None)
+        message_root = MessageRoot(panel, access=Everyone(), profiler=profiler, timeout=None)
 
-        await mount.send(destination)
+        await message_root.send(destination)
 
         assert len(destination.calls) == 1
         assert "pending" in str(destination.calls[0][0].to_components())
         message.edit.assert_awaited_once()
         assert "ready:loaded" in str(message.edit.await_args.kwargs["view"].to_components())
-        assert not mount.pending
+        assert not message_root.pending
         trace = _operation_trace(profiler, OperationKind.SEND)
         assert "resource_settle.visible" in {span.name for span in trace.spans}
 
@@ -3051,13 +3068,13 @@ class TestResourceLoading:
                 return Text("constant")
 
         message: Any = fake_message()
-        mount = Mount(UnprojectedResource(), access=Everyone(), timeout=None)
+        message_root = MessageRoot(UnprojectedResource(), access=Everyone(), timeout=None)
 
-        await mount.send(_Destination(message))
+        await message_root.send(_Destination(message))
 
         message.edit.assert_not_awaited()
-        assert mount.snapshot().suppressed == 1
-        assert not mount.pending
+        assert message_root.snapshot().suppressed == 1
+        assert not message_root.pending
 
     async def test_atomic_resource_delivers_only_the_settled_render(self) -> None:
         async def load() -> str:
@@ -3066,9 +3083,9 @@ class TestResourceLoading:
         message: Any = fake_message()
         destination = _Destination(message)
         profiler = MemoryProfiler()
-        mount = Mount(AtomicResourcePanel(load), access=Everyone(), profiler=profiler, timeout=None)
+        message_root = MessageRoot(AtomicResourcePanel(load), access=Everyone(), profiler=profiler, timeout=None)
 
-        await mount.send(destination)
+        await message_root.send(destination)
 
         assert len(destination.calls) == 1
         assert "ready:loaded" in str(destination.calls[0][0].to_components())
@@ -3097,13 +3114,13 @@ class TestResourceLoading:
             raise RuntimeError(message)
 
         message: Any = fake_message()
-        mount = Mount(VisibleResourcePanel(load), access=Everyone(), timeout=None)
+        message_root = MessageRoot(VisibleResourcePanel(load), access=Everyone(), timeout=None)
 
-        await mount.send(_Destination(message))
+        await message_root.send(_Destination(message))
 
         message.edit.assert_awaited_once()
         assert "failed:offline" in str(message.edit.await_args.kwargs["view"].to_components())
-        assert not mount.pending
+        assert not message_root.pending
 
     async def test_visible_siblings_load_concurrently(self) -> None:
         started = anyio.Event()
@@ -3123,10 +3140,10 @@ class TestResourceLoading:
                 return Text(f"{type(self.first.status).__name__}:{type(self.second.status).__name__}")
 
         message: Any = fake_message()
-        mount = Mount(Pair(), access=Everyone(), timeout=None)
+        message_root = MessageRoot(Pair(), access=Everyone(), timeout=None)
 
         with anyio.fail_after(5):
-            await mount.send(_Destination(message))
+            await message_root.send(_Destination(message))
 
         message.edit.assert_awaited_once()
         assert "Ready:Ready" in str(message.edit.await_args.kwargs["view"].to_components())
@@ -3162,9 +3179,9 @@ class TestResourceLoading:
                         return [Text("parent:Ready"), self.boundary(self.child, key="child")]
 
         message: Any = fake_message()
-        mount = Mount(Parent(), access=Everyone(), timeout=None)
+        message_root = MessageRoot(Parent(), access=Everyone(), timeout=None)
 
-        await mount.send(_Destination(message))
+        await message_root.send(_Destination(message))
 
         assert loads == ["parent", "child"]
         assert message.edit.await_count == 2
@@ -3187,12 +3204,12 @@ class TestResourceLoading:
 
         panel = Conditional()
         message: Any = fake_message()
-        mount = Mount(panel, access=Everyone(), timeout=None)
-        await mount.send(_Destination(message))
+        message_root = MessageRoot(panel, access=Everyone(), timeout=None)
+        await message_root.send(_Destination(message))
 
         assert loads == []
         panel.shown = True
-        await mount.refresh()
+        await message_root.refresh()
 
         assert loads == ["load"]
         assert message.edit.await_count == 2
@@ -3206,24 +3223,24 @@ class TestResourceLoading:
             return "loaded"
 
         panel = VisibleResourcePanel(load)
-        mount = Mount(panel, access=Everyone(), timeout=None)
+        message_root = MessageRoot(panel, access=Everyone(), timeout=None)
 
-        await mount.send(_Destination(None))
+        await message_root.send(_Destination(None))
 
         assert loads == []
         assert isinstance(panel.value.status, Pending)
-        assert mount.pending
+        assert message_root.pending
 
     async def test_dependency_reload_uses_the_interaction_for_both_paints(self) -> None:
         async def load(key: str) -> str:
             return key
 
         panel = VisibleResourcePanel(load)
-        mount = Mount(panel, access=Everyone(), timeout=None)
-        await mount.send(_Destination(fake_message()))
+        message_root = MessageRoot(panel, access=Everyone(), timeout=None)
+        await message_root.send(_Destination(fake_message()))
         interaction = fake_interaction()
 
-        await mount.dispatch("change", interaction)
+        await message_root.dispatch("change", interaction)
 
         interaction.response.edit_message.assert_awaited_once()
         assert "pending:first" in str(interaction.response.edit_message.await_args.kwargs["view"].to_components())
@@ -3237,35 +3254,35 @@ class TestResourceLoading:
         panel = VisibleResourcePanel(load)
         message: Any = fake_message()
         message.edit.side_effect = _http_error()
-        mount = Mount(panel, access=Everyone(), timeout=None)
+        message_root = MessageRoot(panel, access=Everyone(), timeout=None)
 
-        await mount.send(_Destination(message))
+        await message_root.send(_Destination(message))
 
         assert isinstance(panel.value.status, Ready)
-        assert mount.pending
-        assert mount._view is not None
-        assert "pending" in str(mount._view.to_components())
+        assert message_root.pending
+        assert message_root._view is not None
+        assert "pending" in str(message_root._view.to_components())
 
         message.edit.side_effect = None
         message.edit.return_value = message
-        await mount.refresh()
+        await message_root.refresh()
 
-        assert not mount.pending
-        assert mount._view is not None
-        assert "ready:loaded" in str(mount._view.to_components())
+        assert not message_root.pending
+        assert message_root._view is not None
+        assert "ready:loaded" in str(message_root._view.to_components())
 
     async def test_a_load_superseded_mid_settle_is_abandoned(self) -> None:
         """The mount supplies the cancellation `abandon_superseded_loads` asks for."""
         panel = CheckpointedResourcePanel()
         message: Any = fake_message()
         destination = _Destination(message)
-        mount = Mount(panel, access=Everyone(), timeout=None)
+        message_root = MessageRoot(panel, access=Everyone(), timeout=None)
 
         # Deadlined because the regression is a hang, not a wrong answer: without the mount
         # installing a scope, nothing releases the first loader and `send` never returns.
         with anyio.fail_after(5):
             async with anyio.create_task_group() as tasks:
-                tasks.start_soon(mount.send, destination)
+                tasks.start_soon(message_root.send, destination)
                 await panel.entered.wait()
                 panel.value.invalidate()
 
@@ -3405,22 +3422,22 @@ class TestLoading:
 
     async def test_the_delivered_render_is_the_loaded_one(self):
         log: list[str] = []
-        mount = Mount(Leaf(log, "panel"), access=Everyone(), timeout=None)
+        message_root = MessageRoot(Leaf(log, "panel"), access=Everyone(), timeout=None)
         destination = _Destination(fake_message())
 
-        await mount.send(destination)
+        await message_root.send(destination)
 
         assert log == ["load:panel", "render:panel"]
         assert len(destination.calls) == 1
         view, _files = destination.calls[0]
         assert "panel loaded" in str(view.to_components())
-        assert not mount.pending
+        assert not message_root.pending
 
     async def test_a_child_loads_before_its_own_first_render(self):
         log: list[str] = []
-        mount = Mount(Nested(log), access=Everyone(), timeout=None)
+        message_root = MessageRoot(Nested(log), access=Everyone(), timeout=None)
 
-        await mount.send(delivered_to(fake_message()))
+        await message_root.send(delivered_to(fake_message()))
 
         # The parent's loaded render is what reveals the child, so the tiers are serial —
         # but no component renders before its own load.
@@ -3443,11 +3460,11 @@ class TestLoading:
                 await super().on_load()
 
         component = Siblings(log, first=Waits(log, "waits"), second=Slow(log, "slow"))
-        mount = Mount(component, access=Everyone(), timeout=None)
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
         destination = _Destination(fake_message())
 
         with anyio.fail_after(5):
-            await mount.send(destination)
+            await message_root.send(destination)
 
         assert len(destination.calls) == 1
         rendered = str(destination.calls[0][0].to_components())
@@ -3472,12 +3489,12 @@ class TestLoading:
             async def reveal(self, event: PressEvent) -> None:
                 self.open = True
 
-        mount = Mount(Opener(), access=Everyone(), timeout=None)
-        await mount.send(delivered_to(fake_message()))
+        message_root = MessageRoot(Opener(), access=Everyone(), timeout=None)
+        await message_root.send(delivered_to(fake_message()))
         assert log == []
 
         interaction = fake_interaction()
-        await mount.dispatch("open", interaction)
+        await message_root.dispatch("open", interaction)
 
         assert log.index("load:child") < log.index("render:child")
         assert "child loaded" in str(interaction.response.edit_message.await_args.kwargs["view"].to_components())
@@ -3498,16 +3515,16 @@ class TestLoading:
             def render(self):
                 return Text(self.label)
 
-        mount = Mount(Flaky(), access=Everyone(), timeout=None)
+        message_root = MessageRoot(Flaky(), access=Everyone(), timeout=None)
         destination = _Destination(fake_message())
 
         with pytest.raises(RuntimeError, match="the database is down"):
-            await mount.send(destination)
+            await message_root.send(destination)
 
         assert destination.calls == []
-        assert mount._generation == 0
+        assert message_root._generation == 0
 
-        await mount.send(destination)
+        await message_root.send(destination)
 
         assert len(attempts) == 2
         assert "loaded" in str(destination.calls[0][0].to_components())
@@ -3522,10 +3539,10 @@ class TestLoading:
 
         log: list[str] = []
         component = Siblings(log, first=Boom(log, "boom"), second=Leaf(log, "fine"))
-        mount = Mount(component, access=Everyone(), timeout=None)
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
 
         with pytest.raises(LookupError, match="no such account"):
-            await mount.send(_Destination(fake_message()))
+            await message_root.send(_Destination(fake_message()))
 
     async def test_several_failures_at_once_stay_a_group(self):
         class Boom(Leaf):
@@ -3536,47 +3553,47 @@ class TestLoading:
 
         log: list[str] = []
         component = Siblings(log, first=Boom(log, "first"), second=Boom(log, "second"))
-        mount = Mount(component, access=Everyone(), timeout=None)
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
 
         with pytest.raises(BaseExceptionGroup) as caught:
-            await mount.send(_Destination(fake_message()))
+            await message_root.send(_Destination(fake_message()))
 
         assert len(caught.value.exceptions) == 2
 
     async def test_a_completed_load_does_not_run_again(self):
         log: list[str] = []
         component = Leaf(log, "panel")
-        mount = Mount(component, access=Everyone(), timeout=None)
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
         destination = _Destination(fake_message(), raises=_http_error())
 
         with pytest.raises(discord.HTTPException):
-            await mount.send(destination)
+            await message_root.send(destination)
         destination.raises = None
-        await mount.send(destination)
+        await message_root.send(destination)
         component.label = "changed"
-        await mount.refresh()
+        await message_root.refresh()
 
         assert log.count("load:panel") == 1
 
     async def test_stage_view_renders_without_loading(self):
         """The stage-only escape hatch is sync, so it cannot load — and does not pretend to."""
         log: list[str] = []
-        mount = Mount(Leaf(log, "panel"), access=Everyone(), timeout=None)
+        message_root = MessageRoot(Leaf(log, "panel"), access=Everyone(), timeout=None)
 
-        mount._stage_view()
-        await mount.finish(disable=True)
+        message_root._stage_view()
+        await message_root.finish(disable=True)
 
         assert log == ["render:panel"]
 
     async def test_a_terminal_render_loads_nothing(self):
         log: list[str] = []
         component = Nested(log)
-        mount = Mount(component, access=Everyone(), timeout=None)
-        await mount.send(delivered_to(fake_message()))
+        message_root = MessageRoot(component, access=Everyone(), timeout=None)
+        await message_root.send(delivered_to(fake_message()))
         component.child = Leaf(log, "late")
         log.clear()
 
-        await mount.finish(disable=True)
+        await message_root.finish(disable=True)
 
         assert not any(entry.startswith("load:") for entry in log)
 
@@ -3590,9 +3607,9 @@ class TestLoading:
                 renders.append(self.count)
                 return Text(f"count: {self.count}")
 
-        mount = Mount(Plain(), access=Everyone(), timeout=None)
+        message_root = MessageRoot(Plain(), access=Everyone(), timeout=None)
 
-        await mount.send(delivered_to(fake_message()))
+        await message_root.send(delivered_to(fake_message()))
 
         assert len(renders) == 1
 
@@ -3611,8 +3628,8 @@ class TestLoading:
             def render(self):
                 return Text(self.label)
 
-        mount = Mount(Reader(), access=Everyone(), timeout=None)
-        await mount.send(delivered_to(fake_message()))
+        message_root = MessageRoot(Reader(), access=Everyone(), timeout=None)
+        await message_root.send(delivered_to(fake_message()))
 
         assert seen == [False]
 
@@ -3633,10 +3650,10 @@ class TestLoading:
                     nodes.append(self.boundary(self.child, key="child"))
                 return nodes
 
-        mount = Mount(Endless(), access=Everyone(), timeout=None)
+        message_root = MessageRoot(Endless(), access=Everyone(), timeout=None)
 
         with pytest.raises(LayoutInvariantError, match="did not settle"):
-            await mount.send(delivered_to(fake_message()))
+            await message_root.send(delivered_to(fake_message()))
 
 
 class _GuardedPanel(Component):
@@ -3684,49 +3701,49 @@ def _notice_text(interaction: Any) -> list[str]:
 class TestGuards:
     async def test_a_denial_runs_no_handler_and_costs_one_ephemeral_message(self):
         panel = _GuardedPanel(guard=sl.guards.when(lambda event: False, reason="Not for you."))
-        mount = Mount(panel, access=Everyone(), timeout=None)
-        commit_render(mount)
-        generation = mount.generation
+        message_root = MessageRoot(panel, access=Everyone(), timeout=None)
+        commit_render(message_root)
+        generation = message_root.generation
         interaction = fake_interaction()
 
-        await mount.dispatch("go", interaction)
+        await message_root.dispatch("go", interaction)
 
         assert panel.count == 0
-        assert mount.generation == generation
+        assert message_root.generation == generation
         assert _notice_text(interaction) == ["Not for you."]
         assert interaction.response.send_message.await_args.kwargs["ephemeral"] is True
 
     async def test_a_reasonless_denial_falls_back_to_chrome(self):
-        mount = Mount(_GuardedPanel(guard=sl.guards.once()), access=Everyone(), timeout=None)
-        commit_render(mount)
-        await mount.dispatch("go", fake_interaction())
+        message_root = MessageRoot(_GuardedPanel(guard=sl.guards.once()), access=Everyone(), timeout=None)
+        commit_render(message_root)
+        await message_root.dispatch("go", fake_interaction())
 
         interaction = fake_interaction()
-        await mount.dispatch("go", interaction)
+        await message_root.dispatch("go", interaction)
 
         assert _notice_text(interaction) == [Chrome().not_now]
 
     async def test_a_delay_bearing_denial_says_how_long_to_wait(self):
-        mount = Mount(_GuardedPanel(guard=sl.guards.cooldown(30)), access=Everyone(), timeout=None)
-        commit_render(mount)
-        await mount.dispatch("go", fake_interaction())
+        message_root = MessageRoot(_GuardedPanel(guard=sl.guards.cooldown(30)), access=Everyone(), timeout=None)
+        commit_render(message_root)
+        await message_root.dispatch("go", fake_interaction())
 
         interaction = fake_interaction()
-        await mount.dispatch("go", interaction)
+        await message_root.dispatch("go", interaction)
 
         assert _notice_text(interaction) == ["Try again in 30 seconds."]
 
     async def test_a_denial_is_traced_as_its_own_disposition(self):
         profiler = MemoryProfiler()
-        mount = Mount(
+        message_root = MessageRoot(
             _GuardedPanel(guard=sl.guards.when(lambda event: False, reason="No.")),
             access=Everyone(),
             timeout=None,
             profiler=profiler,
         )
-        commit_render(mount)
+        commit_render(message_root)
 
-        await mount.dispatch("go", fake_interaction())
+        await message_root.dispatch("go", fake_interaction())
 
         dispatch = _profile_trace(profiler).result.dispatch
         assert dispatch is not None
@@ -3742,11 +3759,11 @@ class TestGuards:
         hook = AsyncMock()
         profiler = MemoryProfiler()
         panel = _GuardedPanel(guard=sl.guards.permission(broken))
-        mount = Mount(panel, access=Everyone(), timeout=None, on_error=hook, profiler=profiler)
-        commit_render(mount)
+        message_root = MessageRoot(panel, access=Everyone(), timeout=None, on_error=hook, profiler=profiler)
+        commit_render(message_root)
         interaction = fake_interaction()
 
-        await mount.dispatch("go", interaction)
+        await message_root.dispatch("go", interaction)
 
         assert panel.count == 0
         hook.assert_awaited_once_with(interaction, error, "guard:go")
@@ -3773,22 +3790,22 @@ class TestGuards:
 
         for policy in ActionMode:
             panel = Reader(policy)
-            mount = Mount(panel, access=Everyone(), timeout=None)
-            commit_render(mount)
+            message_root = MessageRoot(panel, access=Everyone(), timeout=None)
+            commit_render(message_root)
 
-            await mount.dispatch("go", fake_interaction())
-            await mount.dispatch("go", fake_interaction())
+            await message_root.dispatch("go", fake_interaction())
+            await message_root.dispatch("go", fake_interaction())
 
             assert panel.presses == ["1"], policy
 
     async def test_a_stale_press_is_rejected_before_its_guard_is_consulted(self):
         panel = _GuardedPanel(guard=sl.guards.once())
-        mount = Mount(panel, access=Everyone(), timeout=None)
-        commit_render(mount)
-        stale = mount.generation - 1
+        message_root = MessageRoot(panel, access=Everyone(), timeout=None)
+        commit_render(message_root)
+        stale = message_root.generation - 1
 
-        await mount.dispatch("go", fake_interaction(), generation=stale)
-        await mount.dispatch("go", fake_interaction())
+        await message_root.dispatch("go", fake_interaction(), generation=stale)
+        await message_root.dispatch("go", fake_interaction())
 
         assert panel.count == 1
 
@@ -3810,13 +3827,13 @@ class TestGuards:
                 self.pressed += 1
 
         crowd = Crowd()
-        mount = Mount(crowd, access=Everyone(), timeout=None)
-        commit_render(mount)
-        (picker,) = set(mount.snapshot().handler_keys) - {f"act{index}" for index in range(8)}
+        message_root = MessageRoot(crowd, access=Everyone(), timeout=None)
+        commit_render(message_root)
+        (picker,) = set(message_root.snapshot().handler_keys) - {f"act{index}" for index in range(8)}
 
-        await mount.dispatch(picker, fake_interaction(), ["act3"])
-        await mount.dispatch(picker, fake_interaction(), ["act3"])
-        await mount.dispatch(picker, fake_interaction(), ["act4"])
+        await message_root.dispatch(picker, fake_interaction(), ["act3"])
+        await message_root.dispatch(picker, fake_interaction(), ["act3"])
+        await message_root.dispatch(picker, fake_interaction(), ["act4"])
 
         assert crowd.pressed == 2
 
@@ -3830,19 +3847,19 @@ class TestGuards:
             def render(self):
                 return sl_form("Rename", spec, key="rename", on_submit=submitted, guard=sl.guards.once())
 
-        mount = Mount(Panel(), access=Everyone(), timeout=None)
-        commit_render(mount)
+        message_root = MessageRoot(Panel(), access=Everyone(), timeout=None)
+        commit_render(message_root)
 
         opened = fake_interaction()
-        await mount.dispatch("rename", opened)
+        await message_root.dispatch("rename", opened)
         assert opened.response.send_modal.await_count == 1
 
         refused = fake_interaction()
-        await mount.dispatch("rename", refused)
+        await message_root.dispatch("rename", refused)
         assert refused.response.send_modal.await_count == 0
 
         # The submission completes a press already admitted, so `once` does not eat it.
-        await mount.dispatch_submit("rename", fake_interaction(), spec, {"name": "Ada"}, submitted)
+        await message_root.dispatch_submit("rename", fake_interaction(), spec, {"name": "Ada"}, submitted)
         submitted.assert_awaited_once()
 
 
@@ -3852,11 +3869,11 @@ class TestBusyFeedback:
         return [(item.label, item.disabled) for item in view.walk_children() if isinstance(item, discord.ui.Button)]
 
     @staticmethod
-    async def _press(mount: Mount, interaction: Any, release: asyncio.Event) -> None:
+    async def _press(message_root: MessageRoot, interaction: Any, release: asyncio.Event) -> None:
         """Dispatch a press whose handler is held open until the interim has painted."""
 
         async def press() -> None:
-            await mount.dispatch("go", interaction)
+            await message_root.dispatch("go", interaction)
 
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(press)
@@ -3866,25 +3883,25 @@ class TestBusyFeedback:
 
     async def test_a_fast_handler_suppresses_an_unchanged_finished_render(self):
         panel = _GuardedPanel(busy=sl.interactions.BusySpec())
-        mount = Mount(panel, access=Everyone(), timeout=None, pending_after=30)
-        commit_render(mount)
+        message_root = MessageRoot(panel, access=Everyone(), timeout=None, pending_after=30)
+        commit_render(message_root)
         interaction = fake_interaction()
 
-        await mount.dispatch("go", interaction)
+        await message_root.dispatch("go", interaction)
 
         assert panel.count == 1
         interaction.response.edit_message.assert_not_awaited()
         interaction.response.defer.assert_awaited_once()
-        assert mount.snapshot().suppressed == 1
+        assert message_root.snapshot().suppressed == 1
 
     async def test_a_slow_handler_disables_the_panel_and_relabels_the_press(self):
         release = asyncio.Event()
         panel = _GuardedPanel(busy=sl.interactions.BusySpec(pending="Rendering…"), run=release.wait)
-        mount = Mount(panel, access=Everyone(), timeout=None, pending_after=0)
-        commit_render(mount)
+        message_root = MessageRoot(panel, access=Everyone(), timeout=None, pending_after=0)
+        commit_render(message_root)
         interaction = fake_interaction()
 
-        await self._press(mount, interaction, release)
+        await self._press(message_root, interaction, release)
 
         interim = interaction.response.edit_message.await_args.kwargs["view"]
         assert self._labels(interim) == [("Rendering…", True)]
@@ -3908,24 +3925,24 @@ class TestBusyFeedback:
             async def go(self, event: ActionEvent) -> None:
                 await release_handler.wait()
 
-        mount = Mount(
+        message_root = MessageRoot(
             Idle(),
             access=Everyone(),
             timeout=None,
             pending_after=0,
             acknowledgement_timeout=0.01,
         )
-        commit_render(mount)
+        commit_render(message_root)
         interaction = fake_interaction()
         lock_held = asyncio.Event()
 
         async def hold_render_lock() -> None:
-            async with mount._render_lock:
+            async with message_root._render_lock:
                 lock_held.set()
                 await release_lock.wait()
 
         async def dispatch() -> None:
-            await mount.dispatch("go", interaction)
+            await message_root.dispatch("go", interaction)
 
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(hold_render_lock)
@@ -3956,16 +3973,16 @@ class TestBusyFeedback:
             ValueError,
             match="a mount acknowledgement timeout must be greater than zero and below Discord's 3-second limit",
         ):
-            Mount(Counter(), access=Everyone(), acknowledgement_timeout=3.5)
+            MessageRoot(Counter(), access=Everyone(), acknowledgement_timeout=3.5)
 
     async def test_the_pending_label_falls_back_to_chrome(self):
         release = asyncio.Event()
         panel = _GuardedPanel(busy=sl.interactions.BusySpec(), run=release.wait)
-        mount = Mount(panel, access=Everyone(), timeout=None, pending_after=0)
-        commit_render(mount)
+        message_root = MessageRoot(panel, access=Everyone(), timeout=None, pending_after=0)
+        commit_render(message_root)
         interaction = fake_interaction()
 
-        await self._press(mount, interaction, release)
+        await self._press(message_root, interaction, release)
 
         interim = interaction.response.edit_message.await_args.kwargs["view"]
         assert self._labels(interim) == [(Chrome().working, True)]
@@ -3982,11 +3999,11 @@ class TestBusyFeedback:
             order.append(f"hook:{source}")
 
         panel = _GuardedPanel(busy=sl.interactions.BusySpec(), run=fail)
-        mount = Mount(panel, access=Everyone(), timeout=None, pending_after=0, on_error=hook)
-        commit_render(mount)
+        message_root = MessageRoot(panel, access=Everyone(), timeout=None, pending_after=0, on_error=hook)
+        commit_render(message_root)
         interaction = fake_interaction()
 
-        await self._press(mount, interaction, release)
+        await self._press(message_root, interaction, release)
 
         restored = interaction.followup.edit_message.await_args.kwargs["view"]
         assert self._labels(restored) == [("Go", False)]
@@ -4001,11 +4018,11 @@ class TestBusyFeedback:
             raise RuntimeError("render failed")
 
         panel = _GuardedPanel(busy=sl.interactions.BusySpec(restore_on_error=False), run=fail)
-        mount = Mount(panel, access=Everyone(), timeout=None, pending_after=0, on_error=AsyncMock())
-        commit_render(mount)
+        message_root = MessageRoot(panel, access=Everyone(), timeout=None, pending_after=0, on_error=AsyncMock())
+        commit_render(message_root)
         interaction = fake_interaction()
 
-        await self._press(mount, interaction, release)
+        await self._press(message_root, interaction, release)
 
         assert interaction.followup.edit_message.await_count == 0
 
@@ -4025,23 +4042,23 @@ class TestBusyFeedback:
                 ran.append(True)
 
         panel = Idle()
-        mount = Mount(panel, access=Everyone(), timeout=None, pending_after=0)
-        commit_render(mount)
+        message_root = MessageRoot(panel, access=Everyone(), timeout=None, pending_after=0)
+        commit_render(message_root)
         interaction = fake_interaction()
 
-        await self._press(mount, interaction, release)
+        await self._press(message_root, interaction, release)
 
         assert ran == [True]
-        assert not mount.pending
+        assert not message_root.pending
         restored = interaction.followup.edit_message.await_args.kwargs["view"]
         assert self._labels(restored) == [("Go", False)]
 
     async def test_a_late_watchdog_paints_nothing_over_the_finished_render(self):
         panel = _GuardedPanel(busy=sl.interactions.BusySpec())
-        mount = Mount(panel, access=Everyone(), timeout=None, pending_after=0)
-        commit_render(mount)
+        message_root = MessageRoot(panel, access=Everyone(), timeout=None, pending_after=0)
+        commit_render(message_root)
         interaction = fake_interaction()
-        busy = _BusyPaint(mount, "go", sl.interactions.BusySpec(), interaction)
+        busy = _BusyPaint(message_root, "go", sl.interactions.BusySpec(), interaction)
         profile = SimpleNamespace(acknowledge=lambda source: None)
 
         assert await busy.close() is False

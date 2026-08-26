@@ -10,8 +10,8 @@ import discord
 from discord import Message, app_commands
 from discord.ext.commands import Cog
 
-import squid_ui_discord as sd
 import squid_ui as sl
+import squid_ui_discord as sd
 from squid.accounts.domain import IdentityProvider
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
@@ -200,8 +200,8 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             locale=locale,
             on_submit=persist_draft,
         )
-        mount = component.mount(source=interaction)
-        delivered = await mount.send(sd.respond_to(interaction, ephemeral=True, wait=True))
+        message_root = component.mount(source=interaction)
+        delivered = await message_root.send(sd.respond_to(interaction, ephemeral=True, wait=True))
         # `wait=True` fetches the message back, and a delivery that produced none would have
         # raised. The form edits this message three times below, so it needs the handle.
         assert isinstance(delivered, sd.delivery.Delivered), "the interaction response cannot be abandoned"

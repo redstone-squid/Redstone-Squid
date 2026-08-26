@@ -26,7 +26,7 @@ from squid_ui.runtime.presentation_state import (
 )
 from squid_ui.runtime.reactivity import export_state, restore_state
 from squid_ui.sources import Direction, Position
-from squid_ui_discord.mount import Mount
+from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.sessions import SessionKey
 from squid_ui_discord.target import DISCORD_V2_DPY27
 from squid_ui_discord.targets import DEFAULT_TARGETS, TargetRegistry
@@ -41,8 +41,8 @@ __all__ = [
     "DurabilityHealth",
     "DurableBot",
     "DurableFrontend",
-    "DurableMountCodec",
-    "DurableMountRecord",
+    "DurableMessageRootCodec",
+    "DurableMessageRootRecord",
     "DurableOpenResult",
     "DurableRuntimeSnapshot",
     "DurableSession",
@@ -52,10 +52,10 @@ __all__ = [
     "DurableSessionStore",
     "FrontendAddress",
     "MemorySessionStore",
+    "MessageRootState",
+    "MessageRootStateCodec",
+    "MessageRootStateError",
     "Missing",
-    "MountState",
-    "MountStateCodec",
-    "MountStateError",
     "NotDurable",
     "PostgresSessionStore",
     "PostgresTopicBridge",
@@ -68,8 +68,8 @@ __all__ = [
     "RecoveryReport",
     "RestoreContext",
     "SQLiteSessionStore",
-    "SessionMountRecord",
     "SessionRecord",
+    "SessionRootRecord",
     "TargetRegistry",
     "TopicBridgeSnapshot",
     "Unreachable",
@@ -78,7 +78,7 @@ __all__ = [
 ]
 
 
-class MountStateError(ValueError):
+class MessageRootStateError(ValueError):
     """A snapshot is malformed, incompatible, or unsafe to restore."""
 
 
@@ -98,7 +98,7 @@ class PresentationSnapshot:
 
 
 @dataclass(frozen=True, slots=True)
-class MountState:
+class MessageRootState:
     protocol: int
     component_key: str
     component_version: int
@@ -125,28 +125,28 @@ class FrontendAddress:
 
 
 @dataclass(frozen=True, slots=True)
-class DurableMountRecord:
+class DurableMessageRootRecord:
     """One mount's stored state plus the operational metadata recovery needs."""
 
     protocol: int
-    state: MountState
+    state: MessageRootState
     address: FrontendAddress
     expires_at: float | None = None
 
 
-class DurableMountCodec:
+class DurableMessageRootCodec:
     """Canonical JSON codec for operational mount record protocol 1."""
 
     protocol = 1
 
     @classmethod
-    def dumps(cls, record: DurableMountRecord) -> str:
+    def dumps(cls, record: DurableMessageRootRecord) -> str:
         if record.protocol != cls.protocol:
             message = f"unsupported durable mount record protocol {record.protocol}"
-            raise MountStateError(message)
+            raise MessageRootStateError(message)
         raw = {
             "protocol": record.protocol,
-            "state": json.loads(MountStateCodec.dumps(record.state)),
+            "state": json.loads(MessageRootStateCodec.dumps(record.state)),
             "address": {
                 "frontend": record.address.frontend,
                 "values": dict(record.address.values),
@@ -157,47 +157,47 @@ class DurableMountCodec:
             return json.dumps(raw, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
         except (TypeError, ValueError) as error:
             message = f"durable mount metadata is not JSON serializable: {error}"
-            raise MountStateError(message) from error
+            raise MessageRootStateError(message) from error
 
     @classmethod
-    def loads(cls, payload: str) -> DurableMountRecord:
+    def loads(cls, payload: str) -> DurableMessageRootRecord:
         try:
             raw = json.loads(payload)
         except json.JSONDecodeError as error:
-            raise MountStateError(str(error)) from error
+            raise MessageRootStateError(str(error)) from error
         item = _object(raw)
         protocol = _integer(item, "protocol")
         if protocol != cls.protocol or "state" not in item:
             message = f"unsupported durable mount record protocol {protocol}"
-            raise MountStateError(message)
+            raise MessageRootStateError(message)
         address = _object(item.get("address"))
         values = _object(address.get("values"))
         if not all(isinstance(key, str) and isinstance(value, str | int) for key, value in values.items()):
             message = "mount address values must contain string keys and string or integer values"
-            raise MountStateError(message)
+            raise MessageRootStateError(message)
         expires_at = item.get("expires_at")
         if expires_at is not None and not isinstance(expires_at, int | float):
             message = "mount record expires_at must be a number or null"
-            raise MountStateError(message)
+            raise MessageRootStateError(message)
         state_payload = json.dumps(item.get("state"), ensure_ascii=False, separators=(",", ":"))
-        return DurableMountRecord(
+        return DurableMessageRootRecord(
             protocol,
-            MountStateCodec.loads(state_payload),
+            MessageRootStateCodec.loads(state_payload),
             FrontendAddress(_string(address, "frontend"), values),
             float(expires_at) if expires_at is not None else None,
         )
 
 
-class MountStateCodec:
+class MessageRootStateCodec:
     """Canonical JSON codec for mount state protocol 1."""
 
     protocol = 1
 
     @classmethod
-    def dumps(cls, state: MountState) -> str:
+    def dumps(cls, state: MessageRootState) -> str:
         if state.protocol != cls.protocol:
             message = f"unsupported mount state protocol {state.protocol}"
-            raise MountStateError(message)
+            raise MessageRootStateError(message)
         raw = {
             "protocol": state.protocol,
             "component_key": state.component_key,
@@ -218,33 +218,33 @@ class MountStateCodec:
             return json.dumps(raw, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
         except (TypeError, ValueError) as error:
             message = f"component state is not JSON serializable: {error}"
-            raise MountStateError(message) from error
+            raise MessageRootStateError(message) from error
 
     @classmethod
-    def loads(cls, payload: str) -> MountState:
+    def loads(cls, payload: str) -> MessageRootState:
         try:
             raw = json.loads(payload)
         except json.JSONDecodeError as error:
-            raise MountStateError(str(error)) from error
+            raise MessageRootStateError(str(error)) from error
         if not isinstance(raw, dict):
             message = "mount state must be an object"
-            raise MountStateError(message)
+            raise MessageRootStateError(message)
         protocol = _integer(raw, "protocol")
         if protocol != cls.protocol:
             message = f"unsupported mount state protocol {protocol}"
-            raise MountStateError(message)
+            raise MessageRootStateError(message)
         components = raw.get("components")
         presentation = raw.get("presentation")
         if not isinstance(components, list) or not isinstance(presentation, dict):
             message = "mount state components or presentation are malformed"
-            raise MountStateError(message)
+            raise MessageRootStateError(message)
         decoded_components: list[ComponentState] = []
         for value in components:
             item = _object(value)
             state = item.get("state")
             if not isinstance(state, dict) or not all(isinstance(key, str) for key in state):
                 message = "component snapshot state must be an object with string keys"
-                raise MountStateError(message)
+                raise MessageRootStateError(message)
             decoded_components.append(
                 ComponentState(
                     path=_string(item, "path"),
@@ -258,11 +258,11 @@ class MountStateCodec:
             isinstance(capability, str) for capability in adapter_capabilities
         ):
             message = "mount state target adapter_capabilities must be a string list"
-            raise MountStateError(message)
+            raise MessageRootStateError(message)
         if adapter_capabilities != sorted(set(adapter_capabilities)):
             message = "mount state target adapter_capabilities must be sorted and unique"
-            raise MountStateError(message)
-        return MountState(
+            raise MessageRootStateError(message)
+        return MessageRootState(
             protocol,
             _string(raw, "component_key"),
             _integer(raw, "component_version"),
@@ -276,29 +276,29 @@ class MountStateCodec:
 
 
 def migrate_component_state(
-    current: MountState,
+    current: MessageRootState,
     path: str,
     transform: Callable[[Mapping[str, object]], Mapping[str, object]],
     *,
     type_id: str | None = None,
-) -> MountState:
+) -> MessageRootState:
     """Transform one component snapshot and advance the root's version by one."""
-    isolated = MountStateCodec.loads(MountStateCodec.dumps(current))
+    isolated = MessageRootStateCodec.loads(MessageRootStateCodec.dumps(current))
     matches = [index for index, component in enumerate(isolated.components) if component.path == path]
     if len(matches) != 1:
         detail = "missing" if not matches else "duplicate"
         message = f"component path {path!r} is {detail} in the mount state"
-        raise MountStateError(message)
+        raise MessageRootStateError(message)
     if type_id == "":
         message = "component type identity must not be empty"
-        raise MountStateError(message)
+        raise MessageRootStateError(message)
 
     index = matches[0]
     component = current.components[index]
     transformed = transform(isolated.components[index].state)
     if not isinstance(transformed, Mapping) or not all(isinstance(key, str) for key in transformed):
         message = "component migration result must be a mapping with string keys"
-        raise MountStateError(message)
+        raise MessageRootStateError(message)
     components = list(current.components)
     components[index] = ComponentState(
         component.path,
@@ -310,7 +310,7 @@ def migrate_component_state(
         component_version=current.component_version + 1,
         components=tuple(components),
     )
-    MountStateCodec.loads(MountStateCodec.dumps(migrated))
+    MessageRootStateCodec.loads(MessageRootStateCodec.dumps(migrated))
     return migrated
 
 
@@ -381,21 +381,21 @@ class RestoreContext:
     record_id: str
     session_key: SessionKey
     actor_id: int | None
-    mount_actor_id: int | None
+    message_root_actor_id: int | None
     address: FrontendAddress
     expires_at: float | None
     parent_id: str | None
 
 
-type MountStateMigration = Callable[[MountState], MountState]
+type MessageRootStateMigration = Callable[[MessageRootState], MessageRootState]
 
 
 @dataclass(frozen=True, slots=True)
 class _Registration:
     version: int
     factory: Callable[[], Component] | None
-    restore: Callable[[RestoreContext], Mount] | None
-    migrations: Mapping[int, MountStateMigration]
+    restore: Callable[[RestoreContext], MessageRoot] | None
+    migrations: Mapping[int, MessageRootStateMigration]
 
 
 class ComponentRegistry:
@@ -413,8 +413,8 @@ class ComponentRegistry:
         key: str,
         *,
         version: int,
-        restore: Callable[[RestoreContext], Mount] | None = None,
-        migrations: Mapping[int, MountStateMigration] | None = None,
+        restore: Callable[[RestoreContext], MessageRoot] | None = None,
+        migrations: Mapping[int, MessageRootStateMigration] | None = None,
         factory: Callable[[], Component] | None = None,
     ) -> None:
         """Register one known root and every sequential migration to its current version.
@@ -438,45 +438,45 @@ class ComponentRegistry:
             raise ValueError(message)
         self._registrations[key] = _Registration(version, factory, restore, migration_map)
 
-    def capture(self, mount: Mount, component_key: str) -> MountState:
+    def capture(self, message_root: MessageRoot, component_key: str) -> MessageRootState:
         registration = self._registrations.get(component_key)
         if registration is None:
             message = f"durable component {component_key!r} is not registered"
-            raise MountStateError(message)
-        if not mount.runtime.components:
+            raise MessageRootStateError(message)
+        if not message_root.runtime.components:
             message = "a mount must be built before it can be snapshotted"
-            raise MountStateError(message)
+            raise MessageRootStateError(message)
         components = tuple(
             ComponentState(path, _type_id(component), export_state(component))
-            for path, component in sorted(mount.runtime.components.items())
+            for path, component in sorted(message_root.runtime.components.items())
         )
-        snapshot = MountState(
-            MountStateCodec.protocol,
+        snapshot = MessageRootState(
+            MessageRootStateCodec.protocol,
             component_key,
             registration.version,
             components,
             PresentationSnapshot(
-                dict(mount.presentation.cursors),
-                dict(mount.presentation.selections),
-                dict(mount.presentation.disclosures),
-                dict(mount.presentation.strategies),
+                dict(message_root.presentation.cursors),
+                dict(message_root.presentation.selections),
+                dict(message_root.presentation.disclosures),
+                dict(message_root.presentation.strategies),
             ),
-            mount.target.triple,
-            mount.target.version,
-            mount.target.fingerprint,
-            tuple(sorted(mount.target.adapter_capabilities)),
+            message_root.target.triple,
+            message_root.target.version,
+            message_root.target.fingerprint,
+            tuple(sorted(message_root.target.adapter_capabilities)),
         )
-        MountStateCodec.dumps(snapshot)
+        MessageRootStateCodec.dumps(snapshot)
         return snapshot
 
     def restore(
         self,
-        state: MountState,
+        state: MessageRootState,
         context: RestoreContext | None = None,
         *,
         targets: TargetRegistry = DEFAULT_TARGETS,
-        **mount_options: Any,
-    ) -> Mount:
+        **message_root_options: Any,
+    ) -> MessageRoot:
         """Rebuild a mount from a state, against the exact target it was planned for.
 
         The target is resolved *before* anything is built, so an unavailable or changed
@@ -489,48 +489,48 @@ class ComponentRegistry:
             state.target_fingerprint,
             state.target_adapter_capabilities,
         )
-        mount_options.setdefault("target", target)
+        message_root_options.setdefault("target", target)
         registration = self._registrations.get(state.component_key)
         if registration is None:
             message = f"durable component {state.component_key!r} is not registered"
-            raise MountStateError(message)
+            raise MessageRootStateError(message)
         state = self._migrate(state, registration)
         by_path = {component.path: component for component in state.components}
         if registration.restore is not None:
             if context is None:
                 message = f"durable component {state.component_key!r} requires a restore context"
-                raise MountStateError(message)
-            mount = registration.restore(context)
-            root = mount.component
+                raise MessageRootStateError(message)
+            message_root = registration.restore(context)
+            root = message_root.component
         else:
             factory = registration.factory
             if factory is None:
                 message = f"durable component {state.component_key!r} has no restore recipe"
-                raise MountStateError(message)
+                raise MessageRootStateError(message)
             root = factory()
-            mount = Mount(root, **mount_options)
+            message_root = MessageRoot(root, **message_root_options)
         root_snapshot = by_path.get("$")
         if root_snapshot is None:
             message = "mount state has no root component"
-            raise MountStateError(message)
+            raise MessageRootStateError(message)
         _restore_component(root, root_snapshot)
         tree = render_component_tree(root)
         if set(by_path) != set(tree.components):
             message = "restored component tree does not match the state paths"
-            raise MountStateError(message)
+            raise MessageRootStateError(message)
         for path, component in tree.components.items():
             if path != "$":
                 _restore_component(component, by_path[path])
-        mount.presentation = PresentationState(
+        message_root.presentation = PresentationState(
             cursors=dict(state.presentation.cursors),
             selections=dict(state.presentation.selections),
             disclosures=dict(state.presentation.disclosures),
             strategies=dict(state.presentation.strategies),
         )
-        return mount
+        return message_root
 
     @staticmethod
-    def _migrate(state: MountState, registration: _Registration) -> MountState:
+    def _migrate(state: MessageRootState, registration: _Registration) -> MessageRootState:
         current = state
         while current.component_version < registration.version:
             migration = registration.migrations.get(current.component_version)
@@ -539,24 +539,24 @@ class ComponentRegistry:
                     f"durable component {current.component_key!r} has no migration from "
                     f"version {current.component_version}"
                 )
-                raise MountStateError(message)
+                raise MessageRootStateError(message)
             source_version = current.component_version
             migrated = migration(current)
             if (
-                migrated.protocol != MountStateCodec.protocol
+                migrated.protocol != MessageRootStateCodec.protocol
                 or migrated.component_key != current.component_key
                 or migrated.component_version != source_version + 1
             ):
                 message = f"state migration from version {source_version} must produce version {source_version + 1}"
-                raise MountStateError(message)
-            MountStateCodec.dumps(migrated)
-            current = MountStateCodec.loads(MountStateCodec.dumps(migrated))
+                raise MessageRootStateError(message)
+            MessageRootStateCodec.dumps(migrated)
+            current = MessageRootStateCodec.loads(MessageRootStateCodec.dumps(migrated))
         if current.component_version != registration.version:
             message = (
                 f"durable component {current.component_key!r} state version "
                 f"{current.component_version} is newer than registered version {registration.version}"
             )
-            raise MountStateError(message)
+            raise MessageRootStateError(message)
         return current
 
 
@@ -564,11 +564,11 @@ def _restore_component(component: Component, state: ComponentState) -> None:
     expected = _type_id(component)
     if state.type_id != expected:
         message = f"component at {state.path!r} changed type from {state.type_id!r} to {expected!r}"
-        raise MountStateError(message)
+        raise MessageRootStateError(message)
     try:
         restore_state(component, state.state)
     except ValueError as error:
-        raise MountStateError(str(error)) from error
+        raise MessageRootStateError(str(error)) from error
 
 
 def _type_id(component: Component) -> str:
@@ -579,7 +579,7 @@ def _type_id(component: Component) -> str:
 def _object(value: object) -> dict[str, object]:
     if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
         message = "snapshot entry must be an object"
-        raise MountStateError(message)
+        raise MessageRootStateError(message)
     return value
 
 
@@ -587,7 +587,7 @@ def _string(raw: Mapping[str, object], key: str) -> str:
     value = raw.get(key)
     if not isinstance(value, str):
         message = f"snapshot field {key!r} must be a string"
-        raise MountStateError(message)
+        raise MessageRootStateError(message)
     return value
 
 
@@ -595,7 +595,7 @@ def _integer(raw: Mapping[str, object], key: str) -> int:
     value = raw.get(key)
     if not isinstance(value, int) or isinstance(value, bool):
         message = f"snapshot field {key!r} must be an integer"
-        raise MountStateError(message)
+        raise MessageRootStateError(message)
     return value
 
 
@@ -603,7 +603,7 @@ def _optional_string(raw: Mapping[str, object], key: str) -> str | None:
     value = raw.get(key)
     if value is not None and not isinstance(value, str):
         message = f"snapshot field {key!r} must be a string or null"
-        raise MountStateError(message)
+        raise MessageRootStateError(message)
     return value
 
 
@@ -611,7 +611,7 @@ def _boolean(raw: Mapping[str, object], key: str) -> bool:
     value = raw.get(key)
     if not isinstance(value, bool):
         message = f"snapshot field {key!r} must be a boolean"
-        raise MountStateError(message)
+        raise MessageRootStateError(message)
     return value
 
 
@@ -619,7 +619,7 @@ def _strings(raw: Mapping[str, object], key: str) -> tuple[str, ...]:
     value = raw.get(key)
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         message = f"snapshot field {key!r} must be an array of strings"
-        raise MountStateError(message)
+        raise MessageRootStateError(message)
     return tuple(value)
 
 
@@ -647,6 +647,6 @@ from .runtime import (
 from .session_records import (
     DurableSessionCodec,
     DurableSessionRecord,
-    SessionMountRecord,
+    SessionRootRecord,
     encode_session_scope,
 )

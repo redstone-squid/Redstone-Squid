@@ -186,7 +186,7 @@ def seek_control(context: NavigationContext) -> SelectMenu | None:
 def page_select_nav(context: NavigationContext) -> Sequence[NavNode]:
     """`default_nav` plus a jump select wherever the cursor can address a page.
 
-    Opt in per mount (`Mount(..., nav=sl.page_select_nav)`): a select is a whole component
+    Opt in per mount (`MessageRoot(..., nav=sl.page_select_nav)`): a select is a whole component
     row, and spending one on every paginator in the process is the host's call, not the
     framework's.
     """

@@ -5,7 +5,7 @@ import discord
 import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui.semantic import ActionControls, Stack, Status
-from squid_ui_discord import Everyone, Mount
+from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord.testing import commit_render, fake_interaction
 
 
@@ -49,21 +49,21 @@ def test_options_disable_and_status_appears_after_deciding() -> None:
     assert any(isinstance(child, Status) for child in rendered.children)
 
 
-async def test_component_handler_receives_the_option_and_finish_action_ends_mount() -> None:
+async def test_component_handler_receives_the_option_and_finish_action_ends_root() -> None:
     seen: list[tuple[str, sp.DecisionState]] = []
 
     async def decided(event: sp.TransitionEvent[sp.DecisionState], key: str) -> None:
         seen.append((key, event.state))
 
     component = _decision().build_component(on_decide=decided, finish_on={"delete"})
-    mount = Mount(component, access=Everyone(), timeout=None)
-    commit_render(mount)
+    message_root = MessageRoot(component, access=Everyone(), timeout=None)
+    commit_render(message_root)
 
-    await mount.dispatch("delete-build.delete", fake_interaction())
+    await message_root.dispatch("delete-build.delete", fake_interaction())
 
     assert component.machine_state == sp.DecisionState("delete")
     assert seen == [("delete", sp.DecisionState("delete"))]
-    assert mount._finished
+    assert message_root._finished
 
 
 async def test_confirm_wires_handlers_default_chrome_and_tone() -> None:
@@ -76,14 +76,14 @@ async def test_confirm_wires_handlers_default_chrome_and_tone() -> None:
         seen.append(event.action)
 
     component = sp.confirm("Proceed?", on_confirm=confirmed, on_cancel=cancelled, tone=sl.Tone.DANGER)
-    mount = Mount(component, access=Everyone(), timeout=None)
-    view = commit_render(mount)
+    message_root = MessageRoot(component, access=Everyone(), timeout=None)
+    view = commit_render(message_root)
     buttons = [item for item in view.walk_children() if isinstance(item, discord.ui.Button)]
 
     assert [button.label for button in buttons] == ["Confirm", "Cancel"]
     assert buttons[0].style == discord.ButtonStyle.danger
 
-    await mount.dispatch("confirm.confirm", fake_interaction())
+    await message_root.dispatch("confirm.confirm", fake_interaction())
 
     assert seen == ["choose:confirm"]
     rendered = component.render()

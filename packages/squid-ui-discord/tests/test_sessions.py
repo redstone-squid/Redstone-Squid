@@ -8,9 +8,10 @@ from unittest.mock import AsyncMock
 import anyio
 import pytest
 
-import squid_ui_discord
 import squid_ui as sl
-from squid_ui_discord import Everyone, MountDefaults, SessionKey, SessionRegistry
+import squid_ui_discord
+from squid_ui.primitives import Button, Heading, Row
+from squid_ui_discord import Everyone, MessageRootDefaults, SessionKey, SessionRegistry
 from squid_ui_discord.delivery import Abandoned
 from squid_ui_discord.sessions import (
     MembershipStatus,
@@ -27,7 +28,6 @@ from squid_ui_discord.sessions import (
     Unprotected,
 )
 from squid_ui_discord.testing import fake_message
-from squid_ui.primitives import Button, Heading, Row
 
 
 class Panel(sl.Component):
@@ -38,8 +38,8 @@ class Panel(sl.Component):
         return None
 
 
-def a_mount() -> squid_ui_discord.Mount:
-    return squid_ui_discord.Mount(Panel(), access=Everyone(), timeout=None)
+def a_root() -> squid_ui_discord.MessageRoot:
+    return squid_ui_discord.MessageRoot(Panel(), access=Everyone(), timeout=None)
 
 
 _DEFAULT_MESSAGE = object()
@@ -98,30 +98,30 @@ def test_session_keys_use_typed_frozen_scopes() -> None:
     assert len({SessionKey.global_("status"), SessionKey.global_("status")}) == 1
 
 
-def test_mount_defaults_fields_track_mount_keyword_options() -> None:
-    mount_keywords = {
+def test_message_root_defaults_fields_track_message_root_keyword_options() -> None:
+    message_root_keywords = {
         name
-        for name, parameter in inspect.signature(squid_ui_discord.Mount.__init__).parameters.items()
+        for name, parameter in inspect.signature(squid_ui_discord.MessageRoot.__init__).parameters.items()
         if parameter.kind is inspect.Parameter.KEYWORD_ONLY
     }
 
-    assert {field.name for field in fields(MountDefaults)} == mount_keywords - {"access"}
+    assert {field.name for field in fields(MessageRootDefaults)} == message_root_keywords - {"access"}
 
 
-def test_mount_defaults_apply_overrides_without_mutating_the_defaults() -> None:
-    defaults = MountDefaults(timeout=30, strict=True)
+def test_message_root_defaults_apply_overrides_without_mutating_the_defaults() -> None:
+    defaults = MessageRootDefaults(timeout=30, strict=True)
 
-    mount = defaults.mount(Panel(), access=Everyone(), timeout=None)
+    message_root = defaults.mount(Panel(), access=Everyone(), timeout=None)
 
-    assert mount.timeout is None
-    assert mount.strict is True
+    assert message_root.timeout is None
+    assert message_root.strict is True
     assert defaults.timeout == 30
 
 
-async def test_registry_requires_a_constructed_mount() -> None:
+async def test_registry_requires_a_constructed_root() -> None:
     registry = SessionRegistry()
 
-    with pytest.raises(TypeError, match=r"requires a Mount; use MountDefaults\.mount or ScreenSpec\.open"):
+    with pytest.raises(TypeError, match=r"requires a MessageRoot; use MessageRootDefaults\.mount or ScreenSpec\.open"):
         await registry.open(cast(Any, Panel()), to_message())
 
 
@@ -129,7 +129,7 @@ async def test_any_hashable_key_can_name_a_session() -> None:
     registry = SessionRegistry()
     key = ("panel", "team-red", 42)
 
-    result = await registry.open(a_mount(), to_message(), key=key)
+    result = await registry.open(a_root(), to_message(), key=key)
 
     assert isinstance(result, Opened)
     assert registry.get(key) == (result.session,)
@@ -137,21 +137,21 @@ async def test_any_hashable_key_can_name_a_session() -> None:
 
 class TestResults:
     async def test_opened_carries_the_logical_session(self) -> None:
-        mount = a_mount()
+        message_root = a_root()
 
-        result = await SessionRegistry().open(mount, to_message(), key=KEY)
+        result = await SessionRegistry().open(message_root, to_message(), key=KEY)
 
         assert isinstance(result, Opened)
-        assert result.session.root is mount
-        assert result.session.mounts == (mount,)
+        assert result.session.root is message_root
+        assert result.session.message_roots == (message_root,)
 
     async def test_rejected_carries_occupants_and_reason_without_delivering(self) -> None:
         registry = SessionRegistry()
-        first = await registry.open(a_mount(), to_message(), key=KEY)
+        first = await registry.open(a_root(), to_message(), key=KEY)
         destination = AsyncMock()
 
         result = await registry.open(
-            a_mount(),
+            a_root(),
             destination,
             key=KEY,
             policy=SessionPolicy(collision=Reject()),
@@ -162,12 +162,12 @@ class TestResults:
         destination.assert_not_awaited()
 
     async def test_abandoned_is_distinct_from_rejection_and_delivery(self) -> None:
-        result = await SessionRegistry().open(a_mount(), abandoning(), key=KEY)
+        result = await SessionRegistry().open(a_root(), abandoning(), key=KEY)
 
         assert isinstance(result, Abandoned)
 
     async def test_handleless_delivery_is_still_opened(self) -> None:
-        result = await SessionRegistry().open(a_mount(), to_message(None), key=KEY)
+        result = await SessionRegistry().open(a_root(), to_message(None), key=KEY)
 
         assert isinstance(result, Opened)
 
@@ -175,21 +175,21 @@ class TestResults:
 class TestReplacement:
     async def test_same_actor_replaces_the_oldest_incumbent(self) -> None:
         registry = SessionRegistry()
-        first_mount, second_mount = a_mount(), a_mount()
-        first = await registry.open(first_mount, to_message(), key=KEY, actor_id=7)
+        first_root, second_root = a_root(), a_root()
+        first = await registry.open(first_root, to_message(), key=KEY, actor_id=7)
 
-        second = await registry.open(second_mount, to_message(), key=KEY, actor_id=7)
+        second = await registry.open(second_root, to_message(), key=KEY, actor_id=7)
 
         assert isinstance(first, Opened) and isinstance(second, Opened)
-        assert first_mount.finished
+        assert first_root.finished
         assert registry.get(KEY) == (second.session,)
 
     async def test_incumbent_survives_a_failed_send(self) -> None:
         registry = SessionRegistry()
-        first = await registry.open(a_mount(), to_message(), key=KEY)
+        first = await registry.open(a_root(), to_message(), key=KEY)
 
         with pytest.raises(RuntimeError, match="gateway"):
-            await registry.open(a_mount(), failing(RuntimeError("gateway is down")), key=KEY)
+            await registry.open(a_root(), failing(RuntimeError("gateway is down")), key=KEY)
 
         assert isinstance(first, Opened)
         assert not first.session.root.finished
@@ -197,9 +197,9 @@ class TestReplacement:
 
     async def test_incumbent_survives_an_abandoned_send(self) -> None:
         registry = SessionRegistry()
-        first = await registry.open(a_mount(), to_message(), key=KEY)
+        first = await registry.open(a_root(), to_message(), key=KEY)
 
-        result = await registry.open(a_mount(), abandoning(), key=KEY)
+        result = await registry.open(a_root(), abandoning(), key=KEY)
 
         assert isinstance(first, Opened) and isinstance(result, Abandoned)
         assert not first.session.root.finished
@@ -207,19 +207,19 @@ class TestReplacement:
 
     async def test_cross_user_replacement_is_protected_by_default(self) -> None:
         registry = SessionRegistry()
-        first = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        first = await registry.open(a_root(), to_message(), key=KEY, actor_id=7)
 
-        result = await registry.open(a_mount(), to_message(), key=KEY, actor_id=8)
+        result = await registry.open(a_root(), to_message(), key=KEY, actor_id=8)
 
         assert isinstance(first, Opened)
         assert result == Rejected((first.session.snapshot,), RejectionReason.PROTECTED)
 
     async def test_unprotected_policy_explicitly_allows_cross_user_replacement(self) -> None:
         registry = SessionRegistry()
-        first = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        first = await registry.open(a_root(), to_message(), key=KEY, actor_id=7)
 
         result = await registry.open(
-            a_mount(),
+            a_root(),
             to_message(),
             key=KEY,
             actor_id=8,
@@ -234,21 +234,23 @@ class TestCardinality:
     async def test_limit_greater_than_one_replaces_only_the_oldest_needed_session(self) -> None:
         registry = SessionRegistry()
         policy = SessionPolicy(limit=2, replacement=Unprotected())
-        mounts = [a_mount() for _ in range(3)]
-        results = [await registry.open(mount, to_message(), key=KEY, policy=policy) for mount in mounts]
+        message_roots = [a_root() for _ in range(3)]
+        results = [
+            await registry.open(message_root, to_message(), key=KEY, policy=policy) for message_root in message_roots
+        ]
 
         assert all(isinstance(result, Opened) for result in results)
-        assert mounts[0].finished
-        assert not mounts[1].finished and not mounts[2].finished
-        assert tuple(session.root for session in registry.get(KEY)) == tuple(mounts[1:])
+        assert message_roots[0].finished
+        assert not message_roots[1].finished and not message_roots[2].finished
+        assert tuple(session.root for session in registry.get(KEY)) == tuple(message_roots[1:])
 
     async def test_unlimited_policy_keeps_every_session(self) -> None:
         registry = SessionRegistry()
-        mounts = [a_mount() for _ in range(3)]
-        for mount in mounts:
-            await registry.open(mount, to_message(), key=KEY, policy=SessionPolicy(limit=None))
+        message_roots = [a_root() for _ in range(3)]
+        for message_root in message_roots:
+            await registry.open(message_root, to_message(), key=KEY, policy=SessionPolicy(limit=None))
 
-        assert tuple(session.root for session in registry.get(KEY)) == tuple(mounts)
+        assert tuple(session.root for session in registry.get(KEY)) == tuple(message_roots)
 
     def test_non_positive_limits_are_invalid(self) -> None:
         with pytest.raises(ValueError, match="positive"):
@@ -263,7 +265,7 @@ class TestCardinality:
 
         registry = SessionRegistry()
         initial = SessionPolicy(limit=2, replacement=Unprotected())
-        first, second, third = a_mount(), a_mount(), a_mount()
+        first, second, third = a_root(), a_root(), a_root()
         await registry.open(first, to_message(), key=KEY, policy=initial)
         await registry.open(second, to_message(), key=KEY, policy=initial)
 
@@ -284,11 +286,11 @@ class TestCardinality:
                 return Replace(())
 
         registry = SessionRegistry()
-        await registry.open(a_mount(), to_message(), key=KEY)
+        await registry.open(a_root(), to_message(), key=KEY)
 
         with pytest.raises(ValueError, match="exact required occupants"):
             await registry.open(
-                a_mount(),
+                a_root(),
                 to_message(),
                 key=KEY,
                 policy=SessionPolicy(collision=SelectNobody(), replacement=Unprotected()),
@@ -298,10 +300,10 @@ class TestCardinality:
 class TestAttachments:
     async def test_finish_is_depth_first_across_the_attachment_tree(self) -> None:
         registry = SessionRegistry()
-        opened = await registry.open(a_mount(), to_message(), key=KEY)
+        opened = await registry.open(a_root(), to_message(), key=KEY)
         assert isinstance(opened, Opened)
         session = opened.session
-        child, grandchild = a_mount(), a_mount()
+        child, grandchild = a_root(), a_root()
         await session.attach(child, to_message())
         await session.attach(grandchild, to_message(), parent=child)
         order: list[str] = []
@@ -315,9 +317,9 @@ class TestAttachments:
         assert registry.get(KEY) == ()
 
     async def test_direct_root_finish_cascades_to_every_attachment(self) -> None:
-        opened = await SessionRegistry().open(a_mount(), to_message(), key=KEY)
+        opened = await SessionRegistry().open(a_root(), to_message(), key=KEY)
         assert isinstance(opened, Opened)
-        child, sibling = a_mount(), a_mount()
+        child, sibling = a_root(), a_root()
         await opened.session.attach(child, to_message())
         await opened.session.attach(sibling, to_message())
 
@@ -327,9 +329,9 @@ class TestAttachments:
 
     async def test_direct_child_finish_detaches_its_branch_only(self) -> None:
         registry = SessionRegistry()
-        opened = await registry.open(a_mount(), to_message(), key=KEY)
+        opened = await registry.open(a_root(), to_message(), key=KEY)
         assert isinstance(opened, Opened)
-        child, grandchild, sibling = a_mount(), a_mount(), a_mount()
+        child, grandchild, sibling = a_root(), a_root(), a_root()
         await opened.session.attach(child, to_message())
         await opened.session.attach(grandchild, to_message(), parent=child)
         await opened.session.attach(sibling, to_message())
@@ -338,27 +340,27 @@ class TestAttachments:
 
         assert grandchild.finished
         assert not opened.session.root.finished and not sibling.finished
-        assert opened.session.mounts == (opened.session.root, sibling)
+        assert opened.session.message_roots == (opened.session.root, sibling)
         assert registry.session_for(child) is None
 
     async def test_abandoned_attachment_is_not_registered(self) -> None:
-        opened = await SessionRegistry().open(a_mount(), to_message(), key=KEY)
+        opened = await SessionRegistry().open(a_root(), to_message(), key=KEY)
         assert isinstance(opened, Opened)
-        child = a_mount()
+        child = a_root()
 
         result = await opened.session.attach(child, abandoning())
 
         assert isinstance(result, Abandoned)
-        assert opened.session.mounts == (opened.session.root,)
+        assert opened.session.message_roots == (opened.session.root,)
 
     async def test_foreign_attachment_actor_protects_replacement(self) -> None:
         registry = SessionRegistry()
-        first = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        first = await registry.open(a_root(), to_message(), key=KEY, actor_id=7)
         assert isinstance(first, Opened)
-        await first.session.attach(a_mount(), to_message(), actor_id=8)
+        await first.session.attach(a_root(), to_message(), actor_id=8)
 
         result = await registry.open(
-            a_mount(),
+            a_root(),
             to_message(),
             key=KEY,
             actor_id=7,
@@ -369,9 +371,9 @@ class TestAttachments:
 
     async def test_one_unreachable_sibling_does_not_strand_the_rest(self) -> None:
         registry = SessionRegistry()
-        opened = await registry.open(a_mount(), to_message(), key=KEY)
+        opened = await registry.open(a_root(), to_message(), key=KEY)
         assert isinstance(opened, Opened)
-        doomed, sibling = a_mount(), a_mount()
+        doomed, sibling = a_root(), a_root()
         await opened.session.attach(doomed, to_message())
         await opened.session.attach(sibling, to_message())
         doomed.finish = AsyncMock(side_effect=RuntimeError("message is gone"))  # type: ignore[method-assign]
@@ -385,7 +387,7 @@ class TestAttachments:
 class TestMembership:
     async def test_the_opener_is_the_only_initial_member(self) -> None:
         registry = SessionRegistry()
-        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        opened = await registry.open(a_root(), to_message(), key=KEY, actor_id=7)
         assert isinstance(opened, Opened)
 
         assert opened.session.members == frozenset({7})
@@ -398,28 +400,28 @@ class TestMembership:
 
         class Roster(sl.Component):
             def render(self):
-                session = registry.session_for(mount)
+                session = registry.session_for(message_root)
                 seen.append(None if session is None else session.members)
                 return Heading("Roster")
 
-        mount = squid_ui_discord.Mount(Roster(), access=Everyone(), timeout=None)
-        opened = await registry.open(mount, to_message(), key=KEY, actor_id=7)
+        message_root = squid_ui_discord.MessageRoot(Roster(), access=Everyone(), timeout=None)
+        opened = await registry.open(message_root, to_message(), key=KEY, actor_id=7)
 
         assert isinstance(opened, Opened)
         assert seen == [frozenset({7})]
 
-    async def test_an_abandoned_delivery_leaves_no_mount_indexed(self) -> None:
+    async def test_an_abandoned_delivery_leaves_no_message_root_indexed(self) -> None:
         registry = SessionRegistry()
-        mount = a_mount()
+        message_root = a_root()
 
-        result = await registry.open(mount, abandoning(), key=KEY, actor_id=7)
+        result = await registry.open(message_root, abandoning(), key=KEY, actor_id=7)
 
         assert isinstance(result, Abandoned)
-        assert registry.session_for(mount) is None
+        assert registry.session_for(message_root) is None
 
     async def test_an_actorless_session_starts_empty(self) -> None:
         registry = SessionRegistry()
-        opened = await registry.open(a_mount(), to_message(), key=KEY)
+        opened = await registry.open(a_root(), to_message(), key=KEY)
         assert isinstance(opened, Opened)
 
         assert opened.session.members == frozenset()
@@ -427,17 +429,17 @@ class TestMembership:
 
     async def test_an_attachment_actor_is_attributed_but_never_a_member(self) -> None:
         registry = SessionRegistry()
-        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        opened = await registry.open(a_root(), to_message(), key=KEY, actor_id=7)
         assert isinstance(opened, Opened)
 
-        await opened.session.attach(a_mount(), to_message(), actor_id=8)
+        await opened.session.attach(a_root(), to_message(), actor_id=8)
 
         assert opened.session.members == frozenset({7})
         assert opened.session.participants == frozenset({7, 8})
 
     async def test_join_admits_below_capacity_and_reports_the_remaining_slots(self) -> None:
         registry = SessionRegistry()
-        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7, capacity=3)
+        opened = await registry.open(a_root(), to_message(), key=KEY, actor_id=7, capacity=3)
         assert isinstance(opened, Opened)
 
         result = await opened.session.join(8)
@@ -449,7 +451,7 @@ class TestMembership:
 
     async def test_rejoining_at_capacity_stays_idempotent(self) -> None:
         registry = SessionRegistry()
-        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7, capacity=1)
+        opened = await registry.open(a_root(), to_message(), key=KEY, actor_id=7, capacity=1)
         assert isinstance(opened, Opened)
 
         result = await opened.session.join(7)
@@ -460,7 +462,7 @@ class TestMembership:
 
     async def test_join_at_capacity_refuses_without_mutating(self) -> None:
         registry = SessionRegistry()
-        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7, capacity=1)
+        opened = await registry.open(a_root(), to_message(), key=KEY, actor_id=7, capacity=1)
         assert isinstance(opened, Opened)
 
         result = await opened.session.join(8)
@@ -471,7 +473,7 @@ class TestMembership:
 
     async def test_a_declining_rule_refuses_without_mutating(self) -> None:
         registry = SessionRegistry()
-        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        opened = await registry.open(a_root(), to_message(), key=KEY, actor_id=7)
         assert isinstance(opened, Opened)
 
         result = await opened.session.join(8, when=lambda members: len(members) < 1)
@@ -481,7 +483,7 @@ class TestMembership:
 
     async def test_leave_permits_the_opener_and_the_final_member(self) -> None:
         registry = SessionRegistry()
-        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        opened = await registry.open(a_root(), to_message(), key=KEY, actor_id=7)
         assert isinstance(opened, Opened)
 
         result = await opened.session.leave(7)
@@ -493,7 +495,7 @@ class TestMembership:
 
     async def test_leaving_a_non_member_is_idempotent(self) -> None:
         registry = SessionRegistry()
-        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        opened = await registry.open(a_root(), to_message(), key=KEY, actor_id=7)
         assert isinstance(opened, Opened)
 
         result = await opened.session.leave(8)
@@ -503,7 +505,7 @@ class TestMembership:
 
     async def test_membership_operations_on_a_finished_session_do_nothing(self) -> None:
         registry = SessionRegistry()
-        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        opened = await registry.open(a_root(), to_message(), key=KEY, actor_id=7)
         assert isinstance(opened, Opened)
         await opened.session.finish()
 
@@ -516,7 +518,7 @@ class TestMembership:
 
     async def test_a_stale_expectation_conflicts_and_a_retry_converges(self) -> None:
         registry = SessionRegistry()
-        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        opened = await registry.open(a_root(), to_message(), key=KEY, actor_id=7)
         assert isinstance(opened, Opened)
         stale = opened.session.members
         await opened.session.join(8)
@@ -535,7 +537,7 @@ class TestMembership:
         that exercises real contention.
         """
         registry = SessionRegistry()
-        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7, capacity=2)
+        opened = await registry.open(a_root(), to_message(), key=KEY, actor_id=7, capacity=2)
         assert isinstance(opened, Opened)
         results: list[MembershipStatus] = []
 
@@ -552,13 +554,13 @@ class TestMembership:
 
     async def test_a_member_protects_the_session_from_the_opener_reopening(self) -> None:
         registry = SessionRegistry()
-        first = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        first = await registry.open(a_root(), to_message(), key=KEY, actor_id=7)
         assert isinstance(first, Opened)
         await first.session.join(8)
 
-        protected = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        protected = await registry.open(a_root(), to_message(), key=KEY, actor_id=7)
         unprotected = await registry.open(
-            a_mount(), to_message(), key=KEY, actor_id=7, policy=SessionPolicy(replacement=Unprotected())
+            a_root(), to_message(), key=KEY, actor_id=7, policy=SessionPolicy(replacement=Unprotected())
         )
 
         assert protected == Rejected((first.session.snapshot,), RejectionReason.PROTECTED)
@@ -566,11 +568,11 @@ class TestMembership:
 
     async def test_capacity_and_member_ids_are_validated(self) -> None:
         registry = SessionRegistry()
-        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        opened = await registry.open(a_root(), to_message(), key=KEY, actor_id=7)
         assert isinstance(opened, Opened)
 
         with pytest.raises(ValueError, match="positive"):
-            await registry.open(a_mount(), to_message(), capacity=0)
+            await registry.open(a_root(), to_message(), capacity=0)
         for bad in (True, 0, -1):
             with pytest.raises(ValueError, match="positive integers"):
                 await opened.session.join(cast(int, bad))
@@ -584,46 +586,46 @@ class TestQuota:
 
     async def test_a_quota_refuses_a_second_session_in_the_same_domain(self) -> None:
         registry = SessionRegistry()
-        first = await registry.open(a_mount(), to_message(), key=self.GUILD_ONE, actor_id=7, quota=1)
+        first = await registry.open(a_root(), to_message(), key=self.GUILD_ONE, actor_id=7, quota=1)
         assert isinstance(first, Opened)
-        second_mount = a_mount()
+        second_root = a_root()
 
-        second = await registry.open(second_mount, to_message(), key=self.GUILD_TWO, actor_id=7, quota=1)
+        second = await registry.open(second_root, to_message(), key=self.GUILD_TWO, actor_id=7, quota=1)
 
         assert isinstance(second, Rejected)
         assert second.reason is RejectionReason.QUOTA_REACHED
-        assert second_mount.handle is None
+        assert second_root.handle is None
         assert len(tuple(registry.active())) == 1
 
     async def test_reopening_the_same_key_at_quota_replaces_rather_than_refuses(self) -> None:
         registry = SessionRegistry()
-        first_mount, second_mount = a_mount(), a_mount()
-        first = await registry.open(first_mount, to_message(), key=self.GUILD_ONE, actor_id=7, quota=1)
+        first_root, second_root = a_root(), a_root()
+        first = await registry.open(first_root, to_message(), key=self.GUILD_ONE, actor_id=7, quota=1)
 
-        second = await registry.open(second_mount, to_message(), key=self.GUILD_ONE, actor_id=7, quota=1)
+        second = await registry.open(second_root, to_message(), key=self.GUILD_ONE, actor_id=7, quota=1)
 
         assert isinstance(first, Opened) and isinstance(second, Opened)
-        assert first_mount.finished
+        assert first_root.finished
         assert registry.get(self.GUILD_ONE) == (second.session,)
         assert len(tuple(registry.active())) == 1
 
     async def test_a_replacement_that_retires_nothing_is_still_refused(self) -> None:
         registry = SessionRegistry()
-        held = await registry.open(a_mount(), to_message(), key=self.GUILD_ONE, actor_id=7, quota=1)
+        held = await registry.open(a_root(), to_message(), key=self.GUILD_ONE, actor_id=7, quota=1)
         assert isinstance(held, Opened)
 
-        elsewhere = await registry.open(a_mount(), to_message(), key=self.GUILD_TWO, actor_id=7, quota=1)
+        elsewhere = await registry.open(a_root(), to_message(), key=self.GUILD_TWO, actor_id=7, quota=1)
 
         assert isinstance(elsewhere, Rejected)
         assert elsewhere.reason is RejectionReason.QUOTA_REACHED
 
     async def test_a_protected_incumbent_is_refused_before_the_quota_is_consulted(self) -> None:
         registry = SessionRegistry()
-        first = await registry.open(a_mount(), to_message(), key=self.GUILD_ONE, actor_id=7, quota=1)
+        first = await registry.open(a_root(), to_message(), key=self.GUILD_ONE, actor_id=7, quota=1)
         assert isinstance(first, Opened)
 
         second = await registry.open(
-            a_mount(),
+            a_root(),
             to_message(),
             key=self.GUILD_ONE,
             actor_id=8,
@@ -637,8 +639,8 @@ class TestQuota:
 
     async def test_a_quota_refuses_a_join_that_would_exceed_it(self) -> None:
         registry = SessionRegistry()
-        held = await registry.open(a_mount(), to_message(), key=self.GUILD_ONE, actor_id=8, quota=1)
-        elsewhere = await registry.open(a_mount(), to_message(), key=self.GUILD_TWO, actor_id=9, quota=1)
+        held = await registry.open(a_root(), to_message(), key=self.GUILD_ONE, actor_id=8, quota=1)
+        elsewhere = await registry.open(a_root(), to_message(), key=self.GUILD_TWO, actor_id=9, quota=1)
         assert isinstance(held, Opened) and isinstance(elsewhere, Opened)
 
         result = await elsewhere.session.join(8)
@@ -648,8 +650,8 @@ class TestQuota:
 
     async def test_leaving_one_session_frees_the_quota_for_another(self) -> None:
         registry = SessionRegistry()
-        held = await registry.open(a_mount(), to_message(), key=self.GUILD_ONE, actor_id=8, quota=1)
-        elsewhere = await registry.open(a_mount(), to_message(), key=self.GUILD_TWO, actor_id=9, quota=1)
+        held = await registry.open(a_root(), to_message(), key=self.GUILD_ONE, actor_id=8, quota=1)
+        elsewhere = await registry.open(a_root(), to_message(), key=self.GUILD_TWO, actor_id=9, quota=1)
         assert isinstance(held, Opened) and isinstance(elsewhere, Opened)
 
         await held.session.leave(8)
@@ -659,34 +661,32 @@ class TestQuota:
 
     async def test_a_finished_session_frees_the_quota(self) -> None:
         registry = SessionRegistry()
-        first = await registry.open(a_mount(), to_message(), key=self.GUILD_ONE, actor_id=7, quota=1)
+        first = await registry.open(a_root(), to_message(), key=self.GUILD_ONE, actor_id=7, quota=1)
         assert isinstance(first, Opened)
         await first.session.finish()
 
-        second = await registry.open(a_mount(), to_message(), key=self.GUILD_TWO, actor_id=7, quota=1)
+        second = await registry.open(a_root(), to_message(), key=self.GUILD_TWO, actor_id=7, quota=1)
 
         assert isinstance(second, Opened)
 
     async def test_a_different_domain_does_not_count(self) -> None:
         registry = SessionRegistry()
-        game = await registry.open(a_mount(), to_message(), key=self.GUILD_ONE, actor_id=7, quota=1)
+        game = await registry.open(a_root(), to_message(), key=self.GUILD_ONE, actor_id=7, quota=1)
         assert isinstance(game, Opened)
 
-        settings = await registry.open(
-            a_mount(), to_message(), key=SessionKey.guild("settings", 2), actor_id=7, quota=1
-        )
+        settings = await registry.open(a_root(), to_message(), key=SessionKey.guild("settings", 2), actor_id=7, quota=1)
 
         assert isinstance(settings, Opened)
 
     async def test_an_explicit_domain_joins_two_key_names_into_one_family(self) -> None:
         registry = SessionRegistry()
         lobby = await registry.open(
-            a_mount(), to_message(), key=SessionKey.guild("lobby", 1), actor_id=7, quota=1, domain="game"
+            a_root(), to_message(), key=SessionKey.guild("lobby", 1), actor_id=7, quota=1, domain="game"
         )
         assert isinstance(lobby, Opened)
 
         match = await registry.open(
-            a_mount(), to_message(), key=SessionKey.guild("match", 1), actor_id=7, quota=1, domain="game"
+            a_root(), to_message(), key=SessionKey.guild("match", 1), actor_id=7, quota=1, domain="game"
         )
 
         assert isinstance(match, Rejected)
@@ -698,7 +698,7 @@ class TestQuota:
         results: list[OpenResult] = []
 
         async def contend(key: SessionKey) -> None:
-            results.append(await registry.open(a_mount(), slowly(), key=key, actor_id=7, quota=1))
+            results.append(await registry.open(a_root(), slowly(), key=key, actor_id=7, quota=1))
 
         async with anyio.create_task_group() as tasks:
             for key in (self.GUILD_ONE, self.GUILD_TWO):
@@ -710,8 +710,8 @@ class TestQuota:
 
     async def test_racing_joins_for_one_user_admit_exactly_one(self) -> None:
         registry = SessionRegistry()
-        one = await registry.open(a_mount(), to_message(), key=self.GUILD_ONE, actor_id=1, quota=1)
-        two = await registry.open(a_mount(), to_message(), key=self.GUILD_TWO, actor_id=2, quota=1)
+        one = await registry.open(a_root(), to_message(), key=self.GUILD_ONE, actor_id=1, quota=1)
+        two = await registry.open(a_root(), to_message(), key=self.GUILD_TWO, actor_id=2, quota=1)
         assert isinstance(one, Opened) and isinstance(two, Opened)
         statuses: list[MembershipStatus] = []
 
@@ -724,8 +724,8 @@ class TestQuota:
 
     async def test_sessions_for_member_answers_what_a_user_is_in(self) -> None:
         registry = SessionRegistry()
-        game = await registry.open(a_mount(), to_message(), key=self.GUILD_ONE, actor_id=7)
-        settings = await registry.open(a_mount(), to_message(), key=SessionKey.guild("settings", 1), actor_id=7)
+        game = await registry.open(a_root(), to_message(), key=self.GUILD_ONE, actor_id=7)
+        settings = await registry.open(a_root(), to_message(), key=SessionKey.guild("settings", 1), actor_id=7)
         assert isinstance(game, Opened) and isinstance(settings, Opened)
 
         assert registry.sessions_for_member(7) == (game.session, settings.session)
@@ -736,9 +736,9 @@ class TestQuota:
         registry = SessionRegistry()
 
         with pytest.raises(ValueError, match="membership domain"):
-            await registry.open(a_mount(), to_message(), actor_id=7, quota=1)
+            await registry.open(a_root(), to_message(), actor_id=7, quota=1)
         with pytest.raises(ValueError, match="positive"):
-            await registry.open(a_mount(), to_message(), key=self.GUILD_ONE, actor_id=7, quota=0)
+            await registry.open(a_root(), to_message(), key=self.GUILD_ONE, actor_id=7, quota=0)
 
 
 async def _record_join(statuses: list[MembershipStatus], session: Session, user_id: int) -> None:
@@ -748,19 +748,19 @@ async def _record_join(statuses: list[MembershipStatus], session: Session, user_
 class TestRacesAndCleanup:
     async def test_racing_opens_leave_one_survivor(self) -> None:
         registry = SessionRegistry()
-        mounts = [a_mount() for _ in range(2)]
+        message_roots = [a_root() for _ in range(2)]
 
         async with anyio.create_task_group() as tasks:
-            for mount in mounts:
-                tasks.start_soon(lambda candidate=mount: registry.open(candidate, slowly(), key=KEY))
+            for message_root in message_roots:
+                tasks.start_soon(lambda candidate=message_root: registry.open(candidate, slowly(), key=KEY))
 
-        assert sum(not mount.finished for mount in mounts) == 1
+        assert sum(not message_root.finished for message_root in message_roots) == 1
         assert len(registry.get(KEY)) == 1
         assert registry._locks == {} and registry._waiting == {}
 
     async def test_direct_finish_cleans_up_by_session_identity(self) -> None:
         registry = SessionRegistry()
-        opened = await registry.open(a_mount(), to_message(), key=KEY)
+        opened = await registry.open(a_root(), to_message(), key=KEY)
         assert isinstance(opened, Opened)
 
         await opened.session.root.finish()
@@ -769,8 +769,8 @@ class TestRacesAndCleanup:
 
     async def test_close_all_finishes_keyed_and_keyless_sessions(self) -> None:
         registry = SessionRegistry()
-        keyed = await registry.open(a_mount(), to_message(), key=KEY)
-        keyless = await registry.open(a_mount(), to_message())
+        keyed = await registry.open(a_root(), to_message(), key=KEY)
+        keyless = await registry.open(a_root(), to_message())
         assert isinstance(keyed, Opened) and isinstance(keyless, Opened)
 
         await registry.close_all()

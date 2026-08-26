@@ -15,7 +15,7 @@ from squid_ui.semantic import (
     RoutedChoices,
     Stack,
 )
-from squid_ui_discord import Everyone, Mount
+from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord.testing import commit_render, fake_interaction
 
 
@@ -43,13 +43,13 @@ async def test_window_merge_preserves_staging_from_other_pages() -> None:
         key="roles",
         maximum=10,
     ).build_component()
-    mount = Mount(panel, access=Everyone(), timeout=None)
-    commit_render(mount)
+    message_root = MessageRoot(panel, access=Everyone(), timeout=None)
+    commit_render(message_root)
 
-    await mount.dispatch("roles.members.select", fake_interaction(), ["member-0", "member-1"])
-    await mount.dispatch("roles.members.next", fake_interaction())
-    commit_render(mount)
-    await mount.dispatch("roles.members.select", fake_interaction(), ["member-25", "member-26"])
+    await message_root.dispatch("roles.members.select", fake_interaction(), ["member-0", "member-1"])
+    await message_root.dispatch("roles.members.next", fake_interaction())
+    commit_render(message_root)
+    await message_root.dispatch("roles.members.select", fake_interaction(), ["member-25", "member-26"])
 
     assert panel.machine_state.staged == ("member-0", "member-1", "member-25", "member-26")
 
@@ -105,15 +105,15 @@ async def test_apply_commits_and_dispatches_exactly_once() -> None:
         (sp.MultiChoiceGroup("roles", "Roles", _options("role", 3)),),
         minimum=1,
     ).build_component(on_commit=applied)
-    mount = Mount(panel, access=Everyone(), timeout=None)
-    commit_render(mount)
-    await mount.dispatch("choices.roles.select", fake_interaction(), ["role-1"])
-    commit_render(mount)
-    await mount.dispatch("choices.apply", fake_interaction())
+    message_root = MessageRoot(panel, access=Everyone(), timeout=None)
+    commit_render(message_root)
+    await message_root.dispatch("choices.roles.select", fake_interaction(), ["role-1"])
+    commit_render(message_root)
+    await message_root.dispatch("choices.apply", fake_interaction())
 
     assert panel.machine_state.committed == ("role-1",)
     assert commits == [("role-1",)]
-    view = commit_render(mount)
+    view = commit_render(message_root)
     apply = next(item for item in view.walk_children() if getattr(item, "label", None) == "Apply")
     assert isinstance(apply, discord.ui.Button)
     assert apply.disabled
@@ -181,10 +181,10 @@ async def test_immediate_policy_commits_valid_changes_without_apply() -> None:
         minimum=1,
         commit=sp.CommitMode.IMMEDIATE,
     ).build_component(on_commit=committed)
-    mount = Mount(panel, access=Everyone(), timeout=None)
-    commit_render(mount)
+    message_root = MessageRoot(panel, access=Everyone(), timeout=None)
+    commit_render(message_root)
 
-    await mount.dispatch("choices.roles.select", fake_interaction(), ["role-1"])
+    await message_root.dispatch("choices.roles.select", fake_interaction(), ["role-1"])
 
     assert panel.machine_state == sp.MultiChoiceState(("role-1",), ("role-1",))
     assert commits == [("role-1",)]

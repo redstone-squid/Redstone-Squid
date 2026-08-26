@@ -162,10 +162,11 @@ def verify_container(attrs: Mapping[str, object], identity: RunIdentity, expecte
     tmpfs = _string_mapping(host_config.get("Tmpfs"))
     if tmpfs != dict(expected.tmpfs_options):
         failures.append("tmpfs")
-    mounts = attrs.get("Mounts")
-    if not isinstance(mounts, list) or any(
-        _mapping(mount).get("Type") != "tmpfs" or _mapping(mount).get("Destination") not in expected.tmpfs_targets
-        for mount in mounts
+    message_roots = attrs.get("Mounts")
+    if not isinstance(message_roots, list) or any(
+        _mapping(message_root).get("Type") != "tmpfs"
+        or _mapping(message_root).get("Destination") not in expected.tmpfs_targets
+        for message_root in message_roots
     ):
         failures.append("mounts")
     log_config = _mapping(host_config.get("LogConfig"))

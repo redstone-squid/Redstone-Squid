@@ -8,12 +8,12 @@ import anyio
 import discord
 from whenever import Instant
 
-import squid_ui_discord as sd
 import squid_ui as sl
+import squid_ui_discord as sd
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.components import BuildField, get_text_input
-from squid.bot.ui import DISCORD_YELLOW, create_mount, error_layout, respond_presentation
+from squid.bot.ui import DISCORD_YELLOW, create_message_root, error_layout, respond_presentation
 from squid.bot.utils.permissions import allows
 from squid.bot.utils.sentinel import DEFAULT, DefaultType
 from squid.builds.application import BuildEditPatch, BuildService
@@ -206,7 +206,7 @@ class SubmissionFormComponent(sl.Component):
         self._timeout = timeout
         self.on_submit = on_submit
         self._done = anyio.Event()
-        self._mount: sd.Mount | None = None
+        self._root: sd.MessageRoot | None = None
 
     @property
     def is_ready(self) -> bool:
@@ -273,26 +273,26 @@ class SubmissionFormComponent(sl.Component):
                 minimum=0,
                 maximum=2,
             ),
-            sl.actions(
-                sl.action(
+            sl.action_controls(
+                sl.action_control(
                     t(self.locale, _("Edit basics")),
                     self._edit_basics,
                     key="edit_basics",
                     emphasis=sl.semantic.Emphasis.STRONG,
                 ),
-                sl.action(
+                sl.action_control(
                     t(self.locale, _("Add links & details")),
                     self._edit_details,
                     key="edit_details",
                 ),
-                sl.action(
+                sl.action_control(
                     t(self.locale, _("Submit for review")),
                     self._submit,
                     key="submit",
                     tone=sl.Tone.SUCCESS,
                     available=not self.submitting,
                 ),
-                sl.action(t(self.locale, _("Cancel")), self._cancel, key="cancel"),
+                sl.action_control(t(self.locale, _("Cancel")), self._cancel, key="cancel"),
                 key="submission-actions",
             ),
         )
@@ -403,23 +403,23 @@ class SubmissionFormComponent(sl.Component):
         """Flush a changed draft when called by an external integration."""
         self.validation_error = None
         self.mutated(self.build)
-        if self._mount is not None:
-            await self._mount.refresh(interaction)
+        if self._root is not None:
+            await self._root.refresh(interaction)
 
     async def wait(self) -> bool | None:
         with anyio.move_on_after(self._timeout) as scope:
             await self._done.wait()
         return None if scope.cancel_called else self.value
 
-    def mount(self, *, source: sd.host.HostSource) -> sd.Mount:
-        self._mount = create_mount(
+    def mount(self, *, source: sd.host.HostSource) -> sd.MessageRoot:
+        self._root = create_message_root(
             self,
             source=source,
             access=(sd.Owner(self.author_id) if self.author_id is not None else sd.Everyone()),
             locale=self.locale,
             timeout=self._timeout,
         )
-        return self._mount
+        return self._root
 
 
 def _edit_form(items: Sequence[BuildField[Any]], page: int, locale: str | None) -> sl.forms.FormSpec:
@@ -472,7 +472,7 @@ class BuildEditComponent(sl.Component):
                 if field.applies_to(build)
             ]
         self.items = tuple(items)
-        self._mount: sd.Mount | None = None
+        self._root: sd.MessageRoot | None = None
 
     @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
     async def projection(self) -> tuple[Build, sl.LayoutNode | None]:
@@ -560,33 +560,33 @@ class BuildEditComponent(sl.Component):
             if not self.validation_error
             else t(self.locale, _("Fix these values before review:\n{errors}"), errors=self.validation_error)
         )
-        controls: list[sl.semantic.Action] = [
-            sl.action(t(self.locale, _("Edit this section")), self._open, key="open"),
-            sl.action(t(self.locale, _("Previous")), self._previous, key="previous", available=self.page != 1),
-            sl.action(t(self.locale, _("Next")), self._next, key="next", available=self.page != self.max_pages),
+        controls: list[sl.semantic.ActionControl] = [
+            sl.action_control(t(self.locale, _("Edit this section")), self._open, key="open"),
+            sl.action_control(t(self.locale, _("Previous")), self._previous, key="previous", available=self.page != 1),
+            sl.action_control(t(self.locale, _("Next")), self._next, key="next", available=self.page != self.max_pages),
         ]
         if self.confirming:
             controls.extend(
                 (
-                    sl.action(
+                    sl.action_control(
                         t(self.locale, _("Apply changes")),
                         self._apply,
                         key="apply",
                         tone=sl.Tone.SUCCESS,
                     ),
-                    sl.action(t(self.locale, _("Back")), self._unconfirm, key="unconfirm"),
+                    sl.action_control(t(self.locale, _("Back")), self._unconfirm, key="unconfirm"),
                 )
             )
         else:
             controls.append(
-                sl.action(
+                sl.action_control(
                     t(self.locale, _("Review changes")),
                     self._review,
                     key="review",
                     tone=sl.Tone.SUCCESS,
                 )
             )
-        controls.append(sl.action(t(self.locale, _("Close")), self._close, key="close"))
+        controls.append(sl.action_control(t(self.locale, _("Close")), self._close, key="close"))
         nodes: list[sl.LayoutNode] = [
             sl.section(
                 sl.heading(t(self.locale, _("Edit build"))),
@@ -597,7 +597,9 @@ class BuildEditComponent(sl.Component):
         ]
         if (node := self._current()[1]) is not None:
             nodes.append(node)
-        nodes.append(sl.actions(*controls, key="build-edit-actions", display=sl.semantic.ActionDisplay.INDIVIDUAL))
+        nodes.append(
+            sl.action_controls(*controls, key="build-edit-actions", display=sl.semantic.ControlDisplay.INDIVIDUAL)
+        )
         return tuple(nodes)
 
     def summary_text(self) -> str:
@@ -684,15 +686,15 @@ class BuildEditComponent(sl.Component):
         build = self.build
         self._replace(build, await interaction.client.for_build(build).render_node())
         self.invalidate()
-        if self._mount is not None:
-            await self._mount.refresh(interaction)
+        if self._root is not None:
+            await self._root.refresh(interaction)
 
     async def send(
         self,
         interaction: discord.Interaction[Any],
         ephemeral: bool = True,
         *,
-        parent: sd.Mount | None = None,
+        parent: sd.MessageRoot | None = None,
     ) -> None:
         """Open an editor for this build, replacing this user's previous one."""
         self.locale = await resolve_locale(interaction, interaction.client.services.settings)
@@ -721,23 +723,23 @@ class BuildEditComponent(sl.Component):
             return latest, await client.for_build(latest).render_node()
 
         self._refresh = refresh
-        mount = self.mount(interaction.user.id, source=interaction, scheduler=client.layout_scheduler)
+        message_root = self.mount(interaction.user.id, source=interaction, scheduler=client.layout_scheduler)
         destination = sd.respond_to(interaction, ephemeral=ephemeral, wait=True)
-        parent_session = None if parent is None else interaction.client.mounts.session_for(parent)
+        parent_session = None if parent is None else interaction.client.message_roots.session_for(parent)
         if parent_session is None:
-            await interaction.client.mounts.open(
-                mount,
+            await interaction.client.message_roots.open(
+                message_root,
                 destination,
                 key=SessionKey.custom("build-edit", (interaction.user.id, self.build.id)),
                 actor_id=interaction.user.id,
             )
         else:
-            await parent_session.attach(mount, destination, actor_id=interaction.user.id, parent=parent)
+            await parent_session.attach(message_root, destination, actor_id=interaction.user.id, parent=parent)
 
     def mount(
-        self, user_id: int, *, source: sd.host.HostSource, scheduler: sd.MountScheduler | None = None
-    ) -> sd.Mount:
-        self._mount = create_mount(
+        self, user_id: int, *, source: sd.host.HostSource, scheduler: sd.MessageRootScheduler | None = None
+    ) -> sd.MessageRoot:
+        self._root = create_message_root(
             self,
             source=source,
             access=sd.Owner(user_id),
@@ -745,4 +747,4 @@ class BuildEditComponent(sl.Component):
             timeout=self._timeout,
             scheduler=scheduler,
         )
-        return self._mount
+        return self._root

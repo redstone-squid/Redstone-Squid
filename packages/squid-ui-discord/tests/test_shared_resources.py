@@ -12,9 +12,9 @@ import discord
 import pytest
 
 import squid_ui as sl
-from squid_ui_discord import Everyone, Mount, MountScheduler
-from squid_ui_discord.testing import delivered_to, fake_message
 from squid_ui.runtime.shared import describe
+from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler
+from squid_ui_discord.testing import delivered_to, fake_message
 
 
 class Prefs(sl.runtime.SharedState[int]):
@@ -56,18 +56,18 @@ def texts(view: discord.ui.LayoutView) -> list[str]:
     return [item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)]
 
 
-async def mounted(catalog: Catalog, scheduler: MountScheduler, message: object) -> Mount:
+async def mounted(catalog: Catalog, scheduler: MessageRootScheduler, message: object) -> MessageRoot:
     """Send a reader, and hand the mount back so the caller keeps it alive.
 
     A scheduler holds its mounts weakly, so a test that drops the reference is testing whether
     the collector ran rather than whether the refresh works.
     """
-    mount = Mount(Reader(catalog), access=Everyone(), scheduler=scheduler, timeout=None)
-    await mount.send(delivered_to(message))
-    return mount
+    message_root = MessageRoot(Reader(catalog), access=Everyone(), scheduler=scheduler, timeout=None)
+    await message_root.send(delivered_to(message))
+    return message_root
 
 
-async def drain(scheduler: MountScheduler, bus: sl.runtime.LocalTopicBus) -> None:
+async def drain(scheduler: MessageRootScheduler, bus: sl.runtime.LocalTopicBus) -> None:
     del bus
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(scheduler.run)
@@ -101,11 +101,11 @@ def test_two_namespaces_compute_independently(bus: sl.runtime.LocalTopicBus) -> 
     assert (one.full, two.full) == ("Grace Lovelace", "Ada Lovelace")
 
 
-async def test_a_mount_reading_a_namespace_computed_follows_the_cells_behind_it(
+async def test_a_message_root_reading_a_namespace_computed_follows_the_cells_behind_it(
     bus: sl.runtime.LocalTopicBus,
 ) -> None:
     """A computed carries no address: what moves is the cells, so those are what to follow."""
-    scheduler = MountScheduler(bus)
+    scheduler = MessageRootScheduler(bus)
     prefs = Prefs(bus, 1)
 
     class Panel(sl.Component):
@@ -113,15 +113,15 @@ async def test_a_mount_reading_a_namespace_computed_follows_the_cells_behind_it(
             return sl.paragraph(prefs.full)
 
     message = fake_message()
-    mount = Mount(Panel(), access=Everyone(), scheduler=scheduler, timeout=None)
-    await mount.send(delivered_to(message))
+    message_root = MessageRoot(Panel(), access=Everyone(), scheduler=scheduler, timeout=None)
+    await message_root.send(delivered_to(message))
 
-    assert {describe(address) for address in mount.followed} == {"Prefs(1).first", "Prefs(1).last"}
+    assert {describe(address) for address in message_root.followed} == {"Prefs(1).first", "Prefs(1).last"}
 
     with sl.runtime.transaction():
         prefs.first = "Grace"
     await drain(scheduler, bus)
-    await mount.refresh()
+    await message_root.refresh()
 
     assert texts(message.edit.await_args.kwargs["view"]) == ["Grace Lovelace"]
 
@@ -129,47 +129,49 @@ async def test_a_mount_reading_a_namespace_computed_follows_the_cells_behind_it(
 # --- Resource on a namespace ----------------------------------------------------------
 
 
-async def test_one_namespace_resource_loads_once_for_every_mount_holding_it(bus: sl.runtime.LocalTopicBus) -> None:
-    scheduler = MountScheduler(bus)
+async def test_one_namespace_resource_loads_once_for_every_message_root_holding_it(
+    bus: sl.runtime.LocalTopicBus,
+) -> None:
+    scheduler = MessageRootScheduler(bus)
     catalog = Catalog(bus, 1)
 
-    mounts = [await mounted(catalog, scheduler, fake_message(message_id=message_id)) for message_id in (1, 2)]
+    message_roots = [await mounted(catalog, scheduler, fake_message(message_id=message_id)) for message_id in (1, 2)]
 
     assert catalog._loads == 1, "the second mount shared the value rather than loading its own"
-    assert len(mounts) == 2
+    assert len(message_roots) == 2
 
 
 async def test_a_namespace_resource_is_followed_by_its_own_address(bus: sl.runtime.LocalTopicBus) -> None:
-    scheduler = MountScheduler(bus)
+    scheduler = MessageRootScheduler(bus)
     catalog = Catalog(bus, 1)
-    mount = Mount(Reader(catalog), access=Everyone(), scheduler=scheduler, timeout=None)
-    await mount.send(delivered_to(fake_message()))
+    message_root = MessageRoot(Reader(catalog), access=Everyone(), scheduler=scheduler, timeout=None)
+    await message_root.send(delivered_to(fake_message()))
 
-    followed = {describe(address) for address in mount.followed}
+    followed = {describe(address) for address in message_root.followed}
 
     # Both routes: the resource can be reloaded out of band, and it can be re-pended by the
     # cell its loader read. A reader depends on each of them.
     assert followed == {"Catalog(1).entries", "Catalog(1).key"}
 
 
-async def test_an_out_of_band_reload_redraws_every_mount(bus: sl.runtime.LocalTopicBus) -> None:
-    scheduler = MountScheduler(bus)
+async def test_an_out_of_band_reload_redraws_every_root(bus: sl.runtime.LocalTopicBus) -> None:
+    scheduler = MessageRootScheduler(bus)
     catalog = Catalog(bus, 1)
     messages = [fake_message(message_id=1), fake_message(message_id=2)]
-    mounts = [await mounted(catalog, scheduler, message) for message in messages]
+    message_roots = [await mounted(catalog, scheduler, message) for message in messages]
 
     await catalog.entries.reload()
     await drain(scheduler, bus)
 
     assert [texts(message.edit.await_args.kwargs["view"]) for message in messages] == [["k1#2"], ["k1#2"]]
-    assert all(mount.followed for mount in mounts)
+    assert all(message_root.followed for message_root in message_roots)
 
 
 async def test_a_write_to_a_cell_the_loader_read_reloads_once_for_everyone(bus: sl.runtime.LocalTopicBus) -> None:
-    scheduler = MountScheduler(bus)
+    scheduler = MessageRootScheduler(bus)
     catalog = Catalog(bus, 1)
     messages = [fake_message(message_id=1), fake_message(message_id=2)]
-    mounts = [await mounted(catalog, scheduler, message) for message in messages]
+    message_roots = [await mounted(catalog, scheduler, message) for message in messages]
 
     with sl.runtime.transaction():
         catalog.key = "k2"
@@ -177,30 +179,30 @@ async def test_a_write_to_a_cell_the_loader_read_reloads_once_for_everyone(bus: 
     await drain(scheduler, bus)
 
     assert catalog._loads == 2, "one reload served both mounts"
-    assert all(mount.followed for mount in mounts)
+    assert all(message_root.followed for message_root in message_roots)
     assert [texts(message.edit.await_args.kwargs["view"]) for message in messages] == [["k2#2"], ["k2#2"]]
 
 
 async def test_a_replace_publishes_when_its_action_commits(bus: sl.runtime.LocalTopicBus) -> None:
-    scheduler = MountScheduler(bus)
+    scheduler = MessageRootScheduler(bus)
     catalog = Catalog(bus, 1)
     message = fake_message()
-    mount = await mounted(catalog, scheduler, message)
+    message_root = await mounted(catalog, scheduler, message)
 
     with sl.runtime.transaction():
         catalog.entries.replace("installed")
     await drain(scheduler, bus)
 
     assert texts(message.edit.await_args.kwargs["view"]) == ["installed"]
-    assert mount.followed
+    assert message_root.followed
 
 
 async def test_a_rolled_back_replace_publishes_nothing(bus: sl.runtime.LocalTopicBus) -> None:
     """Doc 48 staging, seen from the bus: an action that failed must not wake other mounts."""
-    scheduler = MountScheduler(bus)
+    scheduler = MessageRootScheduler(bus)
     catalog = Catalog(bus, 1)
     message = fake_message()
-    mount = await mounted(catalog, scheduler, message)
+    message_root = await mounted(catalog, scheduler, message)
     edits = message.edit.await_count
 
     with pytest.raises(RuntimeError), sl.runtime.transaction():
@@ -211,7 +213,7 @@ async def test_a_rolled_back_replace_publishes_nothing(bus: sl.runtime.LocalTopi
 
     assert catalog.entries.value == "k1#1"
     assert message.edit.await_count == edits
-    assert mount.followed
+    assert message_root.followed
 
 
 def test_two_namespaces_hold_separate_resources(bus: sl.runtime.LocalTopicBus) -> None:

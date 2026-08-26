@@ -10,8 +10,8 @@ import discord
 import pytest
 from whenever import Instant
 
-import squid_ui_discord as sd
 import squid_ui as sl
+import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.accounts.domain import (
     Account,
@@ -189,9 +189,11 @@ def _gated_panel(monkeypatch: pytest.MonkeyPatch) -> tuple[AccountPanel, dict[st
     return panel, opened
 
 
-def _press(mount: Any) -> Any:
+def _press(message_root: Any) -> Any:
     """A press double carrying the Discord facts `_with_consent` reads off an event."""
-    responder = SimpleNamespace(interaction=SimpleNamespace(user=SimpleNamespace(id=AUTHOR_ID)), mount=mount)
+    responder = SimpleNamespace(
+        interaction=SimpleNamespace(user=SimpleNamespace(id=AUTHOR_ID)), message_root=message_root
+    )
     return SimpleNamespace(responder=responder, value=True)
 
 
@@ -207,19 +209,19 @@ async def test_a_press_needing_consent_ends_instead_of_holding_the_panel(
     panel, opened = _gated_panel(monkeypatch)
     monkeypatch.setattr("squid_ui_discord.native", lambda event: event.responder.interaction)
     monkeypatch.setattr("squid_ui_discord.responder", lambda event: event.responder)
-    mount = SimpleNamespace(schedule=AsyncMock())
+    message_root = SimpleNamespace(schedule=AsyncMock())
 
-    await panel._edit_page(cast(Any, _press(mount)))
+    await panel._edit_page(cast(Any, _press(message_root)))
 
     assert panel._profile_editor is None
-    mount.schedule.assert_not_awaited()
+    message_root.schedule.assert_not_awaited()
 
     await opened["on_answer"](cast(Any, None), AccountConsent.grant_current())
 
     # The press resumes where the reader left it, on the panel's own message.
     assert panel._profile_editor is not None
     cast(AsyncMock, panel._accounts.grant_current_consent).assert_awaited_once()
-    mount.schedule.assert_awaited_once()
+    message_root.schedule.assert_awaited_once()
 
 
 async def test_declining_leaves_the_panel_exactly_as_it_was(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -227,15 +229,15 @@ async def test_declining_leaves_the_panel_exactly_as_it_was(monkeypatch: pytest.
     panel, opened = _gated_panel(monkeypatch)
     monkeypatch.setattr("squid_ui_discord.native", lambda event: event.responder.interaction)
     monkeypatch.setattr("squid_ui_discord.responder", lambda event: event.responder)
-    mount = SimpleNamespace(schedule=AsyncMock())
+    message_root = SimpleNamespace(schedule=AsyncMock())
 
-    await panel._edit_page(cast(Any, _press(mount)))
+    await panel._edit_page(cast(Any, _press(message_root)))
     await opened["on_answer"](cast(Any, None), None)
 
     assert panel._profile_editor is None
     assert panel._needs_consent
     cast(AsyncMock, panel._accounts.grant_current_consent).assert_not_awaited()
-    mount.schedule.assert_not_awaited()
+    message_root.schedule.assert_not_awaited()
 
 
 async def test_a_toggle_needing_consent_still_applies_once_the_reader_agrees(
@@ -251,9 +253,9 @@ async def test_a_toggle_needing_consent_still_applies_once_the_reader_agrees(
     monkeypatch.setattr("squid_ui_discord.responder", lambda event: event.responder)
     panel._identities = (DISCORD,)
     panel.selected_id = DISCORD.id
-    mount = SimpleNamespace(schedule=AsyncMock())
+    message_root = SimpleNamespace(schedule=AsyncMock())
 
-    await panel._toggle_identity(cast(Any, _press(mount)))
+    await panel._toggle_identity(cast(Any, _press(message_root)))
 
     cast(AsyncMock, panel._accounts.set_identity_visibility).assert_not_awaited()
 
@@ -262,7 +264,7 @@ async def test_a_toggle_needing_consent_still_applies_once_the_reader_agrees(
     cast(AsyncMock, panel._accounts.set_identity_visibility).assert_awaited_once_with(
         ACCOUNT_ID, DISCORD.id, is_public=True
     )
-    mount.schedule.assert_awaited_once()
+    message_root.schedule.assert_awaited_once()
 
 
 class _Recorder:
@@ -275,7 +277,7 @@ class _Recorder:
         self.requests.append(request)
 
 
-def _linked_panel() -> tuple[AccountPanel, _Recorder, AsyncMock, sd.Mount]:
+def _linked_panel() -> tuple[AccountPanel, _Recorder, AsyncMock, sd.MessageRoot]:
     unlink = AsyncMock(return_value=JAVA)
     panel = AccountPanel(
         accounts=cast(Any, SimpleNamespace(unlink_identity=unlink)),
@@ -288,9 +290,9 @@ def _linked_panel() -> tuple[AccountPanel, _Recorder, AsyncMock, sd.Mount]:
     panel.selected_id = JAVA.id
     panel._refresh = AsyncMock()  # type: ignore[method-assign]
     presenter = _Recorder()
-    mount = sd.Mount(panel, access=sd.Everyone(), timeout=None, challenge=presenter)
-    commit_render(mount)
-    return panel, presenter, unlink, mount
+    message_root = sd.MessageRoot(panel, access=sd.Everyone(), timeout=None, challenge=presenter)
+    commit_render(message_root)
+    return panel, presenter, unlink, message_root
 
 
 async def test_unlinking_asks_before_it_removes_anything() -> None:
@@ -299,9 +301,9 @@ async def test_unlinking_asks_before_it_removes_anything() -> None:
     What used to be three pieces of view state, an early return and a relabelled button is now
     `guard=sp.guards.confirm(...)`, and the warning is in the question instead of the footer.
     """
-    panel, presenter, unlink, mount = _linked_panel()
+    panel, presenter, unlink, message_root = _linked_panel()
 
-    await mount.dispatch("unlink", fake_interaction(user_id=AUTHOR_ID))
+    await message_root.dispatch("unlink", fake_interaction(user_id=AUTHOR_ID))
 
     unlink.assert_not_awaited()
     assert len(presenter.requests) == 1
@@ -309,8 +311,8 @@ async def test_unlinking_asks_before_it_removes_anything() -> None:
 
 
 async def test_agreeing_to_the_question_removes_the_identity() -> None:
-    panel, presenter, unlink, mount = _linked_panel()
-    await mount.dispatch("unlink", fake_interaction(user_id=AUTHOR_ID))
+    panel, presenter, unlink, message_root = _linked_panel()
+    await message_root.dispatch("unlink", fake_interaction(user_id=AUTHOR_ID))
 
     await presenter.requests[0].approve()
 
@@ -318,8 +320,8 @@ async def test_agreeing_to_the_question_removes_the_identity() -> None:
 
 
 async def test_declining_the_question_removes_nothing() -> None:
-    panel, presenter, unlink, mount = _linked_panel()
-    await mount.dispatch("unlink", fake_interaction(user_id=AUTHOR_ID))
+    panel, presenter, unlink, message_root = _linked_panel()
+    await message_root.dispatch("unlink", fake_interaction(user_id=AUTHOR_ID))
 
     await presenter.requests[0].decline()
 

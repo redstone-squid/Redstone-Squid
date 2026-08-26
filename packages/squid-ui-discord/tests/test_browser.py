@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import squid_ui as sl
 import squid_ui_widgets as sp
-from squid_ui_discord import Everyone, Mount
+from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord.testing import commit_render, fake_interaction
 
 
@@ -64,23 +64,23 @@ async def test_browser_opens_and_retains_one_detail_component_per_open() -> None
         page_size=2,
     )
     browser.window.replace(loaded)
-    mount = Mount(browser, access=Everyone(), timeout=None)
-    commit_render(mount)
+    message_root = MessageRoot(browser, access=Everyone(), timeout=None)
+    commit_render(message_root)
 
     # Two single-choice entries lower to buttons instead of a select menu.
-    await mount.dispatch("browser.open.a", fake_interaction())
-    commit_render(mount)
+    await message_root.dispatch("browser.open.a", fake_interaction())
+    commit_render(message_root)
     browser.invalidate()
-    commit_render(mount)
+    commit_render(message_root)
 
     assert browser.opened == Entry("a", "A")
     assert built == ["a"]
 
-    await mount.dispatch("browser.item-next", fake_interaction())
+    await message_root.dispatch("browser.item-next", fake_interaction())
     assert browser.opened == Entry("b", "B")
     assert built == ["a", "b"]
 
-    await mount.dispatch("browser.back", fake_interaction())
+    await message_root.dispatch("browser.back", fake_interaction())
     assert browser.opened is None
 
 
@@ -94,8 +94,8 @@ async def test_browser_navigation_keeps_previous_window_visible_while_pending() 
         page_size=2,
     )
     browser.window.replace(loaded)
-    mount = Mount(browser, access=Everyone(), timeout=None)
-    commit_render(mount)
+    message_root = MessageRoot(browser, access=Everyone(), timeout=None)
+    commit_render(message_root)
 
     browser._request = type(browser._request)("next")
 

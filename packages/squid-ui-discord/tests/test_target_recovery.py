@@ -5,20 +5,20 @@ import re
 
 import pytest
 
-import squid_ui_discord
 import squid_ui as sl
-from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, Mount
-from squid_ui_discord.adapter import discord_py_adapter_profile
-from squid_ui_discord.durability import DEFAULT_TARGETS, ComponentRegistry, MountStateCodec
-from squid_ui_discord.target import classic
-from squid_ui_discord.targets import TargetRegistry
-from squid_ui_discord.testing import commit_classic_render, commit_render
+import squid_ui_discord
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning import Target
 from squid_ui.planning.adapter import (
     AdapterCapability,
 )
 from squid_ui.planning.limits import ClassicLimits
+from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, MessageRoot
+from squid_ui_discord.adapter import discord_py_adapter_profile
+from squid_ui_discord.durability import DEFAULT_TARGETS, ComponentRegistry, MessageRootStateCodec
+from squid_ui_discord.target import classic
+from squid_ui_discord.targets import TargetRegistry
+from squid_ui_discord.testing import commit_classic_render, commit_render
 
 
 class Screen(sl.Component):
@@ -36,16 +36,16 @@ def registry() -> ComponentRegistry:
 
 def captured(target: Target):
     components = registry()
-    mount = Mount(Screen(), target=target, access=Everyone())
-    commit(target, mount)
-    return components, components.capture(mount, "screen")
+    message_root = MessageRoot(Screen(), target=target, access=Everyone())
+    commit(target, message_root)
+    return components, components.capture(message_root, "screen")
 
 
-def commit(target: Target, mount: Mount) -> None:
+def commit(target: Target, message_root: MessageRoot) -> None:
     if target.id == DISCORD_V2_DPY27.id:
-        commit_render(mount)
+        commit_render(message_root)
     else:
-        commit_classic_render(mount)
+        commit_classic_render(message_root)
 
 
 class TestFingerprints:
@@ -76,30 +76,32 @@ class TestSnapshot:
     def test_the_target_survives_the_canonical_codec(self, target) -> None:
         _components, snapshot = captured(target)
 
-        restored = MountStateCodec.loads(MountStateCodec.dumps(snapshot))
+        restored = MessageRootStateCodec.loads(MessageRootStateCodec.dumps(snapshot))
 
         assert restored == snapshot
 
     def test_the_former_protocol_two_shape_is_refused(self) -> None:
         _components, snapshot = captured(DISCORD_V2_DPY27)
-        payload = MountStateCodec.dumps(snapshot).replace('"protocol":1', '"protocol":2', 1)
+        payload = MessageRootStateCodec.dumps(snapshot).replace('"protocol":1', '"protocol":2', 1)
 
-        with pytest.raises(squid_ui_discord.durability.MountStateError, match="unsupported mount state protocol 2"):
-            MountStateCodec.loads(payload)
+        with pytest.raises(
+            squid_ui_discord.durability.MessageRootStateError, match="unsupported mount state protocol 2"
+        ):
+            MessageRootStateCodec.loads(payload)
 
     def test_the_former_protocol_one_shape_without_adapter_capabilities_is_refused(self) -> None:
         _components, snapshot = captured(DISCORD_V2_DPY27)
-        raw = json.loads(MountStateCodec.dumps(snapshot))
+        raw = json.loads(MessageRootStateCodec.dumps(snapshot))
         raw["target"].pop("adapter_capabilities")
         payload = json.dumps(raw)
 
-        with pytest.raises(squid_ui_discord.durability.MountStateError, match="adapter_capabilities"):
-            MountStateCodec.loads(payload)
+        with pytest.raises(squid_ui_discord.durability.MessageRootStateError, match="adapter_capabilities"):
+            MessageRootStateCodec.loads(payload)
 
 
 class TestRecovery:
     @pytest.mark.parametrize("target", [DISCORD_V2_DPY27, DISCORD_V1_DPY27])
-    def test_recovery_rebuilds_the_mount_against_the_recorded_target(self, target) -> None:
+    def test_recovery_rebuilds_the_message_root_against_the_recorded_target(self, target) -> None:
         components, snapshot = captured(target)
 
         restored = components.restore(snapshot, access=Everyone())
@@ -125,9 +127,9 @@ class TestRecovery:
     def test_a_custom_target_recovers_once_it_is_registered(self) -> None:
         custom = classic(limits=ClassicLimits(embed_count=2))
         components = registry()
-        mount = Mount(Screen(), target=custom, access=Everyone())
-        commit(custom, mount)
-        snapshot = components.capture(mount, "screen")
+        message_root = MessageRoot(Screen(), target=custom, access=Everyone())
+        commit(custom, message_root)
+        snapshot = components.capture(message_root, "screen")
         targets = TargetRegistry(custom, builtins=False)
 
         restored = components.restore(snapshot, targets=targets, access=Everyone())
@@ -135,14 +137,14 @@ class TestRecovery:
         assert restored.target is custom
 
     def test_a_superset_adapter_recovers_with_the_recorded_planning_capabilities(self) -> None:
-        mount_capabilities = frozenset(
+        message_root_capabilities = frozenset(
             {AdapterCapability.RENDER_CLASSIC, AdapterCapability.DISPATCH, AdapterCapability.INTERACTION_DELIVERY}
         )
-        old_profile = discord_py_adapter_profile("discord.py", ">=2.7,<3", capabilities=mount_capabilities)
+        old_profile = discord_py_adapter_profile("discord.py", ">=2.7,<3", capabilities=message_root_capabilities)
         current_profile = discord_py_adapter_profile(
             "discord.py",
             ">=2.7,<3",
-            capabilities=mount_capabilities | {AdapterCapability.MODAL_FORMS},
+            capabilities=message_root_capabilities | {AdapterCapability.MODAL_FORMS},
         )
         old_target = classic(adapter=old_profile)
         components, snapshot = captured(old_target)
@@ -150,19 +152,19 @@ class TestRecovery:
 
         restored = components.restore(snapshot, targets=targets, access=Everyone())
 
-        assert restored.target.adapter_capabilities == mount_capabilities
+        assert restored.target.adapter_capabilities == message_root_capabilities
         assert AdapterCapability.MODAL_FORMS not in restored.target.capabilities
 
     def test_recovery_rejects_a_missing_recorded_adapter_capability(self) -> None:
-        mount_capabilities = frozenset(
+        message_root_capabilities = frozenset(
             {AdapterCapability.RENDER_CLASSIC, AdapterCapability.DISPATCH, AdapterCapability.INTERACTION_DELIVERY}
         )
         old_profile = discord_py_adapter_profile(
             "discord.py",
             ">=2.7,<3",
-            capabilities=mount_capabilities | {AdapterCapability.MODAL_FORMS},
+            capabilities=message_root_capabilities | {AdapterCapability.MODAL_FORMS},
         )
-        current_profile = discord_py_adapter_profile("discord.py", ">=2.7,<3", capabilities=mount_capabilities)
+        current_profile = discord_py_adapter_profile("discord.py", ">=2.7,<3", capabilities=message_root_capabilities)
         components, snapshot = captured(classic(adapter=old_profile))
         targets = TargetRegistry(classic(adapter=current_profile), builtins=False)
 
@@ -213,9 +215,9 @@ class TestRecovery:
 
         components = ComponentRegistry()
         components.register("screen", version=1, factory=factory)
-        mount = Mount(Screen(), target=DISCORD_V1_DPY27, access=Everyone())
-        commit(DISCORD_V1_DPY27, mount)
-        snapshot = components.capture(mount, "screen")
+        message_root = MessageRoot(Screen(), target=DISCORD_V1_DPY27, access=Everyone())
+        commit(DISCORD_V1_DPY27, message_root)
+        snapshot = components.capture(message_root, "screen")
         built.clear()
 
         with pytest.raises(LayoutInvariantError):
