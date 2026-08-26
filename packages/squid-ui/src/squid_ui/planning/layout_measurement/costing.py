@@ -17,10 +17,10 @@ from squid_ui.planning.layout_measurement.realization import Builder
 from squid_ui.planning.limits import LIMITS, Axis, DiscordLimits
 from squid_ui.planning.navigation import NavNode
 from squid_ui.primitives.nodes import (
-    ActionGroup,
     Break,
     Budget,
     Card,
+    ControlGroup,
     EntitySelect,
     Gallery,
     MediaCollection,
@@ -41,7 +41,7 @@ def measure_nodes(nodes: Sequence[Node], *, limits: DiscordLimits = LIMITS) -> R
 
     def lower_shape(node: Node) -> list[Node]:
         match node:
-            case ActionGroup(items=items):
+            case ControlGroup(items=items):
                 return [
                     Row(tuple(items[start : start + limits.components.row_buttons]))
                     for start in range(0, len(items), limits.components.row_buttons)

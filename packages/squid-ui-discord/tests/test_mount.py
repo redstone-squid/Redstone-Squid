@@ -15,18 +15,9 @@ import discord
 import pytest
 from discord.webhook.async_ import AsyncWebhookAdapter, async_context
 
-import squid_ui_discord
 import squid_ui as sl
-from squid_ui_discord import Everyone, Mount, MountScheduler, Owner, PauseUpdates, RenewEphemeral, Users, delivery
-from squid_ui_discord.access import Allowed, Check, Denied
-from squid_ui_discord.mount import MountLifecycle, _BusyPaint, _custom_id
-from squid_ui_discord.testing import (
-    assert_within_limits,
-    commit_render,
-    delivered_to,
-    fake_interaction,
-    fake_message,
-)
+import squid_ui_discord
+from squid_reactivity import ActionLedger, add_action_result_sink
 from squid_ui import (
     ActionEvent,
     Component,
@@ -43,10 +34,10 @@ from squid_ui.chrome import LOCALIZATION_CONTEXT, Chrome
 from squid_ui.document import Asset, InlineAsset
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.forms import FormField, FormSpec, TextField
-from squid_ui.interactions import InteractionKind, ActionMiddleware, ActionMode, ActionProceed, ActionRequest
+from squid_ui.interactions import ActionMiddleware, ActionMode, ActionProceed, ActionRequest, InteractionKind
 from squid_ui.primitives import (
-    ActionGroup,
     Button,
+    ControlGroup,
     Heading,
     Lines,
     Option,
@@ -77,7 +68,16 @@ from squid_ui.runtime import (
 from squid_ui.runtime.reactivity import _CURRENT
 from squid_ui.semantic import Paragraph
 from squid_ui.text import Localization, Message
-from squid_reactivity import ActionLedger, add_action_result_sink
+from squid_ui_discord import Everyone, Mount, MountScheduler, Owner, PauseUpdates, RenewEphemeral, Users, delivery
+from squid_ui_discord.access import Allowed, Check, Denied
+from squid_ui_discord.mount import MountLifecycle, _BusyPaint, _custom_id
+from squid_ui_discord.testing import (
+    assert_within_limits,
+    commit_render,
+    delivered_to,
+    fake_interaction,
+    fake_message,
+)
 
 
 class Counter(Component):
@@ -341,7 +341,7 @@ class TestEphemeralRenewal:
 class RootToolbar(Component):
     def render(self):
         return Document(
-            (ActionGroup(tuple(Button(str(index), self.click, f"b{index}") for index in range(41))),),
+            (ControlGroup(tuple(Button(str(index), self.click, f"b{index}") for index in range(41))),),
             key="toolbar",
         )
 
@@ -2314,8 +2314,8 @@ class TestSend:
                 self.invoked += 1
 
             def render(self):
-                return sl.actions(
-                    sl.action(
+                return sl.action_controls(
+                    sl.action_control(
                         "same",
                         self.click,
                         key="same",
@@ -3658,8 +3658,8 @@ class _GuardedPanel(Component):
         self.run = run
 
     def render(self):
-        return sl.actions(
-            sl.action(
+        return sl.action_controls(
+            sl.action_control(
                 "Go",
                 self.go,
                 key="go",
@@ -3763,8 +3763,8 @@ class TestGuards:
                 self.presses: list[str] = []
 
             def render(self):
-                return sl.actions(
-                    sl.action("Go", self.go, key="go", guard=sl.guards.once(), mode=self.mode),
+                return sl.action_controls(
+                    sl.action_control("Go", self.go, key="go", guard=sl.guards.once(), mode=self.mode),
                     key="panel",
                 )
 
@@ -3797,13 +3797,13 @@ class TestGuards:
             pressed: int = state(0)
 
             def render(self):
-                return sl.actions(
+                return sl.action_controls(
                     *(
-                        sl.action(f"Act {index}", self.act, key=f"act{index}", guard=sl.guards.once())
+                        sl.action_control(f"Act {index}", self.act, key=f"act{index}", guard=sl.guards.once())
                         for index in range(8)
                     ),
                     key="crowd",
-                    display=sl.semantic.ActionDisplay.GROUPED,
+                    display=sl.semantic.ControlDisplay.GROUPED,
                 )
 
             async def act(self, event: ActionEvent) -> None:
@@ -3900,8 +3900,8 @@ class TestBusyFeedback:
 
         class Idle(Component):
             def render(self):
-                return sl.actions(
-                    sl.action("Go", self.go, key="go", busy=sl.interactions.BusySpec(pending="Working…")),
+                return sl.action_controls(
+                    sl.action_control("Go", self.go, key="go", busy=sl.interactions.BusySpec(pending="Working…")),
                     key="panel",
                 )
 
@@ -4016,7 +4016,9 @@ class TestBusyFeedback:
 
         class Idle(Component):
             def render(self):
-                return sl.actions(sl.action("Go", self.go, key="go", busy=sl.interactions.BusySpec()), key="panel")
+                return sl.action_controls(
+                    sl.action_control("Go", self.go, key="go", busy=sl.interactions.BusySpec()), key="panel"
+                )
 
             async def go(self, event: ActionEvent) -> None:
                 await release.wait()

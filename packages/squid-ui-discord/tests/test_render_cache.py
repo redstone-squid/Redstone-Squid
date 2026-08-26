@@ -5,27 +5,27 @@ import discord
 
 import squid_ui_discord.classic_renderer as classic_renderer_module
 import squid_ui_discord.renderer as renderer_module
-from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, Mount
-from squid_ui_discord.classic_renderer import ClassicRenderer
-from squid_ui_discord.render_cache import RenderProgramCache
-from squid_ui_discord.renderer import StaticView, V2Renderer
-from squid_ui_discord.testing import delivered_to, fake_message
 from squid_ui import Component, state
 from squid_ui.document import Document
 from squid_ui.interactions import ActionBinding
 from squid_ui.planning.planner import plan
 from squid_ui.primitives import Text
 from squid_ui.scene import ClassicMessage, Codec, Embed
-from squid_ui.scene import Document as SceneDocument
-from squid_ui.semantic import Action, Actions
+from squid_ui.scene import Scene as RenderedScene
+from squid_ui.semantic import ActionControl, ActionControls
+from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, Mount
+from squid_ui_discord.classic_renderer import ClassicRenderer
+from squid_ui_discord.render_cache import RenderProgramCache
+from squid_ui_discord.renderer import StaticView, V2Renderer
+from squid_ui_discord.testing import delivered_to, fake_message
 
 
 def _text_plan(value: str):
     return plan(Document((Text(value),)), target=DISCORD_V2_DPY27)  # pyrefly: ignore[bad-argument-type]
 
 
-def _classic_document(value: str) -> SceneDocument[ClassicMessage]:
-    return SceneDocument(
+def _classic_document(value: str) -> RenderedScene[ClassicMessage]:
+    return RenderedScene(
         protocol=Codec.protocol,
         target=DISCORD_V1_DPY27.id,
         target_version=1,
@@ -108,7 +108,7 @@ def test_shared_render_program_does_not_retain_authored_callbacks() -> None:
 
     owner = Handler()
     retained = weakref.ref(owner)
-    document = Actions((Action("run", "Run", owner.run),), key="tools")
+    document = ActionControls((ActionControl("run", "Run", owner.run),), key="tools")
     result = plan(document, target=DISCORD_V2_DPY27)  # pyrefly: ignore[bad-argument-type]
     cache = RenderProgramCache()
 

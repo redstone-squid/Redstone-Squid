@@ -3,8 +3,6 @@
 import discord
 import pytest
 
-from squid_ui_discord import DISCORD_V2_DPY27, classic, render_static
-from squid_ui_discord.testing import without_capabilities
 from squid_ui import scene
 from squid_ui.emoji import Emoji
 from squid_ui.errors import LayoutInvariantError
@@ -22,6 +20,8 @@ from squid_ui.primitives import (
     Variant,
     Variants,
 )
+from squid_ui_discord import DISCORD_V2_DPY27, classic, render_static
+from squid_ui_discord.testing import without_capabilities
 
 
 def test_v2_draws_premium_links_select_emoji_and_media_metadata() -> None:
@@ -71,7 +71,7 @@ def test_classic_draws_premium_and_disabled_emoji_links() -> None:
 
 
 def test_html_marks_premium_metadata_and_spoilers_accessibly() -> None:
-    document = scene.Document(
+    document = scene.Scene(
         1,
         "discord.components-v2",
         1,

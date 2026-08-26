@@ -35,7 +35,7 @@ def walk_ladders(nodes: Sequence[Node], positions: Positions, visit) -> None:
     """Visit every node reachable through the currently selected rungs, in document order.
 
     Ladders only occur at the top level, inside a Panel, or inside another ladder's rung:
-    `Section.texts`, `Row.items` and `ActionGroup.items` are typed to exclude them, so these
+    `Section.texts`, `Row.items` and `ControlGroup.items` are typed to exclude them, so these
     two recursive arms are exhaustive.
     """
 

@@ -376,7 +376,7 @@ class Pager:
 
 
 @dataclass(frozen=True, slots=True)
-class Document[BodyT = Body]:
+class Scene[BodyT = Body]:
     """A target-resolved scene with no callbacks or native frontend objects."""
 
     protocol: int
@@ -453,7 +453,7 @@ class PlanMetrics:
 
 @dataclass(frozen=True, slots=True)
 class PlanResult[BodyT = Body]:
-    scene: Document[BodyT]
+    scene: Scene[BodyT]
     bindings: Mapping[str, ActionBinding]
     report: PlanReport
     form_bindings: Mapping[str, FormBinding] = field(default_factory=dict)

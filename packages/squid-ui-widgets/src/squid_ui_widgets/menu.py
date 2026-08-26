@@ -3,9 +3,9 @@
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
-from squid_ui.factories import actions, choice, heading, stack
+from squid_ui.factories import action_controls, choice, heading, stack
 from squid_ui.runtime.component import RenderResult
-from squid_ui.semantic import ActionDisplay
+from squid_ui.semantic import ControlDisplay
 from squid_ui.text import Message, ResolvedText, TextLike
 from squid_ui_widgets._content import ContentItem, ContentLike, normalize_content, require_key, slug
 from squid_ui_widgets.drivers import ComponentDriver, MachineControls
@@ -137,13 +137,13 @@ class Menu:
         current, entries = self._resolve_path(state.path)
         if len(entries) <= 5:
             destinations = (
-                actions(
+                action_controls(
                     *(
-                        controls.action(entry.label, f"open:{entry.key}", key=f"{self.key}.{entry.key}")
+                        controls.action_control(entry.label, f"open:{entry.key}", key=f"{self.key}.{entry.key}")
                         for entry in entries
                     ),
                     key=f"{self.key}.destinations",
-                    display=ActionDisplay.INDIVIDUAL,
+                    display=ControlDisplay.INDIVIDUAL,
                 )
                 if entries
                 else None
@@ -158,12 +158,14 @@ class Menu:
                 maximum=1,
                 placeholder="Choose a destination",
             )
-        chrome = actions(
-            controls.action(controls.chrome.back, "back", key=f"{self.key}.back", available=bool(state.path)),
-            controls.action(controls.chrome.home, "home", key=f"{self.key}.home", available=len(state.path) > 1),
-            controls.action(controls.chrome.close, "close", key=f"{self.key}.close"),
+        chrome = action_controls(
+            controls.action_control(controls.chrome.back, "back", key=f"{self.key}.back", available=bool(state.path)),
+            controls.action_control(
+                controls.chrome.home, "home", key=f"{self.key}.home", available=len(state.path) > 1
+            ),
+            controls.action_control(controls.chrome.close, "close", key=f"{self.key}.close"),
             key=f"{self.key}.chrome",
-            display=ActionDisplay.INDIVIDUAL,
+            display=ControlDisplay.INDIVIDUAL,
         )
         return stack(
             heading(self.title),

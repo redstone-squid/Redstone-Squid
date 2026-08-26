@@ -39,9 +39,6 @@ from squid_ui.primitives.constraints import (
     Spill,
 )
 from squid_ui.primitives.nodes import (
-    ActionGroup as PrimitiveActionGroup,
-)
-from squid_ui.primitives.nodes import (
     Button,
     Footer,
     Gallery,
@@ -59,19 +56,22 @@ from squid_ui.primitives.nodes import (
     Code as PrimitiveCode,
 )
 from squid_ui.primitives.nodes import (
+    ControlGroup as PrimitiveActionGroup,
+)
+from squid_ui.primitives.nodes import (
     Heading as PrimitiveHeading,
 )
 from squid_ui.scene.model import PlanEvent, PlanSeverity
 from squid_ui.semantic import (
-    Action,
-    ActionGroup,
-    Actions,
+    ActionControl,
+    ActionControls,
+    ControlGroup,
     Emphasis,
     Grid,
     Link,
     Media,
     Roster,
-    RoutedAction,
+    RoutedActionControl,
     Table,
     Tone,
 )
@@ -271,13 +271,13 @@ def _media(node: Media, path: str, context: _Context) -> list[Node]:
     ]
 
 
-def _actions(node: Actions, path: str, context: _Context) -> list[Node]:
+def _actions(node: ActionControls, path: str, context: _Context) -> list[Node]:
     strategy = _select_strategy(_action_axis(node, path, context.limits, context.session), context)
-    groups: list[tuple[str, tuple[Action, ...], str | None]] = []
+    groups: list[tuple[str, tuple[ActionControl, ...], str | None]] = []
     # Links and routed controls carry no binding, so they can never be folded into a select
     # menu the way a group of session actions can: they stay individual buttons.
-    direct: list[Action | LinkButton | RoutedButton] = []
-    implicit: list[Action] = []
+    direct: list[ActionControl | LinkButton | RoutedButton] = []
+    implicit: list[ActionControl] = []
 
     def flush_implicit() -> None:
         if implicit:
@@ -285,16 +285,16 @@ def _actions(node: Actions, path: str, context: _Context) -> list[Node]:
             implicit.clear()
 
     for item in node.items:
-        if isinstance(item, ActionGroup):
+        if isinstance(item, ControlGroup):
             flush_implicit()
-            group_actions: list[Action] = []
-            for action in item.actions:
-                if isinstance(action, Action):
-                    group_actions.append(action)
+            group_actions: list[ActionControl] = []
+            for control in item.controls:
+                if isinstance(control, ActionControl):
+                    group_actions.append(control)
                 else:
-                    direct.append(_unbound_button(action, context))
+                    direct.append(_unbound_button(control, context))
             groups.append((item.key, tuple(group_actions), _resolve(item.label, context) if item.label else None))
-        elif isinstance(item, Action):
+        elif isinstance(item, ActionControl):
             implicit.append(item)
         else:
             flush_implicit()
@@ -309,13 +309,13 @@ def _actions(node: Actions, path: str, context: _Context) -> list[Node]:
         for group_key, actions, label in groups:
             result.extend(_grouped(actions, f"{node.key}.{group_key}", label, path, context))
     if direct:
-        controls = tuple(_button(action, context) if isinstance(action, Action) else action for action in direct)
+        controls = tuple(_button(action, context) if isinstance(action, ActionControl) else action for action in direct)
         result.append(PrimitiveActionGroup(controls))
     context.events.append(
         PlanEvent(
             code=f"actions.{strategy}",
             path=path,
-            message=f"Actions {node.key!r} uses the {strategy} strategy",
+            message=f"ActionControls {node.key!r} uses the {strategy} strategy",
             severity=PlanSeverity.ADAPTATION,
             after={"adapter_version": ACTIONS_ADAPTER_VERSION},
         )
@@ -323,14 +323,14 @@ def _actions(node: Actions, path: str, context: _Context) -> list[Node]:
     return result
 
 
-def _individual(actions: Sequence[Action], key: str, context: _Context) -> list[Node]:
+def _individual(actions: Sequence[ActionControl], key: str, context: _Context) -> list[Node]:
     controls = tuple(_button(action, context) for action in actions)
     return [PrimitiveActionGroup(controls)] if controls else []
 
 
-def _grouped(actions: Sequence[Action], key: str, label: str | None, path: str, context: _Context) -> list[Node]:
-    eligible: list[Action] = []
-    direct: list[Action] = []
+def _grouped(actions: Sequence[ActionControl], key: str, label: str | None, path: str, context: _Context) -> list[Node]:
+    eligible: list[ActionControl] = []
+    direct: list[ActionControl] = []
     for action in actions:
         default_grouping = action.emphasis.value != "strong" and action.tone in {Tone.NEUTRAL, Tone.INFO}
         if action.allow_grouping if action.allow_grouping is not None else default_grouping:
@@ -356,7 +356,7 @@ def _grouped(actions: Sequence[Action], key: str, label: str | None, path: str, 
     return result
 
 
-def _paged_picker(actions: Sequence[Action], key: str, label: str | None, context: _Context) -> list[Node]:
+def _paged_picker(actions: Sequence[ActionControl], key: str, label: str | None, context: _Context) -> list[Node]:
     chunk, index, pages = _page_items(actions, key, context, identity=lambda action: action.key)
     return [
         _picker(chunk, f"{key}.page", label, context),
@@ -364,7 +364,7 @@ def _paged_picker(actions: Sequence[Action], key: str, label: str | None, contex
     ]
 
 
-def _picker(actions: Sequence[Action], key: str, label: str | None, context: _Context) -> SelectMenu:
+def _picker(actions: Sequence[ActionControl], key: str, label: str | None, context: _Context) -> SelectMenu:
     routes = {
         action.key: ActionBinding(
             action.key,
@@ -386,7 +386,7 @@ def _picker(actions: Sequence[Action], key: str, label: str | None, context: _Co
     )
 
 
-def _unbound_button(item: Link | RoutedAction, context: _Context) -> LinkButton | RoutedButton:
+def _unbound_button(item: Link | RoutedActionControl, context: _Context) -> LinkButton | RoutedButton:
     """Lower a control the mount never dispatches: a URL, or a router's own custom id."""
     label = _resolve(item.label, context)
     if isinstance(item, Link):
@@ -396,7 +396,7 @@ def _unbound_button(item: Link | RoutedAction, context: _Context) -> LinkButton 
     )
 
 
-def _button(action: Action, context: _Context) -> Button:
+def _button(action: ActionControl, context: _Context) -> Button:
     return Button(
         _resolve(action.label, context),
         action.on_trigger,

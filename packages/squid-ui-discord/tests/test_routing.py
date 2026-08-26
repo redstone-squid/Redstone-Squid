@@ -6,16 +6,16 @@ import anyio
 import discord
 import pytest
 
-import squid_ui_discord
 import squid_ui as sl
-from squid_ui_discord import render_static
-from squid_ui_discord.routing import Router, _dispatch_item
-from squid_ui_discord.testing import fake_interaction
+import squid_ui_discord
 from squid_ui import scene
 from squid_ui.errors import DrawInvariantError, LayoutInvariantError
 from squid_ui.primitives import Option, Panel, RoutedButton, RoutedSelect, Row
 from squid_ui.profiling import MemoryProfiler, OperationKind, TraceStatus
 from squid_ui.profiling.profiler import _MAX_NAME_LENGTH
+from squid_ui_discord import render_static
+from squid_ui_discord.routing import Router, _dispatch_item
+from squid_ui_discord.testing import fake_interaction
 
 EDIT_BUILD = sl.routing.Route("edit:build:{build_id:int}")
 POLL_CLOSE = sl.routing.Route("poll:close")
@@ -911,7 +911,9 @@ class TestDrawing:
     def test_a_sessionless_document_may_carry_a_routed_control(self) -> None:
         document = sl.section(
             sl.heading("Poll"),
-            sl.actions(sl.routed_action("Close poll", POLL_CLOSE.id(), key="close", tone=sl.Tone.DANGER), key="c"),
+            sl.action_controls(
+                sl.routed_action_control("Close poll", POLL_CLOSE.id(), key="close", tone=sl.Tone.DANGER), key="c"
+            ),
         )
 
         view = _static_view([document])
@@ -946,13 +948,15 @@ class TestDrawing:
             render_static(document)
 
     def test_a_bound_control_still_needs_a_session(self) -> None:
-        document = sl.actions(sl.action("Press", _press, key="press"), key="c")
+        document = sl.action_controls(sl.action_control("Press", _press, key="press"), key="c")
 
         with pytest.raises(TypeError, match="require a mounted Discord frontend"):
             render_static([document])
 
     def test_a_routed_scene_round_trips_through_the_codec(self) -> None:
-        document = sl.block(sl.actions(sl.routed_action("Edit", EDIT_BUILD.id(build_id=3), key="e"), key="c"))
+        document = sl.block(
+            sl.action_controls(sl.routed_action_control("Edit", EDIT_BUILD.id(build_id=3), key="e"), key="c")
+        )
 
         planned = sl.planning.plan(document, target=squid_ui_discord.DISCORD_V2_DPY27).scene
         payload = sl.scene.Codec.dumps(planned)
@@ -966,7 +970,7 @@ class TestDrawing:
         assert row.items == (scene.RoutedButton("Edit", "edit:build:3"),)
 
     def test_the_old_scene_custom_id_field_is_not_accepted(self) -> None:
-        document = sl.actions(sl.routed_action("Close", POLL_CLOSE.id(), key="close"), key="c")
+        document = sl.action_controls(sl.routed_action_control("Close", POLL_CLOSE.id(), key="close"), key="c")
         payload = sl.scene.Codec.to_dict(sl.planning.plan(document, target=squid_ui_discord.DISCORD_V2_DPY27).scene)
         routed = payload["body"]["children"][0]["items"][0]
         routed["custom_id"] = routed.pop("route_id")
@@ -975,7 +979,7 @@ class TestDrawing:
             sl.scene.Codec.from_dict(payload)
 
     def test_the_html_preview_emits_the_route(self) -> None:
-        document = sl.actions(sl.routed_action("Close", POLL_CLOSE.id(), key="close"), key="c")
+        document = sl.action_controls(sl.routed_action_control("Close", POLL_CLOSE.id(), key="close"), key="c")
 
         html = sl.html.Renderer().draw(sl.planning.plan(document, target=squid_ui_discord.DISCORD_V2_DPY27).scene)
 

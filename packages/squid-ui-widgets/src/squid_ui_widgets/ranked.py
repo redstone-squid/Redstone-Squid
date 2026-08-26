@@ -3,7 +3,7 @@
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 
-from squid_ui.factories import actions, heading, note, stack
+from squid_ui.factories import action_controls, heading, note, stack
 from squid_ui.primitives import Lines
 from squid_ui.runtime.component import RenderResult
 from squid_ui.semantic import LayoutNode
@@ -120,14 +120,14 @@ class RankedList[EntryT]:
         offset = page * (self.page_size or max(1, total))
         body = (Lines(self.rows.lines(visible, offset)),) if visible else controls.content(self.empty, prefix="empty")
         pager = (
-            actions(
-                controls.action(
+            action_controls(
+                controls.action_control(
                     controls.chrome.previous,
                     "previous",
                     key=f"{self.key}.previous",
                     available=page > 0,
                 ),
-                controls.action(
+                controls.action_control(
                     controls.chrome.next,
                     "next",
                     key=f"{self.key}.next",

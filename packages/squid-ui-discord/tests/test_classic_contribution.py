@@ -3,12 +3,12 @@
 import discord
 import pytest
 
-from squid_ui_discord import ExistingLayoutError, classic
-from squid_ui_discord.inspection import measure
-from squid_ui_discord.presentation import DiscordModeError, DiscordPresentation
 from squid_ui.errors import UnsolvableLayoutError
 from squid_ui.planning.limits import CLASSIC_LIMITS, Axis
 from squid_ui.semantic import Heading, Paragraph
+from squid_ui_discord import ExistingLayoutError, classic
+from squid_ui_discord.inspection import measure
+from squid_ui_discord.presentation import DiscordModeError, DiscordPresentation
 
 
 def host(*, content=None, embeds=(), controls=()) -> DiscordPresentation:
@@ -88,11 +88,11 @@ class TestContribution:
         assert result.presentation.content == "@here"
 
     def test_squid_controls_go_into_rows_after_the_hosts(self) -> None:
-        from squid_ui.semantic import Actions, Link
+        from squid_ui.semantic import ActionControls, Link
 
         host_view_message = host(controls=[button("host")])
         result = classic.contribute(
-            [Paragraph("body"), Actions((Link("d", "Docs", "https://example.invalid"),), key="k")],
+            [Paragraph("body"), ActionControls((Link("d", "Docs", "https://example.invalid"),), key="k")],
             to=host_view_message,
         )
         view = result.presentation.view
@@ -103,10 +103,12 @@ class TestContribution:
 
     def test_the_host_view_is_mutated_rather_than_cloned(self) -> None:
         """A control's callback registration belongs to the view that owns it."""
-        from squid_ui.semantic import Actions, Link
+        from squid_ui.semantic import ActionControls, Link
 
         message = host(controls=[button("host")])
-        result = classic.contribute(Actions((Link("d", "Docs", "https://example.invalid"),), key="k"), to=message)
+        result = classic.contribute(
+            ActionControls((Link("d", "Docs", "https://example.invalid"),), key="k"), to=message
+        )
 
         assert result.presentation.view is message.view
 
@@ -120,10 +122,12 @@ class TestContribution:
         assert result.presentation.embeds is not message.embeds
 
     def test_removal_is_identity_based(self) -> None:
-        from squid_ui.semantic import Actions, Link
+        from squid_ui.semantic import ActionControls, Link
 
         message = host(controls=[button("host")])
-        result = classic.contribute(Actions((Link("d", "Docs", "https://example.invalid"),), key="k"), to=message)
+        result = classic.contribute(
+            ActionControls((Link("d", "Docs", "https://example.invalid"),), key="k"), to=message
+        )
         result.remove()
 
         assert labels(message.view) == ["host"]
@@ -136,7 +140,7 @@ class TestContribution:
 
 class TestPreflight:
     def test_a_duplicate_custom_id_fails_before_anything_moves(self) -> None:
-        from squid_ui.semantic import Actions, RoutedAction
+        from squid_ui.semantic import ActionControls, RoutedActionControl
 
         message = host(controls=[button("shared")])
         assert isinstance(message.view, discord.ui.View)
@@ -144,7 +148,7 @@ class TestPreflight:
 
         with pytest.raises(ExistingLayoutError, match="already used in this message"):
             classic.contribute(
-                Actions((RoutedAction("r", "Go", "shared"),), key="k"),
+                ActionControls((RoutedActionControl("r", "Go", "shared"),), key="k"),
                 to=message,
             )
 
@@ -169,12 +173,12 @@ class TestPreflight:
 
     def test_a_component_local_action_cannot_enter_a_host_view(self) -> None:
         """The host view's callbacks stay under its owner."""
-        from squid_ui.semantic import Action, Actions
+        from squid_ui.semantic import ActionControl, ActionControls
 
         async def press(event) -> None: ...
 
         with pytest.raises(TypeError, match="mounted Discord frontend"):
-            classic.contribute(Actions((Action("a", "Press", press),), key="k"), to=host())
+            classic.contribute(ActionControls((ActionControl("a", "Press", press),), key="k"), to=host())
 
 
 class TestEffectiveRows:
