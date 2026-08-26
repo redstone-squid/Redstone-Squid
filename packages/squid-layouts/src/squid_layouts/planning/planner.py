@@ -39,11 +39,11 @@ from squid_layouts.planning.layout_measurement.diagnostics import (
     SolveNoteSeverity,
     lossy_notes,
 )
-from squid_layouts.planning.limits import LIMITS, DiscordLimits
-from squid_layouts.planning.measurement import (
+from squid_layouts.planning.layout_measurement.solver import (
     MeasuredLayout,
     measure,
 )
+from squid_layouts.planning.limits import LIMITS, DiscordLimits
 from squid_layouts.planning.navigation import PlannedNav, materialized_navigation_state
 from squid_layouts.planning.search import (
     DEFAULT_SEARCH_BUDGET,
