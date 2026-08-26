@@ -10,6 +10,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import replace
 
 from squid_layouts.planning.degradation import DegradationEffect, DegradationProfile
+from squid_layouts.planning.layout_measurement.costing import component_count, prune
 from squid_layouts.planning.layout_measurement.diagnostics import (
     SolveNote,
     SolveNoteCode,
@@ -18,10 +19,6 @@ from squid_layouts.planning.layout_measurement.diagnostics import (
 )
 from squid_layouts.planning.layout_measurement.realization import Builder
 from squid_layouts.planning.limits import COMPONENTS, V2Limits
-from squid_layouts.planning.measurement import (
-    _component_count,
-    _prune,
-)
 from squid_layouts.planning.target import ResourceCost
 from squid_layouts.primitives.nodes import Break, Budget, Card, Fidelity, Node, Panel, Variants
 
@@ -197,11 +194,11 @@ def variant_state_bound(nodes: Sequence[Node], cutoff: int) -> int:
 def static_cost(nodes: Sequence[Node], limits: V2Limits) -> ResourceCost:
     """A rung's own resource cost, with every nested ladder left at rung 0."""
     builder = Builder(limits=limits)
-    children = _prune(builder.realize_children(resolve_variants(nodes, {})))
+    children = prune(builder.realize_children(resolve_variants(nodes, {})))
     text = dict(builder.raw_text_cost)
     for unit in builder.units:
         text[unit.axis] = text.get(unit.axis, 0) + unit.need
-    return ResourceCost({**text, COMPONENTS: _component_count(children)})
+    return ResourceCost({**text, COMPONENTS: component_count(children)})
 
 
 def guided_step(nodes: Sequence[Node], positions: Positions, limits: V2Limits) -> dict[VariantPath, int] | None:

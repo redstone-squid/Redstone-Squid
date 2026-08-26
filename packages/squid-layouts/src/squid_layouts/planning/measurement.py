@@ -13,11 +13,28 @@ planner's search decisions, and a layout reaching this module has already made t
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from heapq import heappop, heappush
 
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome, localize_chrome
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning.degradation import DegradationProfile, DegradationRecorder
+from squid_layouts.planning.layout_measurement.allocation import (
+    allocate as _allocate,
+)
+from squid_layouts.planning.layout_measurement.allocation import (
+    allocate_budgeted as _allocate_budgeted,
+)
+from squid_layouts.planning.layout_measurement.costing import (
+    component_count as _component_count,
+)
+from squid_layouts.planning.layout_measurement.costing import (
+    prune as _prune,
+)
+from squid_layouts.planning.layout_measurement.costing import (
+    structural_cost as _structural_cost,
+)
+from squid_layouts.planning.layout_measurement.costing import (
+    validated_nav as _validated_nav,
+)
 from squid_layouts.planning.layout_measurement.diagnostics import (
     LayoutOverflowError,
     SolveNote,
@@ -31,60 +48,29 @@ from squid_layouts.planning.layout_measurement.diagnostics import (
 from squid_layouts.planning.layout_measurement.model import (
     PAGE_FOOTER_PREFIX,
     Pager,
-    RCard,
-    RContent,
     Realized,
     RGroup,
     RPanel,
-    RSection,
     RText,
 )
 from squid_layouts.planning.layout_measurement.realization import Builder as _Builder
 from squid_layouts.planning.layout_measurement.text import (
-    BudgetRegion as _BudgetRegion,
-)
-from squid_layouts.planning.layout_measurement.text import (
     TextUnit as _Unit,
-)
-from squid_layouts.planning.layout_measurement.text import (
-    split_pages,
-)
-from squid_layouts.planning.layout_measurement.text import (
-    trim_keep as _trim_keep,
 )
 from squid_layouts.planning.limits import (
     COMPONENTS,
-    CONTROLS,
-    EMBEDS,
     LIMITS,
-    ROWS,
     DiscordLimits,
 )
 from squid_layouts.planning.navigation import (
-    NavNode,
     PlannedNav,
     materialized_navigation_state,
 )
 from squid_layouts.planning.target import EMPTY_COST, ResourceCost
-from squid_layouts.primitives.constraints import Alts, Condense, Drop, Never, Paginate, Spill, Truncate
+from squid_layouts.primitives.constraints import Paginate
 from squid_layouts.primitives.nodes import (
-    ActionGroup,
-    Break,
-    Budget,
-    Card,
-    EntitySelect,
-    Gallery,
     Lines,
-    MediaCollection,
     Node,
-    Panel,
-    RawItem,
-    RoutedSelect,
-    Row,
-    SelectMenu,
-    Sep,
-    Thumbnail,
-    Variants,
 )
 from squid_layouts.sources import Position
 from squid_layouts.text import NEUTRAL, Localization
@@ -175,499 +161,7 @@ class MeasuredLayout:
 # --- Text units -----------------------------------------------------------------------------
 
 
-def measure_nodes(nodes: Sequence[Node], *, limits: DiscordLimits = LIMITS) -> ResourceCost:
-    """Measure preferred cost per named axis, without applying any budget pressure."""
-
-    def lower_shape(node: Node) -> list[Node]:
-        match node:
-            case ActionGroup(items=items):
-                return [
-                    Row(tuple(items[start : start + limits.row_buttons]))
-                    for start in range(0, len(items), limits.row_buttons)
-                ]
-            case MediaCollection(items=items):
-                return [
-                    Gallery(tuple(items[start : start + limits.gallery_items]))
-                    for start in range(0, len(items), limits.gallery_items)
-                ]
-            case (
-                Panel(children=children)
-                | Budget(children=children)
-                | Break(children=children)
-                | Card(children=children)
-            ):
-                return [replace(node, children=tuple(child for item in children for child in lower_shape(item)))]
-            case Variants(variants=variants):
-                # Preferred cost, so every ladder is priced on the rung it opens at.
-                return [child for item in variants[0].nodes for child in lower_shape(item)]
-            case _:
-                return [node]
-
-    lowered = [child for node in nodes for child in lower_shape(node)]
-    builder = _Builder(limits=limits)
-    children = builder.realize_children(lowered)
-    text = dict(builder.raw_text_cost)
-    for unit in builder.units:
-        text[unit.axis] = text.get(unit.axis, 0) + unit.need
-    return ResourceCost({**text, **_structural_cost(children)})
-
-
 # --- Solve ----------------------------------------------------------------------------------
-
-
-def _apply(unit: _Unit, chrome: Chrome, notes: list[SolveNote], degradation: DegradationRecorder) -> bool:
-    """Render the unit into its slot within its grant. Returns False when the node drops."""
-    if unit.count_pages is not None:
-        return _apply_count_pages(unit)
-    if unit.fragments is not None and unit.grant >= unit.chrome_len + max(map(len, unit.fragments)):
-        unit.slot.content = unit.prefix + unit.fragments[0] + unit.suffix
-        return True
-    if unit.grant >= unit.need:
-        unit.slot.content = unit.prefix + unit.content + unit.suffix
-        return True
-
-    usable = unit.grant - unit.chrome_len
-    match unit.overflow:
-        case Drop():
-            notes.append(
-                _note(SolveNoteCode.NODE_DROPPED, f"dropped node {unit.index} ({unit.need} chars over budget)")
-            )
-            degradation.record(priority=unit.priority, path=f"$.text.{unit.index}", dropped_nodes=1)
-            return False
-        case Spill() if unit.ladders is not None:
-            return _apply_spill(unit, usable, chrome, notes, degradation)
-        case Condense() if usable >= 1:
-            return _apply_condense(unit, usable, notes, degradation)
-        case Alts(ladder=ladder) if usable >= 1:
-            for step, alternate in enumerate(ladder, 1):
-                if alternate and len(alternate) <= usable:
-                    notes.append(
-                        _note(
-                            SolveNoteCode.ALTERNATE,
-                            f"node {unit.index} degraded to a {len(alternate)}-char alternate",
-                        )
-                    )
-                    degradation.record(
-                        priority=unit.priority,
-                        path=f"$.text.{unit.index}",
-                        semantic_steps=step,
-                    )
-                    unit.slot.content = unit.prefix + alternate + unit.suffix
-                    return True
-            fallback = ladder[-1] if ladder else unit.content
-            notes.append(
-                _note(
-                    SolveNoteCode.ALTERNATE_EXHAUSTED,
-                    f"node {unit.index} exhausted its ladder; trimming the last alternate",
-                )
-            )
-            degradation.record(
-                priority=unit.priority,
-                path=f"$.text.{unit.index}",
-                semantic_steps=len(ladder),
-                truncated_chars=max(0, len(fallback) - usable),
-            )
-            unit.slot.content = unit.prefix + _trim_keep(fallback, usable, "head") + unit.suffix
-            return True
-        case Paginate(boundary=boundary, min_fill=min_fill, widows=widows) if usable >= 1:
-            # Pagination is the policy working as intended, not a degradation: no note.
-            unit.fragments = split_pages(unit.content, usable, boundary, min_fill=min_fill, widows=widows)
-            unit.slot.content = unit.prefix + unit.fragments[0] + unit.suffix
-            return True
-        case Truncate(keep=keep) if usable >= 1:
-            notes.append(
-                _note(
-                    SolveNoteCode.TRUNCATED,
-                    f"trimmed node {unit.index} from {len(unit.content)} to {usable}",
-                )
-            )
-            degradation.record(
-                priority=unit.priority,
-                path=f"$.text.{unit.index}",
-                truncated_chars=max(0, len(unit.content) - usable),
-            )
-            unit.slot.content = unit.prefix + _trim_keep(unit.content, usable, keep) + unit.suffix
-            return True
-        case Never() if usable >= 1:
-            notes.append(
-                _note(
-                    SolveNoteCode.NEVER_CLAMPED,
-                    f"clamped Never node {unit.index}: needed {unit.need}, granted {unit.grant}",
-                )
-            )
-            unit.slot.content = unit.prefix + _trim_keep(unit.content, usable, "head") + unit.suffix
-            return True
-        case _:
-            notes.append(
-                _note(
-                    SolveNoteCode.CHROME_DROP,
-                    f"dropped node {unit.index}: grant {unit.grant} cannot cover chrome {unit.chrome_len}",
-                )
-            )
-            degradation.record(priority=unit.priority, path=f"$.text.{unit.index}", dropped_nodes=1)
-            return False
-
-
-def _apply_count_pages(unit: _Unit) -> bool:
-    """Realize a count-paginated node: N entries per page, budget-split if a page is too big.
-
-    Count pages are the author's UX pin rather than a degradation, so this fires whether or
-    not the budget is tight and adds no note.
-    """
-    pages = unit.count_pages or [""]
-    usable = max(1, unit.grant - unit.chrome_len)
-    fragments: list[str] = []
-    for page in pages:
-        policy = unit.overflow
-        assert isinstance(policy, Paginate)
-        fragments.extend(
-            [page]
-            if len(page) <= usable
-            else split_pages(page, usable, unit.join, min_fill=policy.min_fill, widows=policy.widows)
-        )
-    unit.fragments = fragments
-    unit.slot.content = unit.prefix + fragments[0] + unit.suffix
-    return True
-
-
-def _step_ladders(ladders: tuple[tuple[str, ...], ...], join: str, usable: int) -> list[int]:
-    """Pick each entry's ladder rung, stepping the largest entry down until the block fits.
-
-    Shared by `Spill` and `Condense`: both shrink entries the same way and differ only in
-    what they do once every ladder is exhausted. Returns one rung index per entry, which is
-    0 for an entry that never had to move.
-    """
-    levels = [0] * len(ladders)
-    total = sum(len(ladder[0]) for ladder in ladders) + max(0, len(ladders) - 1) * len(join)
-    candidates: list[tuple[int, int]] = []
-    for index, ladder in enumerate(ladders):
-        if len(ladder) > 1:
-            heappush(candidates, (-len(ladder[0]), index))
-    while total > usable and candidates:
-        _negative_length, largest = heappop(candidates)
-        level = levels[largest]
-        before = len(ladders[largest][level])
-        level += 1
-        levels[largest] = level
-        after = len(ladders[largest][level])
-        total -= before - after
-        if level + 1 < len(ladders[largest]):
-            heappush(candidates, (-after, largest))
-    return levels
-
-
-def _apply_condense(
-    unit: _Unit,
-    usable: int,
-    notes: list[SolveNote],
-    degradation: DegradationRecorder,
-) -> bool:
-    """Shorten entries as far as their ladders go, then trim; never lose a whole entry."""
-    ladders = unit.ladders or ((unit.content,),)
-    levels = _step_ladders(ladders, unit.join, usable)
-    body = unit.join.join(ladder[level] for ladder, level in zip(ladders, levels, strict=True))
-    stepped = sum(1 for level in levels if level)
-    if stepped:
-        notes.append(
-            _note(
-                SolveNoteCode.CONDENSED,
-                f"node {unit.index} condensed {stepped} of {len(ladders)} entries down their ladders",
-            )
-        )
-        degradation.record(
-            priority=unit.priority,
-            path=f"$.text.{unit.index}",
-            semantic_steps=sum(levels),
-        )
-    if len(body) > usable:
-        notes.append(
-            _note(
-                SolveNoteCode.CONDENSE_TRUNCATED,
-                f"condensed node {unit.index} exhausted its ladders; trimming from {len(body)} to {usable}",
-            )
-        )
-        degradation.record(
-            priority=unit.priority,
-            path=f"$.text.{unit.index}",
-            truncated_chars=len(body) - usable,
-        )
-        body = _trim_keep(body, usable, "head")
-    unit.slot.content = unit.prefix + body + unit.suffix
-    return True
-
-
-def _apply_spill(
-    unit: _Unit,
-    usable: int,
-    chrome: Chrome,
-    notes: list[SolveNote],
-    degradation: DegradationRecorder,
-) -> bool:
-    ladders = unit.ladders or ()
-    total = len(ladders)
-    # First degrade the largest entries down their ladders; spill whole entries only after
-    # every ladder is exhausted.
-    levels = _step_ladders(ladders, unit.join, usable)
-    degraded = any(levels)
-
-    def entry(index: int) -> str:
-        return ladders[index][levels[index]]
-
-    # Stepping is about fitting, so it takes the largest entries first; dropping is about
-    # what the reader can afford to lose, so it takes the lowest priority first (ties from
-    # the tail, which is where a list's least important entries conventionally sit).
-    drop_order = sorted(range(total), key=lambda i: (unit.ranks[i] if unit.ranks else 0, -i))
-    entry_lengths = [len(entry(index)) for index in range(total)]
-    remaining_chars = sum(entry_lengths)
-    for dropped in range(total + 1):
-        marker = chrome.and_n_more(dropped) if dropped else ""
-        shown_entries = total - dropped
-        output_items = shown_entries + int(bool(marker))
-        body_length = remaining_chars + len(marker) + max(0, output_items - 1) * len(unit.join)
-        if body_length and body_length <= usable:
-            omitted = set(drop_order[:dropped])
-            shown = [entry(index) for index in range(total) if index not in omitted]
-            if marker:
-                shown.append(marker)
-            body = unit.join.join(shown)
-            if degraded:
-                notes.append(
-                    _note(
-                        SolveNoteCode.SPILL_ALTERNATES,
-                        f"node {unit.index} degraded {sum(1 for lvl in levels if lvl)} entries down their ladders",
-                    )
-                )
-                degradation.record(
-                    priority=unit.priority,
-                    path=f"$.text.{unit.index}",
-                    semantic_steps=sum(levels),
-                )
-            if dropped:
-                notes.append(
-                    _note(
-                        SolveNoteCode.SPILLED,
-                        f"spilled node {unit.index}: showing {total - dropped} of {total} lines",
-                    )
-                )
-                degradation.record(
-                    priority=unit.priority,
-                    path=f"$.text.{unit.index}",
-                    spilled_items=dropped,
-                )
-            unit.slot.content = unit.prefix + body + unit.suffix
-            return True
-        if dropped < total:
-            remaining_chars -= entry_lengths[drop_order[dropped]]
-    notes.append(_note(SolveNoteCode.SPILL_DROPPED, f"dropped node {unit.index}: no line fits in {usable}"))
-    degradation.record(priority=unit.priority, path=f"$.text.{unit.index}", dropped_nodes=1)
-    return False
-
-
-def _allocate(
-    units: list[_Unit],
-    budget: int,
-    notes: list[SolveNote],
-    chrome: Chrome,
-    degradation: DegradationRecorder,
-) -> None:
-    active = list(units)
-    for _ in range(len(units) + 1):
-        remaining = budget
-        # Never and Condense nodes are fixed costs: both promise to keep every entry, so
-        # they are charged before any flexible node sees the budget. Never goes first —
-        # a heading or a paragraph outranks a field block that can still condense — and
-        # only Never's shortfall is reported, because only Never's shortfall is a defeat.
-        overdraw = 0
-        for unit in active:
-            if isinstance(unit.overflow, Never):
-                unit.grant = min(unit.need, max(0, remaining))
-                overdraw += unit.need - unit.grant
-                remaining -= unit.grant
-        if overdraw:
-            notes.append(
-                _note(
-                    SolveNoteCode.NEVER_BUDGET,
-                    f"Never nodes need {budget + overdraw} of {budget} available characters",
-                    SolveNoteSeverity.FAILURE,
-                )
-            )
-        for unit in active:
-            if isinstance(unit.overflow, Condense):
-                unit.grant = min(unit.need, max(0, remaining))
-                remaining -= unit.grant
-        flexible = [unit for unit in active if not isinstance(unit.overflow, Never | Condense)]
-        for priority in sorted({unit.priority for unit in flexible}, reverse=True):
-            group = [unit for unit in flexible if unit.priority == priority]
-            total_need = sum(unit.need for unit in group)
-            if total_need <= remaining:
-                for unit in group:
-                    unit.grant = unit.need
-            else:
-                # Share the shortfall proportionally to need instead of first-come-take-all,
-                # so document order does not decide which same-priority node starves.
-                share = max(0, remaining)
-                for unit in group:
-                    unit.grant = unit.need * share // total_need
-                leftover = share - sum(unit.grant for unit in group)
-                for unit in sorted(group, key=lambda u: u.index):
-                    if leftover <= 0:
-                        break
-                    top_up = min(leftover, unit.need - unit.grant)
-                    unit.grant += top_up
-                    leftover -= top_up
-            remaining -= sum(unit.grant for unit in group)
-        iteration = DegradationRecorder.create()
-        dropped = [unit for unit in active if not _apply(unit, chrome, notes, iteration)]
-        if not dropped:
-            degradation.effects.extend(iteration.effects)
-            return
-        dropped_paths = {f"$.text.{unit.index}" for unit in dropped}
-        degradation.effects.extend(effect for effect in iteration.effects if effect.path in dropped_paths)
-        for unit in dropped:
-            unit.slot.dropped = True
-            active.remove(unit)
-    # The loop always terminates by emptying `active`; each pass removes at least one unit.
-
-
-@dataclass(slots=True)
-class _GrantGroup:
-    units: tuple[_Unit, ...]
-    floor: int
-    demand: int
-    priority: int
-    best_effort: bool = False
-    grant: int = 0
-
-
-def _allocate_budgeted(
-    regions: Sequence[_BudgetRegion],
-    units: Sequence[_Unit],
-    budget: int,
-    notes: list[SolveNote],
-    chrome: Chrome,
-    degradation: DegradationRecorder,
-) -> None:
-    """Allocate transparent budget regions as siblings, then solve inside each grant."""
-    claimed: set[int] = set()
-    groups: list[_GrantGroup] = []
-    # Outer regions are recorded after their descendants. Claiming them first gives a
-    # nested declaration one owner instead of charging the same unit twice.
-    for region in reversed(regions):
-        units = tuple(unit for unit in region.units if unit.index not in claimed)
-        if not units:
-            continue
-        claimed.update(unit.index for unit in units)
-        need = sum(unit.need for unit in units)
-        ceiling = region.preferred + region.stretch
-        demand = need if need <= ceiling else min(need, region.preferred)
-        if len(units) == 1 and need > ceiling and isinstance(units[0].overflow, Paginate):
-            unit = units[0]
-            usable = ceiling - unit.chrome_len
-            if usable >= 1:
-                policy = unit.overflow
-                unit.fragments = split_pages(
-                    unit.content,
-                    usable,
-                    policy.boundary,
-                    min_fill=policy.min_fill,
-                    widows=policy.widows,
-                )
-                demand = unit.chrome_len + max(map(len, unit.fragments))
-        groups.append(
-            _GrantGroup(
-                units,
-                min(region.minimum, demand),
-                demand,
-                max(unit.priority for unit in units),
-                region.best_effort,
-            )
-        )
-    for unit in units:
-        if unit.index in claimed:
-            continue
-        fixed = isinstance(unit.overflow, Never | Condense)
-        groups.append(_GrantGroup((unit,), unit.need if fixed else 0, unit.need, unit.priority))
-    groups.sort(key=lambda group: min(unit.index for unit in group.units))
-
-    remaining = max(0, budget)
-    hard_floor = sum(group.floor for group in groups if not group.best_effort)
-    if hard_floor > remaining:
-        notes.append(
-            _note(
-                SolveNoteCode.BUDGET_FLOOR,
-                f"Budget floors need {hard_floor} of {remaining} available characters",
-                SolveNoteSeverity.FAILURE,
-            )
-        )
-
-    for group in groups:
-        if group.best_effort:
-            continue
-        group.grant = min(group.floor, remaining)
-        remaining -= group.grant
-    for group in groups:
-        if not group.best_effort:
-            continue
-        group.grant = min(group.floor, remaining)
-        remaining -= group.grant
-        if group.grant < group.floor:
-            notes.append(
-                _note(
-                    SolveNoteCode.BEST_EFFORT_FLOOR,
-                    f"breached best-effort budget floor {group.floor} with a {group.grant}-character grant",
-                )
-            )
-
-    for priority in sorted({group.priority for group in groups}, reverse=True):
-        peers = [group for group in groups if group.priority == priority and group.grant < group.demand]
-        wanted = sum(group.demand - group.grant for group in peers)
-        share = min(remaining, wanted)
-        if wanted:
-            distributed = 0
-            for group in peers:
-                extra = (group.demand - group.grant) * share // wanted
-                group.grant += extra
-                distributed += extra
-            leftover = share - distributed
-            for group in peers:
-                if leftover <= 0:
-                    break
-                top_up = min(leftover, group.demand - group.grant)
-                group.grant += top_up
-                leftover -= top_up
-            remaining = max(0, budget - sum(group.grant for group in groups))
-
-    for group in groups:
-        _allocate(list(group.units), group.grant, notes, chrome, degradation)
-
-
-def _prune(children: list[Realized]) -> list[Realized]:
-    pruned: list[Realized] = []
-    for child in children:
-        match child:
-            case RText(dropped=True):
-                continue
-            case RCard(blocks=blocks):
-                pruned.append(replace(child, blocks=_prune(blocks)))
-            case RContent(slot=slot) if slot.dropped:
-                continue
-            case RPanel(children=inner, accent=accent, spoiler=spoiler):
-                kept = _prune(inner)
-                if kept:
-                    pruned.append(RPanel(children=kept, accent=accent, spoiler=spoiler))
-            case RGroup(children=inner):
-                pruned.extend(_prune(inner))
-            case RSection(texts=texts, accessory=accessory):
-                kept_texts = [slot for slot in texts if not slot.dropped]
-                # A Section needs at least one text child, and its accessory cannot stand
-                # alone as a top-level component, so an emptied section drops whole.
-                if kept_texts:
-                    pruned.append(RSection(texts=kept_texts, accessory=accessory))
-            case Gallery(items=()) | Row(items=()):
-                continue
-            case _:
-                pruned.append(child)
-    return pruned
 
 
 def _count_pages(unit: _Unit, per: int) -> list[str]:
@@ -686,80 +180,6 @@ def _footer_cost(footer: Callable[[int, int], str], content_len: int) -> int:
     """
     widest = 10 ** len(str(max(content_len, 1))) - 1
     return len(PAGE_FOOTER_PREFIX) + len(footer(widest, widest))
-
-
-def _validated_nav(nodes: Sequence[NavNode]) -> list[Node]:
-    """Check the one part of the nav contract a type cannot state.
-
-    `NavNode` already excludes text-bearing nodes, which is what lets nav land after the
-    display budget is allocated. A raw item smuggles its own text cost past that, so it is
-    still worth a look at runtime.
-    """
-    for node in nodes:
-        match node:
-            case Row(items=items) if not any(isinstance(item, RawItem) and item.text_cost for item in items):
-                continue
-            case (
-                SelectMenu() | RoutedSelect() | EntitySelect() | Sep() | Thumbnail() | Gallery() | RawItem(text_cost=0)
-            ):
-                continue
-            case _:
-                message = f"nav factories may only return component-bearing nodes, got {type(node).__name__}"
-                raise ValueError(message)
-    return list(nodes)
-
-
-def _item_component_cost(item: object) -> int:
-    return item.component_cost if isinstance(item, RawItem) else 1
-
-
-def _structural_cost(children: Sequence[Realized]) -> dict[str, int]:
-    """Count every structural axis at once, whichever target ends up budgeting them.
-
-    A Components V2 target budgets components; a classic target budgets embeds, rows, and
-    view children. Counting all four always is cheaper than asking the dialect, and costs
-    nothing: a target simply does not budget the axes it has no field for, and an axis no
-    target budgets is unconstrained rather than zero.
-    """
-    totals = {COMPONENTS: 0, EMBEDS: 0, ROWS: 0, CONTROLS: 0}
-
-    def walk(nodes: Sequence[Realized]) -> None:
-        for child in nodes:
-            match child:
-                case RPanel(children=inner):
-                    totals[COMPONENTS] += 1
-                    walk(inner)
-                case RGroup(children=inner):
-                    walk(inner)
-                case RCard(blocks=blocks):
-                    totals[EMBEDS] += 1
-                    totals[COMPONENTS] += 1
-                    walk(blocks)
-                case RContent():
-                    # Content is a message field, not a component. It costs no structure.
-                    continue
-                case RSection(texts=texts, accessory=accessory):
-                    totals[COMPONENTS] += 1 + len(texts) + _item_component_cost(accessory)
-                case Row(items=items):
-                    totals[COMPONENTS] += 1 + sum(_item_component_cost(item) for item in items)
-                    totals[ROWS] += 1
-                    totals[CONTROLS] += len(items)
-                case SelectMenu() | RoutedSelect() | EntitySelect():
-                    totals[COMPONENTS] += 2  # the implicit ActionRow plus the select itself
-                    totals[ROWS] += 1  # a select always occupies a whole row
-                    totals[CONTROLS] += 1
-                case RawItem(component_cost=component_cost):
-                    totals[COMPONENTS] += component_cost
-                case _:
-                    totals[COMPONENTS] += 1
-
-    walk(children)
-    return totals
-
-
-def _component_count(children: Sequence[Realized]) -> int:
-    """Components alone, for callers comparing one V2 subtree against another."""
-    return _structural_cost(children)[COMPONENTS]
 
 
 type PositionState = Mapping[str, Position] | Position | None
