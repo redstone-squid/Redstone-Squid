@@ -99,3 +99,33 @@ callbacks, components, live resources or Discord objects, though they retain tex
 
 Implementation lands as reviewable runtime, planner, mount, renderer and diagnostics commits, with
 focused tests at each boundary followed by Pyrefly, architecture tests and the full unit suite.
+
+## Outcome
+
+Shipped 2026-08-26. The implementation deliberately rejected generated closure recipes. Semantic
+controls lower through named typed adapters, and shared planner/renderer programs contain only
+scene-derived instructions plus dynamic slot identifiers. Runtime-local exact memos may retain the
+current callback-bearing result until their owner finishes; bounded shared caches retain no authored
+callback, component, session, live resource, Discord object, function or code object. A weak-reference
+regression proves an explicitly shared render cache does not retain the owner of an authored handler.
+
+The delivered lanes and boundaries are:
+
+- component render snapshots, subtree splicing, component-attributed shared-address invalidation,
+  computed backdating before tree expansion, and identity publication of a committed tree;
+- owner-local exact plans, callback-free structural `PlanProgram` execution, and bounded incremental
+  certificates for isolated primitive/semantic text, heading, footer and code regions;
+- planning and action/asset preflight before Discord renderer, view, item or generation construction;
+- callback-free V2 and classic constructor programs with fresh mutable frontend objects on every
+  execution and reusable audits only for trusted static factories;
+- conservative force boundaries for direct refresh, explicit scheduling and opaque component inputs,
+  plus full-search/audit fallbacks for coupled layout, custom wiring/factories and extensions;
+- `PlanMetrics.reuse`, planner/renderer profile counters, mount suppression counts, and bounded render
+  cache hit/miss/certificate/eviction diagnostics.
+
+`benchmarks/plan72_render_caching.py` is the deterministic mocked 1/100/1,000-component harness. On
+the final Windows/Python 3.14 development run, cold versus unchanged p95 was 1.3192/0.0147 ms,
+3.2562/0.0126 ms and 73.8528/0.0128 ms respectively. The 100-component pytest gate therefore measured
+the unchanged path below both limits by a wide margin: 0.39% of cold and 0.013 ms, against 25% and
+2 ms. Timing varies by host; the checked thresholds, work-invariant tests and cold-result differential
+tests are the contract.

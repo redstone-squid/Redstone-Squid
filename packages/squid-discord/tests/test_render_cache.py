@@ -1,3 +1,6 @@
+import gc
+import weakref
+
 import discord
 
 import squid_discord.classic_renderer as classic_renderer_module
@@ -9,10 +12,12 @@ from squid_discord.renderer import StaticView, V2Renderer
 from squid_discord.testing import delivered_to, fake_message
 from squid_layouts import Component, state
 from squid_layouts.document import Document
+from squid_layouts.interactions import ActionBinding
 from squid_layouts.planning.planner import plan
 from squid_layouts.primitives import Text
 from squid_layouts.scene import ClassicMessage, Codec, Embed
 from squid_layouts.scene import Document as SceneDocument
+from squid_layouts.semantic import Action, Actions
 
 
 def _text_plan(value: str):
@@ -96,6 +101,29 @@ def test_custom_v2_factory_keeps_final_audits_on_program_hits(monkeypatch) -> No
     assert cache.snapshot().certified == 0
 
 
+def test_shared_render_program_does_not_retain_authored_callbacks() -> None:
+    class Handler:
+        async def run(self, _event) -> None:
+            pass
+
+    owner = Handler()
+    retained = weakref.ref(owner)
+    document = Actions((Action("run", "Run", owner.run),), key="tools")
+    result = plan(document, target=DISCORD_V2_DPY27)  # pyrefly: ignore[bad-argument-type]
+    cache = RenderProgramCache()
+
+    def wire(node, _binding: ActionBinding) -> discord.ui.Item:
+        return discord.ui.Button(label=node.label, custom_id="render-cache-test")
+
+    presentation = V2Renderer(cache=cache, audit=False).draw(result.scene, plan=result, wire=wire)
+    assert len(cache) == 1
+
+    del presentation, result, document, owner
+    gc.collect()
+
+    assert retained() is None
+
+
 def test_classic_program_hits_return_fresh_objects_and_skip_certified_audit(monkeypatch) -> None:
     cache = RenderProgramCache()
     renderer = ClassicRenderer(always_view=True, cache=cache)
@@ -162,3 +190,12 @@ async def test_explicit_render_cache_shares_programs_without_sharing_frontend_ob
     assert cache.snapshot().misses == 1
     await first.finish(disable=False)
     assert len(cache) == 1
+
+
+def test_100_component_unchanged_hot_path_meets_latency_budget() -> None:
+    from benchmarks.plan72_render_caching import measure_case
+
+    result = measure_case(100, cold_samples=10, unchanged_samples=50)
+
+    assert result.unchanged_p95_ms <= 2
+    assert result.unchanged_fraction <= 0.25
