@@ -400,7 +400,7 @@ class Row(Renderable[DiscordTarget]):
 
 
 @dataclass(frozen=True, slots=True)
-class ActionGroup(Renderable[DiscordTarget]):
+class ControlGroup(Renderable[DiscordTarget]):
     """Buttons automatically arranged into as many valid target rows as needed."""
 
     items: tuple[LinkButton | PremiumButton | Button | RoutedButton | RawItem, ...]
@@ -507,7 +507,7 @@ class Fidelity(StrEnum):
 class Variant[ModeT = Any]:
     """One structural representation of a region and the capabilities it requires.
 
-    ``nodes`` is a tuple because a variant may lower to several nodes — an ActionGroup becomes
+    ``nodes`` is a tuple because a variant may lower to several nodes — an ControlGroup becomes
     one Row per five buttons — and splicing them into the parent is exact where wrapping them
     in a Panel would invent the very container component the ladder exists to save.
 
@@ -628,7 +628,7 @@ type Node = (
     | File
     | Sep
     | Row
-    | ActionGroup
+    | ControlGroup
     | SelectMenu
     | EntitySelect
     | RoutedSelect

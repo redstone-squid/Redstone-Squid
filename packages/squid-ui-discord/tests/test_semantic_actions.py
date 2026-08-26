@@ -1,4 +1,4 @@
-"""Discord Actions adaptation, routing, and sticky presentation state."""
+"""Discord ActionControls adaptation, routing, and sticky presentation state."""
 
 from collections.abc import Awaitable, Callable
 
@@ -12,10 +12,10 @@ from squid_ui.primitives import Lines, Paginate, Panel, Sep, Text, Variant, Vari
 from squid_ui.runtime import PresentationState, apply_updates
 from squid_ui.runtime.presentation_state import StrategyState
 from squid_ui.semantic import (
-    Action,
-    ActionDisplay,
-    ActionGroup,
-    Actions,
+    ActionControl,
+    ActionControls,
+    ControlDisplay,
+    ControlGroup,
     Download,
     Emphasis,
     Flexibility,
@@ -32,12 +32,12 @@ from squid_ui_discord import DISCORD_V2_DPY27
 async def _act(event: ActionEvent) -> None: ...
 
 
-def _actions(count: int, *, handler: Callable[[ActionEvent], Awaitable[None]] = _act) -> tuple[Action, ...]:
-    return tuple(Action(f"action.{index}", f"Action {index + 1}", handler) for index in range(count))
+def _actions(count: int, *, handler: Callable[[ActionEvent], Awaitable[None]] = _act) -> tuple[ActionControl, ...]:
+    return tuple(ActionControl(f"action.{index}", f"Action {index + 1}", handler) for index in range(count))
 
 
 def test_thirty_six_actions_fold_losslessly_into_twenty_five_and_eleven() -> None:
-    result = plan(Actions(_actions(36), key="demo"), target=DISCORD_V2_DPY27)
+    result = plan(ActionControls(_actions(36), key="demo"), target=DISCORD_V2_DPY27)
 
     selects = [node for node in result.scene.components_v2.children if isinstance(node, scene.Select)]
     assert [len(select.options) for select in selects] == [25, 11]
@@ -50,13 +50,15 @@ def test_thirty_six_actions_fold_losslessly_into_twenty_five_and_eleven() -> Non
 
 
 def test_explicit_action_groups_never_merge() -> None:
-    document = Actions(
+    document = ActionControls(
         (
-            ActionGroup("files", _actions(10)),
-            ActionGroup("admin", tuple(Action(f"admin.{index}", f"Admin {index}", _act) for index in range(10))),
+            ControlGroup("files", _actions(10)),
+            ControlGroup(
+                "admin", tuple(ActionControl(f"admin.{index}", f"Admin {index}", _act) for index in range(10))
+            ),
         ),
         key="toolbar",
-        display=ActionDisplay.GROUPED,
+        display=ControlDisplay.GROUPED,
     )
 
     result = plan(document, target=DISCORD_V2_DPY27)
@@ -67,12 +69,12 @@ def test_explicit_action_groups_never_merge() -> None:
 
 
 def test_strong_actions_and_links_remain_direct_unless_grouping_is_granted() -> None:
-    strong = Action("delete", "Delete", _act, emphasis=Emphasis.STRONG)
-    grouped = Action("archive", "Archive", _act)
+    strong = ActionControl("delete", "Delete", _act, emphasis=Emphasis.STRONG)
+    grouped = ActionControl("archive", "Archive", _act)
     link = Link("docs", "Docs", "https://example.invalid")
 
     result = plan(
-        Actions((strong, grouped, link), key="mixed", display=ActionDisplay.GROUPED),
+        ActionControls((strong, grouped, link), key="mixed", display=ControlDisplay.GROUPED),
         target=DISCORD_V2_DPY27,
     )
 
@@ -84,8 +86,8 @@ def test_strong_actions_and_links_remain_direct_unless_grouping_is_granted() -> 
 
 
 def test_grouped_route_keeps_the_selected_actions_policy_and_handler() -> None:
-    action = Action("read", "Read", _act, mode=ActionMode.PARALLEL_READ)
-    result = plan(Actions((action,), key="demo", display=ActionDisplay.GROUPED), target=DISCORD_V2_DPY27)
+    action = ActionControl("read", "Read", _act, mode=ActionMode.PARALLEL_READ)
+    result = plan(ActionControls((action,), key="demo", display=ControlDisplay.GROUPED), target=DISCORD_V2_DPY27)
     select = next(node for node in result.scene.components_v2.children if isinstance(node, scene.Select))
 
     routed = result.bindings[select.action].routed(("read",))
@@ -99,11 +101,11 @@ def test_grouped_route_keeps_the_selected_actions_policy_and_handler() -> None:
 def test_actions_choose_a_global_fit_instead_of_root_pagination() -> None:
     dense_document = (
         *(Paragraph(f"component {index}") for index in range(35)),
-        Actions(_actions(5), key="demo"),
+        ActionControls(_actions(5), key="demo"),
     )
 
     dense = plan(dense_document, target=DISCORD_V2_DPY27)
-    roomy = plan(Actions(_actions(5), key="demo"), target=DISCORD_V2_DPY27)
+    roomy = plan(ActionControls(_actions(5), key="demo"), target=DISCORD_V2_DPY27)
 
     assert dense.report.events[0].code == "actions.grouped"
     assert dense.metrics.states_explored == 2
@@ -118,7 +120,7 @@ def test_actions_find_a_global_fit_alongside_a_local_pager() -> None:
     document = (
         *(Paragraph(f"component {index}") for index in range(33)),
         Lines(("first", "second"), overflow=Paginate(key="local", per=1)),
-        Actions(_actions(5), key="demo"),
+        ActionControls(_actions(5), key="demo"),
     )
 
     result = plan(document, target=DISCORD_V2_DPY27)
@@ -131,11 +133,11 @@ def test_actions_find_a_global_fit_alongside_a_local_pager() -> None:
 
 def test_inactive_fallback_axes_do_not_spend_the_global_search_budget() -> None:
     session = PresentationState(strategies={"visible": StrategyState("visible", "discord.actions", 1, "individual")})
-    inactive = Stack(tuple(Actions(_actions(1), key=f"inactive-{index}") for index in range(9)))
+    inactive = Stack(tuple(ActionControls(_actions(1), key=f"inactive-{index}") for index in range(9)))
     document = (
         *(Paragraph(f"component {index}") for index in range(35)),
         fallback(Paragraph("primary"), inactive),
-        Actions(_actions(5), key="visible", flexibility=Flexibility.STABLE),
+        ActionControls(_actions(5), key="visible", flexibility=Flexibility.STABLE),
     )
 
     result = plan(document, target=DISCORD_V2_DPY27, session=session)
@@ -150,7 +152,7 @@ def test_fallback_axes_are_discovered_when_their_rung_becomes_reachable() -> Non
         *(Paragraph(f"component {index}") for index in range(35)),
         fallback(
             Stack(tuple(Paragraph(f"primary {index}") for index in range(10))),
-            Actions(_actions(5), key="fallback-actions"),
+            ActionControls(_actions(5), key="fallback-actions"),
         ),
     )
 
@@ -170,7 +172,7 @@ def test_degraded_global_fit_prefers_less_loss_before_display_preference() -> No
     document = (
         Text("x" * 5000, overflow=alts("summary")),
         structural_fallback,
-        Actions(_actions(5), key="demo"),
+        ActionControls(_actions(5), key="demo"),
     )
 
     result = plan(document, target=DISCORD_V2_DPY27)
@@ -184,9 +186,9 @@ def test_degraded_global_fit_prefers_less_loss_before_display_preference() -> No
 
 def test_action_strategy_is_sticky_while_it_remains_valid() -> None:
     session = PresentationState()
-    first = plan(Actions(_actions(36), key="demo"), target=DISCORD_V2_DPY27, session=session)
+    first = plan(ActionControls(_actions(36), key="demo"), target=DISCORD_V2_DPY27, session=session)
     apply_updates(session, first.session_updates)
-    second = plan(Actions(_actions(5), key="demo"), target=DISCORD_V2_DPY27, session=session)
+    second = plan(ActionControls(_actions(5), key="demo"), target=DISCORD_V2_DPY27, session=session)
 
     assert first.report.events[0].code == "actions.grouped"
     assert second.report.events[0].code == "actions.grouped"
@@ -197,7 +199,7 @@ def test_action_strategy_is_sticky_while_it_remains_valid() -> None:
     [(5, "actions.individual"), (36, "actions.grouped"), (76, "actions.paged")],
 )
 def test_fresh_action_strategy_matrix(count: int, expected: str) -> None:
-    result = plan(Actions(_actions(count), key="demo"), target=DISCORD_V2_DPY27, session=PresentationState())
+    result = plan(ActionControls(_actions(count), key="demo"), target=DISCORD_V2_DPY27, session=PresentationState())
 
     assert result.report.events[0].code == expected
 
@@ -214,10 +216,10 @@ def test_fresh_action_strategy_matrix(count: int, expected: str) -> None:
 )
 def test_sticky_action_strategy_grow_and_shrink_matrix(initial: int, changed: int, expected: str) -> None:
     session = PresentationState()
-    first = plan(Actions(_actions(initial), key="demo"), target=DISCORD_V2_DPY27, session=session)
+    first = plan(ActionControls(_actions(initial), key="demo"), target=DISCORD_V2_DPY27, session=session)
     apply_updates(session, first.session_updates)
 
-    result = plan(Actions(_actions(changed), key="demo"), target=DISCORD_V2_DPY27, session=session)
+    result = plan(ActionControls(_actions(changed), key="demo"), target=DISCORD_V2_DPY27, session=session)
 
     assert result.report.events[0].code == expected
 
@@ -225,10 +227,10 @@ def test_sticky_action_strategy_grow_and_shrink_matrix(initial: int, changed: in
 def test_reordering_actions_does_not_change_a_sticky_strategy() -> None:
     session = PresentationState()
     actions = _actions(36)
-    first = plan(Actions(actions, key="demo"), target=DISCORD_V2_DPY27, session=session)
+    first = plan(ActionControls(actions, key="demo"), target=DISCORD_V2_DPY27, session=session)
     apply_updates(session, first.session_updates)
 
-    result = plan(Actions(tuple(reversed(actions)), key="demo"), target=DISCORD_V2_DPY27, session=session)
+    result = plan(ActionControls(tuple(reversed(actions)), key="demo"), target=DISCORD_V2_DPY27, session=session)
 
     assert result.report.events[0].code == "actions.grouped"
 
@@ -236,7 +238,7 @@ def test_reordering_actions_does_not_change_a_sticky_strategy() -> None:
 def test_adapter_version_change_resets_only_that_strategy() -> None:
     session = PresentationState(strategies={"demo": StrategyState("demo", "discord.actions", 0, "individual")})
 
-    result = plan(Actions(_actions(36), key="demo"), target=DISCORD_V2_DPY27, session=session)
+    result = plan(ActionControls(_actions(36), key="demo"), target=DISCORD_V2_DPY27, session=session)
     apply_updates(session, result.session_updates)
 
     assert result.report.events[0].code == "actions.grouped"
@@ -245,7 +247,7 @@ def test_adapter_version_change_resets_only_that_strategy() -> None:
 
 def test_more_than_seventy_five_actions_use_a_keyed_paged_picker() -> None:
     session = PresentationState()
-    document = Actions(_actions(76), key="demo")
+    document = ActionControls(_actions(76), key="demo")
     first = plan(document, target=DISCORD_V2_DPY27, session=session)
     apply_updates(session, first.session_updates)
     session.move_cursor("demo.default", Position(offset=1))
@@ -263,7 +265,7 @@ def test_more_than_seventy_five_actions_use_a_keyed_paged_picker() -> None:
 def test_search_budget_exhaustion_reports_the_best_incumbent() -> None:
     # The incumbent fits but loses text, so a cheaper representation could still have won.
     # The budget stops the search before it can rule one out, which is what it reports.
-    document = (truncate(Paragraph("x" * 5000)), Actions(_actions(5), key="demo"))
+    document = (truncate(Paragraph("x" * 5000)), ActionControls(_actions(5), key="demo"))
 
     result = plan(document, target=DISCORD_V2_DPY27, search_budget=1)
 
@@ -276,7 +278,7 @@ def test_search_budget_exhaustion_reports_the_best_incumbent() -> None:
 
 def test_a_provably_optimal_first_candidate_reports_no_fallback() -> None:
     """A budget of one is not a truncated search when nothing left could have beaten it."""
-    result = plan(Actions(_actions(5), key="demo"), target=DISCORD_V2_DPY27, search_budget=1)
+    result = plan(ActionControls(_actions(5), key="demo"), target=DISCORD_V2_DPY27, search_budget=1)
 
     assert result.metrics.states_explored == 1
     assert not result.metrics.search_fallback
@@ -302,7 +304,7 @@ def test_an_unopened_branch_leaves_no_trace_of_itself() -> None:
     """A hidden branch is not lowered at all, so it cannot stage anything on the way past."""
     hidden = Stack(
         (
-            Actions(_actions(3), key="hidden-actions"),
+            ActionControls(_actions(3), key="hidden-actions"),
             List(tuple(ListItem(str(index), f"hidden {index}") for index in range(40)), key="hidden-list"),
             Download(
                 "hidden-download",
@@ -327,14 +329,14 @@ def test_opening_a_fallback_abandons_the_decisions_under_the_old_branch() -> Non
     """Two spellings of one candidate would cost an extra evaluation; there is only one."""
     inner = fallback(
         Stack(tuple(Paragraph(f"inner primary {index}") for index in range(8))),
-        Actions(_actions(5), key="inner-actions"),
+        ActionControls(_actions(5), key="inner-actions"),
     )
     document = (
         *(Paragraph(f"component {index}") for index in range(33)),
         fallback(
             Stack(
                 (
-                    Actions(_actions(5), key="outer-actions"),
+                    ActionControls(_actions(5), key="outer-actions"),
                     *(Paragraph(f"outer {index}") for index in range(10)),
                 )
             ),
@@ -363,7 +365,7 @@ def test_a_strategy_and_a_ladder_rung_are_weighed_against_each_other() -> None:
     document = (
         *(Paragraph(f"component {index}") for index in range(34)),
         Variants.of(Panel((Text("rich"), Text("detail"))), Text("compact")),
-        Actions(_actions(5), key="demo"),
+        ActionControls(_actions(5), key="demo"),
     )
 
     result = plan(document, target=DISCORD_V2_DPY27)

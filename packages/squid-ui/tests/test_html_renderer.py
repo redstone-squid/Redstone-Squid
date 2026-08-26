@@ -10,8 +10,8 @@ from squid_ui.html import Renderer
 from squid_ui.interactions import ActionMode
 
 
-def _scene() -> scene.Document:
-    return scene.Document(
+def _scene() -> scene.Scene:
+    return scene.Scene(
         protocol=scene.Codec.protocol,
         target="discord.components-v2",
         target_version=1,

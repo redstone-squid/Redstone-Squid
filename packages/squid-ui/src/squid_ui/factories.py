@@ -38,10 +38,8 @@ from squid_ui.semantic import (
     UNOPENED,
     UNRATED,
     UNSELECTED,
-    Action,
-    ActionDisplay,
-    ActionGroup,
-    Actions,
+    ActionControl,
+    ActionControls,
     Article,
     Aside,
     Block,
@@ -54,6 +52,8 @@ from squid_ui.semantic import (
     Column,
     Columns,
     ConcreteLayoutNode,
+    ControlDisplay,
+    ControlGroup,
     Controlled,
     Details,
     DisclosureOwnership,
@@ -80,10 +80,10 @@ from squid_ui.semantic import (
     Link,
     List,
     ListItem,
-    Measure,
     Media,
     MediaDisplay,
     MediaItem,
+    Metric,
     Navigation,
     NavigationDisplay,
     NavOption,
@@ -93,7 +93,7 @@ from squid_ui.semantic import (
     ProgressBar,
     Quote,
     Roster,
-    RoutedAction,
+    RoutedActionControl,
     RoutedChoices,
     ScaleEvent,
     ScaleOwnership,
@@ -391,9 +391,9 @@ def progress(value: float, *, label: TextValue | None = None, maximum: float = 1
     return ProgressBar(value, _opt_text(label), maximum)
 
 
-def measure(value: int | float | str, label: TextValue, *, unit: str | None = None) -> Measure:
+def metric(value: int | float | str, label: TextValue, *, unit: str | None = None) -> Metric:
     """A single labelled quantity."""
-    return Measure(value, _text(label), unit)
+    return Metric(value, _text(label), unit)
 
 
 def timestamp(
@@ -606,7 +606,7 @@ def media(
 # --- controls -------------------------------------------------------------------------------
 
 
-def action(
+def action_control(
     label: TextValue,
     on_trigger: PressHandler,
     *,
@@ -619,7 +619,7 @@ def action(
     guard: Guard | None = None,
     busy: BusySpec | None = None,
     record: History | None = None,
-) -> Action:
+) -> ActionControl:
     """A control that runs ``on_trigger``; ``key`` namespaces its custom id.
 
     ``guard`` decides whether a press may execute now; ``available`` decides whether the
@@ -633,7 +633,9 @@ def action(
     if record is not None and mode is ActionMode.PARALLEL_READ:
         message = "a parallel-read action changes nothing, so it has nothing to record"
         raise ValueError(message)
-    return Action(key, _text(label), on_trigger, tone, emphasis, available, allow_grouping, mode, guard, busy, record)
+    return ActionControl(
+        key, _text(label), on_trigger, tone, emphasis, available, allow_grouping, mode, guard, busy, record
+    )
 
 
 def toggle(
@@ -667,7 +669,7 @@ def link(label: TextValue, url: str, *, key: str, emphasis: Emphasis = Emphasis.
     return Link(key, _text(label), url, emphasis)
 
 
-def routed_action(
+def routed_action_control(
     label: TextValue,
     route_id: str,
     *,
@@ -675,31 +677,36 @@ def routed_action(
     tone: Tone = Tone.NEUTRAL,
     emphasis: Emphasis = Emphasis.NORMAL,
     available: bool = True,
-) -> RoutedAction:
+) -> RoutedActionControl:
     """A control the router dispatches, surviving the process that drew it.
 
     Build ``route_id`` with a `squid_ui.routing.Route` rather than by hand, so an id
     over Discord's budget fails here and not at send time.
     """
-    return RoutedAction(key, _text(label), route_id, tone, emphasis, available)
+    return RoutedActionControl(key, _text(label), route_id, tone, emphasis, available)
 
 
-def action_group(
-    *entries: Conditional[Action | Link | RoutedAction], key: str, label: TextValue | None = None
-) -> ActionGroup:
+def control_group(
+    *entries: Conditional[ActionControl | Link | RoutedActionControl], key: str, label: TextValue | None = None
+) -> ControlGroup:
     """Controls that belong together and degrade together."""
-    return ActionGroup(key, _collect(entries, (Action, Link, RoutedAction), "sl.action_group()"), _opt_text(label))
+    return ControlGroup(
+        key, _collect(entries, (ActionControl, Link, RoutedActionControl), "sl.control_group()"), _opt_text(label)
+    )
 
 
-def actions(
-    *entries: Conditional[Action | Link | RoutedAction | ActionGroup],
+def action_controls(
+    *entries: Conditional[ActionControl | Link | RoutedActionControl | ControlGroup],
     key: str,
-    display: ActionDisplay = ActionDisplay.AUTO,
+    display: ControlDisplay = ControlDisplay.AUTO,
     flexibility: Flexibility = Flexibility.NORMAL,
-) -> Actions:
+) -> ActionControls:
     """The controls offered by a view; ``key`` carries the chosen presentation."""
-    return Actions(
-        _collect(entries, (Action, Link, RoutedAction, ActionGroup), "sl.actions()"), key, display, flexibility
+    return ActionControls(
+        _collect(entries, (ActionControl, Link, RoutedActionControl, ControlGroup), "sl.action_controls()"),
+        key,
+        display,
+        flexibility,
     )
 
 
@@ -864,9 +871,8 @@ __all__ = [
     "ChildLike",
     "Conditional",
     "TextValue",
-    "action",
-    "action_group",
-    "actions",
+    "action_control",
+    "action_controls",
     "article",
     "aside",
     "block",
@@ -878,6 +884,7 @@ __all__ = [
     "code",
     "column",
     "columns",
+    "control_group",
     "controlled",
     "details",
     "download",
@@ -894,9 +901,9 @@ __all__ = [
     "item_label",
     "items",
     "link",
-    "measure",
     "media",
     "media_item",
+    "metric",
     "nav_option",
     "navigation",
     "note",
@@ -905,7 +912,7 @@ __all__ = [
     "quote",
     "rating",
     "roster",
-    "routed_action",
+    "routed_action_control",
     "routed_choices",
     "section",
     "stack",

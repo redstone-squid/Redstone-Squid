@@ -15,14 +15,20 @@ from contextvars import ContextVar
 from dataclasses import dataclass, replace
 from typing import Any, Protocol
 
+from squid_reactivity.core import (
+    _RENDER_OBSERVATION,
+    Observation,
+    StateOwner,
+    observe_render,
+)
 from squid_ui.document import Asset, Document
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.primitives.constraints import Paginate
 from squid_ui.primitives.nodes import (
-    ActionGroup,
     Boundary,
     Button,
     Code,
+    ControlGroup,
     Footer,
     Heading,
     Lines,
@@ -41,17 +47,15 @@ from squid_ui.runtime.resources import (
 )
 from squid_ui.runtime.topics import Address
 from squid_ui.semantic import (
-    Action as SemanticAction,
+    ActionControl as SemanticActionControl,
 )
 from squid_ui.semantic import (
-    ActionGroup as SemanticActionGroup,
-)
-from squid_ui.semantic import (
-    Actions as SemanticActions,
+    ActionControls as SemanticActionControls,
 )
 from squid_ui.semantic import (
     Choices as SemanticChoices,
 )
+from squid_ui.semantic import ControlGroup as SemanticControlGroup
 from squid_ui.semantic import (
     Details as SemanticDetails,
 )
@@ -84,12 +88,6 @@ from squid_ui.semantic import (
     Table as SemanticTable,
 )
 from squid_ui.semantic import Toggle as SemanticToggle
-from squid_reactivity.core import (
-    _RENDER_OBSERVATION,
-    Observation,
-    StateOwner,
-    observe_render,
-)
 
 type RenderNode[ModeT = Any] = LayoutNode[ModeT]
 type RenderResult[ModeT = Any] = Document[ModeT] | LayoutNode[ModeT] | Sequence[LayoutNode[ModeT]]
@@ -493,19 +491,19 @@ def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
         return replace(item, key=key_for(item)) if isinstance(item, Button) else item  # pyrefly: ignore
 
     def rewrite_semantic_action(
-        item: SemanticAction | SemanticLink | SemanticActionGroup,
-    ) -> SemanticAction | SemanticLink | SemanticActionGroup:
-        if isinstance(item, SemanticActionGroup):
+        item: SemanticActionControl | SemanticLink | SemanticControlGroup,
+    ) -> SemanticActionControl | SemanticLink | SemanticControlGroup:
+        if isinstance(item, SemanticControlGroup):
             return replace(
                 item,
                 key=f"{prefix}.{item.key}",
-                actions=tuple(rewrite_semantic_action(action) for action in item.actions),
+                controls=tuple(rewrite_semantic_action(control) for control in item.controls),
             )
         return replace(item, key=f"{prefix}.{item.key}")
 
     def rewrite(node: LayoutNode) -> LayoutNode:
         match node:
-            case SemanticActions(items=items, key=key):
+            case SemanticActionControls(items=items, key=key):
                 return replace(
                     node,
                     key=f"{prefix}.{key}",
@@ -534,8 +532,8 @@ def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
                 return rewrite_text(node)
             case Row(items=items):
                 return Row(items=tuple(rewrite_item(item) for item in items))
-            case ActionGroup(items=items):
-                return ActionGroup(items=tuple(rewrite_item(item) for item in items))
+            case ControlGroup(items=items):
+                return ControlGroup(items=tuple(rewrite_item(item) for item in items))
             case Section(texts=texts, accessory=accessory):
                 return Section(texts=tuple(rewrite_text(text) for text in texts), accessory=rewrite_item(accessory))
             case SelectMenu():

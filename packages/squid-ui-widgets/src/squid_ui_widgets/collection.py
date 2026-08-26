@@ -5,10 +5,10 @@ from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
 
-from squid_ui.factories import actions, choice, heading, stack, status
+from squid_ui.factories import action_controls, choice, heading, stack, status
 from squid_ui.forms import Form, FormLike, FormSpec
 from squid_ui.runtime.component import RenderResult
-from squid_ui.semantic import ActionDisplay, FormTrigger, Tone
+from squid_ui.semantic import ControlDisplay, FormTrigger, Tone
 from squid_ui.sources import Position
 from squid_ui.text import TextLike
 from squid_ui_widgets._paging import window
@@ -225,62 +225,64 @@ class CollectionEditor:
         add = (
             controls.form(add_form, _Action.ADD.value, key=f"{self.key}.add", label=controls.chrome.add)
             if add_form is not None
-            else controls.action(controls.chrome.add, _Action.ADD.value, key=f"{self.key}.add", available=False)
+            else controls.action_control(controls.chrome.add, _Action.ADD.value, key=f"{self.key}.add", available=False)
         )
         edit = (
             controls.form(edit_form, _Action.EDIT.value, key=f"{self.key}.edit", label=controls.chrome.edit)
             if edit_form is not None
-            else controls.action(controls.chrome.edit, _Action.EDIT.value, key=f"{self.key}.edit", available=False)
+            else controls.action_control(
+                controls.chrome.edit, _Action.EDIT.value, key=f"{self.key}.edit", available=False
+            )
         )
         add_node = (
             add
             if isinstance(add, FormTrigger)
-            else actions(add, key=f"{self.key}.add-action", display=ActionDisplay.INDIVIDUAL)
+            else action_controls(add, key=f"{self.key}.add-action", display=ControlDisplay.INDIVIDUAL)
         )
         edit_node = (
             edit
             if isinstance(edit, FormTrigger)
-            else actions(edit, key=f"{self.key}.edit-action", display=ActionDisplay.INDIVIDUAL)
+            else action_controls(edit, key=f"{self.key}.edit-action", display=ControlDisplay.INDIVIDUAL)
         )
-        entry_actions = actions(
-            controls.action(
+        entry_actions = action_controls(
+            controls.action_control(
                 controls.chrome.remove,
                 _Action.REMOVE.value,
                 key=f"{self.key}.remove",
                 tone=Tone.DANGER,
                 available=selected_index is not None and len(state.entries) > self.minimum,
             ),
-            controls.action(
+            controls.action_control(
                 controls.chrome.move_up,
                 _Action.UP.value,
                 key=f"{self.key}.up",
                 available=self.reorder and selected_index is not None and selected_index > 0,
             ),
-            controls.action(
+            controls.action_control(
                 controls.chrome.move_down,
                 _Action.DOWN.value,
                 key=f"{self.key}.down",
                 available=(self.reorder and selected_index is not None and selected_index < len(state.entries) - 1),
             ),
             key=f"{self.key}.entry-actions",
-            display=ActionDisplay.INDIVIDUAL,
+            display=ControlDisplay.INDIVIDUAL,
         )
         paging = (
-            actions(
-                controls.action(
+            action_controls(
+                controls.action_control(
                     controls.chrome.previous,
                     _Action.PREVIOUS.value,
                     key=f"{self.key}.previous",
                     available=position.offset > 0,
                 ),
-                controls.action(
+                controls.action_control(
                     controls.chrome.next,
                     _Action.NEXT.value,
                     key=f"{self.key}.next",
                     available=position.offset < pages - 1,
                 ),
                 key=f"{self.key}.paging",
-                display=ActionDisplay.INDIVIDUAL,
+                display=ControlDisplay.INDIVIDUAL,
             )
             if pages > 1
             else None

@@ -3,10 +3,10 @@
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
 
-from squid_ui.factories import actions, heading, paragraph, stack, status
+from squid_ui.factories import action_controls, heading, paragraph, stack, status
 from squid_ui.forms import ChoiceOption, FormSpec, MultiChoiceField
 from squid_ui.runtime.component import RenderResult
-from squid_ui.semantic import ActionDisplay, Choice, Tone, fallback
+from squid_ui.semantic import Choice, ControlDisplay, Tone, fallback
 from squid_ui.sources import Position
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import display_text, require_key
@@ -280,14 +280,14 @@ class MultiChoice:
                 else status("Selection limit reached in another group.", tone=Tone.INFO)
             )
             pager = (
-                actions(
-                    controls.action(
+                action_controls(
+                    controls.action_control(
                         controls.chrome.previous,
                         f"page:{group.key}:previous",
                         key=f"{self.key}.{group.key}.previous",
                         available=page > 0,
                     ),
-                    controls.action(
+                    controls.action_control(
                         controls.chrome.next,
                         f"page:{group.key}:next",
                         key=f"{self.key}.{group.key}.next",
@@ -329,15 +329,15 @@ class MultiChoice:
             *(status(message, tone=Tone.DANGER) for message in errors),
             selection,
             (
-                actions(
-                    controls.action(
+                action_controls(
+                    controls.action_control(
                         controls.chrome.apply,
                         "apply",
                         key=f"{self.key}.apply",
                         available=not errors and state.staged != state.committed,
                     ),
                     key=f"{self.key}.commit",
-                    display=ActionDisplay.INDIVIDUAL,
+                    display=ControlDisplay.INDIVIDUAL,
                 )
                 if self.commit is CommitMode.EXPLICIT
                 else None

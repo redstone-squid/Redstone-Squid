@@ -152,7 +152,7 @@ def _program_dynamic_values(
     positions: object,
     nav: PlannedNav | None,
     capabilities: object,
-    planned: scene.Document[Any],
+    planned: scene.Scene[Any],
 ) -> tuple[object, ...]:
     external = (
         target,
@@ -814,7 +814,7 @@ def plan[ModeT, AdapterT, BodyT: scene.Body](
             collected = _collect_cached_bindings(selected_nodes, cached.scene, nav, chrome)
             resources = {f"asset:{asset.key}": asset for asset in assets}
             result = PlanResult(
-                scene=cast(scene.Document[BodyT], cached.scene),
+                scene=cast(scene.Scene[BodyT], cached.scene),
                 bindings=collected.bindings,
                 form_bindings=collected.form_bindings,
                 report=cached.report,
@@ -850,7 +850,7 @@ def plan[ModeT, AdapterT, BodyT: scene.Body](
         collected = _collect_cached_bindings(selected_nodes, cached.scene, nav, chrome)
         resources = {f"asset:{asset.key}": asset for asset in assets}
         result = PlanResult(
-            scene=cast(scene.Document[BodyT], cached.scene),
+            scene=cast(scene.Scene[BodyT], cached.scene),
             bindings=collected.bindings,
             form_bindings=collected.form_bindings,
             report=cached.report,
@@ -948,7 +948,7 @@ def plan[ModeT, AdapterT, BodyT: scene.Body](
             f"but its dialect produced {type(body).__name__}"
         )
         raise LayoutInvariantError(message)
-    planned = scene.Document(
+    planned = scene.Scene(
         protocol=scene.Codec.protocol,
         target=target.id,
         target_version=target.version,
@@ -1141,7 +1141,7 @@ def _collect_bindings(nodes: Sequence[Node]) -> SceneBindings:
 
 def _collect_cached_bindings(
     nodes: Sequence[Node],
-    document: scene.Document,
+    document: scene.Scene,
     nav: PlannedNav | None,
     chrome: Chrome,
 ) -> SceneBindings:

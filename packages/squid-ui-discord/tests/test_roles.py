@@ -10,6 +10,7 @@ import discord
 import pytest
 
 import squid_ui_discord
+from squid_ui.primitives.nodes import ControlGroup, RoutedButton, RoutedSelect, Variants
 from squid_ui_discord.roles import (
     RoleMutationForbidden,
     RolesUnchanged,
@@ -17,7 +18,6 @@ from squid_ui_discord.roles import (
 )
 from squid_ui_discord.routing import Router
 from squid_ui_discord.testing import fake_interaction
-from squid_ui.primitives.nodes import ActionGroup, RoutedButton, RoutedSelect, Variants
 
 
 class FakeRole:
@@ -123,7 +123,7 @@ def test_routes_and_rendering_are_stable_and_unselected() -> None:
     assert isinstance(ladder, Variants)
     preferred, fallback = ladder.variants
     preferred_node = preferred.nodes[0]
-    assert isinstance(preferred_node, ActionGroup)
+    assert isinstance(preferred_node, ControlGroup)
     buttons = tuple(button for button in preferred_node.items if isinstance(button, RoutedButton))
     assert [button.route_id for button in buttons] == [
         "roles:toggle:colour:101",

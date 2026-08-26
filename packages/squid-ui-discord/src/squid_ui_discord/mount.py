@@ -692,7 +692,7 @@ def _drawn(candidate: _ApplicationCandidate) -> _Candidate:
     return candidate
 
 
-def _scene_action_keys(document: scene.Document) -> tuple[str, ...]:
+def _scene_action_keys(document: scene.Scene) -> tuple[str, ...]:
     """Collect visible action references without allocating frontend controls."""
     found: list[str] = []
 
@@ -780,7 +780,7 @@ class MountSnapshot:
     suppressed: int
     """Renders committed without a Discord edit because they matched the live generation."""
     render_cache: RenderProgramCacheSnapshot
-    scene: scene.Document | None
+    scene: scene.Scene | None
     report: PlanReport | None
     metrics: PlanMetrics | None
 

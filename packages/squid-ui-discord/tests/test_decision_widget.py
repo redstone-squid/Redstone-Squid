@@ -4,15 +4,15 @@ import discord
 
 import squid_ui as sl
 import squid_ui_widgets as sp
+from squid_ui.semantic import ActionControls, Stack, Status
 from squid_ui_discord import Everyone, Mount
 from squid_ui_discord.testing import commit_render, fake_interaction
-from squid_ui.semantic import Actions, Stack, Status
 
 
-def _actions(rendered: sl.LayoutNode) -> tuple[sl.semantic.Action, ...]:
+def _actions(rendered: sl.LayoutNode) -> tuple[sl.semantic.ActionControl, ...]:
     assert isinstance(rendered, Stack)
-    group = next(child for child in rendered.children if isinstance(child, Actions))
-    return tuple(item for item in group.items if isinstance(item, sl.semantic.Action))
+    group = next(child for child in rendered.children if isinstance(child, ActionControls))
+    return tuple(item for item in group.items if isinstance(item, sl.semantic.ActionControl))
 
 
 def _decision() -> sp.Decision:

@@ -5,9 +5,9 @@ import pytest
 
 import squid_ui as sl
 import squid_ui_widgets as sp
+from squid_ui.semantic import FormTrigger, Stack
 from squid_ui_discord import Everyone, Mount
 from squid_ui_discord.testing import commit_render, fake_interaction
-from squid_ui.semantic import FormTrigger, Stack
 from squid_ui_widgets import REVIEW_STEP
 
 
@@ -147,7 +147,9 @@ def _answer(wizard: sp.Wizard, state: sp.WizardState, step: str, value: str) -> 
 
 
 def _labels(rendered) -> list[object]:
-    return [node.label for node in _walk(rendered) if isinstance(node, sl.semantic.Action | sl.semantic.FormTrigger)]
+    return [
+        node.label for node in _walk(rendered) if isinstance(node, sl.semantic.ActionControl | sl.semantic.FormTrigger)
+    ]
 
 
 def _walk(node):

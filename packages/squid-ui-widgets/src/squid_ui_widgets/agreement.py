@@ -5,11 +5,11 @@ from dataclasses import dataclass
 from typing import Literal
 
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
-from squid_ui.factories import action, actions, bullet, bullets, stack, status
+from squid_ui.factories import action_control, action_controls, bullet, bullets, stack, status
 from squid_ui.interactions import ActionEvent, ActionMode, PressEvent
 from squid_ui.runtime.component import Component, RenderResult
 from squid_ui.runtime.reactivity import state
-from squid_ui.semantic import ActionDisplay, Emphasis, Tone
+from squid_ui.semantic import ControlDisplay, Emphasis, Tone
 from squid_ui.text import Message, TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, render_content, require_key
 
@@ -83,7 +83,7 @@ class Agreement(Component):
             for participant in self.participants
         )
         controls = [
-            action(
+            action_control(
                 chrome.approve,
                 self._approve,
                 key=f"{self.key}.approve",
@@ -95,7 +95,7 @@ class Agreement(Component):
         ]
         if self.allow_withdraw:
             controls.append(
-                action(
+                action_control(
                     chrome.withdraw,
                     self._withdraw,
                     key=f"{self.key}.withdraw",
@@ -111,7 +111,7 @@ class Agreement(Component):
                 tone=Tone.SUCCESS if self.resolved else Tone.INFO,
                 emphasis=Emphasis.STRONG if self.resolved else Emphasis.NORMAL,
             ),
-            actions(*controls, key=f"{self.key}.controls", display=ActionDisplay.INDIVIDUAL),
+            action_controls(*controls, key=f"{self.key}.controls", display=ControlDisplay.INDIVIDUAL),
         )
 
     def _participant(self, actor_id: str) -> bool:

@@ -6,12 +6,12 @@ from typing import Any
 import discord
 import pytest
 
-import squid_ui_discord
 import squid_ui as sl
+import squid_ui_discord
+from squid_ui.primitives import Button, Heading, Row, Text
 from squid_ui_discord import Everyone, Mount, Owner, live
 from squid_ui_discord.devtools_view import MountInspector, metrics_text, plan_text, scene_attachment
 from squid_ui_discord.testing import assert_within_limits, commit_render, delivered_to, fake_interaction
-from squid_ui.primitives import Button, Heading, Row, Text
 
 
 class Subject(sl.Component):
@@ -66,7 +66,7 @@ class TestList:
         nodes = MountInspector().render()
 
         assert isinstance(nodes[0], sl.semantic.Section)
-        assert isinstance(nodes[-1], sl.semantic.Actions)
+        assert isinstance(nodes[-1], sl.semantic.ActionControls)
 
     async def test_it_lists_a_live_mount_with_a_link_to_its_message(self) -> None:
         subject = await live_subject()

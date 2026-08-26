@@ -4,10 +4,10 @@ from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
 from types import MappingProxyType
 
-from squid_ui.factories import actions, field, fields, heading, progress, stack
+from squid_ui.factories import action_controls, field, fields, heading, progress, stack
 from squid_ui.forms import Form, FormField, FormLike, FormSpec
 from squid_ui.runtime.component import RenderResult
-from squid_ui.semantic import Action, ActionDisplay, FormTrigger, LayoutNode, RoutedAction, Tone
+from squid_ui.semantic import ActionControl, ControlDisplay, FormTrigger, LayoutNode, RoutedActionControl, Tone
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import ContentItem, ContentLike, normalize_content, require_key
 from squid_ui_widgets.drivers import ComponentDriver, MachineControls, TransitionEvent
@@ -290,14 +290,17 @@ class Wizard:
             heading(self.title),
             heading(review.label if review.label is not None else controls.chrome.review, level=3),
             *body,
-            actions(
-                *(controls.action(step.label, f"goto:{step.key}", key=f"{self.key}.goto.{step.key}") for step in steps),
+            action_controls(
+                *(
+                    controls.action_control(step.label, f"goto:{step.key}", key=f"{self.key}.goto.{step.key}")
+                    for step in steps
+                ),
                 key=f"{self.key}.review",
             )
             if steps
             else None,
-            actions(
-                controls.action(
+            action_controls(
+                controls.action_control(
                     controls.chrome.finish,
                     "finish",
                     key=f"{self.key}.finish",
@@ -305,7 +308,7 @@ class Wizard:
                     available=self.answered(state),
                 ),
                 key=f"{self.key}.chrome",
-                display=ActionDisplay.INDIVIDUAL,
+                display=ControlDisplay.INDIVIDUAL,
             ),
         )
 
@@ -337,9 +340,9 @@ class Wizard:
                 label=controls.chrome.next,
             )
         elif editing:
-            primary = controls.action(controls.chrome.review, "review", key=f"{self.key}.primary")
+            primary = controls.action_control(controls.chrome.review, "review", key=f"{self.key}.primary")
         else:
-            primary = controls.action(
+            primary = controls.action_control(
                 last_label if next_step is None else controls.chrome.next,
                 last_action if next_step is None else "next",
                 key=f"{self.key}.primary",
@@ -351,16 +354,16 @@ class Wizard:
             heading(current.label, level=3),
             *controls.content(current.content, prefix=f"step-{current.key}"),
             primary if isinstance(primary, FormTrigger) else None,
-            actions(
-                controls.action(
+            action_controls(
+                controls.action_control(
                     controls.chrome.back,
                     "back",
                     key=f"{self.key}.back",
                     available=index > 0 or editing,
                 ),
-                primary if isinstance(primary, Action | RoutedAction) else None,
+                primary if isinstance(primary, ActionControl | RoutedActionControl) else None,
                 key=f"{self.key}.chrome",
-                display=ActionDisplay.INDIVIDUAL,
+                display=ControlDisplay.INDIVIDUAL,
             ),
         )
 

@@ -7,11 +7,9 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-import squid_ui_discord as sd
 import squid_ui as sl
 import squid_ui.runtime.owner as owner_module
-from squid_ui_discord import Everyone, Mount
-from squid_ui_discord.testing import commit_render, fake_interaction
+import squid_ui_discord as sd
 from squid_ui import Component, ContextKey, PressEvent, state
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.primitives import (
@@ -32,7 +30,9 @@ from squid_ui.runtime.component import render_component_tree
 from squid_ui.runtime.owner import ComponentRuntime
 from squid_ui.runtime.shared import SharedState
 from squid_ui.runtime.topics import CellAddress, LocalTopicBus
-from squid_ui.semantic import Action, Actions, Choice, Choices, Controlled, Group, List, ListItem
+from squid_ui.semantic import ActionControl, ActionControls, Choice, Choices, Controlled, Group, List, ListItem
+from squid_ui_discord import Everyone, Mount
+from squid_ui_discord.testing import commit_render, fake_interaction
 
 
 class Counter(Component):
@@ -505,7 +505,7 @@ def test_semantic_actions_are_namespaced_across_embedded_instances() -> None:
 
     class Child(Component):
         def render(self):
-            return Actions((Action("run", "Run", run),), key="toolbar")
+            return ActionControls((ActionControl("run", "Run", run),), key="toolbar")
 
     class Parent(Component):
         def __init__(self) -> None:

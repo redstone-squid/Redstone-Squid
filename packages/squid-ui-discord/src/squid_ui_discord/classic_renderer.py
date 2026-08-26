@@ -22,6 +22,12 @@ from typing import Any, cast
 
 import discord
 
+from squid_ui import scene
+from squid_ui.errors import DrawInvariantError
+from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
+from squid_ui.planning.limits import CLASSIC_LIMITS, ClassicLimits
+from squid_ui.scene.model import PlanResult
+from squid_ui.target_types import DiscordPyAdapter
 from squid_ui_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
 from squid_ui_discord.attachments import attachment_assets
 from squid_ui_discord.emoji import discord_emoji
@@ -31,12 +37,6 @@ from squid_ui_discord.render_cache import RenderProgramCache
 from squid_ui_discord.renderer import RoutedItem, RoutedSelectItem
 from squid_ui_discord.renderer import Wire as Wire
 from squid_ui_discord.target import DISCORD_V1_DPY27
-from squid_ui import scene
-from squid_ui.errors import DrawInvariantError
-from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
-from squid_ui.planning.limits import CLASSIC_LIMITS, ClassicLimits
-from squid_ui.scene.model import PlanResult
-from squid_ui.target_types import DiscordPyAdapter
 
 type Control = scene.Button | scene.Select | scene.EntitySelect
 type ClassicViewFactory = Callable[[], discord.ui.View]
@@ -106,7 +106,7 @@ class ClassicRenderer:
 
     def draw(
         self,
-        document: scene.Document[scene.ClassicMessage],
+        document: scene.Scene[scene.ClassicMessage],
         *,
         plan: PlanResult[scene.ClassicMessage] | None = None,
         wire: Wire | None = None,
@@ -145,14 +145,14 @@ class ClassicRenderer:
 
     def _cache_key(
         self,
-        document: scene.Document[scene.ClassicMessage],
+        document: scene.Scene[scene.ClassicMessage],
         plan: PlanResult[scene.ClassicMessage] | None,
     ) -> Hashable:
         fingerprint = plan.report.scene_fingerprint if plan is not None else scene.Codec.fingerprint(document)
         factory = "static" if self.view_factory is StaticClassicView else "custom"
         return "discord.classic", fingerprint, self.limits, factory, self.always_view
 
-    def _body(self, document: scene.Document[scene.ClassicMessage]) -> scene.ClassicMessage:
+    def _body(self, document: scene.Scene[scene.ClassicMessage]) -> scene.ClassicMessage:
         if document.protocol != scene.Codec.protocol:
             message = f"ClassicRenderer cannot draw scene protocol {document.protocol}"
             raise DrawInvariantError(message)

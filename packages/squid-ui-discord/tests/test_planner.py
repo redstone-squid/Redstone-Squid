@@ -5,10 +5,6 @@ from datetime import UTC, datetime
 import discord
 import pytest
 
-from squid_ui_discord import DISCORD_V2_DPY27
-from squid_ui_discord import V2_LIMITS as LIMITS
-from squid_ui_discord.renderer import V2Renderer
-from squid_ui_discord.target import NativeItem
 from squid_ui import Document, scene, zoned_timestamp
 from squid_ui.document import Asset, InlineAsset
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
@@ -18,9 +14,9 @@ from squid_ui.planning.discord import components_v2_target
 from squid_ui.planning.limits import V2Limits
 from squid_ui.planning.types import DiscordAdapter
 from squid_ui.primitives import (
-    ActionGroup,
     Button,
     Code,
+    ControlGroup,
     Lines,
     Never,
     Paginate,
@@ -35,6 +31,10 @@ from squid_ui.primitives import (
 from squid_ui.sources import Position
 from squid_ui.temporal import ZonedDateTime
 from squid_ui.text import Localization, Message
+from squid_ui_discord import DISCORD_V2_DPY27
+from squid_ui_discord import V2_LIMITS as LIMITS
+from squid_ui_discord.renderer import V2Renderer
+from squid_ui_discord.target import NativeItem
 
 
 def _target(name: str, *, capabilities: frozenset[str] = frozenset(), limits: V2Limits = LIMITS):
@@ -122,7 +122,7 @@ def test_assets_are_scene_resources_not_visual_children() -> None:
 
 def test_action_group_chunks_controls_without_dropping_any() -> None:
     buttons = tuple(Button(label=str(index), on_click=_click, key=f"b{index}") for index in range(6))
-    result = plan(ActionGroup(buttons), target=DISCORD_V2_DPY27)
+    result = plan(ControlGroup(buttons), target=DISCORD_V2_DPY27)
 
     rows = [node for node in result.scene.components_v2.children if isinstance(node, scene.Row)]
     assert [len(row.items) for row in rows] == [5, 1]
@@ -131,7 +131,7 @@ def test_action_group_chunks_controls_without_dropping_any() -> None:
 
 def test_explicit_document_key_allows_lossless_root_component_paging() -> None:
     buttons = tuple(Button(str(index), _click, f"b{index}") for index in range(41))
-    document = Document((ActionGroup(buttons),), key="toolbar")
+    document = Document((ControlGroup(buttons),), key="toolbar")
     first = plan(document, target=DISCORD_V2_DPY27, nav=_nav)
 
     assert first.scene.pagers[0].key == "toolbar"
@@ -160,7 +160,7 @@ def test_a_cosmetic_note_does_not_fragment_root_pages() -> None:
     buttons = tuple(Button(str(index), _click, f"b{index}") for index in range(41))
 
     def pages_for(overflow) -> int:
-        document = Document((Text("hi", overflow=overflow), ActionGroup(buttons)), key="toolbar")
+        document = Document((Text("hi", overflow=overflow), ControlGroup(buttons)), key="toolbar")
         return plan(document, target=DISCORD_V2_DPY27, nav=_nav).scene.pagers[0].pages
 
     assert pages_for(Paginate(key="noted", per=5)) == pages_for(Never())
@@ -170,13 +170,13 @@ def test_root_paging_requires_an_explicit_document_key() -> None:
     buttons = tuple(Button(str(index), _click, f"b{index}") for index in range(41))
 
     with pytest.raises(UnsolvableLayoutError, match="give Document an explicit key"):
-        plan(ActionGroup(buttons), target=DISCORD_V2_DPY27, nav=_nav)
+        plan(ControlGroup(buttons), target=DISCORD_V2_DPY27, nav=_nav)
 
 
 def test_local_pagination_precedes_root_pagination_instead_of_nesting() -> None:
     buttons = tuple(Button(str(index), _click, f"b{index}") for index in range(41))
     document = Document(
-        (ActionGroup(buttons), Code("x" * 9000, overflow=Paginate(key="detail"))),
+        (ControlGroup(buttons), Code("x" * 9000, overflow=Paginate(key="detail"))),
         key="root",
     )
 

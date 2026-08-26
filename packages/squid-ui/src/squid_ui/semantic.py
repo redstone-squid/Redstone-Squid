@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from squid_ui.runtime.histories import History
 
 
-class ActionDisplay(StrEnum):
+class ControlDisplay(StrEnum):
     AUTO = "auto"
     INDIVIDUAL = "individual"
     GROUPED = "grouped"
@@ -429,7 +429,7 @@ class Grid:
 
 
 @dataclass(frozen=True, slots=True)
-class Measure:
+class Metric:
     value: int | float | str
     label: TextLike
     unit: str | None = None
@@ -470,7 +470,7 @@ class FormTrigger:
 
 
 @dataclass(frozen=True, slots=True)
-class Action:
+class ActionControl:
     key: str
     label: TextLike
     on_trigger: PressHandler
@@ -496,7 +496,7 @@ class Link:
 
 
 @dataclass(frozen=True, slots=True)
-class RoutedAction:
+class RoutedActionControl:
     """A control whose custom id is its state, dispatched by a router rather than a mount.
 
     For the buttons on mass-posted cards that must still work after a restart: no
@@ -504,7 +504,7 @@ class RoutedAction:
     a `squid_ui.routing.Route`, which validates it against Discord's budget at
     authoring time rather than at send time.
 
-    `Action` remains the right node whenever a session is already in play; this one buys
+    `ActionControl` remains the right node whenever a session is already in play; this one buys
     survival at the price of every guarantee the mount's funnel provides.
     """
 
@@ -517,17 +517,17 @@ class RoutedAction:
 
 
 @dataclass(frozen=True, slots=True)
-class ActionGroup:
+class ControlGroup:
     key: str
-    actions: tuple[Action | Link | RoutedAction, ...]
+    controls: tuple[ActionControl | Link | RoutedActionControl, ...]
     label: TextLike | None = None
 
 
 @dataclass(frozen=True, slots=True)
-class Actions:
-    items: tuple[Action | Link | RoutedAction | ActionGroup, ...]
+class ActionControls:
+    items: tuple[ActionControl | Link | RoutedActionControl | ControlGroup, ...]
     key: str
-    display: ActionDisplay = ActionDisplay.AUTO
+    display: ControlDisplay = ControlDisplay.AUTO
     flexibility: Flexibility = Flexibility.NORMAL
 
 
@@ -792,11 +792,11 @@ type SemanticNode = (
     | ProgressBar
     | Roster
     | Grid
-    | Measure
+    | Metric
     | Timestamp
     | ZonedTimestamp
     | FormTrigger
-    | Actions
+    | ActionControls
     | Choices
     | Entities
     | RoutedChoices
@@ -916,10 +916,8 @@ __all__ = [
     "UNOPENED",
     "UNRATED",
     "UNSELECTED",
-    "Action",
-    "ActionDisplay",
-    "ActionGroup",
-    "Actions",
+    "ActionControl",
+    "ActionControls",
     "Adaptation",
     "Article",
     "Aside",
@@ -934,6 +932,8 @@ __all__ = [
     "Code",
     "Column",
     "Columns",
+    "ControlDisplay",
+    "ControlGroup",
     "Controlled",
     "DetailLevel",
     "Details",
@@ -963,10 +963,10 @@ __all__ = [
     "Link",
     "List",
     "ListItem",
-    "Measure",
     "Media",
     "MediaDisplay",
     "MediaItem",
+    "Metric",
     "NavOption",
     "NavOwnership",
     "NavigateEvent",
@@ -981,7 +981,7 @@ __all__ = [
     "ProgressBar",
     "Quote",
     "Roster",
-    "RoutedAction",
+    "RoutedActionControl",
     "RoutedChoices",
     "ScaleEvent",
     "ScaleOwnership",

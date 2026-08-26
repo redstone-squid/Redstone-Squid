@@ -6,7 +6,7 @@ from typing import Literal
 
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.factories import action, actions, heading, note, stack
+from squid_ui.factories import action_control, action_controls, heading, note, stack
 from squid_ui.interactions import ActionEvent
 from squid_ui.planning.navigation import (
     NAV_FACTORY_CONTEXT,
@@ -142,8 +142,8 @@ class SourceRankedList[EntryT](Component):
         return stack(
             heading(self.heading) if self.heading is not None else None,
             note(message),
-            actions(
-                action(self.retry, self._retry, key=f"{self.key}.retry"),
+            action_controls(
+                action_control(self.retry, self._retry, key=f"{self.key}.retry"),
                 key=f"{self.key}.load-actions",
             )
             if retry
@@ -220,8 +220,8 @@ class SourceRankedList[EntryT](Component):
             *navigation,
             *(self._hook(self.footer, total, name="footer") if self.footer is not None else ()),
             note(status) if status is not None else None,
-            actions(
-                action(self.retry, self._retry, key=f"{self.key}.retry"),
+            action_controls(
+                action_control(self.retry, self._retry, key=f"{self.key}.retry"),
                 key=f"{self.key}.load-actions",
             )
             if retry
