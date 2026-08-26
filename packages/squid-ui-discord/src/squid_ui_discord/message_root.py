@@ -60,6 +60,7 @@ from squid_ui.planning.navigation import (
     default_nav,
 )
 from squid_ui.planning.planner import plan as plan_document
+from squid_ui.planning.target import AnyTarget
 from squid_ui.primitives.nodes import Button, Node, Row
 from squid_ui.profiling import (
     ActionStatus,
@@ -155,7 +156,7 @@ _BINDINGS: dict[str, _DiscordBinding] = {
 }
 
 
-def _binding_for(target: Target[Any, Any, Any, Any]) -> _DiscordBinding:
+def _binding_for(target: AnyTarget) -> _DiscordBinding:
     binding = _BINDINGS.get(target.dialect.id)
     if binding is None:
         known = ", ".join(sorted(_BINDINGS))

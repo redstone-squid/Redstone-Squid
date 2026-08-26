@@ -40,7 +40,7 @@ from squid_ui.planning.layout_measurement.solver import (
     MeasuredLayout,
     measure,
 )
-from squid_ui.planning.limits import DiscordLimits
+from squid_ui.planning.limits import MessageLimits
 from squid_ui.planning.navigation import PlannedNav, materialized_navigation_state
 from squid_ui.planning.search import (
     DEFAULT_SEARCH_BUDGET,
@@ -54,7 +54,7 @@ from squid_ui.planning.semantic_adaptation.lowering import (
     lower_semantics,
 )
 from squid_ui.planning.semantic_adaptation.model import FallbackAxis, SemanticDecisions, SemanticLowering
-from squid_ui.planning.target import Target
+from squid_ui.planning.target import AnyTarget, Target, TargetIdentity
 from squid_ui.primitives.constraints import Paginate
 from squid_ui.primitives.nodes import (
     Break,
@@ -405,7 +405,7 @@ class _Search:
     """Everything one document's search needs that does not change between candidates."""
 
     document: Document[Any]
-    target: Target[Any, Any, Any, Any]
+    target: AnyTarget
     chrome: Chrome
     localization: Localization
     palette: Palette
@@ -414,7 +414,7 @@ class _Search:
     nav: PlannedNav | None
 
     @property
-    def limits(self) -> DiscordLimits:
+    def limits(self) -> MessageLimits:
         return self.target.limits
 
     @property
@@ -1055,7 +1055,7 @@ def _reconcile_pagers(measured: MeasuredLayout, broker: CursorCoordinator) -> No
 
 def _plan_cache_context(
     *,
-    target: Target[Any, Any, Any, Any],
+    target: TargetIdentity,
     chrome: Chrome,
     localization: Localization,
     palette: Palette,
