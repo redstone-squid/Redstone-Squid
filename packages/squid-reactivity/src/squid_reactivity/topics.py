@@ -41,7 +41,7 @@ class CellAddress:
     def __str__(self) -> str:
         """``Preferences(Member(1, 2)).theme``: what a person needs to find the field.
 
-        Here rather than only in :func:`squid_reactivity.shared.describe` so that
+        Here rather than only in :func:`squid_reactivity.shared_state.describe` so that
         :mod:`squid_reactivity.core` can name an address too. It cannot import the namespace
         module -- that module imports it -- and a conflict that says which field moved is
         worth more than a diagnostic layered on top of one that does not.

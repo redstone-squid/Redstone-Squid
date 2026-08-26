@@ -87,7 +87,7 @@ from squid_ui.semantic import Toggle as SemanticToggle
 from squid_reactivity.core import (
     _RENDER_OBSERVATION,
     Observation,
-    Reactive,
+    StateOwner,
     observe_render,
 )
 
@@ -159,7 +159,7 @@ class _ExpandedSubtree:
     observations: tuple[Address, ...]
 
 
-class Component[ModeT = Any](Reactive):
+class Component[ModeT = Any](StateOwner):
     """Base class for mounted, stateful views."""
 
     _runtime: RuntimeOwner | None = None

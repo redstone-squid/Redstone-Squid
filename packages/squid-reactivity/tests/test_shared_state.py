@@ -4,12 +4,12 @@ import contextvars
 
 import pytest
 
-from squid_reactivity import LocalTopicBus, ReactiveConflictError, Shared, state, transaction
+from squid_reactivity import LocalTopicBus, ReactiveConflictError, SharedState, state, transaction
 from squid_reactivity.core import _CURRENT
 from squid_reactivity.topics import Address, CellAddress
 
 
-class Preferences(Shared[int]):
+class Preferences(SharedState[int]):
     theme: str = state("dark")
 
 

@@ -18,8 +18,8 @@ from squid_ui.interactions import ActionEvent
 from squid_ui.runtime.reactivity import (
     ActionCommit,
     ActionContext,
-    ActionKind,
-    ActionParticipant,
+    ActionPurpose,
+    TransactionParticipant,
     CellPatchSet,
     ConditionalCellPatch,
     FrameworkIntegrityError,
@@ -30,7 +30,7 @@ from squid_ui.runtime.reactivity import (
     apply_local_overwrite_patches,
     fresh_action_transaction,
     has_action_hook,
-    join_action,
+    enlist,
     on_action_commit,
 )
 from squid_ui.semantic import ActionGroup
@@ -41,7 +41,7 @@ from squid_reactivity.actions import (
     ConflictDetail,
     ExceptionReport,
     OperationEventSnapshot,
-    ParticipantChange,
+    TransactionContribution,
     current_action,
     emit_causal_event,
 )
@@ -197,7 +197,7 @@ class CompensationOutbox(Protocol):
 class TransactionalCompensationOutbox(CompensationOutbox, Protocol):
     """An outbox that can atomically retain first intent through the Squid commit gate."""
 
-    def participant(self, intent: CompensationIntent) -> ActionParticipant[CompensationRecord | None]: ...
+    def participant(self, intent: CompensationIntent) -> TransactionParticipant[CompensationRecord | None]: ...
 
 
 SETTLED_COMPENSATIONS = frozenset(
@@ -400,7 +400,7 @@ class UndoPlan:
     """An atomic set of version-conditional physical inverses."""
 
     cells: tuple[ConditionalCellPatch, ...]
-    participants: tuple[ParticipantChange, ...] = ()
+    participants: tuple[TransactionContribution, ...] = ()
 
     @classmethod
     def from_commit(cls, commit: ActionCommit) -> UndoPlan:
@@ -526,8 +526,8 @@ class History:
     ) -> None:
         """Retain the whole successful action once, using its committed patch lineage."""
 
-        def committed(commit: ActionCommit, aftermath: object) -> None:
-            if commit.context.kind in {ActionKind.UNDO, ActionKind.REDO}:
+        def committed(commit: ActionCommit, continuation: object) -> None:
+            if commit.context.kind in {ActionPurpose.UNDO, ActionPurpose.REDO}:
                 return
             self._push(
                 HistoryEntry(
@@ -565,7 +565,7 @@ class History:
         cause = current_action()
         context = action_context or ActionContext.create(
             f"Undo {entry.label}",
-            kind=ActionKind.UNDO,
+            kind=ActionPurpose.UNDO,
             cause=None if cause is None else cause.causal_ref(),
             root_action_id=None if cause is None else cause.root_action_id,
             reverses_action_id=entry.original_action_id,
@@ -592,7 +592,7 @@ class History:
                 for token, inverse in planned:
                     token.stage_inverse(inverse)
 
-                def committed(commit: ActionCommit, aftermath: object) -> None:
+                def committed(commit: ActionCommit, continuation: object) -> None:
                     entry.undo_action_id = commit.context.action_id
                     entry.redo_plan = UndoPlan.from_commit(commit)
                     entry.state = HistoryEntryState.UNDONE
@@ -642,7 +642,7 @@ class History:
         self._owner.invalidate()
         intent_context = ActionContext.create(
             f"Begin compensation for {entry.label}",
-            kind=ActionKind.COMPENSATION,
+            kind=ActionPurpose.COMPENSATION,
             cause=operation_context.causal_ref(),
             root_action_id=original.root_action_id,
             compensates_action_id=original.action_id,
@@ -651,7 +651,7 @@ class History:
             with fresh_action_transaction(action_context=intent_context):
                 participant = getattr(self._compensation_outbox, "participant", None)
                 if participant is not None:
-                    joined = join_action(
+                    joined = enlist(
                         (self._compensation_outbox, key),
                         lambda: participant(intent),
                     )
@@ -722,7 +722,7 @@ class History:
                 return result
         compensation_context = ActionContext.create(
             f"Apply compensation for {entry.label}",
-            kind=ActionKind.COMPENSATION,
+            kind=ActionPurpose.COMPENSATION,
             cause=operation_context.causal_ref(),
             root_action_id=original.root_action_id,
             compensates_action_id=original.action_id,
@@ -773,7 +773,7 @@ class History:
         cause = current_action()
         context = ActionContext.create(
             f"Redo {entry.label}",
-            kind=ActionKind.REDO,
+            kind=ActionPurpose.REDO,
             cause=None if cause is None else cause.causal_ref(),
             root_action_id=None if cause is None else cause.root_action_id,
             reapplies_action_id=entry.original_action_id,
@@ -800,7 +800,7 @@ class History:
                 for token, inverse in planned:
                     token.stage_inverse(inverse)
 
-                def committed(commit: ActionCommit, aftermath: object) -> None:
+                def committed(commit: ActionCommit, continuation: object) -> None:
                     entry.undo_plan = UndoPlan.from_commit(commit)
                     entry.state = HistoryEntryState.READY
                     result = HistoryResult(HistoryResultStatus.APPLIED, entry, commit.context.action_id)

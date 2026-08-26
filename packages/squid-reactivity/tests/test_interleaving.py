@@ -6,12 +6,12 @@ import pytest
 
 from squid_reactivity import (
     ActionLedger,
-    ActionParticipant,
+    TransactionParticipant,
     LocalTopicBus,
     ReactiveConflictError,
-    Shared,
+    SharedState,
     add_action_result_sink,
-    join_action,
+    enlist,
     on_action_commit,
     state,
     strong_read,
@@ -20,7 +20,7 @@ from squid_reactivity import (
 from squid_reactivity.testing import InterleavingHarness
 
 
-class Model(Shared[str]):
+class Model(SharedState[str]):
     source: str = state("A")
     result: str = state("")
 
@@ -103,7 +103,7 @@ def test_scheduler_observes_prepare_abort_and_failure_isolated_hook_order() -> N
 
     try:
         with schedule.installed(), pytest.raises(RuntimeError, match="prepare rejected"), transaction():
-            join_action(object(), Participant)
+            enlist(object(), Participant)
     finally:
         ledger.close()
 
@@ -114,8 +114,8 @@ def test_scheduler_observes_prepare_abort_and_failure_isolated_hook_order() -> N
 
     hook_schedule = InterleavingHarness()
     with hook_schedule.installed(), transaction():
-        on_action_commit(lambda commit, aftermath: (_ for _ in ()).throw(RuntimeError("hook")))
-    assert "aftermath.before_hook" in hook_schedule.seen
+        on_action_commit(lambda commit, continuation: (_ for _ in ()).throw(RuntimeError("hook")))
+    assert "continuation.before_hook" in hook_schedule.seen
 
 
 def test_scheduler_records_read_only_noop_and_integrity_commit_exactly_once() -> None:
@@ -148,7 +148,7 @@ def test_scheduler_records_read_only_noop_and_integrity_commit_exactly_once() ->
 
         integrity = InterleavingHarness()
         with integrity.installed(), pytest.raises(RuntimeError, match="integrity failure"), transaction():
-            join_action(object(), BrokenParticipant)
+            enlist(object(), BrokenParticipant)
     finally:
         ledger.close()
 
@@ -165,7 +165,7 @@ def test_change_description_failure_aborts_with_the_prepared_value() -> None:
     ledger = ActionLedger()
     add_action_result_sink(ledger)
 
-    class Participant(ActionParticipant[object]):
+    class Participant(TransactionParticipant[object]):
         def prepare(self, view) -> object:
             return prepared_value
 
@@ -184,7 +184,7 @@ def test_change_description_failure_aborts_with_the_prepared_value() -> None:
 
     try:
         with pytest.raises(RuntimeError, match="describe change"), transaction():
-            join_action(object(), Participant)
+            enlist(object(), Participant)
     finally:
         ledger.close()
 

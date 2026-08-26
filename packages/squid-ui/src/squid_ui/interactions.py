@@ -42,7 +42,7 @@ class BusySpec:
     """Put the previous scene back before the error hook runs."""
 
 
-class ActionKind(StrEnum):
+class InteractionKind(StrEnum):
     """The portable interaction shape being dispatched."""
 
     PRESS = "press"
@@ -184,7 +184,7 @@ class ActionRequest:
 
     event: ActionEvent
     key: str
-    kind: ActionKind
+    kind: InteractionKind
     mode: ActionMode
     submitted_generation: int | None
     active_generation: int
@@ -246,7 +246,7 @@ __all__ = [
     "ActionBinding",
     "ActionEvent",
     "ActionHandler",
-    "ActionKind",
+    "InteractionKind",
     "ActionMiddleware",
     "ActionMode",
     "ActionProceed",

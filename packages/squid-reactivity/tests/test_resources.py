@@ -7,9 +7,9 @@ from squid_reactivity import (
     ActionContext,
     ActionLedger,
     LocalTopicBus,
-    Reactive,
+    StateOwner,
     ResourceEventSnapshot,
-    Shared,
+    SharedState,
     Topic,
     action_scope,
     add_action_result_sink,
@@ -20,7 +20,7 @@ from squid_reactivity import (
 from squid_reactivity.resources import Pending, Ready, abandon_superseded_loads, resource
 
 
-class Source(Reactive):
+class Source(StateOwner):
     key = state("first")
 
     def __init__(self) -> None:
@@ -50,7 +50,7 @@ async def test_publish_during_load_repends_the_result() -> None:
     started = asyncio.Event()
     resume = asyncio.Event()
 
-    class Watched(Reactive):
+    class Watched(StateOwner):
         @resource
         async def value(self) -> str:
             watch(topic)
@@ -90,7 +90,7 @@ async def test_shared_resource_publishes_its_cell_address() -> None:
     bus = LocalTopicBus()
     published = []
 
-    class Preferences(Shared[int]):
+    class Preferences(SharedState[int]):
         @resource
         async def theme(self) -> str:
             return "dark"
@@ -107,7 +107,7 @@ async def test_shared_resource_publishes_its_cell_address() -> None:
 async def test_cancelled_load_attempt_remains_pending_and_retryable() -> None:
     attempts = 0
 
-    class Retryable(Reactive):
+    class Retryable(StateOwner):
         @resource
         async def value(self) -> str:
             nonlocal attempts
@@ -148,7 +148,7 @@ async def test_an_abandoned_load_does_not_subscribe_the_live_value_to_its_reads(
     """A superseded loader keeps running, and what it reads on the way out is not a dependency."""
     released = asyncio.Event()
 
-    class Mixer(Reactive):
+    class Mixer(StateOwner):
         abandoned = state(0)
         live = state(0)
 
@@ -183,7 +183,7 @@ async def test_an_abandoned_load_does_not_subscribe_the_live_value_to_its_reads(
     assert owner.value.status == Pending(Ready("live-0")), "a cell the live load read still is one"
 
 
-class _Checkpointed(Reactive):
+class _Checkpointed(StateOwner):
     """A loader whose first attempt parks at a checkpoint until something releases it."""
 
     def __init__(self) -> None:
@@ -274,7 +274,7 @@ async def test_an_installed_scope_does_not_swallow_a_cancellation_from_outside()
     """The scope answers for its own generation; a caller's deadline stays the caller's."""
     attempts = 0
 
-    class Retryable(Reactive):
+    class Retryable(StateOwner):
         @resource
         async def value(self) -> str:
             nonlocal attempts

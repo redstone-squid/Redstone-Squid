@@ -12,7 +12,7 @@ from squid_reactivity.actions import (
     DEFAULT_REDACTION,
     ActionContext,
     ActionId,
-    ActionKind,
+    ActionPurpose,
     CausalRef,
     ExceptionReport,
     OperationEventSnapshot,
@@ -79,13 +79,13 @@ type OperationStatus[ValueT, ProgressT] = (
 )
 
 
-class Progress[ProgressT]:
+class ProgressReporter[ProgressT]:
     """The explicit capability through which an execution reports reactive progress."""
 
     def __init__(self, execution: OperationExecution[Any, ProgressT]) -> None:
         self._execution = execution
 
-    def set(self, value: ProgressT) -> None:
+    def report(self, value: ProgressT) -> None:
         """Replace current progress and request a render."""
         self._execution._set_progress(value)
 
@@ -100,7 +100,7 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
     def __init__(
         self,
         owner: OperationOwner,
-        loader: Callable[[Progress[ProgressT]], Awaitable[ValueT]],
+        loader: Callable[[ProgressReporter[ProgressT]], Awaitable[ValueT]],
         *,
         context: OperationContext,
         initial: ProgressT,
@@ -155,7 +155,7 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
                 await self._completion.wait()
             return self._status
         self._started = True
-        progress = Progress(self)
+        progress = ProgressReporter(self)
         try:
             with causal_scope(self.context.causal_ref(), self.context.root_action_id):
                 value = await self._loader(progress)
@@ -182,7 +182,7 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
         return self._status
 
     @contextmanager
-    def start_action(self, name: str, *, kind: ActionKind = ActionKind.SYSTEM):
+    def start_action(self, name: str, *, kind: ActionPurpose = ActionPurpose.SYSTEM):
         """Start a fresh state-publishing action caused by this execution."""
         from squid_reactivity.core import fresh_action_transaction
 
@@ -216,7 +216,7 @@ class OperationDefinition[ValueT, ProgressT]:
     def __init__(
         self,
         owner: OperationOwner,
-        loader: Callable[[Progress[ProgressT]], Awaitable[ValueT]],
+        loader: Callable[[ProgressReporter[ProgressT]], Awaitable[ValueT]],
         *,
         name: str,
         initial: ProgressT,
@@ -248,7 +248,7 @@ class _OperationDescriptor[OwnerT: OperationOwner, ValueT, ProgressT]:
 
     def __init__(
         self,
-        loader: Callable[[OwnerT, Progress[ProgressT]], Awaitable[ValueT]],
+        loader: Callable[[OwnerT, ProgressReporter[ProgressT]], Awaitable[ValueT]],
         *,
         initial: ProgressT,
     ) -> None:
@@ -287,13 +287,13 @@ class _OperationDescriptor[OwnerT: OperationOwner, ValueT, ProgressT]:
 def operation[OwnerT: OperationOwner, ValueT, ProgressT](
     *, initial: ProgressT
 ) -> Callable[
-    [Callable[[OwnerT, Progress[ProgressT]], Awaitable[ValueT]]],
+    [Callable[[OwnerT, ProgressReporter[ProgressT]], Awaitable[ValueT]]],
     _OperationDescriptor[OwnerT, ValueT, ProgressT],
 ]:
     """Declare a repeatable operation definition."""
 
     def decorate(
-        loader: Callable[[OwnerT, Progress[ProgressT]], Awaitable[ValueT]],
+        loader: Callable[[OwnerT, ProgressReporter[ProgressT]], Awaitable[ValueT]],
     ) -> _OperationDescriptor[OwnerT, ValueT, ProgressT]:
         return _OperationDescriptor(loader, initial=initial)
 
@@ -308,7 +308,7 @@ __all__ = [
     "OperationExecution",
     "OperationStatus",
     "Pending",
-    "Progress",
+    "ProgressReporter",
     "Succeeded",
     "operation",
 ]

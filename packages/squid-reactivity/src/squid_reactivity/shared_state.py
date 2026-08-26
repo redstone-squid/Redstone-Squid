@@ -14,7 +14,7 @@ import logging
 from collections.abc import Callable
 from typing import Any, ClassVar
 
-from squid_reactivity.core import Reactive, _Computed, _State
+from squid_reactivity.core import StateOwner, _Computed, _State
 from squid_reactivity.topics import Address, CellAddress, TopicBus
 
 _RESERVED = frozenset({"bus", "scope"})
@@ -25,7 +25,7 @@ surface is a read, a write and `scope`, and every name past those is the author'
 """
 
 _NO_SCOPE: Any = None
-"""The scope of a namespace with nothing to say about itself, i.e. ``Shared[None]``."""
+"""The scope of a namespace with nothing to say about itself, i.e. ``SharedState[None]``."""
 
 _logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ def _check_name(cls: type, name: str) -> None:
         raise TypeError(message)
 
 
-class Shared[ScopeT = None](Reactive):
+class SharedState[ScopeT = None](StateOwner):
     """Base class for a namespace of view state that several mounts share.
 
     Subclass it, declare fields with :func:`~squid_reactivity.state`, and hand the instance to
@@ -181,4 +181,4 @@ def describe(address: Address) -> str:
     return str(address)
 
 
-__all__ = ["Shared", "describe"]
+__all__ = ["SharedState", "describe"]

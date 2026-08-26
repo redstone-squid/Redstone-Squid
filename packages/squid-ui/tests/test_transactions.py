@@ -8,7 +8,7 @@ import pytest
 
 from squid_ui import Component, computed, state
 from squid_ui.primitives import Text
-from squid_ui.runtime import ComponentRuntime, ReactiveWriteError, UndeclaredStateError, join_action, transaction
+from squid_ui.runtime import ComponentRuntime, ReactiveWriteError, UndeclaredStateError, enlist, transaction
 from squid_ui.runtime.reactivity import (
     ActionCommit,
     block_writes,
@@ -183,7 +183,7 @@ class TestStaging:
         panel.declared = 1
         seen: list[ActionCommit] = []
         with transaction():
-            on_action_commit(lambda commit, aftermath: seen.append(commit))
+            on_action_commit(lambda commit, continuation: seen.append(commit))
             panel.declared = 2
             panel.declared = 3
         (commit,) = seen
@@ -436,7 +436,7 @@ class TestActionCommitHooks:
         assert panel.declared == 0
         seen: list[ActionCommit] = []
         with transaction():
-            on_action_commit(lambda commit, aftermath: seen.append(commit))
+            on_action_commit(lambda commit, continuation: seen.append(commit))
             panel.declared = 7
         (commit,) = seen
         (patch,) = commit.patches.patches
@@ -447,7 +447,7 @@ class TestActionCommitHooks:
         panel = attached(Panel(Uncopyable()))
         seen: list[ActionCommit] = []
         with transaction():
-            on_action_commit(lambda commit, aftermath: seen.append(commit))
+            on_action_commit(lambda commit, continuation: seen.append(commit))
             panel.declared = 7
         (commit,) = seen
         (patch,) = commit.patches.patches
@@ -457,7 +457,7 @@ class TestActionCommitHooks:
         panel = attached(Panel(Uncopyable()))
         seen: list[ActionCommit] = []
         with pytest.raises(RuntimeError), transaction():
-            on_action_commit(lambda commit, aftermath: seen.append(commit))
+            on_action_commit(lambda commit, continuation: seen.append(commit))
             panel.declared = 7
             message = "the action failed"
             raise RuntimeError(message)
@@ -468,7 +468,7 @@ class TestActionCommitHooks:
         panel = attached(Panel(service))
         seen: list[ActionCommit] = []
         with transaction():
-            on_action_commit(lambda commit, aftermath: seen.append(commit))
+            on_action_commit(lambda commit, continuation: seen.append(commit))
             panel.service = Uncopyable()
         (commit,) = seen
         (patch,) = commit.patches.patches
@@ -477,9 +477,9 @@ class TestActionCommitHooks:
     def test_one_key_registers_once(self):
         key = object()
         with transaction():
-            on_action_commit(lambda commit, aftermath: None, key=key)
+            on_action_commit(lambda commit, continuation: None, key=key)
             with pytest.raises(RuntimeError, match="already registered"):
-                on_action_commit(lambda commit, aftermath: None, key=key)
+                on_action_commit(lambda commit, continuation: None, key=key)
 
     def test_blocked_writes_name_their_reason(self):
         panel = attached(Panel(Uncopyable()))
@@ -553,22 +553,22 @@ class TestActionParticipants:
 
     def test_there_is_nothing_to_join_outside_an_action(self):
         """The caller's signal that its write has nothing to wait for."""
-        assert join_action(object(), lambda: Recorder([], "store")) is None
+        assert enlist(object(), lambda: Recorder([], "store")) is None
 
     def test_one_key_enlists_once(self):
         log: list[str] = []
         key = object()
         with transaction():
-            first = join_action(key, lambda: Recorder(log, "a"))
-            second = join_action(key, lambda: Recorder(log, "b"))
+            first = enlist(key, lambda: Recorder(log, "a"))
+            second = enlist(key, lambda: Recorder(log, "b"))
         assert first is second
         assert log == ["a.prepare", "a.apply", "a.finalize"]
 
     def test_every_participant_prepares_before_any_applies(self):
         log: list[str] = []
         with transaction():
-            first = join_action(object(), lambda: Recorder(log, "a"))
-            second = join_action(object(), lambda: Recorder(log, "b"))
+            first = enlist(object(), lambda: Recorder(log, "a"))
+            second = enlist(object(), lambda: Recorder(log, "b"))
         assert log == [
             "a.prepare",
             "b.prepare",
@@ -602,7 +602,7 @@ class TestActionParticipants:
             def finalize(self, prepared: None) -> None: ...
 
         with transaction():
-            join_action(object(), Silent)
+            enlist(object(), Silent)
         assert log == ["prepare", "apply"]
 
     def test_a_rejected_prepare_applies_nothing_and_rolls_state_back(self):
@@ -610,8 +610,8 @@ class TestActionParticipants:
         panel = watched()
         with pytest.raises(RuntimeError, match="a rejected the action"), transaction():
             panel.declared = 7
-            join_action(object(), lambda: Recorder(log, "a", fail="prepare"))
-            join_action(object(), lambda: Recorder(log, "b"))
+            enlist(object(), lambda: Recorder(log, "a", fail="prepare"))
+            enlist(object(), lambda: Recorder(log, "b"))
         assert "a.apply" not in log and "b.apply" not in log
         assert log.count("a.abort") == 1 and log.count("b.abort") == 1
         assert panel.declared == 0
@@ -620,14 +620,14 @@ class TestActionParticipants:
     def test_a_later_rejection_aborts_the_participant_that_already_prepared(self):
         log: list[str] = []
         with pytest.raises(RuntimeError, match="b rejected"), transaction():
-            join_action(object(), lambda: Recorder(log, "a"))
-            join_action(object(), lambda: Recorder(log, "b", fail="prepare"))
+            enlist(object(), lambda: Recorder(log, "a"))
+            enlist(object(), lambda: Recorder(log, "b", fail="prepare"))
         assert log == ["a.prepare", "b.prepare", "b.abort", "a.abort"]
 
     def test_a_failed_action_aborts_without_preparing(self):
         log: list[str] = []
         with pytest.raises(RuntimeError, match="the action failed"), transaction():
-            join_action(object(), lambda: Recorder(log, "a"))
+            enlist(object(), lambda: Recorder(log, "a"))
             message = "the action failed"
             raise RuntimeError(message)
         assert log == ["a.abort"]
@@ -639,8 +639,8 @@ class TestActionParticipants:
             pytest.raises(RuntimeError, match="the action failed"),
             transaction(),
         ):
-            join_action(object(), lambda: Recorder(log, "a", fail="abort"))
-            join_action(object(), lambda: Recorder(log, "b"))
+            enlist(object(), lambda: Recorder(log, "a", fail="abort"))
+            enlist(object(), lambda: Recorder(log, "b"))
             message = "the action failed"
             raise RuntimeError(message)
         # The siblings still get their abort, and the swallowed failure is still visible.
@@ -657,7 +657,7 @@ class TestActionParticipants:
 
         with transaction():
             panel.declared = 7
-            recorder = join_action(object(), lambda: Recorder(log, "a"))
+            recorder = enlist(object(), lambda: Recorder(log, "a"))
             assert recorder is not None
             recorder.finalize = check  # type: ignore[bad-assignment]
         assert log == ["a.prepare", "a.apply", "declared=7"]
@@ -665,16 +665,16 @@ class TestActionParticipants:
 
     def test_parallel_read_actions_cannot_stage_writes(self):
         with pytest.raises(ReactiveWriteError, match="parallel-read"), readonly_transaction():
-            join_action(object(), lambda: Recorder([], "a"))
+            enlist(object(), lambda: Recorder([], "a"))
 
     def test_a_blocked_write_reaches_a_participant_already_enlisted(self):
         """An undo inverse may not stage shared writes either; the restore would clobber them."""
         log: list[str] = []
         key = object()
         with transaction():
-            join_action(key, lambda: Recorder(log, "a"))
+            enlist(key, lambda: Recorder(log, "a"))
             with pytest.raises(ReactiveWriteError, match="busy reversing"), block_writes("busy reversing"):
-                join_action(key, lambda: Recorder(log, "a"))
+                enlist(key, lambda: Recorder(log, "a"))
 
 
 class TestCommitFailures:
@@ -684,7 +684,7 @@ class TestCommitFailures:
         """The recorder is what failed, not the action; silently un-rendering it is worse."""
         panel = watched()
 
-        def explode(commit: ActionCommit, aftermath) -> None:
+        def explode(commit: ActionCommit, continuation) -> None:
             message = "the recorder failed"
             raise RuntimeError(message)
 
@@ -699,8 +699,8 @@ class TestCommitFailures:
         log: list[str] = []
         panel = watched()
         with transaction():
-            on_action_commit(lambda commit, aftermath: log.append("hook"))
-            join_action(object(), lambda: Recorder(log, "a"))
+            on_action_commit(lambda commit, continuation: log.append("hook"))
+            enlist(object(), lambda: Recorder(log, "a"))
             panel.declared = 7
         assert log == ["a.prepare", "a.apply", "a.finalize", "hook"]
 
@@ -743,5 +743,5 @@ class TestPrePublicationRollback:
         component = attached(Panel(Uncopyable()))
         with pytest.raises(RuntimeError, match="rejected"), transaction():
             component.declared = 1
-            join_action(self, Rejects)
+            enlist(self, Rejects)
         assert component.declared == 0

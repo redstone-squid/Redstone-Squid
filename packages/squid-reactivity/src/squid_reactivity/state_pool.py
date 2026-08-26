@@ -1,6 +1,6 @@
 """An optional keyed lifetime owner for shared view state.
 
-:mod:`squid_reactivity.shared` argues that there is no store, no registry and no keyed lookup, and
+:mod:`squid_reactivity.shared_state` argues that there is no store, no registry and no keyed lookup, and
 that stays true: a handle is still the state, and it still lives exactly as long as whoever holds
 it. This module is the one thing a host may reach for when what it holds is *one handle per scope* —
 the `setdefault` cache otherwise written by hand around every namespace.
@@ -14,31 +14,31 @@ from collections.abc import Callable, Hashable, Mapping
 from types import MappingProxyType
 from typing import Any, cast, overload
 
-from squid_reactivity.shared import Shared
+from squid_reactivity.shared_state import SharedState
 from squid_reactivity.topics import TopicBus
 
-type SharedFactory[ScopeT, SharedT] = Callable[[TopicBus, ScopeT], SharedT]
+type SharedStateFactory[ScopeT, SharedT] = Callable[[TopicBus, ScopeT], SharedT]
 """How a pool builds a namespace it does not already hold: the pool's bus, and the missing scope."""
 
 
-class SharedPool[ScopeT: Hashable, SharedT: Shared[Any]]:
+class SharedStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
     """Retain one canonical namespace per scope, for as long as this pool is held.
 
     The pool is where a host writes down a lifetime it would otherwise write down in a dict: put it
     on the bot for process lifetime, on a cog for extension lifetime, on a session or a request for
-    theirs. Nothing about :class:`~squid_reactivity.shared.Shared` changes -- constructing and passing
+    theirs. Nothing about :class:`~squid_reactivity.shared_state.SharedState` changes -- constructing and passing
     handles directly remains supported, and a scope used outside a pool may still be mutable or
     unhashable.
 
     ``namespace`` is declared twice in the overloads, as a class and as the constructor that class
     already is. The callable spelling is what lets a type checker read ``ScopeT`` off
-    ``Shared[ScopeT]`` rather than having to solve it from a type-parameter bound, which Pyrefly 1.2
+    ``SharedState[ScopeT]`` rather than having to solve it from a type-parameter bound, which Pyrefly 1.2
     will not do (see ``docs/plans/squid-ui-redesign/spikes/59/``). Only a namespace *class* is
     accepted at runtime; a bare function is refused at construction, because the identity check a
     pool performs on what its factory returns needs a class to check against.
 
     Args:
-        namespace: The one :class:`~squid_reactivity.shared.Shared` subclass this pool owns.
+        namespace: The one :class:`~squid_reactivity.shared_state.SharedState` subclass this pool owns.
         bus: The host's topic bus. Every handle this pool retains must hold exactly this bus.
         factory: How to build a namespace that needs more than ``(bus, scope)``. Annotate it as a
             function rather than passing a lambda: a lambda takes its parameter types from the
@@ -60,7 +60,7 @@ class SharedPool[ScopeT: Hashable, SharedT: Shared[Any]]:
         namespace: type[SharedT],
         bus: TopicBus,
         *,
-        factory: SharedFactory[ScopeT, SharedT],
+        factory: SharedStateFactory[ScopeT, SharedT],
     ) -> None: ...
 
     def __init__(
@@ -68,11 +68,11 @@ class SharedPool[ScopeT: Hashable, SharedT: Shared[Any]]:
         namespace: Callable[[TopicBus, ScopeT], SharedT] | type[SharedT],
         bus: TopicBus,
         *,
-        factory: SharedFactory[ScopeT, SharedT] | None = None,
+        factory: SharedStateFactory[ScopeT, SharedT] | None = None,
     ) -> None:
-        if not isinstance(namespace, type) or not issubclass(namespace, Shared):
+        if not isinstance(namespace, type) or not issubclass(namespace, SharedState):
             message = (
-                f"a shared pool owns one Shared subclass, not {namespace!r}. Pass the namespace "
+                f"a shared pool owns one SharedState subclass, not {namespace!r}. Pass the namespace "
                 f"class; anything it needs beyond (bus, scope) goes in factory=."
             )
             raise TypeError(message)
@@ -173,7 +173,7 @@ class SharedPool[ScopeT: Hashable, SharedT: Shared[Any]]:
         return created
 
     def __repr__(self) -> str:
-        return f"SharedPool({self.namespace.__name__}, {len(self._handles)} active)"
+        return f"SharedStatePool({self.namespace.__name__}, {len(self._handles)} active)"
 
 
-__all__ = ["SharedFactory", "SharedPool"]
+__all__ = ["SharedStateFactory", "SharedStatePool"]

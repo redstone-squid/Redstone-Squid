@@ -1,6 +1,6 @@
 """Mounts following the named topics their renders read, through `sl.runtime.watch`.
 
-`test_shared_follow.py` covers the same reconciliation for `sl.runtime.Shared` cells. The difference
+`test_shared_follow.py` covers the same reconciliation for `sl.runtime.SharedState` cells. The difference
 here is where the read happens: a topic is watched inside a `sl.resource` loader, under the
 resource's consumer rather than the render's, so these tests are mostly about whether that
 read still reaches the render that used the value.

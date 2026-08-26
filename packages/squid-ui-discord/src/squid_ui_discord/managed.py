@@ -8,7 +8,7 @@ from typing import cast, overload
 from squid_ui_discord.delivery import Delivered, Destination, SendResult
 from squid_ui_discord.mount import Mount
 from squid_ui.runtime.component import Component, RenderResult
-from squid_reactivity.operations import Cancelled, Failed, OperationExecution, Pending, Progress, Succeeded, operation
+from squid_reactivity.operations import Cancelled, Failed, OperationExecution, Pending, ProgressReporter, Succeeded, operation
 
 type Work[ValueT] = Callable[[], Awaitable[ValueT]]
 type SuccessRenderer[ValueT] = Callable[[ValueT], RenderResult]
@@ -80,7 +80,7 @@ class _ManagedResult[ValueT](Component):
                 return self._initial
 
     @operation(initial=None)
-    async def _run(self, _progress: Progress[None]) -> ValueT:
+    async def _run(self, _progress: ProgressReporter[None]) -> ValueT:
         """Run the callback once the initial scene has been delivered."""
         return await self._work()
 

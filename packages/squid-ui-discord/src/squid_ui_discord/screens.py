@@ -93,7 +93,7 @@ class Scope(StrEnum):
 
         `ScreenSpec` declares its scope as a member and resolves it here, so this returns the union.
         A caller that knows the kind statically should ask the opener instead --
-        `opener.user_guild()` is a `UserGuildScope`, which is what lets a `Shared[UserGuildScope]`
+        `opener.user_guild()` is a `UserGuildScope`, which is what lets a `SharedState[UserGuildScope]`
         pool refuse the wrong scope at the call site rather than missing at runtime. Both spellings
         build the same values, and those are the values a `SessionKey` already carries, so a panel
         holding its session key reaches a pool through `key.scope` with nothing to convert.

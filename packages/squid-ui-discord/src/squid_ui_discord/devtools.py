@@ -35,7 +35,7 @@ from squid_ui.semantic import LayoutNode
 from squid_reactivity.actions import (
     ActionLedger,
     ActionResultSnapshot,
-    AftermathFailureSnapshot,
+    ContinuationFailureSnapshot,
     CausalEventSnapshot,
     OperationEventSnapshot,
     ResourceEventSnapshot,
@@ -470,9 +470,9 @@ def _causal_event_text(event: CausalEventSnapshot) -> str:
         case ResourceEventSnapshot():
             cause = "root" if event.cause is None else f"{event.cause.kind}:{event.cause.identity}"
             return f"resource:{event.generation_id} {event.name} {event.status} cause={cause}"
-        case AftermathFailureSnapshot():
+        case ContinuationFailureSnapshot():
             return (
-                f"aftermath:{event.failure_id} failed {event.stage} {event.callback} "
+                f"continuation:{event.failure_id} failed {event.stage} {event.callback} "
                 f"cause={event.cause.kind}:{event.cause.identity}"
             )
 

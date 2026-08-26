@@ -1,9 +1,9 @@
-"""Pins `SharedPool`'s inference under `just typecheck`; nothing here runs.
+"""Pins `SharedStatePool`'s inference under `just typecheck`; nothing here runs.
 
-The pool's whole claim is that the namespace's `Shared[ScopeT]`, the lookup scope, the factory
+The pool's whole claim is that the namespace's `SharedState[ScopeT]`, the lookup scope, the factory
 argument and the returned handle are one inferred pair. The assertions below are on the **full**
 pool type rather than on the handle alone, because the failure mode this guards against is
-`SharedPool[Any, Preferences]` -- which would satisfy a handle-only assertion while silently
+`SharedStatePool[Any, Preferences]` -- which would satisfy a handle-only assertion while silently
 accepting the wrong scope. See `docs/plans/squid-ui-redesign/spikes/59/` for the measurement
 that chose this signature.
 """
@@ -11,7 +11,7 @@ that chose this signature.
 from dataclasses import dataclass
 from typing import assert_type
 
-from squid_reactivity import LocalTopicBus, Shared, SharedPool, TopicBus, state
+from squid_reactivity import LocalTopicBus, SharedState, SharedStatePool, TopicBus, state
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,17 +25,17 @@ class UserGuildScope:
     guild_id: int
 
 
-class Preferences(Shared[UserGuildScope]):
+class Preferences(SharedState[UserGuildScope]):
     theme: str = state("dark")
 
 
-class SearchState(Shared[UserGuildScope]):
+class SearchState(SharedState[UserGuildScope]):
     def __init__(self, bus: TopicBus, scope: UserGuildScope, *, index: object) -> None:
         super().__init__(bus, scope)
         self._index = index
 
 
-class Anonymous(Shared):
+class Anonymous(SharedState):
     note: str = state("")
 
 
@@ -43,8 +43,8 @@ bus = LocalTopicBus()
 index = object()
 
 # The scope comes off the base class, with nothing else in the call to pin it.
-preferences = SharedPool(Preferences, bus)
-assert_type(preferences, SharedPool[UserGuildScope, Preferences])
+preferences = SharedStatePool(Preferences, bus)
+assert_type(preferences, SharedStatePool[UserGuildScope, Preferences])
 assert_type(preferences.get(UserGuildScope(1, 2)), Preferences)
 assert_type(preferences.get_existing(UserGuildScope(1, 2)), Preferences | None)
 assert_type(preferences.delete(UserGuildScope(1, 2)), Preferences | None)
@@ -62,15 +62,15 @@ def make_search_state(pool_bus: TopicBus, scope: UserGuildScope) -> SearchState:
     return SearchState(pool_bus, scope, index=index)
 
 
-searches = SharedPool(SearchState, bus, factory=make_search_state)
-assert_type(searches, SharedPool[UserGuildScope, SearchState])
+searches = SharedStatePool(SearchState, bus, factory=make_search_state)
+assert_type(searches, SharedStatePool[UserGuildScope, SearchState])
 assert_type(searches.get(UserGuildScope(1, 2)), SearchState)
 
-# An unparameterised namespace is `Shared[None]`, and its pool keys on `None`.
-anonymous = SharedPool(Anonymous, bus)
-assert_type(anonymous, SharedPool[None, Anonymous])
+# An unparameterised namespace is `SharedState[None]`, and its pool keys on `None`.
+anonymous = SharedStatePool(Anonymous, bus)
+assert_type(anonymous, SharedStatePool[None, Anonymous])
 assert_type(anonymous.get(None), Anonymous)
 
 # Explicit parameterisation stays available as the escape hatch.
-explicit = SharedPool[UserGuildScope, Preferences](Preferences, bus)
-assert_type(explicit, SharedPool[UserGuildScope, Preferences])
+explicit = SharedStatePool[UserGuildScope, Preferences](Preferences, bus)
+assert_type(explicit, SharedStatePool[UserGuildScope, Preferences])

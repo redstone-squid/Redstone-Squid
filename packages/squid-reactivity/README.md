@@ -4,10 +4,10 @@ Transactional reactive state for synchronous projections, with no hard dependenc
 background tasks.
 
 ```python
-from squid_reactivity import Reactive, computed, observe_reads, state, transaction
+from squid_reactivity import StateOwner, computed, observe_reads, state, transaction
 
 
-class Counter(Reactive):
+class Counter(StateOwner):
     count: int = state(0)
 
     @computed
@@ -28,8 +28,8 @@ The package is layered:
 - `squid_reactivity.actions` provides sortable action IDs, causal contexts, immutable terminal
   outcomes, bounded ledgers, aftermath authority, and portable redacted schema version 1.
 - `squid_reactivity.core` provides state cells, computed values, full strong-read OCC,
-  version-conditional patches, staged transaction participants, and the reusable `Reactive` owner.
-- `squid_reactivity.shared` provides `Shared`, whose state fields publish exact `CellAddress`
+  version-conditional patches, staged transaction participants, and the reusable `StateOwner` owner.
+- `squid_reactivity.shared_state` provides `SharedState`, whose state fields publish exact `CellAddress`
   values through a host-supplied bus.
 - `squid_reactivity.topics` provides portable `Topic` values, tracked `watch()` reads, the small
   synchronous `TopicBus` protocol, `LocalTopicBus`, and committed/staged subscription
