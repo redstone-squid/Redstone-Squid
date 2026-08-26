@@ -48,7 +48,7 @@ OBJECT_ENDING_VERBS = frozenset({"close", "finish"})
 
 `run` ends an owner's tasks, `discard` ends staged work, `cancel` ends unfinished async
 work. Those name other subjects, so pairing them with `close` is correct --
-`PersistedPool` has `run` and `close`, `SubscriptionReconciler` has `discard` and `close`.
+`PersistentStatePool` has `run` and `close`, `SubscriptionReconciler` has `discard` and `close`.
 """
 
 DISCOURAGED_VERBS = frozenset({"shutdown", "stop", "dispose", "teardown", "destroy", "terminate", "kill"})
@@ -105,7 +105,7 @@ RETIRED_VERBS = frozenset({"format_prefill", "list_records", "purge_expired", "d
 """Callable names that said in two words what one dictionary verb already said.
 
 `flush` is deliberately absent: persistence `flush` names a different subject -- writing
-pending bytes -- and `PersistedPool.flush` and `DurableSessionRuntime.flush` keep it. What
+pending bytes -- and `PersistentStatePool.flush` and `DurableSessionRuntime.flush` keep it. What
 retired was `Mount.flush`, which delivered a render and is now `Mount.refresh`.
 """
 
