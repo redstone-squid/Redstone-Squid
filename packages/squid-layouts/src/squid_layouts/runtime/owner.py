@@ -1,6 +1,6 @@
 """Frontend-neutral owner of a reactive component tree."""
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
 from squid_layouts.errors import LayoutInvariantError
@@ -14,6 +14,7 @@ from squid_layouts.runtime.component import (
 )
 from squid_layouts.runtime.context import ContextKey
 from squid_layouts.runtime.presentation import PresentationSession
+from squid_layouts.runtime.topics import Address
 
 
 class ComponentRuntime:
@@ -55,12 +56,57 @@ class ComponentRuntime:
 
     def invalidate(self, component: Component | None = None, *, check_dependencies: bool = False) -> None:
         """Declare the render inputs moved, so anything rendered before now is stale."""
+        self._invalidate_components(
+            () if component is None else (component,),
+            force_all=component is None,
+            check_dependencies=check_dependencies,
+        )
+
+    def invalidate_addresses(self, addresses: Iterable[Address]) -> None:
+        """Invalidate only component snapshots that observed any current bus address."""
+        requested = set(addresses)
+        if not requested:
+            return
+        active: set[Address] = set()
+        if self._committed_tree is not None:
+            active.update(self._committed_tree.observations)
+        if self._candidate_tree is not None:
+            active.update(self._candidate_tree.observations)
+        relevant = requested & active
+        if not relevant:
+            return
+
+        matched: set[Component] = set()
+        covered: set[Address] = set()
+        for component, snapshot in self._render_cache.items():
+            observed = relevant.intersection(snapshot.observation.addresses())
+            if observed:
+                matched.add(component)
+                covered.update(observed)
+        self._invalidate_components(
+            matched,
+            force_all=covered != relevant,
+            check_dependencies=True,
+        )
+
+    def invalidate_address(self, address: Address) -> None:
+        """Invalidate component snapshots that observed one current bus address."""
+        self.invalidate_addresses((address,))
+
+    def _invalidate_components(
+        self,
+        components: Iterable[Component],
+        *,
+        force_all: bool,
+        check_dependencies: bool,
+    ) -> None:
+        """Record one invalidation revision for a component set."""
         self.revision += 1
         self.dirty = True
         self._candidate_tree = None
-        if component is None:
+        if force_all:
             self._force_all = True
-        else:
+        for component in components:
             self._dirty_components.add(component)
             if not check_dependencies:
                 self._forced_components.add(component)
@@ -114,6 +160,8 @@ class ComponentRuntime:
             _subtree_cache=self._subtree_cache,
             _dirty_paths=self._dirty_paths,
         )
+        if reuse_committed and self._committed_tree is not None and tree == self._committed_tree:
+            tree = self._committed_tree
         self._dirty_components.clear()
         self._forced_components.clear()
         self._force_all = False
