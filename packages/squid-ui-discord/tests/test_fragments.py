@@ -3,8 +3,8 @@
 import discord
 import pytest
 
-import squid_ui_discord
 import squid_ui as sl
+import squid_ui_discord
 from squid_ui_discord import (
     V2_LIMITS as LIMITS,
 )
@@ -207,7 +207,7 @@ class TestRelease:
 def test_a_fragment_never_exceeds_whole_document_planning():
     """The combined result must obey the same limits as composing everything at once."""
     body = "x" * 6000
-    whole = squid_ui_discord.compose([sl.primitives.Text("header"), sl.primitives.Text(body)]).view
+    whole = squid_ui_discord.render_message([sl.primitives.Text("header"), sl.primitives.Text(body)]).view
 
     host = _host(discord.ui.TextDisplay("header"))
     contribute([sl.primitives.Text(body)], to=host)

@@ -2,7 +2,7 @@
 
 A Discord message has two halves. Squid's renderer owns the components; content and embeds
 were owned by nobody, so delivery guessed at them from whatever `discord.Message` happened to
-be in reach. A :class:`DiscordPresentation` is both halves plus the files that go with them,
+be in reach. A :class:`MessagePayload` is both halves plus the files that go with them,
 so delivering is replacing a message rather than patching one field of it and hoping about
 the rest.
 
@@ -19,14 +19,14 @@ from typing import Any
 
 import discord
 
-from squid_ui_discord.attachments import files_for
 from squid_ui.assets import Asset
 from squid_ui.errors import LayoutError
+from squid_ui_discord.attachments import files_for
 
 type AnyView = discord.ui.View | discord.ui.LayoutView
 
 
-class DiscordMode(StrEnum):
+class MessageMode(StrEnum):
     """Which of Discord's two message component modes a payload is written for."""
 
     CLASSIC = "classic"
@@ -36,21 +36,21 @@ class DiscordMode(StrEnum):
     """A `LayoutView` owning the whole message; content and embeds are forbidden."""
 
 
-class DiscordModeError(LayoutError):
+class MessageModeError(LayoutError):
     """A payload disagrees with its own mode, or with the message it is being written to."""
 
 
-def mode_of(message: discord.Message) -> DiscordMode:
+def message_mode(message: discord.Message) -> MessageMode:
     """Which mode a sent message is in, read from the flag Discord set on it."""
-    return DiscordMode.COMPONENTS_V2 if message.flags.components_v2 else DiscordMode.CLASSIC
+    return MessageMode.COMPONENTS_V2 if message.flags.components_v2 else MessageMode.CLASSIC
 
 
 def _incoherent(
-    mode: DiscordMode, content: str | None, embeds: Sequence[discord.Embed], view: AnyView | None
+    mode: MessageMode, content: str | None, embeds: Sequence[discord.Embed], view: AnyView | None
 ) -> list[str]:
     """Every way this payload contradicts the mode it declares."""
     problems: list[str] = []
-    if mode is DiscordMode.COMPONENTS_V2:
+    if mode is MessageMode.COMPONENTS_V2:
         if content is not None:
             problems.append("a Components V2 message cannot carry content")
         if embeds:
@@ -68,15 +68,15 @@ def _incoherent(
 
 
 @dataclass(frozen=True, slots=True)
-class DiscordPresentation:
+class MessagePayload:
     """Everything Squid puts on one Discord message, as one replacement value.
 
-    Absent content and embeds are explicit clears rather than omitted kwargs: a presentation
+    Absent content and embeds are explicit clears rather than omitted kwargs: a payload
     describes the whole surface Squid owns, so what it does not name is what the message must
     stop showing.
     """
 
-    mode: DiscordMode
+    mode: MessageMode
     content: str | None = None
     embeds: tuple[discord.Embed, ...] = ()
     view: AnyView | None = None
@@ -87,12 +87,12 @@ class DiscordPresentation:
         object.__setattr__(self, "assets", tuple(self.assets))
         problems = _incoherent(self.mode, self.content, self.embeds, self.view)
         if problems:
-            raise DiscordModeError("; ".join(problems))
+            raise MessageModeError("; ".join(problems))
 
     @classmethod
-    def components_v2(cls, view: discord.ui.LayoutView, *, assets: Sequence[Asset] = ()) -> DiscordPresentation:
+    def components_v2(cls, view: discord.ui.LayoutView, *, assets: Sequence[Asset] = ()) -> MessagePayload:
         """A Components V2 message: the layout is the message."""
-        return cls(DiscordMode.COMPONENTS_V2, view=view, assets=tuple(assets))
+        return cls(MessageMode.COMPONENTS_V2, view=view, assets=tuple(assets))
 
     @classmethod
     def classic(
@@ -102,20 +102,20 @@ class DiscordPresentation:
         embeds: Sequence[discord.Embed] = (),
         view: discord.ui.View | None = None,
         assets: Sequence[Asset] = (),
-    ) -> DiscordPresentation:
+    ) -> MessagePayload:
         """A pre-Components-V2 message: content, embeds, and at most five action rows."""
-        return cls(DiscordMode.CLASSIC, content=content, embeds=tuple(embeds), view=view, assets=tuple(assets))
+        return cls(MessageMode.CLASSIC, content=content, embeds=tuple(embeds), view=view, assets=tuple(assets))
 
     @property
     def layout(self) -> discord.ui.LayoutView:
         """The Components V2 view, for a host surface that only speaks V2.
 
         Raises:
-            DiscordModeError: This is a classic presentation, which has no layout to give.
+            MessageModeError: This is a classic payload, which has no layout to give.
         """
         if not isinstance(self.view, discord.ui.LayoutView):
-            message = f"a {self.mode.value} presentation has no LayoutView"
-            raise DiscordModeError(message)
+            message = f"a {self.mode.value} payload has no LayoutView"
+            raise MessageModeError(message)
         return self.view
 
     def build_files(self) -> list[discord.File]:
@@ -123,25 +123,25 @@ class DiscordPresentation:
         return files_for(self.assets)
 
     def _send_fields(self) -> dict[str, Any]:
-        """The discord.py send kwargs this presentation owns, attachments excluded."""
-        if self.mode is DiscordMode.COMPONENTS_V2:
+        """The discord.py send kwargs this payload owns, attachments excluded."""
+        if self.mode is MessageMode.COMPONENTS_V2:
             # Content and embeds are not merely empty here, they are forbidden: naming them
             # at all beside the V2 flag is a payload Discord is entitled to reject.
             return {"view": self.view}
         return {"content": self.content, "embeds": list(self.embeds), "view": self.view}
 
-    def _edit_fields(self, previous: DiscordMode) -> dict[str, Any]:
+    def _edit_fields(self, previous: MessageMode) -> dict[str, Any]:
         """The discord.py edit kwargs that move a message in `previous` mode to this one.
 
         Raises:
-            DiscordModeError: The transition is one Discord does not offer.
+            MessageModeError: The transition is one Discord does not offer.
         """
-        if previous is DiscordMode.COMPONENTS_V2 and self.mode is DiscordMode.CLASSIC:
+        if previous is MessageMode.COMPONENTS_V2 and self.mode is MessageMode.CLASSIC:
             message = "Discord cannot take the Components V2 flag back off a sent message"
-            raise DiscordModeError(message)
-        if self.mode is DiscordMode.CLASSIC:
+            raise MessageModeError(message)
+        if self.mode is MessageMode.CLASSIC:
             return {"content": self.content, "embeds": list(self.embeds), "view": self.view}
-        if previous is DiscordMode.CLASSIC:
+        if previous is MessageMode.CLASSIC:
             # The one transition with legacy fields to clear. V2 -> V2 must not name them.
             return {"view": self.view, "content": None, "embeds": []}
         return {"view": self.view}

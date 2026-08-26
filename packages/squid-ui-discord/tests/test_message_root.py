@@ -326,7 +326,7 @@ class TestEphemeralRenewal:
         class StaleHandle:
             permanent = False
             expires_at: datetime | None = datetime.now(UTC) + timedelta(seconds=30)
-            mode = squid_ui_discord.DiscordMode.COMPONENTS_V2
+            mode = squid_ui_discord.MessageMode.COMPONENTS_V2
 
             def expired(self) -> bool:
                 return False
@@ -410,7 +410,7 @@ class _RefusingHandle:
 
     permanent = False
     expires_at = None
-    mode = squid_ui_discord.DiscordMode.COMPONENTS_V2
+    mode = squid_ui_discord.MessageMode.COMPONENTS_V2
 
     def expired(self) -> bool:
         return False
@@ -2078,7 +2078,7 @@ class _Destination:
         self.raises = raises
         self.calls: list[tuple[discord.ui.LayoutView, list[discord.File]]] = []
 
-    async def __call__(self, presentation: squid_ui_discord.presentation.DiscordPresentation) -> Any:
+    async def __call__(self, presentation: squid_ui_discord.message_payload.MessagePayload) -> Any:
         self.calls.append((presentation.layout, presentation.build_files()))
         if self.raises is not None:
             raise self.raises
@@ -2756,7 +2756,7 @@ class TestEditHandles:
         class _Stale:
             permanent = False
             expires_at = None
-            mode = squid_ui_discord.DiscordMode.COMPONENTS_V2
+            mode = squid_ui_discord.MessageMode.COMPONENTS_V2
             writes = 0
 
             def expired(self) -> bool:

@@ -16,7 +16,7 @@ class StubStickyMessage(StickyMessage):
         super().__init__(stale_threshold=stale_threshold, debounce_delay=debounce_delay)
         self.render_count = 0
 
-    async def render(self, channel: TextChannel) -> sd.presentation.DiscordPresentation:
+    async def render(self, channel: TextChannel) -> sd.message_payload.MessagePayload:
         self.render_count += 1
         return sd.render_static([])
 
@@ -125,7 +125,7 @@ async def test_dismiss_deletes_message_and_clears_state() -> None:
 async def test_functional_sticky_message_uses_renderer_callback() -> None:
     called = False
 
-    async def custom_render(ch: TextChannel) -> sd.presentation.DiscordPresentation:
+    async def custom_render(ch: TextChannel) -> sd.message_payload.MessagePayload:
         nonlocal called
         called = True
         return sd.render_static([])

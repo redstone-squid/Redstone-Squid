@@ -2,8 +2,6 @@
 
 import pytest
 
-from squid_ui_discord import DISCORD_V2_DPY27
-from squid_ui_discord import V2_LIMITS as LIMITS
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_ui.planning import measure, plan
 from squid_ui.planning.adapter import AdapterProfile
@@ -15,6 +13,8 @@ from squid_ui.planning.limits import Axis, V2Limits
 from squid_ui.planning.target import ResourceCost
 from squid_ui.planning.types import DiscordAdapter
 from squid_ui.primitives import Never, Panel, Text, Variants
+from squid_ui_discord import DISCORD_V2_DPY27
+from squid_ui_discord import V2_LIMITS as LIMITS
 
 
 def _target(name: str, *, capabilities: frozenset[str] = frozenset(), limits: V2Limits = LIMITS):

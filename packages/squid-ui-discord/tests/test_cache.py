@@ -38,7 +38,7 @@ from squid_ui.semantic import (
     Uncontrolled,
 )
 from squid_ui.text import Localization, Message
-from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, compose
+from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, render_message
 
 
 def _target(name: str, *, capabilities: frozenset[str] = frozenset(), limits: V2Limits = LIMITS):
@@ -402,15 +402,15 @@ def test_realistic_queue_plan_and_draw_meets_latency_budget() -> None:
     cold = []
     for _ in range(15):
         started = perf_counter()
-        compose(document, cache=PlanCache())
+        render_message(document, cache=PlanCache())
         cold.append(perf_counter() - started)
 
     cache = PlanCache()
-    compose(document, cache=cache)
+    render_message(document, cache=cache)
     warm = []
     for _ in range(50):
         started = perf_counter()
-        result = compose(document, cache=cache)
+        result = render_message(document, cache=cache)
         warm.append(perf_counter() - started)
         assert result.plan.metrics.cache_hit
 

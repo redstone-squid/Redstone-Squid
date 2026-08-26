@@ -191,9 +191,9 @@ def test_static_layout_rendering_stays_behind_the_host_wrapper() -> None:
                 continue
             resolved = ".".join((aliases.get(target.id, target.id), *reversed(parts)))
             # These are dotted *call* targets (package attribute -> function), not module
-            # paths: squid_ui_discord.composition defines compose(), so a call resolves
-            # to "squid_ui_discord.compose" regardless of which file compose() lives in.
-            if resolved in {"squid_ui_discord.compose", "squid_ui_discord.render_static"}:
+            # paths: squid_ui_discord.rendering defines render_message(), so a call resolves
+            # to "squid_ui_discord.render_message" regardless of which file render_message() lives in.
+            if resolved in {"squid_ui_discord.render_message", "squid_ui_discord.render_static"}:
                 violations.append(f"{path}:{node.lineno}")
 
     assert violations == []

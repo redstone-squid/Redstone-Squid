@@ -240,7 +240,7 @@ async def run_command_operation(
     destination = sd.send_to(target)
 
     async def capture(
-        presentation: sd.presentation.DiscordPresentation,
+        presentation: sd.message_payload.MessagePayload,
     ) -> sd.delivery.DeliveryResult:
         result = await destination(presentation)
         component._result = result
