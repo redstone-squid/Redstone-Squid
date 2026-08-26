@@ -2,6 +2,8 @@
 
 from typing import Any, Protocol
 
+from squid_reactivity import ConflictDetail
+
 
 class ReplicaBranch[SnapshotT, OperationT, PreparedT](Protocol):
     """An isolated branch whose prepared work has not changed canonical state."""
@@ -12,12 +14,23 @@ class ReplicaBranch[SnapshotT, OperationT, PreparedT](Protocol):
 
     def prepare(self, base: object) -> PreparedT: ...
 
+    def stage_inverse(self, inverse: object) -> None: ...
+
+    @property
+    def base(self) -> object: ...
+
+    @property
+    def operations(self) -> tuple[OperationT, ...]: ...
+
 
 class ReplicationEngine[SnapshotT, OperationT, PreparedT, ChangeT](Protocol):
     """A CRDT backend hidden behind immutable snapshots and opaque causal tokens."""
 
     @property
     def backend_id(self) -> str: ...
+
+    @property
+    def replica_id(self) -> str: ...
 
     def snapshot(self) -> SnapshotT: ...
 
@@ -31,6 +44,31 @@ class ReplicationEngine[SnapshotT, OperationT, PreparedT, ChangeT](Protocol):
 
     def export_since(self, version: object | None = None) -> bytes: ...
 
+    def change_token(self, prepared: PreparedT) -> object | None: ...
+
+    def encode_token(self, token: object) -> bytes: ...
+
+    def decode_token(self, token: bytes) -> object: ...
+
+    def plan_inverse(self, token: object) -> object | ConflictDetail: ...
+
+    def encode_prepared(self, prepared: PreparedT) -> bytes: ...
+
+    def make_operation(self, kind: str, path: str, **data: Any) -> OperationT: ...
+
+    def visible_tags(
+        self,
+        path: str,
+        value: str,
+        additions: tuple[OperationT, ...] = (),
+    ) -> tuple[object, ...]: ...
+
+    def retain_token(self, token: object) -> object: ...
+
+    def release_token(self, retention: object) -> None: ...
+
+    def compact(self) -> None: ...
+
 
 class ReplicationBackend(Protocol):
     """A configured engine factory reusable for every document in one replica."""
@@ -42,4 +80,4 @@ class ReplicationBackend(Protocol):
         self,
         replica_id: str,
         document_id: str,
-    ) -> ReplicationEngine[Any, Any, Any, Any]: ...
+    ) -> Any: ...
