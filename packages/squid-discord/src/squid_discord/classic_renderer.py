@@ -14,9 +14,11 @@ per-value cap are server-only. A payload that would come back as a 400 naming no
 therefore has to be caught here, by walking what will actually be sent.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Hashable
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from enum import StrEnum
+from typing import Any, cast
 
 import discord
 
@@ -25,6 +27,7 @@ from squid_discord.attachments import attachment_assets
 from squid_discord.emoji import discord_emoji
 from squid_discord.inspection import audit_classic_payload
 from squid_discord.presentation import DiscordPresentation
+from squid_discord.render_cache import RenderProgramCache
 from squid_discord.renderer import RoutedItem, RoutedSelectItem
 from squid_discord.renderer import Wire as Wire
 from squid_discord.target import DISCORD_V1_DPY27
@@ -37,6 +40,35 @@ from squid_layouts.target_types import DiscordPyAdapter
 
 type Control = scene.Button | scene.Select | scene.EntitySelect
 type ClassicViewFactory = Callable[[], discord.ui.View]
+
+
+class _ClassicControlOp(StrEnum):
+    LINK = "link"
+    PREMIUM = "premium"
+    ROUTED_BUTTON = "routed_button"
+    ROUTED_SELECT = "routed_select"
+    CONTROL = "control"
+    EXTENSION = "extension"
+
+
+@dataclass(frozen=True, slots=True)
+class _ClassicControlInstruction:
+    op: _ClassicControlOp
+    source: scene.Control
+
+
+@dataclass(frozen=True, slots=True)
+class _ClassicEmbedInstruction:
+    source: scene.Embed
+    timestamp: datetime | None
+
+
+@dataclass(frozen=True, slots=True)
+class _ClassicProgram:
+    content: str | None
+    embeds: tuple[_ClassicEmbedInstruction, ...]
+    rows: tuple[tuple[_ClassicControlInstruction, ...], ...]
+    opaque: bool = False
 
 
 class StaticClassicView(discord.ui.View):
@@ -57,12 +89,14 @@ class ClassicRenderer:
         view_factory: ClassicViewFactory = StaticClassicView,
         always_view: bool = False,
         adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
+        cache: RenderProgramCache | None = None,
     ) -> None:
         require_discord_py_capability(adapter, AdapterCapability.RENDER_CLASSIC, "render a classic message")
         self.limits = limits
         self.audit = audit
         self.view_factory = view_factory
         self.always_view = always_view
+        self.cache = cache if cache is not None else RenderProgramCache()
         """Build a view even for a document with no controls.
 
         A static render of pure prose needs no view and should send none. A *mounted* one
@@ -78,23 +112,45 @@ class ClassicRenderer:
         wire: Wire | None = None,
     ) -> DiscordPresentation:
         body = self._body(document)
-        embeds = tuple(self._embed(embed, index) for index, embed in enumerate(body.embeds))
-        view = self._view(body, plan=plan, wire=wire)
+        key = self._cache_key(document, plan)
+        cached = self.cache.get(key)
+        if cached is None:
+            program = self._compile(body)
+            certified = False
+        else:
+            stored, certified = cached
+            if not isinstance(stored, _ClassicProgram):
+                message = "render program cache returned the wrong program type"
+                raise DrawInvariantError(message)
+            program = stored
+        embeds = tuple(self._embed(embed, index) for index, embed in enumerate(program.embeds))
+        view = self._view(program, plan=plan, wire=wire)
         assets = () if plan is None else attachment_assets(plan)
         presentation = DiscordPresentation.classic(
-            content=body.content,
+            content=program.content,
             embeds=embeds,
             view=view,
             assets=assets,
         )
-        if self.audit:
+        certifiable = self.view_factory is StaticClassicView and wire is None and not program.opaque
+        if self.audit and (not certified or not certifiable):
             problems = audit_classic_payload(
-                content=body.content, embeds=embeds, view=view, attachments=len(assets), limits=self.limits
+                content=program.content, embeds=embeds, view=view, attachments=len(assets), limits=self.limits
             )
             if problems:
                 message = "classic drawing violated its planned limits: " + "; ".join(problems)
                 raise DrawInvariantError(message)
+        self.cache.put(key, program, certified=certified or (self.audit and certifiable))
         return presentation
+
+    def _cache_key(
+        self,
+        document: scene.Document[scene.ClassicMessage],
+        plan: PlanResult[scene.ClassicMessage] | None,
+    ) -> Hashable:
+        fingerprint = plan.report.scene_fingerprint if plan is not None else scene.Codec.fingerprint(document)
+        factory = "static" if self.view_factory is StaticClassicView else "custom"
+        return "discord.classic", fingerprint, self.limits, factory, self.always_view
 
     def _body(self, document: scene.Document[scene.ClassicMessage]) -> scene.ClassicMessage:
         if document.protocol != scene.Codec.protocol:
@@ -111,13 +167,60 @@ class ClassicRenderer:
             raise DrawInvariantError(message)
         return document.body
 
-    def _embed(self, node: scene.Embed, index: int) -> discord.Embed:
+    def _compile(self, body: scene.ClassicMessage) -> _ClassicProgram:
+        embeds = tuple(
+            _ClassicEmbedInstruction(
+                embed,
+                None if embed.timestamp is None else datetime.fromisoformat(embed.timestamp),
+            )
+            for embed in body.embeds
+        )
+        rows: list[tuple[_ClassicControlInstruction, ...]] = []
+        opaque = False
+        for index, row in enumerate(body.rows):
+            selects = sum(
+                isinstance(control, scene.Select | scene.RoutedSelect | scene.EntitySelect) for control in row.controls
+            )
+            if selects and len(row.controls) > 1:
+                message = f"row {index} mixes a select with other controls; a select occupies its whole row"
+                raise DrawInvariantError(message)
+            if not selects and len(row.controls) > self.limits.components.row_buttons:
+                message = (
+                    f"row {index} holds {len(row.controls)} buttons; "
+                    f"the maximum is {self.limits.components.row_buttons}"
+                )
+                raise DrawInvariantError(message)
+            if not row.controls:
+                message = f"row {index} is empty; planning should not have produced it"
+                raise DrawInvariantError(message)
+            instructions: list[_ClassicControlInstruction] = []
+            for control in row.controls:
+                match control:
+                    case scene.Link():
+                        op = _ClassicControlOp.LINK
+                    case scene.PremiumButton():
+                        op = _ClassicControlOp.PREMIUM
+                    case scene.RoutedButton():
+                        op = _ClassicControlOp.ROUTED_BUTTON
+                    case scene.RoutedSelect():
+                        op = _ClassicControlOp.ROUTED_SELECT
+                    case scene.Button() | scene.Select() | scene.EntitySelect():
+                        op = _ClassicControlOp.CONTROL
+                    case scene.Extension():
+                        op = _ClassicControlOp.EXTENSION
+                        opaque = True
+                instructions.append(_ClassicControlInstruction(op, control))
+            rows.append(tuple(instructions))
+        return _ClassicProgram(body.content, embeds, tuple(rows), opaque)
+
+    def _embed(self, instruction: _ClassicEmbedInstruction, index: int) -> discord.Embed:
+        node = instruction.source
         embed = discord.Embed(
             title=node.title,
             url=node.url,
             description=node.description,
             colour=None if node.colour is None else discord.Colour(node.colour),
-            timestamp=None if node.timestamp is None else datetime.fromisoformat(node.timestamp),
+            timestamp=instruction.timestamp,
         )
         for field in node.fields:
             embed.add_field(name=field.name, value=field.value, inline=field.inline)
@@ -136,16 +239,17 @@ class ClassicRenderer:
 
     def _view(
         self,
-        body: scene.ClassicMessage,
+        program: _ClassicProgram,
         *,
         plan: PlanResult | None,
         wire: Wire | None,
     ) -> discord.ui.View | None:
-        if not body.rows and not self.always_view:
+        if not program.rows and not self.always_view:
             return None
         view = self.view_factory()
-        for index, row in enumerate(body.rows):
-            for item in self._row(row, index, plan=plan, wire=wire):
+        for index, row in enumerate(program.rows):
+            for instruction in row:
+                item = self._control(instruction, index, plan=plan, wire=wire)
                 item.row = index
                 try:
                     view.add_item(item)
@@ -157,67 +261,47 @@ class ClassicRenderer:
                     raise DrawInvariantError(message) from error
         return view
 
-    def _row(
-        self,
-        row: scene.ClassicRow,
-        index: int,
-        *,
-        plan: PlanResult | None,
-        wire: Wire | None,
-    ) -> list[discord.ui.Item[Any]]:
-        selects = sum(
-            isinstance(control, scene.Select | scene.RoutedSelect | scene.EntitySelect) for control in row.controls
-        )
-        if selects and len(row.controls) > 1:
-            message = f"row {index} mixes a select with other controls; a select occupies its whole row"
-            raise DrawInvariantError(message)
-        if not selects and len(row.controls) > self.limits.components.row_buttons:
-            message = (
-                f"row {index} holds {len(row.controls)} buttons; the maximum is {self.limits.components.row_buttons}"
-            )
-            raise DrawInvariantError(message)
-        if not row.controls:
-            message = f"row {index} is empty; planning should not have produced it"
-            raise DrawInvariantError(message)
-        return [self._control(control, index, plan=plan, wire=wire) for control in row.controls]
-
     def _control(
         self,
-        control: scene.Control,
+        instruction: _ClassicControlInstruction,
         row: int,
         *,
         plan: PlanResult | None,
         wire: Wire | None,
     ) -> discord.ui.Item[Any]:
-        match control:
-            case scene.Link(label=label, url=url):
+        control = instruction.source
+        match instruction.op:
+            case _ClassicControlOp.LINK:
+                node = cast(scene.Link, control)
                 return discord.ui.Button(
                     style=discord.ButtonStyle.link,
-                    label=label,
-                    url=url,
-                    emoji=discord_emoji(control.emoji),
-                    disabled=control.disabled,
+                    label=node.label,
+                    url=node.url,
+                    emoji=discord_emoji(node.emoji),
+                    disabled=node.disabled,
                 )
-            case scene.PremiumButton(sku_id=sku_id):
-                return discord.ui.Button(sku_id=sku_id)
-            case scene.RoutedButton(label=label, route_id=route_id):
+            case _ClassicControlOp.PREMIUM:
+                return discord.ui.Button(sku_id=cast(scene.PremiumButton, control).sku_id)
+            case _ClassicControlOp.ROUTED_BUTTON:
+                node = cast(scene.RoutedButton, control)
                 return RoutedItem(
-                    style=getattr(discord.ButtonStyle, control.style.value),
-                    label=label,
-                    custom_id=route_id,
-                    emoji=discord_emoji(control.emoji),
-                    disabled=control.disabled,
+                    style=getattr(discord.ButtonStyle, node.style.value),
+                    label=node.label,
+                    custom_id=node.route_id,
+                    emoji=discord_emoji(node.emoji),
+                    disabled=node.disabled,
                 )
-            case scene.RoutedSelect(options=options, route_id=route_id):
+            case _ClassicControlOp.ROUTED_SELECT:
+                node = cast(scene.RoutedSelect, control)
                 return RoutedSelectItem(
-                    options=[_option(option) for option in options],
-                    custom_id=route_id,
-                    placeholder=control.placeholder,
-                    min_values=control.min_values,
-                    max_values=control.max_values,
-                    disabled=control.disabled,
+                    options=[_option(option) for option in node.options],
+                    custom_id=node.route_id,
+                    placeholder=node.placeholder,
+                    min_values=node.min_values,
+                    max_values=node.max_values,
+                    disabled=node.disabled,
                 )
-            case scene.Button() | scene.Select() | scene.EntitySelect():
+            case _ClassicControlOp.CONTROL:
                 if plan is None or wire is None:
                     message = "interactive scene controls require a mounted Discord frontend"
                     raise TypeError(message)
@@ -226,7 +310,8 @@ class ClassicRenderer:
                     message = f"scene action {control.action!r} has no binding"
                     raise DrawInvariantError(message)
                 return wire(control, binding)
-            case scene.Extension(kind=kind):
+            case _ClassicControlOp.EXTENSION:
+                kind = cast(scene.Extension, control).kind
                 message = f"a classic message cannot draw the Discord extension {kind!r} in row {row}"
                 raise DrawInvariantError(message)
 
