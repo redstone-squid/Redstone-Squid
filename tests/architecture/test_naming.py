@@ -94,6 +94,7 @@ RETIRED_CLASS_NAMES = frozenset(
         "ActionGroup",
         "Composition",
         "Destination",
+        "DiscordLimits",
         "DiscordMode",
         "DiscordModeError",
         "DiscordPresentation",

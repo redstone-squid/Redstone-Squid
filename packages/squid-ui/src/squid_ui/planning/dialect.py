@@ -30,7 +30,7 @@ from squid_ui.interactions import ActionBinding
 from squid_ui.planning.cursors import CursorCoordinator
 from squid_ui.planning.layout_measurement.model import Realized
 from squid_ui.planning.layout_measurement.solver import MeasuredLayout
-from squid_ui.planning.limits import Axis, DiscordLimits
+from squid_ui.planning.limits import Axis, MessageLimits
 from squid_ui.planning.navigation import PlannedNav
 from squid_ui.primitives.nodes import (
     Button,
@@ -130,7 +130,7 @@ class SceneBindings:
                 return scene.Extension(kind, version, {**payload, "resource": resource})
 
 
-class TargetDialect[LimitsT: DiscordLimits, BodyT: scene.Body, ModeT](Protocol):
+class TargetDialect[LimitsT: MessageLimits, BodyT: scene.Body, ModeT](Protocol):
     """One Discord protocol mode: what a legal message of it is, and how to build one.
 
     The first axis of a target. Bound to its own limits and body types, so each dialect's

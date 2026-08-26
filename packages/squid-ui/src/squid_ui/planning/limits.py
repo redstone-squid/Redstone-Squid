@@ -17,8 +17,8 @@ per-value embed cap — is server-only, which is why the renderer runs a strict 
 
 The caps split three ways, and the split is what lets a function say what it reads.
 `ComponentLimits` holds what every component obeys in either mode, `EmbedLimits` what one
-embed may hold, and a `DiscordLimits` subclass the message-wide budgets that mode alone
-knows. A shared planning layer takes a `DiscordLimits` and may touch only what it declares.
+embed may hold, and a `MessageLimits` subclass the message-wide budgets that mode alone
+knows. A shared planning layer takes a `MessageLimits` and may touch only what it declares.
 """
 
 from collections.abc import Iterator, Mapping
@@ -131,8 +131,8 @@ def _cap_values(value: object, prefix: str = "") -> Iterator[tuple[str, object]]
 
 
 @dataclass(frozen=True, slots=True)
-class DiscordLimits:
-    """What every Discord message obeys, whichever component mode it is in.
+class MessageLimits:
+    """The message-wide budgets every dialect obeys, whichever component mode it is in.
 
     Abstract: message-wide budgets live on the subclasses, because a mode-specific strategy
     may not borrow another mode's totals. What is shared is stated here, and a shared
@@ -203,7 +203,7 @@ class DiscordLimits:
 
 
 @dataclass(frozen=True, slots=True)
-class V2Limits(DiscordLimits):
+class V2Limits(MessageLimits):
     """Hard limits for a Components V2 message and its children."""
 
     # Message-wide budgets.
@@ -250,13 +250,13 @@ class V2Limits(DiscordLimits):
 
 
 @dataclass(frozen=True, slots=True)
-class ClassicLimits(DiscordLimits):
+class ClassicLimits(MessageLimits):
     """Hard limits for a pre-Components-V2 message: content, embeds, and action rows."""
 
     embeds: EmbedLimits = EMBED_LIMITS
     """Narrowed from the base's optional: a classic message always has embeds.
 
-    Plan 71 made `DiscordLimits.embeds` optional so a mode without embeds could say so and
+    Plan 71 made `MessageLimits.embeds` optional so a mode without embeds could say so and
     every read would be guarded. The classic path is the mode that always has them, and
     saying so here is what spares its own code seven `is None` checks that can never fire.
     """
