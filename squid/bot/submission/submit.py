@@ -205,7 +205,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         # `wait=True` fetches the message back, and a delivery that produced none would have
         # raised. The form edits this message three times below, so it needs the handle.
         assert isinstance(delivered, sd.delivery.Delivered), "the interaction response cannot be abandoned"
-        workspace_message = delivered.receipt.message
+        workspace_message = delivered.result.message
         assert workspace_message is not None, "a waited response always hands back its message"
         await component.wait()
         if component.value is None:

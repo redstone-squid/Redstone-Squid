@@ -68,7 +68,7 @@ type ReconnectResult = Reconnected | Missing | Unreachable
 class DurableFrontend(Protocol):
     """A frontend that can promote live deliveries and reconnect restored sessions."""
 
-    async def promote(self, mount: Mount, receipt: DeliveryResult) -> PromotionResult: ...
+    async def promote(self, mount: Mount, result: DeliveryResult) -> PromotionResult: ...
 
     async def reconnect(self, bindings: Sequence[RecoveredBinding]) -> ReconnectResult: ...
 
@@ -87,16 +87,16 @@ class DiscordFrontend:
     def __init__(self, client: discord.Client) -> None:
         self.client = client
 
-    async def promote(self, mount: Mount, receipt: DeliveryResult) -> PromotionResult:
+    async def promote(self, mount: Mount, result: DeliveryResult) -> PromotionResult:
         """Trade a recoverable public delivery up to permanent bot-token authority."""
-        message = receipt.message
+        message = result.message
         if message is None:
             return NotDurable("the delivery did not expose an addressable message")
-        if receipt.ephemeral is True:
+        if result.ephemeral is True:
             return NotDurable("ephemeral Discord messages cannot be recovered")
         address = mount.address
         if address is None or address.message_id != message.id or address.channel_id != message.channel.id:
-            return NotDurable("the delivery receipt does not address this mount's message")
+            return NotDurable("the delivery result does not address this mount's message")
 
         try:
             durable_message = await self._normal_message(message)

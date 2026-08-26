@@ -327,7 +327,7 @@ class DurableSessionRuntime:
                 victims: tuple[SessionSnapshot, ...],
             ) -> None:
                 nonlocal consumed, not_durable
-                promoted = await self.frontend.promote(mount, delivered.receipt)
+                promoted = await self.frontend.promote(mount, delivered.result)
                 if isinstance(promoted, NotDurable):
                     not_durable = promoted
                     raise _NotDurableOpen(promoted)
@@ -576,7 +576,7 @@ class DurableSessionRuntime:
             result = await mount.send(destination)
             if isinstance(result, Abandoned):
                 return result
-            promoted = await self.frontend.promote(mount, result.receipt)
+            promoted = await self.frontend.promote(mount, result.result)
             if isinstance(promoted, NotDurable):
                 await mount.finish()
                 return promoted

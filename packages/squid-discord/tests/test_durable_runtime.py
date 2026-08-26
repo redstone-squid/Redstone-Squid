@@ -62,19 +62,19 @@ class FakeFrontend:
     missing_ids: frozenset[str] = frozenset()
     unreachable_ids: frozenset[str] = frozenset()
 
-    async def promote(self, mount: squid_discord.Mount, receipt: DeliveryResult):
+    async def promote(self, mount: squid_discord.Mount, result: DeliveryResult):
         if self.reject_next:
             self.reject_next = False
             return NotDurable("test destination is temporary")
-        if receipt.message is None or receipt.handle is None or receipt.ephemeral:
+        if result.message is None or result.handle is None or result.ephemeral:
             return NotDurable("message has no durable binding")
-        await mount.adopt_handle(receipt.handle)
+        await mount.adopt_handle(result.handle)
         return Promoted(
             FrontendAddress(
                 "fake",
-                {"channel_id": receipt.message.channel.id, "message_id": receipt.message.id},
+                {"channel_id": result.message.channel.id, "message_id": result.message.id},
             ),
-            receipt.handle,
+            result.handle,
         )
 
     async def reconnect(self, bindings: Sequence[RecoveredBinding]):

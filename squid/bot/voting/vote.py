@@ -234,8 +234,8 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
 
         # The card is a public artifact of a public decision, so it goes in the channel
         # rather than into the ephemeral reply the right-click opened.
-        async def publish(_progress, receipt):
-            published = receipt.message
+        async def publish(_progress, result):
+            published = result.message
             if published is None:
                 detail = "a public vote operation requires the delivered Discord message"
                 raise RuntimeError(detail)

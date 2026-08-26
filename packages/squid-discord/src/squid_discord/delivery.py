@@ -70,7 +70,7 @@ class DeliveryAbandoned(Exception):
 class Delivered:
     """A mount render committed through a destination."""
 
-    receipt: DeliveryResult
+    result: DeliveryResult
     settled: bool
     """Whether every async binding observed by the delivered generation reached a terminal status."""
 
@@ -340,7 +340,7 @@ class DeliveryResult:
                 object.__setattr__(self, "ephemeral", ephemeral)
 
 
-def _callback_receipt(
+def _callback_result(
     response: discord.InteractionCallbackResponse[Any],
     handle: EditHandle,
     *,
@@ -398,8 +398,8 @@ class Destination(Protocol):
 
     The return value says what the mount gets to keep, not whether it worked:
 
-    - a receipt with a handle — delivered, and here is the exact authority to edit it;
-    - a receipt without a handle — delivered, but the operation exposed no edit authority;
+    - a result with a handle — delivered, and here is the exact authority to edit it;
+    - a result without a handle — delivered, but the operation exposed no edit authority;
     - raise :class:`DeliveryAbandoned` — nothing was delivered, deliberately, and the user
       already knows;
     - raise anything else — the delivery failed. The mount stays on its previous generation
@@ -553,7 +553,7 @@ def respond_to(
         callback_message = response.resource if isinstance(response.resource, discord.Message) else None
         message = await interaction.original_response() if wait and callback_message is None else callback_message
         handle = _OriginalResponseHandle(interaction, message, mode=mode)
-        return _callback_receipt(response, handle, fallback=message)
+        return _callback_result(response, handle, fallback=message)
 
     return send
 
@@ -567,7 +567,7 @@ def edit_to(
     """Write a mount's first render onto a message the bot already owns.
 
     The way a mount *arrives* on an existing message: `Mount.send` runs its usual
-    stage/deliver/commit around it, and the receipt names the permanent bot-token authority
+    stage/deliver/commit around it, and the result names the permanent bot-token authority
     for the message it wrote. `Mount.adopt_handle` is the other half of the pair -- it
     retains authority for a mount that is already live, and stays the answer when the handle
     was established somewhere else.
