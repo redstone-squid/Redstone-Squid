@@ -1,6 +1,6 @@
 """Backend-neutral replicated engine and staging contracts."""
 
-from typing import Protocol
+from typing import Any, Protocol
 
 
 class ReplicaBranch[SnapshotT, OperationT, PreparedT](Protocol):
@@ -30,3 +30,16 @@ class ReplicationEngine[SnapshotT, OperationT, PreparedT, ChangeT](Protocol):
     def prepare_remote(self, update: bytes) -> PreparedT: ...
 
     def export_since(self, version: object | None = None) -> bytes: ...
+
+
+class ReplicationBackend(Protocol):
+    """A configured engine factory reusable for every document in one replica."""
+
+    @property
+    def backend_id(self) -> str: ...
+
+    def open_engine(
+        self,
+        replica_id: str,
+        document_id: str,
+    ) -> ReplicationEngine[Any, Any, Any, Any]: ...

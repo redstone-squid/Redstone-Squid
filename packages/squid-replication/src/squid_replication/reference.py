@@ -140,7 +140,9 @@ class ReferenceEngine:
             tuple((path, frozenset(values)) for path, values in sorted(sets.items())),
         )
 
-    def visible_tags(self, path: str, value: str, additions: tuple[ReferenceOperation, ...] = ()) -> tuple[OperationId, ...]:
+    def visible_tags(
+        self, path: str, value: str, additions: tuple[ReferenceOperation, ...] = ()
+    ) -> tuple[OperationId, ...]:
         operations = {**self._operations, **{operation.identity: operation for operation in additions}}
         standing = self._standing_removals(operations.values())
         return tuple(
@@ -291,3 +293,13 @@ class ReferenceEngine:
             ],
         }
         return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+
+
+@dataclass(frozen=True, slots=True)
+class ReferenceBackend:
+    """Create bounded deterministic engines for conformance tests and examples."""
+
+    backend_id = ReferenceEngine.backend_id
+
+    def open_engine(self, replica_id: str, document_id: str) -> ReferenceEngine:
+        return ReferenceEngine(replica_id)

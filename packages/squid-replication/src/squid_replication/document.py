@@ -26,12 +26,13 @@ from squid_reactivity.core import (
     enlist,
     transaction,
 )
+from squid_replication.engine import ReplicationBackend
 from squid_replication.reference import (
+    PreparedReferenceUpdate,
     ReferenceEngine,
     ReferenceOperation,
     ReferenceSnapshot,
     ReferenceVersion,
-    PreparedReferenceUpdate,
 )
 from squid_replication.transport import ReplicationUpdate
 
@@ -461,8 +462,9 @@ class Replica:
     clock; mutating first re-mints identities its peers already hold, and that is refused.
     """
 
-    def __init__(self, replica_id: str) -> None:
+    def __init__(self, replica_id: str, *, backend: ReplicationBackend) -> None:
         self.replica_id = replica_id
+        self.backend = backend
         self._documents: dict[str, ReplicatedDocument] = {}
         self.closed = False
 
@@ -472,7 +474,8 @@ class Replica:
             raise ReplicaClosedError(message)
         document = self._documents.get(document_id)
         if document is None:
-            document = self._documents[document_id] = ReplicatedDocument(document_id, ReferenceEngine(self.replica_id))
+            engine = self.backend.open_engine(self.replica_id, document_id)
+            document = self._documents[document_id] = ReplicatedDocument(document_id, engine)
         return document
 
     @property

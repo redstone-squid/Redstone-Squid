@@ -4,7 +4,21 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from squid_reactivity import ActionCommit, on_action_commit, transaction
-from squid_replication import PreparedReplicationInverse, ReplicationChangeToken, ReplicatedDocument, Replica
+from squid_replication import (
+    PreparedReplicationInverse,
+    ReferenceBackend,
+    ReplicatedDocument,
+    ReplicationChangeToken,
+)
+from squid_replication import (
+    Replica as _Replica,
+)
+
+_REFERENCE_BACKEND = ReferenceBackend()
+
+
+def Replica(replica_id: str) -> _Replica:
+    return _Replica(replica_id, backend=_REFERENCE_BACKEND)
 
 
 @settings(max_examples=30, deadline=None)
