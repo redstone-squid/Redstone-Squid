@@ -25,8 +25,8 @@ from squid_layouts.forms import FormBinding
 from squid_layouts.interactions import ActionBinding
 from squid_layouts.planning.cursors import CursorCoordinator
 from squid_layouts.planning.layout_measurement.model import Realized
+from squid_layouts.planning.layout_measurement.solver import MeasuredLayout
 from squid_layouts.planning.limits import DiscordLimits
-from squid_layouts.planning.measurement import MeasuredLayout
 from squid_layouts.planning.navigation import PlannedNav
 from squid_layouts.planning.target import TargetProfile
 from squid_layouts.primitives.nodes import (

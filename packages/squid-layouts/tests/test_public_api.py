@@ -150,7 +150,7 @@ ROOT_NAMESPACES = (
 )
 
 RENAMED_SUBMODULES = (
-    "squid_layouts.planning.measurement",
+    "squid_layouts.planning.layout_measurement.solver",
     "squid_layouts.runtime.histories",
     "squid_layouts.runtime.topics",
 )

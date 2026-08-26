@@ -16,7 +16,7 @@ from squid_layouts.planning.layout_measurement.diagnostics import (
     SolveNoteCode,
     SolveNoteSeverity,
 )
-from squid_layouts.planning.measurement import (
+from squid_layouts.planning.layout_measurement.solver import (
     MeasuredLayout,
     measure,
 )
