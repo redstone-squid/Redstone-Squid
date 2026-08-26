@@ -9,7 +9,7 @@ import anyio
 from anyio.abc import TaskStatus
 
 from squid_reactivity import Shared, SharedPool, TopicBus, export_state, restore_state
-from squid_stores.scoped import ScopedStore, Slot
+from squid_storage.scoped import ScopedStore, Slot
 
 _logger = logging.getLogger(__name__)
 

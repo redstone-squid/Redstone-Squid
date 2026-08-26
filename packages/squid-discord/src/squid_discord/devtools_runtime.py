@@ -19,7 +19,7 @@ from squid_ui.runtime.topics import Address, BusSnapshot, CellAddress, Topic, To
 
 if TYPE_CHECKING:
     # Annotations only. Kept out of the runtime import graph so `import squid_discord` does
-    # not reach `squid_stores`, which arrives with the `durable` extra rather than the base
+    # not reach `squid_storage`, which arrives with the `durable` extra rather than the base
     # install. Deferred evaluation makes this free on 3.14.
     from squid_discord.durability.runtime import (
         DurableRuntimeSnapshot,

@@ -119,7 +119,7 @@ def test_patterns_package_is_transport_free() -> None:
         .should_not_import("discord*")
         .should_not_import("anyio*")
         .should_not_import("squid_discord*")
-        .should_not_import("squid_stores*")
+        .should_not_import("squid_storage*")
         .should_not_import("squid")
         .should_not_import("squid.*")
         .check("squid_patterns", only_direct_imports=True)
@@ -564,7 +564,7 @@ def test_the_engine_needs_no_transport_install() -> None:
     TYPE_CHECKING, which is where a back-edge would hide from a plain dependency check.
     """
     root = Path("packages/squid-ui/src/squid_ui")
-    blocked = {"anyio", "discord", "squid_stores", "squid_discord", "squid_patterns"}
+    blocked = {"anyio", "discord", "squid_storage", "squid_discord", "squid_patterns"}
     violations: list[str] = []
     for path in root.rglob("*.py"):
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):

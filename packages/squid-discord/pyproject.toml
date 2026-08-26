@@ -16,8 +16,8 @@ dependencies = [
 # Durable mounts and sessions. Optional so a bot that never persists a panel installs no store
 # backend; `squid_discord.durability` is imported lazily to keep that promise real, and the
 # modules that name its types do so under TYPE_CHECKING.
-durable = ["squid-stores"]
-postgres = ["squid-stores[postgres]"]
+durable = ["squid-storage"]
+postgres = ["squid-storage[postgres]"]
 
 [build-system]
 requires = ["uv_build>=0.11,<0.13"]

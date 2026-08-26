@@ -3,7 +3,7 @@
 **Status: applied 2026-08-26. `tests/architecture/test_naming.py` enforces the
 retired vocabulary across public and private identifiers.**
 
-One dictionary for `squid-ui`, `squid-reactivity`, `squid-replicated`, `squid-stores`,
+One dictionary for `squid-ui`, `squid-reactivity`, `squid-replicated`, `squid-storage`,
 `squid-discord`, and `squid-patterns`, covering head nouns, suffixes, callable verbs, and
 private identifiers. It is the naming source of truth referenced by
 [squid-ui-architecture.md §Naming](squid-ui-architecture.md#naming).
@@ -260,7 +260,7 @@ visual. It becomes **`ScreenSpec`**, and its `policy: SessionPolicy` field, whic
 `{limit, collision}`, is an occupancy rule rather than an injected decision-maker.
 
 **`Session`** survives. It is a bounded interaction with a set of participants, fourteen
-dependent names already agree with it, and `squid-stores` speaks it independently.
+dependent names already agree with it, and `squid-storage` speaks it independently.
 
 **`Mount`** survives, under the discord.py/Vue mirroring exemption. It is Vue's own word for
 binding a component to a render target, and the alternatives all collide: `Panel` is an exact

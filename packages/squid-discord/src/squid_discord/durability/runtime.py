@@ -29,7 +29,7 @@ from squid_discord.sessions import (
     SessionRegistry,
     SessionSnapshot,
 )
-from squid_stores import ClaimToken, DurableSessionStore, StoredSessionRecord
+from squid_storage import ClaimToken, DurableSessionStore, StoredSessionRecord
 
 from . import ComponentRegistry, FrontendAddress, MountStateError, RestoreContext
 from .frontend import (
