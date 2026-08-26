@@ -76,19 +76,19 @@ class ClaimReviewComponent(sl.Component):
         if self._claims:
             choices = cast(
                 sl.primitives.Node,
-                sl.semantic.Choices(
-                    key="claim",
-                    choices=tuple(
-                        sl.semantic.Choice(
-                            str(claim.id),
+                sl.choices(
+                    *(
+                        sl.choice(
                             L("Claim #{id} — {name}", id=claim.id, name=claim.alias_name),
-                            sl.md(
+                            key=str(claim.id),
+                            description=sl.md(
                                 "{claimant}",
                                 claimant=sl.raw_md(present_claimant(claim, self.locale, mention=False)),
                             ),
                         )
                         for claim in self._claims
                     ),
+                    key="claim",
                     selection=sl.controlled(
                         (str(self.selected_id),) if self.selected_id is not None else (), self._select_claim
                     ),
@@ -96,32 +96,29 @@ class ClaimReviewComponent(sl.Component):
                     maximum=1,
                 ),
             )
-        buttons: list[sl.primitives.Button] = []
+        buttons: list[sl.semantic.Action] = []
         if self._can_approve:
             buttons.append(
-                sl.primitives.Button(
+                sl.action(
                     L(t"Take the name")
                     if self.selected_id is not None and self.reassign_armed == self.selected_id
                     else L(t"Approve"),
                     self._approve,
-                    "approve",
-                    style=sl.primitives.ActionStyle.DANGER
-                    if self.reassign_armed == self.selected_id
-                    else sl.primitives.ActionStyle.SUCCESS,
-                    disabled=self.selected is None,
+                    key="approve",
+                    tone=sl.Tone.DANGER if self.reassign_armed == self.selected_id else sl.Tone.SUCCESS,
+                    available=self.selected is not None,
                 )
             )
         if self._can_reject:
             buttons.append(
-                sl.primitives.Button(
+                sl.action(
                     L(t"Reject"),
                     self._reject,
-                    "reject",
-                    style=sl.primitives.ActionStyle.SECONDARY,
-                    disabled=self.selected is None,
+                    key="reject",
+                    available=self.selected is not None,
                 )
             )
-        buttons.append(sl.primitives.Button(L(t"Close"), self._close, "close"))
+        buttons.append(sl.action(L(t"Close"), self._close, key="close"))
         return (
             sl.primitives.Panel(
                 (
@@ -131,7 +128,7 @@ class ClaimReviewComponent(sl.Component):
                 ),
                 accent=DISCORD_BLUE,
             ),
-            sl.primitives.Row(tuple(buttons)),
+            sl.actions(*buttons, key="claim-actions"),
         )
 
     def _page_footer(self, page: int, pages: int) -> sl.text.Message:

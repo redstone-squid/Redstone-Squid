@@ -170,7 +170,12 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
             footer += f" • Updated <t:{build.edited_time.timestamp()}:R>"
         rows = ()
         if build.original_link is not None:
-            rows = (sl.primitives.Row((sl.primitives.LinkButton("Original submission", build.original_link),)),)
+            rows = (
+                sl.actions(
+                    sl.link("Original submission", build.original_link, key="original-submission"),
+                    key="submission-links",
+                ),
+            )
         description = await self.get_description()
         media = await self._get_media_urls()
         extra_media = media[1:]

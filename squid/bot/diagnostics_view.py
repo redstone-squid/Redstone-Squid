@@ -86,7 +86,7 @@ class ErrorReportBrowser(sl.Component):
                     placeholder=L(t"Choose an error to open"),
                 )
             )
-        nodes.append(sl.primitives.Row((self._close_button(),)))
+        nodes.append(sl.actions(self._close_action(), key="list-actions"))
         return nodes
 
     def _render_detail(self) -> Sequence[sl.LayoutNode]:
@@ -114,18 +114,17 @@ class ErrorReportBrowser(sl.Component):
                 L(t"Full report"), report_asset(report), key="full-report", emphasis=sl.semantic.Emphasis.STRONG
             )
         )
-        controls: list[sl.primitives.Button] = []
+        controls: list[sl.semantic.Action] = []
         if self._reports:
-            controls.append(sl.primitives.Button(label=L(t"Back"), on_click=self._back, key="back"))
-        controls.append(self._close_button())
-        return [sl.stack(*children), sl.primitives.Row(tuple(controls))]
+            controls.append(sl.action(L(t"Back"), self._back, key="back"))
+        controls.append(self._close_action())
+        return [sl.stack(*children), sl.actions(*controls, key="detail-actions")]
 
-    def _close_button(self) -> sl.primitives.Button:
-        return sl.primitives.Button(
-            label=L(t"Close"),
-            on_click=self._close,
+    def _close_action(self) -> sl.semantic.Action:
+        return sl.action(
+            L(t"Close"),
+            self._close,
             key="close",
-            style=sl.primitives.ActionStyle.SECONDARY,
         )
 
     async def _open(self, event: sl.SelectionEvent) -> None:

@@ -195,36 +195,35 @@ class SettingsPanel(sl.Component):
                     )
                 )
             children.append(
-                sl.semantic.Choices(
-                    key="locale",
-                    choices=tuple(
-                        sl.semantic.Choice(
-                            tag,
+                sl.choices(
+                    *(
+                        sl.choice(
                             L(t"Follow Discord") if tag == FOLLOW_DISCORD else tag,
+                            key=tag,
                         )
                         for tag in (FOLLOW_DISCORD, *sorted(SUPPORTED_LOCALES))
                     ),
+                    key="locale",
                     selection=sl.controlled((self._locale_override or FOLLOW_DISCORD,), self._locale_changed),
                 )
             )
-        actions: list[sl.primitives.Button] = []
+        actions: list[sl.semantic.Action] = []
         # Only once there is something to reverse: an always-present disabled pair would be
         # two dead controls on a panel most readers never undo anything on.
         if self._capabilities.edit_server and self.history.can_undo:
-            actions.append(sl.primitives.Button(L(t"Undo"), self._undo, "undo"))
+            actions.append(sl.action(L(t"Undo"), self._undo, key="undo"))
         if self._capabilities.edit_server and self.history.can_redo:
-            actions.append(sl.primitives.Button(L(t"Redo"), self._redo, "redo"))
+            actions.append(sl.action(L(t"Redo"), self._redo, key="redo"))
         if self.shows_voting:
-            actions.append(sl.primitives.Button(L(t"Voting"), self._show_voting, "voting"))
+            actions.append(sl.action(L(t"Voting"), self._show_voting, key="voting"))
         actions.append(
-            sl.primitives.Button(
+            sl.action(
                 L(t"Close"),
                 self._close,
-                "close",
-                style=sl.primitives.ActionStyle.SECONDARY,
+                key="close",
             )
         )
-        children.append(sl.primitives.Row(tuple(actions)))
+        children.append(sl.actions(*actions, key="server-actions"))
         return children
 
     def _voting_nodes(self) -> Sequence[sl.LayoutNode]:
@@ -235,11 +234,9 @@ class SettingsPanel(sl.Component):
                 sl.fields(*(sl.field(field.name, field.value) for field in self._voting_fields())),
                 scope_note and sl.note(scope_note),
             ),
-            sl.semantic.Choices(
+            sl.choices(
+                *(sl.choice(L(label), key=kind.value) for kind, label in KIND_LABELS.items()),
                 key="vote-kind",
-                choices=tuple(
-                    sl.semantic.Choice(kind.value, L(label), available=True) for kind, label in KIND_LABELS.items()
-                ),
                 selection=sl.controlled((self.kind.value,), self._kind_changed),
             ),
         ]
@@ -254,37 +251,34 @@ class SettingsPanel(sl.Component):
                     placeholder=L(t"Choose a role"),
                 )
             )
-        actions: list[sl.primitives.Button] = []
+        actions: list[sl.semantic.Action] = []
         if self._capabilities.edit_voting:
             actions.extend(
                 (
-                    sl.primitives.Button(
+                    sl.action(
                         L(t"Edit emojis"),
                         self._edit_emojis,
-                        "edit-emojis",
-                        style=sl.primitives.ActionStyle.PRIMARY,
+                        key="edit-emojis",
+                        emphasis=sl.semantic.Emphasis.STRONG,
                     ),
-                    sl.primitives.Button(
+                    sl.action(
                         L(t"Confirm reset") if self.confirming_reset else L(t"Reset"),
                         self._reset,
-                        "reset",
-                        style=sl.primitives.ActionStyle.DANGER
-                        if self.confirming_reset
-                        else sl.primitives.ActionStyle.SECONDARY,
+                        key="reset",
+                        tone=sl.Tone.DANGER if self.confirming_reset else sl.Tone.NEUTRAL,
                     ),
                 )
             )
         if self.shows_server:
-            actions.append(sl.primitives.Button(L(t"Back"), self._show_server, "server"))
+            actions.append(sl.action(L(t"Back"), self._show_server, key="server"))
         actions.append(
-            sl.primitives.Button(
+            sl.action(
                 L(t"Close"),
                 self._close,
-                "close",
-                style=sl.primitives.ActionStyle.SECONDARY,
+                key="close",
             )
         )
-        children.append(sl.primitives.Row(tuple(actions)))
+        children.append(sl.actions(*actions, key="voting-actions"))
         return children
 
     async def _channel_changed(self, event: sl.EntityEvent, setting: ScalarChannelSetting) -> None:

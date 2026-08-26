@@ -239,7 +239,7 @@ class SearchResultsView(sl.Component):
             )
         return (
             self.boundary(self._browser, key="results"),
-            sl.primitives.Row((sl.primitives.Button(t(self.locale, _("Close")), self._close, "close"),)),
+            sl.actions(sl.action(t(self.locale, _("Close")), self._close, key="close"), key="search-actions"),
         )
 
     async def _close(self, event: sl.PressEvent) -> None:

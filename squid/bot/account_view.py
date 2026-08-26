@@ -107,14 +107,13 @@ class AccountPanel(sl.Component):
         if self._profile_editor is not None:
             return (
                 self.boundary(self._profile_editor, key="profile-editor"),
-                sl.primitives.Row(
-                    (
-                        sl.primitives.Button(
-                            t(self.locale, _("Cancel")),
-                            self._cancel_profile_edit,
-                            "cancel-profile-edit",
-                        ),
-                    )
+                sl.actions(
+                    sl.action(
+                        t(self.locale, _("Cancel")),
+                        self._cancel_profile_edit,
+                        key="cancel-profile-edit",
+                    ),
+                    key="profile-editor-actions",
                 ),
             )
         fields = tuple(sl.field(field.name, field.value) for field in self._fields())
@@ -135,17 +134,17 @@ class AccountPanel(sl.Component):
         ]
         if self.identities:
             nodes.append(
-                sl.semantic.Choices(
-                    key="identity",
-                    choices=tuple(
-                        sl.semantic.Choice(
-                            str(identity.id),
+                sl.choices(
+                    *(
+                        sl.choice(
                             identity_label(identity, self.locale),
-                            self.identity_detail(identity),
+                            key=str(identity.id),
+                            description=self.identity_detail(identity),
                         )
                         for identity in self.identities
                         if identity.id is not None
                     ),
+                    key="identity",
                     selection=sl.controlled(
                         (str(self.selected_id),) if self.selected_id is not None else (), self._selection_changed
                     ),
@@ -172,24 +171,23 @@ class AccountPanel(sl.Component):
             )
         )
         nodes.append(
-            sl.primitives.Row(
-                (
-                    sl.primitives.Button(
-                        t(self.locale, _("Unlink")),
-                        self._unlink,
-                        "unlink",
-                        style=sl.primitives.ActionStyle.DANGER,
-                        disabled=self.selected is None,
-                        guard=sp.guards.confirm(self._unlink_warning()),
-                    ),
-                    sl.primitives.Button(
-                        t(self.locale, _("Edit page")),
-                        self._edit_page,
-                        "edit_page",
-                        style=sl.primitives.ActionStyle.PRIMARY,
-                    ),
-                    sl.primitives.Button(t(self.locale, _("Close")), self._close, "close"),
-                )
+            sl.actions(
+                sl.action(
+                    t(self.locale, _("Unlink")),
+                    self._unlink,
+                    key="unlink",
+                    tone=sl.Tone.DANGER,
+                    available=self.selected is not None,
+                    guard=sp.guards.confirm(self._unlink_warning()),
+                ),
+                sl.action(
+                    t(self.locale, _("Edit page")),
+                    self._edit_page,
+                    key="edit_page",
+                    emphasis=sl.semantic.Emphasis.STRONG,
+                ),
+                sl.action(t(self.locale, _("Close")), self._close, key="close"),
+                key="account-actions",
             )
         )
         return tuple(nodes)
