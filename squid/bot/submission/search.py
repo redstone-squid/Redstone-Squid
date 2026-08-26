@@ -27,11 +27,11 @@ from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.ui import (
     PagedList,
     create_message_root,
-    destination,
     error_layout,
     error_node,
     info_node,
-    reply_presentation,
+    message_destination,
+    reply_payload,
     text_layout,
 )
 from squid.bot.utils.autocomplete import autocompletes
@@ -220,7 +220,7 @@ class SearchCog[
             render_build=lambda build: self.bot.for_build(build).render_node(),
         )
         message_root = view.mount(source=ctx)
-        await message_root.send(destination(ctx, locale=locale))
+        await message_root.send(message_destination(ctx, locale=locale))
 
     @commands.hybrid_group(name="restrictions")
     @requires(RESTRICTION_ALIAS_CREATE)
@@ -277,7 +277,7 @@ class SearchCog[
             await interaction.response.defer()
             build = await self.queries.get(build_id)
             if build is None:
-                await reply_presentation(
+                await reply_payload(
                     ctx,
                     error_layout(t(locale, _("Error")), t(locale, _("No build with that ID."))),
                     visibility="personal",
@@ -361,7 +361,7 @@ class SearchCog[
         locale = await resolve_locale(ctx, self.bot.services.settings)
         build = await self.queries.get(build_id)
         if build is None:
-            await reply_presentation(
+            await reply_payload(
                 ctx,
                 error_layout(t(locale, _("Error")), t(locale, _("No build with that ID."))),
                 visibility="personal" if personal(ctx) else "public",
@@ -370,7 +370,7 @@ class SearchCog[
 
         # One message carrying the file, rather than a running message that would then have to
         # be edited into holding an attachment it was not sent with.
-        await reply_presentation(
+        await reply_payload(
             ctx,
             text_layout(t(locale, _("Internal state for build #{id} is attached."), id=build_id)),
             visibility="personal" if personal(ctx) else "public",

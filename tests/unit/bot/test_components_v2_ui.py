@@ -54,7 +54,7 @@ async def test_build_handler_renders_composable_v2_card(display_build: Build) ->
     bot = SimpleNamespace(services=SimpleNamespace(versions=versions))
     handler = BuildHandler(cast("squid.bot.app.RedstoneSquid", bot), display_build)
 
-    presentation = await handler.render_presentation()
+    presentation = await handler.render_payload()
     payload = presentation.layout.to_components()
 
     assert presentation.layout.has_components_v2()

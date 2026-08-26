@@ -17,7 +17,7 @@ class DesiredPost:
     channel_id: int
     guild_id: int
     surface: Surface
-    presentation: sd.message_payload.MessagePayload
+    payload: sd.message_payload.MessagePayload
     allowed_mentions: discord.AllowedMentions = field(default_factory=sd.delivery.no_mentions)
 
 
