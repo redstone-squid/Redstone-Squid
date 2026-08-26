@@ -353,10 +353,8 @@ class DurableSessionRuntime:
                     quota=newcomer.quota,
                     domain=newcomer.domain,
                 )
-                # The newcomer's own snapshot, not the pre-session one built above: that one
-                # predates the Session and so carries no participants, and nothing forces a
-                # checkpoint after opening. A remote process reading the empty projection would
-                # let ProtectCrossUserAttachments retire another user's durable session.
+                # Persist the live session projection; the opening request has no participants yet.
+                # Publishing that empty projection could authorize another user's replacement.
                 token = await self.store.commit(
                     reservation,
                     key=snapshot.id,
