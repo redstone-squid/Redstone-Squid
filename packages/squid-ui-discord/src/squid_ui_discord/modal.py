@@ -13,7 +13,7 @@ from typing import Any, ClassVar
 import discord
 
 from squid_ui.capabilities import Capability
-from squid_ui.entity import EntityType
+from squid_ui.entity import EntityKind, EntityRef, EntityType
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.forms import (
     BoolField,
@@ -142,7 +142,7 @@ class CheckboxGroupField[ValueT](ExtensionField[tuple[ValueT, ...]]):
             raise FormValueError(message)
         return values
 
-    def format(self, value: object) -> object:
+    def format(self, value: object) -> tuple[str, ...]:
         submitted = tuple(value) if isinstance(value, list | tuple | set | frozenset) else (value,)
         return tuple(
             option.key
@@ -263,6 +263,51 @@ def _text_input(
         min_length=field.minimum if isinstance(field, TextField) else None,
         max_length=maximum,
     )
+
+
+_ENTITY_DEFAULT_TYPES: dict[EntityKind, discord.SelectDefaultValueType] = {
+    EntityKind.USER: discord.SelectDefaultValueType.user,
+    EntityKind.ROLE: discord.SelectDefaultValueType.role,
+    EntityKind.CHANNEL: discord.SelectDefaultValueType.channel,
+}
+
+_FIELD_DEFAULT_TYPES: dict[EntityType, discord.SelectDefaultValueType] = {
+    EntityType.USER: discord.SelectDefaultValueType.user,
+    EntityType.ROLE: discord.SelectDefaultValueType.role,
+    EntityType.CHANNEL: discord.SelectDefaultValueType.channel,
+}
+
+
+def _entity_defaults(prefill: object, entity_type: EntityType) -> list[discord.SelectDefaultValue]:
+    """Narrow a stored entity prefill to the preselected values discord.py accepts.
+
+    `EntityField` is an `ExtensionField[object]`, so a prefill arrives as whatever the store
+    round-tripped: the discord entities the select handed back last time, portable `EntityRef`s,
+    or bare snowflake ids. Everything resolves to an explicit `SelectDefaultValue` rather than a
+    bare `discord.Object`, because discord.py can only infer a missing type from the select's own
+    kind and rejects an untyped object outright on a mentionable select. A value whose kind cannot
+    be determined is dropped: a preselection is a convenience, and guessing it wrong preselects the
+    wrong entity.
+    """
+    values = prefill if isinstance(prefill, list | tuple) else (() if prefill is None else (prefill,))
+    defaults: list[discord.SelectDefaultValue] = []
+    for value in values:
+        match value:
+            case discord.SelectDefaultValue():
+                defaults.append(value)
+            case EntityRef():
+                defaults.append(discord.SelectDefaultValue(id=value.id, type=_ENTITY_DEFAULT_TYPES[value.kind]))
+            case discord.Role():
+                defaults.append(discord.SelectDefaultValue(id=value.id, type=discord.SelectDefaultValueType.role))
+            case discord.Member() | discord.User() | discord.ClientUser():
+                defaults.append(discord.SelectDefaultValue(id=value.id, type=discord.SelectDefaultValueType.user))
+            case discord.Thread() | discord.abc.GuildChannel():
+                defaults.append(discord.SelectDefaultValue(id=value.id, type=discord.SelectDefaultValueType.channel))
+            case int() if entity_type in _FIELD_DEFAULT_TYPES:
+                defaults.append(discord.SelectDefaultValue(id=value, type=_FIELD_DEFAULT_TYPES[entity_type]))
+            case _:
+                logger.warning("dropping unrecognized %s prefill of type %s", entity_type, type(value).__name__)
+    return defaults
 
 
 def _form_component(
@@ -400,7 +445,7 @@ def _form_component(
             EntityType.MENTIONABLE: discord.ui.MentionableSelect,
         }[field.entity_type]
         placeholder = _resolve(field.placeholder, localization) if field.placeholder is not None else None
-        defaults = list(prefill) if isinstance(prefill, list | tuple) else ([] if prefill is None else [prefill])
+        defaults = _entity_defaults(prefill, field.entity_type)
         component = select_type(
             custom_id=field.key,
             placeholder=placeholder,
