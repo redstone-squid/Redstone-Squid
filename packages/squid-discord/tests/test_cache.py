@@ -3,7 +3,7 @@
 from dataclasses import replace
 from time import perf_counter
 
-from squid_discord import DISCORD_V2_DPY27, compose
+from squid_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, compose
 from squid_layouts import Palette, fallback, form, scene
 from squid_layouts.forms import FormSpec, TextField
 from squid_layouts.planning import PlanCache, PlanMemo, plan
@@ -332,6 +332,25 @@ def test_lossless_text_growth_replans_locally_without_global_search(monkeypatch)
             cache_hit=True,
             reuse=scene.PlanReuse.INCREMENTAL,
         )
+
+
+def test_classic_lossless_text_growth_replans_locally_without_global_search(monkeypatch) -> None:
+    import squid_layouts.planning.planner as planner_module
+
+    expected = plan(Text("x" * 2500), target=DISCORD_V1_DPY27)
+    cache = PlanCache()
+    plan(Text("x" * 2000), target=DISCORD_V1_DPY27, cache=cache)
+
+    monkeypatch.setattr(planner_module, "_search", _never_measured)
+    incremental = plan(Text("x" * 2500), target=DISCORD_V1_DPY27, cache=cache)
+
+    assert incremental.scene == expected.scene
+    assert incremental.report == expected.report
+    assert incremental.metrics == scene.PlanMetrics(
+        states_explored=1,
+        cache_hit=True,
+        reuse=scene.PlanReuse.INCREMENTAL,
+    )
 
 
 def test_incremental_text_growth_falls_back_when_it_crosses_headroom(monkeypatch) -> None:
