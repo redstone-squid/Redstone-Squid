@@ -24,7 +24,7 @@ from squid_ui.planning.layout_measurement.model import (
     Realized,
 )
 from squid_ui.planning.layout_measurement.text import BudgetRegion, TextBearing, TextUnit, make_unit, trim_keep
-from squid_ui.planning.limits import LIMITS, Axis, DiscordLimits
+from squid_ui.planning.limits import LIMITS, Axis, MessageLimits
 from squid_ui.primitives.nodes import (
     Boundary,
     Break,
@@ -59,7 +59,7 @@ from squid_ui.primitives.nodes import (
 
 @dataclass(slots=True)
 class Builder:
-    limits: DiscordLimits = LIMITS
+    limits: MessageLimits = LIMITS
     notes: list[SolveNote] = field(default_factory=list)
     units: list[TextUnit] = field(default_factory=list)
     raw_text_cost: dict[str, int] = field(default_factory=dict)

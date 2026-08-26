@@ -852,42 +852,48 @@ def optional[ModeT = DiscordTarget](
     return OptionalContent(node, importance)
 
 
+# Positional-only throughout. The arity ladder exists to union each rung's mode into the
+# result, which a `*args` signature cannot express; but the implementation *is* variadic, so
+# an overload naming its parameters would promise a keyword call the implementation cannot
+# accept, and the two signatures would not agree.
 @overload
-def fallback[FirstT, SecondT](  # pyrefly: ignore[inconsistent-overload]
-    primary: LayoutNode[FirstT], alternate: LayoutNode[SecondT]
+def fallback[FirstT, SecondT](
+    primary: LayoutNode[FirstT], alternate: LayoutNode[SecondT], /
 ) -> FallbackContent[FirstT | SecondT]: ...
 
 
 @overload
-def fallback[FirstT, SecondT, ThirdT](  # pyrefly: ignore[inconsistent-overload]
-    primary: LayoutNode[FirstT], first: LayoutNode[SecondT], second: LayoutNode[ThirdT]
+def fallback[FirstT, SecondT, ThirdT](
+    primary: LayoutNode[FirstT], first: LayoutNode[SecondT], second: LayoutNode[ThirdT], /
 ) -> FallbackContent[FirstT | SecondT | ThirdT]: ...
 
 
 @overload
-def fallback[FirstT, SecondT, ThirdT, FourthT](  # pyrefly: ignore[inconsistent-overload]
+def fallback[FirstT, SecondT, ThirdT, FourthT](
     primary: LayoutNode[FirstT],
     first: LayoutNode[SecondT],
     second: LayoutNode[ThirdT],
     third: LayoutNode[FourthT],
+    /,
 ) -> FallbackContent[FirstT | SecondT | ThirdT | FourthT]: ...
 
 
 @overload
-def fallback[FirstT, SecondT, ThirdT, FourthT, FifthT](  # pyrefly: ignore[inconsistent-overload]
+def fallback[FirstT, SecondT, ThirdT, FourthT, FifthT](
     primary: LayoutNode[FirstT],
     first: LayoutNode[SecondT],
     second: LayoutNode[ThirdT],
     third: LayoutNode[FourthT],
     fourth: LayoutNode[FifthT],
+    /,
 ) -> FallbackContent[FirstT | SecondT | ThirdT | FourthT | FifthT]: ...
 
 
 @overload
-def fallback(primary: LayoutNode[Any], *alternates: LayoutNode[Any]) -> FallbackContent[Any]: ...
+def fallback(primary: AnyLayoutNode, /, *alternates: AnyLayoutNode) -> FallbackContent[Any]: ...
 
 
-def fallback(primary: LayoutNode[Any], *alternates: LayoutNode[Any]) -> FallbackContent[Any]:
+def fallback(primary: AnyLayoutNode, /, *alternates: AnyLayoutNode) -> FallbackContent[Any]:
     """Declare complete author-supplied alternate representations, in descending preference.
 
     Each alternate is a whole replacement for ``primary``, not a shortening of it; the planner

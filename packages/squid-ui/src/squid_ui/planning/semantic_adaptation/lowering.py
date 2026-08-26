@@ -8,7 +8,7 @@ from squid_ui.chrome import Chrome
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.palette import DEFAULT_PALETTE, AccentDefault, Palette
 from squid_ui.planning.cursors import CursorCoordinator
-from squid_ui.planning.limits import DiscordLimits
+from squid_ui.planning.limits import MessageLimits
 from squid_ui.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_ui.planning.semantic_adaptation.common import (
     _resolve,
@@ -163,7 +163,7 @@ from squid_ui.text import Localization
 def lower_semantics(
     nodes: Sequence[AnyLayoutNode],
     *,
-    limits: DiscordLimits,
+    limits: MessageLimits,
     chrome: Chrome,
     localization: Localization,
     session: PresentationState,

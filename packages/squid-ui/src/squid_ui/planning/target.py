@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
-from typing import Any, Self
+from typing import Any, Protocol, Self
 
 from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError
@@ -19,11 +19,35 @@ from squid_ui.planning.adapter import (
     PreparedExtension as PreparedExtension,
 )
 from squid_ui.planning.dialect import TargetDialect
-from squid_ui.planning.limits import Axis, DiscordLimits
+from squid_ui.planning.limits import Axis, MessageLimits
+
+
+class TargetIdentity(Protocol):
+    """What a target is called and what it can do -- everything but how to compile for it.
+
+    Enough for the layers that only need to *name* a target: cache keys, diagnostics,
+    capability checks. They took `Target[Any, Any, Any, Any]` before, which said nothing
+    about what they read and erased four parameters to say it.
+    """
+
+    @property
+    def id(self) -> str: ...
+
+    @property
+    def version(self) -> int: ...
+
+    @property
+    def triple(self) -> str: ...
+
+    @property
+    def fingerprint(self) -> str: ...
+
+    @property
+    def capabilities(self) -> frozenset[str]: ...
 
 
 @dataclass(frozen=True, slots=True)
-class Target[LimitsT: DiscordLimits, BodyT: scene.Body, ModeT, AdapterT]:
+class Target[LimitsT: MessageLimits, BodyT: scene.Body, ModeT, AdapterT]:
     """What a document is compiled to: a protocol dialect and an adapter for it.
 
     Two axes and nothing else, the way a compiler names `x86_64-unknown-linux-gnu` rather
@@ -166,3 +190,13 @@ class Target[LimitsT: DiscordLimits, BodyT: scene.Body, ModeT, AdapterT]:
             message = f"target {self.triple!r} has no reservable resource {unknown[0]!r} (known: {known})"
             raise LayoutInvariantError(message)
         return replace(self, limits=self.limits.with_capacities(cost.values))
+
+
+type AnyTarget = Target[Any, Any, Any, Any]
+"""A target whose four parameters are deliberately erased.
+
+For the layers that need both real axes -- the search hands the target to its own dialect,
+the adapter check reads the adapter -- but are written once for every dialect. Stating the
+erasure once beats spelling `Any` four times at each site, and distinguishes it from the
+places that only need `TargetIdentity`.
+"""
