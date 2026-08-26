@@ -669,7 +669,7 @@ class SessionRegistry:
         this session rather than of the key contest, so it is not part of ``policy``.
         """
         if not isinstance(mount, Mount):
-            message = "SessionRegistry.open requires a Mount; use MountDefaults.mount or Screen.open"
+            message = "SessionRegistry.open requires a Mount; use MountDefaults.mount or ScreenSpec.open"
             raise TypeError(message)
 
         if key is None:

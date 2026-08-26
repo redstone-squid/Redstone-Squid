@@ -148,7 +148,7 @@ def adopt(
         discard_timeout: Accept that an overridden `on_timeout` will never run.
 
     Returns:
-        A `Component` that composes like any other -- mount it, put it in a `Screen`, or embed
+        A `Component` that composes like any other -- mount it, put it in a `ScreenSpec`, or embed
         it in a larger Squid screen with `self.boundary(child, key=...)`.
 
     Raises:

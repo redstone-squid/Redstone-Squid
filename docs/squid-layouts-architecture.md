@@ -15,7 +15,7 @@ expands them in roughly this order.
 | State | what one component knows | `sl.state`, `sl.computed`, `sl.resource` | [Components and reactivity](#components-and-vue-inspired-reactivity) |
 | Shared state | what several panels agree on | `Shared`, `SharedPool`, `TopicBus` | [Shared state across mounts](#shared-state-across-mounts) |
 | Actions | what a press is allowed to do | `sl.action`, `Guard`, `history`, `ActionMiddleware` | [Actions and frontend adapters](#actions-and-frontend-adapters) |
-| Lifetime | how long a panel lives and who may use it | `Mount`, `Screen`, `SessionRegistry`, `AccessPolicy` | [Which entry point to use](#which-entry-point-to-use), [Ownership and lifetime](#ownership-and-lifetime) |
+| Lifetime | how long a panel lives and who may use it | `Mount`, `ScreenSpec`, `SessionRegistry`, `AccessPolicy` | [Which entry point to use](#which-entry-point-to-use), [Ownership and lifetime](#ownership-and-lifetime) |
 | Durability | what survives a restart | `DurableSessionRuntime`, `Router`, `PersistedPool` | [Durable sessions](#durable-sessions), [Durable route graph](#durable-route-graph-and-dispatch-onion) |
 | Diagnostics | what happened | `Profiler`, `DevTools`, `sd.testing` | package `README.md` |
 
@@ -58,7 +58,7 @@ planning, that is a DrawInvariantError, not a second degradation mechanism.
 | That runtime, from an interaction or context | sd.LayoutHost.of(source) | the installed host, or `LayoutHostMissing` |
 | Stateful Discord interaction | sd.Mount(component, access=...) | lifecycle, access, events, paging, edits |
 | Scoped live UI lifetime | sd.SessionRegistry | root/child cascade, cardinality, replacement |
-| Per-open policy for one screen | sd.Screen(name, scope=..., policy=...) | session key, cardinality, capacity, quota, access |
+| Per-open policy for one screen | sd.ScreenSpec(name, scope=..., policy=...) | session key, cardinality, capacity, quota, access |
 | Static Components V2 message | sd.render_static(document) | DiscordPresentation |
 | One node as a detached item | sd.render_item(node, reservation=...) | discord.ui.Item for a host-built view |
 | Static classic message | sd.classic.render_static(document) | DiscordPresentation |
@@ -80,13 +80,13 @@ document is preferable because the planner can see every cost. A reservation is 
 planning against a reduced target, so adaptation and measurement agree on the room available. It never adopts an arbitrary existing `discord.py` view: renderers own their
 output object, so unknown pre-existing controls cannot undermine measurement.
 
-`sd.Screen` is the per-open policy for one logical screen, written once and shared by
+`sd.ScreenSpec` is the per-open policy for one logical screen, written once and shared by
 every opening of it: `scope` picks the key an opening collides on, `policy` decides what happens
 when it does, `capacity` caps members per session, `quota` caps how many sessions in `domain` one
-user may be in, and `access` builds the mount's access policy from the opener. `Screen.open` and
-`Screen.respond` construct the mount and hand it to the `SessionRegistry`, which still owns
+user may be in, and `access` builds the mount's access policy from the opener. `ScreenSpec.open` and
+`ScreenSpec.respond` construct the mount and hand it to the `SessionRegistry`, which still owns
 lifetime -- a screen owns the policy, not the sessions. Either accepts the registry itself or
-anything an installed `LayoutHost` can be found from, and `Screen.respond` defaults it to the
+anything an installed `LayoutHost` can be found from, and `ScreenSpec.respond` defaults it to the
 interaction's own client, so a caller holding neither does not dispatch over the two invocation
 surfaces to find one. The two are separate values because a
 component is not intrinsically a session policy: the same component can be opened under more than
@@ -365,7 +365,7 @@ session for that session's. `squid/bot/layout_showcase.py` keeps one on the cog 
 reason. None of this changes `Shared` itself: constructing a handle and passing it directly stays
 supported, and a scope used outside a pool may still be mutable or unhashable.
 
-The scope a pool keys on is the one a `Screen` already computes. `Opener.of(interaction)` yields the
+The scope a pool keys on is the one a `ScreenSpec` already computes. `Opener.of(interaction)` yields the
 opener, and asking it for a kind statically -- `opener.user_guild()` is a `UserGuildScope` -- is what
 lets a `Shared[UserGuildScope]` pool refuse the wrong scope at the call site. A panel holding its
 session key reaches a pool through `key.scope` with nothing to convert. `Opener` and `Scope` are
@@ -822,7 +822,7 @@ with `prepare`.
 
 Lifetime is carried by verbs, not nouns. A closed noun vocabulary was designed and rejected:
 the public surface has 93 distinct class-name suffixes and 60 are used exactly once, so the
-table would have had to reject `Component`, `Mount`, `Screen` and `Destination` or grow until
+table would have had to reject `Component`, `Mount`, `ScreenSpec` and `Destination` or grow until
 it was not a table. What nouns owe instead is consistency, which needs no dictionary:
 
 1. **One meaning per word.** `MountSnapshot` named both a view of a live mount and the

@@ -139,7 +139,7 @@ from squid_layouts.semantic import (
     OptionalContent,
     Paged,
     Paragraph,
-    Progress,
+    ProgressBar,
     Quote,
     Roster,
     RoutedChoices,
@@ -413,7 +413,7 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
                 Tone.DANGER: "❌ ",
             }.get(tone, "")
             return [Text(prefix + _resolve(content, context), overflow=Never())]
-        case Progress(value=value, maximum=maximum, label=label):
+        case ProgressBar(value=value, maximum=maximum, label=label):
             ratio = 0.0 if maximum <= 0 else max(0.0, min(1.0, value / maximum))
             filled = round(ratio * 10)
             prefix = f"{_resolve(label, context)}: " if label is not None else ""

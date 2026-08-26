@@ -56,7 +56,7 @@ ROOT_API = frozenset(
         "columns",
         "computed",
         "controlled",
-        "destination",
+        "nav_option",
         "details",
         "download",
         "entities",

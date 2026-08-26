@@ -23,11 +23,11 @@ from squid.bot.i18n import t
 from squid.bot.ui import CardField, localization_for, text_layout
 from squid.bot.utils.sentinel import Sentinel
 from squid.core.i18n import _, ntranslate
-from squid_discord import Screen
+from squid_discord import ScreenSpec
 from squid_discord.screens import Opener
 from squid_discord.sessions import Opened, Reject, Rejected, SessionPolicy
 
-CONSENT_SCREEN = Screen(
+CONSENT_SCREEN = ScreenSpec(
     "consent",
     policy=SessionPolicy(collision=Reject()),
     options={"timeout": 120},

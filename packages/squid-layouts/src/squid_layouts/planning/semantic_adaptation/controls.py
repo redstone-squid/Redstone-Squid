@@ -375,7 +375,7 @@ def _items(
 
 
 def _navigation(node: Navigation, path: str, context: _Context) -> list[Node]:
-    available = tuple(destination for destination in node.destinations if destination.available)
+    available = tuple(destination for destination in node.options if destination.available)
     strategy = _select_strategy(_navigation_axis(node, path, context.limits, context.session), context)
     grouped = strategy == "grouped"
 

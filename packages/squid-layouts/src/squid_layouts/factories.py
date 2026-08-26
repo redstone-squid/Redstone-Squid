@@ -32,7 +32,7 @@ from squid_layouts.palette import INHERIT, Accent, Palette
 from squid_layouts.rosters import RosterPlacement
 from squid_layouts.semantic import (
     CLOSED,
-    FIRST_DESTINATION,
+    FIRST_OPTION,
     NO_ENTITIES,
     OFF,
     UNOPENED,
@@ -55,7 +55,6 @@ from squid_layouts.semantic import (
     Columns,
     ConcreteLayoutNode,
     Controlled,
-    Destination,
     Details,
     DisclosureOwnership,
     Download,
@@ -88,10 +87,11 @@ from squid_layouts.semantic import (
     MediaItem,
     Navigation,
     NavigationDisplay,
+    NavOption,
     NavOwnership,
     Note,
     Paragraph,
-    Progress,
+    ProgressBar,
     Quote,
     Roster,
     RoutedAction,
@@ -386,9 +386,9 @@ def quote(content: TextValue, *, attribution: TextValue | None = None) -> Quote:
     return Quote(_text(content), _opt_text(attribution))
 
 
-def progress(value: float, *, label: TextValue | None = None, maximum: float = 1.0) -> Progress:
+def progress(value: float, *, label: TextValue | None = None, maximum: float = 1.0) -> ProgressBar:
     """Completion of a known-length task."""
-    return Progress(value, _opt_text(label), maximum)
+    return ProgressBar(value, _opt_text(label), maximum)
 
 
 def measure(value: int | float | str, label: TextValue, *, unit: str | None = None) -> Measure:
@@ -838,22 +838,22 @@ def routed_choices(
     )
 
 
-def destination(label: TextValue, *, key: str, available: bool = True) -> Destination:
+def nav_option(label: TextValue, *, key: str, available: bool = True) -> NavOption:
     """One place `navigation` can go."""
-    return Destination(key, _text(label), available)
+    return NavOption(key, _text(label), available)
 
 
 def navigation(
-    *entries: Conditional[Destination],
+    *entries: Conditional[NavOption],
     key: str,
-    current: NavOwnership = FIRST_DESTINATION,
+    current: NavOwnership = FIRST_OPTION,
     display: NavigationDisplay = NavigationDisplay.AUTO,
     flexibility: Flexibility = Flexibility.STABLE,
 ) -> Navigation:
     """Movement between the views of one message."""
     return Navigation(
         key,
-        _collect(entries, (Destination,), "sl.navigation()"),
+        _collect(entries, (NavOption,), "sl.navigation()"),
         current,
         display,
         flexibility,
@@ -879,7 +879,6 @@ __all__ = [
     "column",
     "columns",
     "controlled",
-    "destination",
     "details",
     "download",
     "entities",
@@ -899,6 +898,7 @@ __all__ = [
     "measure",
     "media",
     "media_item",
+    "nav_option",
     "navigation",
     "note",
     "paragraph",

@@ -133,7 +133,7 @@ UNOPENED: ItemOwnership = Managed(None)
 CLOSED: DisclosureOwnership = Managed(initial=False)
 OFF: ToggleOwnership = Managed(initial=False)
 UNRATED: ScaleOwnership = Managed(None)
-FIRST_DESTINATION: NavOwnership = Managed(None)
+FIRST_OPTION: NavOwnership = Managed(None)
 
 
 @dataclass(frozen=True, slots=True)
@@ -381,7 +381,7 @@ class Status:
 
 
 @dataclass(frozen=True, slots=True)
-class Progress:
+class ProgressBar:
     value: float
     label: TextLike | None = None
     maximum: float = 1.0
@@ -651,7 +651,7 @@ class Items:
 
 
 @dataclass(frozen=True, slots=True)
-class Destination:
+class NavOption:
     key: str
     label: TextLike
     available: bool = True
@@ -665,8 +665,8 @@ class NavigateEvent(ActionEvent):
 @dataclass(frozen=True, slots=True)
 class Navigation:
     key: str
-    destinations: tuple[Destination, ...]
-    current: NavOwnership = FIRST_DESTINATION
+    options: tuple[NavOption, ...]
+    current: NavOwnership = FIRST_OPTION
     """`None` means the first available destination."""
     display: NavigationDisplay = NavigationDisplay.AUTO
     flexibility: Flexibility = Flexibility.STABLE
@@ -789,7 +789,7 @@ type SemanticNode = (
     | Toggle
     | Download
     | Status
-    | Progress
+    | ProgressBar
     | Roster
     | Grid
     | Measure
@@ -910,7 +910,7 @@ def paged(
 
 __all__ = [
     "CLOSED",
-    "FIRST_DESTINATION",
+    "FIRST_OPTION",
     "NO_ENTITIES",
     "OFF",
     "UNOPENED",
@@ -935,7 +935,6 @@ __all__ = [
     "Column",
     "Columns",
     "Controlled",
-    "Destination",
     "DetailLevel",
     "Details",
     "DisclosureOwnership",
@@ -969,6 +968,7 @@ __all__ = [
     "Media",
     "MediaDisplay",
     "MediaItem",
+    "NavOption",
     "NavOwnership",
     "NavigateEvent",
     "Navigation",
@@ -979,7 +979,7 @@ __all__ = [
     "Ownership",
     "Paged",
     "Paragraph",
-    "Progress",
+    "ProgressBar",
     "Quote",
     "Roster",
     "RoutedAction",

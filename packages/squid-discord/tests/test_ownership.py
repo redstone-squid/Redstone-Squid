@@ -14,12 +14,12 @@ from squid_layouts.semantic import (
     ChoiceEvent,
     Choices,
     Controlled,
-    Destination,
     Details,
     Item,
     Items,
     Managed,
     Navigation,
+    NavOption,
     Paragraph,
 )
 
@@ -195,7 +195,7 @@ async def test_a_controlled_choices_still_reports_what_changed() -> None:
 
 async def test_a_managed_navigation_remembers_the_destination_and_defaults_to_the_first() -> None:
     session = PresentationSession()
-    document = Navigation("tabs", tuple(Destination(str(index), f"Tab {index}") for index in range(6)))
+    document = Navigation("tabs", tuple(NavOption(str(index), f"Tab {index}") for index in range(6)))
 
     assert _chosen(plan(document, target=DISCORD_V2_DPY27, session=session)) == ("0",)
 
@@ -207,6 +207,6 @@ async def test_a_managed_navigation_remembers_the_destination_and_defaults_to_th
 async def test_a_managed_navigation_forgets_a_destination_that_went_away() -> None:
     session = PresentationSession()
     session.select("tabs", ("4",))
-    document = Navigation("tabs", tuple(Destination(str(index), f"Tab {index}") for index in range(6, 12)))
+    document = Navigation("tabs", tuple(NavOption(str(index), f"Tab {index}") for index in range(6, 12)))
 
     assert _chosen(plan(document, target=DISCORD_V2_DPY27, session=session)) == ("6",)

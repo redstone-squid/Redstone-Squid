@@ -514,5 +514,20 @@ def test_scale_field_needs_a_span_to_pick_from() -> None:
         sl.forms.ScaleField(key="score", minimum=3, maximum=3)
 
 
-def test_scale_is_the_short_alias() -> None:
-    assert sl.forms.Scale is sl.forms.ScaleField
+def test_the_short_field_aliases_are_gone() -> None:
+    """Only the `*Field` spellings survive; the aliases lowered to nothing."""
+    for name in (
+        "Bool",
+        "Choice",
+        "Date",
+        "DateTime",
+        "Duration",
+        "Float",
+        "Int",
+        "MultiChoice",
+        "Scale",
+        "Text",
+        "TextArea",
+        "Time",
+    ):
+        assert not hasattr(sl.forms, name), name

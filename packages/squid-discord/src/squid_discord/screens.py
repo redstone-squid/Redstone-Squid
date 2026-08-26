@@ -89,7 +89,7 @@ class Scope(StrEnum):
     def of(self, opener: Opener) -> SessionScope:
         """Build this kind of scope as a value, for a kind chosen at runtime.
 
-        `Screen` declares its scope as a member and resolves it here, so this returns the union.
+        `ScreenSpec` declares its scope as a member and resolves it here, so this returns the union.
         A caller that knows the kind statically should ask the opener instead --
         `opener.user_guild()` is a `UserGuildScope`, which is what lets a `Shared[UserGuildScope]`
         pool refuse the wrong scope at the call site rather than missing at runtime. Both spellings
@@ -124,7 +124,7 @@ def _registry(source: SessionRegistry | HostSource) -> SessionRegistry:
 
 
 @dataclass(frozen=True, slots=True)
-class Screen:
+class ScreenSpec:
     """Per-open session policy shared by every opening of one logical screen."""
 
     name: str

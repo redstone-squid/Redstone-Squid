@@ -772,10 +772,6 @@ class Form:
         """Handle a successfully parsed submission, or an accepted invalid one."""
 
 
-Scale = ScaleField
-"""Short alias for `ScaleField`, for authors writing a form class."""
-
-
 @dataclass(frozen=True, slots=True)
 class FormBinding:
     """One render's answer for a form key: what to present, and what to do with it.
@@ -809,35 +805,16 @@ def bind_form(form: FormLike, on_submit: SubmitHandler | None) -> tuple[FormSpec
     return form, on_submit, ActionPolicy.EXCLUSIVE
 
 
-# Short names stay available under ``sl.forms`` without colliding with semantic ``Choice``.
-Text = TextField
-TextArea = TextAreaField
-Int = IntField
-Float = FloatField
-Duration = DurationField
-Date = DateField
-Time = TimeField
-DateTime = DateTimeField
-Choice = ChoiceField
-MultiChoice = MultiChoiceField
-Bool = BoolField
-
 __all__ = [
     "AmbiguousTimePolicy",
-    "Bool",
     "BoolField",
-    "Choice",
     "ChoiceField",
     "ChoiceOption",
-    "Date",
     "DateField",
-    "DateTime",
     "DateTimeField",
-    "Duration",
     "DurationField",
     "ExtensionField",
     "FieldError",
-    "Float",
     "FloatField",
     "Form",
     "FormBinding",
@@ -851,19 +828,13 @@ __all__ = [
     "FormValidationPolicy",
     "FormValidator",
     "FormValueError",
-    "Int",
     "IntField",
-    "MultiChoice",
     "MultiChoiceField",
     "NonexistentTimePolicy",
-    "Scale",
     "ScaleField",
     "SubmitHandler",
-    "Text",
-    "TextArea",
     "TextAreaField",
     "TextField",
-    "Time",
     "TimeField",
     "UploadedFile",
     "ZonedDateTimeField",
