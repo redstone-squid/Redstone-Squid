@@ -1896,6 +1896,22 @@ class MessageRoot[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         nothing staged, so the mount is exactly as deliverable as it was.
         """
         for pass_index in range(_MAX_LOAD_PASSES):
+            cached_atomic = self.runtime.pending_cached_atomic_resources()
+            if cached_atomic:
+                if profile is None:
+                    await self._settle_resources(cached_atomic)
+                else:
+                    with profile.span(
+                        "resource_settle.atomic",
+                        attributes={
+                            "count": len(cached_atomic),
+                            "pass": pass_index,
+                            "source": "cached",
+                            "strategy": "direct" if len(cached_atomic) == 1 else "task_group",
+                        },
+                    ):
+                        await self._settle_resources(cached_atomic)
+                continue
             if _needs_load(root := self.runtime.root):
                 if profile is None:
                     await self._load_all((root,))

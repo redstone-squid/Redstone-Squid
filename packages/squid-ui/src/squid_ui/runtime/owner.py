@@ -14,6 +14,7 @@ from squid_ui.runtime.component import (
 )
 from squid_ui.runtime.context import ContextKey
 from squid_ui.runtime.presentation_state import PresentationState
+from squid_ui.runtime.resources import AsyncBinding, PendingMode
 from squid_ui.runtime.topics import Address
 
 
@@ -187,6 +188,55 @@ class ComponentRuntime:
         self._candidate_tree = self._committed_tree
         self._candidate_revision = self.revision
         return True
+
+    def pending_cached_atomic_resources(self) -> tuple[AsyncBinding, ...]:
+        """Return atomic bindings that can settle before the next component-tree render.
+
+        This is deliberately narrower than general cache reuse. Every directly moved render
+        source must be an atomic binding from that same snapshot, and no dirty ancestor may
+        remove or recontextualize the component before it renders again.
+        """
+        if self._committed_tree is None or self._force_all or not self._dirty_components:
+            return ()
+
+        dirty_paths = {
+            component: path
+            for component in self._dirty_components
+            if (path := self._component_paths.get(component)) is not None
+        }
+        if len(dirty_paths) != len(self._dirty_components):
+            return ()
+
+        found: list[AsyncBinding] = []
+        seen: set[int] = set()
+        for component, path in dirty_paths.items():
+            if component in self._forced_components:
+                continue
+            if any(
+                ancestor is not component and (ancestor_path == "$" or path.startswith(f"{ancestor_path}."))
+                for ancestor, ancestor_path in dirty_paths.items()
+            ):
+                continue
+            cached = self._render_cache.get(component)
+            if cached is None or cached.revision != component.__dict__.get("_state_revision", 0):
+                continue
+            atomic = {
+                id(binding): binding for binding in cached.async_bindings if binding.pending_mode is PendingMode.ATOMIC
+            }
+            moved = tuple(
+                source for source, version in tuple(cached.observation.sources.items()) if source.settle() != version
+            )
+            if not moved or any(id(source) not in atomic for source in moved):
+                continue
+            bindings = tuple(atomic[id(source)] for source in moved)
+            if not all(binding.pending for binding in bindings):
+                continue
+            for binding in bindings:
+                identity = id(binding)
+                if identity not in seen:
+                    seen.add(identity)
+                    found.append(binding)
+        return tuple(found)
 
     def _clear_render_invalidations(self) -> None:
         self._dirty_components.clear()
