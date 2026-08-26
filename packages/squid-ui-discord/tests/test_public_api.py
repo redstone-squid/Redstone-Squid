@@ -30,18 +30,18 @@ def test_the_adapter_namespace_exposes_its_surface() -> None:
     assert squid_ui_discord.button_grid
     assert squid_ui_discord.modals.CheckboxGroupField
     assert squid_ui_discord.MessageRootDefaults
-    assert squid_ui_discord.SessionRegistry
+    assert squid_ui_discord.SessionManager
     assert squid_ui_discord.routing.routers
     assert squid_ui_discord.renderer.V2Renderer
     assert squid_ui_discord.classic_renderer.ClassicRenderer
     assert squid_ui_discord.classic.compose
     assert squid_ui_discord.SessionKey
-    assert squid_ui_discord.sessions.SessionPolicy
-    assert squid_ui_discord.ScreenSpec
-    assert squid_ui_discord.Navigator
-    assert squid_ui_discord.Opener
-    assert squid_ui_discord.Scope
-    assert squid_ui_discord.ScreenOptionsResolver
+    assert squid_ui_discord.sessions.AdmissionSpec
+    assert squid_ui_discord.SessionSpec
+    assert squid_ui_discord.StackNavigator
+    assert squid_ui_discord.OpenContext
+    assert squid_ui_discord.ScopeKind
+    assert squid_ui_discord.MessageRootOptionsResolver
     assert squid_ui_discord.presentation.DiscordPresentation
     assert squid_ui_discord.DiscordMode.COMPONENTS_V2
     assert squid_ui_discord.DiscordModeError
@@ -55,7 +55,7 @@ def test_the_adapter_namespace_exposes_its_surface() -> None:
     assert squid_ui_discord.durability.DiscordFrontend
     assert not hasattr(squid_ui_discord.durability, "MountManager")
     assert squid_ui_discord.MessageRootScheduler.follow
-    for removed in ("SessionPolicy", "Router", "V2Renderer", "ClassicRenderer", "AuditReport"):
+    for removed in ("AdmissionSpec", "Router", "V2Renderer", "ClassicRenderer", "AuditReport"):
         assert removed not in squid_ui_discord.__all__ and not hasattr(squid_ui_discord, removed)
 
 
@@ -114,7 +114,7 @@ class BlockStores(importlib.abc.MetaPathFinder):
 sys.meta_path.insert(0, BlockStores())
 import squid_ui_discord
 assert squid_ui_discord.MessageRoot
-assert squid_ui_discord.ScreenSpec
+assert squid_ui_discord.SessionSpec
 assert "durability" in squid_ui_discord.__all__
 assert "squid_storage" not in sys.modules
 """

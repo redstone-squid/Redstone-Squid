@@ -84,7 +84,7 @@ class MergeConfirmation(sl.Component):
             await self._done.wait()
         return None if scope.cancel_called else self.value
 
-    def mount(self, *, source: sd.host.HostSource) -> sd.MessageRoot:
+    def mount(self, *, source: sd.runtime.RuntimeSource) -> sd.MessageRoot:
         return create_message_root(
             self,
             source=source,

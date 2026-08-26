@@ -411,7 +411,7 @@ class SubmissionFormComponent(sl.Component):
             await self._done.wait()
         return None if scope.cancel_called else self.value
 
-    def mount(self, *, source: sd.host.HostSource) -> sd.MessageRoot:
+    def mount(self, *, source: sd.runtime.RuntimeSource) -> sd.MessageRoot:
         self._root = create_message_root(
             self,
             source=source,
@@ -725,9 +725,9 @@ class BuildEditComponent(sl.Component):
         self._refresh = refresh
         message_root = self.mount(interaction.user.id, source=interaction, scheduler=client.layout_scheduler)
         destination = sd.respond_to(interaction, ephemeral=ephemeral, wait=True)
-        parent_session = None if parent is None else interaction.client.message_roots.session_for(parent)
+        parent_session = None if parent is None else interaction.client.sessions.session_for(parent)
         if parent_session is None:
-            await interaction.client.message_roots.open(
+            await interaction.client.sessions.open(
                 message_root,
                 destination,
                 key=SessionKey.custom("build-edit", (interaction.user.id, self.build.id)),
@@ -737,7 +737,7 @@ class BuildEditComponent(sl.Component):
             await parent_session.attach(message_root, destination, actor_id=interaction.user.id, parent=parent)
 
     def mount(
-        self, user_id: int, *, source: sd.host.HostSource, scheduler: sd.MessageRootScheduler | None = None
+        self, user_id: int, *, source: sd.runtime.RuntimeSource, scheduler: sd.MessageRootScheduler | None = None
     ) -> sd.MessageRoot:
         self._root = create_message_root(
             self,

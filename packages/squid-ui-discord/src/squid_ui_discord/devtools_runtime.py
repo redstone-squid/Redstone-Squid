@@ -15,7 +15,7 @@ from squid_ui.runtime.topics import Address, BusSnapshot, CellAddress, Topic, To
 from squid_ui_discord.live import find, message_roots
 from squid_ui_discord.message_root import MessageRootSnapshot
 from squid_ui_discord.message_root_scheduler import MessageRootScheduler, MessageRootSchedulerSnapshot
-from squid_ui_discord.sessions import Session, SessionRegistry
+from squid_ui_discord.sessions import Session, SessionManager
 
 if TYPE_CHECKING:
     # Annotations only. Kept out of the runtime import graph so `import squid_ui_discord` does
@@ -174,7 +174,7 @@ class DevToolsRuntime:
     def __init__(
         self,
         *,
-        sessions: SessionRegistry | None = None,
+        sessions: SessionManager | None = None,
         scheduler: MessageRootScheduler | None = None,
         bus: TopicBus | None = None,
         profiler: Profiler | None = None,

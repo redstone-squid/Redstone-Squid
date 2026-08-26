@@ -19,12 +19,12 @@ from dataclasses import dataclass, field
 from squid_ui.guards import ChallengeResolver
 from squid_ui_discord.delivery import respond_to
 from squid_ui_discord.message_root import ChallengeRequest, ChallengeSupervisor, ResumedPress
-from squid_ui_discord.screens import Opener, ScreenSpec
-from squid_ui_discord.sessions import SessionRegistry
+from squid_ui_discord.session_specs import OpenContext, SessionSpec
+from squid_ui_discord.sessions import SessionManager
 
 logger = logging.getLogger(__name__)
 
-CHALLENGE_SCREEN = ScreenSpec("challenge")
+CHALLENGE_SESSION_SPEC = SessionSpec("challenge")
 """Owner-only by default, so only the actor who was asked can answer.
 
 Its session key rarely decides anything: a challenge uses the strict attachment entry point, so it attaches
@@ -138,18 +138,18 @@ class DialogPresenter:
     minute over.
     """
 
-    sessions: SessionRegistry
+    sessions: SessionManager
     supervisor: ChallengeSupervisor
-    screen: ScreenSpec = field(default=CHALLENGE_SCREEN)
+    session_spec: SessionSpec = field(default=CHALLENGE_SESSION_SPEC)
 
     async def present(self, request: ChallengeRequest) -> None:
         """Open the dialog through the interaction that asked, and return."""
         resolver: ChallengeResolver = _Resolver(request, self.supervisor)
-        await self.screen.attach(
+        await self.session_spec.attach(
             request.challenge.ask(resolver),
             respond_to(request.interaction, ephemeral=True, wait=True),
             sessions=self.sessions,
-            opener=Opener.of(request.interaction),
+            open_context=OpenContext.of(request.interaction),
             parent=request.message_root,
             # Locale is a fact about the reader, not about the host, so the question is asked
             # in the language the panel that asked it is speaking -- chrome labels included.
@@ -160,4 +160,4 @@ class DialogPresenter:
         )
 
 
-__all__ = ["CHALLENGE_SCREEN", "ChallengeRunner", "DialogPresenter"]
+__all__ = ["CHALLENGE_SESSION_SPEC", "ChallengeRunner", "DialogPresenter"]
