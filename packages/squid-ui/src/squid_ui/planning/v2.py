@@ -192,8 +192,8 @@ def _lower(
                     lowered.extend(_lower((fallback,), target, limits))
                     continue
                 prepared = adapter.prepare(payload)
-                component_cost = prepared.cost.get("components")
-                text_cost = prepared.cost.get("display_text")
+                component_cost = prepared.cost.get(Axis.COMPONENTS)
+                text_cost = prepared.cost.get(Axis.DISPLAY_TEXT)
                 if component_cost < 1 or text_cost < 0:
                     message = f"extension adapter {kind!r} returned an invalid resource cost"
                     raise LayoutInvariantError(message)
@@ -348,7 +348,7 @@ def _paginate_v2(
     nodes: Sequence[Node],
     *,
     key: str,
-    capacities: Mapping[str, int],
+    capacities: Mapping[Axis, int],
     limits: V2Limits,
     chrome: Chrome,
     nav: PlannedNav,

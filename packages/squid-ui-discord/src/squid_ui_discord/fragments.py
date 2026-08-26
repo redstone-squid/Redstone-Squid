@@ -22,7 +22,7 @@ from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.document import DocumentLike
 from squid_ui.errors import ExistingLayoutError, LayoutError
 from squid_ui.palette import DEFAULT_PALETTE, Palette
-from squid_ui.planning.limits import LIMITS, V2Limits
+from squid_ui.planning.limits import LIMITS, Axis, V2Limits
 from squid_ui.planning.planner import EMPTY_RESERVATION
 from squid_ui.planning.target import ResourceCost
 from squid_ui.scene.model import PlanReport, PlanResult
@@ -296,9 +296,9 @@ def _preflight(
 
     additions = (*fragment_items, *trailing)
     addition_cost = cost(*additions)
-    components = reservation.cost.get("components") + addition_cost.get("components")
-    text = reservation.cost.get("display_text") + addition_cost.get("display_text")
-    attachments = reservation.cost.get("attachments") + len(assets)
+    components = reservation.cost.get(Axis.COMPONENTS) + addition_cost.get(Axis.COMPONENTS)
+    text = reservation.cost.get(Axis.DISPLAY_TEXT) + addition_cost.get(Axis.DISPLAY_TEXT)
+    attachments = reservation.cost.get(Axis.ATTACHMENTS) + len(assets)
 
     problems: list[str] = []
     if components > limits.total_components:

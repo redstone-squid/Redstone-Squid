@@ -62,10 +62,10 @@ class Builder:
     limits: MessageLimits = LIMITS
     notes: list[SolveNote] = field(default_factory=list)
     units: list[TextUnit] = field(default_factory=list)
-    raw_text_cost: dict[str, int] = field(default_factory=dict)
+    raw_text_cost: dict[Axis, int] = field(default_factory=dict)
     """Text no overflow policy can shrink, per axis: timestamps and prepared native items."""
     budgets: list[BudgetRegion] = field(default_factory=list)
-    axis: str = Axis.DISPLAY_TEXT
+    axis: Axis = Axis.DISPLAY_TEXT
     """The pool text realized right now draws from; target shape moves it, nothing else."""
 
     def charge(self, characters: int) -> None:
@@ -77,7 +77,7 @@ class Builder:
             self.units.append(made)
 
     @contextmanager
-    def pool(self, axis: str) -> Iterator[None]:
+    def pool(self, axis: Axis) -> Iterator[None]:
         """Realize everything inside this block against another text pool."""
         previous = self.axis
         self.axis = axis
