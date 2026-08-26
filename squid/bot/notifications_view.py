@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import squid_discord as sd
 import squid_layouts as sl
 from squid.bot.i18n import t
-from squid.bot.ui import DISCORD_BLUE, create_mount
+from squid.bot.ui import create_mount
 from squid.core.i18n import _
 from squid.notifications import (
     NotificationPreferences,
@@ -82,9 +82,7 @@ class NotificationPanel(sl.Component):
 
     def render(self) -> tuple[sl.LayoutNode, ...]:
         if self.closed:
-            # DISCORD_BLUE is house chrome, not a Tone, so the exact colour needs sl.section's
-            # accent rather than sl.status's fixed tone palette.
-            return (sl.section(sl.heading(t(self.locale, _("Notifications closed"))), accent=DISCORD_BLUE),)
+            return (sl.section(sl.heading(t(self.locale, _("Notifications closed")))),)
         on, off = t(self.locale, _("On")), t(self.locale, _("Off"))
         fields = (
             sl.field(t(self.locale, _("Web inbox")), on if self.web_enabled else off),

@@ -100,7 +100,7 @@ from squid_layouts.interactions import (
     SelectionEvent,
     SubmitEvent,
 )
-from squid_layouts.palette import Palette
+from squid_layouts.palette import Palette, PaletteRegistry
 from squid_layouts.runtime.component import Component
 from squid_layouts.runtime.context import ContextKey
 from squid_layouts.runtime.reactivity import (
@@ -150,6 +150,7 @@ __all__ = [
     "NavigateEvent",
     "OpenEvent",
     "Palette",
+    "PaletteRegistry",
     "PressEvent",
     "ScaleEvent",
     "SelectionEvent",
