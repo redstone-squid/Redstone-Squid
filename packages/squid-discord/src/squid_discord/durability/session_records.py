@@ -224,7 +224,7 @@ def encode_session_key(key: SessionKey) -> dict[str, Any]:
 
 
 def decode_session_key(raw: dict[str, Any]) -> SessionKey:
-    """Decode a session key previously produced by :func:`encode_session_key`."""
+    """Decode a session key produced by :func:`encode_session_key`."""
     name = _string(raw, "name")
     scope = _object(raw.get("scope"), "session scope")
     kind = _string(scope, "type")

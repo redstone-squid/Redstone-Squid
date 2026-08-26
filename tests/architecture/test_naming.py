@@ -85,6 +85,9 @@ Unlike `Summary`, `Strategy`, and `Policy`, these have no surviving second meani
 six packages. Checking identifiers closes the gap left by the first class-and-method sweep.
 """
 
+RETIRED_IDENTIFIERS = frozenset({"summary_bytes", "summary_payload"})
+"""Ambiguous retired words in durable identifiers whose complete spelling is unambiguous."""
+
 ANNOTATION_VOCABULARY = {
     "ActionMode": frozenset({"policy"}),
     "ActionResult": frozenset({"outcome"}),
@@ -338,7 +341,9 @@ def test_retired_identifier_words_stay_retired() -> None:
                     name = node.attr
                 elif isinstance(node, ast.arg):
                     name = node.arg
-                if name is None or not (_identifier_words(name) & RETIRED_IDENTIFIER_WORDS):
+                if name is None or (
+                    name not in RETIRED_IDENTIFIERS and not (_identifier_words(name) & RETIRED_IDENTIFIER_WORDS)
+                ):
                     continue
                 key = (path, name)
                 if key not in seen:
@@ -357,8 +362,12 @@ def test_annotated_identifiers_follow_their_type_vocabulary() -> None:
                 pairs: list[tuple[str, ast.expr | None]] = []
                 if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
                     pairs.append((node.name, node.returns))
-                    pairs.extend((argument.arg, argument.annotation) for argument in node.args.args)
-                    pairs.extend((argument.arg, argument.annotation) for argument in node.args.kwonlyargs)
+                    arguments = (*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs)
+                    pairs.extend((argument.arg, argument.annotation) for argument in arguments)
+                    if node.args.vararg is not None:
+                        pairs.append((node.args.vararg.arg, node.args.vararg.annotation))
+                    if node.args.kwarg is not None:
+                        pairs.append((node.args.kwarg.arg, node.args.kwarg.annotation))
                 elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name | ast.Attribute):
                     target = node.target.id if isinstance(node.target, ast.Name) else node.target.attr
                     pairs.append((target, node.annotation))
@@ -369,6 +378,31 @@ def test_annotated_identifiers_follow_their_type_vocabulary() -> None:
                         if words & retired:
                             offenders.append(f"{path}::{name}: {type_name}")
     assert not offenders, f"identifiers disagree with their annotated types: {sorted(offenders)}"
+
+
+def test_constructor_assigned_identifiers_follow_their_type_vocabulary() -> None:
+    """An unannotated value named by its constructor still follows that type vocabulary."""
+    offenders: list[str] = []
+    for root in PACKAGE_SOURCE_ROOTS:
+        for path in root.rglob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Call):
+                    continue
+                constructor = node.value.func
+                type_name = constructor.id if isinstance(constructor, ast.Name) else None
+                if isinstance(constructor, ast.Attribute):
+                    type_name = constructor.attr
+                retired = ANNOTATION_VOCABULARY.get(type_name or "", frozenset())
+                if not retired:
+                    continue
+                for target in node.targets:
+                    if not isinstance(target, ast.Name | ast.Attribute):
+                        continue
+                    name = target.id if isinstance(target, ast.Name) else target.attr
+                    if _identifier_words(name) & retired:
+                        offenders.append(f"{path}::{name}: {type_name}")
+    assert not offenders, f"constructor-assigned identifiers disagree with their types: {sorted(offenders)}"
 
 
 def test_agent_nouns_name_a_verb_the_dictionary_has() -> None:
