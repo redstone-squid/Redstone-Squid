@@ -7,15 +7,15 @@ import pytest
 # Both engines are exercised by the same parametrized scenarios, so the module needs both
 # backends rather than either. They are optional extras and the engines only import them when
 # instantiated, so without this the whole file fails at construction instead of skipping.
-pytest.importorskip("loro", reason="install squid-replicated[loro] to run the real backends")
-pytest.importorskip("pycrdt", reason="install squid-replicated[pycrdt] to run the real backends")
+pytest.importorskip("loro", reason="install squid-replication[loro] to run the real backends")
+pytest.importorskip("pycrdt", reason="install squid-replication[pycrdt] to run the real backends")
 
-from squid_replicated.backends.loro import (
+from squid_replication.backends.loro import (
     LoroChangeToken,
     LoroTextEngine,
     LoroTextOperation,
 )
-from squid_replicated.backends.pycrdt import (
+from squid_replication.backends.pycrdt import (
     PycrdtChangeToken,
     PycrdtTextEngine,
     PycrdtTextOperation,
