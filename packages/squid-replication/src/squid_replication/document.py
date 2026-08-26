@@ -3,9 +3,10 @@
 import base64
 import binascii
 import json
+import uuid
 import weakref
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -26,13 +27,12 @@ from squid_reactivity.core import (
     enlist,
     transaction,
 )
-from squid_replication.engine import ReplicationBackend
-from squid_replication.reference import (
-    PreparedReferenceUpdate,
-    ReferenceEngine,
-    ReferenceOperation,
-    ReferenceSnapshot,
-    ReferenceVersion,
+from squid_replication.engine import ReplicationBackend, ReplicationEngine
+from squid_replication.model import (
+    ReplicatedItem,
+    ReplicatedTreeSnapshot,
+    ReplicatedValue,
+    freeze_value,
 )
 from squid_replication.transport import ReplicationUpdate
 
@@ -53,11 +53,19 @@ class ReplicationResyncRequiredError(RuntimeError):
     """
 
 
+class ReplicationCorruptUpdateError(ValueError):
+    """A backend update or durable token failed structural or native decoding."""
+
+
+class ReplicationBackendIntegrityError(RuntimeError):
+    """A validated backend operation failed at the canonical apply boundary."""
+
+
 @dataclass(frozen=True, slots=True)
 class PreparedReplicationInverse:
     """An opaque semantic inverse tied to the backend-history generation that planned it."""
 
-    operations: tuple[ReferenceOperation, ...]
+    payload: object
     token_epoch: int
 
 
@@ -66,7 +74,7 @@ class ReplicationChangeToken:
     """An action-addressable semantic token retained by opted-in history."""
 
     document: weakref.ReferenceType[ReplicatedDocument]
-    operations: tuple[ReferenceOperation, ...]
+    backend_token: object
     token_epoch: int
 
     def encode(self) -> bytes:
@@ -78,7 +86,7 @@ class ReplicationChangeToken:
         payload = {
             "backend": document.engine.backend_id,
             "document": document.document_id,
-            "payload": base64.b64encode(document.engine.encode_token(self.operations)).decode("ascii"),
+            "payload": base64.b64encode(document.engine.encode_token(self.backend_token)).decode("ascii"),
             "schema": 1,
             "token_epoch": self.token_epoch,
         }
@@ -95,7 +103,7 @@ class ReplicationChangeToken:
             raise ValueError(message) from error
         if not isinstance(payload, dict) or payload.get("schema") != 1:
             message = "replicated history token has an unsupported or corrupt schema"
-            raise ValueError(message)
+            raise TypeError(message)
         if payload.get("backend") != document.engine.backend_id or payload.get("document") != document.document_id:
             message = "replicated history token targets the wrong backend or document"
             raise ValueError(message)
@@ -105,11 +113,11 @@ class ReplicationChangeToken:
             message = "replicated history token has an unsupported or corrupt schema"
             raise ValueError(message)  # noqa: TRY004
         try:
-            operations = document.engine.decode_token(base64.b64decode(encoded, validate=True))
+            backend_token = document.engine.decode_token(base64.b64decode(encoded, validate=True))
         except (binascii.Error, TypeError, ValueError) as error:
             message = "replicated history token has corrupt backend data"
             raise ValueError(message) from error
-        return cls(weakref.ref(document), operations, token_epoch)
+        return cls(weakref.ref(document), backend_token, token_epoch)
 
     def plan_inverse(self) -> PreparedReplicationInverse | ConflictDetail:
         document = self.document()
@@ -117,28 +125,10 @@ class ReplicationChangeToken:
             return ConflictDetail("replicated:closed", 0, 0)
         if self.token_epoch != document.token_epoch:
             return ConflictDetail(f"replicated:{document.document_id}:expired", self.token_epoch, document.token_epoch)
-        inverse: list[ReferenceOperation] = []
-        for operation in reversed(self.operations):
-            if operation.kind == "increment":
-                assert isinstance(operation.value, int)
-                inverse.append(document.engine.operation("increment", operation.path, -operation.value))
-            elif operation.kind == "add":
-                inverse.append(
-                    document.engine.operation("remove", operation.path, operation.value, (operation.identity,))
-                )
-            elif operation.kind == "remove":
-                # Reversing this removal by name, not by re-adding: a fresh add would outlive a
-                # concurrent replica's removal of the same tags and resurrect the value against it.
-                inverse.append(
-                    document.engine.operation(
-                        "restore", operation.path, operation.value, operation.tags, operation.identity
-                    )
-                )
-            elif operation.kind == "restore":
-                inverse.append(document.engine.operation("remove", operation.path, operation.value, operation.tags))
-            else:
-                return ConflictDetail(f"replicated:{operation.path}", 0, 0)
-        return PreparedReplicationInverse(tuple(inverse), self.token_epoch)
+        inverse = document.engine.plan_inverse(self.backend_token)
+        if isinstance(inverse, ConflictDetail):
+            return inverse
+        return PreparedReplicationInverse(inverse, self.token_epoch)
 
     def stage_inverse(self, inverse: PreparedReplicationInverse) -> None:
         document = self.document()
@@ -153,8 +143,37 @@ class ReplicationChangeToken:
             )
             raise ReactiveConflictError(detail, "replicated inverse expired before it could be staged")
         participant = document._participant()
-        for operation in inverse.operations:
-            participant.branch.apply(operation)
+        participant.branch.stage_inverse(inverse.payload)
+
+    def retain(self) -> ReplicationHistoryLease:
+        """Retain the backend history needed by this token until the returned lease releases it."""
+        document = self.document()
+        if document is None or document.closed:
+            message = "replicated history token no longer has a live document"
+            raise ReplicaClosedError(message)
+        retention = document.engine.retain_token(self.backend_token)
+        return ReplicationHistoryLease(weakref.ref(document), retention)
+
+
+@dataclass(slots=True)
+class ReplicationHistoryLease:
+    """Retain inverse metadata until :meth:`release` is called or this lease is collected."""
+
+    document: weakref.ReferenceType[ReplicatedDocument]
+    retention: object | None
+
+    def release(self) -> None:
+        """Release this token's compaction boundary; repeated calls do nothing."""
+        retention = self.retention
+        if retention is None:
+            return
+        self.retention = None
+        document = self.document()
+        if document is not None:
+            document.engine.release_token(retention)
+
+    def __del__(self) -> None:
+        self.release()
 
 
 class _ReplicationParticipant:
@@ -162,7 +181,7 @@ class _ReplicationParticipant:
         self,
         document: ReplicatedDocument,
         *,
-        remote: PreparedReferenceUpdate | None = None,
+        remote: object | None = None,
         remote_update_id: str | None = None,
     ) -> None:
         self.document = document
@@ -170,40 +189,39 @@ class _ReplicationParticipant:
         self.remote = remote
         self.remote_update_id = remote_update_id
 
-    def prepare(self, view: TransactionView) -> PreparedReferenceUpdate:
+    def prepare(self, view: TransactionView) -> object:
         if self.remote is not None:
             return self.remote
         base = self.branch.base
         if self.document.engine.version() != base:
-            detail = ConflictDetail(
-                self.document.identity, len(base.operations), len(self.document.engine.version().operations)
-            )
+            detail = ConflictDetail(self.document.identity, hash(base), hash(self.document.engine.version()))
             raise ReactiveConflictError(detail, f"{self.document.identity} changed before replicated prepare")
         return self.branch.prepare(base)
 
-    def describe_change(self, prepared: PreparedReferenceUpdate) -> TransactionContribution | None:
-        if not prepared.operations:
+    def describe_change(self, prepared: object) -> TransactionContribution | None:
+        backend_token = self.document.engine.change_token(prepared)
+        if backend_token is None:
             return None
-        token = ReplicationChangeToken(weakref.ref(self.document), prepared.operations, self.document.token_epoch)
+        token = ReplicationChangeToken(weakref.ref(self.document), backend_token, self.document.token_epoch)
         return TransactionContribution(self.document.identity, token, ChangeReport(participants=1))
 
-    def apply(self, prepared: PreparedReferenceUpdate) -> None:
+    def apply(self, prepared: object) -> None:
         self.document.engine.apply(prepared)
         self.document._version_cell.write(self.document.engine.snapshot())
 
-    def abort(self, prepared: PreparedReferenceUpdate | None, cause: BaseException) -> None:
+    def abort(self, prepared: object | None, cause: BaseException) -> None:
         return None
 
-    def finalize(self, prepared: PreparedReferenceUpdate) -> None:
+    def finalize(self, prepared: object) -> None:
         self.document._notify()
-        if self.remote_update_id is None and prepared.operations:
+        if self.remote_update_id is None and self.document.engine.change_token(prepared) is not None:
             self.document._publish_update(prepared)
 
 
 class ReplicatedDocument:
     """One immutable-snapshot replicated document. Calling :meth:`close` ends all access."""
 
-    def __init__(self, document_id: str, engine: ReferenceEngine) -> None:
+    def __init__(self, document_id: str, engine: ReplicationEngine[Any, Any, Any, Any]) -> None:
         self.document_id = document_id
         self.engine = engine
         self.closed = False
@@ -251,7 +269,7 @@ class ReplicatedDocument:
         """Return the bounded number of remote update identities retained for deduplication."""
         return len(self._seen_update_ids)
 
-    def snapshot(self) -> ReferenceSnapshot:
+    def snapshot(self) -> Any:
         self._ensure_open()
         self._version_cell.read()
         participant = action_participant(self)
@@ -267,7 +285,22 @@ class ReplicatedDocument:
     def set(self, path: str) -> ReplicatedSet:
         return ReplicatedSet(self, path)
 
-    def export_since(self, version: ReferenceVersion | None = None) -> bytes:
+    def text(self, path: str) -> ReplicatedText:
+        return ReplicatedText(self, path)
+
+    def list(self, path: str) -> ReplicatedList:
+        return ReplicatedList(self, path)
+
+    def movable_list(self, path: str) -> ReplicatedMovableList:
+        return ReplicatedMovableList(self, path)
+
+    def map(self, path: str) -> ReplicatedMap:
+        return ReplicatedMap(self, path)
+
+    def tree(self, path: str) -> ReplicatedTree:
+        return ReplicatedTree(self, path)
+
+    def export_since(self, version: object | None = None) -> bytes:
         self._ensure_open()
         update = ReplicationUpdate.create(
             document_id=self.document_id,
@@ -310,7 +343,7 @@ class ReplicatedDocument:
             assert joined is not None
         self._remember_update(update_id)
 
-    def subscribe(self, callback: Callable[[ReferenceSnapshot], None]) -> Callable[[], None]:
+    def subscribe(self, callback: Callable[[Any], None]) -> Callable[[], None]:
         """Receive each committed snapshot until the returned function or document closes it."""
         self._ensure_open()
         self._listeners.add(callback)
@@ -360,6 +393,18 @@ class ReplicatedDocument:
         self._dropped_updates = 0
         self._resync_required = False
 
+    def compact_history(self) -> None:
+        """Compact backend history without crossing any retained token lease."""
+        self._ensure_open()
+        if isinstance(action_participant(self), _ReplicationParticipant):
+            message = "replicated history cannot be compacted inside a transaction that edits the document"
+            raise TypeError(message)
+        self.engine.compact()
+
+    def checkpoint(self) -> bytes:
+        """Export a self-contained, authenticated-by-the-host checkpoint envelope."""
+        return self.export_since()
+
     def expire_history_tokens(self) -> None:
         """Expire retained inverse authority before backend compaction discards its metadata."""
         self._ensure_open()
@@ -387,7 +432,7 @@ class ReplicatedDocument:
         for callback in tuple(self._listeners):
             callback(self.snapshot())
 
-    def _publish_update(self, prepared: PreparedReferenceUpdate) -> None:
+    def _publish_update(self, prepared: object) -> None:
         from squid_reactivity import current_action
 
         context = current_action()
@@ -395,7 +440,7 @@ class ReplicatedDocument:
             document_id=self.document_id,
             backend_id=self.engine.backend_id,
             source_replica_id=self.engine.replica_id,
-            payload=self.engine.encode_update(prepared.operations),
+            payload=self.engine.encode_prepared(prepared),
             origin_action_id=None if context is None else context.action_id,
         )
         if len(self._pending_updates) == _PENDING_UPDATE_LIMIT:
@@ -431,8 +476,11 @@ class ReplicatedCounter:
         return self.document.snapshot().counter(self.path)
 
     def increment(self, amount: int = 1) -> None:
+        if isinstance(amount, bool) or not isinstance(amount, int):
+            message = "counter increments must be integers"
+            raise TypeError(message)
         participant = self.document._participant()
-        participant.branch.apply(self.document.engine.operation("increment", self.path, amount))
+        participant.branch.apply(self.document.engine.make_operation("increment", self.path, value=amount))
 
 
 @dataclass(frozen=True, slots=True)
@@ -446,12 +494,176 @@ class ReplicatedSet:
 
     def add(self, value: str) -> None:
         participant = self.document._participant()
-        participant.branch.apply(self.document.engine.operation("add", self.path, value))
+        participant.branch.apply(self.document.engine.make_operation("add", self.path, value=value))
 
     def discard(self, value: str) -> None:
         participant = self.document._participant()
         tags = self.document.engine.visible_tags(self.path, value, participant.branch.operations)
-        participant.branch.apply(self.document.engine.operation("remove", self.path, value, tags))
+        participant.branch.apply(self.document.engine.make_operation("remove", self.path, value=value, tags=tags))
+
+
+@dataclass(frozen=True, slots=True)
+class ReplicatedText:
+    document: ReplicatedDocument
+    path: str
+
+    @property
+    def value(self) -> str:
+        return self.document.snapshot().text(self.path)
+
+    def insert(self, index: int, value: str) -> None:
+        participant = self.document._participant()
+        participant.branch.apply(
+            self.document.engine.make_operation("text_insert", self.path, index=index, value=value)
+        )
+
+    def delete(self, index: int, count: int = 1) -> None:
+        participant = self.document._participant()
+        participant.branch.apply(
+            self.document.engine.make_operation("text_delete", self.path, index=index, count=count)
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ReplicatedList:
+    document: ReplicatedDocument
+    path: str
+
+    @property
+    def value(self) -> tuple[ReplicatedValue, ...]:
+        return self.document.snapshot().sequence(self.path)
+
+    def insert(self, index: int, value: object) -> None:
+        participant = self.document._participant()
+        participant.branch.apply(
+            self.document.engine.make_operation("list_insert", self.path, index=index, value=freeze_value(value))
+        )
+
+    def delete(self, index: int, count: int = 1) -> None:
+        participant = self.document._participant()
+        participant.branch.apply(
+            self.document.engine.make_operation("list_delete", self.path, index=index, count=count)
+        )
+
+    def replace(self, index: int, value: object) -> None:
+        participant = self.document._participant()
+        participant.branch.apply(
+            self.document.engine.make_operation("list_replace", self.path, index=index, value=freeze_value(value))
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ReplicatedMovableList:
+    document: ReplicatedDocument
+    path: str
+
+    @property
+    def value(self) -> tuple[ReplicatedItem, ...]:
+        return self.document.snapshot().movable(self.path)
+
+    def insert(self, index: int, value: object, *, item_id: uuid.UUID | None = None) -> uuid.UUID:
+        logical_id = item_id or uuid.uuid7()
+        participant = self.document._participant()
+        participant.branch.apply(
+            self.document.engine.make_operation(
+                "movable_insert", self.path, index=index, item_id=str(logical_id), value=freeze_value(value)
+            )
+        )
+        return logical_id
+
+    def delete(self, item_id: uuid.UUID) -> None:
+        participant = self.document._participant()
+        participant.branch.apply(self.document.engine.make_operation("movable_delete", self.path, item_id=str(item_id)))
+
+    def move(self, item_id: uuid.UUID, index: int) -> None:
+        participant = self.document._participant()
+        participant.branch.apply(
+            self.document.engine.make_operation("movable_move", self.path, item_id=str(item_id), index=index)
+        )
+
+    def replace(self, item_id: uuid.UUID, value: object) -> None:
+        participant = self.document._participant()
+        participant.branch.apply(
+            self.document.engine.make_operation(
+                "movable_replace", self.path, item_id=str(item_id), value=freeze_value(value)
+            )
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ReplicatedMap:
+    document: ReplicatedDocument
+    path: str
+
+    @property
+    def value(self) -> Mapping[str, ReplicatedValue]:
+        return self.document.snapshot().mapping(self.path)
+
+    def set(self, key: str, value: object) -> None:
+        participant = self.document._participant()
+        participant.branch.apply(
+            self.document.engine.make_operation("map_set", self.path, key=key, value=freeze_value(value))
+        )
+
+    def delete(self, key: str) -> None:
+        participant = self.document._participant()
+        participant.branch.apply(self.document.engine.make_operation("map_delete", self.path, key=key))
+
+
+@dataclass(frozen=True, slots=True)
+class ReplicatedTree:
+    document: ReplicatedDocument
+    path: str
+
+    @property
+    def value(self) -> ReplicatedTreeSnapshot:
+        return self.document.snapshot().tree(self.path)
+
+    def create(
+        self,
+        *,
+        parent_id: uuid.UUID | None = None,
+        index: int | None = None,
+        metadata: Mapping[str, object] | None = None,
+        node_id: uuid.UUID | None = None,
+    ) -> uuid.UUID:
+        logical_id = node_id or uuid.uuid7()
+        participant = self.document._participant()
+        participant.branch.apply(
+            self.document.engine.make_operation(
+                "tree_create",
+                self.path,
+                node_id=str(logical_id),
+                parent_id=None if parent_id is None else str(parent_id),
+                index=index,
+                metadata=freeze_value(dict(metadata or {})),
+            )
+        )
+        return logical_id
+
+    def move(self, node_id: uuid.UUID, *, parent_id: uuid.UUID | None = None, index: int | None = None) -> None:
+        participant = self.document._participant()
+        participant.branch.apply(
+            self.document.engine.make_operation(
+                "tree_move",
+                self.path,
+                node_id=str(node_id),
+                parent_id=None if parent_id is None else str(parent_id),
+                index=index,
+            )
+        )
+
+    def set_metadata(self, node_id: uuid.UUID, key: str, value: object) -> None:
+        participant = self.document._participant()
+        participant.branch.apply(
+            self.document.engine.make_operation(
+                "tree_metadata", self.path, node_id=str(node_id), key=key, value=freeze_value(value)
+            )
+        )
+
+    def delete(self, node_id: uuid.UUID) -> None:
+        participant = self.document._participant()
+        participant.branch.apply(self.document.engine.make_operation("tree_delete", self.path, node_id=str(node_id)))
 
 
 class Replica:

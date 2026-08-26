@@ -5,6 +5,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
+from squid_reactivity import ConflictDetail
+
 _MAX_UPDATE_BYTES = 1_048_576
 _MAX_OPERATIONS = 10_000
 _KINDS = frozenset({"increment", "add", "remove", "restore"})
@@ -87,6 +89,12 @@ class ReferenceBranch:
         assert isinstance(base, ReferenceVersion)
         return PreparedReferenceUpdate(base, tuple(self._operations))
 
+    def stage_inverse(self, inverse: object) -> None:
+        if not isinstance(inverse, tuple) or not all(isinstance(item, ReferenceOperation) for item in inverse):
+            message = "reference inverse has the wrong backend type"
+            raise TypeError(message)
+        self._operations.extend(inverse)
+
 
 class ReferenceEngine:
     """A deterministic convergent operation set used to prove Squid integration semantics."""
@@ -97,6 +105,7 @@ class ReferenceEngine:
         self.replica_id = replica_id
         self._next_sequence = 0
         self._operations: dict[OperationId, ReferenceOperation] = {}
+        self._retentions: set[object] = set()
 
     def operation(
         self,
@@ -108,6 +117,15 @@ class ReferenceEngine:
     ) -> ReferenceOperation:
         self._next_sequence += 1
         return ReferenceOperation(OperationId(self.replica_id, self._next_sequence), kind, path, value, tags, undoes)
+
+    def make_operation(self, kind: str, path: str, **data: Any) -> ReferenceOperation:
+        return self.operation(
+            kind,
+            path,
+            data["value"],
+            tuple(data.get("tags", ())),
+            data.get("undoes"),
+        )
 
     def version(self) -> ReferenceVersion:
         return ReferenceVersion(frozenset(self._operations))
@@ -196,9 +214,46 @@ class ReferenceEngine:
         """Encode one action's opaque change token for durable history tests."""
         return self._encode_envelope("history-token", operations)
 
+    def change_token(self, prepared: PreparedReferenceUpdate) -> object | None:
+        return prepared.operations or None
+
     def decode_token(self, token: bytes) -> tuple[ReferenceOperation, ...]:
         """Decode a schema-checked action token without applying it."""
         return self._decode_envelope(token, kind="history-token")
+
+    def plan_inverse(self, token: object) -> object | ConflictDetail:
+        if not isinstance(token, tuple) or not all(isinstance(item, ReferenceOperation) for item in token):
+            return ConflictDetail("replicated:reference:token", 0, 0)
+        inverse: list[ReferenceOperation] = []
+        for operation in reversed(token):
+            if operation.kind == "increment":
+                assert isinstance(operation.value, int)
+                inverse.append(self.operation("increment", operation.path, -operation.value))
+            elif operation.kind == "add":
+                inverse.append(self.operation("remove", operation.path, operation.value, (operation.identity,)))
+            elif operation.kind == "remove":
+                inverse.append(
+                    self.operation("restore", operation.path, operation.value, operation.tags, operation.identity)
+                )
+            elif operation.kind == "restore":
+                inverse.append(self.operation("remove", operation.path, operation.value, operation.tags))
+            else:
+                return ConflictDetail(f"replicated:{operation.path}", 0, 0)
+        return tuple(inverse)
+
+    def encode_prepared(self, prepared: PreparedReferenceUpdate) -> bytes:
+        return self.encode_update(prepared.operations)
+
+    def retain_token(self, token: object) -> object:
+        retention = object()
+        self._retentions.add(retention)
+        return retention
+
+    def release_token(self, retention: object) -> None:
+        self._retentions.discard(retention)
+
+    def compact(self) -> None:
+        """Keep the deterministic reference log unchanged; it is a bounded test backend."""
 
     def export_since(self, version: object | None = None) -> bytes:
         known = version.operations if isinstance(version, ReferenceVersion) else frozenset()
