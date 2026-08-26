@@ -15,7 +15,7 @@ from typing import Any
 import squid_ui as sl
 from squid_ui import Component, computed, state
 from squid_ui.primitives import Panel, Text
-from squid_ui.profiling import PresentationStatus
+from squid_ui.profiling import MemoryProfiler, OperationKind, PresentationStatus
 from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord.testing import commit_render, delivered_to, fake_message
 
@@ -63,6 +63,27 @@ class ChangeScenarioResult:
     p50_ms: float
     p95_ms: float
     samples: int
+
+
+@dataclass(frozen=True, slots=True)
+class ResourcePhaseResult:
+    name: str
+    p50_ms: float
+    p95_ms: float
+    calls_per_operation: float
+
+
+@dataclass(frozen=True, slots=True)
+class ResourcePipelineResult:
+    components: int
+    samples: int
+    operation_p50_ms: float
+    operation_p95_ms: float
+    render_passes_per_operation: float
+    leaf_renders_per_operation: float
+    loads_per_operation: float
+    scheduler_included: bool
+    phases: tuple[ResourcePhaseResult, ...]
 
 
 def _p95(samples: list[int]) -> int:
@@ -391,6 +412,77 @@ async def _measure_resource_resolution(components: int, samples: int) -> ChangeS
         message_root._teardown()
 
 
+async def measure_resource_pipeline(
+    components: int = 1_000,
+    *,
+    samples: int = 50,
+) -> ResourcePipelineResult:
+    """Break atomic refreshes into runtime, settlement, planning, and rendering phases.
+
+    Instrumented samples are intentionally separate from the headline latency samples. The
+    benchmark invokes the mount pipeline directly, so scheduler queueing and debounce latency
+    are excluded.
+    """
+    leaf = _ResourceLeaf()
+    root = _root_with_special(components, leaf)
+    message_root = MessageRoot(root, access=Everyone(), timeout=None)
+    await message_root.send(delivered_to(fake_message()))
+    profiler = MemoryProfiler(recent=samples, slow=0, failed=0, deadline_misses=0)
+    operations: list[int] = []
+    phase_samples: dict[str, list[int]] = {}
+    phase_calls: dict[str, int] = {}
+    starting_renders = leaf.renders
+    starting_loads = leaf.loads
+
+    try:
+        for index in range(samples):
+            leaf.key = index + 1
+            started = time.perf_counter_ns()
+            with profiler.operation(OperationKind.REFRESH, name="atomic_resource_pipeline") as operation:
+                candidate = await message_root._stage_loaded(
+                    profile=operation,
+                    preflight=True,
+                    reuse_committed=True,
+                )
+                _commit_candidate(message_root, candidate)
+            operations.append(time.perf_counter_ns() - started)
+
+        traces = tuple(trace for trace in profiler.snapshot().recent if trace.name == "atomic_resource_pipeline")
+        assert len(traces) == samples
+        for trace in traces:
+            per_operation: dict[str, int] = {}
+            for span in trace.spans:
+                if span.name not in {"runtime_render", "resource_settle.atomic", "preflight", "planner", "renderer"}:
+                    continue
+                per_operation[span.name] = per_operation.get(span.name, 0) + round(span.duration * 1_000_000_000)
+                phase_calls[span.name] = phase_calls.get(span.name, 0) + 1
+            for name, duration in per_operation.items():
+                phase_samples.setdefault(name, []).append(duration)
+
+        phases = tuple(
+            ResourcePhaseResult(
+                name=name,
+                p50_ms=_percentile(durations, 0.5) / 1_000_000,
+                p95_ms=_percentile(durations, 0.95) / 1_000_000,
+                calls_per_operation=phase_calls[name] / samples,
+            )
+            for name, durations in sorted(phase_samples.items())
+        )
+        return ResourcePipelineResult(
+            components=components,
+            samples=samples,
+            operation_p50_ms=_percentile(operations, 0.5) / 1_000_000,
+            operation_p95_ms=_percentile(operations, 0.95) / 1_000_000,
+            render_passes_per_operation=phase_calls["runtime_render"] / samples,
+            leaf_renders_per_operation=(leaf.renders - starting_renders) / samples,
+            loads_per_operation=(leaf.loads - starting_loads) / samples,
+            scheduler_included=False,
+            phases=phases,
+        )
+    finally:
+        message_root._teardown()
+
+
 async def measure_change_scenarios(
     components: int = 1_000,
     *,
@@ -410,11 +502,13 @@ async def measure_change_scenarios(
 def main() -> None:
     unchanged = [measure_case(components) for components in (1, 100, 1_000)]
     changes = asyncio.run(measure_change_scenarios())
+    resource_pipeline = asyncio.run(measure_resource_pipeline())
     print(
         json.dumps(
             {
                 "unchanged": [asdict(result) for result in unchanged],
                 "changes": [asdict(result) for result in changes],
+                "resource_pipeline": asdict(resource_pipeline),
             },
             indent=2,
         )
