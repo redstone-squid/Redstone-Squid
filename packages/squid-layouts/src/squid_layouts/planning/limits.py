@@ -107,6 +107,11 @@ class DiscordLimits:
         """
         raise NotImplementedError
 
+    @property
+    def component_budget(self) -> int:
+        """The most components one page of this mode may spend."""
+        raise NotImplementedError
+
 
 @dataclass(frozen=True, slots=True)
 class V2Limits(DiscordLimits):
@@ -137,6 +142,10 @@ class V2Limits(DiscordLimits):
     def fits_controls(self, controls: int, rows: int) -> bool:
         # An ActionRow and each of its buttons are all components against one total.
         return controls + rows <= self.total_components
+
+    @property
+    def component_budget(self) -> int:
+        return self.total_components
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,6 +191,10 @@ class ClassicLimits(DiscordLimits):
 
     def fits_controls(self, controls: int, rows: int) -> bool:
         return controls <= self.controls and rows <= self.rows
+
+    @property
+    def component_budget(self) -> int:
+        return self.controls
 
 
 LIMITS = V2Limits()
