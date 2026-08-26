@@ -279,6 +279,35 @@ class TestRenderCaching:
         assert changed.nodes[499:502] == (Text("0"), Text("1"), Text("0"))
         assert namespaces == 1
 
+    def test_metadata_stable_commit_reuses_topology_indexes(self) -> None:
+        class Leaf(Component):
+            value: int = state(0)
+
+            def render(self) -> Text:
+                return Text(str(self.value))
+
+        class Root(Component):
+            def __init__(self) -> None:
+                self.leaves = tuple(Leaf() for _ in range(100))
+
+            def render(self):
+                return tuple(self.boundary(leaf, key=str(index)) for index, leaf in enumerate(self.leaves))
+
+        root = Root()
+        runtime = ComponentRuntime(root)
+        initial = runtime.render()
+        runtime.commit(initial, rendered_revision=runtime.revision)
+        components = runtime.components
+        component_paths = runtime._component_paths
+
+        root.leaves[50].value = 1
+        changed = runtime.render(reuse_committed=True)
+        runtime.commit(changed, rendered_revision=runtime.revision)
+
+        assert runtime.components is components
+        assert runtime._component_paths is component_paths
+        assert runtime.components["50"] is root.leaves[50]
+
     def test_dirty_nested_leaf_splices_through_structural_ancestors(self, monkeypatch) -> None:
         class Leaf(Component):
             value: int = state(0)
