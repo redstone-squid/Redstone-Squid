@@ -9,8 +9,16 @@ import pytest
 
 import squid_discord
 import squid_layouts as sl
-from squid_discord import Everyone, MountDefaults, Owner, ScreenSpec, SessionRegistry
-from squid_discord.screens import Opener, Scope
+from squid_discord import (
+    Everyone,
+    MountDefaults,
+    Opener,
+    Owner,
+    Scope,
+    ScreenOptionsResolver,
+    ScreenSpec,
+    SessionRegistry,
+)
 from squid_discord.sessions import Opened, Rejected, RejectionReason
 from squid_discord.testing import fake_interaction, fake_message
 from squid_layouts.primitives import Heading
@@ -127,6 +135,38 @@ async def test_screen_applies_options_overrides_and_access() -> None:
     assert result.session.actor_for(result.session.root) == 7
 
 
+async def test_screen_resolves_options_once_between_static_options_and_overrides() -> None:
+    calls: list[Opener] = []
+
+    async def resolve(opener: Opener) -> squid_discord.MountOptions:
+        calls.append(opener)
+        return {"timeout": 10, "strict": False}
+
+    registry = SessionRegistry(MountDefaults(timeout=30, strict=True))
+    screen = ScreenSpec("panel", options={"timeout": 20}, resolve_options=resolve)
+
+    result = await screen.open(Panel(), to_message(), sessions=registry, opener=Opener(7), strict=True)
+
+    assert isinstance(result, Opened)
+    assert calls == [Opener(7)]
+    assert result.session.root.timeout == 10
+    assert result.session.root.strict is True
+
+
+async def test_screen_resolver_failure_does_not_construct_or_deliver_a_mount() -> None:
+    destination = AsyncMock()
+
+    async def fail(_opener: Opener) -> squid_discord.MountOptions:
+        raise RuntimeError("cannot resolve screen")
+
+    screen = ScreenSpec("panel", resolve_options=fail)
+
+    with pytest.raises(RuntimeError, match="cannot resolve screen"):
+        await screen.open(Panel(), destination, sessions=SessionRegistry(), opener=Opener(7))
+
+    destination.assert_not_awaited()
+
+
 async def test_screen_respond_derives_identity_and_delivery_from_the_interaction() -> None:
     registry = SessionRegistry(MountDefaults(timeout=30))
     interaction = fake_interaction(user_id=7)
@@ -151,7 +191,7 @@ async def test_screen_respond_derives_identity_and_delivery_from_the_interaction
     interaction.original_response.assert_awaited_once_with()
 
 
-async def test_screen_respond_forwards_parent_attachment() -> None:
+async def test_screen_responds_with_an_attached_mount() -> None:
     registry = SessionRegistry()
     root_mount = registry.defaults.mount(Panel(), access=Owner(7), timeout=None)
     root = await registry.open(root_mount, to_message())
@@ -159,7 +199,7 @@ async def test_screen_respond_forwards_parent_attachment() -> None:
     interaction = fake_interaction(user_id=7)
     interaction.guild_id = None
 
-    attached = await ScreenSpec("child").respond(
+    attached = await ScreenSpec("child").respond_attached(
         Panel(),
         interaction,
         sessions=registry,
@@ -180,7 +220,7 @@ async def test_screen_attaches_to_a_live_parent_session() -> None:
     assert isinstance(root, Opened)
     screen = ScreenSpec("child", options={"timeout": None})
 
-    attached = await screen.open(Panel(), to_message(), sessions=registry, opener=Opener(7), parent=root.session.root)
+    attached = await screen.attach(Panel(), to_message(), sessions=registry, opener=Opener(7), parent=root.session.root)
 
     assert isinstance(attached, Opened)
     assert attached.session is root.session
@@ -188,15 +228,62 @@ async def test_screen_attaches_to_a_live_parent_session() -> None:
     assert registry.get(screen.key(Opener(7))) == ()
 
 
-async def test_screen_opens_a_root_when_parent_has_no_live_session() -> None:
+async def test_screen_rejects_an_unknown_parent_without_delivery() -> None:
     registry = SessionRegistry()
     unknown_parent = MountDefaults(timeout=None).mount(Panel(), access=Owner(7))
     screen = ScreenSpec("child", options={"timeout": None})
 
-    opened = await screen.open(Panel(), to_message(), sessions=registry, opener=Opener(7), parent=unknown_parent)
+    destination = AsyncMock()
+    opened = await screen.attach(Panel(), destination, sessions=registry, opener=Opener(7), parent=unknown_parent)
 
-    assert isinstance(opened, Opened)
-    assert opened.session.key == screen.key(Opener(7))
+    assert isinstance(opened, Rejected)
+    assert opened.occupants == ()
+    assert opened.reason is RejectionReason.SESSION_FINISHED
+    destination.assert_not_awaited()
+
+
+async def test_screen_rejects_a_finished_parent_without_delivery() -> None:
+    registry = SessionRegistry()
+    root_mount = registry.defaults.mount(Panel(), access=Owner(7), timeout=None)
+    root = await registry.open(root_mount, to_message())
+    assert isinstance(root, Opened)
+    await root.session.finish()
+    destination = AsyncMock()
+
+    opened = await ScreenSpec("child").attach(
+        Panel(), destination, sessions=registry, opener=Opener(7), parent=root_mount
+    )
+
+    assert isinstance(opened, Rejected)
+    assert opened.reason is RejectionReason.SESSION_FINISHED
+    destination.assert_not_awaited()
+
+
+async def test_screen_rejects_a_detached_parent_without_delivery() -> None:
+    registry = SessionRegistry()
+    root_mount = registry.defaults.mount(Panel(), access=Owner(7), timeout=None)
+    root = await registry.open(root_mount, to_message())
+    assert isinstance(root, Opened)
+    child_mount = registry.defaults.mount(Panel(), access=Owner(7), timeout=None)
+    child = await root.session.attach(child_mount, to_message())
+    assert isinstance(child, Opened)
+    await child_mount.finish()
+    destination = AsyncMock()
+
+    opened = await ScreenSpec("grandchild").attach(
+        Panel(), destination, sessions=registry, opener=Opener(7), parent=child_mount
+    )
+
+    assert isinstance(opened, Rejected)
+    assert opened.reason is RejectionReason.SESSION_FINISHED
+    destination.assert_not_awaited()
+
+
+def test_screen_ergonomics_are_promoted_from_the_public_bundle() -> None:
+    assert squid_discord.Opener is Opener
+    assert squid_discord.Scope is Scope
+    assert squid_discord.ScreenOptionsResolver is ScreenOptionsResolver
+    assert squid_discord.Navigator is squid_discord.navigation.Navigator
 
 
 async def test_a_screen_carries_its_capacity_into_the_session() -> None:
