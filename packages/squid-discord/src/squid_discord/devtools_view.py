@@ -57,6 +57,10 @@ class MountInspector(sl.Component):
         self._registry = registry
 
     def render(self) -> Sequence[sl.LayoutNode]:
+        # Both are explicit invalidation tokens for process state that is not itself
+        # reactive. Observe them even when an empty registry makes their usual branches
+        # unreachable, otherwise a cached empty list cannot be refreshed.
+        _ = self.revision, self.own_id
         mounts = squid_discord.mounts()
         if self.focus is not None:
             target = squid_discord.live.find(self.focus)
