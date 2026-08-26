@@ -26,8 +26,8 @@ This resolves the dependency direction without lowering the production gate:
   adapter therefore uses `skip_gc=True`, making compaction an all-history coordination event rather than a
   selective retained-token boundary.
 
-The generalized production adapter remains blocked on type-aware inverse planning, not on text CRDT
-mathematics. A raw Loro `diff(after, before)` correctly preserves later text insertions and counter
+At research time, the generalized production adapter was blocked on type-aware inverse planning, not on text
+CRDT mathematics. A raw Loro `diff(after, before)` correctly preserves later text insertions and counter
 increments, but it restored an old LWW-map value over a causally later remote value. Map/register paths must
 therefore use an action-token precondition and return a typed conflict when their winning operation changed.
 No production code may use raw document-wide frontier reversal as a universally safe inverse.

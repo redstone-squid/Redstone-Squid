@@ -100,6 +100,7 @@ class ReferenceEngine:
     """A deterministic convergent operation set used to prove Squid integration semantics."""
 
     backend_id = "squid-reference-v1"
+    container_kinds = frozenset({"counter", "set"})
 
     def __init__(self, replica_id: str) -> None:
         self.replica_id = replica_id

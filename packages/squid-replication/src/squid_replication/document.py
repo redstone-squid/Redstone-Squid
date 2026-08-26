@@ -61,6 +61,10 @@ class ReplicationBackendIntegrityError(RuntimeError):
     """A validated backend operation failed at the canonical apply boundary."""
 
 
+class UnsupportedReplicationContainerError(TypeError):
+    """The explicitly selected backend does not implement a requested container class."""
+
+
 @dataclass(frozen=True, slots=True)
 class PreparedReplicationInverse:
     """An opaque semantic inverse tied to the backend-history generation that planned it."""
@@ -280,24 +284,31 @@ class ReplicatedDocument:
         )
 
     def counter(self, path: str) -> ReplicatedCounter:
+        self._require_container("counter")
         return ReplicatedCounter(self, path)
 
     def set(self, path: str) -> ReplicatedSet:
+        self._require_container("set")
         return ReplicatedSet(self, path)
 
     def text(self, path: str) -> ReplicatedText:
+        self._require_container("text")
         return ReplicatedText(self, path)
 
     def list(self, path: str) -> ReplicatedList:
+        self._require_container("list")
         return ReplicatedList(self, path)
 
     def movable_list(self, path: str) -> ReplicatedMovableList:
+        self._require_container("movable")
         return ReplicatedMovableList(self, path)
 
     def map(self, path: str) -> ReplicatedMap:
+        self._require_container("map")
         return ReplicatedMap(self, path)
 
     def tree(self, path: str) -> ReplicatedTree:
+        self._require_container("tree")
         return ReplicatedTree(self, path)
 
     def export_since(self, version: object | None = None) -> bytes:
@@ -469,6 +480,12 @@ class ReplicatedDocument:
         if self.closed:
             message = f"replicated document {self.document_id!r} is closed"
             raise ReplicaClosedError(message)
+
+    def _require_container(self, kind: str) -> None:
+        self._ensure_open()
+        if kind not in self.engine.container_kinds:
+            message = f"backend {self.engine.backend_id!r} does not support {kind!r} containers"
+            raise UnsupportedReplicationContainerError(message)
 
 
 @dataclass(frozen=True, slots=True)
