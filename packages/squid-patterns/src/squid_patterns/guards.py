@@ -20,7 +20,7 @@ from squid_layouts.guards import (
     ChallengeResolver,
     Guard,
     GuardLedger,
-    GuardOutcome,
+    GuardResult,
     approvals,
 )
 from squid_layouts.interactions import ActionEvent
@@ -41,7 +41,7 @@ class _Confirm:
     deadline: float | None
     on_decline: TextLike | None
 
-    async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardOutcome:
+    async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardResult:
         bucket = approvals(ledger, event.actor.id)
         outstanding: int = ledger.read(bucket, 0)
         if outstanding > 0:

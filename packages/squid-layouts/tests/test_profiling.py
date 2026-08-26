@@ -18,8 +18,8 @@ from squid_layouts.profiling import (
     SpanId,
     TraceId,
     TraceLink,
-    TraceOutcome,
     TraceResult,
+    TraceStatus,
     snapshot_json,
 )
 
@@ -175,7 +175,7 @@ def test_detached_span_measures_work_overlapping_lexical_spans() -> None:
             acknowledgement.set_attribute("source", "watchdog")
             acknowledgement.finish()
             clock.advance(0.3)
-        acknowledgement.finish(TraceOutcome.FAILED)
+        acknowledgement.finish(TraceStatus.FAILED)
 
     trace = trace_by_name(subject, "click")
     root, acknowledgement_span, handler = trace.spans
@@ -183,7 +183,7 @@ def test_detached_span_measures_work_overlapping_lexical_spans() -> None:
     assert handler.parent_span_id == root.span_id
     assert acknowledgement_span.duration == pytest.approx(0.3)
     assert acknowledgement_span.attributes[0].value == "watchdog"
-    assert acknowledgement_span.outcome is TraceOutcome.COMPLETED
+    assert acknowledgement_span.status is TraceStatus.COMPLETED
 
 
 def test_operation_may_include_elapsed_queue_time_and_record_its_span() -> None:
@@ -255,11 +255,11 @@ def test_caught_child_failure_still_completes_operation() -> None:
     subject = profiler(clock)
 
     with subject.operation(OperationKind.DISPATCH, name="caught") as operation, operation.span("handler") as captured:
-        captured.set_outcome(TraceOutcome.FAILED)
+        captured.set_status(TraceStatus.FAILED)
 
     trace = trace_by_name(subject, "caught")
-    assert trace.result.outcome is TraceOutcome.COMPLETED
-    assert trace.spans[1].outcome is TraceOutcome.FAILED
+    assert trace.result.status is TraceStatus.COMPLETED
+    assert trace.spans[1].status is TraceStatus.FAILED
 
 
 def test_escaping_exception_overrides_an_explicit_span_outcome() -> None:
@@ -271,12 +271,12 @@ def test_escaping_exception_overrides_an_explicit_span_outcome() -> None:
         pytest.raises(ValueError),
         operation.span("handler") as span,
     ):
-        span.set_outcome(TraceOutcome.COMPLETED)
+        span.set_status(TraceStatus.COMPLETED)
         raise ValueError("the explicit success must not hide this")
 
     trace = trace_by_name(subject, "caught")
-    assert trace.result.outcome is TraceOutcome.COMPLETED
-    assert trace.spans[1].outcome is TraceOutcome.FAILED
+    assert trace.result.status is TraceStatus.COMPLETED
+    assert trace.spans[1].status is TraceStatus.FAILED
 
 
 def test_escaping_exception_records_only_type() -> None:
@@ -287,7 +287,7 @@ def test_escaping_exception_records_only_type() -> None:
         raise LookupError("secret payload")
 
     trace = subject.snapshot().failed[0]
-    assert trace.result == TraceResult(TraceOutcome.FAILED, "builtins.LookupError")
+    assert trace.result == TraceResult(TraceStatus.FAILED, "builtins.LookupError")
     detail = trace.result.detail
     assert detail is not None
     assert "secret payload" not in detail
@@ -304,7 +304,7 @@ def test_cancellation_is_recorded_and_propagated() -> None:
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(cancelled())
 
-    assert subject.snapshot().failed[0].result.outcome is TraceOutcome.CANCELLED
+    assert subject.snapshot().failed[0].result.status is TraceStatus.CANCELLED
 
 
 def test_exception_group_cancellation_detected_when_nested() -> None:
@@ -321,7 +321,7 @@ def test_exception_group_cancellation_detected_when_nested() -> None:
     with pytest.raises(BaseExceptionGroup):
         asyncio.run(grouped())
 
-    assert subject.snapshot().failed[0].result.outcome is TraceOutcome.CANCELLED
+    assert subject.snapshot().failed[0].result.status is TraceStatus.CANCELLED
 
 
 def test_active_snapshot_exposes_only_running_spans() -> None:
@@ -547,7 +547,7 @@ def test_aggregate_overflow() -> None:
     overflow = next(item for item in aggregates if item.key.name == "<overflow>")
     assert overflow.lifetime.observations == 2
     assert overflow.key.operation is None
-    assert overflow.key.outcome is None
+    assert overflow.key.status is None
     assert overflow.key.detail is None
     assert overflow.key.disposition is None
     assert overflow.key.action is None
@@ -584,7 +584,7 @@ def test_span_aggregate_overflow_is_bounded_and_honest() -> None:
     assert len(aggregates) == 2
     overflow = next(item for item in aggregates if item.key.span_name == "<overflow>")
     assert overflow.key.operation is None
-    assert overflow.key.outcome is None
+    assert overflow.key.status is None
     assert overflow.lifetime.observations == 2
 
 
@@ -662,12 +662,12 @@ def test_operation_recorder_expires_with_its_dynamic_scope() -> None:
     assert subject.capture_link() is None
     with operation.span("too-late"):
         assert subject.capture_link() is None
-    operation.set_result(TraceResult(TraceOutcome.FAILED))
+    operation.set_result(TraceResult(TraceStatus.FAILED))
     operation.mark_deadline_missed()
 
     trace = trace_by_name(subject, "done")
     assert [span.name for span in trace.spans] == ["done"]
-    assert trace.result.outcome is TraceOutcome.COMPLETED
+    assert trace.result.status is TraceStatus.COMPLETED
     assert not trace.deadline_missed
 
 

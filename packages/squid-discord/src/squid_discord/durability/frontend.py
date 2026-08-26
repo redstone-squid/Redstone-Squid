@@ -6,8 +6,8 @@ from typing import Protocol
 
 import discord
 
-from squid_discord.delivery import Abandoned, DeliveryReceipt, EditHandle, StaleHandleError, handle_for
-from squid_discord.durability import MountLocator
+from squid_discord.delivery import Abandoned, DeliveryResult, EditHandle, StaleHandleError, handle_for
+from squid_discord.durability import FrontendAddress
 from squid_discord.mount import Mount
 from squid_discord.presentation import DiscordMode, DiscordPresentation
 
@@ -16,7 +16,7 @@ from squid_discord.presentation import DiscordMode, DiscordPresentation
 class Promoted:
     """A delivered mount now has portable coordinates and permanent edit authority."""
 
-    locator: MountLocator
+    address: FrontendAddress
     handle: EditHandle
 
 
@@ -36,7 +36,7 @@ class RecoveredBinding:
 
     record_mount_id: str
     mount: Mount
-    locator: MountLocator
+    address: FrontendAddress
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,7 +68,7 @@ type ReconnectResult = Reconnected | Missing | Unreachable
 class DurableFrontend(Protocol):
     """A frontend that can promote live deliveries and reconnect restored sessions."""
 
-    async def promote(self, mount: Mount, receipt: DeliveryReceipt) -> PromotionResult: ...
+    async def promote(self, mount: Mount, receipt: DeliveryResult) -> PromotionResult: ...
 
     async def reconnect(self, bindings: Sequence[RecoveredBinding]) -> ReconnectResult: ...
 
@@ -87,7 +87,7 @@ class DiscordFrontend:
     def __init__(self, client: discord.Client) -> None:
         self.client = client
 
-    async def promote(self, mount: Mount, receipt: DeliveryReceipt) -> PromotionResult:
+    async def promote(self, mount: Mount, receipt: DeliveryResult) -> PromotionResult:
         """Trade a recoverable public delivery up to permanent bot-token authority."""
         message = receipt.message
         if message is None:
@@ -114,7 +114,7 @@ class DiscordFrontend:
         }
         if durable_message.guild is not None:
             values["guild_id"] = durable_message.guild.id
-        return Promoted(MountLocator(self.frontend, values), handle)
+        return Promoted(FrontendAddress(self.frontend, values), handle)
 
     async def reconnect(self, bindings: Sequence[RecoveredBinding]) -> ReconnectResult:
         """Resolve a whole session before redrawing any of its restored mounts."""
@@ -124,7 +124,7 @@ class DiscordFrontend:
 
         for binding in bindings:
             try:
-                channel_id, message_id = self._coordinates(binding.locator)
+                channel_id, message_id = self._coordinates(binding.address)
                 message = await self._fetch_message(channel_id, message_id)
             except discord.NotFound:
                 missing.append((binding.record_mount_id, "Discord no longer has the channel or message"))
@@ -141,7 +141,7 @@ class DiscordFrontend:
             return Unreachable(tuple(item[0] for item in unreachable), tuple(item[1] for item in unreachable))
 
         for item in resolved:
-            handle = handle_for(item.message, mode=self._mode(item.binding.locator))
+            handle = handle_for(item.message, mode=self._mode(item.binding.address))
 
             async def edit(
                 presentation: DiscordPresentation,
@@ -149,9 +149,9 @@ class DiscordFrontend:
                 *,
                 message: discord.Message = item.message,
                 authority: EditHandle = handle,
-            ) -> DeliveryReceipt:
+            ) -> DeliveryResult:
                 await authority.write(presentation)
-                return DeliveryReceipt(message, authority, message_id=message.id, ephemeral=False)
+                return DeliveryResult(message, authority, message_id=message.id, ephemeral=False)
 
             try:
                 result = await item.binding.mount.send(edit)
@@ -191,26 +191,26 @@ class DiscordFrontend:
             raise TypeError(message)
         return await fetch_message(message_id)
 
-    def _coordinates(self, locator: MountLocator) -> tuple[int, int]:
-        if locator.frontend != self.frontend:
-            message = f"unsupported frontend {locator.frontend!r}"
+    def _coordinates(self, address: FrontendAddress) -> tuple[int, int]:
+        if address.frontend != self.frontend:
+            message = f"unsupported frontend {address.frontend!r}"
             raise ValueError(message)
-        channel_id = locator.values.get("channel_id")
-        message_id = locator.values.get("message_id")
+        channel_id = address.values.get("channel_id")
+        message_id = address.values.get("message_id")
         if not isinstance(channel_id, int) or isinstance(channel_id, bool):
-            message = "Discord locator channel_id must be an integer"
+            message = "Discord address channel_id must be an integer"
             raise TypeError(message)
         if not isinstance(message_id, int) or isinstance(message_id, bool):
-            message = "Discord locator message_id must be an integer"
+            message = "Discord address message_id must be an integer"
             raise TypeError(message)
         return channel_id, message_id
 
-    def _mode(self, locator: MountLocator) -> DiscordMode | None:
-        """The message mode this locator recorded, or `None` for one written before it did."""
-        mode = locator.values.get("mode")
+    def _mode(self, address: FrontendAddress) -> DiscordMode | None:
+        """The message mode this address recorded, or `None` for one written before it did."""
+        mode = address.values.get("mode")
         if mode is None:
             return None
         if not isinstance(mode, str) or mode not in set(DiscordMode):
-            message = f"Discord locator mode {mode!r} is not a message mode"
+            message = f"Discord address mode {mode!r} is not a message mode"
             raise TypeError(message)
         return DiscordMode(mode)

@@ -39,7 +39,7 @@ from squid_reactive.actions import (
     DEFAULT_REDACTION,
     CausalRef,
     ConflictDetail,
-    ExceptionSummary,
+    ExceptionReport,
     OperationEventSnapshot,
     ParticipantChange,
     current_action,
@@ -76,7 +76,7 @@ class HistoryResultStatus(Enum):
     NEEDS_RECONCILIATION = "needs_reconciliation"
 
 
-class UndoStrategy(Enum):
+class UndoMode(Enum):
     """How retained register patches may be applied."""
 
     CONDITIONAL = "conditional"
@@ -137,7 +137,7 @@ class CompensationExecution:
         """Record an inspectable transition without changing any transactional domain state."""
         self.status = status
         self.error = error
-        summary = None if error is None else DEFAULT_REDACTION.exception(ExceptionSummary.capture(error))
+        summary = None if error is None else DEFAULT_REDACTION.exception(ExceptionReport.capture(error))
         emit_causal_event(
             OperationEventSnapshot(
                 str(self.context.execution_id),
@@ -169,7 +169,7 @@ class CompensationRecord:
     status: CompensationStatus
     attempts: int
     updated_at: datetime
-    error: ExceptionSummary | None = None
+    error: ExceptionReport | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -190,7 +190,7 @@ class CompensationOutbox(Protocol):
         self,
         intent: CompensationIntent,
         status: CompensationStatus,
-        error: ExceptionSummary | None = None,
+        error: ExceptionReport | None = None,
     ) -> None: ...
 
 
@@ -262,7 +262,7 @@ class MemoryCompensationOutbox:
         self,
         intent: CompensationIntent,
         status: CompensationStatus,
-        error: ExceptionSummary | None = None,
+        error: ExceptionReport | None = None,
     ) -> None:
         existing = self._records.get(intent.idempotency_key)
         # One is a floor, not a count, for a key the bound already forgot: the attempt being
@@ -391,7 +391,7 @@ class CompensationRecordCodec:
             CompensationStatus(payload["status"]),
             payload["attempts"],
             datetime.fromisoformat(payload["updated_at"]),
-            None if error is None else ExceptionSummary(error["type_name"], error["message"]),
+            None if error is None else ExceptionReport(error["type_name"], error["message"]),
         )
 
 
@@ -423,7 +423,7 @@ class HistoryEntry:
     compensation: CompensationSpec | None = None
     original_commit: ActionCommit | None = None
     compensation_execution: CompensationExecution | None = None
-    strategy: UndoStrategy = UndoStrategy.CONDITIONAL
+    strategy: UndoMode = UndoMode.CONDITIONAL
 
 
 @dataclass(frozen=True, slots=True)
@@ -522,7 +522,7 @@ class History:
         label: TextLike,
         *,
         compensate: CompensationSpec | None = None,
-        strategy: UndoStrategy = UndoStrategy.CONDITIONAL,
+        strategy: UndoMode = UndoMode.CONDITIONAL,
     ) -> None:
         """Retain the whole successful action once, using its committed patch lineage."""
 
@@ -573,7 +573,7 @@ class History:
         try:
             with fresh_action_transaction(action_context=context):
                 planned: list[tuple[object, object]] = []
-                if entry.strategy is UndoStrategy.LOCAL_OVERWRITE and entry.undo_plan.participants:
+                if entry.strategy is UndoMode.LOCAL_OVERWRITE and entry.undo_plan.participants:
                     detail = ConflictDetail("participant", 0, 0)
                     raise ReactiveConflictError(  # noqa: TRY301
                         detail, "local overwrite policy cannot target transaction participants"
@@ -585,7 +585,7 @@ class History:
                             inverse, f"{change.participant_id} cannot be inverted safely"
                         )
                     planned.append((change.token, inverse))
-                if entry.strategy is UndoStrategy.LOCAL_OVERWRITE:
+                if entry.strategy is UndoMode.LOCAL_OVERWRITE:
                     apply_local_overwrite_patches(entry.undo_plan.cells)
                 else:
                     apply_conditional_patches(entry.undo_plan.cells)
@@ -689,7 +689,7 @@ class History:
                 execution.transition(CompensationStatus.CANCELLED)
                 entry.state = HistoryEntryState.FAILED
                 await self._compensation_outbox.update(
-                    intent, CompensationStatus.CANCELLED, ExceptionSummary.capture(error)
+                    intent, CompensationStatus.CANCELLED, ExceptionReport.capture(error)
                 )
                 self._owner.invalidate()
                 raise
@@ -697,7 +697,7 @@ class History:
                 external_error = error
                 try:
                     await self._compensation_outbox.update(
-                        intent, CompensationStatus.FAILED, ExceptionSummary.capture(external_error)
+                        intent, CompensationStatus.FAILED, ExceptionReport.capture(external_error)
                     )
                 except Exception as outbox_error:
                     error = ExceptionGroup(
@@ -781,7 +781,7 @@ class History:
         try:
             with fresh_action_transaction(action_context=context):
                 planned: list[tuple[object, object]] = []
-                if entry.strategy is UndoStrategy.LOCAL_OVERWRITE and entry.redo_plan.participants:
+                if entry.strategy is UndoMode.LOCAL_OVERWRITE and entry.redo_plan.participants:
                     detail = ConflictDetail("participant", 0, 0)
                     raise ReactiveConflictError(  # noqa: TRY301
                         detail, "local overwrite policy cannot target transaction participants"
@@ -793,7 +793,7 @@ class History:
                             inverse, f"{change.participant_id} cannot be reapplied safely"
                         )
                     planned.append((change.token, inverse))
-                if entry.strategy is UndoStrategy.LOCAL_OVERWRITE:
+                if entry.strategy is UndoMode.LOCAL_OVERWRITE:
                     apply_local_overwrite_patches(entry.redo_plan.cells)
                 else:
                     apply_conditional_patches(entry.redo_plan.cells)
@@ -953,9 +953,9 @@ __all__ = [
     "MemoryCompensationOutbox",
     "RedoResult",
     "TransactionalCompensationOutbox",
+    "UndoMode",
     "UndoPlan",
     "UndoResult",
-    "UndoStrategy",
     "history",
     "history_actions",
     "inspect_histories",

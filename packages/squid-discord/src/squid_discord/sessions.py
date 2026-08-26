@@ -93,11 +93,11 @@ class RejectionReason(Enum):
 
 
 @dataclass(frozen=True, slots=True)
-class SessionSummary:
+class SessionSnapshot:
     """Immutable facts a session policy may use during local admission.
 
     ``id`` and ``opened_at`` do not change over a session's lifetime. Membership fields
-    are a point-in-time copy too: the registry creates a fresh summary for a decision after
+    are a point-in-time copy too: the registry creates a fresh snapshot for a decision after
     a membership or attachment change while retaining the same identity and opening time.
     """
 
@@ -149,12 +149,12 @@ class Opened[SessionT]:
 class Rejected:
     """Admission was refused without attempting delivery."""
 
-    occupants: tuple[SessionSummary, ...]
+    occupants: tuple[SessionSnapshot, ...]
     reason: RejectionReason
 
 
 type OpenResult = Opened | Rejected | Abandoned
-type BeforeRegistration = Callable[[Session, Delivered, tuple[SessionSummary, ...]], Awaitable[None]]
+type BeforeRegistration = Callable[[Session, Delivered, tuple[SessionSnapshot, ...]], Awaitable[None]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,7 +162,7 @@ class OpeningRequest:
     """The context a collision or protection policy uses to judge replacement."""
 
     key: Hashable
-    newcomer: SessionSummary
+    newcomer: SessionSnapshot
     actor_id: int | None
     required_victims: int
 
@@ -171,7 +171,7 @@ class OpeningRequest:
 class Replace:
     """Replace these exact occupants."""
 
-    victims: tuple[SessionSummary, ...]
+    victims: tuple[SessionSnapshot, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -185,16 +185,16 @@ type CollisionDecision = Replace | Refuse
 
 
 class CollisionPolicy(Protocol):
-    """Asynchronously select exact replacement victims from immutable summaries."""
+    """Asynchronously select exact replacement victims from immutable snapshots."""
 
-    async def select(self, request: OpeningRequest, occupants: tuple[SessionSummary, ...]) -> CollisionDecision: ...
+    async def select(self, request: OpeningRequest, occupants: tuple[SessionSnapshot, ...]) -> CollisionDecision: ...
 
 
 @dataclass(frozen=True, slots=True)
 class Reject:
     """Reject any open that would exceed the key's limit."""
 
-    async def select(self, request: OpeningRequest, occupants: tuple[SessionSummary, ...]) -> CollisionDecision:
+    async def select(self, request: OpeningRequest, occupants: tuple[SessionSnapshot, ...]) -> CollisionDecision:
         return Refuse()
 
 
@@ -202,21 +202,21 @@ class Reject:
 class ReplaceOldest:
     """Retire the oldest occupants needed to admit the newcomer."""
 
-    async def select(self, request: OpeningRequest, occupants: tuple[SessionSummary, ...]) -> CollisionDecision:
+    async def select(self, request: OpeningRequest, occupants: tuple[SessionSnapshot, ...]) -> CollisionDecision:
         return Replace(occupants[: request.required_victims])
 
 
-class ReplacementProtection(Protocol):
+class ReplacementPolicy(Protocol):
     """Asynchronously decide whether one immutable collision victim may be retired."""
 
-    async def allows(self, request: OpeningRequest, victim: SessionSummary) -> bool: ...
+    async def allows(self, request: OpeningRequest, victim: SessionSnapshot) -> bool: ...
 
 
 @dataclass(frozen=True, slots=True)
 class ProtectCrossUserAttachments:
     """Keep sessions that another participant or attachment actor is using."""
 
-    async def allows(self, request: OpeningRequest, victim: SessionSummary) -> bool:
+    async def allows(self, request: OpeningRequest, victim: SessionSnapshot) -> bool:
         actor_id = request.actor_id
         others = victim.participants if actor_id is None else victim.participants - {actor_id}
         allowed = not others
@@ -230,7 +230,7 @@ class ProtectCrossUserAttachments:
 class Unprotected:
     """Allow every collision-selected replacement."""
 
-    async def allows(self, request: OpeningRequest, victim: SessionSummary) -> bool:
+    async def allows(self, request: OpeningRequest, victim: SessionSnapshot) -> bool:
         return True
 
 
@@ -240,7 +240,7 @@ class SessionPolicy:
 
     limit: int | None = 1
     collision: CollisionPolicy = field(default_factory=ReplaceOldest)
-    protect: ReplacementProtection = field(default_factory=ProtectCrossUserAttachments)
+    protect: ReplacementPolicy = field(default_factory=ProtectCrossUserAttachments)
 
     def __post_init__(self) -> None:
         if self.limit is not None and self.limit <= 0:
@@ -322,7 +322,7 @@ class Session:
         actor_id: int | None,
         durable: bool = False,
         local: bool = True,
-        summary: SessionSummary | None = None,
+        snapshot: SessionSnapshot | None = None,
         members: frozenset[int] | None = None,
         capacity: int | None = None,
         quota: int | None = None,
@@ -350,7 +350,7 @@ class Session:
         self._capacity = capacity
         self._quota = quota
         self._domain = domain
-        self._summary = summary or SessionSummary(
+        self._snapshot = snapshot or SessionSnapshot(
             id=str(uuid4()),
             opened_at=datetime.now(UTC),
             key=key,
@@ -374,8 +374,8 @@ class Session:
 
     @property
     def participants(self) -> frozenset[int]:
-        """Every user attributable to this session; see `SessionSummary.participants`."""
-        return self.summary.participants
+        """Every user attributable to this session; see `SessionSnapshot.participants`."""
+        return self.snapshot.participants
 
     @property
     def capacity(self) -> int | None:
@@ -421,15 +421,15 @@ class Session:
         return None if membership is None else membership.actor
 
     @property
-    def summary(self) -> SessionSummary:
+    def snapshot(self) -> SessionSnapshot:
         """Return immutable current facts for admission and inspection."""
-        return SessionSummary(
-            id=self._summary.id,
-            opened_at=self._summary.opened_at,
+        return SessionSnapshot(
+            id=self._snapshot.id,
+            opened_at=self._snapshot.opened_at,
             key=self.key,
-            actor_id=self._summary.actor_id,
-            durable=self._summary.durable,
-            local=self._summary.local,
+            actor_id=self._snapshot.actor_id,
+            durable=self._snapshot.durable,
+            local=self._snapshot.local,
             members=self._members,
             attachment_actors=self.attachment_actors,
             capacity=self._capacity,
@@ -438,22 +438,22 @@ class Session:
     @property
     def id(self) -> str:
         """Stable identity assigned when this session opened."""
-        return self._summary.id
+        return self._snapshot.id
 
     @property
     def opened_at(self) -> datetime:
         """UTC timestamp at which this session opened."""
-        return self._summary.opened_at
+        return self._snapshot.opened_at
 
     @property
     def durable(self) -> bool:
         """Whether this session is backed by durable state."""
-        return self._summary.durable
+        return self._snapshot.durable
 
     @property
     def local(self) -> bool:
         """Whether this process owns the live session."""
-        return self._summary.local
+        return self._snapshot.local
 
     async def attach(
         self,
@@ -466,10 +466,10 @@ class Session:
         """Deliver and attach a child mount to this session."""
         async with self._lifecycle_lock:
             if self._closed or self.root.finished:
-                return Rejected((self.summary,), RejectionReason.SESSION_FINISHED)
+                return Rejected((self.snapshot,), RejectionReason.SESSION_FINISHED)
             parent = self.root if parent is None else parent
             if parent not in self._graph or parent.finished:
-                return Rejected((self.summary,), RejectionReason.SESSION_FINISHED)
+                return Rejected((self.snapshot,), RejectionReason.SESSION_FINISHED)
             result = await mount.send(destination)
             if isinstance(result, Abandoned):
                 return result
@@ -629,8 +629,8 @@ class Session:
             self._graph.pop(mount, None)
 
 
-def _resolve_victims(selected: tuple[SessionSummary, ...], occupants: tuple[Session, ...]) -> tuple[Session, ...]:
-    """Resolve summary victims back to live sessions by their stable identity."""
+def _resolve_victims(selected: tuple[SessionSnapshot, ...], occupants: tuple[Session, ...]) -> tuple[Session, ...]:
+    """Resolve snapshot victims back to live sessions by their stable identity."""
     by_id = {occupant.id: occupant for occupant in occupants}
     return tuple(by_id[victim.id] for victim in selected if victim.id in by_id)
 
@@ -656,7 +656,7 @@ class SessionRegistry:
         actor_id: int | None = None,
         durable: bool = False,
         local: bool = True,
-        summary: SessionSummary | None = None,
+        snapshot: SessionSnapshot | None = None,
         capacity: int | None = None,
         quota: int | None = None,
         domain: str | None = None,
@@ -664,7 +664,7 @@ class SessionRegistry:
         """Admit, deliver, and register one new root session.
 
         ``durable`` and ``local`` are descriptive admission facts.  A caller restoring a
-        session may pass its immutable ``summary`` instead to retain the original identity
+        session may pass its immutable ``snapshot`` instead to retain the original identity
         and opening time.  ``capacity`` caps the session's explicit members; it is a fact of
         this session rather than of the key contest, so it is not part of ``policy``.
         """
@@ -681,7 +681,7 @@ class SessionRegistry:
                 actor_id=actor_id,
                 durable=durable,
                 local=local,
-                summary=summary,
+                snapshot=snapshot,
                 capacity=capacity,
                 quota=quota,
                 domain=domain,
@@ -698,7 +698,7 @@ class SessionRegistry:
                 actor_id=actor_id,
                 durable=durable,
                 local=local,
-                summary=summary,
+                snapshot=snapshot,
                 capacity=capacity,
                 quota=quota,
                 domain=domain,
@@ -715,8 +715,8 @@ class SessionRegistry:
         key: SessionKey,
         policy: SessionPolicy,
         actor_id: int | None,
-        summary: SessionSummary,
-        remote_occupants: tuple[SessionSummary, ...],
+        snapshot: SessionSnapshot,
+        remote_occupants: tuple[SessionSnapshot, ...],
         before_registration: BeforeRegistration,
         session_type: type[SessionT],
         capacity: int | None = None,
@@ -737,7 +737,7 @@ class SessionRegistry:
                 actor_id=actor_id,
                 durable=True,
                 local=True,
-                summary=summary,
+                snapshot=snapshot,
                 capacity=capacity,
                 quota=quota,
                 domain=domain,
@@ -752,7 +752,7 @@ class SessionRegistry:
         *,
         key: SessionKey,
         actor_id: int | None,
-        summary: SessionSummary,
+        snapshot: SessionSnapshot,
         attachments: tuple[tuple[Mount, Mount, int | None], ...],
         session_type: type[SessionT],
         members: frozenset[int] | None = None,
@@ -768,7 +768,7 @@ class SessionRegistry:
             actor_id=actor_id,
             durable=True,
             local=True,
-            summary=summary,
+            snapshot=snapshot,
             members=members,
             capacity=capacity,
             quota=quota,
@@ -846,19 +846,19 @@ class SessionRegistry:
         actor_id: int | None,
         durable: bool,
         local: bool,
-        summary: SessionSummary | None,
+        snapshot: SessionSnapshot | None,
         capacity: int | None,
         quota: int | None,
         domain: str | None,
-        remote_occupants: tuple[SessionSummary, ...],
+        remote_occupants: tuple[SessionSnapshot, ...],
         before_registration: BeforeRegistration | None,
         session_type: type[Session],
     ) -> OpenResult:
         occupants = () if key is None else self._live_occupants(key)
-        local_summaries = tuple(session.summary for session in occupants)
-        local_ids = {summary.id for summary in local_summaries}
-        summaries = (*local_summaries, *(summary for summary in remote_occupants if summary.id not in local_ids))
-        summaries = tuple(sorted(summaries, key=lambda occupant: (occupant.opened_at, occupant.id)))
+        local_summaries = tuple(session.snapshot for session in occupants)
+        local_ids = {snapshot.id for snapshot in local_summaries}
+        snapshots = (*local_summaries, *(snapshot for snapshot in remote_occupants if snapshot.id not in local_ids))
+        snapshots = tuple(sorted(snapshots, key=lambda occupant: (occupant.opened_at, occupant.id)))
         newcomer = session_type(
             self,
             mount,
@@ -866,22 +866,22 @@ class SessionRegistry:
             actor_id=actor_id,
             durable=durable,
             local=local,
-            summary=summary,
+            snapshot=snapshot,
             capacity=capacity,
             quota=quota,
             domain=domain,
         )
         victims: tuple[Session, ...] = ()
-        selected: tuple[SessionSummary, ...] = ()
-        if key is not None and policy.limit is not None and len(summaries) >= policy.limit:
-            required = len(summaries) + 1 - policy.limit
-            request = OpeningRequest(key, newcomer.summary, actor_id, required)
-            decision = await policy.collision.select(request, summaries)
+        selected: tuple[SessionSnapshot, ...] = ()
+        if key is not None and policy.limit is not None and len(snapshots) >= policy.limit:
+            required = len(snapshots) + 1 - policy.limit
+            request = OpeningRequest(key, newcomer.snapshot, actor_id, required)
+            decision = await policy.collision.select(request, snapshots)
             if isinstance(decision, Refuse):
-                return Rejected(summaries, decision.reason)
+                return Rejected(snapshots, decision.reason)
             selected = decision.victims
             victims = _resolve_victims(selected, occupants)
-            summary_ids = {occupant.id for occupant in summaries}
+            summary_ids = {occupant.id for occupant in snapshots}
             if (
                 len(selected) != required
                 or len({victim.id for victim in selected}) != len(selected)
@@ -891,14 +891,14 @@ class SessionRegistry:
                 raise ValueError(message)
             for victim in selected:
                 if not await policy.protect.allows(request, victim):
-                    return Rejected(summaries, RejectionReason.PROTECTED)
+                    return Rejected(snapshots, RejectionReason.PROTECTED)
 
         # Advisory: the authoritative check is under the member lock below, but refusing
         # here means a doomed open costs no Discord message. Counted against the membership
         # this open will leave behind, because the victims below are still registered and a
         # caller replacing their own session would otherwise be counted in two seats at once.
         if actor_id is not None and newcomer._quota_reached(actor_id, excluding=victims):
-            return Rejected(summaries, RejectionReason.QUOTA_REACHED)
+            return Rejected(snapshots, RejectionReason.QUOTA_REACHED)
 
         # Indexed before delivery, because delivery renders: a root component that draws
         # session facts would otherwise find no session on its own first paint and never be
@@ -918,7 +918,7 @@ class SessionRegistry:
                 if newcomer._quota_reached(actor_id, excluding=victims):
                     self._unindex_mount(newcomer, mount)
                     await mount.finish()
-                    return Rejected(summaries, RejectionReason.QUOTA_REACHED)
+                    return Rejected(snapshots, RejectionReason.QUOTA_REACHED)
 
             if before_registration is not None:
                 try:

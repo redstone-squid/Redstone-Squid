@@ -2,7 +2,7 @@
 
 from squid_layouts.profiling.export import snapshot_json
 from squid_layouts.profiling.model import (
-    ActionOutcome,
+    ActionResult,
     ActiveSpanSnapshot,
     ActiveTraceSnapshot,
     AggregateKey,
@@ -15,7 +15,7 @@ from squid_layouts.profiling.model import (
     HistogramSnapshot,
     OperationAggregate,
     OperationKind,
-    PresentationOutcome,
+    PresentationStatus,
     ProfilerHealth,
     RuntimeSnapshot,
     RuntimeSpan,
@@ -27,8 +27,8 @@ from squid_layouts.profiling.model import (
     TraceCounter,
     TraceId,
     TraceLink,
-    TraceOutcome,
     TraceResult,
+    TraceStatus,
 )
 from squid_layouts.profiling.profiler import (
     DetachedSpanRecorder,
@@ -40,7 +40,7 @@ from squid_layouts.profiling.profiler import (
 )
 
 __all__ = [
-    "ActionOutcome",
+    "ActionResult",
     "ActiveSpanSnapshot",
     "ActiveTraceSnapshot",
     "AggregateKey",
@@ -57,7 +57,7 @@ __all__ = [
     "OperationAggregate",
     "OperationKind",
     "OperationRecorder",
-    "PresentationOutcome",
+    "PresentationStatus",
     "Profiler",
     "ProfilerHealth",
     "RuntimeSnapshot",
@@ -71,7 +71,7 @@ __all__ = [
     "TraceCounter",
     "TraceId",
     "TraceLink",
-    "TraceOutcome",
     "TraceResult",
+    "TraceStatus",
     "snapshot_json",
 ]

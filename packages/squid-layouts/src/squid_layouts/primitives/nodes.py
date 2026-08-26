@@ -18,8 +18,8 @@ from squid_layouts.guards import Guard
 from squid_layouts.interactions import (
     ActionBinding,
     ActionPolicy,
+    BusySpec,
     EntitySelectionHandler,
-    Feedback,
     PressHandler,
     SelectionHandler,
 )
@@ -152,7 +152,7 @@ class Button(Renderable[DiscordTarget]):
     disabled: bool = False
     policy: ActionPolicy = ActionPolicy.EXCLUSIVE
     guard: Guard | None = None
-    feedback: Feedback | None = None
+    busy: BusySpec | None = None
     record: History | None = None
     """Enter this press in history under `label` before `on_click` runs."""
 

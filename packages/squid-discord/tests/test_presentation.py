@@ -16,7 +16,7 @@ import pytest
 import squid_discord
 import squid_layouts as sl
 from squid_discord import delivery
-from squid_discord.durability import MountLocator
+from squid_discord.durability import FrontendAddress
 from squid_discord.durability.frontend import DiscordFrontend, Promoted, Reconnected, RecoveredBinding
 from squid_discord.presentation import DiscordMode, DiscordModeError, DiscordPresentation, mode_of
 from squid_discord.testing import delivered_to, fake_interaction, fake_message
@@ -392,7 +392,7 @@ class _Channel:
 
 
 class TestDurableMode:
-    """The mode is recorded beside the locator, so recovery does not have to re-derive it."""
+    """The mode is recorded beside the address, so recovery does not have to re-derive it."""
 
     async def test_promotion_records_the_mode_and_recovery_restores_it(self) -> None:
         message = fake_message()
@@ -405,15 +405,15 @@ class TestDurableMode:
         promoted = await frontend.promote(mount, sent.receipt)
 
         assert isinstance(promoted, Promoted)
-        assert promoted.locator.values["mode"] == "components_v2"
+        assert promoted.address.values["mode"] == "components_v2"
 
         # The stored mode wins over the flag on the message that comes back, which is what
         # makes it a restored fact rather than a re-derived one.
         restored = squid_discord.Mount(Panel(), access=squid_discord.Everyone(), timeout=None)
-        locator = MountLocator("discord", {**promoted.locator.values, "mode": "classic"})
+        address = FrontendAddress("discord", {**promoted.address.values, "mode": "classic"})
         message.edit.reset_mock()
 
-        result = await frontend.reconnect([RecoveredBinding("mount-1", restored, locator)])
+        result = await frontend.reconnect([RecoveredBinding("mount-1", restored, address)])
 
         assert isinstance(result, Reconnected)
         assert message.edit.await_args.kwargs["content"] is None
@@ -424,15 +424,15 @@ class TestDurableMode:
         mount = squid_discord.Mount(Panel(), access=squid_discord.Everyone(), timeout=None)
         client = SimpleNamespace(get_channel=lambda _id: _Channel(message), fetch_channel=AsyncMock())
         frontend = DiscordFrontend(client)  # type: ignore[arg-type]
-        locator = MountLocator("discord", {"channel_id": message.channel.id, "message_id": message.id})
+        address = FrontendAddress("discord", {"channel_id": message.channel.id, "message_id": message.id})
 
-        result = await frontend.reconnect([RecoveredBinding("mount-1", mount, locator)])
+        result = await frontend.reconnect([RecoveredBinding("mount-1", mount, address)])
 
         assert isinstance(result, Reconnected)
         assert "content" not in message.edit.await_args.kwargs
 
     def test_the_mode_survives_a_durable_record_round_trip(self) -> None:
-        locator = MountLocator("discord", {"channel_id": 5, "message_id": 99, "mode": "components_v2"})
+        address = FrontendAddress("discord", {"channel_id": 5, "message_id": 99, "mode": "components_v2"})
         record = squid_discord.durability.DurableMountRecord(
             protocol=1,
             state=squid_discord.durability.MountState(
@@ -443,11 +443,11 @@ class TestDurableMode:
                 presentation=squid_discord.durability.PresentationState({}, {}, {}, {}),
                 target_fingerprint=squid_discord.DISCORD_V2_DPY27.fingerprint,
             ),
-            locator=locator,
+            address=address,
         )
 
         restored = squid_discord.durability.DurableMountCodec.loads(
             squid_discord.durability.DurableMountCodec.dumps(record)
         )
 
-        assert restored.locator.values["mode"] == "components_v2"
+        assert restored.address.values["mode"] == "components_v2"

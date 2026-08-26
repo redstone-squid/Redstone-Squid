@@ -72,10 +72,10 @@ class SceneBindings:
             raise LayoutInvariantError(message)
         handler = node.on_click if isinstance(node, Button) else node.on_select
         routes = node.routes if isinstance(node, SelectMenu) else {}
-        # Only buttons carry admission, busy feedback and recording; a select's guards and
+        # Only buttons carry admission, busy busy and recording; a select's guards and
         # histories, if any, live on the route bindings its grouped actions were lowered into.
         guard = node.guard if isinstance(node, Button) else None
-        feedback = node.feedback if isinstance(node, Button) else None
+        busy = node.busy if isinstance(node, Button) else None
         label = node.label if isinstance(node, Button) else ""
         record = node.record if isinstance(node, Button) else None
         for route_key, binding in routes.items():
@@ -89,7 +89,7 @@ class SceneBindings:
             policy=node.policy,
             routes=routes,
             guard=guard,
-            feedback=feedback,
+            busy=busy,
             label=label,
             record=record,
         )

@@ -14,7 +14,7 @@ import discord
 
 import squid_layouts as sl
 from squid_discord import Everyone, Mount, Reactor
-from squid_discord.delivery import DeliveryReceipt, handle_for
+from squid_discord.delivery import DeliveryResult, handle_for
 from squid_discord.testing import delivered_to, fake_message
 from squid_layouts import Component, resource, state
 from squid_layouts.primitives import Text
@@ -201,7 +201,7 @@ async def test_a_publish_during_the_load_is_not_lost() -> None:
 
     async def destination(presentation) -> Any:
         sent.append(presentation.layout)
-        return DeliveryReceipt(message, handle_for(message))
+        return DeliveryResult(message, handle_for(message))
 
     mount = Mount(Watcher(load), access=Everyone(), scheduler=reactor, timeout=None)
     await mount.send(destination)

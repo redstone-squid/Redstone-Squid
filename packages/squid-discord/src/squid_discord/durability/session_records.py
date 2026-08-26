@@ -15,7 +15,7 @@ from squid_discord.sessions import (
     UserScope,
 )
 
-from . import MountLocator, MountState, MountStateCodec, MountStateError
+from . import FrontendAddress, MountState, MountStateCodec, MountStateError
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,7 +24,7 @@ class SessionMountRecord:
 
     id: str
     state: MountState
-    locator: MountLocator
+    address: FrontendAddress
     parent_id: str | None
     actor_id: int | None
 
@@ -75,7 +75,8 @@ class DurableSessionCodec:
                     "id": mount.id,
                     # Wire key stays "snapshot"; only the Python field was renamed.
                     "snapshot": json.loads(MountStateCodec.dumps(mount.state)),
-                    "locator": {"frontend": mount.locator.frontend, "values": dict(mount.locator.values)},
+                    # Wire key stays "locator"; see DurableMountCodec.dumps.
+                    "locator": {"frontend": mount.address.frontend, "values": dict(mount.address.values)},
                     "parent_id": mount.parent_id,
                     "actor_id": mount.actor_id,
                 }
@@ -106,10 +107,10 @@ class DurableSessionCodec:
         mounts: list[SessionMountRecord] = []
         for raw_mount in raw_mounts:
             mount = _object(raw_mount, "durable mount")
-            locator = _object(mount.get("locator"), "mount locator")
-            values = _object(locator.get("values"), "mount locator values")
+            address = _object(mount.get("locator"), "mount address")
+            values = _object(address.get("values"), "mount address values")
             if not all(isinstance(key, str) and isinstance(value, str | int) for key, value in values.items()):
-                message = "mount locator values must contain string keys and string or integer values"
+                message = "mount address values must contain string keys and string or integer values"
                 raise MountStateError(message)
             actor_id = mount.get("actor_id")
             if actor_id is not None and (not isinstance(actor_id, int) or isinstance(actor_id, bool)):
@@ -125,7 +126,7 @@ class DurableSessionCodec:
                     state=MountStateCodec.loads(
                         json.dumps(mount.get("snapshot"), ensure_ascii=False, separators=(",", ":"))
                     ),
-                    locator=MountLocator(_string(locator, "frontend"), values),
+                    address=FrontendAddress(_string(address, "frontend"), values),
                     parent_id=parent_id,
                     actor_id=actor_id,
                 )

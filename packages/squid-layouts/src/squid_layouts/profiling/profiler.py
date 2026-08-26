@@ -35,8 +35,8 @@ from squid_layouts.profiling.model import (
     TraceCounter,
     TraceId,
     TraceLink,
-    TraceOutcome,
     TraceResult,
+    TraceStatus,
 )
 
 _SCHEMA_VERSION = 2
@@ -56,9 +56,9 @@ type SampleSource = Callable[[], float]
 
 
 class SpanRecorder(Protocol):
-    """Controls the outcome of the current span."""
+    """Controls the status of the current span."""
 
-    def set_outcome(self, outcome: TraceOutcome) -> None: ...
+    def set_status(self, status: TraceStatus) -> None: ...
 
     def set_attribute(self, key: str, value: AttributeValue) -> None: ...
 
@@ -66,7 +66,7 @@ class SpanRecorder(Protocol):
 class DetachedSpanRecorder(SpanRecorder, Protocol):
     """A manually finished span for work that overlaps its lexical caller."""
 
-    def finish(self, outcome: TraceOutcome = TraceOutcome.COMPLETED) -> None: ...
+    def finish(self, status: TraceStatus = TraceStatus.COMPLETED) -> None: ...
 
 
 class OperationRecorder(Protocol):
@@ -99,7 +99,7 @@ class OperationRecorder(Protocol):
         name: str,
         duration: float,
         *,
-        outcome: TraceOutcome = TraceOutcome.COMPLETED,
+        status: TraceStatus = TraceStatus.COMPLETED,
         attributes: Mapping[str, AttributeValue] | None = None,
         links: Sequence[TraceLink] = (),
     ) -> None: ...
@@ -135,7 +135,7 @@ class _MutableSpan:
     links: tuple[TraceLink, ...]
     omitted_links: int
     ended: float | None = None
-    outcome: TraceOutcome | None = None
+    status: TraceStatus | None = None
 
 
 @dataclass(slots=True)
@@ -229,7 +229,7 @@ class _NoOpSpan(AbstractContextManager[SpanRecorder]):
     ) -> None:
         return None
 
-    def set_outcome(self, outcome: TraceOutcome) -> None:
+    def set_status(self, status: TraceStatus) -> None:
         pass
 
     def set_attribute(self, key: str, value: AttributeValue) -> None:
@@ -269,7 +269,7 @@ class _NoOpOperation(_NoOpSpan, OperationRecorder):
         name: str,
         duration: float,
         *,
-        outcome: TraceOutcome = TraceOutcome.COMPLETED,
+        status: TraceStatus = TraceStatus.COMPLETED,
         attributes: Mapping[str, AttributeValue] | None = None,
         links: Sequence[TraceLink] = (),
     ) -> None:
@@ -277,7 +277,7 @@ class _NoOpOperation(_NoOpSpan, OperationRecorder):
 
 
 class _NoOpDetachedSpan(_NoOpSpan, DetachedSpanRecorder):
-    def finish(self, outcome: TraceOutcome = TraceOutcome.COMPLETED) -> None:
+    def finish(self, status: TraceStatus = TraceStatus.COMPLETED) -> None:
         pass
 
 
@@ -370,13 +370,13 @@ class _SpanScope(AbstractContextManager[SpanRecorder], SpanRecorder):
         if self._fallback or self._span is None:
             return
         self._reset_context()
-        outcome = _outcome_for_exception(exc) if exc is not None else self._span.outcome or TraceOutcome.COMPLETED
-        self._profiler._finish_span(self._trace, self._span, outcome)
+        status = _status_for_exception(exc) if exc is not None else self._span.status or TraceStatus.COMPLETED
+        self._profiler._finish_span(self._trace, self._span, status)
         return
 
-    def set_outcome(self, outcome: TraceOutcome) -> None:
+    def set_status(self, status: TraceStatus) -> None:
         if self._span is not None:
-            self._span.outcome = outcome
+            self._span.status = status
 
     def set_attribute(self, key: str, value: AttributeValue) -> None:
         if self._span is not None:
@@ -438,13 +438,13 @@ class _OperationScope(AbstractContextManager[OperationRecorder], OperationRecord
         self._reset_context()
 
         if exc is not None:
-            outcome = _outcome_for_exception(exc)
-            detail = None if outcome is not TraceOutcome.FAILED else _exception_name(exc)
+            status = _status_for_exception(exc)
+            detail = None if status is not TraceStatus.FAILED else _exception_name(exc)
             dispatch = None if self._trace.result is None else self._trace.result.dispatch
             presentation = None if self._trace.result is None else self._trace.result.presentation
-            result = TraceResult(outcome, detail, dispatch, presentation)
+            result = TraceResult(status, detail, dispatch, presentation)
         else:
-            result = self._trace.result or TraceResult(TraceOutcome.COMPLETED)
+            result = self._trace.result or TraceResult(TraceStatus.COMPLETED)
         self._profiler._finish_trace(self._trace, result)
         return
 
@@ -504,7 +504,7 @@ class _OperationScope(AbstractContextManager[OperationRecorder], OperationRecord
         name: str,
         duration: float,
         *,
-        outcome: TraceOutcome = TraceOutcome.COMPLETED,
+        status: TraceStatus = TraceStatus.COMPLETED,
         attributes: Mapping[str, AttributeValue] | None = None,
         links: Sequence[TraceLink] = (),
     ) -> None:
@@ -516,7 +516,7 @@ class _OperationScope(AbstractContextManager[OperationRecorder], OperationRecord
             if current is not None and current.profiler is self._profiler and current.trace is self._trace
             else self._trace.root_span_id
         )
-        self._profiler._record_span(self._trace, parent, name, duration, outcome, attributes, links)
+        self._profiler._record_span(self._trace, parent, name, duration, status, attributes, links)
 
     def _reset_context(self) -> None:
         if self._token is None:
@@ -534,31 +534,31 @@ class _DetachedSpan(DetachedSpanRecorder):
         self._span = span
         self._finished = False
 
-    def set_outcome(self, outcome: TraceOutcome) -> None:
+    def set_status(self, status: TraceStatus) -> None:
         if not self._finished and not self._trace.closed:
-            self._span.outcome = outcome
+            self._span.status = status
 
     def set_attribute(self, key: str, value: AttributeValue) -> None:
         if not self._finished:
             self._profiler._set_span_attribute(self._trace, self._span, key, value)
 
-    def finish(self, outcome: TraceOutcome = TraceOutcome.COMPLETED) -> None:
+    def finish(self, status: TraceStatus = TraceStatus.COMPLETED) -> None:
         if self._finished or self._trace.closed:
             return
         self._finished = True
-        self._profiler._finish_span(self._trace, self._span, self._span.outcome or outcome)
+        self._profiler._finish_span(self._trace, self._span, self._span.status or status)
 
 
-def _outcome_for_exception(error: BaseException | None) -> TraceOutcome:
+def _status_for_exception(error: BaseException | None) -> TraceStatus:
     if error is None:
-        return TraceOutcome.COMPLETED
+        return TraceStatus.COMPLETED
     if isinstance(error, asyncio.CancelledError):
-        return TraceOutcome.CANCELLED
+        return TraceStatus.CANCELLED
     if isinstance(error, BaseExceptionGroup) and any(
-        _outcome_for_exception(nested) is TraceOutcome.CANCELLED for nested in error.exceptions
+        _status_for_exception(nested) is TraceStatus.CANCELLED for nested in error.exceptions
     ):
-        return TraceOutcome.CANCELLED
-    return TraceOutcome.FAILED
+        return TraceStatus.CANCELLED
+    return TraceStatus.FAILED
 
 
 def _exception_name(error: BaseException) -> str:
@@ -852,14 +852,14 @@ class MemoryProfiler:
             trace.spans[span_id] = span
         return span
 
-    def _finish_span(self, trace: _MutableTrace, span: _MutableSpan, outcome: TraceOutcome) -> None:
+    def _finish_span(self, trace: _MutableTrace, span: _MutableSpan, status: TraceStatus) -> None:
         try:
             ended = self._clock()
             with self._lock:
                 if trace.closed or span.ended is not None:
                     return
                 span.ended = ended
-                span.outcome = outcome
+                span.status = status
         except BaseException:
             self._note_internal_failure()
 
@@ -869,7 +869,7 @@ class MemoryProfiler:
         parent_span_id: SpanId,
         name: str,
         duration: float,
-        outcome: TraceOutcome,
+        status: TraceStatus,
         attributes: Mapping[str, AttributeValue] | None,
         links: Sequence[TraceLink],
     ) -> None:
@@ -882,7 +882,7 @@ class MemoryProfiler:
             with self._lock:
                 span.started = max(trace.started, ended - duration)
                 span.ended = ended
-                span.outcome = outcome
+                span.status = status
         except BaseException:
             self._note_internal_failure()
 
@@ -911,17 +911,17 @@ class MemoryProfiler:
                 root = trace.spans[trace.root_span_id]
                 trace.closed = True
                 trace.result = TraceResult(
-                    result.outcome,
+                    result.status,
                     None if result.detail is None else self._bounded_text(result.detail, _MAX_DETAIL_LENGTH),
                     result.dispatch,
                     result.presentation,
                 )
                 root.ended = ended
-                root.outcome = trace.result.outcome
+                root.status = trace.result.status
                 for span in trace.spans.values():
                     if span.ended is None:
                         span.ended = ended
-                        span.outcome = TraceOutcome.ABANDONED
+                        span.status = TraceStatus.ABANDONED
                 frozen = self._freeze(trace, ended)
                 self._active.pop(trace.trace_id, None)
                 self._record(frozen, ended)
@@ -939,7 +939,7 @@ class MemoryProfiler:
                 span.name,
                 max(0.0, span.started - trace.started),
                 max(0.0, (span.ended or ended) - span.started),
-                span.outcome or TraceOutcome.ABANDONED,
+                span.status or TraceStatus.ABANDONED,
                 span.attributes,
                 span.links,
                 span.omitted_links,
@@ -953,7 +953,7 @@ class MemoryProfiler:
             trace.name,
             max(0.0, trace.started - self._started),
             max(0.0, ended - trace.started),
-            trace.result or TraceResult(TraceOutcome.ABANDONED),
+            trace.result or TraceResult(TraceStatus.ABANDONED),
             spans,
             trace.links,
             trace.omitted_links,
@@ -984,7 +984,7 @@ class MemoryProfiler:
 
         retained = False
         selected = False
-        if trace.result.outcome is not TraceOutcome.COMPLETED:
+        if trace.result.status is not TraceStatus.COMPLETED:
             selected = True
             retained |= self._append(self._failed, trace)
         if trace.duration >= self._slow_threshold:
@@ -995,7 +995,7 @@ class MemoryProfiler:
             retained |= self._append(self._deadline_misses, trace)
 
         ordinary = (
-            trace.result.outcome is TraceOutcome.COMPLETED
+            trace.result.status is TraceStatus.COMPLETED
             and not trace.deadline_missed
             and trace.duration < self._slow_threshold
         )
@@ -1015,7 +1015,7 @@ class MemoryProfiler:
         key = AggregateKey(
             trace.operation,
             trace.name,
-            trace.result.outcome,
+            trace.result.status,
             trace.result.detail,
             None if dispatch is None else dispatch.disposition,
             None if dispatch is None else dispatch.action,
@@ -1044,7 +1044,7 @@ class MemoryProfiler:
         return True
 
     def _span_aggregate_key(self, trace: RuntimeTrace, span: RuntimeSpan) -> SpanAggregateKey:
-        key = SpanAggregateKey(trace.operation, trace.name, span.name, span.outcome)
+        key = SpanAggregateKey(trace.operation, trace.name, span.name, span.status)
         if key in self._span_lifetime or len(self._span_lifetime) < self._max_span_aggregate_keys:
             return key
         if self._span_overflow_key is None:

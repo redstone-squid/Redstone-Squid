@@ -422,6 +422,6 @@ def _button(action: Action, context: _Context) -> Button:
         disabled=not action.available,
         policy=action.policy,
         guard=action.guard,
-        feedback=action.feedback,
+        busy=action.busy,
         record=action.record,
     )

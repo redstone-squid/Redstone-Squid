@@ -56,13 +56,13 @@ from squid_layouts.primitives import (
     Text,
 )
 from squid_layouts.profiling import (
-    ActionOutcome,
+    ActionResult,
     DispatchDisposition,
     MemoryProfiler,
     OperationKind,
-    PresentationOutcome,
+    PresentationStatus,
     RuntimeTrace,
-    TraceOutcome,
+    TraceStatus,
 )
 from squid_layouts.runtime import (
     ComponentRuntime,
@@ -77,7 +77,7 @@ from squid_layouts.runtime import (
 from squid_layouts.runtime.reactivity import _CURRENT
 from squid_layouts.semantic import Paragraph
 from squid_layouts.text import Localization, Message
-from squid_reactive import ActionLedger, add_action_outcome_sink
+from squid_reactive import ActionLedger, add_action_result_sink
 
 
 class Counter(Component):
@@ -448,7 +448,7 @@ class TestDispatchProfiling:
     async def test_handler_span_links_to_the_semantic_action_identity(self) -> None:
         profiler = MemoryProfiler()
         ledger = ActionLedger()
-        add_action_outcome_sink(ledger)
+        add_action_result_sink(ledger)
         mount = Mount(Counter(), access=Everyone(), profiler=profiler, timeout=None)
         commit_render(mount)
 
@@ -459,7 +459,7 @@ class TestDispatchProfiling:
 
         handler = next(span for span in _profile_trace(profiler).spans if span.name == "handler")
         action_id = dict((attribute.key, attribute.value) for attribute in handler.attributes)["action_id"]
-        assert any(outcome.action_id == action_id for outcome in ledger.outcomes)
+        assert any(result.action_id == action_id for result in ledger.results)
 
     async def test_success_records_action_presentation_generation_and_stages(self) -> None:
         profiler = MemoryProfiler()
@@ -474,15 +474,15 @@ class TestDispatchProfiling:
         result = trace.result.dispatch
         assert result is not None
         assert result.disposition is DispatchDisposition.COMPLETED
-        assert result.action is ActionOutcome.HANDLED
-        assert result.presentation is PresentationOutcome.WRITTEN
+        assert result.action is ActionResult.HANDLED
+        assert result.presentation is PresentationStatus.WRITTEN
         assert result.generation.submitted == submitted
         assert result.generation.active == submitted
         assert not result.generation.rebased
         aggregate = profiler.snapshot().aggregates[0]
         assert aggregate.key.disposition is DispatchDisposition.COMPLETED
-        assert aggregate.key.action is ActionOutcome.HANDLED
-        assert aggregate.key.presentation is PresentationOutcome.WRITTEN
+        assert aggregate.key.action is ActionResult.HANDLED
+        assert aggregate.key.presentation is PresentationStatus.WRITTEN
         assert {span.name for span in trace.spans} >= {
             "acknowledgement",
             "access",
@@ -557,7 +557,7 @@ class TestDispatchProfiling:
 
         stopped_result = _profile_trace(stopped_profiler).result.dispatch
         assert stopped_result is not None
-        assert stopped_result.action is ActionOutcome.SHORT_CIRCUITED
+        assert stopped_result.action is ActionResult.SHORT_CIRCUITED
 
         class Broken(Counter):
             async def increment(self, event: PressEvent) -> None:
@@ -584,9 +584,9 @@ class TestDispatchProfiling:
         recovered_result = recovered_trace.result.dispatch
         assert recovered_result is not None
         assert recovered_result.disposition is DispatchDisposition.COMPLETED
-        assert recovered_result.action is ActionOutcome.HANDLED
+        assert recovered_result.action is ActionResult.HANDLED
         handler = next(span for span in recovered_trace.spans if span.name == "handler")
-        assert handler.outcome is TraceOutcome.FAILED
+        assert handler.status is TraceStatus.FAILED
 
     async def test_action_and_delivery_failures_have_different_dispositions(self, monkeypatch) -> None:
         class Broken(Counter):
@@ -607,7 +607,7 @@ class TestDispatchProfiling:
         action = _profile_trace(action_profiler).result.dispatch
         assert action is not None
         assert action.disposition is DispatchDisposition.ACTION_FAILED
-        assert action.action is ActionOutcome.FAILED
+        assert action.action is ActionResult.FAILED
 
         delivery_profiler = MemoryProfiler()
         failed_delivery = Mount(Counter(), access=Everyone(), profiler=delivery_profiler, timeout=None)
@@ -619,8 +619,8 @@ class TestDispatchProfiling:
         delivered = _profile_trace(delivery_profiler).result.dispatch
         assert delivered is not None
         assert delivered.disposition is DispatchDisposition.DELIVERY_FAILED
-        assert delivered.action is ActionOutcome.HANDLED
-        assert delivered.presentation is PresentationOutcome.FAILED
+        assert delivered.action is ActionResult.HANDLED
+        assert delivered.presentation is PresentationStatus.FAILED
 
     async def test_watchdog_records_deadline_miss_and_acknowledgement_source(self) -> None:
         started = anyio.Event()
@@ -1106,7 +1106,7 @@ class TestPresentedHooks:
         committed.clear()
         presented.clear()
 
-        assert await mount.refresh_now() is PresentationOutcome.UNCHANGED
+        assert await mount.refresh_now() is PresentationStatus.UNCHANGED
         assert committed == [mount]
         assert presented == []
 
@@ -1139,7 +1139,7 @@ class TestPresentedHooks:
         await mount.send(delivered_to(fake_message()))
         presented.clear()
 
-        assert await mount.refresh_now() is PresentationOutcome.UNCHANGED
+        assert await mount.refresh_now() is PresentationStatus.UNCHANGED
 
         assert presented == []
 
@@ -2068,7 +2068,7 @@ class _Destination:
         self.calls.append((presentation.layout, presentation.files()))
         if self.raises is not None:
             raise self.raises
-        return delivery.DeliveryReceipt(self.message, self.handle)
+        return delivery.DeliveryResult(self.message, self.handle)
 
 
 class Report(Component):
@@ -2120,7 +2120,7 @@ class TestSend:
         await mount.send(delivered_to(message))
 
         sent = _operation_trace(profiler, OperationKind.SEND)
-        assert sent.result.presentation is PresentationOutcome.WRITTEN
+        assert sent.result.presentation is PresentationStatus.WRITTEN
         assert {span.name for span in sent.spans} >= {
             "render_lock",
             "runtime_render",
@@ -2134,7 +2134,7 @@ class TestSend:
         await mount.refresh_now()
 
         refreshed = _operation_trace(profiler, OperationKind.REFRESH)
-        assert refreshed.result.presentation is PresentationOutcome.WRITTEN
+        assert refreshed.result.presentation is PresentationStatus.WRITTEN
         assert {span.name for span in refreshed.spans} >= {
             "render_lock",
             "runtime_render",
@@ -2250,9 +2250,9 @@ class TestSend:
         await mount.send(_Destination(message))
         component.contents = b"second"
 
-        outcome = await mount.refresh_now()
+        result = await mount.refresh_now()
 
-        assert outcome is PresentationOutcome.WRITTEN
+        assert result is PresentationStatus.WRITTEN
         message.edit.assert_awaited_once()
 
     async def test_changed_handler_identity_is_published_without_repainting(self) -> None:
@@ -2277,9 +2277,9 @@ class TestSend:
         component.version = 1
         mount.invalidate()
 
-        outcome = await mount.refresh_now()
+        result = await mount.refresh_now()
 
-        assert outcome is PresentationOutcome.UNCHANGED
+        assert result is PresentationStatus.UNCHANGED
         message.edit.assert_not_awaited()
         assert mount._generation == generation
         assert mount._view is view
@@ -2314,7 +2314,7 @@ class TestSend:
         component.allowed = False
         mount.invalidate()
 
-        assert await mount.refresh_now() is PresentationOutcome.UNCHANGED
+        assert await mount.refresh_now() is PresentationStatus.UNCHANGED
 
         interaction = fake_interaction()
         await mount.dispatch("same", interaction, generation=mount._generation)
@@ -3631,12 +3631,12 @@ class _GuardedPanel(Component):
         self,
         *,
         guard: sl.guards.Guard | None = None,
-        feedback: sl.interactions.Feedback | None = None,
+        busy: sl.interactions.BusySpec | None = None,
         policy: ActionPolicy = ActionPolicy.EXCLUSIVE,
         run: Callable[[], Awaitable[Any]] | None = None,
     ) -> None:
         self.guard = guard
-        self.feedback = feedback
+        self.busy = busy
         self.policy = policy
         self.run = run
 
@@ -3647,7 +3647,7 @@ class _GuardedPanel(Component):
                 self.go,
                 key="go",
                 guard=self.guard,
-                feedback=self.feedback,
+                busy=self.busy,
                 policy=self.policy,
             ),
             key="panel",
@@ -3714,7 +3714,7 @@ class TestGuards:
         dispatch = _profile_trace(profiler).result.dispatch
         assert dispatch is not None
         assert dispatch.disposition is DispatchDisposition.GUARD_DENIED
-        assert dispatch.action is ActionOutcome.NOT_RUN
+        assert dispatch.action is ActionResult.NOT_RUN
 
     async def test_a_raising_guard_reaches_the_error_hook_without_admitting(self):
         error = RuntimeError("permission service unavailable")
@@ -3848,7 +3848,7 @@ class TestBusyFeedback:
             release.set()
 
     async def test_a_fast_handler_suppresses_an_unchanged_finished_render(self):
-        panel = _GuardedPanel(feedback=sl.interactions.Feedback())
+        panel = _GuardedPanel(busy=sl.interactions.BusySpec())
         mount = Mount(panel, access=Everyone(), timeout=None, pending_after=30)
         commit_render(mount)
         interaction = fake_interaction()
@@ -3862,7 +3862,7 @@ class TestBusyFeedback:
 
     async def test_a_slow_handler_disables_the_panel_and_relabels_the_press(self):
         release = asyncio.Event()
-        panel = _GuardedPanel(feedback=sl.interactions.Feedback(pending="Rendering…"), run=release.wait)
+        panel = _GuardedPanel(busy=sl.interactions.BusySpec(pending="Rendering…"), run=release.wait)
         mount = Mount(panel, access=Everyone(), timeout=None, pending_after=0)
         commit_render(mount)
         interaction = fake_interaction()
@@ -3884,7 +3884,7 @@ class TestBusyFeedback:
         class Idle(Component):
             def render(self):
                 return sl.actions(
-                    sl.action("Go", self.go, key="go", feedback=sl.interactions.Feedback(pending="Working…")),
+                    sl.action("Go", self.go, key="go", busy=sl.interactions.BusySpec(pending="Working…")),
                     key="panel",
                 )
 
@@ -3943,7 +3943,7 @@ class TestBusyFeedback:
 
     async def test_the_pending_label_falls_back_to_chrome(self):
         release = asyncio.Event()
-        panel = _GuardedPanel(feedback=sl.interactions.Feedback(), run=release.wait)
+        panel = _GuardedPanel(busy=sl.interactions.BusySpec(), run=release.wait)
         mount = Mount(panel, access=Everyone(), timeout=None, pending_after=0)
         commit_render(mount)
         interaction = fake_interaction()
@@ -3964,7 +3964,7 @@ class TestBusyFeedback:
         async def hook(interaction: discord.Interaction, error: Exception, source: str) -> None:
             order.append(f"hook:{source}")
 
-        panel = _GuardedPanel(feedback=sl.interactions.Feedback(), run=fail)
+        panel = _GuardedPanel(busy=sl.interactions.BusySpec(), run=fail)
         mount = Mount(panel, access=Everyone(), timeout=None, pending_after=0, on_error=hook)
         commit_render(mount)
         interaction = fake_interaction()
@@ -3983,7 +3983,7 @@ class TestBusyFeedback:
             await release.wait()
             raise RuntimeError("render failed")
 
-        panel = _GuardedPanel(feedback=sl.interactions.Feedback(restore_on_error=False), run=fail)
+        panel = _GuardedPanel(busy=sl.interactions.BusySpec(restore_on_error=False), run=fail)
         mount = Mount(panel, access=Everyone(), timeout=None, pending_after=0, on_error=AsyncMock())
         commit_render(mount)
         interaction = fake_interaction()
@@ -3999,7 +3999,7 @@ class TestBusyFeedback:
 
         class Idle(Component):
             def render(self):
-                return sl.actions(sl.action("Go", self.go, key="go", feedback=sl.interactions.Feedback()), key="panel")
+                return sl.actions(sl.action("Go", self.go, key="go", busy=sl.interactions.BusySpec()), key="panel")
 
             async def go(self, event: ActionEvent) -> None:
                 await release.wait()
@@ -4018,11 +4018,11 @@ class TestBusyFeedback:
         assert self._labels(restored) == [("Go", False)]
 
     async def test_a_late_watchdog_paints_nothing_over_the_finished_render(self):
-        panel = _GuardedPanel(feedback=sl.interactions.Feedback())
+        panel = _GuardedPanel(busy=sl.interactions.BusySpec())
         mount = Mount(panel, access=Everyone(), timeout=None, pending_after=0)
         commit_render(mount)
         interaction = fake_interaction()
-        busy = _BusyPaint(mount, "go", sl.interactions.Feedback(), interaction)
+        busy = _BusyPaint(mount, "go", sl.interactions.BusySpec(), interaction)
         profile = SimpleNamespace(acknowledge=lambda source: None)
 
         assert await busy.close() is False

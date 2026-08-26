@@ -18,7 +18,7 @@ from squid_discord.routing import Router
 from squid_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 from squid_layouts.primitives import Button, Heading, Row
 from squid_layouts.profiling import MemoryProfiler, OperationKind
-from squid_reactive import ActionLedger, OperationEventSnapshot, add_action_outcome_sink, transaction
+from squid_reactive import ActionLedger, OperationEventSnapshot, add_action_result_sink, transaction
 
 
 class Subject(sl.Component):
@@ -127,7 +127,7 @@ class TestMountCommands:
 
     async def test_actions_uses_ledger_when_profiler_has_no_trace(self) -> None:
         ledger = ActionLedger()
-        add_action_outcome_sink(ledger)
+        add_action_result_sink(ledger)
         try:
             with transaction():
                 pass
@@ -137,8 +137,8 @@ class TestMountCommands:
             await run(cog.inspect_actions, cog, ctx)
 
             rendered = str(ctx.send.await_args.kwargs["view"].to_components())
-            assert "Action outcomes" in rendered
-            assert ledger.outcomes[0].action_id in rendered
+            assert "Action results" in rendered
+            assert ledger.results[0].action_id in rendered
         finally:
             ledger.close()
 

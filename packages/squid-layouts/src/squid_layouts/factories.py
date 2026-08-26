@@ -27,7 +27,7 @@ from squid_layouts.entity import ChannelType, EntityRef, EntityType
 from squid_layouts.forms import FormLike, SubmitHandler, bind_form
 from squid_layouts.grids import GridCell
 from squid_layouts.guards import Guard
-from squid_layouts.interactions import ActionPolicy, Feedback, PressHandler, SelectionEvent
+from squid_layouts.interactions import ActionPolicy, BusySpec, PressHandler, SelectionEvent
 from squid_layouts.palette import INHERIT, Accent, Palette
 from squid_layouts.rosters import RosterPlacement
 from squid_layouts.semantic import (
@@ -617,7 +617,7 @@ def action(
     allow_grouping: bool | None = None,
     policy: ActionPolicy = ActionPolicy.EXCLUSIVE,
     guard: Guard | None = None,
-    feedback: Feedback | None = None,
+    busy: BusySpec | None = None,
     record: History | None = None,
 ) -> Action:
     """A control that runs ``on_trigger``; ``key`` namespaces its custom id.
@@ -633,9 +633,7 @@ def action(
     if record is not None and policy is ActionPolicy.PARALLEL_READ:
         message = "a parallel-read action changes nothing, so it has nothing to record"
         raise ValueError(message)
-    return Action(
-        key, _text(label), on_trigger, tone, emphasis, available, allow_grouping, policy, guard, feedback, record
-    )
+    return Action(key, _text(label), on_trigger, tone, emphasis, available, allow_grouping, policy, guard, busy, record)
 
 
 def toggle(

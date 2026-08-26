@@ -34,7 +34,7 @@ class FakeRole:
 def panel_for(
     *,
     cardinality: squid_discord.Cardinality = squid_discord.ANY,
-    feedback: squid_discord.RoleFeedback | None = None,
+    notice: squid_discord.RoleNoticeHandler | None = None,
 ) -> tuple[squid_discord.RolePanel, squid_discord.routing.RouteGroup[discord.Client]]:
     group = squid_discord.routing.RouteGroup("roles")
     panel = squid_discord.RolePanel(
@@ -52,7 +52,7 @@ def panel_for(
                 description="Choose a colour.",
             ),
         ),
-        feedback=feedback,
+        notice=notice,
     )
     return panel, group
 
@@ -164,13 +164,13 @@ async def test_exactly_one_button_replaces_stale_selection_and_preserves_other_r
     assert followup.send.await_args.args == ("Your roles were updated.",)
 
 
-async def test_unchanged_selection_skips_edit_and_custom_feedback_receives_result() -> None:
+async def test_unchanged_selection_skips_edit_and_a_custom_notice_receives_the_result() -> None:
     outcomes: list[RoleTransitionResult] = []
 
-    async def feedback(_interaction: discord.Interaction[Any], result: RoleTransitionResult) -> None:
+    async def notice(_interaction: discord.Interaction[Any], result: RoleTransitionResult) -> None:
         outcomes.append(result)
 
-    panel, _ = panel_for(feedback=feedback)
+    panel, _ = panel_for(notice=notice)
     roles = {101: FakeRole(101, 10), 102: FakeRole(102, 11)}
     interaction, _member, _fetch_member, edit = interaction_for(panel, roles, held=(101,))
 
@@ -230,10 +230,10 @@ async def test_uneditable_role_is_forbidden_before_edit(role: FakeRole) -> None:
 
     outcomes: list[RoleTransitionResult] = []
 
-    async def feedback(_interaction: discord.Interaction[Any], result: RoleTransitionResult) -> None:
+    async def notice(_interaction: discord.Interaction[Any], result: RoleTransitionResult) -> None:
         outcomes.append(result)
 
-    panel.feedback = feedback
+    panel.notice = notice
     await panel._handle_toggle(interaction, "colour", 101)
 
     edit.assert_not_awaited()
