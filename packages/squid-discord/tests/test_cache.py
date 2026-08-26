@@ -4,7 +4,7 @@ from dataclasses import replace
 from time import perf_counter
 
 from squid_discord import DISCORD_V2_DPY27, compose
-from squid_layouts import Palette, fallback
+from squid_layouts import Palette, fallback, scene
 from squid_layouts.planning import PlanCache, plan
 from squid_layouts.planning.adapter import AdapterProfile
 from squid_layouts.planning.cache import CachedPlan
@@ -22,8 +22,7 @@ from squid_layouts.primitives import (
     Variants,
 )
 from squid_layouts.runtime import PresentationSession
-from squid_layouts.scene.codec import SceneCodec
-from squid_layouts.scene.model import PlanReport, SceneComponentsV2, SceneDocument, ScenePanel, SceneText
+from squid_layouts.scene.model import PlanReport
 from squid_layouts.semantic import Action, Actions, Heading, List, ListItem, Paragraph, Section, Stack
 from squid_layouts.text import Localization, Message
 
@@ -57,8 +56,8 @@ def test_palette_is_part_of_plan_cache_identity() -> None:
     second = plan(document, target=DISCORD_V2_DPY27, palette=Palette(brand=0x222222), cache=cache)
 
     assert not second.metrics.cache_hit
-    assert isinstance(first.scene.components_v2.children[0], ScenePanel)
-    assert isinstance(second.scene.components_v2.children[0], ScenePanel)
+    assert isinstance(first.scene.components_v2.children[0], scene.Panel)
+    assert isinstance(second.scene.components_v2.children[0], scene.Panel)
     assert (first.scene.components_v2.children[0].accent, second.scene.components_v2.children[0].accent) == (
         0x111111,
         0x222222,
@@ -80,8 +79,8 @@ def test_plan_cache_separates_targets_with_different_capabilities() -> None:
     second = plan(document, target=rich, cache=cache)
 
     assert not second.metrics.cache_hit
-    assert first.scene.components_v2.children == (SceneText("plain"),)
-    assert second.scene.components_v2.children == (SceneText("rich"),)
+    assert first.scene.components_v2.children == (scene.Text("plain"),)
+    assert second.scene.components_v2.children == (scene.Text("rich"),)
 
 
 def test_cache_hit_reuses_structure_and_rebinds_current_handler() -> None:
@@ -181,8 +180,8 @@ def _never_measured(*_args, **_kwargs):
 
 def test_plan_cache_evicts_the_least_recently_used_entry() -> None:
     cache = PlanCache(capacity=2)
-    scene = SceneDocument(SceneCodec.protocol, "discord.components-v2", 1, SceneComponentsV2(()))
-    cached = CachedPlan(scene, PlanReport())
+    document = scene.Document(scene.Codec.protocol, "discord.components-v2", 1, scene.ComponentsV2(()))
+    cached = CachedPlan(document, PlanReport())
 
     cache.put("first", cached)
     cache.put("second", cached)

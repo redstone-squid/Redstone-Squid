@@ -225,7 +225,7 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert sl.profiling.snapshot_json
     assert sl.runtime.ComponentRuntime
     assert sl.scene.Codec
-    assert sl.scene.SceneFile
+    assert sl.scene.File
     assert sl.html.Renderer
     assert sl.runtime.TopicBus
     assert {"Shared", "SharedPool", "SharedFactory", "ReactiveConflictError", "state", "addresses"} <= set(

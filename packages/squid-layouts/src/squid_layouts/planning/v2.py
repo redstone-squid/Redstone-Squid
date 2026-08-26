@@ -5,6 +5,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC
 from typing import Any
 
+from squid_layouts import scene
 from squid_layouts.capabilities import Capability
 from squid_layouts.chrome import Chrome
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
@@ -54,30 +55,6 @@ from squid_layouts.primitives.nodes import (
     Variant,
     Variants,
 )
-from squid_layouts.scene.model import (
-    SceneButton,
-    SceneComponentsV2,
-    SceneEntitySelect,
-    SceneExtension,
-    SceneFile,
-    SceneGallery,
-    SceneGalleryItem,
-    SceneLink,
-    SceneNode,
-    SceneOption,
-    ScenePanel,
-    ScenePremiumButton,
-    SceneRoutedButton,
-    SceneRoutedSelect,
-    SceneRow,
-    SceneSection,
-    SceneSelect,
-    SceneSeparator,
-    SceneText,
-    SceneThumbnail,
-    SceneTime,
-    SceneZonedTime,
-)
 from squid_layouts.sources import Position
 from squid_layouts.target_types import ComponentsV2Target
 
@@ -88,43 +65,45 @@ class _V2Converter:
 
     def accessory(
         self, node: Thumbnail | LinkButton | PremiumButton | Button | RoutedButton | RawItem, path: str
-    ) -> SceneNode:
+    ) -> scene.Node:
         return self.bindings.control(node, path)
 
-    def node(self, node: Realized, path: str) -> SceneNode:
+    def node(self, node: Realized, path: str) -> scene.Node:
         match node:
             case RText(content=content):
-                return SceneText(content)
+                return scene.Text(content)
             case RTime(instant=instant, style=style, prefix=prefix):
-                return SceneTime(instant.astimezone(UTC).isoformat(), style, prefix)
+                return scene.Time(instant.astimezone(UTC).isoformat(), style, prefix)
             case RZonedTime(value=value, prefix=prefix):
-                return SceneZonedTime(value.instant.isoformat(), value.timezone, prefix)
+                return scene.ZonedTime(value.instant.isoformat(), value.timezone, prefix)
             case File(asset_key=asset_key, name=name, media_type=media_type, spoiler=spoiler):
-                return SceneFile(asset_key, name, media_type, spoiler)
+                return scene.File(asset_key, name, media_type, spoiler)
             case RPanel(children=children, accent=accent, spoiler=spoiler):
-                return ScenePanel(
+                return scene.Panel(
                     tuple(self.node(child, f"{path}.{index}") for index, child in enumerate(children)), accent, spoiler
                 )
             case RSection(texts=texts, accessory=accessory):
-                return SceneSection(
-                    tuple(SceneText(text.content) for text in texts),
+                return scene.Section(
+                    tuple(scene.Text(text.content) for text in texts),
                     self.accessory(accessory, f"{path}.accessory"),
                 )
             case Sep(large=large, visible=visible):
-                return SceneSeparator(large, visible)
+                return scene.Separator(large, visible)
             case Row(items=items):
                 converted = tuple(self.accessory(item, f"{path}.{index}") for index, item in enumerate(items))
                 if not all(
-                    isinstance(item, SceneLink | ScenePremiumButton | SceneButton | SceneRoutedButton | SceneExtension)
+                    isinstance(
+                        item, scene.Link | scene.PremiumButton | scene.Button | scene.RoutedButton | scene.Extension
+                    )
                     for item in converted
                 ):
                     message = f"row {path} contains an unsupported item"
                     raise LayoutInvariantError(message)
-                return SceneRow(converted)
+                return scene.Row(converted)
             case SelectMenu(options=options):
-                return SceneSelect(
+                return scene.Select(
                     options=tuple(
-                        SceneOption(option.label, option.value, option.description, option.default, option.emoji)
+                        scene.Option(option.label, option.value, option.description, option.default, option.emoji)
                         for option in options
                     ),
                     action=self.bindings.action(node),
@@ -135,7 +114,7 @@ class _V2Converter:
                     policy=node.policy,
                 )
             case EntitySelect():
-                return SceneEntitySelect(
+                return scene.EntitySelect(
                     entity_type=node.entity_type,
                     action=self.bindings.action(node),
                     placeholder=node.placeholder,
@@ -147,9 +126,9 @@ class _V2Converter:
                     policy=node.policy,
                 )
             case RoutedSelect(options=options):
-                return SceneRoutedSelect(
+                return scene.RoutedSelect(
                     options=tuple(
-                        SceneOption(option.label, option.value, option.description, option.default, option.emoji)
+                        scene.Option(option.label, option.value, option.description, option.default, option.emoji)
                         for option in options
                     ),
                     route_id=node.route_id,
@@ -159,15 +138,17 @@ class _V2Converter:
                     disabled=node.disabled,
                 )
             case Thumbnail(url=url, description=description, spoiler=spoiler):
-                return SceneThumbnail(url, description, spoiler)
+                return scene.Thumbnail(url, description, spoiler)
             case Gallery(items=items):
-                return SceneGallery(tuple(SceneGalleryItem(item.url, item.description, item.spoiler) for item in items))
+                return scene.Gallery(
+                    tuple(scene.GalleryItem(item.url, item.description, item.spoiler) for item in items)
+                )
             case RawItem():
                 return self.accessory(node, path)
             case LinkButton() | PremiumButton() | RoutedButton():
                 return self.accessory(node, path)
 
-    def children(self, children: Sequence[Realized]) -> tuple[SceneNode, ...]:
+    def children(self, children: Sequence[Realized]) -> tuple[scene.Node, ...]:
         return tuple(self.node(child, str(index)) for index, child in enumerate(children))
 
 
@@ -441,12 +422,12 @@ class V2Dialect:
         }
     )
     mode = ComponentsV2Target
-    body_type = SceneComponentsV2
+    body_type = scene.ComponentsV2
     default_limits = LIMITS
     realizes_extensions = True
 
     def normalize(
-        self, nodes: Sequence[Node], target: Target[V2Limits, SceneComponentsV2, ComponentsV2Target, Any]
+        self, nodes: Sequence[Node], target: Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, Any]
     ) -> tuple[Node, ...]:
         return _lower(nodes, target, target.limits)
 
@@ -466,8 +447,8 @@ class V2Dialect:
     ) -> tuple[MeasuredLayout, int]:
         return _paginate_v2(nodes, key=key, capacities=capacities, limits=limits, chrome=chrome, nav=nav, broker=broker)
 
-    def body(self, children: Sequence[Realized], bindings: SceneBindings) -> SceneComponentsV2:
-        return SceneComponentsV2(_V2Converter(bindings).children(children))
+    def body(self, children: Sequence[Realized], bindings: SceneBindings) -> scene.ComponentsV2:
+        return scene.ComponentsV2(_V2Converter(bindings).children(children))
 
 
 V2_DIALECT = V2Dialect()

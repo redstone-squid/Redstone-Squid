@@ -4,12 +4,11 @@ from collections.abc import Awaitable, Callable
 
 import squid_layouts as sl
 from squid_discord import DISCORD_V2_DPY27
-from squid_layouts import TextLike
+from squid_layouts import TextLike, scene
 from squid_layouts.forms import FormLike, SubmitHandler
 from squid_layouts.interactions import ActionPolicy, Actor, SelectionEvent, Visibility
 from squid_layouts.planning import plan
 from squid_layouts.runtime import PresentationSession
-from squid_layouts.scene.model import SceneSelect, SceneText
 from squid_layouts.semantic import (
     Choice,
     ChoiceEvent,
@@ -77,7 +76,7 @@ ENTRIES = (
 
 def _opened(result) -> bool:
     return any(
-        isinstance(node, SceneText) and "second detail" in node.content for node in result.scene.components_v2.children
+        isinstance(node, scene.Text) and "second detail" in node.content for node in result.scene.components_v2.children
     )
 
 
@@ -126,7 +125,7 @@ async def test_a_controlled_items_reports_both_opening_and_backing_out() -> None
 
 def _disclosed(result) -> bool:
     return any(
-        isinstance(node, SceneText) and "hidden body" in node.content for node in result.scene.components_v2.children
+        isinstance(node, scene.Text) and "hidden body" in node.content for node in result.scene.components_v2.children
     )
 
 
@@ -165,7 +164,7 @@ async def test_a_controlled_details_reports_the_requested_state_and_ignores_the_
 
 
 def _chosen(result) -> tuple[str, ...]:
-    select = next(node for node in result.scene.components_v2.children if isinstance(node, SceneSelect))
+    select = next(node for node in result.scene.components_v2.children if isinstance(node, scene.Select))
     return tuple(option.value for option in select.options if option.default)
 
 

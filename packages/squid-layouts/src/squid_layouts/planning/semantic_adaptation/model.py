@@ -3,6 +3,7 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from squid_layouts import scene
 from squid_layouts.assets import Asset
 from squid_layouts.chrome import Chrome
 from squid_layouts.palette import Palette
@@ -11,7 +12,7 @@ from squid_layouts.planning.limits import DiscordLimits
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET, StrategyAxis
 from squid_layouts.primitives.nodes import Node
 from squid_layouts.runtime.presentation import PresentationSession, SessionUpdate
-from squid_layouts.scene.model import PlanEvent, ScenePager
+from squid_layouts.scene.model import PlanEvent
 from squid_layouts.text import Localization
 
 
@@ -20,7 +21,7 @@ class SemanticLowering:
     nodes: tuple[Node, ...]
     assets: tuple[Asset, ...] = ()
     events: tuple[PlanEvent, ...] = ()
-    pagers: tuple[ScenePager, ...] = ()
+    pagers: tuple[scene.Pager, ...] = ()
     updates: tuple[SessionUpdate, ...] = ()
     states_explored: int = 0
     search_fallback: bool = False

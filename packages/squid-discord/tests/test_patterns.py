@@ -10,9 +10,9 @@ import squid_layouts as sl
 import squid_patterns as sp
 from squid_discord import Everyone, Mount
 from squid_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
+from squid_layouts import scene
 from squid_layouts.planning.navigation import SEEK_OPTION_LIMIT, NavigationContext, _seek_pages, page_select_nav
 from squid_layouts.primitives import Button, Lines, Row
-from squid_layouts.scene import SceneRoutedButton, SceneRoutedSelect
 from squid_layouts.semantic import Stack
 from squid_layouts.sources import Position, Window
 
@@ -95,15 +95,15 @@ def test_tabs_router_shell_encodes_next_state_and_input_state() -> None:
         return f"tabs:{request.state.selected}"
 
     rendered = sp.RouterShell(route).render(small, small.initial_state)
-    scene = sl.planning.plan(rendered, target=squid_discord.DISCORD_V2_DPY27).scene
-    buttons = [item for row in scene.components_v2.children if hasattr(row, "items") for item in row.items]
-    assert all(isinstance(item, SceneRoutedButton) for item in buttons)
+    document = sl.planning.plan(rendered, target=squid_discord.DISCORD_V2_DPY27).scene
+    buttons = [item for row in document.components_v2.children if hasattr(row, "items") for item in row.items]
+    assert all(isinstance(item, scene.RoutedButton) for item in buttons)
     assert routes[-1] == sp.PatternRoute("select:two", sp.TabsState("two"), "next")
 
     many = sp.Tabs([sp.Tab(str(index), str(index), str(index)) for index in range(6)], key="many")
     routed = sp.RouterShell(route).render(many, many.initial_state)
     routed_scene = sl.planning.plan(routed, target=squid_discord.DISCORD_V2_DPY27).scene
-    assert isinstance(routed_scene.components_v2.children[0], SceneRoutedSelect)
+    assert isinstance(routed_scene.components_v2.children[0], scene.RoutedSelect)
     assert routes[-1] == sp.PatternRoute("select", sp.TabsState("0"), "input")
 
 

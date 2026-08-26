@@ -11,7 +11,7 @@ expands them in roughly this order.
 
 | Bucket | What it decides | Principal APIs | Expanded in |
 |---|---|---|---|
-| Rendering | what the user sees | `Document`, `plan`, target adapters, `SceneDocument`, `Renderer` | [Semantic authoring](#semantic-authoring-adaptation-and-exact-primitives), [Scenes and renderers](#scenes-and-renderers) |
+| Rendering | what the user sees | `Document`, `plan`, target adapters, `sl.scene.Document`, `Renderer` | [Semantic authoring](#semantic-authoring-adaptation-and-exact-primitives), [Scenes and renderers](#scenes-and-renderers) |
 | State | what one component knows | `sl.state`, `sl.computed`, `sl.resource` | [Components and reactivity](#components-and-vue-inspired-reactivity) |
 | Shared state | what several panels agree on | `Shared`, `SharedPool`, `TopicBus` | [Shared state across mounts](#shared-state-across-mounts) |
 | Actions | what a press is allowed to do | `sl.action`, `Guard`, `history`, `ActionMiddleware` | [Actions and frontend adapters](#actions-and-frontend-adapters) |
@@ -41,7 +41,7 @@ owning background work ends through one named method.
         +-- PlanMetrics (search/cache/latency instrumentation)
         +-- ephemeral ActionBindings (never serialized)
         v
-    immutable SceneDocument -- `sl.scene.Codec` JSON and JSON Schema
+    immutable sl.scene.Document -- `sl.scene.Codec` JSON and JSON Schema
         |
         +-- sd.Renderer --> discord.ui.LayoutView
         +-- sl.html.Renderer ----> safe semantic HTML
@@ -647,7 +647,7 @@ the engine never presents two competing navigation systems.
 
 ## Scenes and renderers
 
-SceneDocument is immutable and contains no callbacks or native frontend objects.
+`sl.scene.Document` is immutable and contains no callbacks or native frontend objects.
 PlanResult.bindings and PlanResult.resources are ephemeral side tables for a live frontend.
 
 `sl.scene.Codec` provides canonical JSON, fingerprints, and a Draft 2020-12 schema through `schema`

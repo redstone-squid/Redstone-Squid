@@ -5,6 +5,7 @@ import pytest
 
 from squid_discord import DISCORD_V2_DPY27, classic, render_static
 from squid_discord.testing import without_capabilities
+from squid_layouts import scene
 from squid_layouts.emoji import Emoji
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.html import Renderer as HtmlRenderer
@@ -20,15 +21,6 @@ from squid_layouts.primitives import (
     Text,
     Variant,
     Variants,
-)
-from squid_layouts.scene.model import (
-    SceneComponentsV2,
-    SceneDocument,
-    SceneGallery,
-    SceneGalleryItem,
-    ScenePanel,
-    ScenePremiumButton,
-    SceneText,
 )
 
 
@@ -79,16 +71,18 @@ def test_classic_draws_premium_and_disabled_emoji_links() -> None:
 
 
 def test_html_marks_premium_metadata_and_spoilers_accessibly() -> None:
-    scene = SceneDocument(
+    document = scene.Document(
         1,
         "discord.components-v2",
         1,
-        SceneComponentsV2(
+        scene.ComponentsV2(
             (
-                ScenePanel(
+                scene.Panel(
                     (
-                        ScenePremiumButton(42),
-                        SceneGallery((SceneGalleryItem("https://example.invalid/image.png", "preview", spoiler=True),)),
+                        scene.PremiumButton(42),
+                        scene.Gallery(
+                            (scene.GalleryItem("https://example.invalid/image.png", "preview", spoiler=True),)
+                        ),
                     ),
                     spoiler=True,
                 ),
@@ -96,7 +90,7 @@ def test_html_marks_premium_metadata_and_spoilers_accessibly() -> None:
         ),
     )
 
-    rendered = HtmlRenderer().draw(scene)
+    rendered = HtmlRenderer().draw(document)
 
     assert 'data-sku-id="42"' in rendered
     assert 'alt="preview"' in rendered
@@ -119,4 +113,4 @@ def test_non_discord_target_requires_explicit_premium_fallback() -> None:
         target=target,
     )
 
-    assert result.scene.components_v2.children == (SceneText("Purchase unavailable"),)
+    assert result.scene.components_v2.children == (scene.Text("Purchase unavailable"),)

@@ -9,9 +9,9 @@ import pytest
 import squid_discord
 import squid_layouts as sl
 import squid_patterns as sp
+from squid_layouts import scene
 from squid_layouts.chrome import Chrome
 from squid_layouts.runtime.component import render_component_tree
-from squid_layouts.scene import SceneButton, SceneRoutedButton, SceneText
 
 SLOTS = (
     sp.RosterSlot("tank", "Tank", capacity=1),
@@ -94,8 +94,8 @@ def test_roster_uses_active_chrome_and_renders_routed_slots() -> None:
             waitlist="Queue", full="No seats", slot_count=lambda count, capacity: f"Seats {count}/{capacity}"
         ),
     )
-    text = [item.content for item in _walk(result.scene.body) if isinstance(item, SceneText)]
-    buttons = [item for item in _walk(result.scene.body) if isinstance(item, SceneRoutedButton)]
+    text = [item.content for item in _walk(result.scene.body) if isinstance(item, scene.Text)]
+    buttons = [item for item in _walk(result.scene.body) if isinstance(item, scene.RoutedButton)]
 
     assert "### Tank — Seats 1/1" in text
     assert "No seats" in text
@@ -112,7 +112,7 @@ async def test_mounted_roster_delivers_one_portable_slot_key() -> None:
         sl.roster(sp.place_roster((), SLOTS), key="raid", on_join=join),
         target=squid_discord.DISCORD_V2_DPY27,
     )
-    button = next(item for item in _walk(result.scene.body) if isinstance(item, SceneButton))
+    button = next(item for item in _walk(result.scene.body) if isinstance(item, scene.Button))
     await result.bindings[button.action].handler(
         sl.PressEvent(sl.interactions.Actor("7"), cast(sl.interactions.ActionResponder, object()))
     )

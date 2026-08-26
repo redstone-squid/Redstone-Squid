@@ -8,12 +8,12 @@ from zoneinfo import ZoneInfo
 import pytest
 
 import squid_layouts as sl
+from squid_layouts import scene
 from squid_layouts.interactions import ActionPolicy
 from squid_layouts.planning.adapter import AdapterProfile
 from squid_layouts.planning.discord import components_v2_target
 from squid_layouts.planning.limits import LIMITS, V2Limits
 from squid_layouts.planning.types import DiscordAdapter
-from squid_layouts.scene.model import SceneButton, SceneRow
 
 
 def _target(name: str, *, capabilities: frozenset[str] = frozenset(), limits: V2Limits = LIMITS):
@@ -391,8 +391,8 @@ def test_form_trigger_plans_as_content_with_a_submission_binding() -> None:
     result = sl.planning.plan(sl.form("Edit", spec, key="edit", on_submit=_submitted), target=target)
 
     row = result.scene.components_v2.children[0]
-    assert isinstance(row, SceneRow)
-    assert isinstance(row.items[0], SceneButton)
+    assert isinstance(row, scene.Row)
+    assert isinstance(row.items[0], scene.Button)
     assert row.items[0].action == "edit"
     assert result.bindings["edit"].policy is sl.interactions.ActionPolicy.EXCLUSIVE
 
@@ -428,7 +428,7 @@ def test_extension_field_uses_its_portable_fallback() -> None:
 
     result = sl.planning.plan(sl.form("Open form", spec, key="native", on_submit=_submitted), target=target)
 
-    assert isinstance(result.scene.components_v2.children[0], SceneRow)
+    assert isinstance(result.scene.components_v2.children[0], scene.Row)
 
 
 @dataclass(frozen=True, slots=True)

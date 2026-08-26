@@ -36,6 +36,7 @@ from squid_discord.emoji import discord_emoji
 from squid_discord.presentation import DiscordMode, DiscordPresentation
 from squid_discord.renderer import V2Renderer
 from squid_discord.target import DISCORD_V2_DPY27, Target
+from squid_layouts import scene
 from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME, LOCALIZATION_CONTEXT, Chrome, localize_chrome
 from squid_layouts.document import Asset, Document
 from squid_layouts.entity import ChannelType, EntityKind, EntityRef, EntityType
@@ -100,15 +101,7 @@ from squid_layouts.runtime.reactivity import (
 )
 from squid_layouts.runtime.resources import AsyncBinding, PendingPolicy, abandon_superseded_loads
 from squid_layouts.runtime.topics import Address, SubscriptionReconciler, TopicBus
-from squid_layouts.scene.model import (
-    PlanMetrics,
-    PlanReport,
-    PlanResult,
-    SceneButton,
-    SceneDocument,
-    SceneEntitySelect,
-    SceneSelect,
-)
+from squid_layouts.scene.model import PlanMetrics, PlanReport, PlanResult
 from squid_layouts.semantic import Status
 from squid_layouts.sources import Position
 from squid_layouts.target_types import DiscordPyAdapter
@@ -443,7 +436,7 @@ def _custom_id(mount_id: str, generation: int, key: str) -> str:
 
 
 class _WiredButton(discord.ui.Button[AnyMountedView]):
-    def __init__(self, node: SceneButton, mount: Mount, key: str, generation: int) -> None:
+    def __init__(self, node: scene.Button, mount: Mount, key: str, generation: int) -> None:
         super().__init__(
             style=getattr(discord.ButtonStyle, node.style.value),
             label=node.label,
@@ -460,7 +453,7 @@ class _WiredButton(discord.ui.Button[AnyMountedView]):
 
 
 class _WiredSelect(discord.ui.Select[AnyMountedView]):
-    def __init__(self, node: SceneSelect, mount: Mount, key: str, generation: int) -> None:
+    def __init__(self, node: scene.Select, mount: Mount, key: str, generation: int) -> None:
         super().__init__(
             placeholder=node.placeholder,
             min_values=node.min_values,
@@ -549,7 +542,7 @@ class _EntityDispatch:
         )
 
 
-def _entity_kwargs(node: SceneEntitySelect, mount: Mount, key: str, generation: int) -> dict[str, object]:
+def _entity_kwargs(node: scene.EntitySelect, mount: Mount, key: str, generation: int) -> dict[str, object]:
     return {
         "placeholder": node.placeholder,
         "min_values": node.min_values,
@@ -581,7 +574,7 @@ class _WiredMentionableSelect(_EntityDispatch, discord.ui.MentionableSelect[AnyM
 
 
 def _wired_entity_select(
-    node: SceneEntitySelect, mount: Mount, key: str, generation: int
+    node: scene.EntitySelect, mount: Mount, key: str, generation: int
 ) -> discord.ui.BaseSelect[Any]:
     kwargs = _entity_kwargs(node, mount, key, generation)
     if node.entity_type is EntityType.USER:
@@ -705,7 +698,7 @@ class MountSnapshot:
     """Action keys the live generation answers to."""
     suppressed: int
     """Renders committed without a Discord edit because they matched the live generation."""
-    scene: SceneDocument | None
+    scene: scene.Document | None
     report: PlanReport | None
     metrics: PlanMetrics | None
 
@@ -1247,13 +1240,13 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             handlers.clear()
 
             def wire(
-                node: SceneButton | SceneSelect | SceneEntitySelect, binding: ActionBinding
+                node: scene.Button | scene.Select | scene.EntitySelect, binding: ActionBinding
             ) -> discord.ui.Item[Any]:
                 key = binding.key
                 handlers[key] = binding
-                if isinstance(node, SceneButton):
+                if isinstance(node, scene.Button):
                     item: discord.ui.Item[Any] = _WiredButton(node, self, key, generation)
-                elif isinstance(node, SceneEntitySelect):
+                elif isinstance(node, scene.EntitySelect):
                     item = _wired_entity_select(node, self, key, generation)
                 else:
                     item = _WiredSelect(node, self, key, generation)
@@ -1345,8 +1338,10 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             )
         )
 
-        def wire(node: SceneButton | SceneSelect | SceneEntitySelect, binding: ActionBinding) -> discord.ui.Item[Any]:
-            if not isinstance(node, SceneButton):
+        def wire(
+            node: scene.Button | scene.Select | scene.EntitySelect, binding: ActionBinding
+        ) -> discord.ui.Item[Any]:
+            if not isinstance(node, scene.Button):
                 message = "the renewal generation may only contain its framework button"
                 raise TypeError(message)
             internal = _RenewalBinding(
@@ -1453,9 +1448,9 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             busy = busy_key is not None
 
             def wire(
-                node: SceneButton | SceneSelect | SceneEntitySelect, binding: ActionBinding
+                node: scene.Button | scene.Select | scene.EntitySelect, binding: ActionBinding
             ) -> discord.ui.Item[Any]:
-                if isinstance(node, SceneButton):
+                if isinstance(node, scene.Button):
                     if busy:
                         node = replace(
                             node,
@@ -1463,7 +1458,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                             label=pending if binding.key == busy_key and pending is not None else node.label,
                         )
                     return _WiredButton(node, self, binding.key, generation)
-                if isinstance(node, SceneEntitySelect):
+                if isinstance(node, scene.EntitySelect):
                     return _wired_entity_select(
                         replace(node, disabled=True) if busy else node, self, binding.key, generation
                     )

@@ -6,6 +6,7 @@ import pytest
 import squid_layouts as sl
 from squid_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, V2_LIMITS
 from squid_discord.target import classic
+from squid_layouts import scene
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.planning import Target, plan
 from squid_layouts.planning.limits import CLASSIC_LIMITS, Axis
@@ -26,12 +27,11 @@ from squid_layouts.primitives import (
     Thumbnail,
     Truncate,
 )
-from squid_layouts.scene.model import SceneClassicMessage, SceneEmbedField
 
 
-def body(document, target=DISCORD_V1_DPY27) -> SceneClassicMessage:
+def body(document, target=DISCORD_V1_DPY27) -> scene.ClassicMessage:
     resolved = plan(document, target=target).scene.body
-    assert isinstance(resolved, SceneClassicMessage)
+    assert isinstance(resolved, scene.ClassicMessage)
     return resolved
 
 
@@ -112,7 +112,7 @@ class TestClassicShape:
 
         assert embed.title == "Piston door"
         assert embed.description == "first block\n\nsecond block"
-        assert embed.fields == (SceneEmbedField("Width", "2", inline=True),)
+        assert embed.fields == (scene.EmbedField("Width", "2", inline=True),)
         assert embed.footer is not None and embed.footer.text == "by squid"
         assert embed.author is not None and embed.author.name == "Redstone Squid"
         assert embed.colour == 0x00FF00
@@ -222,7 +222,7 @@ class TestPagedRegions:
             chars=200,
         )
 
-        assert isinstance(plan(document, target=DISCORD_V1_DPY27).scene.body, SceneClassicMessage)
+        assert isinstance(plan(document, target=DISCORD_V1_DPY27).scene.body, scene.ClassicMessage)
 
 
 class TestDiscordPyCrossChecks:
