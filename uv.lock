@@ -17,7 +17,7 @@ members = [
     "squid-patterns",
     "squid-reactivity",
     "squid-replicated",
-    "squid-stores",
+    "squid-storage",
 ]
 
 [[package]]
@@ -2318,7 +2318,7 @@ dependencies = [
     { name = "squid-ui" },
     { name = "squid-patterns" },
     { name = "squid-replicated" },
-    { name = "squid-stores", extra = ["postgres"] },
+    { name = "squid-storage", extra = ["postgres"] },
     { name = "uvicorn" },
     { name = "uvloop", marker = "sys_platform != 'win32'" },
     { name = "whenever" },
@@ -2403,7 +2403,7 @@ requires-dist = [
     { name = "squid-ui", editable = "packages/squid-ui" },
     { name = "squid-patterns", editable = "packages/squid-patterns" },
     { name = "squid-replicated", editable = "packages/squid-replicated" },
-    { name = "squid-stores", extras = ["postgres"], editable = "packages/squid-stores" },
+    { name = "squid-storage", extras = ["postgres"], editable = "packages/squid-storage" },
     { name = "uvicorn", specifier = ">=0.34.0" },
     { name = "uvloop", marker = "sys_platform != 'win32'", specifier = ">=0.21.0" },
     { name = "whenever", specifier = ">=0.10.3" },
@@ -2728,10 +2728,10 @@ dependencies = [
 
 [package.optional-dependencies]
 durable = [
-    { name = "squid-stores" },
+    { name = "squid-storage" },
 ]
 postgres = [
-    { name = "squid-stores", extra = ["postgres"] },
+    { name = "squid-storage", extra = ["postgres"] },
 ]
 
 [package.metadata]
@@ -2740,8 +2740,8 @@ requires-dist = [
     { name = "discord-py", specifier = ">=2.7,<3" },
     { name = "packaging", specifier = ">=24,<27" },
     { name = "squid-ui", editable = "packages/squid-ui" },
-    { name = "squid-stores", marker = "extra == 'durable'", editable = "packages/squid-stores" },
-    { name = "squid-stores", extras = ["postgres"], marker = "extra == 'postgres'", editable = "packages/squid-stores" },
+    { name = "squid-storage", marker = "extra == 'durable'", editable = "packages/squid-storage" },
+    { name = "squid-storage", extras = ["postgres"], marker = "extra == 'postgres'", editable = "packages/squid-storage" },
 ]
 provides-extras = ["durable", "postgres"]
 
@@ -2797,9 +2797,9 @@ requires-dist = [
 provides-extras = ["loro", "pycrdt"]
 
 [[package]]
-name = "squid-stores"
+name = "squid-storage"
 version = "0.1.0"
-source = { editable = "packages/squid-stores" }
+source = { editable = "packages/squid-storage" }
 dependencies = [
     { name = "anyio" },
     { name = "squid-reactivity" },

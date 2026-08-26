@@ -19,7 +19,7 @@ from squid_ui.runtime.presentation import (
 )
 from squid_ui.runtime.reactivity import export_state, restore_state
 from squid_ui.sources import Direction, Position
-from squid_stores import (
+from squid_storage import (
     AdmissionToken,
     ClaimToken,
     DurableSessionStore,

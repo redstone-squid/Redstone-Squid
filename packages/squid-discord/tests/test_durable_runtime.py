@@ -39,7 +39,7 @@ from squid_discord.sessions import (
 from squid_discord.testing import delivered_to, fake_message
 from squid_ui.primitives import Text
 from squid_ui.profiling import PresentationStatus
-from squid_stores import StoredSessionRecord
+from squid_storage import StoredSessionRecord
 
 
 class Counter(sl.Component):

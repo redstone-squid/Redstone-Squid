@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from squid_stores import MemoryScopedStore, Slot, SlotVersionError, SQLiteScopedStore, json_codec
+from squid_storage import MemoryScopedStore, Slot, SlotVersionError, SQLiteScopedStore, json_codec
 
 
 @pytest.fixture

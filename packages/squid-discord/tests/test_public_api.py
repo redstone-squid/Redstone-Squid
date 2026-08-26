@@ -99,7 +99,7 @@ def test_base_install_needs_no_store_backend() -> None:
 
     `durability` is behind a lazy `__getattr__`, and `operations`, `devtools` and
     `devtools_view` name its types under `TYPE_CHECKING`. Miss any one of those and importing
-    this package reaches `squid_stores` again, which nothing else here would notice.
+    this package reaches `squid_storage` again, which nothing else here would notice.
     """
     code = """
 import importlib.abc
@@ -107,7 +107,7 @@ import sys
 
 class BlockStores(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
-        if fullname.split(".", 1)[0] in {"squid_stores", "asyncpg"}:
+        if fullname.split(".", 1)[0] in {"squid_storage", "asyncpg"}:
             raise ModuleNotFoundError(fullname)
         return None
 
@@ -116,7 +116,7 @@ import squid_discord
 assert squid_discord.Mount
 assert squid_discord.ScreenSpec
 assert "durability" in squid_discord.__all__
-assert "squid_stores" not in sys.modules
+assert "squid_storage" not in sys.modules
 """
     subprocess.run([sys.executable, "-c", code], check=True)
 
@@ -131,5 +131,5 @@ def test_package_metadata_keeps_its_base_and_optional_dependencies() -> None:
         "anyio>=4.14,<5",
         "packaging>=24,<27",
     ]
-    assert project["optional-dependencies"]["durable"] == ["squid-stores"]
-    assert project["optional-dependencies"]["postgres"] == ["squid-stores[postgres]"]
+    assert project["optional-dependencies"]["durable"] == ["squid-storage"]
+    assert project["optional-dependencies"]["postgres"] == ["squid-storage[postgres]"]

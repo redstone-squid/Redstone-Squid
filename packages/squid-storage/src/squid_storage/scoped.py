@@ -13,7 +13,7 @@ from os import PathLike
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
-from squid_stores.stores import _validate_table_name
+from squid_storage.stores import _validate_table_name
 
 if TYPE_CHECKING:
     from asyncpg import Pool

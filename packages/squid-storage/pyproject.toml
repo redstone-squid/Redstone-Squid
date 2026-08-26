@@ -1,5 +1,5 @@
 [project]
-name = "squid-stores"
+name = "squid-storage"
 version = "0.1.0"
 description = "Portable backing stores for Squid applications"
 requires-python = ">=3.14"
