@@ -14,7 +14,7 @@ from squid_storage.scoped import ScopedStore, Slot
 _logger = logging.getLogger(__name__)
 
 
-class PersistedPool[ScopeT: Hashable, SharedT: SharedState[Any]]:
+class PersistentStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
     """Hydrate one shared namespace per scope and persist committed changes.
 
     Loading is explicit and asynchronous because it reads the store. Once a namespace is
@@ -214,4 +214,4 @@ class PersistedPool[ScopeT: Hashable, SharedT: SharedState[Any]]:
             _logger.exception("persisted shared-state error hook failed")
 
 
-__all__ = ["PersistedPool"]
+__all__ = ["PersistentStatePool"]

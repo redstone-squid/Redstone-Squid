@@ -595,7 +595,7 @@ workspace = workspaces.get(guild.id)
 
 `get` is get-or-create and synchronous; `get_existing`, `drop`, `clear` and `active` are the rest of
 it. Put the pool where the lifetime is — on the bot for the process, on a cog for the extension, on
-a session for that session. `squid_storage.PersistedPool` is the hydrating variant, `await load(scope)`
+a session for that session. `squid_storage.PersistentStatePool` is the hydrating variant, `await load(scope)`
 for a namespace that should survive a restart. Keep domain truth in your data layer; a namespace is
 for what only the screen wants.
 

@@ -15,7 +15,7 @@ from squid_storage.stores import (
     _SCHEMA_VERSION,
     AdmissionToken,
     ClaimToken,
-    StoredSessionRecord,
+    SessionRecord,
     _check_schema_version,
     _validate_key,
     _validate_lease_seconds,
@@ -76,14 +76,14 @@ class PostgresSessionStore:
         self._initialized = False
         self._initialize_lock = asyncio.Lock()
 
-    async def list(self) -> tuple[StoredSessionRecord, ...]:
+    async def list(self) -> tuple[SessionRecord, ...]:
         await self._initialize()
         rows = await self.pool.fetch(
             f"SELECT key, scope, snapshot_payload, record_payload FROM {self.table_name} ORDER BY key"
         )
         return tuple(_stored_record(row) for row in rows)
 
-    async def load(self, key: str) -> StoredSessionRecord | None:
+    async def load(self, key: str) -> SessionRecord | None:
         _validate_key(key)
         await self._initialize()
         row = await self.pool.fetchrow(
@@ -204,7 +204,7 @@ class PostgresSessionStore:
         )
         return None if fence is None else AdmissionToken(scope, owner, int(fence))
 
-    async def inspect(self, reservation: AdmissionToken) -> tuple[StoredSessionRecord, ...] | None:
+    async def inspect(self, reservation: AdmissionToken) -> tuple[SessionRecord, ...] | None:
         await self._initialize()
         async with self.pool.acquire() as connection, connection.transaction():
             valid = await connection.fetchval(
@@ -379,8 +379,8 @@ class PostgresSessionStore:
             self._initialized = True
 
 
-def _stored_record(row: Record) -> StoredSessionRecord:
-    return StoredSessionRecord(
+def _stored_record(row: Record) -> SessionRecord:
+    return SessionRecord(
         key=str(row["key"]),
         scope=str(row["scope"]),
         snapshot_payload=str(row["snapshot_payload"]),

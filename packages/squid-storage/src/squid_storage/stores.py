@@ -17,7 +17,7 @@ _DEFAULT_TABLE_NAME = "squid_sessions"
 
 
 @dataclass(frozen=True, slots=True)
-class StoredSessionRecord:
+class SessionRecord:
     """One published durable session and its admission snapshot."""
 
     key: str
@@ -60,9 +60,9 @@ class DurableSessionStore(Protocol):
     newcomer atomically. A target already present must be named as a victim.
     """
 
-    async def list(self) -> tuple[StoredSessionRecord, ...]: ...
+    async def list(self) -> tuple[SessionRecord, ...]: ...
 
-    async def load(self, key: str) -> StoredSessionRecord | None: ...
+    async def load(self, key: str) -> SessionRecord | None: ...
 
     async def claim(self, key: str, owner: str, lease_seconds: float) -> ClaimToken | None: ...
 
@@ -76,7 +76,7 @@ class DurableSessionStore(Protocol):
 
     async def reserve(self, scope: str, owner: str, lease_seconds: float) -> AdmissionToken | None: ...
 
-    async def inspect(self, reservation: AdmissionToken) -> tuple[StoredSessionRecord, ...] | None: ...
+    async def inspect(self, reservation: AdmissionToken) -> tuple[SessionRecord, ...] | None: ...
 
     async def commit(
         self,
@@ -103,18 +103,18 @@ class MemorySessionStore:
     """In-process implementation of the complete fenced store contract."""
 
     def __init__(self, *, clock: Callable[[], float] = time.time) -> None:
-        self._records: dict[str, StoredSessionRecord] = {}
+        self._records: dict[str, SessionRecord] = {}
         self._claims: dict[str, _MemoryLease] = {}
         self._admissions: dict[str, _MemoryLease] = {}
         self._next_fence = 0
         self._clock = clock
         self._lock = asyncio.Lock()
 
-    async def list(self) -> tuple[StoredSessionRecord, ...]:
+    async def list(self) -> tuple[SessionRecord, ...]:
         async with self._lock:
             return tuple(self._records[key] for key in sorted(self._records))
 
-    async def load(self, key: str) -> StoredSessionRecord | None:
+    async def load(self, key: str) -> SessionRecord | None:
         _validate_key(key)
         async with self._lock:
             return self._records.get(key)
@@ -150,7 +150,7 @@ class MemorySessionStore:
             record = self._records.get(token.key)
             if record is None:
                 return False
-            self._records[token.key] = StoredSessionRecord(token.key, record.scope, snapshot_payload, record_payload)
+            self._records[token.key] = SessionRecord(token.key, record.scope, snapshot_payload, record_payload)
             return True
 
     async def delete(self, token: ClaimToken) -> bool:
@@ -181,7 +181,7 @@ class MemorySessionStore:
             self._admissions[scope] = _MemoryLease(owner, fence, now + lease_seconds)
             return AdmissionToken(scope, owner, fence)
 
-    async def inspect(self, reservation: AdmissionToken) -> tuple[StoredSessionRecord, ...] | None:
+    async def inspect(self, reservation: AdmissionToken) -> tuple[SessionRecord, ...] | None:
         async with self._lock:
             if self._active_admission(reservation) is None:
                 return None
@@ -210,7 +210,7 @@ class MemorySessionStore:
                 self._records.pop(victim, None)
                 self._claims.pop(victim, None)
             fence = self._mint_fence()
-            self._records[key] = StoredSessionRecord(key, reservation.scope, snapshot_payload, record_payload)
+            self._records[key] = SessionRecord(key, reservation.scope, snapshot_payload, record_payload)
             self._claims[key] = _MemoryLease(reservation.owner, fence, self._clock() + lease_seconds)
             self._admissions.pop(reservation.scope, None)
             return ClaimToken(key, reservation.owner, fence)
@@ -241,7 +241,7 @@ class MemorySessionStore:
             return False
         return all((record := self._records.get(victim)) is None or record.scope == scope for victim in victims)
 
-    def _ordered_records(self) -> tuple[StoredSessionRecord, ...]:
+    def _ordered_records(self) -> tuple[SessionRecord, ...]:
         return tuple(self._records[key] for key in sorted(self._records))
 
     def _mint_fence(self) -> int:
@@ -282,11 +282,11 @@ class SQLiteSessionStore:
         self._initialized = False
         self._initialize_lock = asyncio.Lock()
 
-    async def list(self) -> tuple[StoredSessionRecord, ...]:
+    async def list(self) -> tuple[SessionRecord, ...]:
         await self._initialize()
         return await asyncio.to_thread(self._list_records)
 
-    async def load(self, key: str) -> StoredSessionRecord | None:
+    async def load(self, key: str) -> SessionRecord | None:
         _validate_key(key)
         await self._initialize()
         return await asyncio.to_thread(self._load, key)
@@ -322,7 +322,7 @@ class SQLiteSessionStore:
         await self._initialize()
         return await asyncio.to_thread(self._reserve, scope, owner, lease_seconds)
 
-    async def inspect(self, reservation: AdmissionToken) -> tuple[StoredSessionRecord, ...] | None:
+    async def inspect(self, reservation: AdmissionToken) -> tuple[SessionRecord, ...] | None:
         await self._initialize()
         return await asyncio.to_thread(self._inspect, reservation)
 
@@ -419,20 +419,20 @@ class SQLiteSessionStore:
             )
             connection.commit()
 
-    def _list_records(self) -> tuple[StoredSessionRecord, ...]:
+    def _list_records(self) -> tuple[SessionRecord, ...]:
         with closing(self._connect()) as connection:
             rows = connection.execute(
                 f"SELECT key, scope, snapshot_payload, record_payload FROM {self.table_name} ORDER BY key"
             ).fetchall()
-        return tuple(StoredSessionRecord(*(str(value) for value in row)) for row in rows)
+        return tuple(SessionRecord(*(str(value) for value in row)) for row in rows)
 
-    def _load(self, key: str) -> StoredSessionRecord | None:
+    def _load(self, key: str) -> SessionRecord | None:
         with closing(self._connect()) as connection:
             row = connection.execute(
                 f"SELECT key, scope, snapshot_payload, record_payload FROM {self.table_name} WHERE key = ?",
                 (key,),
             ).fetchone()
-        return None if row is None else StoredSessionRecord(*(str(value) for value in row))
+        return None if row is None else SessionRecord(*(str(value) for value in row))
 
     def _claim(self, key: str, owner: str, lease_seconds: float) -> ClaimToken | None:
         with closing(self._connect()) as connection:
@@ -520,7 +520,7 @@ class SQLiteSessionStore:
             connection.commit()
         return AdmissionToken(scope, owner, fence)
 
-    def _inspect(self, reservation: AdmissionToken) -> tuple[StoredSessionRecord, ...] | None:
+    def _inspect(self, reservation: AdmissionToken) -> tuple[SessionRecord, ...] | None:
         with closing(self._connect()) as connection:
             valid = connection.execute(
                 f"""
@@ -535,7 +535,7 @@ class SQLiteSessionStore:
                 f"SELECT key, scope, snapshot_payload, record_payload FROM {self.table_name} WHERE scope = ? ORDER BY key",
                 (reservation.scope,),
             ).fetchall()
-        return tuple(StoredSessionRecord(*(str(value) for value in row)) for row in rows)
+        return tuple(SessionRecord(*(str(value) for value in row)) for row in rows)
 
     def _commit(
         self,

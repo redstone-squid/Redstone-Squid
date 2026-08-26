@@ -1,6 +1,6 @@
 """Backing stores and their backend discipline for Squid applications."""
 
-from squid_storage.persisted import PersistedPool
+from squid_storage.persistent_state import PersistentStatePool
 from squid_storage.postgres import PostgresSessionStore, PostgresTopicBridge, TopicBridgeSnapshot
 from squid_storage.scoped import (
     JsonSlotCodec,
@@ -19,7 +19,7 @@ from squid_storage.stores import (
     DurableSessionStore,
     MemorySessionStore,
     SQLiteSessionStore,
-    StoredSessionRecord,
+    SessionRecord,
 )
 
 __all__ = [
@@ -29,7 +29,7 @@ __all__ = [
     "JsonSlotCodec",
     "MemoryScopedStore",
     "MemorySessionStore",
-    "PersistedPool",
+    "PersistentStatePool",
     "PostgresScopedStore",
     "PostgresSessionStore",
     "PostgresTopicBridge",
@@ -39,7 +39,7 @@ __all__ = [
     "Slot",
     "SlotCodec",
     "SlotVersionError",
-    "StoredSessionRecord",
+    "SessionRecord",
     "TopicBridgeSnapshot",
     "json_codec",
 ]

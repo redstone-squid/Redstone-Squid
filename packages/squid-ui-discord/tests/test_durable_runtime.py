@@ -39,7 +39,7 @@ from squid_ui_discord.sessions import (
 from squid_ui_discord.testing import delivered_to, fake_message
 from squid_ui.primitives import Text
 from squid_ui.profiling import PresentationStatus
-from squid_storage import StoredSessionRecord
+from squid_storage import SessionRecord
 
 
 class Counter(sl.Component):
@@ -648,7 +648,7 @@ async def test_a_record_without_membership_is_refused() -> None:
     stored = (await store.list())[0]
     record = json.loads(stored.record_payload)
     del record["members"]
-    store._records[stored.key] = StoredSessionRecord(
+    store._records[stored.key] = SessionRecord(
         stored.key, stored.scope, stored.snapshot_payload, json.dumps(record)
     )
 
@@ -673,7 +673,7 @@ async def test_a_snapshot_disagreeing_with_its_record_is_refused() -> None:
     stored = (await store.list())[0]
     snapshot = json.loads(stored.snapshot_payload)
     snapshot["members"] = [7, 8]
-    store._records[stored.key] = StoredSessionRecord(
+    store._records[stored.key] = SessionRecord(
         stored.key, stored.scope, json.dumps(snapshot), stored.record_payload
     )
 
