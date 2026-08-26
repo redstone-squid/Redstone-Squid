@@ -560,46 +560,50 @@ class Variants[ModeT = DiscordTarget](Renderable[ModeT]):
 
     @classmethod
     @overload
-    def of[FirstT, SecondT](  # pyrefly: ignore[inconsistent-overload]
+    def of[FirstT, SecondT](
         cls,
         first: PrimitiveNode[FirstT] | Variant[FirstT],
         second: PrimitiveNode[SecondT] | Variant[SecondT],
+        /,
         *,
         priority: int = 0,
     ) -> Variants[FirstT | SecondT]: ...
 
     @classmethod
     @overload
-    def of[FirstT, SecondT, ThirdT](  # pyrefly: ignore[inconsistent-overload]
+    def of[FirstT, SecondT, ThirdT](
         cls,
         first: PrimitiveNode[FirstT] | Variant[FirstT],
         second: PrimitiveNode[SecondT] | Variant[SecondT],
         third: PrimitiveNode[ThirdT] | Variant[ThirdT],
+        /,
         *,
         priority: int = 0,
     ) -> Variants[FirstT | SecondT | ThirdT]: ...
 
     @classmethod
     @overload
-    def of[FirstT, SecondT, ThirdT, FourthT](  # pyrefly: ignore[inconsistent-overload]
+    def of[FirstT, SecondT, ThirdT, FourthT](
         cls,
         first: PrimitiveNode[FirstT] | Variant[FirstT],
         second: PrimitiveNode[SecondT] | Variant[SecondT],
         third: PrimitiveNode[ThirdT] | Variant[ThirdT],
         fourth: PrimitiveNode[FourthT] | Variant[FourthT],
+        /,
         *,
         priority: int = 0,
     ) -> Variants[FirstT | SecondT | ThirdT | FourthT]: ...
 
     @classmethod
     @overload
-    def of[FirstT, SecondT, ThirdT, FourthT, FifthT](  # pyrefly: ignore[inconsistent-overload]
+    def of[FirstT, SecondT, ThirdT, FourthT, FifthT](
         cls,
         first: PrimitiveNode[FirstT] | Variant[FirstT],
         second: PrimitiveNode[SecondT] | Variant[SecondT],
         third: PrimitiveNode[ThirdT] | Variant[ThirdT],
         fourth: PrimitiveNode[FourthT] | Variant[FourthT],
         fifth: PrimitiveNode[FifthT] | Variant[FifthT],
+        /,
         *,
         priority: int = 0,
     ) -> Variants[FirstT | SecondT | ThirdT | FourthT | FifthT]: ...

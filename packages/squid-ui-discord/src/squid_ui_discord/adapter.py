@@ -16,7 +16,7 @@ from squid_ui.planning.adapter import (
     ExtensionAdapter,
     PreparedExtension,
 )
-from squid_ui.planning.target import Target
+from squid_ui.planning.target import AnyTarget
 from squid_ui.target_types import DiscordPy27Adapter, DiscordPyAdapter
 from squid_ui_discord.inspection import cost
 
@@ -94,14 +94,14 @@ def require_discord_py_capability(profile: AdapterProfile[DiscordPyAdapter], cap
         raise LayoutInvariantError(message)
 
 
-def require_discord_py_target(
-    target: Target[Any, Any, Any, Any], capability: str, operation: str
-) -> AdapterProfile[DiscordPyAdapter]:
+def require_discord_py_target(target: AnyTarget, capability: str, operation: str) -> AdapterProfile[DiscordPyAdapter]:
     """Extract and verify the discord.py profile bound to a target."""
     profile = target.adapter
     if profile is None or not issubclass(profile.family, DiscordPyAdapter):
         message = f"target {target.id!r} cannot {operation}; it is not bound to a discord.py adapter profile"
         raise LayoutInvariantError(message)
+    # `issubclass` on `profile.family` proves the family but cannot narrow the profile's
+    # own parameter -- there is no spelling for "this generic argument is that class".
     narrowed = cast(AdapterProfile[DiscordPyAdapter], profile)
     require_discord_py_capability(narrowed, capability, operation)
     return narrowed

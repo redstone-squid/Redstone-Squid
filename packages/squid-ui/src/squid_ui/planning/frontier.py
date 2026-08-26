@@ -19,7 +19,7 @@ from squid_ui.planning.layout_measurement.diagnostics import (
     note,
 )
 from squid_ui.planning.layout_measurement.realization import Builder
-from squid_ui.planning.limits import Axis, DiscordLimits
+from squid_ui.planning.limits import Axis, MessageLimits
 from squid_ui.primitives.nodes import Break, Budget, Card, Fidelity, Node, Panel, Variants
 
 type VariantPath = tuple[int | str, ...]
@@ -191,7 +191,7 @@ def variant_state_bound(nodes: Sequence[Node], cutoff: int) -> int:
     return multiply([count_node(node) for node in nodes])
 
 
-def static_cost(nodes: Sequence[Node], limits: DiscordLimits) -> ResourceCost:
+def static_cost(nodes: Sequence[Node], limits: MessageLimits) -> ResourceCost:
     """A rung's own resource cost, with every nested ladder left at rung 0."""
     builder = Builder(limits=limits)
     children = prune(builder.realize_children(resolve_variants(nodes, {})))
@@ -201,7 +201,7 @@ def static_cost(nodes: Sequence[Node], limits: DiscordLimits) -> ResourceCost:
     return ResourceCost({**text, Axis.COMPONENTS: component_count(children)})
 
 
-def guided_step(nodes: Sequence[Node], positions: Positions, limits: DiscordLimits) -> dict[VariantPath, int] | None:
+def guided_step(nodes: Sequence[Node], positions: Positions, limits: MessageLimits) -> dict[VariantPath, int] | None:
     """Pick the one step a budget-starved product should take next.
 
     Breadth and priority still decide *which* ladders are eligible; among equals the step

@@ -14,7 +14,7 @@ from squid_ui.planning.layout_measurement.model import (
     Realized,
 )
 from squid_ui.planning.layout_measurement.realization import Builder
-from squid_ui.planning.limits import LIMITS, Axis, DiscordLimits
+from squid_ui.planning.limits import LIMITS, Axis, MessageLimits
 from squid_ui.planning.navigation import NavNode
 from squid_ui.primitives.nodes import (
     Break,
@@ -36,7 +36,7 @@ from squid_ui.primitives.nodes import (
 )
 
 
-def measure_nodes(nodes: Sequence[Node], *, limits: DiscordLimits = LIMITS) -> ResourceCost:
+def measure_nodes(nodes: Sequence[Node], *, limits: MessageLimits = LIMITS) -> ResourceCost:
     """Measure preferred cost per named axis, without applying any budget pressure."""
 
     def lower_shape(node: Node) -> list[Node]:
