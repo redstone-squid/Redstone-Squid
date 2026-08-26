@@ -1,28 +1,29 @@
 """Lower semantic author intent into finite target-shaped strategy candidates."""
 
-from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, replace
+from collections.abc import Mapping, Sequence
+from dataclasses import replace
 
 from squid_layouts.capabilities import Capability
 from squid_layouts.chrome import Chrome
-from squid_layouts.entity import EntityKind, EntityRef
-from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
-from squid_layouts.forms import FormBinding
-from squid_layouts.grids import GridCell
-from squid_layouts.interactions import ActionBinding, ActionEvent, EntitySelectionEvent, PressEvent, SelectionEvent
+from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.palette import DEFAULT_PALETTE, AccentDefault, Palette
-from squid_layouts.planning.breaking import BreakItem, balanced_breaks
-from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursorRequest, content_fingerprint
-from squid_layouts.planning.identity import stable_fingerprint
-from squid_layouts.planning.layout_measurement.costing import measure_nodes
-from squid_layouts.planning.layout_measurement.text import split_text_node, text_total
-from squid_layouts.planning.limits import COMPONENTS, V2Limits
-from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET, StrategyAxis, choose_strategy
-from squid_layouts.planning.semantic_adaptation.decisions import (
-    ACTIONS_ADAPTER_VERSION,
+from squid_layouts.planning.cursors import CursorCoordinator
+from squid_layouts.planning.limits import V2Limits
+from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET
+from squid_layouts.planning.semantic_adaptation.common import (
+    _resolve,
 )
-from squid_layouts.planning.semantic_adaptation.decisions import (
-    action_axis as _action_axis,
+from squid_layouts.planning.semantic_adaptation.controls import (
+    _choices,
+    _details,
+    _entities,
+    _form,
+    _items,
+    _navigation,
+    _routed_choices,
+    _toggle,
+    _with_best_effort,
+    _with_overflow,
 )
 from squid_layouts.planning.semantic_adaptation.decisions import (
     branch_paths as _branch_paths,
@@ -30,29 +31,26 @@ from squid_layouts.planning.semantic_adaptation.decisions import (
 from squid_layouts.planning.semantic_adaptation.decisions import (
     fallback_rung as _fallback_rung,
 )
-from squid_layouts.planning.semantic_adaptation.decisions import (
-    grid_axis as _grid_axis,
-)
-from squid_layouts.planning.semantic_adaptation.decisions import (
-    item_state as _item_state,
-)
-from squid_layouts.planning.semantic_adaptation.decisions import (
-    items_axis as _items_axis,
-)
-from squid_layouts.planning.semantic_adaptation.decisions import (
-    media_axis as _media_axis,
-)
-from squid_layouts.planning.semantic_adaptation.decisions import (
-    navigation_axis as _navigation_axis,
-)
-from squid_layouts.planning.semantic_adaptation.decisions import (
-    table_axis as _table_axis,
-)
 from squid_layouts.planning.semantic_adaptation.model import (
     LoweringContext as _Context,
 )
 from squid_layouts.planning.semantic_adaptation.model import (
     SemanticLowering,
+)
+from squid_layouts.planning.semantic_adaptation.regions import (
+    _cards,
+    _fold,
+    _Fragment,
+    _paged_region,
+    _region,
+    _settle,
+)
+from squid_layouts.planning.semantic_adaptation.structures import (
+    _actions,
+    _grid,
+    _media,
+    _roster,
+    _table,
 )
 from squid_layouts.primitives.constraints import (
     Alt,
@@ -76,15 +74,12 @@ from squid_layouts.primitives.nodes import (
     CardFooter,
     CardMedia,
     EntitySelect,
-    Fidelity,
     Footer,
-    FormButton,
     Gallery,
     GalleryItem,
     Lines,
     LinkButton,
     Node,
-    Option,
     Panel,
     RoutedButton,
     RoutedSelect,
@@ -93,10 +88,7 @@ from squid_layouts.primitives.nodes import (
     Text,
     Thumbnail,
     Time,
-    Variant,
-    Variants,
     ZonedTime,
-    card_text,
 )
 from squid_layouts.primitives.nodes import (
     Code as PrimitiveCode,
@@ -110,33 +102,24 @@ from squid_layouts.primitives.nodes import (
 from squid_layouts.primitives.nodes import (
     Section as PrimitiveSection,
 )
-from squid_layouts.primitives.styles import ActionStyle
 from squid_layouts.runtime.presentation import (
     PresentationSession,
-    StrategyState,
-    StrategyUpdate,
 )
 from squid_layouts.scene.model import PlanEvent, PlanSeverity
 from squid_layouts.semantic import (
-    Action,
-    ActionGroup,
     Actions,
     Article,
     Aside,
     BestEffort,
     Block,
     Budgeted,
-    Choice,
-    ChoiceEvent,
     Choices,
     Cluster,
     Code,
-    Controlled,
     Details,
     Download,
     Emphasis,
     Entities,
-    EntityEvent,
     FallbackContent,
     Field,
     Fields,
@@ -148,22 +131,17 @@ from squid_layouts.semantic import (
     Items,
     KeepWithNext,
     LayoutNode,
-    Link,
     List,
-    Managed,
     Measure,
     Media,
-    NavigateEvent,
     Navigation,
     Note,
-    OpenEvent,
     OptionalContent,
     Paged,
     Paragraph,
     Progress,
     Quote,
     Roster,
-    RoutedAction,
     RoutedChoices,
     Section,
     Spilled,
@@ -173,14 +151,12 @@ from squid_layouts.semantic import (
     Themed,
     Timestamp,
     Toggle,
-    ToggleEvent,
     Tone,
     Truncated,
     Unbreakable,
     ZonedTimestamp,
 )
-from squid_layouts.sources import Position
-from squid_layouts.text import Localization, TextLike, resolve_text
+from squid_layouts.text import Localization
 
 
 def lower_semantics(
@@ -256,6 +232,7 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
                     child,
                     path,
                     context,
+                    _node,
                     minimum=minimum,
                     preferred=preferred,
                     stretch=stretch,
@@ -270,7 +247,7 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
                 )
             ]
         case Paged():
-            return _paged_region(node, path, context, minimum=0, preferred=node.chars, stretch=0)
+            return _paged_region(node, path, context, _node, minimum=0, preferred=node.chars, stretch=0)
         case Unbreakable(node=child):
             return [Break(tuple(_node(child, path, context)), unbreakable=True)]
         case KeepWithNext(node=child):
@@ -395,7 +372,7 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
         case Media():
             return _media(node, path, context)
         case Details():
-            return _details(node, path, context)
+            return _details(node, path, context, _children)
         case Toggle():
             return _toggle(node, context)
         case Download(label=label, asset=asset, description=description, emphasis=emphasis, spoiler=spoiler):
@@ -458,7 +435,7 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
         case RoutedChoices():
             return _routed_choices(node, path, context)
         case Items():
-            return _items(node, path, context)
+            return _items(node, path, context, _children)
         case Navigation():
             return _navigation(node, path, context)
         case Table():
@@ -474,205 +451,6 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             return [Panel(tuple(_children(children, path, context)), accent)]
         case _:
             return [_primitive(node, context)]
-
-
-def _remember(key: str, adapter_id: str, version: int, strategy: str, context: _Context) -> None:
-    """Stage an adapter's sticky choice. Lowering reads the session and writes nothing."""
-    context.updates.append(StrategyUpdate(key, StrategyState(key, adapter_id, version, strategy)))
-
-
-def _select_strategy(axis: StrategyAxis, context: _Context) -> str:
-    selected = context.strategies.get(axis.path)
-    if selected is None:
-        choice = choose_strategy(
-            axis.candidates,
-            path=axis.path,
-            flexibility=axis.flexibility,
-            preferred=axis.preferred,
-            baseline=axis.baseline,
-        )
-        context.states_explored += choice.states_explored
-        selected = choice.candidate.strategy_id
-    elif selected not in {candidate.strategy_id for candidate in axis.candidates}:
-        message = f"{axis.path}: assignment selected unavailable strategy {selected!r}"
-        raise ValueError(message)
-    _remember(
-        axis.key,
-        axis.adapter_id,
-        axis.adapter_version,
-        selected,
-        context,
-    )
-    return selected
-
-
-def _resolve(value: TextLike, context: _Context) -> str:
-    return resolve_text(value, context.localization).content
-
-
-@dataclass(frozen=True, slots=True)
-class _Fragment(Card):
-    """A card holding loose prose or fields rather than an authored region.
-
-    Fragments fold into their neighbours; an `Article`, `Aside`, or `Figure` produces a plain
-    `Card` and never does. Only this layer can tell the two apart — after lowering, both are
-    just cards, and merging two authored regions into one embed would change the author's
-    grouping rather than express it.
-    """
-
-
-def _fold(nodes: Sequence[Node], context: _Context) -> list[Node]:
-    """Fold consecutive fragments into as few legal cards as possible.
-
-    Loose prose has to live somewhere, and a classic message's only home for prose beside an
-    explicit `Content` is an embed description. Consecutive prose therefore becomes one
-    implicit card and the first suitable heading becomes its title — later headings stay in
-    the description as formatted text, because an embed has one title.
-
-    A fragment that would overflow a card's own shape opens a continuation card. Continuations
-    are exact: everything the author wrote is still shown, in the same order.
-    """
-    limits = context.limits
-    folded: list[Node] = []
-    open_card: _Fragment | None = None
-
-    def flush() -> None:
-        nonlocal open_card
-        if open_card is not None:
-            folded.append(open_card)
-            open_card = None
-
-    for node in nodes:
-        fragment = _as_fragment(node, open_card)
-        if fragment is None:
-            flush()
-            folded.append(node)
-            continue
-        merged = None if open_card is None else _merge(open_card, fragment, limits)
-        if merged is None:
-            flush()
-            open_card = fragment
-        else:
-            open_card = merged
-    flush()
-    return folded
-
-
-def _as_fragment(node: Node, open_card: _Fragment | None) -> _Fragment | None:
-    """This node as a foldable card fragment, or None if it stands on its own."""
-    if isinstance(node, _Fragment):
-        return node
-    if isinstance(node, Footer):
-        # A trailing note is what the footer slot is for. One anywhere else stays subtle
-        # description text, because an embed has exactly one footer.
-        if open_card is not None and open_card.footer is None:
-            return _Fragment(footer=CardFooter(Text(node.content, overflow=node.overflow, priority=node.priority)))
-        return _Fragment(children=(node,))
-    if isinstance(node, PrimitiveHeading):
-        # "Suitable" means it can actually be a title: it has to come before any body text,
-        # or the description would read as though it began mid-sentence.
-        leading = open_card is None or (open_card.title is None and not open_card.children)
-        if leading:
-            return _Fragment(title=Text(node.content, overflow=node.overflow, priority=node.priority))
-        return _Fragment(children=(node,))
-    if isinstance(node, Text | PrimitiveCode | Lines | Time | ZonedTime):
-        return _Fragment(children=(node,))
-    return None
-
-
-def _merge(first: _Fragment, second: _Fragment, limits: V2Limits) -> _Fragment | None:
-    """Fold `second` into `first`, or None when the result would not be one legal embed."""
-    if len(first.fields) + len(second.fields) > getattr(limits, "embed_fields", 25):
-        return None
-    for slot in ("title", "url", "footer", "author", "image", "thumbnail", "timestamp"):
-        if getattr(first, slot) is not None and getattr(second, slot) is not None:
-            return None
-    if first.accent is not None and second.accent is not None and first.accent != second.accent:
-        return None
-    return _Fragment(
-        children=(*first.children, *second.children),
-        title=first.title if first.title is not None else second.title,
-        url=first.url if first.url is not None else second.url,
-        fields=(*first.fields, *second.fields),
-        footer=first.footer if first.footer is not None else second.footer,
-        author=first.author if first.author is not None else second.author,
-        accent=first.accent if first.accent is not None else second.accent,
-        image=first.image if first.image is not None else second.image,
-        thumbnail=first.thumbnail if first.thumbnail is not None else second.thumbnail,
-        timestamp=first.timestamp if first.timestamp is not None else second.timestamp,
-    )
-
-
-def _settle(nodes: Sequence[Node], context: _Context) -> list[Node]:
-    """Close every still-open fragment. Folding leaves them open so a parent can absorb them."""
-    return [_close(node, context) if isinstance(node, _Fragment) else node for node in nodes]
-
-
-def _close(card: _Fragment, context: _Context) -> Node:
-    """Settle a folded card, offering the reformatted alternative where one exists."""
-    plain = Card(
-        children=card.children,
-        title=card.title,
-        url=card.url,
-        fields=card.fields,
-        footer=card.footer,
-        author=card.author,
-        accent=card.accent,
-        image=card.image,
-        thumbnail=card.thumbnail,
-        timestamp=card.timestamp,
-    )
-    if not card.fields:
-        return plain
-    # Real embed fields are exact. Spelling the same values as description lines keeps every
-    # one of them but reformats the block, so the solver is told which is which rather than
-    # inferring loss from a rung number.
-    lines = Lines(
-        tuple(
-            Alt(
-                f"**{_slot_text(field.name)}:** {_slot_text(field.value)}",
-                priority=card_text(field.value).priority,
-            )
-            for field in card.fields
-        ),
-        overflow=Condense(),
-    )
-    reformatted = replace(plain, fields=(), children=(*plain.children, lines))
-    return Variants((Variant((plain,)), Variant((reformatted,), fidelity=Fidelity.REFORMATTED)))
-
-
-def _slot_text(value: object) -> str:
-    return card_text(value).content  # type: ignore[arg-type]
-
-
-def _region(card: Card, body: Sequence[Node], context: _Context) -> Node:
-    """One authored region as one card, absorbing whatever its body folded into.
-
-    A region's body is already folded, so the common case is a single fragment that merges
-    straight in. Anything the region cannot hold — a second image, a 26th field — stays a
-    sibling card, which is a continuation rather than a loss.
-    """
-    fragment = _Fragment(
-        title=card.title,
-        url=card.url,
-        footer=card.footer,
-        author=card.author,
-        accent=card.accent,
-        image=card.image,
-        thumbnail=card.thumbnail,
-        timestamp=card.timestamp,
-    )
-    folded = _settle(_fold([fragment, *body], context), context)
-    if len(folded) == 1:
-        return folded[0]
-    # A region that needs continuation cards is still one region: keeping them together stops
-    # root pagination cutting between a heading and the rest of what it introduced.
-    return Break(tuple(folded), keep_with_next=True)
-
-
-def _cards(context: _Context) -> bool:
-    """Whether this target draws regions as embeds rather than as container components."""
-    return Capability.LAYOUT_EMBED in context.capabilities
 
 
 def _card_fields(fields: Sequence[Field], context: _Context) -> list[CardField]:
@@ -777,953 +555,3 @@ def _children(children: Sequence[LayoutNode], path: str, context: _Context) -> l
     for index, child in enumerate(children):
         lowered.extend(_node(child, f"{path}.{index}", context))
     return _fold(lowered, context) if _cards(context) else lowered
-
-
-@dataclass(frozen=True, slots=True)
-class _RegionItem:
-    nodes: tuple[Node, ...]
-    keep_with_next: bool = False
-    unbreakable: bool = False
-
-
-def _region_items(nodes: Sequence[Node], *, keep_heading: bool) -> list[_RegionItem]:
-    items: list[_RegionItem] = []
-    for node in nodes:
-        if isinstance(node, Break):
-            items.append(_RegionItem(node.children, node.keep_with_next, node.unbreakable))
-        else:
-            items.append(_RegionItem((node,)))
-    if keep_heading and len(items) > 1 and isinstance(items[0].nodes[0], PrimitiveHeading):
-        items[0] = replace(items[0], keep_with_next=True)
-    return items
-
-
-def _split_oversized_region_items(
-    items: Sequence[_RegionItem],
-    *,
-    chars: int,
-    min_fill: int,
-    widows: int,
-    limits: V2Limits,
-    path: str,
-) -> list[_RegionItem]:
-    result: list[_RegionItem] = []
-    for item in items:
-        cost = measure_nodes(item.nodes, limits=limits)
-        if text_total(cost) <= chars and cost.get(COMPONENTS) <= limits.total_components:
-            result.append(item)
-            continue
-        fragments = (
-            None
-            if item.unbreakable or len(item.nodes) != 1
-            else split_text_node(item.nodes[0], chars, min_fill=min_fill, widows=widows)
-        )
-        if fragments is None or len(fragments) <= 1:
-            message = (
-                f"{path}: unbreakable region child {type(item.nodes[0]).__name__} needs "
-                f"{text_total(cost)} characters and {cost.get(COMPONENTS)} components; "
-                f"page limit is {chars} characters"
-            )
-            raise UnsolvableLayoutError(message)
-        result.extend(
-            _RegionItem((fragment,), keep_with_next=item.keep_with_next and index == len(fragments) - 1)
-            for index, fragment in enumerate(fragments)
-        )
-    return result
-
-
-def _break_region(
-    items: Sequence[_RegionItem],
-    *,
-    chars: int,
-    min_fill: int,
-    widows: int,
-    limits: V2Limits,
-    path: str,
-) -> list[tuple[_RegionItem, ...]]:
-    if not items:
-        return [()]
-    costs = [measure_nodes(item.nodes, limits=limits) for item in items]
-    try:
-        cuts = balanced_breaks(
-            [
-                BreakItem(
-                    text_total(cost),
-                    cost.get(COMPONENTS),
-                    break_after=not item.keep_with_next,
-                )
-                for item, cost in zip(items, costs, strict=True)
-            ],
-            max_chars=chars,
-            max_components=limits.total_components,
-            min_fill=min_fill,
-            widows=widows,
-            ideal_total=sum(text_total(cost) for cost in costs),
-        )
-    except ValueError as error:
-        message = f"{path}: region has no feasible break set within its {chars}-character page budget"
-        raise UnsolvableLayoutError(message) from error
-    pages: list[tuple[_RegionItem, ...]] = []
-    start = 0
-    for end in cuts:
-        pages.append(tuple(items[start:end]))
-        start = end
-    return pages
-
-
-def _paged_region(
-    node: Paged,
-    path: str,
-    context: _Context,
-    *,
-    minimum: int,
-    preferred: int,
-    stretch: int,
-) -> list[Node]:
-    lowered = _node(node.node, path, context)
-    shell: Panel | None = lowered[0] if len(lowered) == 1 and isinstance(lowered[0], Panel) else None
-    children = shell.children if shell is not None else tuple(lowered)
-    items = _region_items(children, keep_heading=shell is not None)
-    items = _split_oversized_region_items(
-        items,
-        chars=node.chars,
-        min_fill=node.min_fill,
-        widows=node.widows,
-        limits=context.limits,
-        path=path,
-    )
-    pages = _break_region(
-        items,
-        chars=node.chars,
-        min_fill=node.min_fill,
-        widows=node.widows,
-        limits=context.limits,
-        path=path,
-    )
-    request = MaterializedCursorRequest(
-        key=node.key,
-        extent=len(pages),
-        fingerprint=stable_fingerprint(children),
-        initial=node.initial,
-    )
-    grant = context.pages.grant(request)
-    context.pages.record(request, grant.position)
-    selected = [primitive for item in pages[grant.position.offset] for primitive in item.nodes]
-    budgeted = Budget(
-        tuple(selected),
-        minimum,
-        preferred,
-        stretch,
-        best_effort=isinstance(node.node, BestEffort),
-    )
-    controls = context.pages.controls(node.key, grant.position, grant.extent)
-    if controls and node.footer is not None:
-        controls[0] = Footer(_resolve(node.footer(grant.position.offset + 1, grant.extent), context), overflow=Never())
-    if grant.extent > 1:
-        context.events.append(
-            PlanEvent(
-                code="pagination.region",
-                path=path,
-                message=f"Region {node.key!r} uses {grant.extent} balanced pages",
-                severity=PlanSeverity.ADAPTATION,
-                after={"pages": grant.extent},
-            )
-        )
-    if shell is not None:
-        return [replace(shell, children=(budgeted, *controls))]
-    return [budgeted, *controls]
-
-
-def _form(node: FormTrigger, context: _Context) -> list[Node]:
-    if Capability.FORMS_MODAL not in context.capabilities:
-        message = "target does not support forms"
-        raise LayoutInvariantError(message)
-    spec = node.spec.adapt(context.capabilities, maximum_fields=context.limits.modal_components)
-
-    async def present(event: PressEvent) -> None:
-        await event.present_form(
-            spec,
-            key=node.key,
-            on_submit=node.on_submit,
-            policy=node.policy,
-            label=node.label,
-            record=node.record,
-        )
-
-    return [
-        PrimitiveActionGroup(
-            (
-                FormButton(
-                    _resolve(node.label, context),
-                    present,
-                    node.key,
-                    style=_button_style(node.tone, node.emphasis),
-                    policy=node.policy,
-                    # Guarding the press that opens the modal, not the submission: a stateful
-                    # guard checked twice would deny the reader's own filled-in form.
-                    guard=node.guard,
-                    # The adapted spec, not `node.spec`: it is what the reader will actually
-                    # be shown, and so what a late submission must be parsed against.
-                    form=FormBinding(node.key, spec, node.on_submit, node.policy, node.label, node.record),
-                ),
-            )
-        )
-    ]
-
-
-def _with_overflow(node: Node, overflow: Overflow) -> Node:
-    if isinstance(node, Text | PrimitiveHeading | Footer | PrimitiveCode | Lines):
-        return replace(node, overflow=overflow)
-    if isinstance(node, Panel):
-        return replace(node, children=tuple(_with_overflow(child, overflow) for child in node.children))
-    if isinstance(node, Budget | Break):
-        return replace(node, children=tuple(_with_overflow(child, overflow) for child in node.children))
-    return node
-
-
-def _with_best_effort(node: Node) -> Node:
-    if isinstance(node, Budget):
-        return replace(
-            node,
-            children=tuple(_with_best_effort(child) for child in node.children),
-            best_effort=True,
-        )
-    if isinstance(node, Panel | Break):
-        return replace(node, children=tuple(_with_best_effort(child) for child in node.children))
-    return node
-
-
-def _choices(node: Choices, path: str, context: _Context) -> list[Node]:
-    available = tuple(choice for choice in node.choices if choice.available)
-    match node.selection:
-        case Controlled(value=value):
-            previous = tuple(value)
-        case Managed(initial=initial):
-            previous = context.session.selection(node.key, initial=tuple(initial)).selected
-
-    async def commit(event: ActionEvent, selected: tuple[str, ...]) -> None:
-        match node.selection:
-            case Controlled(on_change=on_change):
-                await on_change(
-                    ChoiceEvent(
-                        event.actor,
-                        event.responder,
-                        event.locale,
-                        event.context,
-                        selected,
-                        tuple(key for key in selected if key not in previous),
-                        tuple(key for key in previous if key not in selected),
-                    )
-                )
-            case Managed():
-                await event.acknowledge()
-                context.session.select(node.key, selected)
-                event.invalidate()
-
-    if node.maximum == 1 and 2 <= len(available) <= 5:
-        buttons: list[Button] = []
-        for choice in available:
-
-            async def choose(event: PressEvent, key: str = choice.key) -> None:
-                await commit(event, (key,))
-
-            buttons.append(
-                Button(
-                    _resolve(choice.label, context),
-                    choose,
-                    f"{node.key}.{choice.key}",
-                    style=ActionStyle.PRIMARY if choice.key in previous else ActionStyle.SECONDARY,
-                )
-            )
-        return [PrimitiveActionGroup(tuple(buttons))]
-    page_key = f"{node.key}.choices"
-    if len(available) > context.limits.select_options and node.maximum != 1:
-        message = (
-            f"{path}: Choices has {len(available)} options and selects up to {node.maximum}; "
-            "cross-page multi-selection is ambiguous, so group the choices or use Items"
-        )
-        raise LayoutInvariantError(message)
-    visible, page, pages = _page_items(available, page_key, context, identity=lambda choice: choice.key)
-
-    async def choose_values(event: SelectionEvent) -> None:
-        await commit(event, tuple(event.values))
-
-    options = tuple(
-        Option(
-            _resolve(choice.label, context),
-            choice.key,
-            _resolve(choice.description, context) if choice.description is not None else None,
-            choice.key in previous,
-        )
-        for choice in visible
-    )
-    result: list[Node] = [
-        SelectMenu(
-            options,
-            choose_values,
-            node.key,
-            min_values=node.minimum,
-            max_values=min(node.maximum, len(options)),
-        )
-    ]
-    result.extend(context.pages.controls(page_key, Position(offset=page), pages))
-    return result
-
-
-def _entity_key(ref: EntityRef) -> str:
-    return f"{ref.kind.value}:{ref.id}"
-
-
-def _entity_ref(key: str) -> EntityRef:
-    kind, raw_id = key.split(":", 1)
-    return EntityRef(EntityKind(kind), int(raw_id))
-
-
-def _entities(node: Entities, path: str, context: _Context) -> list[Node]:
-    match node.selection:
-        case Controlled(value=value):
-            previous = tuple(value)
-        case Managed(initial=initial):
-            initial_keys = tuple(_entity_key(value) for value in initial)
-            stored = context.session.selection(node.key, initial=initial_keys).selected
-            previous = tuple(_entity_ref(key) for key in stored)
-
-    async def commit(event: ActionEvent, selected: tuple[EntityRef, ...]) -> None:
-        match node.selection:
-            case Controlled(on_change=on_change):
-                await on_change(
-                    EntityEvent(
-                        event.actor,
-                        event.responder,
-                        event.locale,
-                        event.context,
-                        selected,
-                        tuple(value for value in selected if value not in previous),
-                        tuple(value for value in previous if value not in selected),
-                    )
-                )
-            case Managed():
-                await event.acknowledge()
-                context.session.select(node.key, tuple(_entity_key(value) for value in selected))
-                event.invalidate()
-
-    if Capability.ACTIONS_DISCORD_ENTITY in context.capabilities:
-
-        async def select_entities(event: EntitySelectionEvent) -> None:
-            await commit(event, event.values)
-
-        return [
-            EntitySelect(
-                node.entity_type,
-                select_entities,
-                node.key,
-                placeholder=_resolve(node.placeholder, context) if node.placeholder is not None else None,
-                default_values=previous,
-                channel_types=node.channel_types,
-                min_values=node.minimum,
-                max_values=node.maximum,
-            )
-        ]
-    if not node.choices:
-        message = f"{path}: Entities requires actions.discord.entity or enumerated fallback choices"
-        raise LayoutInvariantError(message)
-
-    available = tuple(choice for choice in node.choices if choice.available)
-    by_key = {_entity_key(choice.ref): choice.ref for choice in available}
-    previous = tuple(value for value in previous if _entity_key(value) in by_key)
-
-    async def choose_fallback(event: ChoiceEvent) -> None:
-        await commit(event, tuple(by_key[key] for key in event.selected if key in by_key))
-
-    fallback = Choices(
-        key=node.key,
-        choices=tuple(
-            Choice(_entity_key(choice.ref), choice.label, choice.description, choice.available)
-            for choice in node.choices
-        ),
-        selection=Controlled(tuple(_entity_key(value) for value in previous), choose_fallback),
-        minimum=node.minimum,
-        maximum=node.maximum,
-        flexibility=node.flexibility,
-    )
-    return _choices(fallback, path, context)
-
-
-def _routed_choices(node: RoutedChoices, path: str, context: _Context) -> list[Node]:
-    """Lower an explicitly stateless picker without inventing mount-owned pagination."""
-    available = tuple(choice for choice in node.choices if choice.available)
-    if not available:
-        message = f"{path}: RoutedChoices needs at least one available choice"
-        raise LayoutInvariantError(message)
-    return [
-        RoutedSelect(
-            options=tuple(
-                Option(
-                    _resolve(choice.label, context),
-                    choice.key,
-                    _resolve(choice.description, context) if choice.description is not None else None,
-                )
-                for choice in available
-            ),
-            route_id=node.route_id,
-            placeholder=_resolve(node.placeholder, context) if node.placeholder is not None else None,
-            min_values=node.minimum,
-            max_values=min(node.maximum, len(available)),
-            disabled=not node.available,
-        )
-    ]
-
-
-def _items(node: Items, path: str, context: _Context) -> list[Node]:
-    opened, _fixed = _item_state(node, context.session)
-    strategy = _select_strategy(_items_axis(node, path, context.limits, context.session), context)
-    if strategy == "opened" and opened is None and node.items:
-        opened = node.items[0].key
-
-    async def open_(event: ActionEvent, entry: str | None) -> None:
-        match node.opened:
-            case Controlled(on_change=on_change):
-                await on_change(OpenEvent(event.actor, event.responder, event.locale, event.context, opened=entry))
-            case Managed():
-                await event.acknowledge()
-                context.session.select(node.key, () if entry is None else (entry,))
-                event.invalidate()
-
-    if opened is not None:
-        item = next(item for item in node.items if item.key == opened)
-
-        async def back(event: PressEvent) -> None:
-            await open_(event, None)
-
-        return [
-            PrimitiveHeading(_resolve(item.label.content, context), level=3, overflow=Never()),
-            *_children(item.children, f"{path}.{item.key}", context),
-            Row((Button(context.chrome.back, back, f"{node.key}.back"),)),
-        ]
-
-    async def focus(event: SelectionEvent) -> None:
-        await open_(event, event.values[0] if event.values else None)
-
-    page_key = f"{node.key}.items"
-    visible, page, pages = _page_items(node.items, page_key, context, identity=lambda item: item.key)
-    summaries = tuple(
-        f"**{_resolve(item.label.content, context)}**"
-        + (f" — {_resolve(item.summary, context)}" if item.summary is not None else "")
-        for item in visible
-    )
-    result: list[Node] = [
-        Lines(summaries, overflow=Never()),
-        SelectMenu(
-            tuple(Option(_resolve(item.label.content, context), item.key) for item in visible),
-            focus,
-            f"{node.key}.focus",
-            placeholder="Choose an item",
-        ),
-    ]
-    result.extend(context.pages.controls(page_key, Position(offset=page), pages))
-    return result
-
-
-def _navigation(node: Navigation, path: str, context: _Context) -> list[Node]:
-    available = tuple(destination for destination in node.destinations if destination.available)
-    strategy = _select_strategy(_navigation_axis(node, path, context.limits, context.session), context)
-    grouped = strategy == "grouped"
-
-    match node.current:
-        case Controlled(value=value):
-            current = value
-        case Managed(initial=initial):
-            # A remembered destination that has since gone unavailable is the engine's own
-            # stale data, so drop it. An author's value is theirs to be wrong about.
-            keys = {destination.key for destination in available}
-            seed = () if initial is None else (initial,)
-            remembered = context.session.selection(node.key, initial=seed).selected
-            current = remembered[0] if remembered and remembered[0] in keys else None
-    if current is None and available:
-        current = available[0].key
-
-    async def navigate(event: ActionEvent, destination: str) -> None:
-        match node.current:
-            case Controlled(on_change=on_change):
-                await on_change(NavigateEvent(event.actor, event.responder, event.locale, event.context, destination))
-            case Managed():
-                await event.acknowledge()
-                context.session.select(node.key, (destination,))
-                event.invalidate()
-
-    if grouped:
-        page_key = f"{node.key}.destinations"
-        visible, page, pages = _page_items(available, page_key, context, identity=lambda item: item.key)
-
-        async def select_destination(event: SelectionEvent) -> None:
-            if event.values:
-                await navigate(event, event.values[0])
-
-        result: list[Node] = [
-            SelectMenu(
-                tuple(
-                    Option(
-                        _resolve(destination.label, context),
-                        destination.key,
-                        default=destination.key == current,
-                    )
-                    for destination in visible
-                ),
-                select_destination,
-                node.key,
-            )
-        ]
-        result.extend(context.pages.controls(page_key, Position(offset=page), pages))
-        return result
-    buttons: list[Button] = []
-    for destination in available:
-
-        async def go(event: PressEvent, key: str = destination.key) -> None:
-            await navigate(event, key)
-
-        buttons.append(
-            Button(
-                _resolve(destination.label, context),
-                go,
-                f"{node.key}.{destination.key}",
-                style=ActionStyle.PRIMARY if destination.key == current else ActionStyle.SECONDARY,
-            )
-        )
-    return [PrimitiveActionGroup(tuple(buttons))]
-
-
-def _details(node: Details, path: str, context: _Context) -> list[Node]:
-    match node.open:
-        case Controlled(value=value):
-            open_ = value
-        case Managed(initial=initial):
-            open_ = context.session.disclosure(node.key, initial=initial).open
-
-    async def toggle(event: PressEvent) -> None:
-        match node.open:
-            case Controlled(on_change=on_change):
-                await on_change(OpenEvent(event.actor, event.responder, event.locale, event.context, opened=not open_))
-            case Managed(initial=seed):
-                await event.acknowledge()
-                context.session.disclose(node.key, not context.session.disclosure(node.key, initial=seed).open)
-                event.invalidate()
-
-    result: list[Node] = [Row((Button(_resolve(node.summary.content, context), toggle, f"{node.key}.toggle"),))]
-    if open_:
-        result.extend(_children(node.children, path, context))
-    return result
-
-
-def _toggle(node: Toggle, context: _Context) -> list[Node]:
-    match node.on:
-        case Controlled(value=value):
-            on = value
-        case Managed(initial=initial):
-            on = context.session.toggle(node.key, initial=initial).on
-
-    async def flip(event: PressEvent) -> None:
-        match node.on:
-            case Controlled(on_change=on_change):
-                await on_change(ToggleEvent(event.actor, event.responder, event.locale, event.context, not on))
-            case Managed(initial=initial):
-                await event.acknowledge()
-                current = context.session.toggle(node.key, initial=initial).on
-                context.session.set_toggle(node.key, on=not current)
-                event.invalidate()
-
-    state_label = node.on_label if on else node.off_label
-    if state_label is None:
-        state_label = context.chrome.on if on else context.chrome.off
-    label = f"{_resolve(node.label, context)}: {_resolve(state_label, context)}"
-    button = Button(
-        label,
-        flip,
-        node.key,
-        style=_button_style(node.tone, Emphasis.NORMAL),
-        disabled=not node.available,
-    )
-    return [Row((button,))]
-
-
-def _table(node: Table, path: str, context: _Context) -> list[Node]:
-    columns = node.columns.columns
-    strategy = _select_strategy(_table_axis(node, path, context.session), context)
-    if strategy in {"matrix", "tabular"}:
-        headings = [_resolve(column.heading, context) for column in columns]
-        widths = [
-            max([len(heading), *(len(_resolve(row.cells[index], context)) for row in node.rows)])
-            for index, heading in enumerate(headings)
-        ]
-        separator = "  " if strategy == "matrix" else " | "
-        lines = [separator.join(heading.ljust(widths[index]) for index, heading in enumerate(headings))]
-        if strategy == "tabular":
-            lines.append("-+-".join("-" * width for width in widths))
-        lines.extend(
-            separator.join(_resolve(cell, context).ljust(widths[index]) for index, cell in enumerate(row.cells))
-            for row in node.rows
-        )
-        return [PrimitiveCode("\n".join(lines), overflow=Never())]
-    records = tuple(
-        "\n".join(
-            f"**{_resolve(column.heading, context)}:** {_resolve(cell, context)}"
-            for column, cell in zip(columns, row.cells, strict=True)
-        )
-        for row in node.rows
-    )
-    return [Lines(records, join="\n\n", overflow=Paginate(key=node.key))]
-
-
-def _column_name(index: int) -> str:
-    """Return a zero-based spreadsheet column name."""
-    name = ""
-    cursor = index + 1
-    while cursor:
-        cursor, remainder = divmod(cursor - 1, 26)
-        name = chr(ord("A") + remainder) + name
-    return name
-
-
-def _coordinate(index: int, columns: int) -> str:
-    return f"{_column_name(index % columns)}{index // columns + 1}"
-
-
-def _grid_matrix(node: Grid, context: _Context) -> PrimitiveCode:
-    labels = [f"{'[ ]' if cell.available else '[x]'} {_resolve(cell.label, context)}" for cell in node.cells]
-    column_names = [_column_name(index) for index in range(node.columns)]
-    widths = [
-        max(
-            [
-                len(column_names[column]),
-                *(len(labels[index]) for index in range(column, len(labels), node.columns)),
-            ]
-        )
-        for column in range(node.columns)
-    ]
-    row_label_width = len(str((len(node.cells) + node.columns - 1) // node.columns))
-    lines = [
-        " " * (row_label_width + 2) + "  ".join(name.ljust(widths[index]) for index, name in enumerate(column_names))
-    ]
-    for start in range(0, len(labels), node.columns):
-        row = labels[start : start + node.columns]
-        lines.append(
-            f"{start // node.columns + 1:>{row_label_width}}  "
-            + "  ".join(value.ljust(widths[index]) for index, value in enumerate(row))
-        )
-    return PrimitiveCode("\n".join(lines), overflow=Never())
-
-
-def _grid_option(index: int, cell: GridCell, node: Grid, context: _Context) -> Option:
-    return Option(f"{_coordinate(index, node.columns)} ??{_resolve(cell.label, context)}", cell.key)
-
-
-def _grid_select(cells: Sequence[tuple[int, GridCell]], node: Grid, key: str, context: _Context) -> SelectMenu:
-    return SelectMenu(
-        tuple(_grid_option(index, cell, node, context) for index, cell in cells),
-        node.on_pick,
-        key,
-        placeholder="Choose a position",
-    )
-
-
-def _grid(node: Grid, path: str, context: _Context) -> list[Node]:
-    strategy = _select_strategy(_grid_axis(node, path, context.limits, context.session), context)
-    if strategy == "buttons":
-        rows: list[Node] = []
-        for start in range(0, len(node.cells), node.columns):
-            buttons: list[Button] = []
-            for cell in node.cells[start : start + node.columns]:
-
-                async def pick(event: PressEvent, cell_key: str = cell.key) -> None:
-                    await node.on_pick(
-                        SelectionEvent(event.actor, event.responder, event.locale, event.context, (cell_key,))
-                    )
-
-                buttons.append(
-                    Button(
-                        _resolve(cell.label, context),
-                        pick,
-                        f"{node.key}.{cell.key}",
-                        style=_button_style(cell.tone, Emphasis.NORMAL),
-                        disabled=not cell.available,
-                    )
-                )
-            rows.append(Row(tuple(buttons)))
-        return rows
-
-    available = tuple((index, cell) for index, cell in enumerate(node.cells) if cell.available)
-    if strategy == "coordinate":
-        result: list[Node] = [_grid_matrix(node, context)]
-        if available:
-            result.append(_grid_select(available, node, f"{node.key}.coordinate", context))
-        return result
-
-    visible, index, pages = _page_items(available, f"{node.key}.cells", context, identity=lambda item: item[1].key)
-    return [
-        _grid_select(visible, node, f"{node.key}.page", context),
-        *context.pages.controls(f"{node.key}.cells", Position(offset=index), pages),
-    ]
-
-
-def _roster(node: Roster, context: _Context) -> list[Node]:
-    lowered: list[Node] = []
-    for group in node.placement.groups:
-        slot = group.slot
-        count = _resolve(context.chrome.slot_count(len(group.members), slot.capacity), context)
-        lowered.append(PrimitiveHeading(f"{_resolve(slot.label, context)} — {count}", level=3, overflow=Never()))
-        if group.members:
-            lowered.append(
-                Lines(tuple(f"- {_resolve(member.display, context)}" for member in group.members), overflow=Spill())
-            )
-        full = slot.capacity is not None and len(group.members) >= slot.capacity
-        available = not node.locked and not (full and node.placement.rejects_overflow)
-        if full and node.placement.rejects_overflow:
-            lowered.append(Text(_resolve(context.chrome.full, context), overflow=Never()))
-        if node.on_join is not None:
-
-            async def join(event: PressEvent, slot_key: str = slot.key) -> None:
-                await node.on_join(
-                    SelectionEvent(event.actor, event.responder, event.locale, event.context, (slot_key,))
-                )
-
-            lowered.append(
-                Row(
-                    (
-                        Button(
-                            _resolve(slot.label, context),
-                            join,
-                            f"{node.key}.{slot.key}",
-                            style=_button_style(slot.tone, Emphasis.NORMAL),
-                            disabled=not available,
-                        ),
-                    )
-                )
-            )
-        elif node.routes is not None:
-            lowered.append(
-                Row(
-                    (
-                        RoutedButton(
-                            _resolve(slot.label, context),
-                            node.routes[slot.key],
-                            style=_button_style(slot.tone, Emphasis.NORMAL),
-                            disabled=not available,
-                        ),
-                    )
-                )
-            )
-    if node.show_waitlist and node.placement.waitlist:
-        lowered.extend(
-            (
-                PrimitiveHeading(_resolve(context.chrome.waitlist, context), level=3, overflow=Never()),
-                Lines(
-                    tuple(f"- {_resolve(entry.display, context)}" for entry in node.placement.waitlist),
-                    overflow=Spill(),
-                ),
-            )
-        )
-    return lowered
-
-
-def _media(node: Media, path: str, context: _Context) -> list[Node]:
-    strategy = _select_strategy(_media_axis(node, path, context.session), context)
-    if not node.items:
-        return []
-    if strategy == "featured":
-        first = node.items[0]
-        if first.spoiler and _cards(context):
-            message = f"{path}: classic targets cannot preserve media spoilers; provide an explicit Variants fallback"
-            raise LayoutInvariantError(message)
-        result: list[Node] = [Gallery((GalleryItem(first.url, first.description, first.spoiler),))]
-        if first.description is not None:
-            result.append(Footer(_resolve(first.description, context), overflow=Never()))
-        return result
-    if _cards(context) and any(item.spoiler for item in node.items):
-        message = f"{path}: classic targets cannot preserve media spoilers; provide an explicit Variants fallback"
-        raise LayoutInvariantError(message)
-    return [
-        Gallery(
-            tuple(
-                GalleryItem(item.url, item.description, item.spoiler)
-                for item in node.items[start : start + context.limits.gallery_items]
-            )
-        )
-        for start in range(0, len(node.items), context.limits.gallery_items)
-    ]
-
-
-def _actions(node: Actions, path: str, context: _Context) -> list[Node]:
-    strategy = _select_strategy(_action_axis(node, path, context.limits, context.session), context)
-    groups: list[tuple[str, tuple[Action, ...], str | None]] = []
-    # Links and routed controls carry no binding, so they can never be folded into a select
-    # menu the way a group of session actions can: they stay individual buttons.
-    direct: list[Action | LinkButton | RoutedButton] = []
-    implicit: list[Action] = []
-
-    def flush_implicit() -> None:
-        if implicit:
-            groups.append(("default", tuple(implicit), None))
-            implicit.clear()
-
-    for item in node.items:
-        if isinstance(item, ActionGroup):
-            flush_implicit()
-            group_actions: list[Action] = []
-            for action in item.actions:
-                if isinstance(action, Action):
-                    group_actions.append(action)
-                else:
-                    direct.append(_unbound_button(action, context))
-            groups.append((item.key, tuple(group_actions), _resolve(item.label, context) if item.label else None))
-        elif isinstance(item, Action):
-            implicit.append(item)
-        else:
-            flush_implicit()
-            direct.append(_unbound_button(item, context))
-    flush_implicit()
-
-    result: list[Node] = []
-    if strategy == "individual":
-        for group_key, actions, _label in groups:
-            result.extend(_individual(actions, f"{node.key}.{group_key}", context))
-    else:
-        for group_key, actions, label in groups:
-            result.extend(_grouped(actions, f"{node.key}.{group_key}", label, path, context))
-    if direct:
-        controls = tuple(_button(action, context) if isinstance(action, Action) else action for action in direct)
-        result.append(PrimitiveActionGroup(controls))
-    context.events.append(
-        PlanEvent(
-            code=f"actions.{strategy}",
-            path=path,
-            message=f"Actions {node.key!r} uses the {strategy} strategy",
-            severity=PlanSeverity.ADAPTATION,
-            after={"adapter_version": ACTIONS_ADAPTER_VERSION},
-        )
-    )
-    return result
-
-
-def _individual(actions: Sequence[Action], key: str, context: _Context) -> list[Node]:
-    controls = tuple(_button(action, context) for action in actions)
-    return [PrimitiveActionGroup(controls)] if controls else []
-
-
-def _grouped(actions: Sequence[Action], key: str, label: str | None, path: str, context: _Context) -> list[Node]:
-    eligible: list[Action] = []
-    direct: list[Action] = []
-    for action in actions:
-        default_grouping = action.emphasis.value != "strong" and action.tone in {Tone.NEUTRAL, Tone.INFO}
-        if action.allow_grouping if action.allow_grouping is not None else default_grouping:
-            eligible.append(action)
-        else:
-            direct.append(action)
-
-    result: list[Node] = []
-    if len(eligible) > 75:
-        result.extend(_paged_picker(eligible, key, label, context))
-    else:
-        result.extend(
-            _picker(
-                tuple(eligible[start : start + context.limits.select_options]),
-                f"{key}.{start // 25}",
-                label,
-                context,
-            )
-            for start in range(0, len(eligible), context.limits.select_options)
-        )
-    if direct:
-        result.extend(_individual(direct, f"{key}.direct", context))
-    return result
-
-
-def _paged_picker(actions: Sequence[Action], key: str, label: str | None, context: _Context) -> list[Node]:
-    chunk, index, pages = _page_items(actions, key, context, identity=lambda action: action.key)
-    return [
-        _picker(chunk, f"{key}.page", label, context),
-        *context.pages.controls(key, Position(offset=index), pages),
-    ]
-
-
-def _page_items[T](
-    items: Sequence[T],
-    pager_key: str,
-    context: _Context,
-    *,
-    identity: Callable[[T], str],
-) -> tuple[tuple[T, ...], int, int]:
-    """Window a list of options 25 at a time, following the item the reader was on."""
-    per = context.limits.select_options
-    keys = [identity(item) for item in items]
-    anchors: dict[str, int] = {}
-    for position, key in enumerate(keys):
-        anchors.setdefault(key, position // per)
-    request = MaterializedCursorRequest(
-        key=pager_key,
-        extent=max(1, (len(items) + per - 1) // per),
-        fingerprint=content_fingerprint(keys),
-        anchors=anchors,
-    )
-    grant = context.pages.grant(request)
-    index = grant.position.offset
-    visible = tuple(items[index * per : (index + 1) * per])
-    context.pages.record(request, grant.position, anchor=identity(visible[0]) if visible else None)
-    return visible, index, grant.extent
-
-
-def _picker(actions: Sequence[Action], key: str, label: str | None, context: _Context) -> SelectMenu:
-    routes = {
-        action.key: ActionBinding(
-            action.key,
-            action.on_trigger,
-            action.policy,
-            guard=action.guard,
-            label=_resolve(action.label, context),
-            record=action.record,
-        )
-        for action in actions
-    }
-
-    async def route(event: SelectionEvent) -> None:
-        binding = routes.get(event.values[0]) if len(event.values) == 1 else None
-        if binding is not None:
-            await binding.handler(event)
-
-    return SelectMenu(
-        tuple(Option(_resolve(action.label, context), action.key) for action in actions),
-        route,
-        key,
-        placeholder=label or "Choose an action",
-        routes=routes,
-    )
-
-
-def _unbound_button(item: Link | RoutedAction, context: _Context) -> LinkButton | RoutedButton:
-    """Lower a control the mount never dispatches: a URL, or a router's own custom id."""
-    label = _resolve(item.label, context)
-    if isinstance(item, Link):
-        return LinkButton(label, item.url)
-    return RoutedButton(
-        label, item.route_id, style=_button_style(item.tone, item.emphasis), disabled=not item.available
-    )
-
-
-def _button_style(tone: Tone, emphasis: Emphasis) -> ActionStyle:
-    return {
-        Tone.SUCCESS: ActionStyle.SUCCESS,
-        Tone.DANGER: ActionStyle.DANGER,
-        Tone.INFO: ActionStyle.PRIMARY,
-    }.get(tone, ActionStyle.PRIMARY if emphasis is Emphasis.STRONG else ActionStyle.SECONDARY)
-
-
-def _button(action: Action, context: _Context) -> Button:
-    return Button(
-        _resolve(action.label, context),
-        action.on_trigger,
-        action.key,
-        style=_button_style(action.tone, action.emphasis),
-        disabled=not action.available,
-        policy=action.policy,
-        guard=action.guard,
-        feedback=action.feedback,
-        record=action.record,
-    )
