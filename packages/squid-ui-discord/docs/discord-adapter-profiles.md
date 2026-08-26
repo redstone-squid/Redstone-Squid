@@ -31,7 +31,7 @@ mutation cannot change a target or its fingerprint.
 Another framework should define its own marker derived from `DiscordAdapter`, create an `AdapterProfile` with that
 marker, and use the dependency-neutral `components_v2_target()` or `classic_target()` factory. Such a target can be
 planned without importing discord.py and handed to that framework's renderer. It cannot be passed to discord.py-only
-compose, mount, routing, delivery, or form APIs.
+render_message, mount, routing, delivery, or form APIs.
 
 ## Static and runtime guarantees
 
@@ -49,9 +49,9 @@ six or more branches, or dynamically splatted branches, deliberately use the gra
 
 ## Durable recovery
 
-A mount snapshot stores the sorted adapter capability names selected when it was planned, not the adapter's name or
+A message root snapshot stores the sorted adapter capability names selected when it was planned, not the adapter's name or
 version. Recovery accepts a current profile that provides a superset, then restricts the reconstructed planning target
-to the recorded capability set before checking its fingerprint. An adapter upgrade can therefore restore old mounts
+to the recorded capability set before checking its fingerprint. An adapter upgrade can therefore restore old message roots
 without silently changing their lowering, fallback, or layout choices. Recovery fails if any recorded capability is no
 longer available.
 
