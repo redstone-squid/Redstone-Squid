@@ -11,21 +11,17 @@ from packaging.version import InvalidVersion, Version
 from squid_discord.inspection import cost
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning.adapter import (
-    ADAPTER_DISPATCH,
-    ADAPTER_INTERACTION_DELIVERY,
-    ADAPTER_MODAL_FORMS,
-    ADAPTER_RENDER_CLASSIC,
-    ADAPTER_RENDER_V2,
+    AdapterCapability,
     AdapterProfile,
     ExtensionAdapter,
     PreparedExtension,
 )
-from squid_layouts.planning.target import TargetProfile
+from squid_layouts.planning.target import Target
 from squid_layouts.target_types import DiscordPy27Adapter, DiscordPyAdapter
 
 
 class _DiscordItemExtension:
-    def prepare(self, payload: object) -> PreparedExtension:
+    def prepare(self, payload: object) -> PreparedExtension[discord.ui.Item[Any]]:
         if not callable(payload):
             message = "discord.item extension payload must be a zero-argument factory"
             raise LayoutInvariantError(message)
@@ -40,15 +36,7 @@ class _DiscordItemExtension:
         return PreparedExtension(cost(item), {"native_kind": type(item).__name__}, item)
 
 
-DISCORD_PY_BEHAVIOR_CAPABILITIES = frozenset(
-    {
-        ADAPTER_RENDER_V2,
-        ADAPTER_RENDER_CLASSIC,
-        ADAPTER_DISPATCH,
-        ADAPTER_INTERACTION_DELIVERY,
-        ADAPTER_MODAL_FORMS,
-    }
-)
+DISCORD_PY_BEHAVIOR_CAPABILITIES = frozenset(AdapterCapability)
 
 DISCORD_PY_27_ADAPTER = AdapterProfile(
     DiscordPy27Adapter,
@@ -64,7 +52,7 @@ def discord_py_adapter_profile(
     version_expression: str,
     *,
     capabilities: frozenset[str] = DISCORD_PY_BEHAVIOR_CAPABILITIES,
-    extensions: Mapping[str, ExtensionAdapter] | None = None,
+    extensions: Mapping[str, ExtensionAdapter[Any]] | None = None,
 ) -> AdapterProfile[DiscordPyAdapter]:
     """Declare an application-verified discord.py adapter profile."""
     return AdapterProfile(
@@ -96,7 +84,7 @@ def require_discord_py_capability(profile: AdapterProfile[DiscordPyAdapter], cap
 
 
 def require_discord_py_target(
-    target: TargetProfile[Any, Any, Any], capability: str, operation: str
+    target: Target[Any, Any, Any, Any], capability: str, operation: str
 ) -> AdapterProfile[DiscordPyAdapter]:
     """Extract and verify the discord.py profile bound to a target."""
     profile = target.adapter

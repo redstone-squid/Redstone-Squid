@@ -582,9 +582,9 @@ def text_layout(
 def _prefixed(prefix: str, value: ui.TextLike) -> ui.TextLike:
     if isinstance(value, ui.text.Message):
         plural = None if value.plural is None else prefix + value.plural
-        return ui.text.Message(prefix + value.template, value.params, value.dialect, plural)
+        return ui.text.Message(prefix + value.template, value.params, value.markup, plural)
     if isinstance(value, ui.text.ResolvedText):
-        return ui.text.ResolvedText(prefix + value.content, value.dialect)
+        return ui.text.ResolvedText(prefix + value.content, value.markup)
     return prefix + value
 
 

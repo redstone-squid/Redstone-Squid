@@ -95,14 +95,14 @@ def test_tabs_router_shell_encodes_next_state_and_input_state() -> None:
         return f"tabs:{request.state.selected}"
 
     rendered = sp.RouterShell(route).render(small, small.initial_state)
-    scene = sl.planning.plan(rendered, target=squid_discord.V2_TARGET).scene
+    scene = sl.planning.plan(rendered, target=squid_discord.DISCORD_V2_DPY27).scene
     buttons = [item for row in scene.components_v2.children if hasattr(row, "items") for item in row.items]
     assert all(isinstance(item, SceneRoutedButton) for item in buttons)
     assert routes[-1] == sp.PatternRoute("select:two", sp.TabsState("two"), "next")
 
     many = sp.Tabs([sp.Tab(str(index), str(index), str(index)) for index in range(6)], key="many")
     routed = sp.RouterShell(route).render(many, many.initial_state)
-    routed_scene = sl.planning.plan(routed, target=squid_discord.V2_TARGET).scene
+    routed_scene = sl.planning.plan(routed, target=squid_discord.DISCORD_V2_DPY27).scene
     assert isinstance(routed_scene.components_v2.children[0], SceneRoutedSelect)
     assert routes[-1] == sp.PatternRoute("select", sp.TabsState("0"), "input")
 

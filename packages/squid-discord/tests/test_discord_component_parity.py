@@ -1,11 +1,10 @@
 """Discord component fields that must survive planning and drawing unchanged."""
 
-from dataclasses import replace
-
 import discord
 import pytest
 
-from squid_discord import V2_TARGET, classic, render_static
+from squid_discord import DISCORD_V2_DPY27, classic, render_static
+from squid_discord.testing import without_capabilities
 from squid_layouts.emoji import Emoji
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.html import Renderer as HtmlRenderer
@@ -45,7 +44,7 @@ def test_v2_draws_premium_links_select_emoji_and_media_metadata() -> None:
             RoutedSelect((Option("One", "1", emoji="1️⃣"),), "pick"),
             Gallery((GalleryItem("https://example.invalid/image.png", "accessible preview", spoiler=True),)),
         ],
-        target=V2_TARGET,
+        target=DISCORD_V2_DPY27,
     )
     row = presentation.layout.children[0]
     assert isinstance(row, discord.ui.ActionRow)
@@ -105,7 +104,7 @@ def test_html_marks_premium_metadata_and_spoilers_accessibly() -> None:
 
 
 def test_non_discord_target_requires_explicit_premium_fallback() -> None:
-    target = replace(V2_TARGET, id="generic-v2", capabilities=V2_TARGET.capabilities - {"actions.discord.premium"})
+    target = without_capabilities(DISCORD_V2_DPY27, "actions.discord.premium")
 
     with pytest.raises(LayoutInvariantError, match="explicit Variants fallback"):
         plan(Row((PremiumButton(42),)), target=target)

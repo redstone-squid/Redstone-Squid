@@ -3,7 +3,7 @@
 from collections.abc import Awaitable, Callable
 
 import squid_layouts as sl
-from squid_discord import V2_TARGET
+from squid_discord import DISCORD_V2_DPY27
 from squid_layouts.forms import FormLike, SubmitHandler
 from squid_layouts.interactions import ActionPolicy, Actor, PressEvent, Visibility
 from squid_layouts.primitives.styles import ActionStyle
@@ -74,7 +74,7 @@ async def test_managed_toggle_flips_session_state_and_invalidates() -> None:
     responder = _Responder()
     node = sl.toggle("Notifications", key="notices")
 
-    initial = sl.planning.plan(node, target=V2_TARGET, session=session)
+    initial = sl.planning.plan(node, target=DISCORD_V2_DPY27, session=session)
     assert _button(initial).label == "Notifications: Off"
 
     await initial.bindings["notices"].handler(_event(responder))
@@ -82,7 +82,7 @@ async def test_managed_toggle_flips_session_state_and_invalidates() -> None:
     assert session.toggle("notices").on
     assert responder.acknowledged
     assert responder.invalidated
-    assert _button(sl.planning.plan(node, target=V2_TARGET, session=session)).label == "Notifications: On"
+    assert _button(sl.planning.plan(node, target=DISCORD_V2_DPY27, session=session)).label == "Notifications: On"
 
 
 async def test_controlled_toggle_reports_flipped_value_without_writing_session() -> None:
@@ -92,7 +92,7 @@ async def test_controlled_toggle_reports_flipped_value_without_writing_session()
     seen, record = _recorder()
     node = sl.toggle("Notifications", key="notices", on=sl.controlled(value=False, on_change=record))
 
-    result = sl.planning.plan(node, target=V2_TARGET, session=session)
+    result = sl.planning.plan(node, target=DISCORD_V2_DPY27, session=session)
     await result.bindings["notices"].handler(_event())
 
     assert _button(result).label == "Notifications: Off"
@@ -111,7 +111,7 @@ def test_toggle_lowering_uses_one_toned_button_and_custom_labels() -> None:
             tone=sl.Tone.DANGER,
             available=False,
         ),
-        target=V2_TARGET,
+        target=DISCORD_V2_DPY27,
     )
 
     button = _button(result)

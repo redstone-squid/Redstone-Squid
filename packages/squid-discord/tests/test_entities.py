@@ -1,11 +1,10 @@
 """Entity picker semantics, planning, and scene contracts."""
 
-from dataclasses import replace
-
 import pytest
 
 import squid_discord
 import squid_layouts as sl
+from squid_discord.testing import without_capabilities
 from squid_layouts.interactions import Actor, EntitySelectionEvent, Visibility
 from squid_layouts.planning import measure
 from squid_layouts.primitives import EntitySelect
@@ -59,7 +58,7 @@ def test_entity_select_costs_an_action_row_and_control() -> None:
 
 def test_native_semantic_picker_lowers_to_entity_scene() -> None:
     plan = sl.planning.plan(
-        sl.entities(key="users", entity_type=sl.entity.EntityType.USER), target=squid_discord.V2_TARGET
+        sl.entities(key="users", entity_type=sl.entity.EntityType.USER), target=squid_discord.DISCORD_V2_DPY27
     )
 
     assert isinstance(plan.scene.components_v2.children[0], SceneEntitySelect)
@@ -72,7 +71,7 @@ async def test_managed_native_entity_selection_survives_a_second_render() -> Non
         entity_type=sl.entity.EntityType.USER,
         selection=sl.managed(()),
     )
-    first = sl.planning.plan(node, target=squid_discord.V2_TARGET, session=session)
+    first = sl.planning.plan(node, target=squid_discord.DISCORD_V2_DPY27, session=session)
     handler = first.bindings["moderator"].handler
     await handler(
         EntitySelectionEvent(
@@ -82,7 +81,7 @@ async def test_managed_native_entity_selection_survives_a_second_render() -> Non
         )
     )
 
-    second = sl.planning.plan(node, target=squid_discord.V2_TARGET, session=session)
+    second = sl.planning.plan(node, target=squid_discord.DISCORD_V2_DPY27, session=session)
 
     assert isinstance(second.scene.components_v2.children[0], SceneEntitySelect)
     assert second.scene.components_v2.children[0].default_values == (
@@ -91,9 +90,7 @@ async def test_managed_native_entity_selection_survives_a_second_render() -> Non
 
 
 def test_semantic_picker_uses_enumerated_fallback_without_capability() -> None:
-    target = replace(
-        squid_discord.V2_TARGET, capabilities=squid_discord.V2_TARGET.capabilities - {"actions.discord.entity"}
-    )
+    target = without_capabilities(squid_discord.DISCORD_V2_DPY27, "actions.discord.entity")
     plan = sl.planning.plan(
         sl.entities(
             sl.entity_choice(sl.entity.EntityRef(sl.entity.EntityKind.USER, 1), "Ada"),
@@ -107,9 +104,7 @@ def test_semantic_picker_uses_enumerated_fallback_without_capability() -> None:
 
 
 def test_fallback_entity_picker_drops_unenumerated_managed_selection() -> None:
-    target = replace(
-        squid_discord.V2_TARGET, capabilities=squid_discord.V2_TARGET.capabilities - {"actions.discord.entity"}
-    )
+    target = without_capabilities(squid_discord.DISCORD_V2_DPY27, "actions.discord.entity")
     session = PresentationSession()
     session.select("users", ("user:999",))
     node = sl.entities(
@@ -126,9 +121,7 @@ def test_fallback_entity_picker_drops_unenumerated_managed_selection() -> None:
 
 
 def test_semantic_picker_refuses_without_native_capability_or_fallback() -> None:
-    target = replace(
-        squid_discord.V2_TARGET, capabilities=squid_discord.V2_TARGET.capabilities - {"actions.discord.entity"}
-    )
+    target = without_capabilities(squid_discord.DISCORD_V2_DPY27, "actions.discord.entity")
 
     with pytest.raises(sl.errors.LayoutInvariantError, match="enumerated fallback"):
         sl.planning.plan(sl.entities(key="users", entity_type=sl.entity.EntityType.USER), target=target)
@@ -151,7 +144,7 @@ def test_entity_scene_round_trips_mixed_mentionable_defaults() -> None:
             default_values=node.default_values,
             max_values=2,
         ),
-        target=squid_discord.V2_TARGET,
+        target=squid_discord.DISCORD_V2_DPY27,
     )
 
     assert Codec.loads(Codec.dumps(plan.scene)) == plan.scene

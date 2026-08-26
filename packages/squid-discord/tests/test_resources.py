@@ -2,16 +2,28 @@
 
 import pytest
 
+from squid_discord import DISCORD_V2_DPY27
 from squid_discord import V2_LIMITS as LIMITS
-from squid_discord import V2_TARGET
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
-from squid_layouts.planning import TargetProfile, measure, plan
+from squid_layouts.planning import measure, plan
+from squid_layouts.planning.adapter import AdapterProfile
+from squid_layouts.planning.discord import components_v2_target
 from squid_layouts.planning.layout_measurement.costing import measure_nodes
 from squid_layouts.planning.layout_measurement.model import RText
 from squid_layouts.planning.layout_measurement.text import BudgetRegion, make_unit, text_total
-from squid_layouts.planning.limits import Axis
+from squid_layouts.planning.limits import Axis, V2Limits
 from squid_layouts.planning.target import ResourceCost
+from squid_layouts.planning.types import DiscordAdapter
 from squid_layouts.primitives import Never, Panel, Text, Variants
+
+
+def _target(name: str, *, capabilities: frozenset[str] = frozenset(), limits: V2Limits = LIMITS):
+    """A V2 target whose adapter supplies exactly `capabilities` and no extensions.
+
+    Capabilities that are not Discord protocol facts belong to the adapter axis, which is
+    what lets a test vary them without inventing a dialect.
+    """
+    return components_v2_target(AdapterProfile(DiscordAdapter, name, ">=1", capabilities=capabilities), limits=limits)
 
 
 class TestResourceCost:
@@ -61,24 +73,24 @@ class TestResourceCost:
 
 class TestTargetCapacities:
     def test_a_target_reads_its_budgets_from_its_limits(self) -> None:
-        assert V2_TARGET.capacities == {
+        assert DISCORD_V2_DPY27.capacities == {
             Axis.DISPLAY_TEXT: LIMITS.total_text,
             Axis.COMPONENTS: LIMITS.total_components,
             Axis.ATTACHMENTS: LIMITS.attachments,
         }
 
     def test_a_reservation_shows_up_as_a_smaller_capacity(self) -> None:
-        reserved = V2_TARGET.reserve(ResourceCost({Axis.COMPONENTS: 5}))
+        reserved = DISCORD_V2_DPY27.reserve(ResourceCost({Axis.COMPONENTS: 5}))
 
         assert reserved.capacity(Axis.COMPONENTS) == LIMITS.total_components - 5
         assert reserved.capacity(Axis.DISPLAY_TEXT) == LIMITS.total_text
 
     def test_an_axis_the_target_does_not_budget_has_no_capacity(self) -> None:
-        assert V2_TARGET.capacity("embed_text") is None
+        assert DISCORD_V2_DPY27.capacity("embed_text") is None
 
     def test_reserving_an_unknown_axis_names_the_ones_that_exist(self) -> None:
         with pytest.raises(LayoutInvariantError, match="no reservable resource 'embed_text'"):
-            V2_TARGET.reserve(ResourceCost({"embed_text": 1}))
+            DISCORD_V2_DPY27.reserve(ResourceCost({"embed_text": 1}))
 
 
 class TestMeasuredCost:
@@ -98,7 +110,7 @@ class TestMeasuredCost:
         oversized = [Text(f"line {index}") for index in range(LIMITS.total_components + 1)]
 
         with pytest.raises(UnsolvableLayoutError, match=rf"41 {Axis.COMPONENTS} exceed target maximum 40"):
-            plan(oversized, target=V2_TARGET)
+            plan(oversized, target=DISCORD_V2_DPY27)
 
 
 class TestBudgetRegions:
@@ -142,7 +154,7 @@ class TestParetoSearch:
         long = Variants.of(Text("x" * 3990, overflow=Never()), Text("x"))
         filler = [Text(f"f{index}") for index in range(19)]
 
-        result = plan([wide, long, *filler], target=TargetProfile("test", 1, limits=LIMITS))
+        result = plan([wide, long, *filler], target=_target("test"))
         rendered = repr(result.scene.components_v2.children)
 
         assert "w0" not in rendered  # the component-heavy ladder gave way

@@ -26,10 +26,10 @@ from squid_discord.emoji import discord_emoji
 from squid_discord.inspection import audit_classic_payload
 from squid_discord.presentation import DiscordPresentation
 from squid_discord.renderer import RoutedItem, RoutedSelectItem
-from squid_discord.target import CLASSIC_TARGET
+from squid_discord.renderer import Wire as Wire
+from squid_discord.target import DISCORD_V1_DPY27
 from squid_layouts.errors import DrawInvariantError
-from squid_layouts.interactions import ActionBinding
-from squid_layouts.planning.adapter import ADAPTER_RENDER_CLASSIC, AdapterProfile
+from squid_layouts.planning.adapter import AdapterCapability, AdapterProfile
 from squid_layouts.planning.limits import CLASSIC_LIMITS, ClassicLimits
 from squid_layouts.scene.codec import SceneCodec
 from squid_layouts.scene.model import (
@@ -51,7 +51,6 @@ from squid_layouts.scene.model import (
 from squid_layouts.target_types import DiscordPyAdapter
 
 type Control = SceneButton | SceneSelect | SceneEntitySelect
-type Wire = Callable[[Control, ActionBinding], discord.ui.Item[Any]]
 type ClassicViewFactory = Callable[[], discord.ui.View]
 
 
@@ -74,7 +73,7 @@ class ClassicRenderer:
         always_view: bool = False,
         adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
     ) -> None:
-        require_discord_py_capability(adapter, ADAPTER_RENDER_CLASSIC, "render a classic message")
+        require_discord_py_capability(adapter, AdapterCapability.RENDER_CLASSIC, "render a classic message")
         self.limits = limits
         self.audit = audit
         self.view_factory = view_factory
@@ -116,7 +115,7 @@ class ClassicRenderer:
         if scene.protocol != SceneCodec.protocol:
             message = f"ClassicRenderer cannot draw scene protocol {scene.protocol}"
             raise DrawInvariantError(message)
-        if scene.target != CLASSIC_TARGET.id:
+        if scene.target != DISCORD_V1_DPY27.id:
             message = f"ClassicRenderer cannot draw target {scene.target!r}"
             raise DrawInvariantError(message)
         if scene.target_version != 1:

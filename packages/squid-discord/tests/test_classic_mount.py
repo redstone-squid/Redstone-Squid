@@ -11,7 +11,7 @@ import discord
 import pytest
 
 import squid_layouts as sl
-from squid_discord import CLASSIC_TARGET, V2_TARGET, Everyone, Mount, Owner
+from squid_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, Mount, Owner
 from squid_discord.mount import ClassicMountedView, MountedView
 from squid_discord.presentation import DiscordMode
 from squid_discord.testing import (
@@ -25,7 +25,7 @@ from squid_layouts import Component
 from squid_layouts.interactions import ActionEvent
 from squid_layouts.semantic import Action, Actions, Heading, Paragraph
 
-TARGETS = [pytest.param(V2_TARGET, id="v2"), pytest.param(CLASSIC_TARGET, id="classic")]
+TARGETS = [pytest.param(DISCORD_V2_DPY27, id="v2"), pytest.param(DISCORD_V1_DPY27, id="classic")]
 
 
 class Screen(Component):
@@ -48,30 +48,30 @@ def mount_for(target, **options) -> Mount:
 
 def message_for(target) -> Any:
     """A sent message already in the mode this target writes, as Discord would report it."""
-    return fake_message(components_v2=target is V2_TARGET)
+    return fake_message(components_v2=target is DISCORD_V2_DPY27)
 
 
 def render_for(target, mount: Mount):
     """Commit a render through whichever helper this target's view type calls for."""
-    return commit_render(mount) if target is V2_TARGET else commit_classic_render(mount)
+    return commit_render(mount) if target is DISCORD_V2_DPY27 else commit_classic_render(mount)
 
 
 def interaction_for(target, **options) -> Any:
     """An interaction arriving from a message in the mode this target writes."""
-    return fake_interaction(components_v2=target is V2_TARGET, **options)
+    return fake_interaction(components_v2=target is DISCORD_V2_DPY27, **options)
 
 
 class TestViewType:
     def test_a_classic_mount_builds_a_plain_view(self) -> None:
         """Not a LayoutView: an ActionRow-only one would flag the message V2 irreversibly."""
-        view = commit_classic_render(mount_for(CLASSIC_TARGET))
+        view = commit_classic_render(mount_for(DISCORD_V1_DPY27))
 
         assert isinstance(view, ClassicMountedView)
         assert not isinstance(view, discord.ui.LayoutView)
         assert view.has_components_v2() is False
 
     def test_a_v2_mount_still_builds_a_layout_view(self) -> None:
-        assert isinstance(commit_render(mount_for(V2_TARGET)), MountedView)
+        assert isinstance(commit_render(mount_for(DISCORD_V2_DPY27)), MountedView)
 
     def test_both_mounted_views_share_one_behaviour(self) -> None:
         """The mixin is the point: timeout, dispatchability, and the error hook are one copy."""
@@ -83,7 +83,7 @@ class TestViewType:
 
 class TestPresentation:
     def test_the_committed_presentation_carries_the_embeds(self) -> None:
-        mount = mount_for(CLASSIC_TARGET)
+        mount = mount_for(DISCORD_V1_DPY27)
         mount._stage_view()
         candidate = mount._pending
         assert candidate is not None
@@ -92,7 +92,7 @@ class TestPresentation:
         assert candidate.presentation.embeds[0].title == "Piston door"
 
     def test_a_v2_mount_delivers_a_layout_and_no_embeds(self) -> None:
-        mount = mount_for(V2_TARGET)
+        mount = mount_for(DISCORD_V2_DPY27)
         mount._stage_view()
         candidate = mount._pending
         assert candidate is not None

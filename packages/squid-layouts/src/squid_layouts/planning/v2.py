@@ -3,6 +3,7 @@
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC
+from typing import Any
 
 from squid_layouts.capabilities import Capability
 from squid_layouts.chrome import Chrome
@@ -22,9 +23,9 @@ from squid_layouts.planning.layout_measurement.solver import (
     MeasuredLayout,
     measure,
 )
-from squid_layouts.planning.limits import V2Limits
+from squid_layouts.planning.limits import LIMITS, Axis, V2Limits
 from squid_layouts.planning.navigation import PlannedNav, materialized_navigation_state
-from squid_layouts.planning.target import TargetProfile
+from squid_layouts.planning.target import Target
 from squid_layouts.primitives.constraints import Never, Paginate
 from squid_layouts.primitives.nodes import (
     ActionGroup,
@@ -78,6 +79,7 @@ from squid_layouts.scene.model import (
     SceneZonedTime,
 )
 from squid_layouts.sources import Position
+from squid_layouts.target_types import ComponentsV2Target
 
 
 @dataclass(slots=True)
@@ -171,7 +173,7 @@ class _V2Converter:
 
 def _lower(
     nodes: Sequence[Node],
-    target: TargetProfile,
+    target: Target,
     limits: V2Limits,
 ) -> tuple[Node, ...]:
     lowered: list[Node] = []
@@ -421,8 +423,32 @@ def _paginate_v2(
 class V2Dialect:
     """Discord Components V2 shape. Everything else about planning is shared."""
 
-    def normalize(self, nodes: Sequence[Node], target: TargetProfile, limits: V2Limits) -> tuple[Node, ...]:
-        return _lower(nodes, target, limits)
+    id = "discord.components-v2"
+    version = 1
+    capabilities = frozenset(
+        {
+            Capability.ACTIONS_BUTTONS,
+            Capability.ACTIONS_DISCORD_PREMIUM,
+            Capability.ACTIONS_SELECT,
+            Capability.ACTIONS_DISCORD_ENTITY,
+            Capability.FORMS_DISCORD_ENTITY,
+            Capability.FORMS_DISCORD_FILE,
+            Capability.FORMS_DISCORD_CHECKBOX_GROUP,
+            Capability.FORMS_MODAL,
+            Capability.LAYOUT_CONTAINER,
+            Capability.LAYOUT_GALLERY,
+            Capability.LAYOUT_SECTION,
+        }
+    )
+    mode = ComponentsV2Target
+    body_type = SceneComponentsV2
+    default_limits = LIMITS
+    realizes_extensions = True
+
+    def normalize(
+        self, nodes: Sequence[Node], target: Target[V2Limits, SceneComponentsV2, ComponentsV2Target, Any]
+    ) -> tuple[Node, ...]:
+        return _lower(nodes, target, target.limits)
 
     def validate(self, nodes: Sequence[Node], limits: V2Limits) -> None:
         _validate_v2(nodes, limits)
@@ -432,7 +458,7 @@ class V2Dialect:
         nodes: Sequence[Node],
         *,
         key: str,
-        capacities: Mapping[str, int],
+        capacities: Mapping[Axis, int],
         limits: V2Limits,
         chrome: Chrome,
         nav: PlannedNav,

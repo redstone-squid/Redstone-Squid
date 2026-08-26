@@ -11,14 +11,17 @@ the same whichever message a document ends up in. Four things do not, and a
 4. building the exact scene body a renderer will draw.
 
 The list is short on purpose. Anything else that wants to branch on the target is a shared
-operation that has not been extracted yet, and adding a fifth method is the signal to go
-extract it instead.
+operation that has not been extracted yet, and adding a fifth *method* is the signal to go
+extract it instead. The data members below are not methods: they are the protocol's own
+identity — what it is called, what it can draw, what a legal message of it holds — and a
+target is the product of one of them and one adapter.
 """
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
+from squid_layouts.capabilities import Capability
 from squid_layouts.chrome import Chrome
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import FormBinding
@@ -26,9 +29,8 @@ from squid_layouts.interactions import ActionBinding
 from squid_layouts.planning.cursors import CursorCoordinator
 from squid_layouts.planning.layout_measurement.model import Realized
 from squid_layouts.planning.layout_measurement.solver import MeasuredLayout
-from squid_layouts.planning.limits import DiscordLimits
+from squid_layouts.planning.limits import Axis, DiscordLimits
 from squid_layouts.planning.navigation import PlannedNav
-from squid_layouts.planning.target import TargetProfile
 from squid_layouts.primitives.nodes import (
     Button,
     EntitySelect,
@@ -51,6 +53,9 @@ from squid_layouts.scene.model import (
     SceneRoutedButton,
     SceneThumbnail,
 )
+
+if TYPE_CHECKING:
+    from squid_layouts.planning.target import Target
 
 
 @dataclass(slots=True)
@@ -134,16 +139,35 @@ class SceneBindings:
                 return SceneExtension(kind, version, {**payload, "resource": resource})
 
 
-class TargetDialect(Protocol):
-    """One target's shape, isolated from everything the targets share."""
+class TargetDialect[LimitsT: DiscordLimits, BodyT: SceneBody, ModeT](Protocol):
+    """One Discord protocol mode: what a legal message of it is, and how to build one.
 
-    def normalize(
-        self, nodes: Sequence[Node], target: TargetProfile[Any, Any, Any], limits: DiscordLimits
-    ) -> tuple[Node, ...]:
+    The first axis of a target. Bound to its own limits and body types, so each dialect's
+    four methods can narrow to what it actually handles instead of declaring the union and
+    narrowing anyway.
+    """
+
+    id: str
+    """This protocol's stable name, recorded in every scene planned against it."""
+    version: int
+    capabilities: frozenset[Capability]
+    """What the *protocol* can draw. Never an adapter behavior or an extension string."""
+    mode: type[ModeT]
+    """The marker type that decides which nodes a document for this dialect may hold."""
+    body_type: type[BodyT]
+    default_limits: LimitsT
+    realizes_extensions: bool
+    """Whether this protocol can draw a native item at all.
+
+    False for classic, whose inability to hold one used to be expressed only by a factory
+    omitting a keyword argument.
+    """
+
+    def normalize(self, nodes: Sequence[Node], target: Target[LimitsT, BodyT, ModeT, Any]) -> tuple[Node, ...]:
         """Rewrite semantically lowered nodes into this target's own primitive shape."""
         ...
 
-    def validate(self, nodes: Sequence[Node], limits: DiscordLimits) -> None:
+    def validate(self, nodes: Sequence[Node], limits: LimitsT) -> None:
         """Reject structure this target cannot draw. Raises `LayoutInvariantError`."""
         ...
 
@@ -152,8 +176,8 @@ class TargetDialect(Protocol):
         nodes: Sequence[Node],
         *,
         key: str,
-        capacities: Mapping[str, int],
-        limits: DiscordLimits,
+        capacities: Mapping[Axis, int],
+        limits: LimitsT,
         chrome: Chrome,
         nav: PlannedNav,
         broker: CursorCoordinator,
@@ -161,6 +185,6 @@ class TargetDialect(Protocol):
         """Split an over-budget document into the fewest lossless pages this target allows."""
         ...
 
-    def body(self, children: Sequence[Realized], bindings: SceneBindings) -> SceneBody:
+    def body(self, children: Sequence[Realized], bindings: SceneBindings) -> BodyT:
         """Build the exact scene body a renderer for this target will draw."""
         ...

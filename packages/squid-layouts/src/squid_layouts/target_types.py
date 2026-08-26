@@ -1,8 +1,5 @@
 """Dependency-leaf static vocabulary for render targets and adapter families."""
 
-from dataclasses import dataclass
-from typing import Any
-
 
 class DiscordTarget:
     """Marker for values renderable to any Discord component mode."""
@@ -33,10 +30,3 @@ class Renderable[ModeT = DiscordTarget]:
 
     def _accepts_target(self, target: ModeT, /) -> None:
         del target
-
-
-@dataclass(frozen=True, slots=True)
-class TargetRequirements[ModeT = Any]:
-    """Runtime requirements carrying the same target mode as their renderable."""
-
-    capabilities: frozenset[str] = frozenset()

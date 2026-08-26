@@ -46,7 +46,7 @@ import discord
 
 from squid_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
 from squid_discord.mount import ErrorHook
-from squid_layouts.planning.adapter import ADAPTER_DISPATCH, AdapterProfile
+from squid_layouts.planning.adapter import AdapterCapability, AdapterProfile
 from squid_layouts.profiling import NoOpProfiler, OperationKind, OperationRecorder, Profiler, TraceOutcome, TraceResult
 from squid_layouts.routing import Route
 from squid_layouts.target_types import DiscordPyAdapter
@@ -335,7 +335,7 @@ class Router[BotT: discord.Client]:
         profiler: Profiler = _NOOP_PROFILER,
         adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
     ) -> None:
-        require_discord_py_capability(adapter, ADAPTER_DISPATCH, "dispatch routed interactions")
+        require_discord_py_capability(adapter, AdapterCapability.DISPATCH, "dispatch routed interactions")
         namespace_group = namespace if isinstance(namespace, RouteGroup) else None
         namespace_value = namespace if isinstance(namespace, str) else None
         if namespace_group is not None:

@@ -5,7 +5,7 @@ import re
 import discord
 import pytest
 
-from squid_discord import CLASSIC_TARGET, classic
+from squid_discord import DISCORD_V1_DPY27, classic
 from squid_discord.classic_renderer import ClassicRenderer, audit_classic_payload
 from squid_layouts.errors import DrawInvariantError
 from squid_layouts.planning.limits import CLASSIC_LIMITS
@@ -241,4 +241,4 @@ class TestPresentationShape:
 
     def test_the_limits_come_from_the_target(self) -> None:
         assert ClassicRenderer().limits is CLASSIC_LIMITS
-        assert CLASSIC_TARGET.limits is CLASSIC_LIMITS
+        assert DISCORD_V1_DPY27.limits is CLASSIC_LIMITS

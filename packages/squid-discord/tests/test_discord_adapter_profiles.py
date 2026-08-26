@@ -3,15 +3,15 @@ import sys
 
 import pytest
 
-from squid_discord import Target
 from squid_discord.adapter import (
     DISCORD_PY_27_ADAPTER,
     discord_py_adapter_profile,
     require_discord_py_capability,
 )
+from squid_discord.target import classic, v2
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning import plan
-from squid_layouts.planning.adapter import ADAPTER_RENDER_V2, AdapterProfile
+from squid_layouts.planning.adapter import AdapterCapability, AdapterProfile
 from squid_layouts.planning.discord import classic_target, components_v2_target
 from squid_layouts.planning.types import DiscordAdapter
 from squid_layouts.primitives import Text
@@ -23,11 +23,11 @@ class AlternateAdapter(DiscordAdapter):
 
 
 def test_builtin_targets_bind_the_verified_discord_py_profile() -> None:
-    assert Target.v2().adapter is DISCORD_PY_27_ADAPTER
-    assert Target.classic().adapter is DISCORD_PY_27_ADAPTER
-    assert ADAPTER_RENDER_V2 in Target.v2().capabilities
-    assert "extension.discord.item" in Target.v2().capabilities
-    assert "extension.discord.item" not in Target.classic().capabilities
+    assert v2().adapter is DISCORD_PY_27_ADAPTER
+    assert classic().adapter is DISCORD_PY_27_ADAPTER
+    assert AdapterCapability.RENDER_V2 in v2().capabilities
+    assert "extension.discord.item" in v2().capabilities
+    assert "extension.discord.item" not in classic().capabilities
 
 
 def test_alternate_profile_can_plan_for_an_injected_renderer() -> None:
@@ -62,21 +62,21 @@ components_v2_target(AdapterProfile(DiscordAdapter, 'alternate', '>=1'))
 
 
 def test_discord_py_boundary_accepts_installed_27_release() -> None:
-    require_discord_py_capability(DISCORD_PY_27_ADAPTER, ADAPTER_RENDER_V2, "render Components V2")
+    require_discord_py_capability(DISCORD_PY_27_ADAPTER, AdapterCapability.RENDER_V2, "render Components V2")
 
 
 def test_discord_py_boundary_rejects_unmatched_version() -> None:
-    profile = discord_py_adapter_profile("future", ">=99", capabilities=frozenset({ADAPTER_RENDER_V2}))
+    profile = discord_py_adapter_profile("future", ">=99", capabilities=frozenset({AdapterCapability.RENDER_V2}))
 
     with pytest.raises(LayoutInvariantError, match="supply a custom profile verified for this version"):
-        require_discord_py_capability(profile, ADAPTER_RENDER_V2, "render Components V2")
+        require_discord_py_capability(profile, AdapterCapability.RENDER_V2, "render Components V2")
 
 
 def test_discord_py_boundary_names_a_missing_operation_capability() -> None:
     profile = discord_py_adapter_profile("render-only", ">=2.7,<3", capabilities=frozenset())
 
-    with pytest.raises(LayoutInvariantError, match=ADAPTER_RENDER_V2):
-        require_discord_py_capability(profile, ADAPTER_RENDER_V2, "render Components V2")
+    with pytest.raises(LayoutInvariantError, match=AdapterCapability.RENDER_V2):
+        require_discord_py_capability(profile, AdapterCapability.RENDER_V2, "render Components V2")
 
 
 def test_protocol_factories_union_only_applicable_extension_capabilities() -> None:
@@ -85,7 +85,7 @@ def test_protocol_factories_union_only_applicable_extension_capabilities() -> No
 
 
 def test_scene_body_can_be_narrowed_after_a_broad_decode() -> None:
-    scene = plan(Text("hello"), target=Target.v2()).scene
+    scene = plan(Text("hello"), target=v2()).scene
 
     assert scene.expect_body(SceneComponentsV2) is scene.body
     with pytest.raises(LayoutInvariantError, match="not SceneClassicMessage"):

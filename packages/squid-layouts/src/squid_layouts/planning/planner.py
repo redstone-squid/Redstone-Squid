@@ -11,6 +11,7 @@ from squid_layouts.chrome import DEFAULT_CHROME, Chrome, localize_chrome
 from squid_layouts.document import Document, DocumentLike, as_document
 from squid_layouts.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.palette import DEFAULT_PALETTE, Palette
+from squid_layouts.planning.adapter import ResourceCost
 from squid_layouts.planning.cache import CachedPlan, PlanCache
 from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursorRequest, content_fingerprint
 from squid_layouts.planning.degradation import DegradationEffect, DegradationProfile
@@ -36,7 +37,7 @@ from squid_layouts.planning.layout_measurement.solver import (
     MeasuredLayout,
     measure,
 )
-from squid_layouts.planning.limits import LIMITS, DiscordLimits
+from squid_layouts.planning.limits import DiscordLimits
 from squid_layouts.planning.navigation import PlannedNav, materialized_navigation_state
 from squid_layouts.planning.search import (
     DEFAULT_SEARCH_BUDGET,
@@ -50,8 +51,7 @@ from squid_layouts.planning.semantic_adaptation.lowering import (
     lower_semantics,
 )
 from squid_layouts.planning.semantic_adaptation.model import FallbackAxis, SemanticDecisions, SemanticLowering
-from squid_layouts.planning.target import ResourceCost, TargetProfile
-from squid_layouts.planning.v2 import V2_DIALECT
+from squid_layouts.planning.target import Target
 from squid_layouts.primitives.nodes import (
     Break,
     Budget,
@@ -76,20 +76,13 @@ from squid_layouts.scene.model import (
     PlanResult,
     PlanSeverity,
     SceneAsset,
+    SceneBody,
     SceneDocument,
 )
 from squid_layouts.sources import Position
 from squid_layouts.text import NEUTRAL, Localization
 
 EMPTY_RESERVATION = ResourceCost()
-
-
-def _dialect_for(target: TargetProfile[Any, Any, Any]) -> TargetDialect:
-    """A target's shape, defaulting to Components V2 for a profile that names none."""
-    dialect = target.dialect
-    if dialect is None:
-        return cast(TargetDialect, V2_DIALECT)
-    return cast(TargetDialect, dialect)
 
 
 def _merge_assets(*groups: Sequence[Asset]) -> tuple[Asset, ...]:
@@ -168,15 +161,21 @@ class _Search:
     """Everything one document's search needs that does not change between candidates."""
 
     document: Document
-    target: TargetProfile[Any, Any, Any]
-    dialect: TargetDialect
-    limits: DiscordLimits
+    target: Target[Any, Any, Any, Any]
     chrome: Chrome
     localization: Localization
     palette: Palette
     presentation: PresentationSession
     positions: Mapping[str, Position] | None
     nav: PlannedNav | None
+
+    @property
+    def limits(self) -> DiscordLimits:
+        return self.target.limits
+
+    @property
+    def dialect(self) -> TargetDialect[Any, Any, Any]:
+        return self.target.dialect
 
     def evaluate(self, state: _State) -> _Candidate:
         """Lower, validate, and measure exactly one candidate in its own coordinator.
@@ -210,7 +209,7 @@ class _Search:
             strategies=strategies,
             fallbacks=fallbacks,
         )
-        lowered = self.dialect.normalize(semantic.nodes, self.target, self.limits)
+        lowered = self.dialect.normalize(semantic.nodes, self.target)
         self.dialect.validate(lowered, self.limits)
         variants = canonical_positions(lowered, dict(state.variants))
         steps = [*_fallback_notes(decisions.fallbacks, fallbacks), *variant_notes(lowered, variants)]
@@ -474,10 +473,10 @@ def _search(search: _Search, *, search_budget: int) -> _Candidate:
     )
 
 
-def plan[ModeT, AdapterT, BodyT](
+def plan[ModeT, AdapterT, BodyT: SceneBody](
     rendered: DocumentLike[ModeT],
     *,
-    target: TargetProfile[ModeT, AdapterT, BodyT],
+    target: Target[Any, BodyT, ModeT, AdapterT],
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,
@@ -500,14 +499,13 @@ def plan[ModeT, AdapterT, BodyT](
     document = as_document(rendered)
     # Every axis is withheld the same way: by planning against a smaller target.
     target = target.reserve(reservation)
-    dialect = _dialect_for(target)
-    limits = target.limits if isinstance(target.limits, DiscordLimits) else LIMITS
+    dialect = target.dialect
+    limits = target.limits
     presentation = session if session is not None else PresentationSession()
     chrome = localize_chrome(chrome, localization)
     cache_key = _plan_cache_key(
         (document,),
         target=target,
-        limits=limits,
         chrome=chrome,
         localization=localization,
         palette=palette,
@@ -533,7 +531,7 @@ def plan[ModeT, AdapterT, BodyT](
             strategies=dict(cached.strategies),
             fallbacks=dict(cached.fallbacks),
         )
-        lowered = dialect.normalize(semantic.nodes, target, limits)
+        lowered = dialect.normalize(semantic.nodes, target)
         assets = _merge_assets(document.assets, semantic.assets)
         dialect.validate(lowered, limits)
         selected_nodes = resolve_variants(lowered, dict(cached.variant_positions))
@@ -557,8 +555,6 @@ def plan[ModeT, AdapterT, BodyT](
         _Search(
             document=document,
             target=target,
-            dialect=dialect,
-            limits=limits,
             chrome=chrome,
             localization=localization,
             palette=palette,
@@ -624,9 +620,10 @@ def plan[ModeT, AdapterT, BodyT](
         raise UnsolvableLayoutError(message)
     bindings = SceneBindings()
     body = dialect.body(measured.children, bindings)
-    if target.body_type is not None and not isinstance(body, target.body_type):
+    if not isinstance(body, target.body_type):
         message = (
-            f"target {target.id!r} declared {target.body_type.__name__}, but its dialect produced {type(body).__name__}"
+            f"target {target.triple!r} declared {target.body_type.__name__}, "
+            f"but its dialect produced {type(body).__name__}"
         )
         raise LayoutInvariantError(message)
     scene = SceneDocument(
@@ -715,8 +712,7 @@ def _reconcile_pagers(measured: MeasuredLayout, broker: CursorCoordinator) -> No
 def _plan_cache_key(
     nodes: Sequence[object],
     *,
-    target: TargetProfile[Any, Any, Any],
-    limits: DiscordLimits,
+    target: Target[Any, Any, Any, Any],
     chrome: Chrome,
     localization: Localization,
     palette: Palette,
@@ -730,7 +726,6 @@ def _plan_cache_key(
     relevant = {
         "document": stable_value(nodes),
         "target": target.fingerprint,
-        "limits": stable_value(limits),
         "presentation": stable_value(presentation),
         "chrome": (
             chrome.previous,

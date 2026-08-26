@@ -8,7 +8,7 @@ from string.templatelib import Interpolation, Template
 from typing import Any
 
 
-class TextDialect(StrEnum):
+class Markup(StrEnum):
     """How a renderer should interpret resolved text."""
 
     PLAIN = "plain"
@@ -20,7 +20,7 @@ class ResolvedText:
     """Text after interpolation and translation, before target planning."""
 
     content: str
-    dialect: TextDialect = TextDialect.DISCORD_MARKDOWN
+    markup: Markup = Markup.DISCORD_MARKDOWN
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,7 +52,7 @@ class Message:
 
     template: str
     params: Mapping[str, object] = field(default_factory=dict)
-    dialect: TextDialect = TextDialect.DISCORD_MARKDOWN
+    markup: Markup = Markup.DISCORD_MARKDOWN
     plural: str | None = None
 
 
@@ -66,24 +66,24 @@ def raw_md(value: object) -> RawMarkdown:
 
 def plain(value: object) -> ResolvedText:
     """Create literal text which renderers must not interpret as Markdown."""
-    temporal = _temporal_value(value, TextDialect.PLAIN)
-    return ResolvedText(str(value) if temporal is None else temporal, TextDialect.PLAIN)
+    temporal = _temporal_value(value, Markup.PLAIN)
+    return ResolvedText(str(value) if temporal is None else temporal, Markup.PLAIN)
 
 
 def md(value: str | Template, /, **values: object) -> ResolvedText:
     """Resolve trusted Markdown with escaped dynamic interpolations.
 
-    Bare strings are the trusted template dialect. Dynamic content is supplied either by a
+    Bare strings are the trusted template markup. Dynamic content is supplied either by a
     Python 3.14 template string or by named values for translated format strings.
     """
     if isinstance(value, Template):
         if values:
             message = "template strings already contain their interpolation values"
             raise TypeError(message)
-        return ResolvedText(_resolve_template(value, TextDialect.DISCORD_MARKDOWN))
+        return ResolvedText(_resolve_template(value, Markup.DISCORD_MARKDOWN))
     if not values:
         return ResolvedText(value)
-    return ResolvedText(_resolve_named(value, values, TextDialect.DISCORD_MARKDOWN))
+    return ResolvedText(_resolve_named(value, values, Markup.DISCORD_MARKDOWN))
 
 
 def resolve_text(value: TextLike, localization: Localization) -> ResolvedText:
@@ -106,28 +106,28 @@ def resolve_text(value: TextLike, localization: Localization) -> ResolvedText:
         key: raw_md(resolve_text(param, localization).content) if isinstance(param, Message | ResolvedText) else param
         for key, param in value.params.items()
     }
-    content = _resolve_named(template, params, value.dialect) if params else template
-    return ResolvedText(content, value.dialect)
+    content = _resolve_named(template, params, value.markup) if params else template
+    return ResolvedText(content, value.markup)
 
 
 def discord_text(value: ResolvedText) -> str:
-    """Render resolved text into Discord's Markdown input dialect."""
-    if value.dialect is TextDialect.DISCORD_MARKDOWN:
+    """Render resolved text into Discord's Markdown input markup."""
+    if value.markup is Markup.DISCORD_MARKDOWN:
         return value.content
     return _escape_markdown(value.content)
 
 
-def _resolve_template(template: Template, dialect: TextDialect) -> str:
+def _resolve_template(template: Template, markup: Markup) -> str:
     parts: list[str] = []
     for string, interpolation in zip(template.strings, template.interpolations, strict=False):
         parts.append(string)
-        parts.append(_interpolation(interpolation, dialect))
+        parts.append(_interpolation(interpolation, markup))
     parts.append(template.strings[-1])
     return "".join(parts)
 
 
-def _resolve_named(template: str, values: Mapping[str, object], dialect: TextDialect) -> str:
-    escaped = {key: _safe_value(value, dialect) for key, value in values.items()}
+def _resolve_named(template: str, values: Mapping[str, object], markup: Markup) -> str:
+    escaped = {key: _safe_value(value, markup) for key, value in values.items()}
     try:
         return template.format_map(escaped)
     except (KeyError, ValueError) as error:
@@ -135,7 +135,7 @@ def _resolve_named(template: str, values: Mapping[str, object], dialect: TextDia
         raise ValueError(message) from error
 
 
-def _interpolation(interpolation: Interpolation, dialect: TextDialect) -> str:
+def _interpolation(interpolation: Interpolation, markup: Markup) -> str:
     value: Any = interpolation.value
     if interpolation.conversion == "r":
         value = repr(value)
@@ -145,19 +145,19 @@ def _interpolation(interpolation: Interpolation, dialect: TextDialect) -> str:
         value = ascii(value)
     if interpolation.format_spec:
         value = format(value, interpolation.format_spec)
-    return _safe_value(value, dialect)
+    return _safe_value(value, markup)
 
 
-def _safe_value(value: object, dialect: TextDialect) -> str:
+def _safe_value(value: object, markup: Markup) -> str:
     if isinstance(value, RawMarkdown):
         return value.content
-    temporal = _temporal_value(value, dialect)
+    temporal = _temporal_value(value, markup)
     if temporal is not None:
         return temporal
     return _neutralize_mentions(_escape_markdown(str(value)))
 
 
-def _temporal_value(value: object, dialect: TextDialect) -> str | None:
+def _temporal_value(value: object, markup: Markup) -> str | None:
     from squid_layouts.semantic import Timestamp
 
     if isinstance(value, Timestamp):
@@ -171,7 +171,7 @@ def _temporal_value(value: object, dialect: TextDialect) -> str | None:
     if instant.tzinfo is None or instant.utcoffset() is None:
         message = "timestamp interpolation requires an aware datetime"
         raise ValueError(message)
-    if dialect is TextDialect.PLAIN:
+    if markup is Markup.PLAIN:
         return instant.isoformat()
     return f"<t:{int(instant.timestamp())}:{style}>"
 
@@ -192,10 +192,10 @@ def _neutralize_mentions(value: str) -> str:
 __all__ = [
     "NEUTRAL",
     "Localization",
+    "Markup",
     "Message",
     "RawMarkdown",
     "ResolvedText",
-    "TextDialect",
     "TextLike",
     "discord_text",
     "md",

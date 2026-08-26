@@ -1,6 +1,6 @@
 """Immutable, serializable output of target planning."""
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import ClassVar
@@ -12,7 +12,7 @@ from squid_layouts.forms import FormBinding
 from squid_layouts.interactions import ActionBinding, ActionPolicy
 from squid_layouts.primitives.styles import ActionStyle, Color
 from squid_layouts.runtime.presentation import SessionUpdate
-from squid_layouts.text import TextDialect
+from squid_layouts.text import Markup
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,7 +20,7 @@ class SceneText:
     KIND: ClassVar[str] = "text"
 
     content: str
-    dialect: TextDialect = TextDialect.DISCORD_MARKDOWN
+    markup: Markup = Markup.DISCORD_MARKDOWN
 
 
 @dataclass(frozen=True, slots=True)
@@ -202,6 +202,10 @@ class ScenePanel:
     spoiler: bool = False
 
 
+type JsonValue = str | int | float | bool | None | Sequence[JsonValue] | Mapping[str, JsonValue]
+"""What may cross the scene codec. Stated by the type rather than only by prose."""
+
+
 @dataclass(frozen=True, slots=True)
 class SceneExtension:
     """Versioned target payload prepared by a registered extension adapter."""
@@ -210,7 +214,7 @@ class SceneExtension:
 
     kind: str
     version: int
-    payload: Mapping[str, object]
+    payload: Mapping[str, JsonValue]
 
 
 type SceneNode = (

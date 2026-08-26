@@ -2,8 +2,12 @@
 
 from typing import Any, assert_type
 
-from squid_discord import Target
+from squid_discord.classic_renderer import ClassicRenderer
+from squid_discord.presentation import DiscordPresentation
+from squid_discord.renderer import V2Renderer
+from squid_discord.target import classic, v2
 from squid_layouts import fallback
+from squid_layouts.html import Renderer as HtmlRenderer
 from squid_layouts.planning import (
     AdapterProfile,
     ClassicTarget,
@@ -13,12 +17,14 @@ from squid_layouts.planning import (
     DiscordPyAdapter,
     DiscordTarget,
     Renderable,
-    TargetProfile,
+    Target,
     classic_target,
     components_v2_target,
     plan,
 )
+from squid_layouts.planning.limits import ClassicLimits, V2Limits
 from squid_layouts.primitives import Card, Panel, Text, Variants
+from squid_layouts.renderer import Renderer
 from squid_layouts.scene.model import PlanResult, SceneClassicMessage, SceneComponentsV2
 from squid_layouts.semantic import FallbackContent
 
@@ -47,27 +53,27 @@ assert_type(discord_py_27, AdapterProfile[DiscordPy27Adapter])
 assert_type(dynamic, AdapterProfile[DiscordAdapter])
 assert_type(
     components_v2_target(discord_py),
-    TargetProfile[ComponentsV2Target, DiscordPyAdapter, SceneComponentsV2],
+    Target[V2Limits, SceneComponentsV2, ComponentsV2Target, DiscordPyAdapter],
 )
 assert_type(
     classic_target(discord_py_27),
-    TargetProfile[ClassicTarget, DiscordPy27Adapter, SceneClassicMessage],
+    Target[ClassicLimits, SceneClassicMessage, ClassicTarget, DiscordPy27Adapter],
 )
 assert_type(
-    Target.v2(),
-    Target[ComponentsV2Target, DiscordPy27Adapter, SceneComponentsV2],
+    v2(),
+    Target[V2Limits, SceneComponentsV2, ComponentsV2Target, DiscordPy27Adapter],
 )
 assert_type(
-    Target.classic(adapter=discord_py),
-    Target[ClassicTarget, DiscordPyAdapter, SceneClassicMessage],
+    classic(adapter=discord_py),
+    Target[ClassicLimits, SceneClassicMessage, ClassicTarget, DiscordPyAdapter],
 )
-assert_type(plan(Text("v2"), target=Target.v2()), PlanResult[SceneComponentsV2])
-assert_type(plan(Text("classic"), target=Target.classic()), PlanResult[SceneClassicMessage])
+assert_type(plan(Text("v2"), target=v2()), PlanResult[SceneComponentsV2])
+assert_type(plan(Text("classic"), target=classic()), PlanResult[SceneClassicMessage])
 
 v2_only = Panel((Text("v2"),))
 classic_only = Card(children=(Text("classic"),))
-plan(v2_only, target=Target.classic())  # pyrefly: ignore[no-matching-overload, bad-argument-type]
-plan(classic_only, target=Target.v2())  # pyrefly: ignore[no-matching-overload, bad-argument-type]
+plan(v2_only, target=classic())  # pyrefly: ignore[no-matching-overload, bad-argument-type]
+plan(classic_only, target=v2())  # pyrefly: ignore[no-matching-overload, bad-argument-type]
 
 assert_type(
     fallback(v2_only, classic_only),
@@ -81,3 +87,23 @@ assert_type(
     Variants.of(v2_only, classic_only, Text("a"), Text("b"), Text("c"), Text("long")),
     Variants[Any],
 )
+
+
+def accepts_v2_renderer(value: Renderer[SceneComponentsV2, DiscordPresentation]) -> None:
+    del value
+
+
+def accepts_classic_renderer(value: Renderer[SceneClassicMessage, DiscordPresentation]) -> None:
+    del value
+
+
+def accepts_html_renderer(value: Renderer[SceneComponentsV2, str]) -> None:
+    del value
+
+
+# A declared protocol nothing implements is how the contravariance bug survived: `draw` took
+# an unparameterized `SceneDocument`, so no renderer that narrowed to its own body could
+# satisfy it. These three pin that it is satisfiable.
+accepts_v2_renderer(V2Renderer())
+accepts_classic_renderer(ClassicRenderer())
+accepts_html_renderer(HtmlRenderer())

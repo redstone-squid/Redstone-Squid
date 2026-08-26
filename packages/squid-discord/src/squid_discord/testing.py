@@ -13,6 +13,7 @@ names to `squid_discord` itself.
 """
 
 from collections.abc import Iterator
+from copy import copy
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
@@ -24,9 +25,26 @@ import discord
 from squid_discord.delivery import DeliveryReceipt, Destination, EditHandle, handle_for
 from squid_discord.mount import AnyMountedView, ClassicMountedView, Mount, MountedView
 from squid_discord.presentation import DiscordPresentation
-from squid_layouts.planning.limits import COMPONENT_LIMITS, LIMITS, ComponentLimits, V2Limits
+from squid_layouts.planning.limits import COMPONENT_LIMITS, LIMITS, ComponentLimits, DiscordLimits, V2Limits
+from squid_layouts.planning.target import Target
+from squid_layouts.scene.model import SceneBody
 
 type ComponentPayload = dict[str, Any]
+
+
+def without_capabilities[LimitsT: DiscordLimits, BodyT: SceneBody, ModeT, AdapterT](
+    target: Target[LimitsT, BodyT, ModeT, AdapterT], *capabilities: str
+) -> Target[LimitsT, BodyT, ModeT, AdapterT]:
+    """A copy of `target` whose dialect declares fewer protocol capabilities.
+
+    Every degradation path is reached by a target that lacks something, and a protocol
+    capability is a fact about the dialect rather than a field on the target — so removing
+    one means a dialect that declares less. Adapter capabilities are not affected; use
+    `Target.restrict_adapter_capabilities` for those.
+    """
+    reduced = copy(target.dialect)
+    reduced.capabilities = frozenset(target.dialect.capabilities) - {*capabilities}
+    return replace(target, dialect=reduced)
 
 
 def iter_component_payloads(components: list[ComponentPayload]) -> Iterator[ComponentPayload]:
@@ -266,4 +284,5 @@ __all__ = [
     "iter_component_payloads",
     "modal_problems",
     "payload_problems",
+    "without_capabilities",
 ]

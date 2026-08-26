@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable
 
 import pytest
 
-from squid_discord import V2_TARGET
+from squid_discord import DISCORD_V2_DPY27
 from squid_layouts import fallback, truncate
 from squid_layouts.document import Asset, InlineAsset
 from squid_layouts.interactions import ActionEvent, ActionPolicy
@@ -38,7 +38,7 @@ def _actions(count: int, *, handler: Callable[[ActionEvent], Awaitable[None]] = 
 
 
 def test_thirty_six_actions_fold_losslessly_into_twenty_five_and_eleven() -> None:
-    result = plan(Actions(_actions(36), key="demo"), target=V2_TARGET)
+    result = plan(Actions(_actions(36), key="demo"), target=DISCORD_V2_DPY27)
 
     selects = [node for node in result.scene.components_v2.children if isinstance(node, SceneSelect)]
     assert [len(select.options) for select in selects] == [25, 11]
@@ -60,7 +60,7 @@ def test_explicit_action_groups_never_merge() -> None:
         display=ActionDisplay.GROUPED,
     )
 
-    result = plan(document, target=V2_TARGET)
+    result = plan(document, target=DISCORD_V2_DPY27)
     selects = [node for node in result.scene.components_v2.children if isinstance(node, SceneSelect)]
 
     assert [len(select.options) for select in selects] == [10, 10]
@@ -74,7 +74,7 @@ def test_strong_actions_and_links_remain_direct_unless_grouping_is_granted() -> 
 
     result = plan(
         Actions((strong, grouped, link), key="mixed", display=ActionDisplay.GROUPED),
-        target=V2_TARGET,
+        target=DISCORD_V2_DPY27,
     )
 
     select = next(node for node in result.scene.components_v2.children if isinstance(node, SceneSelect))
@@ -86,7 +86,7 @@ def test_strong_actions_and_links_remain_direct_unless_grouping_is_granted() -> 
 
 def test_grouped_route_keeps_the_selected_actions_policy_and_handler() -> None:
     action = Action("read", "Read", _act, policy=ActionPolicy.PARALLEL_READ)
-    result = plan(Actions((action,), key="demo", display=ActionDisplay.GROUPED), target=V2_TARGET)
+    result = plan(Actions((action,), key="demo", display=ActionDisplay.GROUPED), target=DISCORD_V2_DPY27)
     select = next(node for node in result.scene.components_v2.children if isinstance(node, SceneSelect))
 
     routed = result.bindings[select.action].routed(("read",))
@@ -103,8 +103,8 @@ def test_actions_choose_a_global_fit_instead_of_root_pagination() -> None:
         Actions(_actions(5), key="demo"),
     )
 
-    dense = plan(dense_document, target=V2_TARGET)
-    roomy = plan(Actions(_actions(5), key="demo"), target=V2_TARGET)
+    dense = plan(dense_document, target=DISCORD_V2_DPY27)
+    roomy = plan(Actions(_actions(5), key="demo"), target=DISCORD_V2_DPY27)
 
     assert dense.report.events[0].code == "actions.grouped"
     assert dense.metrics.states_explored == 2
@@ -122,7 +122,7 @@ def test_actions_find_a_global_fit_alongside_a_local_pager() -> None:
         Actions(_actions(5), key="demo"),
     )
 
-    result = plan(document, target=V2_TARGET)
+    result = plan(document, target=DISCORD_V2_DPY27)
 
     assert result.report.events[0].code == "actions.grouped"
     assert result.metrics.states_explored == 2
@@ -139,7 +139,7 @@ def test_inactive_fallback_axes_do_not_spend_the_global_search_budget() -> None:
         Actions(_actions(5), key="visible", flexibility=Flexibility.STABLE),
     )
 
-    result = plan(document, target=V2_TARGET, session=session)
+    result = plan(document, target=DISCORD_V2_DPY27, session=session)
 
     assert any(event.code == "actions.grouped" and event.path == "$.36" for event in result.report.events)
     assert result.metrics.states_explored == 2
@@ -155,7 +155,7 @@ def test_fallback_axes_are_discovered_when_their_rung_becomes_reachable() -> Non
         ),
     )
 
-    result = plan(document, target=V2_TARGET)
+    result = plan(document, target=DISCORD_V2_DPY27)
 
     assert any(event.code == "actions.grouped" and event.path == "$.35.alternate.0" for event in result.report.events)
     assert any(event.code == "layout.degradation.semantic_fallback" for event in result.report.events)
@@ -174,7 +174,7 @@ def test_degraded_global_fit_prefers_less_loss_before_display_preference() -> No
         Actions(_actions(5), key="demo"),
     )
 
-    result = plan(document, target=V2_TARGET)
+    result = plan(document, target=DISCORD_V2_DPY27)
 
     assert result.report.events[0].code == "actions.grouped"
     assert "compact details" not in {
@@ -185,9 +185,9 @@ def test_degraded_global_fit_prefers_less_loss_before_display_preference() -> No
 
 def test_action_strategy_is_sticky_while_it_remains_valid() -> None:
     session = PresentationSession()
-    first = plan(Actions(_actions(36), key="demo"), target=V2_TARGET, session=session)
+    first = plan(Actions(_actions(36), key="demo"), target=DISCORD_V2_DPY27, session=session)
     apply_updates(session, first.session_updates)
-    second = plan(Actions(_actions(5), key="demo"), target=V2_TARGET, session=session)
+    second = plan(Actions(_actions(5), key="demo"), target=DISCORD_V2_DPY27, session=session)
 
     assert first.report.events[0].code == "actions.grouped"
     assert second.report.events[0].code == "actions.grouped"
@@ -198,7 +198,7 @@ def test_action_strategy_is_sticky_while_it_remains_valid() -> None:
     [(5, "actions.individual"), (36, "actions.grouped"), (76, "actions.paged")],
 )
 def test_fresh_action_strategy_matrix(count: int, expected: str) -> None:
-    result = plan(Actions(_actions(count), key="demo"), target=V2_TARGET, session=PresentationSession())
+    result = plan(Actions(_actions(count), key="demo"), target=DISCORD_V2_DPY27, session=PresentationSession())
 
     assert result.report.events[0].code == expected
 
@@ -215,10 +215,10 @@ def test_fresh_action_strategy_matrix(count: int, expected: str) -> None:
 )
 def test_sticky_action_strategy_grow_and_shrink_matrix(initial: int, changed: int, expected: str) -> None:
     session = PresentationSession()
-    first = plan(Actions(_actions(initial), key="demo"), target=V2_TARGET, session=session)
+    first = plan(Actions(_actions(initial), key="demo"), target=DISCORD_V2_DPY27, session=session)
     apply_updates(session, first.session_updates)
 
-    result = plan(Actions(_actions(changed), key="demo"), target=V2_TARGET, session=session)
+    result = plan(Actions(_actions(changed), key="demo"), target=DISCORD_V2_DPY27, session=session)
 
     assert result.report.events[0].code == expected
 
@@ -226,10 +226,10 @@ def test_sticky_action_strategy_grow_and_shrink_matrix(initial: int, changed: in
 def test_reordering_actions_does_not_change_a_sticky_strategy() -> None:
     session = PresentationSession()
     actions = _actions(36)
-    first = plan(Actions(actions, key="demo"), target=V2_TARGET, session=session)
+    first = plan(Actions(actions, key="demo"), target=DISCORD_V2_DPY27, session=session)
     apply_updates(session, first.session_updates)
 
-    result = plan(Actions(tuple(reversed(actions)), key="demo"), target=V2_TARGET, session=session)
+    result = plan(Actions(tuple(reversed(actions)), key="demo"), target=DISCORD_V2_DPY27, session=session)
 
     assert result.report.events[0].code == "actions.grouped"
 
@@ -237,7 +237,7 @@ def test_reordering_actions_does_not_change_a_sticky_strategy() -> None:
 def test_adapter_version_change_resets_only_that_strategy() -> None:
     session = PresentationSession(strategies={"demo": StrategyState("demo", "discord.actions", 0, "individual")})
 
-    result = plan(Actions(_actions(36), key="demo"), target=V2_TARGET, session=session)
+    result = plan(Actions(_actions(36), key="demo"), target=DISCORD_V2_DPY27, session=session)
     apply_updates(session, result.session_updates)
 
     assert result.report.events[0].code == "actions.grouped"
@@ -247,10 +247,10 @@ def test_adapter_version_change_resets_only_that_strategy() -> None:
 def test_more_than_seventy_five_actions_use_a_keyed_paged_picker() -> None:
     session = PresentationSession()
     document = Actions(_actions(76), key="demo")
-    first = plan(document, target=V2_TARGET, session=session)
+    first = plan(document, target=DISCORD_V2_DPY27, session=session)
     apply_updates(session, first.session_updates)
     session.move_cursor("demo.default", Position(offset=1))
-    second = plan(document, target=V2_TARGET, session=session)
+    second = plan(document, target=DISCORD_V2_DPY27, session=session)
 
     first_select = next(node for node in first.scene.components_v2.children if isinstance(node, SceneSelect))
     second_select = next(node for node in second.scene.components_v2.children if isinstance(node, SceneSelect))
@@ -266,7 +266,7 @@ def test_search_budget_exhaustion_reports_the_best_incumbent() -> None:
     # The budget stops the search before it can rule one out, which is what it reports.
     document = (truncate(Paragraph("x" * 5000)), Actions(_actions(5), key="demo"))
 
-    result = plan(document, target=V2_TARGET, search_budget=1)
+    result = plan(document, target=DISCORD_V2_DPY27, search_budget=1)
 
     assert result.metrics.search_fallback
     assert result.metrics.states_explored == 1
@@ -277,7 +277,7 @@ def test_search_budget_exhaustion_reports_the_best_incumbent() -> None:
 
 def test_a_provably_optimal_first_candidate_reports_no_fallback() -> None:
     """A budget of one is not a truncated search when nothing left could have beaten it."""
-    result = plan(Actions(_actions(5), key="demo"), target=V2_TARGET, search_budget=1)
+    result = plan(Actions(_actions(5), key="demo"), target=DISCORD_V2_DPY27, search_budget=1)
 
     assert result.metrics.states_explored == 1
     assert not result.metrics.search_fallback
@@ -314,7 +314,7 @@ def test_an_unopened_branch_leaves_no_trace_of_itself() -> None:
     )
     session = PresentationSession()
 
-    result = plan(fallback(Paragraph("visible"), hidden), target=V2_TARGET, session=session)
+    result = plan(fallback(Paragraph("visible"), hidden), target=DISCORD_V2_DPY27, session=session)
 
     assert _texts(result) == {"visible"}
     assert not result.scene.pagers
@@ -343,7 +343,7 @@ def test_opening_a_fallback_abandons_the_decisions_under_the_old_branch() -> Non
         ),
     )
 
-    result = plan(document, target=V2_TARGET)  # pyrefly: ignore[bad-argument-type]
+    result = plan(document, target=DISCORD_V2_DPY27)  # pyrefly: ignore[bad-argument-type]
     rendered = _texts(result)
 
     # individual, grouped, the opened branch, then the nested branch: four, not five. The
@@ -367,7 +367,7 @@ def test_a_strategy_and_a_ladder_rung_are_weighed_against_each_other() -> None:
         Actions(_actions(5), key="demo"),
     )
 
-    result = plan(document, target=V2_TARGET)
+    result = plan(document, target=DISCORD_V2_DPY27)
     rendered = _texts(result)
 
     assert "compact" not in rendered  # the ladder kept its preferred rung
@@ -386,7 +386,7 @@ def test_capability_filtering_keeps_rung_selection_stable() -> None:
     )
     document = (*(Paragraph(f"component {index}") for index in range(34)), ladder)
 
-    result = plan(document, target=V2_TARGET)
+    result = plan(document, target=DISCORD_V2_DPY27)
     rendered = _texts(result)
     panels = [node for node in result.scene.components_v2.children if isinstance(node, ScenePanel)]
 

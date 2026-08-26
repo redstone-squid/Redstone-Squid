@@ -4,14 +4,14 @@ from datetime import UTC, datetime
 
 import pytest
 
-from squid_layouts.text import Localization, Message, TextDialect, discord_text, md, plain, raw_md, resolve_text
+from squid_layouts.text import Localization, Markup, Message, discord_text, md, plain, raw_md, resolve_text
 
 
 def test_bare_markdown_is_trusted() -> None:
     text = md("**Build complete**")
 
     assert text.content == "**Build complete**"
-    assert text.dialect is TextDialect.DISCORD_MARKDOWN
+    assert text.markup is Markup.DISCORD_MARKDOWN
 
 
 def test_template_string_interpolations_are_escaped_and_mentions_are_neutralized() -> None:
