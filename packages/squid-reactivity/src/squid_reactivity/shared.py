@@ -14,8 +14,8 @@ import logging
 from collections.abc import Callable
 from typing import Any, ClassVar
 
-from squid_reactive.core import Reactive, _Computed, _State
-from squid_reactive.topics import Address, CellAddress, TopicBus
+from squid_reactivity.core import Reactive, _Computed, _State
+from squid_reactivity.topics import Address, CellAddress, TopicBus
 
 _RESERVED = frozenset({"bus", "scope"})
 """Attribute names a namespace owns, so state may not take one.
@@ -39,7 +39,7 @@ def _check_name(cls: type, name: str) -> None:
 class Shared[ScopeT = None](Reactive):
     """Base class for a namespace of view state that several mounts share.
 
-    Subclass it, declare fields with :func:`~squid_reactive.state`, and hand the instance to
+    Subclass it, declare fields with :func:`~squid_reactivity.state`, and hand the instance to
     whoever should see the same values. The handle *is* the state, so it lives exactly as long as the object
     does: panels holding it means the state dies with the last panel, and a session holding
     it means the state survives every panel opening and closing. Which of those you want is

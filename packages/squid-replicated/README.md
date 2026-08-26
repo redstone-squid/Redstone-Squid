@@ -16,7 +16,7 @@ register conflicts, compaction, ownership, security, and representative workload
 
 ```python
 from squid_replicated import ReplicatedScope
-from squid_reactive import transaction
+from squid_reactivity import transaction
 
 scope = ReplicatedScope("replica-a")
 document = scope.open("project-7")

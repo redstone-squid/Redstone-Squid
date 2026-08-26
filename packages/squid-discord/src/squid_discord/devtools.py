@@ -32,7 +32,7 @@ from squid_layouts.profiling import AttributeValue, OperationAggregate, Operatio
 from squid_layouts.runtime.histories import HistorySnapshot
 from squid_layouts.runtime.topics import BusSnapshot, TopicBus
 from squid_layouts.semantic import LayoutNode
-from squid_reactive.actions import (
+from squid_reactivity.actions import (
     ActionLedger,
     ActionResultSnapshot,
     AftermathFailureSnapshot,

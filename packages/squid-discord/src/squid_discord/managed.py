@@ -8,7 +8,7 @@ from typing import cast, overload
 from squid_discord.delivery import Delivered, Destination, SendResult
 from squid_discord.mount import Mount
 from squid_layouts.runtime.component import Component, RenderResult
-from squid_reactive.operations import Cancelled, Failed, OperationExecution, Pending, Progress, Succeeded, operation
+from squid_reactivity.operations import Cancelled, Failed, OperationExecution, Pending, Progress, Succeeded, operation
 
 type Work[ValueT] = Callable[[], Awaitable[ValueT]]
 type SuccessRenderer[ValueT] = Callable[[ValueT], RenderResult]

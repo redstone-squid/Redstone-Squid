@@ -48,7 +48,7 @@ means the adversarial, restart, retention, or performance claim has a direct tes
 
 The development box deliberately did not run repository-wide pytest discovery.
 
-- 41 focused `squid-reactive` action/interleaving/operation/resource tests passed.
+- 41 focused `squid-reactivity` action/interleaving/operation/resource tests passed.
 - 106 focused `squid-layouts` transaction/history/DevTools/operation tests passed.
 - 32 fake/property/real-backend `squid-replicated` tests passed.
 - 33 focused form-submit, profiler-link, and portable responder tests passed.

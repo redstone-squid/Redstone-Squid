@@ -4,9 +4,9 @@ import contextvars
 
 import pytest
 
-from squid_reactive import LocalTopicBus, ReactiveConflictError, Shared, state, transaction
-from squid_reactive.core import _CURRENT
-from squid_reactive.topics import Address, CellAddress
+from squid_reactivity import LocalTopicBus, ReactiveConflictError, Shared, state, transaction
+from squid_reactivity.core import _CURRENT
+from squid_reactivity.topics import Address, CellAddress
 
 
 class Preferences(Shared[int]):

@@ -35,7 +35,7 @@ from squid_layouts.runtime.reactivity import (
 )
 from squid_layouts.semantic import ActionGroup
 from squid_layouts.text import TextLike
-from squid_reactive.actions import (
+from squid_reactivity.actions import (
     DEFAULT_REDACTION,
     CausalRef,
     ConflictDetail,
@@ -45,7 +45,7 @@ from squid_reactive.actions import (
     current_action,
     emit_causal_event,
 )
-from squid_reactive.operations import OperationContext
+from squid_reactivity.operations import OperationContext
 
 logger = logging.getLogger(__name__)
 

@@ -1,10 +1,10 @@
-# squid-reactive
+# squid-reactivity
 
 Transactional reactive state for synchronous projections, with no hard dependencies and no
 background tasks.
 
 ```python
-from squid_reactive import Reactive, computed, observe_reads, state, transaction
+from squid_reactivity import Reactive, computed, observe_reads, state, transaction
 
 
 class Counter(Reactive):
@@ -25,21 +25,21 @@ with observe_reads() as read_set:
 
 The package is layered:
 
-- `squid_reactive.actions` provides sortable action IDs, causal contexts, immutable terminal
+- `squid_reactivity.actions` provides sortable action IDs, causal contexts, immutable terminal
   outcomes, bounded ledgers, aftermath authority, and portable redacted schema version 1.
-- `squid_reactive.core` provides state cells, computed values, full strong-read OCC,
+- `squid_reactivity.core` provides state cells, computed values, full strong-read OCC,
   version-conditional patches, staged transaction participants, and the reusable `Reactive` owner.
-- `squid_reactive.shared` provides `Shared`, whose state fields publish exact `CellAddress`
+- `squid_reactivity.shared` provides `Shared`, whose state fields publish exact `CellAddress`
   values through a host-supplied bus.
-- `squid_reactive.topics` provides portable `Topic` values, tracked `watch()` reads, the small
+- `squid_reactivity.topics` provides portable `Topic` values, tracked `watch()` reads, the small
   synchronous `TopicBus` protocol, `LocalTopicBus`, and committed/staged subscription
   reconciliation.
-- `squid_reactive.resources` is an optional import for tracked asynchronous values. It uses
+- `squid_reactivity.resources` is an optional import for tracked asynchronous values. It uses
   only the standard library and runs loads in the caller's task. Cancellation is the host's:
   `abandon_superseded_loads` installs a `LoadScope` factory -- `anyio.CancelScope` satisfies the
   protocol as it stands -- and a superseded generation is then stopped rather than run to
   completion. Uninstalled, it runs on and only its result is discarded.
-- `squid_reactive.operations` separates repeatable definitions from causally identified one-shot
+- `squid_reactivity.operations` separates repeatable definitions from causally identified one-shot
   executions; every retry receives a fresh execution ID and terminal status.
 
 A publishing transaction validates every strongly read addressed cell immediately before its

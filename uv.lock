@@ -12,7 +12,7 @@ members = [
     "squid-discord",
     "squid-layouts",
     "squid-patterns",
-    "squid-reactive",
+    "squid-reactivity",
     "squid-replicated",
     "squid-stores",
 ]
@@ -3277,11 +3277,11 @@ name = "squid-layouts"
 version = "0.1.0"
 source = { editable = "packages/squid-layouts" }
 dependencies = [
-    { name = "squid-reactive" },
+    { name = "squid-reactivity" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "squid-reactive", editable = "packages/squid-reactive" }]
+requires-dist = [{ name = "squid-reactivity", editable = "packages/squid-reactivity" }]
 
 [[package]]
 name = "squid-patterns"
@@ -3295,16 +3295,16 @@ dependencies = [
 requires-dist = [{ name = "squid-layouts", editable = "packages/squid-layouts" }]
 
 [[package]]
-name = "squid-reactive"
+name = "squid-reactivity"
 version = "0.1.0"
-source = { editable = "packages/squid-reactive" }
+source = { editable = "packages/squid-reactivity" }
 
 [[package]]
 name = "squid-replicated"
 version = "0.1.0"
 source = { editable = "packages/squid-replicated" }
 dependencies = [
-    { name = "squid-reactive" },
+    { name = "squid-reactivity" },
 ]
 
 [package.optional-dependencies]
@@ -3319,7 +3319,7 @@ pycrdt = [
 requires-dist = [
     { name = "loro", marker = "extra == 'loro'", specifier = "==1.13.2" },
     { name = "pycrdt", marker = "extra == 'pycrdt'", specifier = "==0.14.2" },
-    { name = "squid-reactive", editable = "packages/squid-reactive" },
+    { name = "squid-reactivity", editable = "packages/squid-reactivity" },
 ]
 provides-extras = ["loro", "pycrdt"]
 
@@ -3329,7 +3329,7 @@ version = "0.1.0"
 source = { editable = "packages/squid-stores" }
 dependencies = [
     { name = "anyio" },
-    { name = "squid-reactive" },
+    { name = "squid-reactivity" },
 ]
 
 [package.optional-dependencies]
@@ -3341,7 +3341,7 @@ postgres = [
 requires-dist = [
     { name = "anyio", specifier = ">=4.14,<5" },
     { name = "asyncpg", marker = "extra == 'postgres'", specifier = ">=0.31,<1" },
-    { name = "squid-reactive", editable = "packages/squid-reactive" },
+    { name = "squid-reactivity", editable = "packages/squid-reactivity" },
 ]
 provides-extras = ["postgres"]
 

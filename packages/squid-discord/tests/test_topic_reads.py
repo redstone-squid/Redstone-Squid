@@ -269,7 +269,7 @@ def test_a_topic_nobody_watches_holds_no_cell() -> None:
     """The registry is weak, so an unwatched topic costs nothing and needs no cleanup."""
     import gc
 
-    from squid_reactive.topics import _TOPIC_CELLS
+    from squid_reactivity.topics import _TOPIC_CELLS
 
     lonely = Topic("lonely", "1")
     bus = LocalTopicBus()

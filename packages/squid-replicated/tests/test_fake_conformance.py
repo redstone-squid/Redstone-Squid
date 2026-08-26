@@ -9,7 +9,7 @@ import weakref
 import pytest
 
 from squid_layouts.runtime import History
-from squid_reactive import (
+from squid_reactivity import (
     ActionCommit,
     ActionLedger,
     ConflictDetail,
@@ -21,8 +21,8 @@ from squid_reactive import (
     strong_read,
     transaction,
 )
-from squid_reactive.core import _CURRENT
-from squid_reactive.testing import InterleavingHarness
+from squid_reactivity.core import _CURRENT
+from squid_reactivity.testing import InterleavingHarness
 from squid_replicated import (
     FakeEngine,
     PreparedReplicatedInverse,

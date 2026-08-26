@@ -1,6 +1,6 @@
 """An optional keyed lifetime owner for shared view state.
 
-:mod:`squid_reactive.shared` argues that there is no store, no registry and no keyed lookup, and
+:mod:`squid_reactivity.shared` argues that there is no store, no registry and no keyed lookup, and
 that stays true: a handle is still the state, and it still lives exactly as long as whoever holds
 it. This module is the one thing a host may reach for when what it holds is *one handle per scope* —
 the `setdefault` cache otherwise written by hand around every namespace.
@@ -14,8 +14,8 @@ from collections.abc import Callable, Hashable, Mapping
 from types import MappingProxyType
 from typing import Any, cast, overload
 
-from squid_reactive.shared import Shared
-from squid_reactive.topics import TopicBus
+from squid_reactivity.shared import Shared
+from squid_reactivity.topics import TopicBus
 
 type SharedFactory[ScopeT, SharedT] = Callable[[TopicBus, ScopeT], SharedT]
 """How a pool builds a namespace it does not already hold: the pool's bus, and the missing scope."""
@@ -26,7 +26,7 @@ class SharedPool[ScopeT: Hashable, SharedT: Shared[Any]]:
 
     The pool is where a host writes down a lifetime it would otherwise write down in a dict: put it
     on the bot for process lifetime, on a cog for extension lifetime, on a session or a request for
-    theirs. Nothing about :class:`~squid_reactive.shared.Shared` changes -- constructing and passing
+    theirs. Nothing about :class:`~squid_reactivity.shared.Shared` changes -- constructing and passing
     handles directly remains supported, and a scope used outside a pool may still be mutable or
     unhashable.
 
@@ -38,7 +38,7 @@ class SharedPool[ScopeT: Hashable, SharedT: Shared[Any]]:
     pool performs on what its factory returns needs a class to check against.
 
     Args:
-        namespace: The one :class:`~squid_reactive.shared.Shared` subclass this pool owns.
+        namespace: The one :class:`~squid_reactivity.shared.Shared` subclass this pool owns.
         bus: The host's topic bus. Every handle this pool retains must hold exactly this bus.
         factory: How to build a namespace that needs more than ``(bus, scope)``. Annotate it as a
             function rather than passing a lambda: a lambda takes its parameter types from the

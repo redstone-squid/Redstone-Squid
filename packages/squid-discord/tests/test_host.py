@@ -15,7 +15,7 @@ from squid_discord.host import _INSTALLED, LayoutHostMissing
 from squid_discord.testing import delivered_to, fake_interaction, fake_message
 from squid_layouts.primitives import Heading
 from squid_layouts.runtime.topics import Topic
-from squid_reactive import LocalTopicBus
+from squid_reactivity import LocalTopicBus
 
 
 class Panel(sl.Component):

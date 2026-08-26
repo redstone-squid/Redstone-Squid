@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from squid_reactive import (
+from squid_reactivity import (
     ActionLedger,
     ActionParticipant,
     LocalTopicBus,
@@ -17,7 +17,7 @@ from squid_reactive import (
     strong_read,
     transaction,
 )
-from squid_reactive.testing import InterleavingHarness
+from squid_reactivity.testing import InterleavingHarness
 
 
 class Model(Shared[str]):

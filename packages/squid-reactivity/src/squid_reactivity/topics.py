@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 from weakref import WeakValueDictionary
 
-from squid_reactive.core import _Cell
+from squid_reactivity.core import _Cell
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +41,8 @@ class CellAddress:
     def __str__(self) -> str:
         """``Preferences(Member(1, 2)).theme``: what a person needs to find the field.
 
-        Here rather than only in :func:`squid_reactive.shared.describe` so that
-        :mod:`squid_reactive.core` can name an address too. It cannot import the namespace
+        Here rather than only in :func:`squid_reactivity.shared.describe` so that
+        :mod:`squid_reactivity.core` can name an address too. It cannot import the namespace
         module -- that module imports it -- and a conflict that says which field moved is
         worth more than a diagnostic layered on top of one that does not.
         """

@@ -32,7 +32,7 @@ from squid_layouts.runtime import (
     transaction,
 )
 from squid_layouts.semantic import Action
-from squid_reactive import (
+from squid_reactivity import (
     ActionLedger,
     ChangeReport,
     OperationEventSnapshot,
@@ -41,7 +41,7 @@ from squid_reactive import (
     join_action,
     on_action_commit,
 )
-from squid_reactive.operations import OperationContext
+from squid_reactivity.operations import OperationContext
 
 
 class Workspace(Shared[str]):

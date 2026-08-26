@@ -501,11 +501,11 @@ class _SinkRegistration:
 
 
 _sinks: list[_SinkRegistration] = []
-_CURRENT_ACTION: ContextVar[ActionContext | None] = ContextVar("squid_reactive_action", default=None)
+_CURRENT_ACTION: ContextVar[ActionContext | None] = ContextVar("squid_reactivity_action", default=None)
 _CURRENT_CAUSALITY: ContextVar[tuple[CausalRef, ActionId | None] | None] = ContextVar(
-    "squid_reactive_causality", default=None
+    "squid_reactivity_causality", default=None
 )
-_aftermath_depth: ContextVar[int] = ContextVar("squid_reactive_aftermath_depth", default=0)
+_aftermath_depth: ContextVar[int] = ContextVar("squid_reactivity_aftermath_depth", default=0)
 
 
 def next_commit_sequence() -> CommitSequence:
@@ -625,7 +625,7 @@ class Aftermath:
     @contextmanager
     def start_action(self, name: str, *, kind: ActionKind = ActionKind.RECOVERY):
         """Start a fresh causal action and transaction."""
-        from squid_reactive.core import fresh_action_transaction
+        from squid_reactivity.core import fresh_action_transaction
 
         context = ActionContext.create(
             name,
