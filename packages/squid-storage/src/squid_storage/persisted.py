@@ -8,13 +8,13 @@ from typing import Any
 import anyio
 from anyio.abc import TaskStatus
 
-from squid_reactivity import Shared, SharedPool, TopicBus, export_state, restore_state
+from squid_reactivity import SharedState, SharedStatePool, TopicBus, export_state, restore_state
 from squid_storage.scoped import ScopedStore, Slot
 
 _logger = logging.getLogger(__name__)
 
 
-class PersistedPool[ScopeT: Hashable, SharedT: Shared[Any]]:
+class PersistedPool[ScopeT: Hashable, SharedT: SharedState[Any]]:
     """Hydrate one shared namespace per scope and persist committed changes.
 
     Loading is explicit and asynchronous because it reads the store. Once a namespace is
@@ -26,8 +26,8 @@ class PersistedPool[ScopeT: Hashable, SharedT: Shared[Any]]:
     :meth:`close` drains what is queued and lets `run` return. A pool is loadable only while
     it is running, because hydration is a read and a read must not quietly acquire a task.
 
-    The canonical-handle machinery is a :class:`~squid_reactivity.pool.SharedPool` held privately.
-    This class composes one rather than subclassing it because `SharedPool.get` is synchronous and
+    The canonical-handle machinery is a :class:`~squid_reactivity.state_pool.SharedStatePool` held privately.
+    This class composes one rather than subclassing it because `SharedStatePool.get` is synchronous and
     would publish a handle before the store had been read: a concurrent `load` of the same scope
     would then be handed an un-hydrated namespace and hydrate nothing. The pool's `_create` and
     `_adopt` halves exist for exactly this, so hydration can happen between them.
@@ -45,7 +45,7 @@ class PersistedPool[ScopeT: Hashable, SharedT: Shared[Any]]:
     ) -> None:
         self.store = store
         self.slot = slot
-        self._pool: SharedPool[ScopeT, SharedT] = SharedPool(namespace, bus, factory=factory or namespace)
+        self._pool: SharedStatePool[ScopeT, SharedT] = SharedStatePool(namespace, bus, factory=factory or namespace)
         self._on_error = on_error
         self._listeners: dict[ScopeT, Callable[[], None]] = {}
         self._pending: dict[ScopeT, Mapping[str, object]] = {}
@@ -92,7 +92,7 @@ class PersistedPool[ScopeT: Hashable, SharedT: Shared[Any]]:
         """Return the canonical namespace for scope, hydrating it on the first load."""
         async with self._load_lock:
             # Checked before the cache: `close` is terminal for the pool, even for a scope it
-            # already holds. A caller still holding that namespace keeps an ordinary `Shared`;
+            # already holds. A caller still holding that namespace keeps an ordinary `SharedState`;
             # what ended is the pool's willingness to hand out more and to persist them.
             if self._closing:
                 msg = "persisted pool is closed"

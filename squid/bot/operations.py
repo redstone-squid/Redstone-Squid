@@ -18,7 +18,7 @@ from squid.core.i18n import _, translate
 from squid_ui.runtime.component import RenderResult
 
 type OperationWork = Callable[
-    [sl.operations.Progress[RenderResult | None], sd.delivery.DeliveryResult],
+    [sl.operations.ProgressReporter[RenderResult | None], sd.delivery.DeliveryResult],
     Awaitable[RenderResult],
 ]
 _INITIAL_PROGRESS: RenderResult | None = None
@@ -48,7 +48,7 @@ class CommandOperation(sl.Component):
     @sl.operation(initial=_INITIAL_PROGRESS)
     async def _execute(
         self,
-        progress: sl.operations.Progress[RenderResult | None],
+        progress: sl.operations.ProgressReporter[RenderResult | None],
     ) -> RenderResult:
         result = self._result
         if result is None:
@@ -92,7 +92,7 @@ class _ManagedResultComponent(sl.Component):
         self.execution = self._execute.start()
 
     @sl.operation(initial=None)
-    async def _execute(self, _progress: sl.operations.Progress[None]) -> RenderResult:
+    async def _execute(self, _progress: sl.operations.ProgressReporter[None]) -> RenderResult:
         """Evaluate the command callback once the mount has committed its initial delivery."""
         return await self._callback(*self._args, **self._kwargs)
 

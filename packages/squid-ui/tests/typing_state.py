@@ -2,7 +2,7 @@
 
 A `dict`, `list` or `set` default or factory must declare the read-only ABC, which is what
 makes a concrete annotation and every mutating method a type error at the use sites. A
-namespace's scope is typed by its parameter, and unparameterised means `Shared[None]`.
+namespace's scope is typed by its parameter, and unparameterised means `SharedState[None]`.
 """
 
 from collections.abc import Mapping, Sequence
@@ -19,7 +19,7 @@ from squid_ui.runtime import (
     Ready,
     Resource,
     ResourceStatus,
-    Shared,
+    SharedState,
     addresses,
 )
 from squid_ui.runtime.topics import LocalTopicBus
@@ -48,11 +48,11 @@ assert_type(state(0), int)
 assert_type(state(factory=int), int)
 
 
-class Anonymous(Shared):
+class Anonymous(SharedState):
     flag: bool = state(default=False)
 
 
-class Scoped(Shared[int]):
+class Scoped(SharedState[int]):
     theme: str = state("system")
 
 

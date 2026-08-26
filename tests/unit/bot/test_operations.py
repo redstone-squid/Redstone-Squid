@@ -26,7 +26,7 @@ async def test_command_operation_receives_the_initial_delivery_before_work_start
 
     async def work(progress, receipt):
         seen.append(receipt.message)
-        progress.set(info_node("Working", "Halfway"))
+        progress.report(info_node("Working", "Halfway"))
         return info_node("Done", "Complete")
 
     await run_command_operation(target, work, source=make_layout_bot())

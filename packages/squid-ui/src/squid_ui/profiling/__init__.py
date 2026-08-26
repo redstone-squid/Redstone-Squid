@@ -2,7 +2,7 @@
 
 from squid_ui.profiling.export import snapshot_json
 from squid_ui.profiling.model import (
-    ActionResult,
+    ActionStatus,
     ActiveSpanSnapshot,
     ActiveTraceSnapshot,
     AggregateKey,
@@ -40,7 +40,7 @@ from squid_ui.profiling.profiler import (
 )
 
 __all__ = [
-    "ActionResult",
+    "ActionStatus",
     "ActiveSpanSnapshot",
     "ActiveTraceSnapshot",
     "AggregateKey",

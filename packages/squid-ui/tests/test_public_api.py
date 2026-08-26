@@ -229,7 +229,7 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert sl.scene.File
     assert sl.html.Renderer
     assert sl.runtime.TopicBus
-    assert {"Shared", "SharedPool", "SharedFactory", "ReactiveConflictError", "state", "addresses"} <= set(
+    assert {"SharedState", "SharedStatePool", "SharedStateFactory", "ReactiveConflictError", "state", "addresses"} <= set(
         sl.runtime.__all__
     )
 
@@ -265,8 +265,8 @@ import squid_ui.profiling
 import squid_ui.runtime
 import squid_ui.runtime.shared
 import squid_ui.runtime.topics
-assert squid_ui.runtime.shared.Shared
-assert squid_ui.runtime.shared.SharedPool
+assert squid_ui.runtime.shared.SharedState
+assert squid_ui.runtime.shared.SharedStatePool
 assert not {"discord", "anyio", "squid_storage", "squid_ui_discord", "squid_ui_widgets"} & set(sys.modules)
 """
     subprocess.run([sys.executable, "-c", code], check=True)

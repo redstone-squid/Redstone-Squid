@@ -7,14 +7,14 @@ from squid_reactivity import (
     ActionContext,
     ActionLedger,
     OperationEventSnapshot,
-    Reactive,
+    StateOwner,
     ResourceEventSnapshot,
     action_scope,
     add_action_result_sink,
     state,
     transaction,
 )
-from squid_reactivity.operations import Cancelled, Failed, Pending, Progress, Succeeded, operation
+from squid_reactivity.operations import Cancelled, Failed, Pending, ProgressReporter, Succeeded, operation
 from squid_reactivity.resources import resource
 
 
@@ -27,9 +27,9 @@ class Owner:
         self.invalidations += 1
 
     @operation(initial="starting")
-    async def work(self, progress: Progress[str]) -> int:
+    async def work(self, progress: ProgressReporter[str]) -> int:
         self.calls += 1
-        progress.set("working")
+        progress.report("working")
         return 42
 
 
@@ -51,7 +51,7 @@ async def test_operation_joins_one_in_flight_attempt() -> None:
 
     class SlowOwner(Owner):
         @operation(initial=None)
-        async def slow(self, progress: Progress[None]) -> str:
+        async def slow(self, progress: ProgressReporter[None]) -> str:
             self.calls += 1
             started.set()
             await resume.wait()
@@ -77,8 +77,8 @@ async def test_operation_joins_one_in_flight_attempt() -> None:
 async def test_operation_failure_is_terminal() -> None:
     class FailingOwner(Owner):
         @operation(initial="starting")
-        async def failing(self, progress: Progress[str]) -> None:
-            progress.set("almost")
+        async def failing(self, progress: ProgressReporter[str]) -> None:
+            progress.report("almost")
             raise ValueError("nope")
 
     owner = FailingOwner()
@@ -98,7 +98,7 @@ async def test_operation_failure_is_terminal() -> None:
 async def test_operation_cancellation_is_terminal() -> None:
     class CancelledOwner(Owner):
         @operation(initial="waiting")
-        async def waiting(self, progress: Progress[str]) -> None:
+        async def waiting(self, progress: ProgressReporter[str]) -> None:
             await anyio.sleep_forever()
 
     owner = CancelledOwner()
@@ -143,14 +143,14 @@ async def test_operation_start_and_terminal_state_form_causal_ledger_nodes() -> 
 
 
 async def test_operation_completion_publishes_state_as_a_fresh_caused_action() -> None:
-    class StatefulOwner(Reactive):
+    class StatefulOwner(StateOwner):
         value: int = state(0)
 
         def invalidate(self) -> None:
             pass
 
         @operation(initial=None)
-        async def work(self, progress: Progress[None]) -> int:
+        async def work(self, progress: ProgressReporter[None]) -> int:
             return 42
 
     owner = StatefulOwner()
@@ -171,14 +171,14 @@ async def test_operation_completion_publishes_state_as_a_fresh_caused_action() -
 
 
 async def test_action_operation_response_and_resource_generation_form_one_graph() -> None:
-    class GraphOwner(Reactive):
+    class GraphOwner(StateOwner):
         value: int = state(0)
 
         def invalidate(self) -> None:
             pass
 
         @operation(initial=None)
-        async def fetch(self, progress: Progress[None]) -> int:
+        async def fetch(self, progress: ProgressReporter[None]) -> int:
             return 42
 
         @resource

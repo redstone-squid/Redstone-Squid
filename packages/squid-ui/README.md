@@ -229,7 +229,7 @@ that an address changed; every subscriber re-reads the application's source of t
 `LocalTopicBus` is the synchronous in-process implementation for tests and single-process hosts.
 
 An address is either a `sl.runtime.Topic(kind, key)` -- a value a host writes, equal by value so two
-publishers agree without sharing a constructor -- or a `sl.runtime.CellAddress`, which is a `Shared` cell's
+publishers agree without sharing a constructor -- or a `sl.runtime.CellAddress`, which is a `SharedState` cell's
 identity and is only ever received, never built. `sl.runtime.Address` is the union the bus carries. Keys
 are text on purpose: `sl.runtime.Topic("build", 123)` is a type error rather than a topic nobody else ever
 addresses.
@@ -550,13 +550,13 @@ hook rules, compensation, and replicated-state examples.
 The coordinated breaking signatures and direct before/after examples are in
 [the Plan 68 migration guide](../../docs/plan68-migration.md).
 
-### Shared state
+### SharedState state
 
-`sl.runtime.Shared` is a namespace of view state several live mounts agree on. Subclass it, declare
+`sl.runtime.SharedState` is a namespace of view state several live mounts agree on. Subclass it, declare
 state with `sl.state()`, and hand the same instance to whoever should see the same values:
 
 ```python
-class Workspace(sl.runtime.Shared[GuildId]):
+class Workspace(sl.runtime.SharedState[GuildId]):
     selected: int | None = sl.state(None)
     filters: tuple[str, ...] = sl.state(())
 
@@ -578,18 +578,18 @@ read-only read is not validated by default. Use `relaxed_read()` to opt back out
 `untracked()` controls reactive subscription and is independent. History covers shared and local writes in one atomic,
 version-conditional inverse.
 
-Collaborative/offline data is a separate optional `squid-replication` package. `state()` and `Shared`
+Collaborative/offline data is a separate optional `squid-replication` package. `state()` and `SharedState`
 remain transactional registers. Replicated handles expose immutable snapshots and semantic mutation
 methods, route local and remote changes through the same runtime commit gate, and never expose mutable
 backend containers.
 
 There is no global store and no lookup by type: two panels converge because something gave them
 the same object, so the handle is the state and its lifetime is whoever holds it. When what a host
-holds is one handle per scope, `sl.runtime.SharedPool` is that lifetime written down instead of a
+holds is one handle per scope, `sl.runtime.SharedStatePool` is that lifetime written down instead of a
 `setdefault` cache around every namespace:
 
 ```python
-workspaces = sl.runtime.SharedPool(Workspace, bus)
+workspaces = sl.runtime.SharedStatePool(Workspace, bus)
 workspace = workspaces.get(guild.id)
 ```
 
@@ -619,7 +619,7 @@ renders is never evaluated — and one that raises fails where its value is used
 commit. Values form selector boundaries: downstream computed values recompute only when the
 refreshed value compares unequal. `sl.runtime.untracked()` reads state without subscribing to it.
 
-### Reactive async resources
+### StateOwner async resources
 
 `sl.resource` keeps async data in a synchronous, renderable state machine. Its dependencies are
 whatever its loader read, tracked the same way a computed's are:
@@ -678,9 +678,9 @@ class PublishVote(sl.Component):
     @sl.operation(initial=PublishProgress.CREATING)
     async def _publish(
         self,
-        progress: sl.operations.Progress[PublishProgress],
+        progress: sl.operations.ProgressReporter[PublishProgress],
     ) -> VoteId:
-        progress.set(PublishProgress.PUBLISHING)
+        progress.report(PublishProgress.PUBLISHING)
         return await votes.publish()
 
     def render(self):

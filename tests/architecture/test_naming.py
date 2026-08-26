@@ -90,7 +90,7 @@ RETIRED_IDENTIFIERS = frozenset({"summary_bytes", "summary_payload"})
 
 ANNOTATION_VOCABULARY = {
     "ActionMode": frozenset({"policy"}),
-    "ActionResult": frozenset({"outcome"}),
+    "ActionStatus": frozenset({"status"}),
     "ChangeReport": frozenset({"summary"}),
     "ExceptionReport": frozenset({"summary"}),
     "Markup": frozenset({"dialect"}),
@@ -122,6 +122,7 @@ AGENT_NOUNS = {
     "Profiler": "profile",
     "Reconciler": "reconcile",
     "Recorder": "record",
+    "Reporter": "report",
     "Renderer": "render",
     "Resolver": "resolve",
     "Responder": "respond",
@@ -194,19 +195,13 @@ SAME_CONCEPT_TWO_LAYERS = {
 }
 """Shared names that are deliberate: the same concept at two layers, or a namespaced form."""
 
-UNRELATED_CONCEPTS_SHARING_A_WORD = {
-    # `interactions.ActionKind` is the shape of a frontend interaction -- press, selection,
-    # submit. `squid_reactivity.actions.ActionKind` is why a transaction exists -- action, undo,
-    # redo, compensation. Two senses of "action": the thing a person did, and the unit of work
-    # that records it. Unrelated.
-    "ActionKind",
-}
+UNRELATED_CONCEPTS_SHARING_A_WORD: set[str] = set()
 """Real collisions, recorded rather than renamed.
 
-`Destination` and `Progress` used to be here. Both were settled by renaming the semantic
+`Destination`, `ProgressReporter`, and `ActionKind` used to be here. They were settled by renaming the semantic
 node and leaving the load-bearing word alone: `semantic.Destination` is `NavOption` beside
-`delivery.Destination`, and `semantic.Progress` is `ProgressBar` beside the capability an
-operation reports through.
+`delivery.Destination`; `semantic.Progress` is `ProgressBar` beside `ProgressReporter`; and the
+frontend and transactional classifications are `InteractionKind` and `ActionPurpose`.
 """
 
 

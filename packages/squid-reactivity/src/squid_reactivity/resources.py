@@ -30,7 +30,7 @@ from squid_reactivity.core import (
     action_participant,
     cycle_path,
     declared_cells,
-    join_action,
+    enlist,
     settling,
 )
 
@@ -294,7 +294,7 @@ class Resource[ValueT](AsyncBinding):
         """Where this resource's changes are published, or `None` for a component's own.
 
         Mirrors `_Cell.address`: present exactly when something other than the owner might
-        be looking, which for a resource means it was declared on a `Shared` namespace.
+        be looking, which for a resource means it was declared on a `SharedState` namespace.
         """
         self._publish = publish
         self._status: ResourceStatus[ValueT] = Pending()
@@ -457,7 +457,7 @@ class Resource[ValueT](AsyncBinding):
         resource is the application's value, so it may not be the one thing that survives a
         handler that failed.
         """
-        staged = join_action(self, lambda: _Replacement(self))
+        staged = enlist(self, lambda: _Replacement(self))
         if staged is None:
             self._replace_now(value)
             return

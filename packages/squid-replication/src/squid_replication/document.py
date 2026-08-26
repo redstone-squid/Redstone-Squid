@@ -11,19 +11,19 @@ from typing import Any
 
 from squid_reactivity.actions import (
     ActionContext,
-    ActionKind,
+    ActionPurpose,
     ActorRef,
     CausalRef,
     ChangeReport,
     ConflictDetail,
-    ParticipantChange,
+    TransactionContribution,
 )
 from squid_reactivity.core import (
     ReactiveConflictError,
     TransactionView,
     _Cell,
     action_participant,
-    join_action,
+    enlist,
     transaction,
 )
 from squid_replication.fake import (
@@ -180,11 +180,11 @@ class _ReplicationParticipant:
             raise ReactiveConflictError(detail, f"{self.document.identity} changed before replicated prepare")
         return self.branch.prepare(base)
 
-    def describe_change(self, prepared: PreparedFakeUpdate) -> ParticipantChange | None:
+    def describe_change(self, prepared: PreparedFakeUpdate) -> TransactionContribution | None:
         if not prepared.operations:
             return None
         token = ReplicatedChangeToken(weakref.ref(self.document), prepared.operations, self.document.token_epoch)
-        return ParticipantChange(self.document.identity, token, ChangeReport(participants=1))
+        return TransactionContribution(self.document.identity, token, ChangeReport(participants=1))
 
     def apply(self, prepared: PreparedFakeUpdate) -> None:
         self.document.engine.apply(prepared)
@@ -295,14 +295,14 @@ class ReplicatedDocument:
         )
         context = ActionContext.create(
             f"Import {self.document_id}",
-            kind=ActionKind.REMOTE,
+            kind=ActionPurpose.REMOTE,
             cause=cause,
             root_action_id=envelope.origin_action_id,
             actor=ActorRef("replica", envelope.source_replica_id),
             metadata={"document_id": self.document_id, "update_id": update_id},
         )
         with transaction(action_context=context):
-            joined = join_action(
+            joined = enlist(
                 self,
                 lambda: _ReplicationParticipant(self, remote=prepared, remote_update_id=update_id),
             )
@@ -376,7 +376,7 @@ class ReplicatedDocument:
 
     def _participant(self) -> _ReplicationParticipant:
         self._ensure_open()
-        participant = join_action(self, lambda: _ReplicationParticipant(self))
+        participant = enlist(self, lambda: _ReplicationParticipant(self))
         if participant is None:
             message = "replicated mutations require a Squid transaction"
             raise RuntimeError(message)

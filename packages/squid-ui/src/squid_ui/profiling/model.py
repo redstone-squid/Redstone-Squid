@@ -49,7 +49,7 @@ class DispatchDisposition(StrEnum):
     CANCELLED = "cancelled"
 
 
-class ActionResult(StrEnum):
+class ActionStatus(StrEnum):
     """How far an admitted portable action chain progressed."""
 
     NOT_RUN = "not_run"
@@ -87,7 +87,7 @@ class DispatchResult:
     """Independent terminal, action, presentation, and generation dispatch facts."""
 
     disposition: DispatchDisposition
-    action: ActionResult
+    action: ActionStatus
     presentation: PresentationStatus
     generation: GenerationDecision
 
@@ -243,7 +243,7 @@ class AggregateKey:
     status: TraceStatus | None
     detail: str | None
     disposition: DispatchDisposition | None
-    action: ActionResult | None
+    action: ActionStatus | None
     presentation: PresentationStatus | None
 
 

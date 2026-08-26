@@ -9,11 +9,11 @@ import pytest
 
 from squid_ui_discord.durability import PostgresTopicBridge
 from squid_ui import state
-from squid_ui.runtime import Shared
+from squid_ui.runtime import SharedState
 from squid_ui.runtime.topics import Address, CellAddress, KindKeyCodec, LocalTopicBus, Topic, TopicBus
 
 
-class Workspace(Shared[int]):
+class Workspace(SharedState[int]):
     selected: int | None = state(None)
 
 
@@ -310,7 +310,7 @@ def test_a_cell_address_separates_two_namespaces_of_one_class() -> None:
 def test_a_namespace_that_defines_equality_cannot_merge_two_addresses() -> None:
     """Identity, not equality: a host's `__eq__` must not collapse two live namespaces."""
 
-    class Loose(Shared[int]):
+    class Loose(SharedState[int]):
         selected: int | None = state(None)
 
         def __eq__(self, other: object) -> bool:

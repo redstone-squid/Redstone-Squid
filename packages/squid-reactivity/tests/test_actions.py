@@ -1,4 +1,4 @@
-"""Action outcomes, version lineage, and aftermath boundaries."""
+"""Action outcomes, version lineage, and continuation boundaries."""
 
 import contextvars
 import gc
@@ -12,26 +12,26 @@ from hypothesis import strategies as st
 from squid_reactivity import (
     ActionCommit,
     ActionContext,
-    ActionKind,
+    ActionPurpose,
     ActionLedger,
     ActionResultCodec,
     ActionResultSnapshot,
     ActionRollback,
     ActionValidationError,
     ActorRef,
-    AftermathFailureSnapshot,
+    ContinuationFailureSnapshot,
     DurableResultPolicy,
     DurableResultSink,
     LocalTopicBus,
-    Reactive,
+    StateOwner,
     ReactiveConflictError,
     ReactiveWriteError,
     RedactionPolicy,
-    Shared,
+    SharedState,
     add_action_result_sink,
     apply_conditional_patches,
     computed,
-    join_action,
+    enlist,
     on_action_commit,
     on_action_rollback,
     readonly_transaction,
@@ -44,16 +44,16 @@ from squid_reactivity import (
 from squid_reactivity.core import _CURRENT
 
 
-class Preferences(Shared[int]):
+class Preferences(SharedState[int]):
     theme: str = state("system")
     locale: str = state("en")
 
 
-class Counter(Shared[int]):
+class Counter(SharedState[int]):
     value: int = state(0)
 
 
-class LocalCounter(Reactive):
+class LocalCounter(StateOwner):
     value: int = state(0)
 
 
@@ -113,7 +113,7 @@ def test_handler_failure_emits_rollback_after_staged_state_dies() -> None:
     with pytest.raises(RuntimeError, match="failed"), transaction():
         preferences.theme = "dark"
 
-        def observe(rollback, aftermath) -> None:
+        def observe(rollback, continuation) -> None:
             seen.append((rollback.reason.value, preferences.theme))
 
         on_action_rollback(observe)
@@ -177,7 +177,7 @@ def test_conditional_inverse_model_preserves_or_conflicts_without_clobbering(
     counter = Counter(LocalTopicBus(), 1)
     commits: list[ActionCommit] = []
     with transaction():
-        on_action_commit(lambda commit, aftermath: commits.append(commit))
+        on_action_commit(lambda commit, continuation: commits.append(commit))
         counter.value = committed_value
     inverse = commits[0].patches.inverse()
 
@@ -197,7 +197,7 @@ def test_retained_patch_uses_weak_slot_authority() -> None:
     owner = weakref.ref(counter)
     commits: list[ActionCommit] = []
     with transaction():
-        on_action_commit(lambda commit, aftermath: commits.append(commit))
+        on_action_commit(lambda commit, continuation: commits.append(commit))
         counter.value = 1
     inverse = commits[0].patches.inverse()
 
@@ -238,7 +238,7 @@ def test_relaxed_read_is_distinct_from_reactive_untracking() -> None:
     preferences = Preferences(LocalTopicBus(), 1)
     runs = 0
 
-    class Banner(Reactive):
+    class Banner(StateOwner):
         @computed
         def caption(self) -> str:
             nonlocal runs
@@ -259,7 +259,7 @@ def test_relaxed_read_is_distinct_from_reactive_untracking() -> None:
 def test_hook_failure_is_isolated_from_commit(caplog: pytest.LogCaptureFixture) -> None:
     preferences = Preferences(LocalTopicBus(), 1)
 
-    def fail(commit, aftermath) -> None:
+    def fail(commit, continuation) -> None:
         raise RuntimeError("hook failed")
 
     with caplog.at_level(logging.ERROR), transaction():
@@ -267,14 +267,14 @@ def test_hook_failure_is_isolated_from_commit(caplog: pytest.LogCaptureFixture) 
         preferences.theme = "dark"
 
     assert preferences.theme == "dark"
-    assert "aftermath hook failed" in caplog.text
+    assert "continuation hook failed" in caplog.text
 
 
 def test_hook_failure_is_a_bounded_causal_diagnostic_node() -> None:
     ledger = ActionLedger()
     add_action_result_sink(ledger)
 
-    def fail(commit, aftermath) -> None:
+    def fail(commit, continuation) -> None:
         raise RuntimeError("secret hook detail")
 
     try:
@@ -285,7 +285,7 @@ def test_hook_failure_is_a_bounded_causal_diagnostic_node() -> None:
 
     assert len(ledger.results) == 1
     failure = ledger.events[-1]
-    assert isinstance(failure, AftermathFailureSnapshot)
+    assert isinstance(failure, ContinuationFailureSnapshot)
     assert failure.cause.identity == ledger.results[0].action_id
     assert failure.exception.type_name == "RuntimeError"
     assert failure.exception.message == "[redacted]"
@@ -318,12 +318,12 @@ def test_sink_and_participant_finalize_failures_are_causal_diagnostic_nodes() ->
     add_action_result_sink(ledger)
     try:
         with transaction():
-            join_action(object(), FinalizeFailure)
+            enlist(object(), FinalizeFailure)
     finally:
         ledger.close()
         remove_action_result_sink(failing)
 
-    failures = [event for event in ledger.events if isinstance(event, AftermathFailureSnapshot)]
+    failures = [event for event in ledger.events if isinstance(event, ContinuationFailureSnapshot)]
     assert {failure.stage for failure in failures} == {"result_sink", "participant_finalize"}
     assert all(failure.exception.message == "[redacted]" for failure in failures)
     assert len(ledger.results) == 1
@@ -353,7 +353,7 @@ def test_apply_contract_failure_preserves_one_integrity_commit() -> None:
     try:
         with pytest.raises(RuntimeError, match="infallible apply contract"), transaction():
             preferences.theme = "dark"
-            join_action(object(), BrokenParticipant)
+            enlist(object(), BrokenParticipant)
     finally:
         ledger.close()
 
@@ -363,11 +363,11 @@ def test_apply_contract_failure_preserves_one_integrity_commit() -> None:
     assert ledger.results[0].tags == frozenset({"framework_integrity_failure"})
 
 
-def test_aftermath_direct_mutation_is_rejected() -> None:
+def test_continuation_direct_mutation_is_rejected() -> None:
     preferences = Preferences(LocalTopicBus(), 1)
     errors: list[Exception] = []
 
-    def mutate(commit, aftermath) -> None:
+    def mutate(commit, continuation) -> None:
         try:
             preferences.theme = "forbidden"
         except Exception as error:
@@ -382,13 +382,13 @@ def test_aftermath_direct_mutation_is_rejected() -> None:
     assert preferences.theme == "dark"
 
 
-def test_aftermath_recovery_is_a_fresh_causally_linked_action() -> None:
+def test_continuation_recovery_is_a_fresh_causally_linked_action() -> None:
     preferences = Preferences(LocalTopicBus(), 1)
     ledger = ActionLedger()
     add_action_result_sink(ledger)
 
-    def recover(rollback, aftermath) -> None:
-        with aftermath.start_action("present error"):
+    def recover(rollback, continuation) -> None:
+        with continuation.start_action("present error"):
             preferences.theme = "recovered"
 
     try:
@@ -406,7 +406,7 @@ def test_aftermath_recovery_is_a_fresh_causally_linked_action() -> None:
 
 
 def test_undo_kind_is_explicit_identity_not_hook_timing() -> None:
-    context = ActionContext.create("undo", kind=ActionKind.UNDO)
+    context = ActionContext.create("undo", kind=ActionPurpose.UNDO)
     ledger = ActionLedger()
     add_action_result_sink(ledger)
     try:
@@ -459,7 +459,7 @@ def test_portable_snapshot_redacts_by_default_and_can_opt_into_safe_metadata() -
     add_action_result_sink(ledger)
     try:
         with pytest.raises(RuntimeError), transaction(action_context=context):
-            on_action_rollback(lambda rollback, aftermath: rollbacks.append(rollback))
+            on_action_rollback(lambda rollback, continuation: rollbacks.append(rollback))
             raise RuntimeError("private failure message")
     finally:
         ledger.close()

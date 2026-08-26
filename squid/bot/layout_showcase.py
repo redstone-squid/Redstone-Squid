@@ -174,8 +174,8 @@ match result.status:
         ...  # a later write is intact; nothing was partially restored
 
 # Outcome hooks run after the old transaction is dead. Recovery is a new action.
-def rolled_back(rollback, aftermath):
-    with aftermath.start_action("Present failure"):
+def rolled_back(rollback, continuation):
+    with continuation.start_action("Present failure"):
         self.notice = rollback.reason.value
 
 sl.runtime.on_action_rollback(rolled_back)""",
@@ -194,8 +194,8 @@ peer.import_update(document.export_since())
 # a peer's later +3 and tagged-set insertion.
 result = await history.undo()""",
     "effects": """@sl.operation(initial="queued")
-async def publish(self, progress: sl.operations.Progress[str]) -> int:
-    progress.set("sending")
+async def publish(self, progress: sl.operations.ProgressReporter[str]) -> int:
+    progress.report("sending")
     return 42
 
 execution = self.publish.start()  # every start has a fresh execution id
@@ -354,9 +354,9 @@ class LayoutShowcase(sl.Component):
         self.peer_document: ReplicatedDocument = self.peer_replication_scope.open("layout-showcase")
 
     @sl.operation(initial="queued")
-    async def publish_revision(self, progress: sl.operations.Progress[str]) -> int:
+    async def publish_revision(self, progress: sl.operations.ProgressReporter[str]) -> int:
         """Simulate one repeatable external publication execution."""
-        progress.set("sending")
+        progress.report("sending")
         await asyncio.sleep(0)
         return (self.published_revision or 40) + 1
 
@@ -911,8 +911,8 @@ class LayoutShowcase(sl.Component):
         del event
         self.project_name = "Action Ledger" if self.project_name == "Redstone Squid" else "Redstone Squid"
 
-        def committed(commit: sl.runtime.ActionCommit, aftermath: sl.runtime.Aftermath) -> None:
-            with aftermath.start_action("Present commit outcome"):
+        def committed(commit: sl.runtime.ActionCommit, continuation: sl.runtime.ActionContinuation) -> None:
+            with continuation.start_action("Present commit outcome"):
                 self.outcome_result = (
                     f"COMMITTED · local sequence {commit.sequence.value} · action {str(commit.context.action_id)[-8:]}"
                 )
@@ -948,8 +948,8 @@ class LayoutShowcase(sl.Component):
             with sl.runtime.fresh_action_transaction(action_context=context):
                 self.project_name = "THIS STAGED VALUE MUST NOT APPEAR"
 
-                def rolled_back(rollback: sl.runtime.ActionRollback, aftermath: sl.runtime.Aftermath) -> None:
-                    with aftermath.start_action("Present rollback outcome"):
+                def rolled_back(rollback: sl.runtime.ActionRollback, continuation: sl.runtime.ActionContinuation) -> None:
+                    with continuation.start_action("Present rollback outcome"):
                         self.outcome_result = (
                             f"ROLLED BACK · {rollback.reason.value} · action "
                             f"{str(rollback.context.action_id)[-8:]} · recovery is a fresh action"
@@ -968,16 +968,16 @@ class LayoutShowcase(sl.Component):
     async def _merge_peer_review(self, event: sl.ActionEvent) -> None:
         del event
         with sl.runtime.fresh_action_transaction(
-            action_context=sl.runtime.ActionContext.create("Receive local update", kind=sl.runtime.ActionKind.REMOTE)
+            action_context=sl.runtime.ActionContext.create("Receive local update", kind=sl.runtime.ActionPurpose.REMOTE)
         ):
             self.peer_document.import_update(self.local_document.export_since())
         with sl.runtime.fresh_action_transaction(
-            action_context=sl.runtime.ActionContext.create("Peer review", kind=sl.runtime.ActionKind.REMOTE)
+            action_context=sl.runtime.ActionContext.create("Peer review", kind=sl.runtime.ActionPurpose.REMOTE)
         ):
             self.peer_document.counter("votes").increment(3)
             self.peer_document.set("reviewers").add("peer")
         with sl.runtime.fresh_action_transaction(
-            action_context=sl.runtime.ActionContext.create("Receive peer update", kind=sl.runtime.ActionKind.REMOTE)
+            action_context=sl.runtime.ActionContext.create("Receive peer update", kind=sl.runtime.ActionPurpose.REMOTE)
         ):
             self.local_document.import_update(self.peer_document.export_since())
         self.replication_result = "Replicas converged. Undo can now preserve the peer's later contribution."
@@ -1061,10 +1061,10 @@ class LayoutShowcase(sl.Component):
         self.peer_replication_scope.close()
 
 
-# --- Shared state ---------------------------------------------------------------------------
+# --- shared state ---------------------------------------------------------------------------
 
 
-class Appearance(sl.runtime.Shared[UserScope]):
+class Appearance(sl.runtime.SharedState[UserScope]):
     """View state two live panels agree on, scoped to one reader.
 
     Nothing outside the screen wants a theme name, so it is not a service and not a row: it
@@ -1076,7 +1076,7 @@ class Appearance(sl.runtime.Shared[UserScope]):
     density: str = sl.state("comfortable")
 
 
-class Session(sl.runtime.Shared[UserScope]):
+class Session(sl.runtime.SharedState[UserScope]):
     """What one invocation's two panels are looking at, and only for as long as they are."""
 
     focus: str = sl.state("overview")
@@ -1292,7 +1292,7 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         # Retention state, per §3 of the shared-state plan: the cog outlives every panel, so
         # a reader's accent survives closing and reopening the demo. The pool is the retention
         # policy, written down where the lifetime is known.
-        self._appearance = sl.runtime.SharedPool(Appearance, bot.topic_bus)
+        self._appearance = sl.runtime.SharedStatePool(Appearance, bot.topic_bus)
 
     @commands.hybrid_group(name="layout")
     async def layout_group(self, ctx: Context[BotT]) -> None:

@@ -220,7 +220,7 @@ async def test_composed_children_keep_independent_state_and_keys() -> None:
     assert component.right.count == 0
 
 
-async def test_history_exhibit_preserves_a_sibling_write_and_presents_rollback_aftermath() -> None:
+async def test_history_exhibit_preserves_a_sibling_write_and_presents_rollback_continuation() -> None:
     component = LayoutShowcase(section="history", entries=20, locale="en")
     mount = Mount(component, access=Everyone(), timeout=None)
     commit_render(mount)

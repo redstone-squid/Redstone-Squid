@@ -667,14 +667,14 @@ def _reactivity(mount: squid_ui_discord.Mount) -> list[str]:
     return lines
 
 
-def _pair(topic: object) -> tuple[sl.runtime.Shared[Any] | None, object]:
+def _pair(topic: object) -> tuple[sl.runtime.SharedState[Any] | None, object]:
     """An observed address split into its namespace and cell, or `(None, topic)` otherwise.
 
     Read from what the render observed rather than from what it subscribed to, so a mount
     with no scheduler still reports the shared state it is showing.
     """
     match topic:
-        case (sl.runtime.Shared() as owner, descriptor):
+        case (sl.runtime.SharedState() as owner, descriptor):
             return owner, descriptor
         case _:
             return None, topic

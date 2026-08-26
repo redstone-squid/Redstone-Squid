@@ -30,7 +30,7 @@ from squid_ui.primitives import (
 )
 from squid_ui.runtime.component import render_component_tree
 from squid_ui.runtime.owner import ComponentRuntime
-from squid_ui.runtime.shared import Shared
+from squid_ui.runtime.shared import SharedState
 from squid_ui.runtime.topics import CellAddress, LocalTopicBus
 from squid_ui.semantic import Action, Actions, Choice, Choices, Controlled, Group, List, ListItem
 
@@ -185,7 +185,7 @@ class TestRenderCaching:
         assert unchanged.nodes == initial.nodes
 
     def test_address_invalidation_backdates_before_tree_expansion(self, monkeypatch) -> None:
-        class Values(Shared[object]):
+        class Values(SharedState[object]):
             value: int = state(0)
 
         values = Values(LocalTopicBus(), object())
@@ -224,7 +224,7 @@ class TestRenderCaching:
         assert runtime.components is committed_components
 
     def test_address_invalidation_only_renders_the_dependent_sibling(self) -> None:
-        class Values(Shared[object]):
+        class Values(SharedState[object]):
             left: int = state(0)
             right: int = state(0)
 

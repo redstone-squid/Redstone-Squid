@@ -8,7 +8,7 @@ from squid_reactivity.operations import (
     OperationExecution,
     OperationStatus,
     Pending,
-    Progress,
+    ProgressReporter,
     Succeeded,
 )
 
@@ -20,6 +20,6 @@ __all__ = [
     "OperationExecution",
     "OperationStatus",
     "Pending",
-    "Progress",
+    "ProgressReporter",
     "Succeeded",
 ]

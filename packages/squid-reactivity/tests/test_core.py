@@ -6,10 +6,10 @@ import pytest
 
 from squid_reactivity import (
     LocalTopicBus,
-    Reactive,
+    StateOwner,
     ReactiveConflictError,
     ReactiveWriteError,
-    Shared,
+    SharedState,
     StaleReactiveContextError,
     computed,
     observe_reads,
@@ -19,7 +19,7 @@ from squid_reactivity import (
 )
 
 
-class Counter(Reactive):
+class Counter(StateOwner):
     value: int = state(0)
 
     def __init__(self) -> None:
@@ -64,7 +64,7 @@ def test_observed_state_cannot_be_written() -> None:
 
 
 def test_construction_inside_an_observation_may_assign_declared_state() -> None:
-    class Required(Reactive):
+    class Required(StateOwner):
         value: int = state()
 
         def __init__(self, value: int) -> None:
@@ -141,12 +141,12 @@ def test_a_synchronous_transaction_is_confined_to_nobody() -> None:
     assert counter.value == 3
 
 
-class Preferences(Shared[None]):
+class Preferences(SharedState[None]):
     theme: str = state("light")
     locale: str = state("en")
 
 
-class Label(Reactive):
+class Label(StateOwner):
     preferences: Preferences = state(opaque=True)
 
     def __init__(self, preferences: Preferences) -> None:

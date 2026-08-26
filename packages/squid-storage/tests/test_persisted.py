@@ -5,11 +5,11 @@ from collections.abc import Mapping
 import anyio
 import pytest
 
-from squid_reactivity import LocalTopicBus, Shared, state, transaction
+from squid_reactivity import LocalTopicBus, SharedState, state, transaction
 from squid_storage import MemoryScopedStore, PersistedPool, Slot, json_codec
 
 
-class Preferences(Shared[str]):
+class Preferences(SharedState[str]):
     theme: str = state("dark")
 
 
