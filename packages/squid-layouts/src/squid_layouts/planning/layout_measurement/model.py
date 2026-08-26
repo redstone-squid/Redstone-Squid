@@ -4,7 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
-from squid_layouts.planning.limits import DISPLAY_TEXT
+from squid_layouts.planning.limits import Axis
 from squid_layouts.primitives.nodes import (
     CardMedia,
     EntitySelect,
@@ -132,7 +132,7 @@ class Pager:
     fragments: list[str]
     footer_slot: RText
     footer: Callable[[int, int], str]
-    axis: str = DISPLAY_TEXT
+    axis: str = Axis.DISPLAY_TEXT
     """The text pool this pager's body and footer draw from."""
     initial: int = 0
     """The page to open on; a mount adopts this before its first render."""

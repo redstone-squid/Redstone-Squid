@@ -80,7 +80,6 @@ class Target[ModeT = Any, AdapterT = Any, BodyT = Any](TargetProfile[ModeT, Adap
             limits=target.limits,
             extensions=target.extensions,
             dialect=target.dialect,
-            resources=target.resources,
             mode=target.mode,
             adapter=target.adapter,
             body_type=target.body_type,

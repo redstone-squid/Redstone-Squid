@@ -7,17 +7,7 @@ import squid_layouts as sl
 from squid_discord import CLASSIC_TARGET, V2_LIMITS, V2_TARGET, Target
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.planning import plan
-from squid_layouts.planning.limits import (
-    ATTACHMENTS,
-    CLASSIC_LIMITS,
-    COMPONENTS,
-    CONTENT_TEXT,
-    CONTROLS,
-    DISPLAY_TEXT,
-    EMBED_TEXT,
-    EMBEDS,
-    ROWS,
-)
+from squid_layouts.planning.limits import CLASSIC_LIMITS, Axis
 from squid_layouts.primitives import (
     Card,
     CardAuthor,
@@ -55,10 +45,10 @@ class TestTargets:
             Target()  # type: ignore[call-arg]
 
     def test_custom_limits_arrive_through_a_custom_target(self) -> None:
-        target = Target.classic(limits=CLASSIC_LIMITS.__class__(embeds=2))
+        target = Target.classic(limits=CLASSIC_LIMITS.__class__(embed_count=2))
 
-        assert target.capacity(EMBEDS) == 2
-        assert target.capacity(EMBED_TEXT) == CLASSIC_LIMITS.embed_text
+        assert target.capacity(Axis.EMBEDS) == 2
+        assert target.capacity(Axis.EMBED_TEXT) == CLASSIC_LIMITS.embed_text
 
 
 class TestCapabilities:
@@ -78,28 +68,28 @@ class TestCapabilities:
 
 class TestBudgets:
     def test_classic_budgets_two_independent_text_pools(self) -> None:
-        assert CLASSIC_LIMITS.text_axes == {CONTENT_TEXT: 2000, EMBED_TEXT: 6000}
+        assert CLASSIC_LIMITS.text_axes == {Axis.CONTENT_TEXT: 2000, Axis.EMBED_TEXT: 6000}
 
     def test_v2_budgets_exactly_one(self) -> None:
-        assert V2_LIMITS.text_axes == {DISPLAY_TEXT: 4000}
+        assert V2_LIMITS.text_axes == {Axis.DISPLAY_TEXT: 4000}
 
     def test_classic_budgets_the_axes_a_classic_message_actually_has(self) -> None:
         assert CLASSIC_TARGET.capacities == {
-            CONTENT_TEXT: 2000,
-            EMBED_TEXT: 6000,
-            EMBEDS: 10,
-            ROWS: 5,
-            CONTROLS: 25,
-            ATTACHMENTS: 10,
+            Axis.CONTENT_TEXT: 2000,
+            Axis.EMBED_TEXT: 6000,
+            Axis.EMBEDS: 10,
+            Axis.ROWS: 5,
+            Axis.CONTROLS: 25,
+            Axis.ATTACHMENTS: 10,
         }
 
     def test_no_classic_strategy_can_borrow_the_v2_totals(self) -> None:
-        assert COMPONENTS not in CLASSIC_TARGET.capacities
-        assert DISPLAY_TEXT not in CLASSIC_TARGET.capacities
+        assert Axis.COMPONENTS not in CLASSIC_TARGET.capacities
+        assert Axis.DISPLAY_TEXT not in CLASSIC_TARGET.capacities
 
     def test_row_and_control_shape_is_stated_once_for_both_modes(self) -> None:
-        for name in ("row_buttons", "button_label", "select_options", "custom_id", "modal_components"):
-            assert getattr(CLASSIC_LIMITS, name) == getattr(V2_LIMITS, name)
+        """Not merely equal: the same object, so the two can no longer drift apart."""
+        assert CLASSIC_LIMITS.components is V2_LIMITS.components
 
 
 class TestClassicShape:
@@ -180,7 +170,7 @@ class TestLocalCaps:
         title = body(Card(title=Text("x" * 300, overflow=Truncate()))).embeds[0].title
 
         assert title is not None
-        assert len(title) == CLASSIC_LIMITS.embed_title
+        assert len(title) == CLASSIC_LIMITS.embeds.title
 
     def test_a_field_value_over_its_cap_names_the_field_and_the_cap(self) -> None:
         with pytest.raises(LayoutInvariantError, match="field value is 2000 characters; the cap is 1024"):
@@ -240,7 +230,7 @@ class TestDiscordPyCrossChecks:
     def test_discordpy_enforces_the_ten_embed_cap_and_nothing_finer(self) -> None:
         from discord.http import handle_message_parameters
 
-        embeds = [discord.Embed(description="x") for _ in range(CLASSIC_LIMITS.embeds + 1)]
+        embeds = [discord.Embed(description="x") for _ in range(CLASSIC_LIMITS.embed_count + 1)]
 
         with pytest.raises(ValueError, match="embeds"):
             handle_message_parameters(embeds=embeds)
