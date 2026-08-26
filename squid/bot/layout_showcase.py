@@ -28,7 +28,7 @@ from squid.core.i18n import _
 from squid_ui_discord import SessionKey
 from squid_ui_discord.screens import Opener
 from squid_ui_discord.sessions import UserScope
-from squid_replication import ReplicatedDocument, ReplicatedScope
+from squid_replication import ReplicatedDocument, Replica
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -179,7 +179,7 @@ def rolled_back(rollback, continuation):
         self.notice = rollback.reason.value
 
 sl.runtime.on_action_rollback(rolled_back)""",
-    "replication": """scope = ReplicatedScope("browser-a")
+    "replication": """scope = Replica("browser-a")
 document = scope.open("showcase")
 
 # Reads are immutable snapshots; writes are semantic transaction participants.
@@ -348,8 +348,8 @@ class LayoutShowcase(sl.Component):
         self.left = DemoCounter(L(t"Left child"))
         self.right = DemoCounter(L(t"Right child"))
         self.channel_service = DemoChannelService()
-        self.local_replication_scope = ReplicatedScope("showcase-local")
-        self.peer_replication_scope = ReplicatedScope("showcase-peer")
+        self.local_replication_scope = Replica("showcase-local")
+        self.peer_replication_scope = Replica("showcase-peer")
         self.local_document: ReplicatedDocument = self.local_replication_scope.open("layout-showcase")
         self.peer_document: ReplicatedDocument = self.peer_replication_scope.open("layout-showcase")
 

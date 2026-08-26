@@ -6,7 +6,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from squid_replicated.fake import FakeEngine
+from squid_replicated.fake import ReferenceEngine
 
 
 def _median(operation: Callable[[], Any], iterations: int) -> int:
@@ -19,7 +19,7 @@ def _median(operation: Callable[[], Any], iterations: int) -> int:
 
 
 def _measure(operation_count: int) -> dict[str, int]:
-    engine = FakeEngine("source")
+    engine = ReferenceEngine("source")
     seed = engine.branch()
     for index in range(operation_count):
         seed.apply(engine.operation("increment", "votes", 1))
@@ -44,7 +44,7 @@ def _measure(operation_count: int) -> dict[str, int]:
     update = engine.export_since()
 
     def import_fresh() -> None:
-        target = FakeEngine("target")
+        target = ReferenceEngine("target")
         target.apply(target.prepare_remote(update))
 
     token = engine.encode_token(last_prepared.operations)
