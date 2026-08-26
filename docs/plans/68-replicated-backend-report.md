@@ -65,11 +65,11 @@ The focused tests also reproduced the limiting behavior rather than inferring it
   from unavailable retained authority.
 
 The executable evidence is in
-[`test_real_backends.py`](../../packages/squid-replicated/tests/test_real_backends.py). The focused command is:
+[`test_real_backends.py`](../../packages/squid-replication/tests/test_real_backends.py). The focused command is:
 
 ```console
-uv run --locked --package squid-replicated --extra loro --extra pycrdt \
-  pytest packages/squid-replicated/tests/test_real_backends.py --no-cov -q
+uv run --locked --package squid-replication --extra loro --extra pycrdt \
+  pytest packages/squid-replication/tests/test_real_backends.py --no-cov -q
 ```
 
 Result at the report commit: 19 passed.

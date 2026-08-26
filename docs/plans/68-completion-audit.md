@@ -50,7 +50,7 @@ The development box deliberately did not run repository-wide pytest discovery.
 
 - 41 focused `squid-reactivity` action/interleaving/operation/resource tests passed.
 - 106 focused `squid-ui` transaction/history/DevTools/operation tests passed.
-- 32 fake/property/real-backend `squid-replicated` tests passed.
+- 32 fake/property/real-backend `squid-replication` tests passed.
 - 33 focused form-submit, profiler-link, and portable responder tests passed.
 - Both Loro and pycrdt extras passed their four engine-level spike tests within the replicated slice.
 - Pyrefly ran once; filtering its known nonzero repository result to Plan 68 package and benchmark paths produced no findings.

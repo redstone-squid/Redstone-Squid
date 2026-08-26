@@ -94,7 +94,7 @@ assert workspace.selected == "b"
 
 ## Semantic replicated inverse
 
-`state()` and `Shared` remain transactional registers. The optional `squid-replicated` package exposes
+`state()` and `Shared` remain transactional registers. The optional `squid-replication` package exposes
 immutable snapshots plus semantic methods:
 
 ```python

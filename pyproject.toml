@@ -35,7 +35,7 @@ dependencies = [
     "squid-discord",
     "squid-ui",
     "squid-patterns",
-    "squid-replicated",
+    "squid-replication",
     # Direct: `squid/topics.py` opens the LISTEN/NOTIFY bridge itself rather than reaching
     # for it through the UI package that used to re-export it.
     "squid-storage[postgres]",
@@ -130,7 +130,7 @@ squid-discord = { workspace = true }
 squid-ui = { workspace = true }
 squid-patterns = { workspace = true }
 squid-reactivity = { workspace = true }
-squid-replicated = { workspace = true }
+squid-replication = { workspace = true }
 squid-storage = { workspace = true }
 
 [tool.uv]
@@ -286,7 +286,7 @@ known-first-party = [
     "squid_ui",
     "squid_patterns",
     "squid_reactivity",
-    "squid_replicated",
+    "squid_replication",
     "squid_storage",
 ]
 
@@ -401,7 +401,7 @@ testpaths = [
     "packages/squid-ui/tests",
     "packages/squid-discord/tests",
     "packages/squid-patterns/tests",
-    "packages/squid-replicated/tests",
+    "packages/squid-replication/tests",
 ]
 xfail_strict = true
 addopts = [
@@ -416,7 +416,7 @@ addopts = [
     "--cov=squid_reactivity",
     "--cov=squid_storage",
     "--cov=squid_ui",
-    "--cov=squid_replicated",
+    "--cov=squid_replication",
     "--cov=squid_discord",
     "--cov=squid_patterns",
 ]

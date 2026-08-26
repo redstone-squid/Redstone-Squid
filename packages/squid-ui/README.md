@@ -578,7 +578,7 @@ read-only read is not validated by default. Use `relaxed_read()` to opt back out
 `untracked()` controls reactive subscription and is independent. History covers shared and local writes in one atomic,
 version-conditional inverse.
 
-Collaborative/offline data is a separate optional `squid-replicated` package. `state()` and `Shared`
+Collaborative/offline data is a separate optional `squid-replication` package. `state()` and `Shared`
 remain transactional registers. Replicated handles expose immutable snapshots and semantic mutation
 methods, route local and remote changes through the same runtime commit gate, and never expose mutable
 backend containers.

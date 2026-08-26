@@ -97,7 +97,7 @@ live transaction context.
 
 ## Replicated state
 
-Do not add CRDT behavior to `state()` or `Shared`. Use the optional `squid-replicated` package for
+Do not add CRDT behavior to `state()` or `Shared`. Use the optional `squid-replication` package for
 immutable snapshots and semantic mutations. Transport messages are `ReplicatedUpdate` envelopes with
 document/backend/schema/source/action identity and a verified payload hash. Loro and pycrdt text engines
 remain experimental. Loro is the selected generalized-backend hardening direction, while its production

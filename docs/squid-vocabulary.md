@@ -3,7 +3,7 @@
 **Status: applied 2026-08-26. `tests/architecture/test_naming.py` enforces the
 retired vocabulary across public and private identifiers.**
 
-One dictionary for `squid-ui`, `squid-reactivity`, `squid-replicated`, `squid-storage`,
+One dictionary for `squid-ui`, `squid-reactivity`, `squid-replication`, `squid-storage`,
 `squid-discord`, and `squid-patterns`, covering head nouns, suffixes, callable verbs, and
 private identifiers. It is the naming source of truth referenced by
 [squid-ui-architecture.md §Naming](squid-ui-architecture.md#naming).
@@ -37,7 +37,7 @@ The reverse also holds: where a convention reads badly *here*, the dictionary wi
 deviation is recorded the same way.
 
 **Carve-out.** CRDT "snapshot" (a version vector of a replicated document) is not the pinned
-`Snapshot` below. `squid-replicated` keeps its own sense, recorded here so the rule stays
+`Snapshot` below. `squid-replication` keeps its own sense, recorded here so the rule stays
 enforceable.
 
 ## Suffixes

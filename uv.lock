@@ -16,7 +16,7 @@ members = [
     "squid-ui",
     "squid-patterns",
     "squid-reactivity",
-    "squid-replicated",
+    "squid-replication",
     "squid-storage",
 ]
 
@@ -2317,7 +2317,7 @@ dependencies = [
     { name = "squid-discord" },
     { name = "squid-ui" },
     { name = "squid-patterns" },
-    { name = "squid-replicated" },
+    { name = "squid-replication" },
     { name = "squid-storage", extra = ["postgres"] },
     { name = "uvicorn" },
     { name = "uvloop", marker = "sys_platform != 'win32'" },
@@ -2402,7 +2402,7 @@ requires-dist = [
     { name = "squid-discord", editable = "packages/squid-discord" },
     { name = "squid-ui", editable = "packages/squid-ui" },
     { name = "squid-patterns", editable = "packages/squid-patterns" },
-    { name = "squid-replicated", editable = "packages/squid-replicated" },
+    { name = "squid-replication", editable = "packages/squid-replication" },
     { name = "squid-storage", extras = ["postgres"], editable = "packages/squid-storage" },
     { name = "uvicorn", specifier = ">=0.34.0" },
     { name = "uvloop", marker = "sys_platform != 'win32'", specifier = ">=0.21.0" },
@@ -2773,9 +2773,9 @@ version = "0.1.0"
 source = { editable = "packages/squid-reactivity" }
 
 [[package]]
-name = "squid-replicated"
+name = "squid-replication"
 version = "0.1.0"
-source = { editable = "packages/squid-replicated" }
+source = { editable = "packages/squid-replication" }
 dependencies = [
     { name = "squid-reactivity" },
 ]
