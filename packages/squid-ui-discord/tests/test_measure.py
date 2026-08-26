@@ -5,12 +5,6 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from squid_ui_discord import (
-    V2_LIMITS as LIMITS,
-)
-from squid_ui_discord import conform, render_static
-from squid_ui_discord.conformance import ELLIPSIS
-from squid_ui_discord.testing import assert_within_limits
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning import (
     LayoutOverflowError,
@@ -37,6 +31,12 @@ from squid_ui.primitives import (
     Truncate,
     Variants,
 )
+from squid_ui_discord import (
+    V2_LIMITS as LIMITS,
+)
+from squid_ui_discord import conform, render_static
+from squid_ui_discord.conformance import ELLIPSIS
+from squid_ui_discord.testing import assert_within_limits
 
 
 def _static_view(*args, **kwargs) -> discord.ui.LayoutView:

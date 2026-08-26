@@ -99,7 +99,7 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     async def _deliver(
         self,
         ctx: Context[BotT],
-        presentation: sd.presentation.DiscordPresentation,
+        presentation: sd.message_payload.MessagePayload,
         locale: str | None,
     ) -> None:
         """Answer a plain layout where only the caller can read it (see `_deliver_browser`)."""

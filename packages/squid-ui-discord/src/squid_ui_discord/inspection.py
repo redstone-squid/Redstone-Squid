@@ -15,7 +15,6 @@ from urllib.parse import urlsplit
 import discord
 from discord.ui.select import BaseSelect
 
-from squid_ui_discord.presentation import DiscordMode, DiscordPresentation
 from squid_ui.errors import ExistingLayoutError, LimitViolationError
 from squid_ui.planning.limits import (
     CLASSIC_LIMITS,
@@ -26,6 +25,7 @@ from squid_ui.planning.limits import (
     V2Limits,
 )
 from squid_ui.planning.target import ResourceCost
+from squid_ui_discord.message_payload import MessageMode, MessagePayload
 
 type Path = tuple[int, ...]
 
@@ -96,7 +96,7 @@ class AuditReport:
 
 
 @dataclass(frozen=True, slots=True)
-class DiscordReservation:
+class MessageReservation:
     """What a host-owned message already spends, as an immutable planning input."""
 
     usage: ResourceCost
@@ -113,7 +113,7 @@ class DiscordReservation:
     custom_ids: tuple[CustomIdSite, ...]
     components_v2: bool
     report: AuditReport
-    mode: DiscordMode = DiscordMode.COMPONENTS_V2
+    mode: MessageMode = MessageMode.COMPONENTS_V2
 
     @property
     def cost(self) -> ResourceCost:
@@ -178,10 +178,10 @@ def cost(*items: discord.ui.Item[Any]) -> ResourceCost:
 
 
 def measure(
-    host: DiscordPresentation | discord.ui.LayoutView | discord.ui.View,
+    host: MessagePayload | discord.ui.LayoutView | discord.ui.View,
     *,
     attachments: int = 0,
-) -> DiscordReservation:
+) -> MessageReservation:
     """Measure what a host message or view already spends, mutating and repairing nothing.
 
     One function over three shapes because a caller reserving room does not care which one
@@ -189,8 +189,8 @@ def measure(
     decides the limits too: a V2 host is measured against the V2 table and a classic one
     against the classic table, with nothing for a caller to get wrong.
     """
-    if isinstance(host, DiscordPresentation):
-        if host.mode is DiscordMode.CLASSIC:
+    if isinstance(host, MessagePayload):
+        if host.mode is MessageMode.CLASSIC:
             return measure_classic(host, attachments=attachments)
         return _measure_v2(host.layout, attachments=attachments + len(host.assets))
     if isinstance(host, discord.ui.LayoutView):
@@ -198,8 +198,8 @@ def measure(
     if isinstance(host, discord.ui.View):
         # A bare classic view is controls and nothing else: it says nothing about the
         # content or embeds the same message may also carry.
-        return measure_classic(DiscordPresentation.classic(view=host), attachments=attachments)
-    message = f"measure expects a DiscordPresentation, LayoutView, or View, not {type(host).__name__}"
+        return measure_classic(MessagePayload.classic(view=host), attachments=attachments)
+    message = f"measure expects a MessagePayload, LayoutView, or View, not {type(host).__name__}"
     raise TypeError(message)
 
 
@@ -228,14 +228,14 @@ def effective_rows(view: discord.ui.View) -> tuple[int, ...]:
 
 
 def measure_classic(
-    host: DiscordPresentation,
+    host: MessagePayload,
     *,
     attachments: int = 0,
     limits: ClassicLimits = CLASSIC_LIMITS,
-) -> DiscordReservation:
+) -> MessageReservation:
     """Measure a complete classic host message across the axes a classic target budgets."""
-    if host.mode is not DiscordMode.CLASSIC:
-        message = f"measure_classic expects a classic presentation, not {host.mode.value}"
+    if host.mode is not MessageMode.CLASSIC:
+        message = f"measure_classic expects a classic payload, not {host.mode.value}"
         raise TypeError(message)
     view = host.view if isinstance(host.view, discord.ui.View) else None
 
@@ -265,7 +265,7 @@ def measure_classic(
     # message has one content field and Squid cannot append to someone else's.
     reserved = ResourceCost({**common, Axis.CONTENT_TEXT: limits.content if content is not None else 0})
 
-    return DiscordReservation(
+    return MessageReservation(
         usage=usage,
         reserved=reserved,
         custom_ids=tuple(custom_ids),
@@ -278,7 +278,7 @@ def measure_classic(
                 )
             )
         ),
-        mode=DiscordMode.CLASSIC,
+        mode=MessageMode.CLASSIC,
     )
 
 
@@ -287,7 +287,7 @@ def _measure_v2(
     *,
     attachments: int = 0,
     limits: V2Limits = LIMITS,
-) -> DiscordReservation:
+) -> MessageReservation:
     """Measure what `view` already spends, without mutating or repairing it."""
 
     custom_ids: list[CustomIdSite] = []
@@ -302,7 +302,7 @@ def _measure_v2(
             custom_ids.append(CustomIdSite(custom_id, path))
 
     spent = ResourceCost({Axis.COMPONENTS: components, Axis.DISPLAY_TEXT: text, Axis.ATTACHMENTS: attachments})
-    return DiscordReservation(
+    return MessageReservation(
         # Identical for Components V2: every axis it budgets is additive, so what the host
         # spends and what it withholds are the same number.
         usage=spent,
@@ -310,7 +310,7 @@ def _measure_v2(
         custom_ids=tuple(custom_ids),
         components_v2=True,
         report=audit(view, attachments=attachments, limits=limits),
-        mode=DiscordMode.COMPONENTS_V2,
+        mode=MessageMode.COMPONENTS_V2,
     )
 
 

@@ -23,7 +23,7 @@ from squid_ui_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_c
 from squid_ui_discord.attachments import attachment_assets
 from squid_ui_discord.conformance import LimitViolationError, conform
 from squid_ui_discord.emoji import discord_emoji
-from squid_ui_discord.presentation import DiscordPresentation
+from squid_ui_discord.message_payload import MessagePayload
 from squid_ui_discord.render_cache import RenderProgramCache
 from squid_ui_discord.target import DISCORD_V2_DPY27
 
@@ -192,14 +192,14 @@ class V2Renderer:
         *,
         plan: PlanResult[scene.ComponentsV2] | None = None,
         wire: Wire | None = None,
-    ) -> DiscordPresentation:
+    ) -> MessagePayload:
         """Draw the complete message this scene resolves to.
 
-        A presentation rather than a view, because a message is both halves. For Components
+        A payload rather than a view, because a message is both halves. For Components
         V2 the layout happens to be the whole message, so this looks like ceremony — it stops
         looking like it the moment the other renderer has content and embeds to return.
         """
-        return DiscordPresentation.components_v2(
+        return MessagePayload.components_v2(
             self.view(document, plan=plan, wire=wire),
             assets=() if plan is None else attachment_assets(plan),
         )

@@ -3,12 +3,6 @@ import sys
 
 import pytest
 
-from squid_ui_discord.adapter import (
-    DISCORD_PY_27_ADAPTER,
-    discord_py_adapter_profile,
-    require_discord_py_capability,
-)
-from squid_ui_discord.target import classic, v2
 from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning import plan
@@ -16,6 +10,12 @@ from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.discord import classic_target, components_v2_target
 from squid_ui.planning.types import DiscordAdapter
 from squid_ui.primitives import Text
+from squid_ui_discord.adapter import (
+    DISCORD_PY_27_ADAPTER,
+    discord_py_adapter_profile,
+    require_discord_py_capability,
+)
+from squid_ui_discord.target import classic, v2
 
 
 class AlternateAdapter(DiscordAdapter):

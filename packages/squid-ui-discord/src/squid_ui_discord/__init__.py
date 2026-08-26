@@ -33,10 +33,11 @@ from squid_ui_discord import (
     guards,
     inspection,
     live,
+    message_payload,
     message_root,
     navigation,
-    presentation,
     renderer,
+    rendering,
     roles,
     routing,
     runtime,
@@ -64,15 +65,9 @@ from squid_ui_discord.adoption import (
     adopt,
 )
 from squid_ui_discord.challenges import ChallengeRunner, DialogPresenter
-from squid_ui_discord.composition import (
-    Composition,
-    compose,
-    render_item,
-    render_static,
-)
 from squid_ui_discord.conformance import conform
 from squid_ui_discord.delivery import (
-    Destination,
+    MessageDestination,
     deliver_to,
     edit_to,
     reply_to,
@@ -92,6 +87,12 @@ from squid_ui_discord.managed import (
     Work,
     run_managed_result,
 )
+from squid_ui_discord.message_payload import (
+    MessageMode,
+    MessageModeError,
+    MessagePayload,
+    message_mode,
+)
 from squid_ui_discord.message_root import (
     ChallengePresenter,
     ChallengeRequest,
@@ -110,11 +111,11 @@ from squid_ui_discord.message_root_scheduler import (
     MessageRootSchedulerSnapshot,
 )
 from squid_ui_discord.navigation import StackNavigator
-from squid_ui_discord.presentation import (
-    DiscordMode,
-    DiscordModeError,
-    DiscordPresentation,
-    mode_of,
+from squid_ui_discord.rendering import (
+    RenderedMessage,
+    render_item,
+    render_message,
+    render_static,
 )
 from squid_ui_discord.roles import (
     ANY,
@@ -192,12 +193,7 @@ __all__ = [
     "ChallengeSupervisor",
     "ClientRuntime",
     "ClientRuntimeMissing",
-    "Composition",
-    "Destination",
     "DialogPresenter",
-    "DiscordMode",
-    "DiscordModeError",
-    "DiscordPresentation",
     "ErrorObserver",
     "ErrorRenderer",
     "Everyone",
@@ -205,6 +201,10 @@ __all__ = [
     "LimitViolationError",
     "ManagedDelivery",
     "ManagedError",
+    "MessageDestination",
+    "MessageMode",
+    "MessageModeError",
+    "MessagePayload",
     "MessageRoot",
     "MessageRootDefaults",
     "MessageRootFactory",
@@ -215,6 +215,7 @@ __all__ = [
     "OpenContext",
     "Owner",
     "PauseUpdates",
+    "RenderedMessage",
     "RenewEphemeral",
     "ResourceCost",
     "RoleCategory",
@@ -244,7 +245,6 @@ __all__ = [
     "challenges",
     "classic",
     "classic_renderer",
-    "compose",
     "conform",
     "conformance",
     "contribute",
@@ -262,17 +262,19 @@ __all__ = [
     "install",
     "limits",
     "live",
+    "message_mode",
+    "message_payload",
     "message_root",
     "message_roots",
     "modals",
-    "mode_of",
     "native",
     "navigation",
     "navigation_controls",
-    "presentation",
     "render_item",
+    "render_message",
     "render_static",
     "renderer",
+    "rendering",
     "reply_to",
     "respond_to",
     "responder",

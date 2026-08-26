@@ -15,8 +15,8 @@ from squid_ui import Component
 from squid_ui.interactions import ActionEvent
 from squid_ui.semantic import ActionControl, ActionControls, Heading, Paragraph
 from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, MessageRoot, Owner
+from squid_ui_discord.message_payload import MessageMode
 from squid_ui_discord.message_root import ClassicMountedView, MountedView
-from squid_ui_discord.presentation import DiscordMode
 from squid_ui_discord.testing import (
     commit_classic_render,
     commit_render,
@@ -88,8 +88,8 @@ class TestPresentation:
         candidate = message_root._pending
         assert candidate is not None
 
-        assert candidate.presentation.mode is DiscordMode.CLASSIC
-        assert candidate.presentation.embeds[0].title == "Piston door"
+        assert candidate.payload.mode is MessageMode.CLASSIC
+        assert candidate.payload.embeds[0].title == "Piston door"
 
     def test_a_v2_message_root_delivers_a_layout_and_no_embeds(self) -> None:
         message_root = message_root_for(DISCORD_V2_DPY27)
@@ -97,8 +97,8 @@ class TestPresentation:
         candidate = message_root._pending
         assert candidate is not None
 
-        assert candidate.presentation.mode is DiscordMode.COMPONENTS_V2
-        assert candidate.presentation.embeds == ()
+        assert candidate.payload.mode is MessageMode.COMPONENTS_V2
+        assert candidate.payload.embeds == ()
 
 
 @pytest.mark.parametrize("target", TARGETS)

@@ -1,6 +1,6 @@
-"""Composing classic Discord messages: `squid_ui_discord.classic.compose` and friends.
+"""Composing classic Discord messages: `squid_ui_discord.classic.render_message` and friends.
 
-A separate module rather than a mode flag on `squid_ui_discord.compose`, because the author picks
+A separate module rather than a mode flag on `squid_ui_discord.render_message`, because the author picks
 the message mode and should have to say so. The two produce different messages with different
 capabilities, and a default that silently decides which one you get is the thing this whole
 target exists to avoid.
@@ -40,19 +40,19 @@ from squid_ui_discord.classic_renderer import ClassicRenderer, Wire
 from squid_ui_discord.fragments import _reject_dispatchable
 from squid_ui_discord.inspection import (
     CustomIdSite,
-    DiscordReservation,
+    MessageReservation,
     audit_classic_payload,
     effective_rows,
     measure,
     measure_classic,
 )
-from squid_ui_discord.presentation import DiscordMode, DiscordModeError, DiscordPresentation
+from squid_ui_discord.message_payload import MessageMode, MessageModeError, MessagePayload
 from squid_ui_discord.target import DISCORD_V1_DPY27, Target
 
 logger = logging.getLogger(__name__)
 
 
-def compose(
+def render_message(
     rendered: DocumentLike,
     *,
     wire: Wire | None = None,
@@ -72,9 +72,9 @@ def compose(
     profile: OperationRecorder | None = None,
 ):
     """Plan a logical document, then draw the complete classic message it resolves to."""
-    from squid_ui_discord.composition import Composition, _span
+    from squid_ui_discord.rendering import RenderedMessage, _span
 
-    adapter = require_discord_py_target(target, AdapterCapability.RENDER_CLASSIC, "compose a classic message")
+    adapter = require_discord_py_target(target, AdapterCapability.RENDER_CLASSIC, "render a classic message")
     with _span(profile, "planner") as planner_span:
         result = plan_document(
             rendered,
@@ -102,10 +102,10 @@ def compose(
             profile.increment("planner.states_explored", result.metrics.states_explored)
     drawer = renderer if renderer is not None else ClassicRenderer(limits=target.limits, adapter=adapter)
     with _span(profile, "renderer"):
-        presentation = drawer.draw(result.scene, plan=result, wire=wire)
+        payload = drawer.draw(result.scene, plan=result, wire=wire)
     if result.report.events:
         logger.warning("layout degraded: %s", "; ".join(event.message for event in result.report.events))
-    return Composition(presentation, result)
+    return RenderedMessage(payload, result)
 
 
 def render_static(
@@ -117,13 +117,13 @@ def render_static(
     palette: Palette = DEFAULT_PALETTE,
     strict: bool = False,
     reservation: ResourceCost = EMPTY_RESERVATION,
-) -> DiscordPresentation:
+) -> MessagePayload:
     """Plan and draw a sessionless classic document as one complete message.
 
     A presentation, never a bare view: the embeds *are* the message here, and handing back
     only the controls would leave the caller to reassemble the half that carries the content.
     """
-    return compose(
+    return render_message(
         nodes.render() if isinstance(nodes, Component) else nodes,
         target=target,
         chrome=chrome,
@@ -131,7 +131,7 @@ def render_static(
         palette=palette,
         strict=strict,
         reservation=reservation,
-    ).presentation
+    ).payload
 
 
 @dataclass(slots=True)
@@ -140,11 +140,11 @@ class AttachedClassicContribution:
 
     The host's `View` is mutated transactionally: its items are moved, never cloned, because
     a control's callback registration belongs to the view that owns it. Content, embeds, and
-    the asset tuple are immutable values, so `presentation` is a new whole message rather
+    the asset tuple are immutable values, so `payload` is a new whole message rather
     than a patch applied to the host's.
     """
 
-    presentation: DiscordPresentation
+    payload: MessagePayload
     plan: PlanResult
     view: discord.ui.View | None
     items: tuple[discord.ui.Item[Any], ...]
@@ -162,7 +162,7 @@ class AttachedClassicContribution:
 
     def stale(self) -> bool:
         """Whether the host message has changed since this region was planned against it."""
-        return measure(self.presentation).fingerprint != self.fingerprint
+        return measure(self.payload).fingerprint != self.fingerprint
 
     def remove(self) -> None:
         """Remove exactly the items this contribution inserted.
@@ -178,11 +178,11 @@ class AttachedClassicContribution:
 
 
 def measure_host(
-    host: DiscordPresentation,
+    host: MessagePayload,
     *,
     attachments: int = 0,
     limits: ClassicLimits = CLASSIC_LIMITS,
-) -> DiscordReservation:
+) -> MessageReservation:
     """What a host-owned classic message already spends. Mutates and repairs nothing."""
     return measure_classic(host, attachments=attachments, limits=limits)
 
@@ -190,7 +190,7 @@ def measure_host(
 def contribute(
     document: DocumentLike,
     *,
-    to: DiscordPresentation,
+    to: MessagePayload,
     followed_by: Sequence[discord.Embed] = (),
     followed_by_controls: Sequence[discord.ui.Item[Any]] = (),
     reserve: ResourceCost = EMPTY_RESERVATION,
@@ -215,9 +215,9 @@ def contribute(
     This never sends: delivery stays with the owner of the message. Note that routed controls
     do not run the host view's checks and do not refresh its timeout.
     """
-    if to.mode is not DiscordMode.CLASSIC:
-        message = f"classic.contribute needs a classic host presentation, not {to.mode.value}"
-        raise DiscordModeError(message)
+    if to.mode is not MessageMode.CLASSIC:
+        message = f"classic.contribute needs a classic host payload, not {to.mode.value}"
+        raise MessageModeError(message)
     limits = target.limits
     trailing_embeds = tuple(followed_by)
     trailing_controls = tuple(followed_by_controls)
@@ -226,7 +226,7 @@ def contribute(
     host.raise_if_invalid()
 
     reservation = host.reserved + reserve + _trailing_cost(trailing_embeds, trailing_controls)
-    composition = compose(
+    rendered = render_message(
         document,
         target=target,
         chrome=chrome,
@@ -236,14 +236,14 @@ def contribute(
         reservation=reservation,
         positions=positions,
     )
-    staged = composition.presentation
+    staged = rendered.payload
     staging = staged.view if isinstance(staged.view, discord.ui.View) else None
     if staging is not None:
         _reject_dispatchable(staging)
 
     host_view = to.view if isinstance(to.view, discord.ui.View) else None
     staged_items = tuple(staging.children) if staging is not None else ()
-    merged = DiscordPresentation.classic(
+    merged = MessagePayload.classic(
         content=to.content if to.content is not None else staged.content,
         embeds=(*to.embeds, *staged.embeds, *trailing_embeds),
         view=host_view if host_view is not None else staging,
@@ -267,8 +267,8 @@ def contribute(
 
     inserted = _insert(host_view, staging, staged_items, trailing_controls)
     return AttachedClassicContribution(
-        presentation=merged,
-        plan=composition.plan,
+        payload=merged,
+        plan=rendered.plan,
         view=merged.view if isinstance(merged.view, discord.ui.View) else None,
         items=inserted,
         assets=merged.assets,
@@ -367,8 +367,8 @@ __all__ = [
     "CLASSIC_LIMITS",
     "AttachedClassicContribution",
     "ClassicRenderer",
-    "compose",
     "contribute",
     "measure_host",
+    "render_message",
     "render_static",
 ]

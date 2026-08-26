@@ -8,16 +8,16 @@ from squid_ui.planning.limits import CLASSIC_LIMITS, Axis
 from squid_ui.semantic import Heading, Paragraph
 from squid_ui_discord import ExistingLayoutError, classic
 from squid_ui_discord.inspection import measure
-from squid_ui_discord.presentation import DiscordModeError, DiscordPresentation
+from squid_ui_discord.message_payload import MessageModeError, MessagePayload
 
 
-def host(*, content=None, embeds=(), controls=()) -> DiscordPresentation:
+def host(*, content=None, embeds=(), controls=()) -> MessagePayload:
     view = None
     if controls:
         view = discord.ui.View(timeout=None)
         for item in controls:
             view.add_item(item)
-    return DiscordPresentation.classic(content=content, embeds=list(embeds), view=view)
+    return MessagePayload.classic(content=content, embeds=list(embeds), view=view)
 
 
 def button(label: str, row: int | None = None) -> discord.ui.Button:
@@ -64,14 +64,14 @@ class TestMeasurement:
         layout = discord.ui.LayoutView(timeout=None)
         layout.add_item(discord.ui.TextDisplay("hello"))
 
-        assert measure(DiscordPresentation.components_v2(layout)).reserved.get("display_text") == 5
+        assert measure(MessagePayload.components_v2(layout)).reserved.get("display_text") == 5
 
 
 class TestContribution:
     def test_the_squid_region_lands_after_the_hosts_embeds(self) -> None:
         result = classic.contribute(Paragraph("squid"), to=host(embeds=[discord.Embed(description="host")]))
 
-        assert [embed.description for embed in result.presentation.embeds] == ["host", "squid"]
+        assert [embed.description for embed in result.payload.embeds] == ["host", "squid"]
 
     def test_trailing_embeds_land_after_the_squid_region(self) -> None:
         result = classic.contribute(
@@ -80,12 +80,12 @@ class TestContribution:
             followed_by=[discord.Embed(description="tail")],
         )
 
-        assert [embed.description for embed in result.presentation.embeds] == ["host", "squid", "tail"]
+        assert [embed.description for embed in result.payload.embeds] == ["host", "squid", "tail"]
 
     def test_host_content_is_never_overwritten(self) -> None:
         result = classic.contribute(Paragraph("squid"), to=host(content="@here"))
 
-        assert result.presentation.content == "@here"
+        assert result.payload.content == "@here"
 
     def test_squid_controls_go_into_rows_after_the_hosts(self) -> None:
         from squid_ui.semantic import ActionControls, Link
@@ -95,7 +95,7 @@ class TestContribution:
             [Paragraph("body"), ActionControls((Link("d", "Docs", "https://example.invalid"),), key="k")],
             to=host_view_message,
         )
-        view = result.presentation.view
+        view = result.payload.view
 
         assert labels(view) == ["host", "Docs"]
         assert view is not None
@@ -110,7 +110,7 @@ class TestContribution:
             ActionControls((Link("d", "Docs", "https://example.invalid"),), key="k"), to=message
         )
 
-        assert result.presentation.view is message.view
+        assert result.payload.view is message.view
 
     def test_content_and_embeds_stay_immutable_values(self) -> None:
         embed = discord.Embed(description="host")
@@ -119,7 +119,7 @@ class TestContribution:
         result = classic.contribute(Paragraph("squid"), to=message)
 
         assert message.embeds == (embed,)
-        assert result.presentation.embeds is not message.embeds
+        assert result.payload.embeds is not message.embeds
 
     def test_removal_is_identity_based(self) -> None:
         from squid_ui.semantic import ActionControls, Link
@@ -168,8 +168,8 @@ class TestPreflight:
         layout = discord.ui.LayoutView(timeout=None)
         layout.add_item(discord.ui.TextDisplay("hi"))
 
-        with pytest.raises(DiscordModeError, match="needs a classic host presentation"):
-            classic.contribute(Paragraph("squid"), to=DiscordPresentation.components_v2(layout))
+        with pytest.raises(MessageModeError, match="needs a classic host payload"):
+            classic.contribute(Paragraph("squid"), to=MessagePayload.components_v2(layout))
 
     def test_a_component_local_action_cannot_enter_a_host_view(self) -> None:
         """The host view's callbacks stay under its owner."""

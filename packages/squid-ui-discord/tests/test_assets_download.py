@@ -87,10 +87,10 @@ class _DownloadComponent(Component):
 async def _send(message_root: MessageRoot) -> tuple[discord.ui.LayoutView, list[discord.File]]:
     delivered: list[tuple[discord.ui.LayoutView, list[discord.File]]] = []
 
-    async def destination(presentation: squid_ui_discord.presentation.DiscordPresentation) -> delivery.DeliveryResult:
+    async def destination(payload: squid_ui_discord.message_payload.MessagePayload) -> delivery.DeliveryResult:
         # Materializing the files is the destination's job, so this is where an asset the
         # host never resolved is refused.
-        delivered.append((presentation.layout, presentation.build_files()))
+        delivered.append((payload.layout, payload.build_files()))
         return delivery.DeliveryResult(None, None)
 
     await message_root.send(destination)
