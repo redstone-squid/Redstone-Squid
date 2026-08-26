@@ -155,12 +155,25 @@ class ConflictDetail:
     actual_version: int
 
 
+class ChangeToken[InverseT = Any](Protocol):
+    """A participant's handle to work it can plan and then stage an inverse for.
+
+    Opaque in what the inverse *is* -- that belongs to whichever backend produced it -- but
+    not in what can be asked of the handle. `sl.history()` calls exactly these two methods,
+    and typing the field `Any` meant neither the calls nor the implementations were checked.
+    """
+
+    def plan_inverse(self) -> InverseT | ConflictDetail: ...
+
+    def stage_inverse(self, inverse: InverseT) -> None: ...
+
+
 @dataclass(frozen=True, slots=True)
 class TransactionContribution:
     """An opaque reversible participant contribution and its safe report."""
 
     participant_id: str
-    token: Any
+    token: ChangeToken[Any]
     report: ChangeReport = ChangeReport(participants=1)
 
 

@@ -27,6 +27,7 @@ from squid_ui.primitives.nodes import (
     Budget,
     Card,
     CardFooter,
+    CardText,
     Fidelity,
     Footer,
     Lines,
@@ -185,8 +186,8 @@ def _close(card: _Fragment, context: _Context) -> Node:
     return Variants((Variant((plain,)), Variant((reformatted,), fidelity=Fidelity.REFORMATTED)))
 
 
-def _slot_text(value: object) -> str:
-    return card_text(value).content  # type: ignore[arg-type]
+def _slot_text(value: CardText) -> str:
+    return card_text(value).content
 
 
 def _region(card: Card, body: Sequence[Node], context: _Context) -> Node:

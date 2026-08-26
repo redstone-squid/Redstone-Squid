@@ -24,7 +24,13 @@ from squid_ui.semantic import (
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import ContentLike, display_text, normalize_content, require_key
 from squid_ui_widgets.commit import CommitMode
-from squid_ui_widgets.drivers import ComponentDriver, MachineControls, StateMachine, TransitionEvent
+from squid_ui_widgets.drivers import (
+    ComponentDriver,
+    FormPresentingMachine,
+    MachineControls,
+    StateMachine,
+    TransitionEvent,
+)
 
 type EditorValues = Mapping[str, object]
 type EditorCommitHandler = Callable[[TransitionEvent[EditorState], EditorValues, frozenset[str]], Awaitable[None]]
@@ -352,10 +358,10 @@ class Editor:
             return None
         section, nested_action = nested
         slot = self._slot(state, section.key)
-        resolver = getattr(section.machine, "form_for", None)
-        if slot is None or resolver is None:
+        machine = section.machine
+        if slot is None or not isinstance(machine, FormPresentingMachine):
             return None
-        return cast(FormSpec | None, resolver(slot.state, nested_action))
+        return machine.form_for(slot.state, nested_action)
 
     @staticmethod
     def _committed_changes(previous: EditorState, state: EditorState) -> frozenset[str]:

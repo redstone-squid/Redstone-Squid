@@ -1657,14 +1657,14 @@ def inspect_computed(owner: ReactiveOwner) -> dict[str, ComputedReport]:
     return reports
 
 
-def declared_cells(owner: ReactiveOwner) -> dict[Any, int]:
+def declared_cells(owner: ReactiveOwner) -> dict[_Cell, int]:
     """Every declared state cell on `owner`, at the version it holds now.
 
     The presumed dependency set for something that has not yet said what it reads -- a
     resource holding a value that was installed rather than loaded. Over-subscribing is the
     safe direction, and the first real run replaces the presumption with the truth.
     """
-    presumed: dict[Any, int] = {}
+    presumed: dict[_Cell, int] = {}
     for klass in type(owner).__mro__:
         for descriptor in vars(klass).values():
             if isinstance(descriptor, _State):
