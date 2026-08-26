@@ -247,7 +247,7 @@ class DurationPanel(sl.Component):
 
 This example is shortened from `tests/test_form_discord.py`. `FormSpec` is the explicit schema;
 subclass `sl.forms.Form` when descriptors are more convenient. Under the default
-`FormValidationPolicy.RETRY`, invalid input reopens a fresh modal with the submitted values and
+`FormValidationMode.RETRY`, invalid input reopens a fresh modal with the submitted values and
 errors. `ACCEPT_AND_MARK` instead delivers a `SubmitEvent` carrying errors to the handler. A legacy
 `discord.ui.Modal` instance does not carry over: move its fields and validation into the schema and
 its callback body into the submit handler.

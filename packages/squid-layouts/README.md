@@ -241,7 +241,7 @@ class BuildPanel(sl.Component):
     def __init__(self, build_id: str) -> None:
         self.build_id = build_id
 
-    @sl.resource(pending=sl.resources.PendingPolicy.ATOMIC)
+    @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
     async def build(self) -> Build:
         sl.runtime.watch(sl.runtime.Topic("build", self.build_id))
         return await queries.get_build(self.build_id)
@@ -254,7 +254,7 @@ class BuildPanel(sl.Component):
 follows the topic, a render that stops reading it stops following, and `bus.publish` re-pends
 the resource before the mount redraws. Nothing is subscribed by hand, so nothing has to be
 unsubscribed -- and the initial load is just the resource's first settle. Prefer
-`PendingPolicy.ATOMIC` for live data: the default `EXPLICIT` would flash a pending paint on
+`PendingMode.ATOMIC` for live data: the default `EXPLICIT` would flash a pending paint on
 every external change.
 
 Because the topic carries a version, a publish landing *during* the load is not lost: it moves
@@ -652,7 +652,7 @@ value when available, while request tokens prevent stale completions from publis
 
 Explicit pending is the default: Discord commits the pending render, settles observed sibling
 resources concurrently, then edits to the settled render. Use
-`@sl.resource(pending=sl.resources.PendingPolicy.ATOMIC)` when pending should remain internal and
+`@sl.resource(pending=sl.resources.PendingMode.ATOMIC)` when pending should remain internal and
 the first delivery must already be settled. Its `.status` is typed as `Ready[T] | Failed[T]`:
 refreshes expose the previous `Ready` value while loading, and an initial pending read is retried
 by the mount. Both policies use the same internal state machine and neither starts detached

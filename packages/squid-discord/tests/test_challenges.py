@@ -18,7 +18,7 @@ from squid_layouts import ActionEvent, Component, state
 from squid_layouts import form as sl_form
 from squid_layouts.forms import FormSpec, TextField
 from squid_layouts.guards import Challenge, ChallengeResolver, GuardDecision, GuardLedger, approvals
-from squid_layouts.interactions import ActionPolicy
+from squid_layouts.interactions import ActionMode
 from squid_layouts.profiling import DispatchDisposition, MemoryProfiler, OperationKind
 from squid_layouts.runtime.reactivity import readonly_transaction, transaction
 
@@ -28,12 +28,12 @@ class _Panel(Component):
 
     count: int = state(0)
 
-    def __init__(self, *, guard: sl.guards.Guard, policy: ActionPolicy = ActionPolicy.EXCLUSIVE) -> None:
+    def __init__(self, *, guard: sl.guards.Guard, mode: ActionMode = ActionMode.EXCLUSIVE) -> None:
         self.guard = guard
-        self.policy = policy
+        self.mode = mode
 
     def render(self):
-        return sl.actions(sl.action("Go", self.go, key="go", guard=self.guard, policy=self.policy), key="panel")
+        return sl.actions(sl.action("Go", self.go, key="go", guard=self.guard, mode=self.mode), key="panel")
 
     async def go(self, event: ActionEvent) -> None:
         self.count += 1
@@ -289,7 +289,7 @@ class TestResuming:
                         self.go,
                         key="go",
                         guard=sp.guards.confirm("Sure?"),
-                        policy=ActionPolicy.PARALLEL_READ,
+                        mode=ActionMode.PARALLEL_READ,
                     ),
                     key="panel",
                 )

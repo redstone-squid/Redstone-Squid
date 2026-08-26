@@ -225,14 +225,12 @@ def test_file_field_rejects_more_than_ten_uploads() -> None:
 class DurationPanel(sl.Component):
     seconds: int = sl.state(0)
 
-    def __init__(
-        self, *, validation_policy: sl.forms.FormValidationPolicy = sl.forms.FormValidationPolicy.RETRY
-    ) -> None:
+    def __init__(self, *, validation: sl.forms.FormValidationMode = sl.forms.FormValidationMode.RETRY) -> None:
         self.events: list[sl.SubmitEvent] = []
         self.spec = sl.forms.FormSpec(
             "Duration",
             (sl.forms.DurationField(key="duration", label="Duration"),),
-            validation_policy=validation_policy,
+            validation=validation,
         )
 
     def render(self) -> sl.LayoutNode:
@@ -329,7 +327,7 @@ async def test_exclusive_submission_from_a_stale_generation_is_ignored() -> None
 
 
 async def test_accept_and_mark_delivers_parse_errors_to_the_handler() -> None:
-    panel = DurationPanel(validation_policy=sl.forms.FormValidationPolicy.ACCEPT_AND_MARK)
+    panel = DurationPanel(validation=sl.forms.FormValidationMode.ACCEPT_AND_MARK)
     mount = Mount(panel, access=Everyone(), timeout=None)
     commit_render(mount)
     modal = await _open_form(panel, mount)

@@ -41,14 +41,14 @@ from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME, LOCALIZATION_CO
 from squid_layouts.document import Asset, Document
 from squid_layouts.entity import ChannelType, EntityKind, EntityRef, EntityType
 from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.forms import FormBinding, FormSpec, FormValidationPolicy, SubmitHandler
+from squid_layouts.forms import FormBinding, FormSpec, FormValidationMode, SubmitHandler
 from squid_layouts.guards import Challenge, GuardLedger, approvals
 from squid_layouts.interactions import (
     ActionBinding,
     ActionEvent,
     ActionKind,
     ActionMiddleware,
-    ActionPolicy,
+    ActionMode,
     ActionProceed,
     ActionRequest,
     Actor,
@@ -99,7 +99,7 @@ from squid_layouts.runtime.reactivity import (
     readonly_transaction,
     transaction,
 )
-from squid_layouts.runtime.resources import AsyncBinding, PendingPolicy, abandon_superseded_loads
+from squid_layouts.runtime.resources import AsyncBinding, PendingMode, abandon_superseded_loads
 from squid_layouts.runtime.topics import Address, SubscriptionReconciler, TopicBus
 from squid_layouts.scene.model import PlanMetrics, PlanReport, PlanResult
 from squid_layouts.semantic import Status
@@ -1347,7 +1347,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             internal = _RenewalBinding(
                 binding.key,
                 binding.handler,
-                binding.policy,
+                binding.mode,
                 binding.routes,
                 binding.guard,
                 binding.busy,
@@ -1381,7 +1381,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         return _LifecycleCandidate(view, composition, handlers, generation)
 
     @contextmanager
-    def _action_transaction(self, policy: ActionPolicy, context: ActionContext) -> Iterator[None]:
+    def _action_transaction(self, mode: ActionMode, context: ActionContext) -> Iterator[None]:
         """Run one handler in its transaction, watching for writes this mount renders.
 
         A shared cell publishes on the bus rather than invalidating a component, so without
@@ -1390,7 +1390,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         Noticing one's own commit is not a second notification mechanism: there is no
         subscriber index and no back-reference, only the delta the transaction already built.
         """
-        if policy is ActionPolicy.PARALLEL_READ:
+        if mode is ActionMode.PARALLEL_READ:
             with readonly_transaction():
                 yield
             return
@@ -1702,7 +1702,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     ):
                         await self._load_all(tree.deferred)
                 continue
-            atomic = self._pending_resources(tree, PendingPolicy.ATOMIC)
+            atomic = self._pending_resources(tree, PendingMode.ATOMIC)
             if atomic:
                 if profile is None:
                     await self._settle_resources(atomic)
@@ -1718,10 +1718,8 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         raise LayoutInvariantError(message)
 
     @staticmethod
-    def _pending_resources(tree: ComponentTree, pending: PendingPolicy) -> tuple[AsyncBinding, ...]:
-        return tuple(
-            binding for binding in tree.async_bindings if binding.pending_policy is pending and binding.pending
-        )
+    def _pending_resources(tree: ComponentTree, pending: PendingMode) -> tuple[AsyncBinding, ...]:
+        return tuple(binding for binding in tree.async_bindings if binding.pending_mode is pending and binding.pending)
 
     async def _settle_resources(self, resources: Sequence[AsyncBinding]) -> None:
         """Settle one observed resource tier concurrently under this render operation.
@@ -1752,7 +1750,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             return
         candidate = committed
         for pass_index in range(_MAX_LOAD_PASSES):
-            bindings = self._pending_resources(candidate.tree, PendingPolicy.EXPLICIT)
+            bindings = self._pending_resources(candidate.tree, PendingMode.EXPLICIT)
             if not bindings or self.runtime.dirty:
                 return
             wake = asyncio.Event()
@@ -2170,7 +2168,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         values: Mapping[str, object],
         handler: SubmitHandler,
         *,
-        policy: ActionPolicy = ActionPolicy.EXCLUSIVE,
+        mode: ActionMode = ActionMode.EXCLUSIVE,
         generation: int | None = None,
         label: TextLike = "",
         record: History | None = None,
@@ -2202,7 +2200,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             try:
                 if not await self._begin_dispatch(interaction, profile):
                     return
-                binding = _SubmitBinding(key, handler, policy, label=label, record=record, spec=spec)
+                binding = _SubmitBinding(key, handler, mode, label=label, record=record, spec=spec)
 
                 def rebase() -> ActionBinding | None:
                     newest = self._form_bindings.get(key)
@@ -2211,7 +2209,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     return _SubmitBinding(
                         key,
                         newest.on_submit,
-                        policy,
+                        mode,
                         label=newest.label,
                         record=newest.record,
                         spec=newest.spec,
@@ -2423,7 +2421,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         """Record one approval and re-enter the funnel from the top.
 
         `generation=None` on purpose: a dialog outlives renders, and the actor confirmed an
-        intent rather than a pixel. That is the contract `ActionPolicy.REBASE` already
+        intent rather than a pixel. That is the contract `ActionMode.REBASE` already
         offers, and `EXCLUSIVE` would otherwise reject the press it just asked about.
         """
         ledger = self.guards.for_action(key)
@@ -2481,7 +2479,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         values: _SelectionValues = None,
         rebase: Callable[[], ActionBinding | None] | None = None,
     ) -> None:
-        if binding.policy in {ActionPolicy.IMMEDIATE, ActionPolicy.PARALLEL_READ}:
+        if binding.mode in {ActionMode.IMMEDIATE, ActionMode.PARALLEL_READ}:
             rebased = False
             profile.decide_generation(self._generation)
             # No lock to be inside for these two, so admission is simply the last gate
@@ -2499,14 +2497,14 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             await self._action_lock.acquire()
         try:
             profile.decide_generation(self._generation)
-            if binding.policy is ActionPolicy.EXCLUSIVE and generation not in {None, self._generation}:
+            if binding.mode is ActionMode.EXCLUSIVE and generation not in {None, self._generation}:
                 await self._acknowledge(interaction, profile=profile, source="stale")
                 profile.presentation = PresentationStatus.ACKNOWLEDGED
                 profile.finish(DispatchDisposition.STALE)
                 return
-            rebased = binding.policy is ActionPolicy.REBASE and generation not in {None, self._generation}
+            rebased = binding.mode is ActionMode.REBASE and generation not in {None, self._generation}
             profile.decide_generation(self._generation, rebased=rebased)
-            if binding.policy is ActionPolicy.REBASE and rebase is not None:
+            if binding.mode is ActionMode.REBASE and rebase is not None:
                 # Resolved inside the lock: outside it, "newest" is whatever happened to be
                 # committed before this action started waiting for its turn.
                 with profile.operation.span("generation"):
@@ -2602,7 +2600,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             event,
             key,
             ActionKind.PRESS if values is None else ActionKind.SELECTION,
-            binding.policy,
+            binding.mode,
             submitted_generation,
             active_generation,
             action_context,
@@ -2610,7 +2608,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         )
 
         async def handle() -> None:
-            with self._action_transaction(binding.policy, action_context):
+            with self._action_transaction(binding.mode, action_context):
                 # Before the handler: the entry is the transaction's whole delta either
                 # way, and reserving the history here is what makes a handler's own
                 # `record` the error it is.
@@ -2707,13 +2705,13 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                 evaluation.attempted,
                 evaluation.errors,
             )
-            if evaluation.errors and spec.validation_policy is FormValidationPolicy.RETRY:
+            if evaluation.errors and spec.validation is FormValidationMode.RETRY:
                 await responder.retry_form(
                     spec.with_prefill(evaluation.attempted),
                     evaluation.errors,
                     key=key,
                     handler=binding.handler,
-                    policy=binding.policy,
+                    mode=binding.mode,
                     generation=self._generation if generation is None else generation,
                     actor_id=interaction.user.id,
                     label=binding.label,
@@ -2727,7 +2725,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                 event,
                 key,
                 ActionKind.SUBMIT,
-                binding.policy,
+                binding.mode,
                 generation,
                 active_generation,
                 action_context := ActionContext.create(
@@ -2739,7 +2737,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             )
 
             async def handle() -> None:
-                with self._action_transaction(binding.policy, action_context):
+                with self._action_transaction(binding.mode, action_context):
                     if binding.record is not None:
                         binding.record.record(binding.label)
                     await binding.handler(event)

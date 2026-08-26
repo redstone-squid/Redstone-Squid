@@ -6,7 +6,7 @@ from typing import Literal
 
 from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_layouts.factories import action, actions, bullet, bullets, stack, status
-from squid_layouts.interactions import ActionEvent, ActionPolicy, PressEvent
+from squid_layouts.interactions import ActionEvent, ActionMode, PressEvent
 from squid_layouts.runtime.component import Component, RenderResult
 from squid_layouts.runtime.reactivity import state
 from squid_layouts.semantic import ActionDisplay, Emphasis, Tone
@@ -88,7 +88,7 @@ class Agreement(Component):
                 self._approve,
                 key=f"{self.key}.approve",
                 available=not self.resolved,
-                policy=ActionPolicy.EXCLUSIVE,
+                mode=ActionMode.EXCLUSIVE,
                 tone=Tone.SUCCESS,
                 emphasis=Emphasis.STRONG,
             )
@@ -100,7 +100,7 @@ class Agreement(Component):
                     self._withdraw,
                     key=f"{self.key}.withdraw",
                     available=not self.resolved,
-                    policy=ActionPolicy.EXCLUSIVE,
+                    mode=ActionMode.EXCLUSIVE,
                 )
             )
         return stack(

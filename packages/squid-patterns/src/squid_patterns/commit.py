@@ -3,11 +3,11 @@
 from enum import StrEnum
 
 
-class CommitPolicy(StrEnum):
+class CommitMode(StrEnum):
     """When a pattern promotes valid staged values to committed values."""
 
     EXPLICIT = "explicit"
     IMMEDIATE = "immediate"
 
 
-__all__ = ["CommitPolicy"]
+__all__ = ["CommitMode"]

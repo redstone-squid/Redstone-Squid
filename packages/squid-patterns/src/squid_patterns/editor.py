@@ -23,7 +23,7 @@ from squid_layouts.semantic import (
 )
 from squid_layouts.text import TextLike
 from squid_patterns._content import ContentLike, display_text, normalize_content, require_key
-from squid_patterns.commit import CommitPolicy
+from squid_patterns.commit import CommitMode
 from squid_patterns.shells import ComponentShell, Pattern, PatternControls, PatternEvent
 
 type EditorValues = Mapping[str, object]
@@ -172,7 +172,7 @@ class Editor:
         *,
         key: str = "editor",
         preview: Callable[[EditorValues], ContentLike] | None = None,
-        commit: CommitPolicy = CommitPolicy.EXPLICIT,
+        commit: CommitMode = CommitMode.EXPLICIT,
         commit_label: TextLike | None = None,
         validate: Callable[[EditorValues], Iterable[FormIssue]] | None = None,
     ) -> None:
@@ -265,7 +265,7 @@ class Editor:
         )
 
     def _commit_valid(self, state: EditorState) -> EditorState:
-        if self.commit is CommitPolicy.EXPLICIT or self.issues(state):
+        if self.commit is CommitMode.EXPLICIT or self.issues(state):
             return state
         dirty = self.dirty_sections(state)
         if not dirty:
@@ -298,7 +298,7 @@ class Editor:
     ) -> EditorState:
         if action == "back":
             return replace(state, editing=None)
-        if action == "save" and self.commit is CommitPolicy.EXPLICIT:
+        if action == "save" and self.commit is CommitMode.EXPLICIT:
             if self.issues(state):
                 return state
             dirty = self.dirty_sections(state)
@@ -441,7 +441,7 @@ class Editor:
                 key=f"{self.key}.commit",
                 display=ActionDisplay.INDIVIDUAL,
             )
-            if self.commit is CommitPolicy.EXPLICIT and dirty
+            if self.commit is CommitMode.EXPLICIT and dirty
             else None
         )
         return stack(

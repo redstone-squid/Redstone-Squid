@@ -8,7 +8,7 @@ from typing import Any, cast
 
 from squid_layouts.emoji import Emoji
 from squid_layouts.entity import ChannelType, EntityKind, EntityRef, EntityType
-from squid_layouts.interactions import ActionPolicy
+from squid_layouts.interactions import ActionMode
 from squid_layouts.primitives.styles import ActionStyle
 from squid_layouts.scene.model import (
     Asset,
@@ -308,7 +308,7 @@ def _node_to_dict(node: Node | Link | PremiumButton | Button | RoutedButton) -> 
             }
         case PremiumButton(sku_id=sku_id):
             return {"kind": PremiumButton.KIND, "sku_id": sku_id}
-        case Button(label=label, action=action, style=style, emoji=emoji, disabled=disabled, policy=policy):
+        case Button(label=label, action=action, style=style, emoji=emoji, disabled=disabled, mode=mode):
             return {
                 "kind": Button.KIND,
                 "label": label,
@@ -316,7 +316,7 @@ def _node_to_dict(node: Node | Link | PremiumButton | Button | RoutedButton) -> 
                 "style": style.value,
                 "emoji": _emoji_to_dict(emoji),
                 "disabled": disabled,
-                "policy": policy.value,
+                "policy": mode.value,
             }
         case RoutedButton(label=label, route_id=route_id, style=style, emoji=emoji, disabled=disabled):
             return {
@@ -334,7 +334,7 @@ def _node_to_dict(node: Node | Link | PremiumButton | Button | RoutedButton) -> 
             min_values=min_values,
             max_values=max_values,
             disabled=disabled,
-            policy=policy,
+            mode=mode,
         ):
             return {
                 "kind": Select.KIND,
@@ -353,7 +353,7 @@ def _node_to_dict(node: Node | Link | PremiumButton | Button | RoutedButton) -> 
                 "min_values": min_values,
                 "max_values": max_values,
                 "disabled": disabled,
-                "policy": policy.value,
+                "policy": mode.value,
             }
         case RoutedSelect(
             options=options,
@@ -390,7 +390,7 @@ def _node_to_dict(node: Node | Link | PremiumButton | Button | RoutedButton) -> 
             min_values=min_values,
             max_values=max_values,
             disabled=disabled,
-            policy=policy,
+            mode=mode,
         ):
             return {
                 "kind": EntitySelect.KIND,
@@ -402,7 +402,7 @@ def _node_to_dict(node: Node | Link | PremiumButton | Button | RoutedButton) -> 
                 "min_values": min_values,
                 "max_values": max_values,
                 "disabled": disabled,
-                "policy": policy.value,
+                "policy": mode.value,
             }
         case Row(items=items):
             return {"kind": Row.KIND, "items": [_node_to_dict(item) for item in items]}
@@ -482,7 +482,7 @@ def _node_from_dict(
                 style=ActionStyle(_string(raw, "style")),
                 emoji=_emoji_from_value(raw.get("emoji")),
                 disabled=_boolean(raw, "disabled"),
-                policy=ActionPolicy(_string(raw, "policy")),
+                mode=ActionMode(_string(raw, "policy")),
             )
         case RoutedButton.KIND:
             return RoutedButton(
@@ -513,7 +513,7 @@ def _node_from_dict(
                 min_values=_integer(raw, "min_values"),
                 max_values=_integer(raw, "max_values"),
                 disabled=_boolean(raw, "disabled"),
-                policy=ActionPolicy(_string(raw, "policy")),
+                mode=ActionMode(_string(raw, "policy")),
             )
         case RoutedSelect.KIND:
             options = raw.get("options")
@@ -554,7 +554,7 @@ def _node_from_dict(
                 min_values=_integer(raw, "min_values"),
                 max_values=_integer(raw, "max_values"),
                 disabled=_boolean(raw, "disabled"),
-                policy=ActionPolicy(_string(raw, "policy")),
+                mode=ActionMode(_string(raw, "policy")),
             )
         case Row.KIND:
             items = raw.get("items")

@@ -8,7 +8,7 @@ import discord
 from squid_discord import delivery as deliver
 from squid_discord.modal import ModalSpec, build_form_modal, build_modal
 from squid_layouts.forms import FieldError, FormField, FormIssue, FormLike, FormSpec, SubmitHandler, bind_form
-from squid_layouts.interactions import ActionEvent, ActionPolicy, Visibility
+from squid_layouts.interactions import ActionEvent, ActionMode, Visibility
 from squid_layouts.text import TextLike, resolve_text
 
 if TYPE_CHECKING:
@@ -55,13 +55,13 @@ class ActionResponder:
         *,
         key: str = "form",
         on_submit: SubmitHandler | None = None,
-        policy: ActionPolicy | None = None,
+        mode: ActionMode | None = None,
         label: TextLike = "",
         record: History | None = None,
     ) -> None:
         """Present a portable form and route its submission back through this mount."""
         spec, handler, default_policy = bind_form(form, on_submit)
-        selected_policy = policy or default_policy
+        selected_policy = mode or default_policy
         modal = self._form_modal(spec, key, handler, selected_policy, self.mount.generation, label, record)
         if self.interaction.response.is_done():
             message = "Discord modals must be the interaction's initial response"
@@ -73,7 +73,7 @@ class ActionResponder:
         spec: FormSpec,
         key: str,
         handler: SubmitHandler,
-        policy: ActionPolicy,
+        mode: ActionMode,
         generation: int,
         label: TextLike,
         record: History | None,
@@ -85,7 +85,7 @@ class ActionResponder:
                 spec,
                 values,
                 handler,
-                policy=policy,
+                mode=mode,
                 generation=generation,
                 label=label,
                 record=record,
@@ -106,7 +106,7 @@ class ActionResponder:
         *,
         key: str,
         handler: SubmitHandler,
-        policy: ActionPolicy,
+        mode: ActionMode,
         generation: int,
         actor_id: int,
         label: TextLike,
@@ -128,7 +128,7 @@ class ActionResponder:
                 spec,
                 key,
                 handler,
-                policy,
+                mode,
                 generation,
                 label,
                 record,

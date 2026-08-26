@@ -193,7 +193,7 @@ chrome, shows supplied display text rather than raw ids, and exposes separate ap
 withdraw controls because one shared render cannot truthfully label a toggle for every
 viewer. The handler validates membership as a frontend-neutral safety invariant; Discord
 hosts should additionally mount with `sl.discord.Users(...)` so denial occurs before
-dispatch. `ActionPolicy.EXCLUSIVE` serializes presses. `resolved` gates `on_resolve` exactly
+dispatch. `ActionMode.EXCLUSIVE` serializes presses. `resolved` gates `on_resolve` exactly
 once and disables both controls. Agreement state is intentionally ephemeral: when its mount
 ends, the proposal ends. Routed approvals remain a host-owned ledger rendered separately.
 

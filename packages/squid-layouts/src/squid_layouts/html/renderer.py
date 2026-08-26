@@ -164,13 +164,13 @@ class Renderer:
                 style=style,
                 emoji=emoji,
                 disabled=disabled,
-                policy=policy,
+                mode=mode,
             ):
                 disabled_attribute = " disabled" if disabled else ""
                 icon = f'<span class="squid-button__emoji">{escape(emoji.name)}</span> ' if emoji else ""
                 return (
                     f'<button type="button" class="squid-button squid-button--{style.value}" '
-                    f'data-squid-action="{_attribute(action)}" data-squid-policy="{policy.value}"'
+                    f'data-squid-action="{_attribute(action)}" data-squid-policy="{mode.value}"'
                     f"{disabled_attribute}>{icon}{escape(label or '')}</button>"
                 )
             case scene.RoutedButton(label=label, route_id=route_id, style=style, emoji=emoji, disabled=disabled):
@@ -204,7 +204,7 @@ class Renderer:
                 min_values=minimum,
                 max_values=maximum,
                 disabled=disabled,
-                policy=policy,
+                mode=mode,
             ):
                 disabled_attribute = " disabled" if disabled else ""
                 multiple = " multiple" if maximum > 1 else ""
@@ -220,7 +220,7 @@ class Renderer:
                 )
                 return (
                     f'<select class="squid-select" data-squid-action="{_attribute(action)}" '
-                    f'data-squid-policy="{policy.value}" data-squid-min="{minimum}" data-squid-max="{maximum}"'
+                    f'data-squid-policy="{mode.value}" data-squid-min="{minimum}" data-squid-max="{maximum}"'
                     f"{multiple}{disabled_attribute}>{prompt}{rendered}</select>"
                 )
             case scene.RoutedSelect(

@@ -7,7 +7,7 @@ import pytest
 from squid_layouts import scene
 from squid_layouts.errors import DrawInvariantError
 from squid_layouts.html import Renderer
-from squid_layouts.interactions import ActionPolicy
+from squid_layouts.interactions import ActionMode
 
 
 def _scene() -> scene.Document:
@@ -22,7 +22,7 @@ def _scene() -> scene.Document:
                         scene.Text("<script>alert(1)</script>"),
                         scene.Time("2026-08-22T14:30:00+00:00", "R", "Updated: "),
                         scene.ZonedTime("2026-08-22T14:30:00+00:00", "America/New_York", "Starts: "),
-                        scene.Row((scene.Button("Save", "form.save", policy=ActionPolicy.EXCLUSIVE),)),
+                        scene.Row((scene.Button("Save", "form.save", mode=ActionMode.EXCLUSIVE),)),
                         scene.Select((scene.Option("One", "1"),), "form.choice"),
                         scene.Gallery((scene.GalleryItem("https://example.invalid/image.png", "preview"),)),
                     ),

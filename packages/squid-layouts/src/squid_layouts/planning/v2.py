@@ -111,7 +111,7 @@ class _V2Converter:
                     min_values=node.min_values,
                     max_values=node.max_values,
                     disabled=node.disabled,
-                    policy=node.policy,
+                    mode=node.mode,
                 )
             case EntitySelect():
                 return scene.EntitySelect(
@@ -123,7 +123,7 @@ class _V2Converter:
                     min_values=node.min_values,
                     max_values=node.max_values,
                     disabled=node.disabled,
-                    policy=node.policy,
+                    mode=node.mode,
                 )
             case RoutedSelect(options=options):
                 return scene.RoutedSelect(

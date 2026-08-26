@@ -59,7 +59,7 @@ async def test_immediate_commit_reports_complete_values_and_all_changed_keys() -
     ) -> None:
         commits.append((values, changed))
 
-    editor = sp.Editor("Account", (_profile_section(),), commit=sp.CommitPolicy.IMMEDIATE)
+    editor = sp.Editor("Account", (_profile_section(),), commit=sp.CommitMode.IMMEDIATE)
     component = editor.build_component(
         initial={"profile": {"name": "Old", "bio": None}},
         on_commit=committed,
@@ -86,7 +86,7 @@ def test_invalid_immediate_edit_stays_staged_until_aggregate_becomes_valid() -> 
     editor = sp.Editor(
         "Account",
         (_profile_section(),),
-        commit=sp.CommitPolicy.IMMEDIATE,
+        commit=sp.CommitMode.IMMEDIATE,
         validate=validate,
     )
     initial = editor.initial_from({"profile": {"name": "Old", "bio": None}})

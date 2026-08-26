@@ -21,7 +21,7 @@ from squid_reactive.actions import (
     emit_causal_event,
 )
 from squid_reactive.completion import Completion
-from squid_reactive.resources import AsyncBinding, PendingPolicy, _observe
+from squid_reactive.resources import AsyncBinding, PendingMode, _observe
 
 
 class OperationOwner(Protocol):
@@ -93,7 +93,7 @@ class Progress[ProgressT]:
 class OperationExecution[ValueT, ProgressT](AsyncBinding):
     """One one-shot execution. Awaiting it runs or joins it until terminal status."""
 
-    pending_policy = PendingPolicy.EXPLICIT
+    pending_mode = PendingMode.EXPLICIT
     reconcile_while_pending = True
     settle_without_delivery = True
 
