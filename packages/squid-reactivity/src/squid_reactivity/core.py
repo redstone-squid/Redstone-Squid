@@ -28,15 +28,15 @@ from typing import Any, ClassVar, Protocol, Self, overload
 from squid_reactivity.actions import (
     ActionCommit,
     ActionContext,
+    ActionContinuation,
     ActionResult,
     ActionRollback,
-    ActionContinuation,
     ChangeReport,
     ConflictDetail,
     ExceptionReport,
     ObservedRead,
-    TransactionContribution,
     RollbackReason,
+    TransactionContribution,
     action_scope,
     continuation_callback,
     current_action,
@@ -670,11 +670,15 @@ class _Transaction:
     changed_names: dict[int, set[str]] = field(default_factory=dict)
     # Held by strong reference, so an id cannot be recycled while this transaction runs.
     born: dict[int, object] = field(default_factory=dict)
-    commit_hooks: list[tuple[object | None, Callable[[ActionCommit, ActionContinuation], None]]] = field(default_factory=list)
+    commit_hooks: list[tuple[object | None, Callable[[ActionCommit, ActionContinuation], None]]] = field(
+        default_factory=list
+    )
     rollback_hooks: list[tuple[object | None, Callable[[ActionRollback, ActionContinuation], None]]] = field(
         default_factory=list
     )
-    result_hooks: list[tuple[object | None, Callable[[ActionResult, ActionContinuation], None]]] = field(default_factory=list)
+    result_hooks: list[tuple[object | None, Callable[[ActionResult, ActionContinuation], None]]] = field(
+        default_factory=list
+    )
     context: ActionContext = field(default_factory=ActionContext.create)
     participants: dict[object, TransactionParticipant[Any]] = field(default_factory=dict)
     applied: bool = False
@@ -1247,17 +1251,23 @@ def readonly_transaction() -> Iterator[None]:
         _emit_commit(current, commit)
 
 
-def on_action_commit(callback: Callable[[ActionCommit, ActionContinuation], None], *, key: object | None = None) -> None:
+def on_action_commit(
+    callback: Callable[[ActionCommit, ActionContinuation], None], *, key: object | None = None
+) -> None:
     """Run a failure-isolated synchronous callback after definitive commit."""
     _add_action_hook("commit", callback, key=key)
 
 
-def on_action_rollback(callback: Callable[[ActionRollback, ActionContinuation], None], *, key: object | None = None) -> None:
+def on_action_rollback(
+    callback: Callable[[ActionRollback, ActionContinuation], None], *, key: object | None = None
+) -> None:
     """Run a failure-isolated callback after staged state is dead."""
     _add_action_hook("rollback", callback, key=key)
 
 
-def on_action_result(callback: Callable[[ActionResult, ActionContinuation], None], *, key: object | None = None) -> None:
+def on_action_result(
+    callback: Callable[[ActionResult, ActionContinuation], None], *, key: object | None = None
+) -> None:
     """Run a failure-isolated callback after either terminal result."""
     _add_action_hook("result", callback, key=key)
 
