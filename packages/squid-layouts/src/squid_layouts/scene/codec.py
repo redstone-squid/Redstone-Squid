@@ -55,10 +55,9 @@ class CodecError(ValueError):
 
 
 class Codec:
-    """Encode protocol 2 scenes and decode protocol 1 or 2 scenes."""
+    """Encode and decode deterministic resolved-scene protocol 1."""
 
-    protocol = 2
-    supported = (1, 2)
+    protocol = 1
 
     @classmethod
     def schema(cls) -> dict[str, Any]:
@@ -91,14 +90,14 @@ class Codec:
 
     @classmethod
     def to_dict(cls, scene: Document[Any]) -> dict[str, Any]:
-        if scene.protocol not in cls.supported:
+        if scene.protocol != cls.protocol:
             msg = f"unsupported scene protocol {scene.protocol}"
             raise CodecError(msg)
         return {
             "protocol": scene.protocol,
             "target": scene.target,
             "target_version": scene.target_version,
-            "body": _body_to_dict(scene.body, scene.protocol),
+            "body": _body_to_dict(scene.body),
             "assets": [
                 {"key": asset.key, "name": asset.name, "media_type": asset.media_type} for asset in scene.assets
             ],
@@ -116,7 +115,7 @@ class Codec:
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> Document:
         protocol = _integer(raw, "protocol")
-        if protocol not in cls.supported:
+        if protocol != cls.protocol:
             msg = f"unsupported scene protocol {protocol}"
             raise CodecError(msg)
         assets = raw.get("assets", [])
@@ -128,7 +127,7 @@ class Codec:
             protocol=protocol,
             target=_string(raw, "target"),
             target_version=_integer(raw, "target_version"),
-            body=_body_from_dict(_object(raw.get("body")), protocol),
+            body=_body_from_dict(_object(raw.get("body"))),
             assets=tuple(
                 Asset(
                     key=_string(_object(asset), "key"),
@@ -149,20 +148,20 @@ class Codec:
         )
 
 
-def _body_to_dict(body: Body, protocol: int) -> dict[str, Any]:
+def _body_to_dict(body: Body) -> dict[str, Any]:
     match body:
         case ComponentsV2(children=children):
-            return {"kind": ComponentsV2.KIND, "children": [_node_to_dict(child, protocol) for child in children]}
+            return {"kind": ComponentsV2.KIND, "children": [_node_to_dict(child) for child in children]}
         case ClassicMessage(content=content, embeds=embeds, rows=rows):
             return {
                 "kind": ClassicMessage.KIND,
                 "content": content,
                 "embeds": [_embed_to_dict(embed) for embed in embeds],
-                "rows": [{"controls": [_node_to_dict(control, protocol) for control in row.controls]} for row in rows],
+                "rows": [{"controls": [_node_to_dict(control) for control in row.controls]} for row in rows],
             }
 
 
-def _body_from_dict(raw: Mapping[str, Any], protocol: int) -> Body:
+def _body_from_dict(raw: Mapping[str, Any]) -> Body:
     kind = _string(raw, "kind")
     match kind:
         case ComponentsV2.KIND:
@@ -170,7 +169,7 @@ def _body_from_dict(raw: Mapping[str, Any], protocol: int) -> Body:
             if not isinstance(children, list):
                 msg = "components_v2 children must be an array"
                 raise CodecError(msg)
-            return ComponentsV2(tuple(_node_from_dict(_object(child), protocol) for child in children))
+            return ComponentsV2(tuple(_node_from_dict(_object(child)) for child in children))
         case ClassicMessage.KIND:
             embeds = raw.get("embeds")
             rows = raw.get("rows")
@@ -180,19 +179,19 @@ def _body_from_dict(raw: Mapping[str, Any], protocol: int) -> Body:
             return ClassicMessage(
                 content=_optional_string(raw, "content"),
                 embeds=tuple(_embed_from_dict(_object(embed)) for embed in embeds),
-                rows=tuple(_row_from_dict(_object(row), protocol) for row in rows),
+                rows=tuple(_row_from_dict(_object(row)) for row in rows),
             )
         case _:
             msg = f"unknown scene body kind {kind!r}"
             raise CodecError(msg)
 
 
-def _row_from_dict(raw: Mapping[str, Any], protocol: int) -> ClassicRow:
+def _row_from_dict(raw: Mapping[str, Any]) -> ClassicRow:
     controls = raw.get("controls")
     if not isinstance(controls, list):
         msg = "classic row controls must be an array"
         raise CodecError(msg)
-    decoded = tuple(_node_from_dict(_object(control), protocol) for control in controls)
+    decoded = tuple(_node_from_dict(_object(control)) for control in controls)
     if not all(
         isinstance(
             control,
@@ -280,11 +279,10 @@ def _media_from_dict(raw: Any) -> EmbedMedia | None:
     return EmbedMedia(url=_string(_object(raw), "url"), description=_optional_string(_object(raw), "description"))
 
 
-def _node_to_dict(node: Node | Link | PremiumButton | Button | RoutedButton, protocol: int) -> dict[str, Any]:
+def _node_to_dict(node: Node | Link | PremiumButton | Button | RoutedButton) -> dict[str, Any]:
     match node:
         case Text(content=content, markup=markup):
-            field = "dialect" if protocol == 1 else "markup"
-            return {"kind": Text.KIND, "content": content, field: markup.value}
+            return {"kind": Text.KIND, "content": content, "markup": markup.value}
         case Time(instant=instant, style=style, prefix=prefix):
             return {"kind": Time.KIND, "instant": instant, "style": style, "prefix": prefix}
         case ZonedTime(instant=instant, timezone=timezone, prefix=prefix):
@@ -317,7 +315,7 @@ def _node_to_dict(node: Node | Link | PremiumButton | Button | RoutedButton, pro
                 "style": style.value,
                 "emoji": _emoji_to_dict(emoji),
                 "disabled": disabled,
-                ("policy" if protocol == 1 else "mode"): mode.value,
+                "mode": mode.value,
             }
         case RoutedButton(label=label, route_id=route_id, style=style, emoji=emoji, disabled=disabled):
             return {
@@ -354,7 +352,7 @@ def _node_to_dict(node: Node | Link | PremiumButton | Button | RoutedButton, pro
                 "min_values": min_values,
                 "max_values": max_values,
                 "disabled": disabled,
-                ("policy" if protocol == 1 else "mode"): mode.value,
+                "mode": mode.value,
             }
         case RoutedSelect(
             options=options,
@@ -403,10 +401,10 @@ def _node_to_dict(node: Node | Link | PremiumButton | Button | RoutedButton, pro
                 "min_values": min_values,
                 "max_values": max_values,
                 "disabled": disabled,
-                ("policy" if protocol == 1 else "mode"): mode.value,
+                "mode": mode.value,
             }
         case Row(items=items):
-            return {"kind": Row.KIND, "items": [_node_to_dict(item, protocol) for item in items]}
+            return {"kind": Row.KIND, "items": [_node_to_dict(item) for item in items]}
         case Thumbnail(url=url, description=description, spoiler=spoiler):
             return {"kind": Thumbnail.KIND, "url": url, "description": description, "spoiler": spoiler}
         case Gallery(items=items):
@@ -419,13 +417,13 @@ def _node_to_dict(node: Node | Link | PremiumButton | Button | RoutedButton, pro
         case Section(texts=texts, accessory=accessory):
             return {
                 "kind": Section.KIND,
-                "texts": [_node_to_dict(text, protocol) for text in texts],
-                "accessory": _node_to_dict(accessory, protocol),
+                "texts": [_node_to_dict(text) for text in texts],
+                "accessory": _node_to_dict(accessory),
             }
         case Panel(children=children, accent=accent, spoiler=spoiler):
             return {
                 "kind": Panel.KIND,
-                "children": [_node_to_dict(child, protocol) for child in children],
+                "children": [_node_to_dict(child) for child in children],
                 "accent": accent,
                 "spoiler": spoiler,
             }
@@ -441,12 +439,11 @@ def _node_to_dict(node: Node | Link | PremiumButton | Button | RoutedButton, pro
 
 def _node_from_dict(
     raw: Mapping[str, Any],
-    protocol: int,
 ) -> Node | Link | PremiumButton | Button | RoutedButton:
     kind = _string(raw, "kind")
     match kind:
         case Text.KIND:
-            return Text(_string(raw, "content"), Markup(_string(raw, "dialect" if protocol == 1 else "markup")))
+            return Text(_string(raw, "content"), Markup(_string(raw, "markup")))
         case Time.KIND:
             return Time(
                 _string(raw, "instant"),
@@ -484,7 +481,7 @@ def _node_from_dict(
                 style=ActionStyle(_string(raw, "style")),
                 emoji=_emoji_from_value(raw.get("emoji")),
                 disabled=_boolean(raw, "disabled"),
-                mode=ActionMode(_string(raw, "policy" if protocol == 1 else "mode")),
+                mode=ActionMode(_string(raw, "mode")),
             )
         case RoutedButton.KIND:
             return RoutedButton(
@@ -515,7 +512,7 @@ def _node_from_dict(
                 min_values=_integer(raw, "min_values"),
                 max_values=_integer(raw, "max_values"),
                 disabled=_boolean(raw, "disabled"),
-                mode=ActionMode(_string(raw, "policy" if protocol == 1 else "mode")),
+                mode=ActionMode(_string(raw, "mode")),
             )
         case RoutedSelect.KIND:
             options = raw.get("options")
@@ -556,14 +553,14 @@ def _node_from_dict(
                 min_values=_integer(raw, "min_values"),
                 max_values=_integer(raw, "max_values"),
                 disabled=_boolean(raw, "disabled"),
-                mode=ActionMode(_string(raw, "policy" if protocol == 1 else "mode")),
+                mode=ActionMode(_string(raw, "mode")),
             )
         case Row.KIND:
             items = raw.get("items")
             if not isinstance(items, list):
                 msg = "row items must be an array"
                 raise CodecError(msg)
-            decoded = tuple(_node_from_dict(_object(item), protocol) for item in items)
+            decoded = tuple(_node_from_dict(_object(item)) for item in items)
             if not all(isinstance(item, Link | PremiumButton | Button | RoutedButton | Extension) for item in decoded):
                 msg = "row contains an unsupported child"
                 raise CodecError(msg)
@@ -594,8 +591,8 @@ def _node_from_dict(
             if not isinstance(texts, list):
                 msg = "section texts must be an array"
                 raise CodecError(msg)
-            decoded_texts = tuple(_node_from_dict(_object(text), protocol) for text in texts)
-            accessory = _node_from_dict(_object(raw.get("accessory")), protocol)
+            decoded_texts = tuple(_node_from_dict(_object(text)) for text in texts)
+            accessory = _node_from_dict(_object(raw.get("accessory")))
             if not all(isinstance(text, Text) for text in decoded_texts):
                 msg = "section contains a non-text slot"
                 raise CodecError(msg)
@@ -613,7 +610,7 @@ def _node_from_dict(
                 msg = "panel children or accent is malformed"
                 raise CodecError(msg)
             return Panel(
-                tuple(_node_from_dict(_object(child), protocol) for child in children),
+                tuple(_node_from_dict(_object(child)) for child in children),
                 accent=accent,
                 spoiler=_boolean(raw, "spoiler", default=False),
             )

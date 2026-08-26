@@ -58,7 +58,7 @@ def test_scene_json_is_canonical_and_round_trips() -> None:
     assert json.loads(encoded)["body"]["children"][0]["kind"] == "panel"
 
 
-def test_protocol_two_uses_the_python_markup_and_mode_vocabulary() -> None:
+def test_scene_wire_uses_the_python_markup_and_mode_vocabulary() -> None:
     encoded = scene.Codec.dumps(_scene())
 
     assert '"markup":"discord-markdown"' in encoded
@@ -76,7 +76,6 @@ def test_new_component_metadata_round_trips_on_protocol_one() -> None:
             (
                 scene.Panel(
                     (
-                        scene.Text("legacy"),
                         scene.Row(
                             (
                                 scene.PremiumButton(42),
@@ -96,15 +95,11 @@ def test_new_component_metadata_round_trips_on_protocol_one() -> None:
         ),
     )
 
-    encoded = scene.Codec.dumps(document)
-    assert scene.Codec.loads(encoded) == document
-    assert '"dialect":"discord-markdown"' in encoded
-    assert '"policy":"exclusive"' in encoded
-    assert '"markup"' not in encoded
-    assert '"mode"' not in encoded
+    assert scene.Codec.loads(scene.Codec.dumps(document)) == document
+    jsonschema.validate(scene.Codec.to_dict(document), scene.Codec.schema())
 
 
-def test_current_protocol_decodes_payloads_without_new_optional_fields() -> None:
+def test_protocol_one_decodes_payloads_without_new_optional_fields() -> None:
     raw = scene.Codec.to_dict(_scene())
     panel = raw["body"]["children"][0]
     panel.pop("spoiler")

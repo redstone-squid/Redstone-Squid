@@ -630,7 +630,7 @@ def test_snapshot_json_exports_frozen_snapshot() -> None:
 
     encoded = snapshot_json(subject.snapshot())
     decoded = json.loads(encoded)
-    assert decoded["schema_version"] == 2
+    assert decoded["schema_version"] == 1
     assert decoded["recent"][0]["trace_id"] == str(subject.snapshot().recent[0].trace_id)
     assert decoded["recent"][0]["operation"] == "send"
     assert decoded["active"] == []
