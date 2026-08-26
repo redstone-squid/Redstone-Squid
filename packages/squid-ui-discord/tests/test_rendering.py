@@ -223,6 +223,52 @@ class TestRenderCaching:
         runtime.commit(unchanged, rendered_revision=runtime.revision)
         assert runtime.components is committed_components
 
+    def test_equal_computed_value_refreshes_changed_dependency_addresses(self) -> None:
+        class Values(SharedState[object]):
+            use_b: bool = state(default=False)
+            a: int = state(1)
+            b: int = state(1)
+
+        values = Values(LocalTopicBus(), object())
+
+        class Panel(Component):
+            def __init__(self) -> None:
+                self.renders = 0
+
+            @sl.computed
+            def value(self) -> int:
+                return values.b if values.use_b else values.a
+
+            def render(self) -> Text:
+                self.renders += 1
+                return Text(str(self.value))
+
+        component = Panel()
+        runtime = ComponentRuntime(component)
+        initial = runtime.render()
+        runtime.commit(initial, rendered_revision=runtime.revision)
+        use_b = CellAddress(values, "use_b")
+        a = CellAddress(values, "a")
+        b = CellAddress(values, "b")
+        assert initial.observations == (use_b, a)
+
+        values.use_b = True
+        runtime.invalidate_address(use_b)
+        metadata_only = runtime.render(reuse_committed=True)
+
+        assert component.renders == 1
+        assert metadata_only is not initial
+        assert metadata_only.nodes == initial.nodes
+        assert metadata_only.observations == (use_b, b)
+        runtime.commit(metadata_only, rendered_revision=runtime.revision)
+
+        values.b = 2
+        runtime.invalidate_address(b)
+        changed = runtime.render(reuse_committed=True)
+
+        assert component.renders == 2
+        assert changed.nodes == (Text("2"),)
+
     def test_address_invalidation_only_renders_the_dependent_sibling(self) -> None:
         class Values(SharedState[object]):
             left: int = state(0)

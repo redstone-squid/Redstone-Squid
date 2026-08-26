@@ -141,6 +141,7 @@ class _ComponentRender:
     assets: tuple[Asset, ...]
     document_key: str | None
     observation: Observation
+    addresses: tuple[Address, ...]
     async_bindings: tuple[AsyncBinding, ...]
 
 
@@ -326,7 +327,9 @@ def render_component_tree(
             and (component not in dirty or (dependency_check and cached.observation.current()))
         )
         if reusable:
-            observed_addresses.extend(cached.observation.addresses())
+            current_addresses = cached.observation.addresses()
+            cached.addresses = current_addresses
+            observed_addresses.extend(current_addresses)
             observed_bindings.extend(cached.async_bindings)
             assets.extend(cached.assets)
             return cached
@@ -350,9 +353,10 @@ def render_component_tree(
             own_assets,
             own_key,
             observation,
+            observation.addresses(),
             unique_async_bindings(bindings),
         )
-        observed_addresses.extend(observation.addresses())
+        observed_addresses.extend(snapshot.addresses)
         observed_bindings.extend(snapshot.async_bindings)
         assets.extend(own_assets)
         if not any(isinstance(value, Component) for value in observation.constructed.values()):
