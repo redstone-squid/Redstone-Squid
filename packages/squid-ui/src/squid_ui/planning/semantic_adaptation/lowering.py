@@ -108,6 +108,7 @@ from squid_ui.runtime.presentation_state import (
 from squid_ui.scene.model import PlanEvent, PlanSeverity
 from squid_ui.semantic import (
     ActionControls,
+    AnyLayoutNode,
     Article,
     Aside,
     BestEffort,
@@ -160,7 +161,7 @@ from squid_ui.text import Localization
 
 
 def lower_semantics(
-    nodes: Sequence[LayoutNode],
+    nodes: Sequence[AnyLayoutNode],
     *,
     limits: DiscordLimits,
     chrome: Chrome,
@@ -215,7 +216,7 @@ def _panel_children(children: Sequence[LayoutNode], path: str, context: _Context
         context.panel_depth -= 1
 
 
-def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
+def _node(node: AnyLayoutNode, path: str, context: _Context) -> list[Node]:
     match node:
         case Truncated(node=child, keep=keep):
             return [_with_overflow(item, Truncate(keep)) for item in _node(child, path, context)]
@@ -551,7 +552,7 @@ def _field_entry(field: Field, context: _Context) -> str | Alt:
     return Alt(primary, tuple(kept), priority=int(field.importance))
 
 
-def _children(children: Sequence[LayoutNode], path: str, context: _Context) -> list[Node]:
+def _children(children: Sequence[AnyLayoutNode], path: str, context: _Context) -> list[Node]:
     lowered: list[Node] = []
     for index, child in enumerate(children):
         lowered.extend(_node(child, f"{path}.{index}", context))

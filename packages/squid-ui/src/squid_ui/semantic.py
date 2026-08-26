@@ -15,7 +15,7 @@ from squid_ui.interactions import ActionEvent, ActionMode, BusySpec, PressHandle
 from squid_ui.palette import INHERIT, Accent, Palette, Tone
 from squid_ui.primitives.nodes import Node as PrimitiveNode
 from squid_ui.rosters import RosterPlacement
-from squid_ui.target_types import Renderable
+from squid_ui.target_types import DiscordTarget, Renderable
 from squid_ui.temporal import ZonedDateTime
 from squid_ui.text import TextLike
 
@@ -137,38 +137,38 @@ FIRST_OPTION: NavOwnership = Uncontrolled(None)
 
 
 @dataclass(frozen=True, slots=True)
-class Group:
-    children: tuple[LayoutNode, ...]
+class Group[ModeT = DiscordTarget](Renderable[ModeT]):
+    children: tuple[LayoutNode[ModeT], ...]
 
 
 @dataclass(frozen=True, slots=True)
-class Stack:
-    children: tuple[LayoutNode, ...]
+class Stack[ModeT = DiscordTarget](Renderable[ModeT]):
+    children: tuple[LayoutNode[ModeT], ...]
 
 
 @dataclass(frozen=True, slots=True)
-class Cluster:
-    children: tuple[LayoutNode, ...]
+class Cluster[ModeT = DiscordTarget](Renderable[ModeT]):
+    children: tuple[LayoutNode[ModeT], ...]
 
 
 @dataclass(frozen=True, slots=True)
-class Themed:
+class Themed[ModeT = DiscordTarget](Renderable[ModeT]):
     """A subtree planned with a presentation palette override."""
 
-    children: tuple[LayoutNode, ...]
+    children: tuple[LayoutNode[ModeT], ...]
     palette: Palette
 
 
 @dataclass(frozen=True, slots=True)
-class Block:
+class Block[ModeT = DiscordTarget](Renderable[ModeT]):
     """An untitled semantic region with an exact or inherited accent."""
 
-    children: tuple[LayoutNode, ...]
+    children: tuple[LayoutNode[ModeT], ...]
     accent: Accent = INHERIT
 
 
 @dataclass(frozen=True, slots=True)
-class Section:
+class Section[ModeT = DiscordTarget](Renderable[ModeT]):
     """A titled block of related content.
 
     ``accent`` is an exact colour override, not a semantic fact. Omit it to inherit the
@@ -181,24 +181,24 @@ class Section:
     """
 
     heading: Heading
-    children: tuple[LayoutNode, ...]
+    children: tuple[LayoutNode[ModeT], ...]
     accent: Accent = INHERIT
     thumbnail: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
-class Article:
+class Article[ModeT = DiscordTarget](Renderable[ModeT]):
     """A self-contained block that stands on its own; see `Section` for the extras."""
 
     heading: Heading
-    children: tuple[LayoutNode, ...]
+    children: tuple[LayoutNode[ModeT], ...]
     accent: Accent = INHERIT
     thumbnail: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
-class Aside:
-    children: tuple[LayoutNode, ...]
+class Aside[ModeT = DiscordTarget](Renderable[ModeT]):
+    children: tuple[LayoutNode[ModeT], ...]
     tone: Tone = Tone.NEUTRAL
 
 
@@ -334,10 +334,10 @@ class Summary:
 
 
 @dataclass(frozen=True, slots=True)
-class Details:
+class Details[ModeT = DiscordTarget](Renderable[ModeT]):
     key: str
     summary: Summary
-    children: tuple[LayoutNode, ...]
+    children: tuple[LayoutNode[ModeT], ...]
     open: DisclosureOwnership = CLOSED
 
 
@@ -634,17 +634,17 @@ class ItemLabel:
 
 
 @dataclass(frozen=True, slots=True)
-class Item:
+class Item[ModeT = DiscordTarget](Renderable[ModeT]):
     key: str
     label: ItemLabel
-    children: tuple[LayoutNode, ...]
+    children: tuple[LayoutNode[ModeT], ...]
     summary: TextLike | None = None
 
 
 @dataclass(frozen=True, slots=True)
-class Items:
+class Items[ModeT = DiscordTarget](Renderable[ModeT]):
     key: str
-    items: tuple[Item, ...]
+    items: tuple[Item[ModeT], ...]
     opened: ItemOwnership = UNOPENED
     display: ItemDisplay = ItemDisplay.AUTO
     flexibility: Flexibility = Flexibility.NORMAL
@@ -673,24 +673,24 @@ class Navigation:
 
 
 @dataclass(frozen=True, slots=True)
-class Truncated:
-    node: LayoutNode
+class Truncated[ModeT = DiscordTarget](Renderable[ModeT]):
+    node: LayoutNode[ModeT]
     keep: str = "head"
 
 
 @dataclass(frozen=True, slots=True)
-class Spilled:
-    node: LayoutNode
+class Spilled[ModeT = DiscordTarget](Renderable[ModeT]):
+    node: LayoutNode[ModeT]
 
 
 @dataclass(frozen=True, slots=True)
-class OptionalContent:
-    node: LayoutNode
+class OptionalContent[ModeT = DiscordTarget](Renderable[ModeT]):
+    node: LayoutNode[ModeT]
     importance: Importance = Importance.LOW
 
 
 @dataclass(frozen=True, slots=True)
-class FallbackContent[ModeT = Any](Renderable[ModeT]):
+class FallbackContent[ModeT = DiscordTarget](Renderable[ModeT]):
     """Complete author-supplied representations of one region, best first."""
 
     primary: LayoutNode[ModeT]
@@ -703,15 +703,15 @@ class FallbackContent[ModeT = Any](Renderable[ModeT]):
 
 
 @dataclass(frozen=True, slots=True)
-class BestEffort:
-    node: LayoutNode
+class BestEffort[ModeT = DiscordTarget](Renderable[ModeT]):
+    node: LayoutNode[ModeT]
 
 
 @dataclass(frozen=True, slots=True)
-class Budgeted:
+class Budgeted[ModeT = DiscordTarget](Renderable[ModeT]):
     """Reserve and cap the character grant for one logical region."""
 
-    node: LayoutNode
+    node: LayoutNode[ModeT]
     minimum: int
     preferred: int
     stretch: int = 0
@@ -726,24 +726,24 @@ class Budgeted:
 
 
 @dataclass(frozen=True, slots=True)
-class Unbreakable:
+class Unbreakable[ModeT = DiscordTarget](Renderable[ModeT]):
     """Keep every primitive produced by ``node`` together on a region page."""
 
-    node: LayoutNode
+    node: LayoutNode[ModeT]
 
 
 @dataclass(frozen=True, slots=True)
-class KeepWithNext:
+class KeepWithNext[ModeT = DiscordTarget](Renderable[ModeT]):
     """Forbid a region page break immediately after ``node``."""
 
-    node: LayoutNode
+    node: LayoutNode[ModeT]
 
 
 @dataclass(frozen=True, slots=True)
-class Paged:
+class Paged[ModeT = DiscordTarget](Renderable[ModeT]):
     """Paginate the direct children of a keyed heterogeneous region."""
 
-    node: LayoutNode
+    node: LayoutNode[ModeT]
     key: str
     chars: int
     min_fill: int = 0
@@ -766,15 +766,17 @@ class Paged:
             raise ValueError(message)
 
 
-type SemanticNode = (
-    Group
-    | Stack
-    | Cluster
-    | Themed
-    | Block
-    | Section
-    | Article
-    | Aside
+type SemanticNode[ModeT = DiscordTarget] = (
+    Group[ModeT]
+    | Stack[ModeT]
+    | Cluster[ModeT]
+    | Themed[ModeT]
+    | Block[ModeT]
+    | Section[ModeT]
+    | Article[ModeT]
+    | Aside[ModeT]
+    | Details[ModeT]
+    | Items[ModeT]
     | Heading
     | Paragraph
     | Note
@@ -785,7 +787,6 @@ type SemanticNode = (
     | Code
     | Figure
     | Media
-    | Details
     | Toggle
     | Download
     | Status
@@ -800,26 +801,53 @@ type SemanticNode = (
     | Choices
     | Entities
     | RoutedChoices
-    | Items
     | Navigation
 )
+"""Everything the semantic vocabulary offers, in the dialects it can be drawn in.
 
-type Adaptation = Truncated | Spilled | OptionalContent | BestEffort | Budgeted | Unbreakable | KeepWithNext | Paged
+Only the containers take the parameter. The rest are mode-neutral by construction: a
+`Table` or a `Roster` says what the information *means* and every dialect has some way to
+draw it, which is the whole reason to author semantically. A leaf that grew a dialect
+restriction would belong in `primitives`, not here.
+"""
+
+type Adaptation[ModeT = DiscordTarget] = (
+    Truncated[ModeT]
+    | Spilled[ModeT]
+    | OptionalContent[ModeT]
+    | BestEffort[ModeT]
+    | Budgeted[ModeT]
+    | Unbreakable[ModeT]
+    | KeepWithNext[ModeT]
+    | Paged[ModeT]
+)
+type AnyLayoutNode = LayoutNode[Any]
+"""A node whose dialect is deliberately not tracked.
+
+What the planner, the tree rewriters and the runtime walk. They rewrite whatever they are
+handed and leave the dialect judgement to the target's dialect, so narrowing them to the
+portable default would be a claim none of them makes.
+"""
+
 type ConcreteLayoutNode = SemanticNode | Adaptation | FallbackContent | PrimitiveNode
-type LayoutNode[ModeT = Any] = SemanticNode | Adaptation | FallbackContent[ModeT] | Renderable[ModeT]
+type LayoutNode[ModeT = DiscordTarget] = (
+    SemanticNode[ModeT] | Adaptation[ModeT] | FallbackContent[ModeT] | Renderable[ModeT]
+)
 
 
-def truncate(node: LayoutNode, *, keep: str = "head") -> Truncated:
+def truncate[ModeT = DiscordTarget](node: LayoutNode[ModeT], *, keep: str = "head") -> Truncated[ModeT]:
     """Allow prose in ``node`` to truncate when no lossless plan fits."""
     return Truncated(node, keep)
 
 
-def spill(node: LayoutNode) -> Spilled:
+def spill[ModeT = DiscordTarget](node: LayoutNode[ModeT]) -> Spilled[ModeT]:
     """Allow a static collection in ``node`` to omit its lowest-priority entries."""
     return Spilled(node)
 
 
-def optional(node: LayoutNode, *, importance: Importance = Importance.LOW) -> OptionalContent:
+def optional[ModeT = DiscordTarget](
+    node: LayoutNode[ModeT], *, importance: Importance = Importance.LOW
+) -> OptionalContent[ModeT]:
     """Allow the whole node to disappear as an explicit last resort."""
     return OptionalContent(node, importance)
 
@@ -871,28 +899,30 @@ def fallback(primary: LayoutNode[Any], *alternates: LayoutNode[Any]) -> Fallback
     return FallbackContent(primary, alternates)
 
 
-def best_effort(node: LayoutNode) -> BestEffort:
+def best_effort[ModeT = DiscordTarget](node: LayoutNode[ModeT]) -> BestEffort[ModeT]:
     """Allow safe prose truncation and static collection spill, never consequential loss."""
     return BestEffort(node)
 
 
-def budget(node: LayoutNode, *, min: int, prefer: int, stretch: int = 0) -> Budgeted:
+def budget[ModeT = DiscordTarget](
+    node: LayoutNode[ModeT], *, min: int, prefer: int, stretch: int = 0
+) -> Budgeted[ModeT]:
     """Give ``node`` a hard floor, preferred size, and lossless stretch band."""
     return Budgeted(node, min, prefer, stretch)
 
 
-def unbreakable(node: LayoutNode) -> Unbreakable:
+def unbreakable[ModeT = DiscordTarget](node: LayoutNode[ModeT]) -> Unbreakable[ModeT]:
     """Keep ``node`` atomic when its containing region paginates."""
     return Unbreakable(node)
 
 
-def keep_with_next(node: LayoutNode) -> KeepWithNext:
+def keep_with_next[ModeT = DiscordTarget](node: LayoutNode[ModeT]) -> KeepWithNext[ModeT]:
     """Keep ``node`` off the bottom of a region page without its successor."""
     return KeepWithNext(node)
 
 
-def paged(
-    node: LayoutNode,
+def paged[ModeT = DiscordTarget](
+    node: LayoutNode[ModeT],
     *,
     key: str,
     chars: int,
@@ -902,7 +932,7 @@ def paged(
     widows: int = 1,
     initial: Literal["start", "end"] = "start",
     footer: Callable[[int, int], TextLike] | None = None,
-) -> Budgeted:
+) -> Budgeted[ModeT]:
     """Apply a preferred character budget and heterogeneous paging to ``node``."""
     region = Paged(node, key, chars, min_fill, widows, initial, footer)
     return Budgeted(region, min, chars, stretch)
@@ -919,6 +949,7 @@ __all__ = [
     "ActionControl",
     "ActionControls",
     "Adaptation",
+    "AnyLayoutNode",
     "Article",
     "Aside",
     "BestEffort",
