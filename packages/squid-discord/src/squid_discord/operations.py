@@ -11,7 +11,7 @@ import anyio
 
 from squid_discord.live import find, mounts
 from squid_discord.mount import MountSnapshot
-from squid_discord.reactor import Reactor, ReactorSnapshot
+from squid_discord.scheduler import MountScheduler, MountSchedulerSnapshot
 from squid_discord.sessions import Session, SessionRegistry
 from squid_layouts.profiling import NoOpProfiler, Profiler, RuntimeSnapshot
 from squid_layouts.runtime.histories import HistorySnapshot, inspect_histories
@@ -120,7 +120,7 @@ class OperationalSnapshot:
 
     sessions: tuple[SessionInspection, ...]
     mounts: tuple[MountSnapshot, ...]
-    reactor: ReactorSnapshot | None
+    scheduler: MountSchedulerSnapshot | None
     topics: BusSnapshot | None
     profiler: RuntimeSnapshot
     durable: DurableRuntimeSnapshot | None
@@ -175,7 +175,7 @@ class DevToolsRuntime:
         self,
         *,
         sessions: SessionRegistry | None = None,
-        reactor: Reactor | None = None,
+        scheduler: MountScheduler | None = None,
         bus: TopicBus | None = None,
         profiler: Profiler | None = None,
         durable: DurableSessionRuntime | None = None,
@@ -183,13 +183,13 @@ class DevToolsRuntime:
         audit: AuditHook | None = None,
     ) -> None:
         self.sessions = sessions
-        self.reactor = reactor
-        self.bus = bus if bus is not None else reactor.bus if reactor is not None else None
+        self.scheduler = scheduler
+        self.bus = bus if bus is not None else scheduler.bus if scheduler is not None else None
         self.profiler = (
             profiler
             if profiler is not None
-            else reactor.profiler
-            if reactor is not None
+            else scheduler.profiler
+            if scheduler is not None
             else getattr(self.bus, "profiler", NoOpProfiler())
         )
         self.durable = durable
@@ -208,7 +208,7 @@ class DevToolsRuntime:
         return OperationalSnapshot(
             sessions,
             tuple(mount.snapshot() for mount in mounts()),
-            None if self.reactor is None else self.reactor.snapshot(),
+            None if self.scheduler is None else self.scheduler.snapshot(),
             topics,
             self.profiler.snapshot(),
             None if self.durable is None else self.durable.snapshot(),
@@ -267,8 +267,8 @@ class DevToolsRuntime:
         self._authorize(DevToolsAction.WAIT_IDLE, None, confirmed=True)
         while True:
             await self._wait_bus_idle()
-            if self.reactor is not None:
-                await self.reactor.wait_idle()
+            if self.scheduler is not None:
+                await self.scheduler.wait_idle()
 
             if self._queues_idle():
                 await anyio.sleep(0)
@@ -294,8 +294,8 @@ class DevToolsRuntime:
             snapshot = snapshot_topics() if callable(snapshot_topics) else None
             if snapshot is not None and (snapshot.queued or snapshot.in_flight):
                 return False
-        if self.reactor is not None:
-            snapshot = self.reactor.snapshot()
+        if self.scheduler is not None:
+            snapshot = self.scheduler.snapshot()
             if snapshot.queued or snapshot.in_flight or snapshot.redeliver:
                 return False
         return True

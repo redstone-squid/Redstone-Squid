@@ -40,22 +40,22 @@ class Projection(sl.Component):
                 return sl.paragraph("loading")
 
 
-async def _drain_reactor(reactor: sd.Reactor) -> None:
+async def _drain_reactor(scheduler: sd.MountScheduler) -> None:
     async with anyio.create_task_group() as tasks:
-        tasks.start_soon(reactor.run)
-        await asyncio.wait_for(reactor._queue.join(), timeout=1)
+        tasks.start_soon(scheduler.run)
+        await asyncio.wait_for(scheduler._queue.join(), timeout=1)
         tasks.cancel_scope.cancel()
 
 
 async def test_one_resource_publish_refreshes_two_panels_without_second_post_writer() -> None:
     bus = sl.runtime.LocalTopicBus()
-    reactor = sd.Reactor(bus)
+    scheduler = sd.MountScheduler(bus)
     messages = [fake_message(message_id=1), fake_message(message_id=2)]
     source = "before"
     panels = [Projection(lambda: source), Projection(lambda: source)]
 
     for panel, message in zip(panels, messages, strict=True):
-        mount = sd.Mount(panel, access=Everyone(), scheduler=reactor, timeout=None)
+        mount = sd.Mount(panel, access=Everyone(), scheduler=scheduler, timeout=None)
         await mount.send(delivered_to(message))
         assert mount.followed == (resource_topic("build", "42"),), "following is what the render read"
 
@@ -69,7 +69,7 @@ async def test_one_resource_publish_refreshes_two_panels_without_second_post_wri
     source = "after"
 
     await RedstoneSquid.refresh_posts(bot, "build", "42")
-    await _drain_reactor(reactor)
+    await _drain_reactor(scheduler)
 
     assert all("after" in str(message.edit.await_args.kwargs["view"].to_components()) for message in messages)
     reconciler.reconcile.assert_awaited_once_with("build", "42", 7)

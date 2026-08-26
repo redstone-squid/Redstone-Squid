@@ -264,7 +264,7 @@ class TestProfiles:
     async def test_queue_command_infers_bus_and_profiler_from_reactor(self) -> None:
         profiler = MemoryProfiler()
         bus = sl.runtime.LocalTopicBus()
-        reactor = squid_discord.Reactor(bus, profiler=profiler)
+        scheduler = squid_discord.MountScheduler(bus, profiler=profiler)
 
         def refresh(topic) -> None:
             pass
@@ -272,19 +272,19 @@ class TestProfiles:
         bus.subscribe(sl.runtime.Topic("build", "devtools"), refresh)
         bus.publish(sl.runtime.Topic("build", "devtools"))
         ctx = make_context()
-        cog = DevTools(reactor=reactor)
+        cog = DevTools(scheduler=scheduler)
 
         await run(cog.inspect_queues, cog, ctx)
 
         rendered = str(ctx.send.await_args.kwargs["view"].to_components())
-        assert "reactor" in rendered
+        assert "scheduler" in rendered
         assert "topics" in rendered
         # Neither was passed, so "unconfigured" anywhere means an inference did not happen.
         assert "unconfigured" not in rendered
         assert "build:devtools subscribers=1" in rendered
         # A local bus publishes synchronously, so the press is delivered rather than queued.
         assert "delivered=1" in rendered
-        assert DevToolsRuntime(reactor=reactor).profiler is profiler
+        assert DevToolsRuntime(scheduler=scheduler).profiler is profiler
 
     async def test_profile_export_attaches_round_trippable_snapshot(self) -> None:
         profiler = MemoryProfiler()

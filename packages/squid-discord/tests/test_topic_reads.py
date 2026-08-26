@@ -13,7 +13,7 @@ import anyio
 import discord
 
 import squid_layouts as sl
-from squid_discord import Everyone, Mount, Reactor
+from squid_discord import Everyone, Mount, MountScheduler
 from squid_discord.delivery import DeliveryResult, handle_for
 from squid_discord.testing import delivered_to, fake_message
 from squid_layouts import Component, resource, state
@@ -57,11 +57,11 @@ def counting_loader(values: list[str]):
     return load, lambda: loads
 
 
-async def drain(reactor: Reactor, bus: LocalTopicBus) -> None:
+async def drain(scheduler: MountScheduler, bus: LocalTopicBus) -> None:
     del bus
     async with anyio.create_task_group() as tasks:
-        tasks.start_soon(reactor.run)
-        await asyncio.wait_for(reactor._queue.join(), timeout=1)
+        tasks.start_soon(scheduler.run)
+        await asyncio.wait_for(scheduler._queue.join(), timeout=1)
         tasks.cancel_scope.cancel()
 
 
@@ -69,9 +69,9 @@ def texts(view: discord.ui.LayoutView) -> str:
     return "\n".join(item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay))
 
 
-async def mounted(panel: Component, bus: LocalTopicBus, reactor: Reactor) -> tuple[Mount, Any]:
+async def mounted(panel: Component, bus: LocalTopicBus, scheduler: MountScheduler) -> tuple[Mount, Any]:
     message: Any = fake_message()
-    mount = Mount(panel, access=Everyone(), scheduler=reactor, timeout=None)
+    mount = Mount(panel, access=Everyone(), scheduler=scheduler, timeout=None)
     await mount.send(delivered_to(message))
     return mount, message
 
@@ -82,9 +82,9 @@ async def mounted(panel: Component, bus: LocalTopicBus, reactor: Reactor) -> tup
 async def test_a_topic_watched_only_inside_a_loader_is_followed_by_the_mount() -> None:
     """The whole phase rests on this: a loader's read has to reach the render's observations."""
     bus = LocalTopicBus()
-    reactor = Reactor(bus)
+    scheduler = MountScheduler(bus)
     load, _ = counting_loader(["first"])
-    mount, message = await mounted(Watcher(load), bus, reactor)
+    mount, message = await mounted(Watcher(load), bus, scheduler)
 
     assert mount.followed == (BUILD,)
     assert mount.observed == (BUILD,)
@@ -92,9 +92,9 @@ async def test_a_topic_watched_only_inside_a_loader_is_followed_by_the_mount() -
 
 async def test_a_variadic_watch_follows_every_topic_it_names() -> None:
     bus = LocalTopicBus()
-    reactor = Reactor(bus)
+    scheduler = MountScheduler(bus)
     load, _ = counting_loader(["first"])
-    mount, message = await mounted(Watcher(load, topics=(BUILD, OTHER)), bus, reactor)
+    mount, message = await mounted(Watcher(load, topics=(BUILD, OTHER)), bus, scheduler)
 
     assert set(mount.followed) == {BUILD, OTHER}
 
@@ -108,8 +108,8 @@ async def test_a_topic_watched_in_render_is_followed_too() -> None:
             return Text("x")
 
     bus = LocalTopicBus()
-    reactor = Reactor(bus)
-    mount, message = await mounted(Direct(), bus, reactor)
+    scheduler = MountScheduler(bus)
+    mount, message = await mounted(Direct(), bus, scheduler)
 
     assert mount.followed == (BUILD,)
 
@@ -119,9 +119,9 @@ async def test_a_topic_watched_in_render_is_followed_too() -> None:
 
 async def test_one_publish_refreshes_a_watching_mount_exactly_once() -> None:
     bus = LocalTopicBus()
-    reactor = Reactor(bus)
+    scheduler = MountScheduler(bus)
     load, _ = counting_loader(["first"])
-    mount, message = await mounted(Watcher(load), bus, reactor)
+    mount, message = await mounted(Watcher(load), bus, scheduler)
     refreshes = 0
 
     async def refresh(*, links=()) -> None:
@@ -131,20 +131,20 @@ async def test_one_publish_refreshes_a_watching_mount_exactly_once() -> None:
     mount.refresh = refresh  # pyrefly: ignore
 
     bus.publish(BUILD)
-    await drain(reactor, bus)
+    await drain(scheduler, bus)
 
     assert refreshes == 1
 
 
 async def test_a_publish_reloads_the_resource_and_redraws_the_new_value() -> None:
     bus = LocalTopicBus()
-    reactor = Reactor(bus)
+    scheduler = MountScheduler(bus)
     load, loads = counting_loader(["first", "second"])
-    mount, message = await mounted(Watcher(load), bus, reactor)
+    mount, message = await mounted(Watcher(load), bus, scheduler)
     assert loads() == 1
 
     bus.publish(BUILD)
-    await drain(reactor, bus)
+    await drain(scheduler, bus)
 
     assert loads() == 2
     assert "ready:second" in texts(message.edit.await_args.kwargs["view"])
@@ -152,12 +152,12 @@ async def test_a_publish_reloads_the_resource_and_redraws_the_new_value() -> Non
 
 async def test_an_unrelated_publish_does_not_reload() -> None:
     bus = LocalTopicBus()
-    reactor = Reactor(bus)
+    scheduler = MountScheduler(bus)
     load, loads = counting_loader(["first", "second"])
-    await mounted(Watcher(load), bus, reactor)
+    await mounted(Watcher(load), bus, scheduler)
 
     bus.publish(OTHER)
-    await drain(reactor, bus)
+    await drain(scheduler, bus)
 
     assert loads() == 1
 
@@ -183,7 +183,7 @@ async def test_a_mount_with_no_reactor_still_refetches_on_its_next_render() -> N
 async def test_a_publish_during_the_load_is_not_lost() -> None:
     """`follow` told hosts to subscribe before the first read. A version needs no such rule."""
     bus = LocalTopicBus()
-    reactor = Reactor(bus)
+    scheduler = MountScheduler(bus)
     released = asyncio.Event()
     loads = 0
 
@@ -203,11 +203,11 @@ async def test_a_publish_during_the_load_is_not_lost() -> None:
         sent.append(presentation.layout)
         return DeliveryResult(message, handle_for(message))
 
-    mount = Mount(Watcher(load), access=Everyone(), scheduler=reactor, timeout=None)
+    mount = Mount(Watcher(load), access=Everyone(), scheduler=scheduler, timeout=None)
     await mount.send(destination)
 
     assert released.is_set()
-    await drain(reactor, bus)
+    await drain(scheduler, bus)
 
     # The stale value never reached Discord at all: an atomic resource re-settles before it
     # draws, so the publish is absorbed inside the send rather than costing a second edit.
@@ -221,10 +221,10 @@ async def test_a_publish_during_the_load_is_not_lost() -> None:
 
 async def test_a_dropped_conditional_watch_stops_refreshing_once_delivered() -> None:
     bus = LocalTopicBus()
-    reactor = Reactor(bus)
+    scheduler = MountScheduler(bus)
     load, _ = counting_loader(["first", "second"])
     panel = Watcher(load)
-    mount, message = await mounted(panel, bus, reactor)
+    mount, message = await mounted(panel, bus, scheduler)
     assert mount.followed == (BUILD,)
 
     panel.topic = OTHER
@@ -236,10 +236,10 @@ async def test_a_dropped_conditional_watch_stops_refreshing_once_delivered() -> 
 
 async def test_a_discarded_staged_render_leaves_no_permanent_follow() -> None:
     bus = LocalTopicBus()
-    reactor = Reactor(bus)
+    scheduler = MountScheduler(bus)
     load, _ = counting_loader(["first", "second"])
     panel = Watcher(load)
-    mount, message = await mounted(panel, bus, reactor)
+    mount, message = await mounted(panel, bus, scheduler)
 
     panel.topic = OTHER
     candidate = mount._stage()
@@ -252,9 +252,9 @@ async def test_a_discarded_staged_render_leaves_no_permanent_follow() -> None:
 
 async def test_no_follow_outlives_its_mount() -> None:
     bus = LocalTopicBus()
-    reactor = Reactor(bus)
+    scheduler = MountScheduler(bus)
     load, _ = counting_loader(["first"])
-    mount, message = await mounted(Watcher(load), bus, reactor)
+    mount, message = await mounted(Watcher(load), bus, scheduler)
     assert {snapshot.topic for snapshot in bus.snapshot().topics} == {BUILD}
 
     await mount.finish()

@@ -262,7 +262,7 @@ its callback body into the submit handler.
 | `DynamicItem` | `Route`, `RouteGroup`, `Router` | Keep stable IDs and aliases; register the router at startup. |
 | Decorated button callback | `sl.action(..., on_click=...)` | Reuse the service call, not the live item. Use `sd.native(event)` only when the interaction itself is required. |
 | `Modal.on_submit` | `FormSpec` or `sl.forms.Form` plus `SubmitEvent` | Parsing and retry policy move out of the Discord modal class. |
-| Ephemeral edit token | `RenewEphemeral` with an expiry-supervising `Reactor` | Interactive edits can renew credentials; unattended authority still expires. |
+| Ephemeral edit token | `RenewEphemeral` with an expiry-supervising `MountScheduler` | Interactive edits can renew credentials; unattended authority still expires. |
 
 `RenewEphemeral` presents a replacement control before known edit authority expires. It requires a
 scheduler implementing expiry supervision; a plain mount without one raises rather than promising

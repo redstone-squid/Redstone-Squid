@@ -91,7 +91,7 @@ the Squid region stateless. Components nest through explicit
 `self.embed(child, key=...)` boundaries, so actions and pagers never cross-wire. `sd.Mount`
 binds a component tree to a message: every
 interaction funnels through it (author lock, error hook, re-render/edit), timeouts disable
-controls, `sd.Reactor` coalesces out-of-band refreshes, and `sd.Navigator` stacks screens with
+controls, `sd.MountScheduler` coalesces out-of-band refreshes, and `sd.Navigator` stacks screens with
 Back/Home/Close by composition. A mount's `nav=` replaces the stock Previous/Next row with
 controls built from `sd.NavigationContext`; the same factory receives materialized pages and
 asynchronously loaded windows. Semantic pickers page through keyed
@@ -262,19 +262,19 @@ what the load is being compared against, so the value it produced is already sta
 again. There is no "subscribe before the first read" rule to get wrong. `sl.runtime.watch` belongs in a
 resource, never in `on_load`, which runs once and under no consumer.
 
-`reactor.follow` remains for a dependency no render-time read can express, and `bus.subscribe`
+`scheduler.follow` remains for a dependency no render-time read can express, and `bus.subscribe`
 for a subscriber that is not a mount:
 
 ```python
 bus = sl.runtime.LocalTopicBus()
-reactor = sd.Reactor(bus)
-mount = sd.Mount(panel, access=sd.Owner(interaction.user.id), scheduler=reactor)
-reactor.follow(mount, sl.runtime.Topic("build", "123"))  # subscribe before the first read/send
+scheduler = sd.MountScheduler(bus)
+mount = sd.Mount(panel, access=sd.Owner(interaction.user.id), scheduler=scheduler)
+scheduler.follow(mount, sl.runtime.Topic("build", "123"))  # subscribe before the first read/send
 await mount.send(sd.respond_to(interaction))
 
 # The host owns the only long-running coroutine.
 async with anyio.create_task_group() as tasks:
-    tasks.start_soon(reactor.run)
+    tasks.start_soon(scheduler.run)
 ```
 
 `publish()` delivers local subscribers synchronously in registration order. A subscriber that
@@ -284,7 +284,7 @@ its own durable change feed, NOTIFY listener, or queue consumer into the local b
 the application already funnels committed changes; do not subscribe a durable projection that
 already has a reconciler, because that would give one message two competing writers. For tests,
 call `publish()` and assert immediately.
-Expiry and idle-time tests can inject UTC and monotonic clocks through `Reactor(clock=...)` and
+Expiry and idle-time tests can inject UTC and monotonic clocks through `MountScheduler(clock=...)` and
 `Mount(clock=...)`; production callers normally keep their defaults.
 
 When the change happens in another process -- a worker that finished a render, a second shard --
@@ -327,7 +327,7 @@ then the bridge listener publishes it locally and in other processes. The bridge
 before calling it; unlike `publish()`, it rejects topics that cannot be encoded or fit under the
 NOTIFY payload limit.
 
-Every delivered mount using a reactor is observed for edit-authority expiry, even when it follows
+Every delivered mount using a scheduler is observed for edit-authority expiry, even when it follows
 no topics. `PauseUpdates(warning=60)` is the default pre-expiry status policy. A long-lived
 ephemeral panel can opt into an explicit, non-mutating handoff instead:
 
@@ -335,31 +335,31 @@ ephemeral panel can opt into an explicit, non-mutating handoff instead:
 mount = sd.Mount(
     panel,
     access=sd.Owner(user_id),
-    scheduler=reactor,
+    scheduler=scheduler,
     expiry=sd.RenewEphemeral(warning=90),
 )
 ```
 
 The renewal screen preserves the mount and hidden application state, then restores the latest
 render on the same message when its owner clicks **Continue Session**. Pass `expiry=None` to
-disable pre-expiry UI. `RenewEphemeral` requires a reactor-backed scheduler so timed arming cannot
+disable pre-expiry UI. `RenewEphemeral` requires a scheduler-backed scheduler so timed arming cannot
 silently be missed.
 
 ### Runtime profiling
 
 Runtime profiling is opt-in, bounded, and synchronous. One `MemoryProfiler` can cover the host's
-live-update chain: pass it to `Reactor`, and a `Mount` inherits its scheduler's profiler unless
+live-update chain: pass it to `MountScheduler`, and a `Mount` inherits its scheduler's profiler unless
 explicitly overridden. Routers are independent ownership roots and accept the same collector
 directly.
 
 ```python
 profiler = sl.profiling.MemoryProfiler(sample_rate=0.1)
 bus = sl.runtime.LocalTopicBus()
-reactor = sd.Reactor(bus, profiler=profiler)
+scheduler = sd.MountScheduler(bus, profiler=profiler)
 
-mount = sd.Mount(panel, access=sd.Everyone(), scheduler=reactor)
+mount = sd.Mount(panel, access=sd.Everyone(), scheduler=scheduler)
 router = sd.Router(profiler=profiler)
-devtools = sd.devtools.DevTools(reactor=reactor)
+devtools = sd.devtools.DevTools(scheduler=scheduler)
 ```
 
 Completed operations contribute to lifetime and rolling histograms and event counters even when
@@ -570,7 +570,7 @@ state invalidates its one owner, while a namespace's publishes an address on the
 Every mount whose render read that field refreshes; a mount subscribes to exactly what it
 rendered, reconciled each time it stages one. The mount that *made* the write repaints in the
 click itself rather than waiting for the bus, so a panel writing shared state feels no
-different from one writing local state — and needs no reactor to do it. Every shared value an action
+different from one writing local state — and needs no scheduler to do it. Every shared value an action
 strongly reads is guarded by its version when that action publishes anything, so write skew and
 A→B→A lineage changes raise `sl.runtime.ReactiveConflictError` rather than overwriting. A read is
 strong when the action also writes that cell, or when it was taken inside `strong_read()`; a
@@ -767,7 +767,7 @@ list rather than an assertion.
 
 - The base package depends only on the zero-dependency `squid-reactive` kernel. Install
   `squid-discord` for the discord.py adapter. The adapter never starts background work on its own;
-  start `sd.Reactor.run()` and any external bridge under your own supervisor.
+  start `sd.MountScheduler.run()` and any external bridge under your own supervisor.
 - Factories take content positionally and everything else by keyword. `None` and `False`
   children are skipped, so `cond and node` is the way to include something conditionally;
   `True` is rejected because `and` can never produce it. Collections are unpacked by the

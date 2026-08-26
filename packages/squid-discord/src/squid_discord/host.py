@@ -7,7 +7,7 @@ a panel opened from a click holds neither, so a host that wanted both ended up m
 process global to stand in for the lookup this module now offers.
 
 :func:`install` performs the assembly once — registry, challenge runner, dialog presenter,
-and optionally a reactor — and records the result against the client. Anything carrying that
+and optionally a scheduler — and records the result against the client. Anything carrying that
 client reaches it again through :meth:`LayoutHost.of`. The client-keyed weak table is the
 same shape :mod:`squid_discord.routing` already uses for installed routers.
 
@@ -27,7 +27,7 @@ from squid_discord.challenges import ChallengeRunner, DialogPresenter
 from squid_discord.defaults import MountDefaults, MountOptions
 from squid_discord.delivery import Replyable
 from squid_discord.mount import Mount
-from squid_discord.reactor import Reactor
+from squid_discord.scheduler import MountScheduler
 from squid_discord.sessions import SessionRegistry
 from squid_layouts.profiling import Profiler
 from squid_layouts.runtime.component import Component
@@ -67,7 +67,7 @@ class LayoutHost[ClientT: discord.Client]:
     """The Discord runtime installed on one client; `close()` ends it.
 
     Holds the objects whose construction is circular — the session registry, the challenge
-    runner, and the dialog presenter that needs both — plus the reactor, when the installing
+    runner, and the dialog presenter that needs both — plus the scheduler, when the installing
     host gave a topic bus to build one from. Built by :func:`install`, never directly, so
     exactly one host exists per client and :meth:`of` can be trusted.
     """
@@ -78,12 +78,12 @@ class LayoutHost[ClientT: discord.Client]:
         *,
         mounts: SessionRegistry,
         challenges: ChallengeRunner,
-        reactor: Reactor | None,
+        scheduler: MountScheduler | None,
     ) -> None:
         self.client = client
         self.mounts = mounts
         self.challenges = challenges
-        self.reactor = reactor
+        self.scheduler = scheduler
 
     @property
     def defaults(self) -> MountDefaults:
@@ -107,17 +107,17 @@ class LayoutHost[ClientT: discord.Client]:
         return self.defaults.mount(component, access=access, **overrides)
 
     async def run(self) -> None:
-        """Serve this host's reactor and challenge runner until the caller cancels.
+        """Serve this host's scheduler and challenge runner until the caller cancels.
 
         A convenience for a host content to supervise one job. A host wanting per-job health
-        granularity starts `reactor.run()` and `challenges.run()` separately instead; the
+        granularity starts `scheduler.run()` and `challenges.run()` separately instead; the
         package still starts nothing on its own either way.
         """
         # A task group rather than gather: a failing job must cancel the other one rather
         # than leave a half-served host running.
         async with anyio.create_task_group() as tasks:
-            if self.reactor is not None:
-                tasks.start_soon(self.reactor.run)
+            if self.scheduler is not None:
+                tasks.start_soon(self.scheduler.run)
             tasks.start_soon(self.challenges.run)
 
     async def close(self) -> None:
@@ -162,9 +162,9 @@ def install[ClientT: discord.Client](
 ) -> LayoutHost[ClientT]:
     """Assemble the Discord runtime for `client` and record it against the client.
 
-    `bus` is what makes a reactor: with one, mounts refresh from topics and shared state, and
-    the reactor becomes the default scheduler; without one, a mount is refreshed only by its
-    own clicks. `profiler` instruments that reactor.
+    `bus` is what makes a scheduler: with one, mounts refresh from topics and shared state, and
+    the scheduler becomes the default scheduler; without one, a mount is refreshed only by its
+    own clicks. `profiler` instruments that scheduler.
 
     Raises:
         ValueError: A host is already installed on this client. One client has one host, the
@@ -174,15 +174,15 @@ def install[ClientT: discord.Client](
     if _INSTALLED.get(client) is not None:
         message = "client already has a layout host installed"
         raise ValueError(message)
-    reactor = None if bus is None else Reactor(bus, profiler=profiler)
-    if reactor is not None:
-        defaults = defaults.replace(scheduler=reactor)
+    scheduler = None if bus is None else MountScheduler(bus, profiler=profiler)
+    if scheduler is not None:
+        defaults = defaults.replace(scheduler=scheduler)
     mounts = SessionRegistry(defaults=defaults)
     challenges = ChallengeRunner()
     # The knot install exists to tie: the presenter needs the registry and the runner, and
     # the registry needs the presenter to hand every mount it opens.
     mounts.defaults = mounts.defaults.replace(challenge=DialogPresenter(mounts, challenges))
-    host = LayoutHost(client, mounts=mounts, challenges=challenges, reactor=reactor)
+    host = LayoutHost(client, mounts=mounts, challenges=challenges, scheduler=scheduler)
     _INSTALLED[client] = host
     return host
 
