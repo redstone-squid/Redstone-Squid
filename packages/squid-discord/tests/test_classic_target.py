@@ -3,6 +3,7 @@
 import discord
 import pytest
 
+import squid_layouts as sl
 from squid_discord import CLASSIC_TARGET, V2_LIMITS, V2_TARGET, Target
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.planning import plan
@@ -219,6 +220,18 @@ class TestIndependentTextPools:
 
         with pytest.raises(UnsolvableLayoutError, match="Never nodes need"):
             plan(overlong, target=CLASSIC_TARGET)
+
+
+class TestPagedRegions:
+    def test_a_paged_region_plans_against_the_classic_component_budget(self) -> None:
+        """`sl.paged` is not mode-gated, so the region breaker may not read a V2-only cap."""
+        document = sl.paged(
+            sl.group(*(sl.paragraph(f"{index}: " + "x" * 10) for index in range(6))),
+            key="report",
+            chars=200,
+        )
+
+        assert isinstance(plan(document, target=CLASSIC_TARGET).scene.body, SceneClassicMessage)
 
 
 class TestDiscordPyCrossChecks:
