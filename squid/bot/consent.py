@@ -9,7 +9,7 @@ import anyio
 import discord
 from discord.ext import commands
 
-import squid_discord as sd
+import squid_ui_discord as sd
 import squid_ui as sl
 from squid.accounts.application import AccountService
 from squid.accounts.domain import (
@@ -23,8 +23,8 @@ from squid.bot.i18n import t
 from squid.bot.ui import CardField, localization_for, text_layout
 from squid.bot.utils.sentinel import Sentinel
 from squid.core.i18n import _, ntranslate
-from squid_discord import Opener, ScreenSpec
-from squid_discord.sessions import Opened, Reject, Rejected, SessionPolicy
+from squid_ui_discord import Opener, ScreenSpec
+from squid_ui_discord.sessions import Opened, Reject, Rejected, SessionPolicy
 
 CONSENT_SCREEN = ScreenSpec(
     "consent",

@@ -21,7 +21,7 @@ from squid.notifications import (
     TagPredicate,
 )
 from squid.runtime import JobHandle
-from squid_discord import respond_to
+from squid_ui_discord import respond_to
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid

@@ -10,14 +10,14 @@ import pytest
 from discord.ext import commands
 from whenever import Instant
 
-import squid_discord as sd
+import squid_ui_discord as sd
 import squid_ui as sl
 from squid.accounts.application import AccountService
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, Account, AccountConsent, AccountIdentity, IdentityProvider
 from squid.bot.consent import NOT_ASKED, ensure_consented_account, prompt_for_consent, request_consent
-from squid_discord import Everyone, SessionKey, SessionRegistry
-from squid_discord.sessions import Opened
-from squid_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
+from squid_ui_discord import Everyone, SessionKey, SessionRegistry
+from squid_ui_discord.sessions import Opened
+from squid_ui_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 from tests.helpers.discord import make_layout_bot
 
 AFTER_CUTOFF = Instant.from_utc(2026, 8, 5)

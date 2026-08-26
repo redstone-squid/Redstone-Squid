@@ -9,7 +9,7 @@ import dataclasses
 from collections.abc import Mapping
 from textwrap import dedent
 
-import squid_discord as sd
+import squid_ui_discord as sd
 import squid_ui as sl
 import squid_ui_widgets as sp
 from squid.bot.ui import DISCORD_GREEN, DISCORD_RED, DISCORD_YELLOW, CardField, card_layout, render_presentation

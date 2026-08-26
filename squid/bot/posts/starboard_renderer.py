@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, final
 
 import discord
 
-import squid_discord as sd
+import squid_ui_discord as sd
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale
 from squid.bot.posts.renderer import DesiredPost

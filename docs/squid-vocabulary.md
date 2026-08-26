@@ -4,7 +4,7 @@
 retired vocabulary across public and private identifiers.**
 
 One dictionary for `squid-ui`, `squid-reactivity`, `squid-replication`, `squid-storage`,
-`squid-discord`, and `squid-ui-widgets`, covering head nouns, suffixes, callable verbs, and
+`squid-ui-discord`, and `squid-ui-widgets`, covering head nouns, suffixes, callable verbs, and
 private identifiers. It is the naming source of truth referenced by
 [squid-ui-architecture.md §Naming](squid-ui-architecture.md#naming).
 
@@ -319,5 +319,5 @@ require more exceptions than rules. New synonyms fail without constraining new c
 Scene, durability, profiler, and durable-store formats use the vocabulary-correct shape as
 protocol or schema v1; no pre-reset wire compatibility is retained.
 
-The redundant `Discord*` prefix inside `squid_discord` remains an explicit public-API
+The redundant `Discord*` prefix inside `squid_ui_discord` remains an explicit public-API
 decision; target and adapter types outside that package still need the prefix.

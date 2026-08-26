@@ -7,12 +7,12 @@ from unittest.mock import AsyncMock
 
 import anyio
 
-import squid_discord as sd
+import squid_ui_discord as sd
 import squid_ui as sl
 from squid.bot.app import RedstoneSquid
 from squid.topics import resource_topic
-from squid_discord import Everyone
-from squid_discord.testing import delivered_to, fake_message
+from squid_ui_discord import Everyone
+from squid_ui_discord.testing import delivered_to, fake_message
 
 
 class Projection(sl.Component):
