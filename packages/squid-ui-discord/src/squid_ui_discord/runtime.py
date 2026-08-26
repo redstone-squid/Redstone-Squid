@@ -89,7 +89,7 @@ class ClientRuntime[ClientT: discord.Client]:
     def defaults(self) -> MessageRootDefaults:
         """The values every mount on this host is built from.
 
-        The registry's own defaults, not a copy: a mount opened through `mounts.open` and one
+        The manager's own defaults, not a copy: a message root opened through `sessions.open` and one
         built here are wired the same way, which is the whole reason this lookup exists.
         """
         return self.sessions.defaults
@@ -164,7 +164,7 @@ def install[ClientT: discord.Client](
 ) -> ClientRuntime[ClientT]:
     """Assemble the Discord runtime for `client` and record it against the client.
 
-    `bus` is what makes a scheduler: with one, mounts refresh from topics and shared state, and
+    `bus` is what makes a scheduler: with one, message roots refresh from topics and shared state, and
     the scheduler becomes the default scheduler; without one, a mount is refreshed only by its
     own clicks. `profiler` instruments that scheduler.
 

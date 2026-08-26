@@ -116,7 +116,7 @@ class SessionSnapshot:
         """Every user attributable to this session, however they arrived.
 
         Derived rather than stored so a policy reads one field: explicit members, actors
-        attributed to attached mounts, and the opener are all reasons to treat a session as
+        attributed to attached message roots, and the opening actor are all reasons to treat a session as
         somebody's. A policy that wants only one of them reads that field directly.
         """
         open_context = frozenset() if self.actor_id is None else frozenset({self.actor_id})
@@ -364,7 +364,7 @@ class Session:
 
     @property
     def message_roots(self) -> tuple[MessageRoot, ...]:
-        """The root followed by attached mounts in registration order."""
+        """The root followed by attached message roots in registration order."""
         return tuple(self._graph)
 
     @property
@@ -403,7 +403,7 @@ class Session:
 
     @property
     def attachment_actors(self) -> frozenset[int]:
-        """Actors attributed to non-root mounts, for replacement protection."""
+        """Actors attributed to non-root message roots, for replacement protection."""
         return frozenset(
             membership.actor
             for message_root, membership in self._graph.items()
@@ -458,7 +458,7 @@ class Session:
     async def attach(
         self,
         message_root: MessageRoot,
-        destination: MessageDestination,
+        message_destination: MessageDestination,
         *,
         actor_id: int | None = None,
         parent: MessageRoot | None = None,
@@ -470,7 +470,7 @@ class Session:
             parent = self.root if parent is None else parent
             if parent not in self._graph or parent.finished:
                 return Rejected((self.snapshot,), RejectionReason.SESSION_FINISHED)
-            result = await message_root.send(destination)
+            result = await message_root.send(message_destination)
             if isinstance(result, Abandoned):
                 return result
             self._graph[message_root] = _Membership(parent=parent, actor=actor_id)
@@ -649,7 +649,7 @@ class SessionManager:
     async def open(
         self,
         message_root: MessageRoot,
-        destination: MessageDestination,
+        message_destination: MessageDestination,
         *,
         key: Hashable | None = None,
         admission: AdmissionSpec = DEFAULT_ADMISSION,
@@ -675,7 +675,7 @@ class SessionManager:
         if key is None:
             return await self._open_locked(
                 message_root,
-                destination,
+                message_destination,
                 key=None,
                 admission=admission,
                 actor_id=actor_id,
@@ -692,7 +692,7 @@ class SessionManager:
         async with self._lock_for(key):
             return await self._open_locked(
                 message_root,
-                destination,
+                message_destination,
                 key=key,
                 admission=admission,
                 actor_id=actor_id,
@@ -710,7 +710,7 @@ class SessionManager:
     async def _open_coordinated[SessionT: Session](
         self,
         message_root: MessageRoot,
-        destination: MessageDestination,
+        message_destination: MessageDestination,
         *,
         key: SessionKey,
         admission: AdmissionSpec,
@@ -731,7 +731,7 @@ class SessionManager:
         async with self._lock_for(key):
             return await self._open_locked(
                 message_root,
-                destination,
+                message_destination,
                 key=key,
                 admission=admission,
                 actor_id=actor_id,
@@ -760,7 +760,7 @@ class SessionManager:
         quota: int | None = None,
         domain: str | None = None,
     ) -> SessionT:
-        """Register a frontend-reconnected session without delivering its mounts again."""
+        """Register a frontend-reconnected session without delivering its message roots again."""
         session = session_type(
             self,
             root,
@@ -839,7 +839,7 @@ class SessionManager:
     async def _open_locked(
         self,
         message_root: MessageRoot,
-        destination: MessageDestination,
+        message_destination: MessageDestination,
         *,
         key: Hashable | None,
         admission: AdmissionSpec,
@@ -904,7 +904,7 @@ class SessionManager:
         # session facts would otherwise find no session on its own first paint and never be
         # asked to draw again. An abandoned delivery takes the entry back out.
         self._index_root(newcomer, message_root)
-        result = await message_root.send(destination)
+        result = await message_root.send(message_destination)
         if isinstance(result, Abandoned):
             self._unindex_root(newcomer, message_root)
             return result

@@ -1,4 +1,4 @@
-"""The `/dev ui` inspector: every live mount, and why one of them is odd.
+"""The `/dev ui` inspector: every live message root, and why one of them is odd.
 
 squid-ui has excellent *planning* diagnostics — reports, fingerprints, plan metrics —
 and every one of them describes a render that already happened. Nothing answered "show me
@@ -30,14 +30,14 @@ if TYPE_CHECKING:
 
 
 SESSION_SECONDS = 300
-"""Short-lived on purpose: an inspector left open is one more mount in its own list."""
+"""Short-lived on purpose: an inspector left open is one more message root in its own list."""
 
 _SELECT_LIMIT = 25
 """Discord's option cap. The list itself pages; the picker offers the newest of them."""
 
 
 class MessageRootInspector(sl.Component):
-    """The live mounts, and one of them opened.
+    """The message roots, and one of them opened.
 
     Reads `squid_ui_discord.message_roots()` on every render rather than holding a list, so a panel left
     open keeps telling the truth: sessions that finished while it was open are simply gone
@@ -46,20 +46,20 @@ class MessageRootInspector(sl.Component):
 
     focus: str | None = sl.state(None)
     revision: int = sl.state(0)
-    """Bumped by Refresh. A handler that changes nothing leaves the mount clean and the
+    """Bumped by Refresh. A handler that changes nothing leaves the message root clean and the
     message stale, so re-reading the world has to be a state change like any other."""
 
     own_id: str | None = sl.state(None)
-    """This panel's own mount id, set by the cog once the mount exists — it is in the list
+    """This panel's own message root id, set by the cog once the message root exists — it is in the list
     like everything else, and unlabelled it reads as a mystery session."""
 
-    def __init__(self, *, focus: str | None = None, registry: squid_ui_discord.SessionManager | None = None) -> None:
+    def __init__(self, *, focus: str | None = None, manager: squid_ui_discord.SessionManager | None = None) -> None:
         self.focus = focus
-        self._registry = registry
+        self._manager = manager
 
     def render(self) -> Sequence[sl.LayoutNode]:
         # Both are explicit invalidation tokens for process state that is not itself
-        # reactive. Observe them even when an empty registry makes their usual branches
+        # reactive. Observe them even when an empty manager makes their usual branches
         # unreachable, otherwise a cached empty list cannot be refreshed.
         _ = self.revision, self.own_id
         message_roots = squid_ui_discord.message_roots()
@@ -80,11 +80,11 @@ class MessageRootInspector(sl.Component):
         missing = self.focus is not None
         body: sl.LayoutNode
         if snapshots:
-            body = sl.bullets(*(self._row(snapshot) for snapshot in snapshots), key="mounts", page_size=8)
+            body = sl.bullets(*(self._row(snapshot) for snapshot in snapshots), key="roots", page_size=8)
         else:
             body = sl.paragraph("Nothing is mounted. Open a panel and run this again.")
 
-        nodes: list[sl.LayoutNode] = [sl.section(sl.heading(f"Live mounts — {len(snapshots)}"), body)]
+        nodes: list[sl.LayoutNode] = [sl.section(sl.heading(f"Message roots — {len(snapshots)}"), body)]
         if missing:
             nodes.insert(0, sl.status(f"MessageRoot `{self.focus}` is no longer live.", tone=sl.Tone.WARNING))
         if snapshots:
@@ -117,12 +117,12 @@ class MessageRootInspector(sl.Component):
         )
 
     def _session_key(self, message_root_id: str) -> Hashable | None:
-        if self._registry is None:
+        if self._manager is None:
             return None
         return next(
             (
                 session.key
-                for session in self._registry.active()
+                for session in self._manager.active()
                 if any(message_root.id == message_root_id for message_root in session.message_roots)
             ),
             None,
@@ -226,7 +226,7 @@ class OperationalInspector(sl.Component):
 
     def render(self) -> Sequence[sl.LayoutNode]:
         snapshot = self._devtools_runtime.snapshot()
-        if self.section == "mounts":
+        if self.section == "roots":
             nodes = self._roots(snapshot)
         elif self.section == "sessions":
             nodes = self._sessions(snapshot)
@@ -244,7 +244,7 @@ class OperationalInspector(sl.Component):
 
     def _overview(self, snapshot: squid_ui_discord.devtools_runtime.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         counts = [
-            f"mounts       {len(snapshot.message_roots)}",
+            f"roots        {len(snapshot.message_roots)}",
             f"sessions     {len(snapshot.sessions)}",
             f"scheduler     {_scheduler_summary(snapshot.scheduler)}",
             f"topics      {_topic_summary(snapshot.topics)}",
@@ -292,8 +292,8 @@ class OperationalInspector(sl.Component):
         ]
         nodes: list[sl.LayoutNode] = [
             sl.section(
-                sl.heading("Live mounts"),
-                sl.bullets(*rows, key="mounts", page_size=8) if rows else sl.paragraph("No live mounts."),
+                sl.heading("Message roots"),
+                sl.bullets(*rows, key="roots", page_size=8) if rows else sl.paragraph("No message roots."),
             ),
         ]
         if snapshot.message_roots:
@@ -305,7 +305,7 @@ class OperationalInspector(sl.Component):
                         )
                         for message_root in snapshot.message_roots[:25]
                     ),
-                    key="mount",
+                    key="message root",
                     selection=sl.controlled((), self._open_root),
                 )
             )
@@ -348,7 +348,7 @@ class OperationalInspector(sl.Component):
             notice = None
 
         rows = [
-            f"`{session.id}` · key `{session.key}` · mounts={len(session.message_roots)} · members={_members(session)}"
+            f"`{session.id}` · key `{session.key}` · roots={len(session.message_roots)} · members={_members(session)}"
             for session in snapshot.sessions
         ]
         nodes: list[sl.LayoutNode] = [
@@ -361,7 +361,7 @@ class OperationalInspector(sl.Component):
             nodes.append(
                 sl.choices(
                     *(
-                        sl.choice(session.id, key=session.id, description=f"mounts={len(session.message_roots)}")
+                        sl.choice(session.id, key=session.id, description=f"roots={len(session.message_roots)}")
                         for session in snapshot.sessions[:25]
                     ),
                     key="session",
@@ -413,7 +413,7 @@ class OperationalInspector(sl.Component):
 
     def _section_choices(self) -> sl.LayoutNode:
         return sl.choices(
-            sl.choice("Mounts", key="mounts"),
+            sl.choice("Roots", key="roots"),
             sl.choice("Sessions", key="sessions"),
             sl.choice("Queues", key="queues"),
             sl.choice("Profiler", key="profile"),
@@ -477,7 +477,7 @@ class OperationalInspector(sl.Component):
 
 
 def scene_attachment(snapshot: squid_ui_discord.message_root.MessageRootSnapshot) -> sl.document.Asset | None:
-    """The mount's committed scene as the protocol JSON, for reading outside Discord."""
+    """The message root's committed scene as the protocol JSON, for reading outside Discord."""
     if snapshot.scene is None:
         return None
     return sl.document.Asset(
@@ -492,7 +492,7 @@ def plan_text(snapshot: squid_ui_discord.message_root.MessageRootSnapshot) -> st
     """Render the retained plan report, grouping adaptations by severity."""
     report = snapshot.report
     if report is None:
-        return "Nothing has been committed yet, so this mount has no plan report."
+        return "Nothing has been committed yet, so this message root has no plan report."
     lines = [
         f"logical  {report.logical_fingerprint or '—'}",
         f"scene    {report.scene_fingerprint or '—'}",
@@ -511,10 +511,10 @@ def plan_text(snapshot: squid_ui_discord.message_root.MessageRootSnapshot) -> st
 
 
 def metrics_text(snapshot: squid_ui_discord.message_root.MessageRootSnapshot) -> str:
-    """Render the planner work and cache disposition retained by a mount."""
+    """Render the planner work and cache disposition retained by a message root."""
     metrics = snapshot.metrics
     if metrics is None:
-        return "Nothing has been committed yet, so this mount has no planner metrics."
+        return "Nothing has been committed yet, so this message root has no planner metrics."
     return "\n".join(
         (
             f"states_explored: {metrics.states_explored}",
@@ -533,7 +533,7 @@ def _summary(snapshot: squid_ui_discord.message_root.MessageRootSnapshot) -> lis
     ]
     address = snapshot.address
     if address is None:
-        # A mount sent through an unwaited interaction response has never seen its message.
+        # A message root sent through an unwaited interaction response has never seen its message.
         entries.append("**Message**\nnot located yet — nobody has clicked it")
     else:
         where = "ephemeral" if address.ephemeral else f"<#{address.channel_id}>"
@@ -542,7 +542,7 @@ def _summary(snapshot: squid_ui_discord.message_root.MessageRootSnapshot) -> lis
 
 
 def _access_text(access: squid_ui_discord.AccessPolicy) -> str:
-    """Describe the mount's admission policy without exposing callback internals."""
+    """Describe the message root's admission policy without exposing callback internals."""
     if isinstance(access, squid_ui_discord.Everyone):
         return "Everyone"
     if isinstance(access, squid_ui_discord.Owner):
@@ -677,7 +677,7 @@ def _reactivity(message_root: squid_ui_discord.MessageRoot) -> list[str]:
 def _pair(topic: object) -> tuple[sl.runtime.SharedState[Any] | None, object]:
     """An observed address split into its namespace and cell, or `(None, topic)` otherwise.
 
-    Read from what the render observed rather than from what it subscribed to, so a mount
+    Read from what the render observed rather than from what it subscribed to, so a message root
     with no scheduler still reports the shared state it is showing.
     """
     match topic:

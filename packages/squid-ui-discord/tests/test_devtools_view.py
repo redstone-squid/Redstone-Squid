@@ -40,7 +40,7 @@ class Subject(sl.Component):
 
 
 @pytest.fixture(autouse=True)
-def _isolated_registry():
+def _isolated_manager():
     live._LIVE.clear()
     yield
     live._LIVE.clear()
@@ -176,7 +176,7 @@ class TestDetail:
         body = "\n".join(_texts(commit_render(message_root)))
 
         assert "no longer live" in body
-        assert "Live mounts" in body
+        assert "Message roots" in body
 
     async def test_back_returns_to_the_list(self) -> None:
         subject = await live_subject()
@@ -193,12 +193,12 @@ class TestDetail:
 
         assert_within_limits(view)
 
-    async def test_a_registry_key_labels_its_root(self) -> None:
-        registry = squid_ui_discord.SessionManager()
+    async def test_a_manager_key_labels_its_root(self) -> None:
+        manager = squid_ui_discord.SessionManager()
         subject = MessageRoot(Subject(), access=Everyone())
-        await registry.open(subject, delivered_to(squid_ui_discord.testing.fake_message()), key=("editor", 7))
+        await manager.open(subject, delivered_to(squid_ui_discord.testing.fake_message()), key=("editor", 7))
 
-        _, view = message_root_inspector(MessageRootInspector(registry=registry))
+        _, view = message_root_inspector(MessageRootInspector(manager=manager))
 
         assert "('editor', 7)" in "\n".join(_texts(view))
 

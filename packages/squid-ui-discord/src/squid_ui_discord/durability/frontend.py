@@ -14,7 +14,7 @@ from squid_ui_discord.message_root import MessageRoot
 
 @dataclass(frozen=True, slots=True)
 class Promoted:
-    """A delivered mount now has portable coordinates and permanent edit authority."""
+    """A delivered message root now has portable coordinates and permanent edit authority."""
 
     address: FrontendAddress
     handle: EditHandle
@@ -32,7 +32,7 @@ type PromotionResult = Promoted | NotDurable
 
 @dataclass(frozen=True, slots=True)
 class RecoveredBinding:
-    """One restored mount and the persisted message it must reclaim."""
+    """One restored message root and the persisted message it must reclaim."""
 
     record_message_root_id: str
     message_root: MessageRoot
@@ -41,7 +41,7 @@ class RecoveredBinding:
 
 @dataclass(frozen=True, slots=True)
 class Reconnected:
-    """Every mount in a restored session was redrawn onto its Discord message."""
+    """Every message root in a restored session was redrawn onto its Discord message."""
 
     record_message_root_ids: tuple[str, ...]
 
@@ -80,7 +80,7 @@ class _ResolvedBinding:
 
 
 class DiscordFrontend:
-    """Promote and reconnect durable mounts through bot-token Discord messages."""
+    """Promote and reconnect durable message roots through bot-token Discord messages."""
 
     frontend = "discord"
 
@@ -96,7 +96,7 @@ class DiscordFrontend:
             return NotDurable("ephemeral Discord messages cannot be recovered")
         address = message_root.address
         if address is None or address.message_id != message.id or address.channel_id != message.channel.id:
-            return NotDurable("the delivery result does not address this mount's message")
+            return NotDurable("the delivery result does not address this message root's message")
 
         try:
             durable_message = await self._normal_message(message)
@@ -117,7 +117,7 @@ class DiscordFrontend:
         return Promoted(FrontendAddress(self.frontend, values), handle)
 
     async def reconnect(self, bindings: Sequence[RecoveredBinding]) -> ReconnectResult:
-        """Resolve a whole session before redrawing any of its restored mounts."""
+        """Resolve a whole session before redrawing any of its restored message roots."""
         resolved: list[_ResolvedBinding] = []
         missing: list[tuple[str, str]] = []
         unreachable: list[tuple[str, str]] = []
@@ -144,13 +144,13 @@ class DiscordFrontend:
             handle = handle_for(item.message, mode=self._mode(item.binding.address))
 
             async def edit(
-                presentation: MessagePayload,
+                payload: MessagePayload,
                 /,
                 *,
                 message: discord.Message = item.message,
                 authority: EditHandle = handle,
             ) -> DeliveryResult:
-                await authority.write(presentation)
+                await authority.write(payload)
                 return DeliveryResult(message, authority, message_id=message.id, ephemeral=False)
 
             try:
@@ -170,7 +170,7 @@ class DiscordFrontend:
             if isinstance(result, Abandoned):
                 return Unreachable(
                     (item.binding.record_message_root_id,),
-                    ("the restored mount finished before it could reconnect",),
+                    ("the restored message root finished before it could reconnect",),
                 )
 
         return Reconnected(tuple(binding.record_message_root_id for binding in bindings))
