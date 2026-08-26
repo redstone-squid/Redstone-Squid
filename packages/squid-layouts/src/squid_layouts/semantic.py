@@ -11,7 +11,7 @@ from squid_layouts.entity import ChannelType, EntityRef, EntityType, supports_en
 from squid_layouts.forms import FormSpec, SubmitHandler
 from squid_layouts.grids import GridCell, validate_grid
 from squid_layouts.guards import Guard
-from squid_layouts.interactions import ActionEvent, ActionPolicy, BusySpec, PressHandler, SelectionEvent
+from squid_layouts.interactions import ActionEvent, ActionMode, BusySpec, PressHandler, SelectionEvent
 from squid_layouts.palette import INHERIT, Accent, Palette, Tone
 from squid_layouts.primitives.nodes import Node as PrimitiveNode
 from squid_layouts.rosters import RosterPlacement
@@ -460,7 +460,7 @@ class FormTrigger:
     label: TextLike
     spec: FormSpec
     on_submit: SubmitHandler
-    policy: ActionPolicy = ActionPolicy.EXCLUSIVE
+    mode: ActionMode = ActionMode.EXCLUSIVE
     tone: Tone = Tone.NEUTRAL
     emphasis: Emphasis = Emphasis.NORMAL
     guard: Guard | None = None
@@ -478,7 +478,7 @@ class Action:
     emphasis: Emphasis = Emphasis.NORMAL
     available: bool = True
     allow_grouping: bool | None = None
-    policy: ActionPolicy = ActionPolicy.EXCLUSIVE
+    mode: ActionMode = ActionMode.EXCLUSIVE
     guard: Guard | None = None
     """Whether this press may execute now. `available` is the render-time question."""
     busy: BusySpec | None = None

@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from squid_layouts.runtime.histories import History
 
 
-class ActionPolicy(StrEnum):
+class ActionMode(StrEnum):
     """Concurrency and stale-generation policy for an interactive action."""
 
     EXCLUSIVE = "exclusive"
@@ -85,7 +85,7 @@ class ActionResponder(Protocol):
         *,
         key: str = "form",
         on_submit: SubmitHandler | None = None,
-        policy: ActionPolicy | None = None,
+        mode: ActionMode | None = None,
         label: TextLike = "",
         record: History | None = None,
     ) -> None: ...
@@ -126,7 +126,7 @@ class ActionEvent:
         *,
         key: str = "form",
         on_submit: SubmitHandler | None = None,
-        policy: ActionPolicy | None = None,
+        mode: ActionMode | None = None,
         label: TextLike = "",
         record: History | None = None,
     ) -> None:
@@ -135,7 +135,7 @@ class ActionEvent:
             form,
             key=key,
             on_submit=on_submit,
-            policy=policy,
+            mode=mode,
             label=label,
             record=record,
         )
@@ -185,7 +185,7 @@ class ActionRequest:
     event: ActionEvent
     key: str
     kind: ActionKind
-    policy: ActionPolicy
+    mode: ActionMode
     submitted_generation: int | None
     active_generation: int
     context: ActionContext
@@ -222,7 +222,7 @@ class ActionBinding:
 
     key: str
     handler: Callable[[Any], Awaitable[None]]
-    policy: ActionPolicy = ActionPolicy.EXCLUSIVE
+    mode: ActionMode = ActionMode.EXCLUSIVE
     routes: Mapping[str, ActionBinding] = field(default_factory=dict)
     guard: Guard | None = None
     """Admission checked by the frontend after the concurrency gate, before the handler."""
@@ -248,7 +248,7 @@ __all__ = [
     "ActionHandler",
     "ActionKind",
     "ActionMiddleware",
-    "ActionPolicy",
+    "ActionMode",
     "ActionProceed",
     "ActionRequest",
     "ActionResponder",

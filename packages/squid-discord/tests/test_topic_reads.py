@@ -18,7 +18,7 @@ from squid_discord.delivery import DeliveryResult, handle_for
 from squid_discord.testing import delivered_to, fake_message
 from squid_layouts import Component, resource, state
 from squid_layouts.primitives import Text
-from squid_layouts.runtime import LocalTopicBus, PendingPolicy, Topic
+from squid_layouts.runtime import LocalTopicBus, PendingMode, Topic
 
 BUILD = Topic("build", "1")
 OTHER = Topic("build", "2")
@@ -33,7 +33,7 @@ class Watcher(Component):
         self._load = load
         self._topics = topics
 
-    @resource(pending=PendingPolicy.ATOMIC)
+    @resource(pending=PendingMode.ATOMIC)
     async def value(self) -> str:
         sl.runtime.watch(*(self._topics if self._topics is not None else (self.topic,)))
         return await self._load()

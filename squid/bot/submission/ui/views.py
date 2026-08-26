@@ -477,7 +477,7 @@ class BuildEditComponent(sl.Component):
         self.items = tuple(items)
         self._mount: sd.Mount | None = None
 
-    @sl.resource(pending=sl.resources.PendingPolicy.ATOMIC)
+    @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
     async def projection(self) -> tuple[Build, sl.LayoutNode | None]:
         """Load the edited build and keep its preview current with the build topic."""
         if self._build_id is not None:

@@ -43,7 +43,7 @@ from squid_layouts.chrome import LOCALIZATION_CONTEXT, Chrome
 from squid_layouts.document import Asset, InlineAsset
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import FormField, FormSpec, TextField
-from squid_layouts.interactions import ActionKind, ActionMiddleware, ActionPolicy, ActionProceed, ActionRequest
+from squid_layouts.interactions import ActionKind, ActionMiddleware, ActionMode, ActionProceed, ActionRequest
 from squid_layouts.primitives import (
     ActionGroup,
     Button,
@@ -68,7 +68,7 @@ from squid_layouts.runtime import (
     ComponentRuntime,
     Failed,
     Pending,
-    PendingPolicy,
+    PendingMode,
     ReactiveWriteError,
     Ready,
     batch,
@@ -523,7 +523,7 @@ class TestDispatchProfiling:
 
         class Rebased(Component):
             def render(self):
-                return Row((Button("run", self.run, "run", policy=ActionPolicy.REBASE),))
+                return Row((Button("run", self.run, "run", mode=ActionMode.REBASE),))
 
             async def run(self, event: PressEvent) -> None: ...
 
@@ -1193,7 +1193,7 @@ class TestActionPolicy:
 
             def render(self):
                 handler = self.new if self.current else self.old
-                return Row((Button("run", handler, "run", policy=ActionPolicy.REBASE),))
+                return Row((Button("run", handler, "run", mode=ActionMode.REBASE),))
 
             async def old(self, event: PressEvent) -> None:
                 calls.append("old")
@@ -1221,7 +1221,7 @@ class TestActionPolicy:
 
             def render(self):
                 handler = self.new if self.current else self.old
-                return sl_form("Rename", spec, key="rename", on_submit=handler, policy=ActionPolicy.REBASE)
+                return sl_form("Rename", spec, key="rename", on_submit=handler, mode=ActionMode.REBASE)
 
             async def old(self, event) -> None:
                 calls.append("old")
@@ -1242,7 +1242,7 @@ class TestActionPolicy:
             spec,
             {"name": "Ada"},
             component.old,
-            policy=ActionPolicy.REBASE,
+            mode=ActionMode.REBASE,
             generation=stale,
         )
 
@@ -1278,7 +1278,7 @@ class TestActionPolicy:
             spec,
             {"name": "new"},
             binding.on_submit,
-            policy=binding.policy,
+            mode=binding.mode,
             label=binding.label,
             record=binding.record,
         )
@@ -1294,7 +1294,7 @@ class TestActionPolicy:
 
         class Trigger(Component):
             def render(self):
-                return sl_form("Rename", spec, key="rename", on_submit=self.submit, policy=ActionPolicy.REBASE)
+                return sl_form("Rename", spec, key="rename", on_submit=self.submit, mode=ActionMode.REBASE)
 
             async def submit(self, event) -> None:
                 submitted.append("submit")
@@ -1310,7 +1310,7 @@ class TestActionPolicy:
             spec,
             {"name": "Ada"},
             component.submit,
-            policy=ActionPolicy.REBASE,
+            mode=ActionMode.REBASE,
             generation=mount.generation,
         )
 
@@ -1325,7 +1325,7 @@ class TestActionPolicy:
 
         class Reshaped(Component):
             def render(self):
-                return sl_form("Rename", reshaped, key="rename", on_submit=self.new, policy=ActionPolicy.REBASE)
+                return sl_form("Rename", reshaped, key="rename", on_submit=self.new, mode=ActionMode.REBASE)
 
             async def old(self, event) -> None:
                 calls.append(dict(event.values))
@@ -1343,7 +1343,7 @@ class TestActionPolicy:
             filled,
             {"name": "Ada"},
             component.old,
-            policy=ActionPolicy.REBASE,
+            mode=ActionMode.REBASE,
             generation=mount.generation,
         )
 
@@ -1400,7 +1400,7 @@ class TestActionPolicy:
             count: int = state(0)
 
             def render(self):
-                return Row((Button("read", self.read, "read", policy=ActionPolicy.PARALLEL_READ),))
+                return Row((Button("read", self.read, "read", mode=ActionMode.PARALLEL_READ),))
 
             async def read(self, event: PressEvent) -> None:
                 self.count += 1
@@ -1548,7 +1548,7 @@ class TestActionMiddleware:
 
             def render(self):
                 handler = self.new if self.current else self.old
-                return Row((Button("run", handler, "run", policy=ActionPolicy.REBASE),))
+                return Row((Button("run", handler, "run", mode=ActionMode.REBASE),))
 
             async def old(self, event: PressEvent) -> None: ...
 
@@ -1569,7 +1569,7 @@ class TestActionMiddleware:
                 requests[0].event,
                 "run",
                 ActionKind.PRESS,
-                ActionPolicy.REBASE,
+                ActionMode.REBASE,
                 submitted,
                 active,
                 requests[0].context,
@@ -1969,8 +1969,8 @@ class TestDeliveryAtomicity:
             def render(self):
                 return Row(
                     (
-                        Button(f"a:{self.count}", self.click, "a", policy=ActionPolicy.IMMEDIATE),
-                        Button(f"b:{self.count}", self.click, "b", policy=ActionPolicy.IMMEDIATE),
+                        Button(f"a:{self.count}", self.click, "a", mode=ActionMode.IMMEDIATE),
+                        Button(f"b:{self.count}", self.click, "b", mode=ActionMode.IMMEDIATE),
                     )
                 )
 
@@ -2894,7 +2894,7 @@ class AtomicResourcePanel(Component):
     def __init__(self, load: Callable[[], Awaitable[str]]) -> None:
         self._load = load
 
-    @resource(pending=PendingPolicy.ATOMIC)
+    @resource(pending=PendingMode.ATOMIC)
     async def value(self) -> str:
         return await self._load()
 
@@ -2915,7 +2915,7 @@ class CheckpointedResourcePanel(Component):
         self.entered = asyncio.Event()
         self.released = asyncio.Event()
 
-    @resource(pending=PendingPolicy.ATOMIC)
+    @resource(pending=PendingMode.ATOMIC)
     async def value(self) -> str:
         self.attempts += 1
         attempt = self.attempts
@@ -3632,12 +3632,12 @@ class _GuardedPanel(Component):
         *,
         guard: sl.guards.Guard | None = None,
         busy: sl.interactions.BusySpec | None = None,
-        policy: ActionPolicy = ActionPolicy.EXCLUSIVE,
+        mode: ActionMode = ActionMode.EXCLUSIVE,
         run: Callable[[], Awaitable[Any]] | None = None,
     ) -> None:
         self.guard = guard
         self.busy = busy
-        self.policy = policy
+        self.mode = mode
         self.run = run
 
     def render(self):
@@ -3648,7 +3648,7 @@ class _GuardedPanel(Component):
                 key="go",
                 guard=self.guard,
                 busy=self.busy,
-                policy=self.policy,
+                mode=self.mode,
             ),
             key="panel",
         )
@@ -3741,20 +3741,20 @@ class TestGuards:
         # A list rather than component state: PARALLEL_READ handlers may not write, and the
         # question here is whether the guard was consulted at all under each policy.
         class Reader(Component):
-            def __init__(self, policy: ActionPolicy) -> None:
-                self.policy = policy
+            def __init__(self, mode: ActionMode) -> None:
+                self.mode = mode
                 self.presses: list[str] = []
 
             def render(self):
                 return sl.actions(
-                    sl.action("Go", self.go, key="go", guard=sl.guards.once(), policy=self.policy),
+                    sl.action("Go", self.go, key="go", guard=sl.guards.once(), mode=self.mode),
                     key="panel",
                 )
 
             async def go(self, event: ActionEvent) -> None:
                 self.presses.append(event.actor.id)
 
-        for policy in ActionPolicy:
+        for policy in ActionMode:
             panel = Reader(policy)
             mount = Mount(panel, access=Everyone(), timeout=None)
             commit_render(mount)

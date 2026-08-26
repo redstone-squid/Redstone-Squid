@@ -7,7 +7,7 @@ from squid_discord.actions import ActionResponder
 from squid_discord.testing import commit_render, fake_interaction
 from squid_layouts import Component, PressEvent, TextLike
 from squid_layouts.forms import FormLike, SubmitHandler
-from squid_layouts.interactions import ActionPolicy, Actor, Visibility
+from squid_layouts.interactions import ActionMode, Actor, Visibility
 from squid_layouts.interactions import ActionResponder as ActionResponderProtocol
 from squid_layouts.primitives import Button, Row
 
@@ -29,7 +29,7 @@ class Portable:
         *,
         key: str = "form",
         on_submit: SubmitHandler | None = None,
-        policy: ActionPolicy | None = None,
+        mode: ActionMode | None = None,
         label: TextLike = "",
         record=None,
     ) -> None: ...

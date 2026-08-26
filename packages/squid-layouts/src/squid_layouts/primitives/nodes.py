@@ -17,7 +17,7 @@ from squid_layouts.forms import FormBinding
 from squid_layouts.guards import Guard
 from squid_layouts.interactions import (
     ActionBinding,
-    ActionPolicy,
+    ActionMode,
     BusySpec,
     EntitySelectionHandler,
     PressHandler,
@@ -150,7 +150,7 @@ class Button(Renderable[DiscordTarget]):
     style: ActionStyle = ActionStyle.SECONDARY
     emoji: EmojiLike | None = None
     disabled: bool = False
-    policy: ActionPolicy = ActionPolicy.EXCLUSIVE
+    mode: ActionMode = ActionMode.EXCLUSIVE
     guard: Guard | None = None
     busy: BusySpec | None = None
     record: History | None = None
@@ -214,7 +214,7 @@ class SelectMenu(Renderable[DiscordTarget]):
     min_values: int = 1
     max_values: int = 1
     disabled: bool = False
-    policy: ActionPolicy = ActionPolicy.EXCLUSIVE
+    mode: ActionMode = ActionMode.EXCLUSIVE
     routes: Mapping[str, ActionBinding] = field(default_factory=dict)
 
 
@@ -231,7 +231,7 @@ class EntitySelect(Renderable[DiscordTarget]):
     min_values: int = 1
     max_values: int = 1
     disabled: bool = False
-    policy: ActionPolicy = ActionPolicy.EXCLUSIVE
+    mode: ActionMode = ActionMode.EXCLUSIVE
 
     def __post_init__(self) -> None:
         if self.channel_types and self.entity_type is not EntityType.CHANNEL:

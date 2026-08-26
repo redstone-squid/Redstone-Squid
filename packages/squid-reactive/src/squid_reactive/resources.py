@@ -46,7 +46,7 @@ class ResourceOwner(ReactiveOwner, Protocol):
 class AsyncBinding(Protocol):
     """A caller-owned asynchronous value discovered during a synchronous render."""
 
-    pending_policy: PendingPolicy
+    pending_mode: PendingMode
     reconcile_while_pending: bool
     settle_without_delivery: bool
 
@@ -168,7 +168,7 @@ type ResourceStatus[ValueT] = Pending[ValueT] | Ready[ValueT] | Failed[ValueT]
 type AtomicResourceStatus[ValueT] = Ready[ValueT] | Failed[ValueT]
 
 
-class PendingPolicy(StrEnum):
+class PendingMode(StrEnum):
     """Whether pending is explicit in the render contract or settled atomically."""
 
     EXPLICIT = "explicit"
@@ -282,14 +282,14 @@ class Resource[ValueT](AsyncBinding):
         loader: Callable[[], Awaitable[ValueT]],
         *,
         name: str,
-        pending_policy: PendingPolicy,
+        pending_mode: PendingMode,
         address: Any = None,
         publish: Callable[[Any], None] | None = None,
     ) -> None:
         self._owner = owner
         self._loader = loader
         self._label = name
-        self.pending_policy = pending_policy
+        self.pending_mode = pending_mode
         self.address = address
         """Where this resource's changes are published, or `None` for a component's own.
 
@@ -670,10 +670,10 @@ class _ResourceDescriptor[OwnerT: ResourceOwner, ValueT]:
         self,
         loader: Callable[[OwnerT], Awaitable[ValueT]],
         *,
-        pending_policy: PendingPolicy,
+        pending_mode: PendingMode,
     ) -> None:
         self.loader = loader
-        self.pending_policy = pending_policy
+        self.pending_mode = pending_mode
         self.public_name = loader.__name__
         self._name = ""
 
@@ -702,7 +702,7 @@ class _ResourceDescriptor[OwnerT: ResourceOwner, ValueT]:
                 instance,
                 lambda: self.loader(instance),
                 name=f"{type(instance).__name__}.{self.public_name}",
-                pending_policy=self.pending_policy,
+                pending_mode=self.pending_mode,
                 address=address,
                 publish=publish,
             )
@@ -733,7 +733,7 @@ class _AtomicResourceDescriptor[OwnerT: ResourceOwner, ValueT](_ResourceDescript
                 instance,
                 lambda: self.loader(instance),
                 name=f"{type(instance).__name__}.{self.public_name}",
-                pending_policy=self.pending_policy,
+                pending_mode=self.pending_mode,
                 address=address,
                 publish=publish,
             )
@@ -747,7 +747,7 @@ def resource[OwnerT: ResourceOwner, ValueT](
     loader: Callable[[OwnerT], Awaitable[ValueT]],
     /,
     *,
-    pending: Literal[PendingPolicy.ATOMIC],
+    pending: Literal[PendingMode.ATOMIC],
 ) -> _AtomicResourceDescriptor[OwnerT, ValueT]: ...
 
 
@@ -756,21 +756,21 @@ def resource[OwnerT: ResourceOwner, ValueT](
     loader: Callable[[OwnerT], Awaitable[ValueT]],
     /,
     *,
-    pending: PendingPolicy = PendingPolicy.EXPLICIT,
+    pending: PendingMode = PendingMode.EXPLICIT,
 ) -> _ResourceDescriptor[OwnerT, ValueT]: ...
 
 
 @overload
 def resource[OwnerT: ResourceOwner, ValueT](
     *,
-    pending: Literal[PendingPolicy.ATOMIC],
+    pending: Literal[PendingMode.ATOMIC],
 ) -> Callable[[Callable[[OwnerT], Awaitable[ValueT]]], _AtomicResourceDescriptor[OwnerT, ValueT]]: ...
 
 
 @overload
 def resource[OwnerT: ResourceOwner, ValueT](
     *,
-    pending: PendingPolicy = PendingPolicy.EXPLICIT,
+    pending: PendingMode = PendingMode.EXPLICIT,
 ) -> Callable[[Callable[[OwnerT], Awaitable[ValueT]]], _ResourceDescriptor[OwnerT, ValueT]]: ...
 
 
@@ -778,7 +778,7 @@ def resource(
     loader: Callable[[ResourceOwner], Awaitable[Any]] | None = None,
     /,
     *,
-    pending: PendingPolicy = PendingPolicy.EXPLICIT,
+    pending: PendingMode = PendingMode.EXPLICIT,
 ) -> Any:
     """Declare a lazy async value whose current state is available during synchronous render.
 
@@ -789,8 +789,8 @@ def resource(
     def decorate(
         function: Callable[[ResourceOwner], Awaitable[Any]],
     ) -> _ResourceDescriptor[ResourceOwner, Any] | _AtomicResourceDescriptor[ResourceOwner, Any]:
-        descriptor = _AtomicResourceDescriptor if pending is PendingPolicy.ATOMIC else _ResourceDescriptor
-        return descriptor(function, pending_policy=pending)
+        descriptor = _AtomicResourceDescriptor if pending is PendingMode.ATOMIC else _ResourceDescriptor
+        return descriptor(function, pending_mode=pending)
 
     return decorate if loader is None else decorate(loader)
 

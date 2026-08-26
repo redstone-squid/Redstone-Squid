@@ -90,7 +90,7 @@ def _form(node: FormTrigger, context: _Context) -> list[Node]:
             spec,
             key=node.key,
             on_submit=node.on_submit,
-            policy=node.policy,
+            mode=node.mode,
             label=node.label,
             record=node.record,
         )
@@ -103,13 +103,13 @@ def _form(node: FormTrigger, context: _Context) -> list[Node]:
                     present,
                     node.key,
                     style=_button_style(node.tone, node.emphasis),
-                    policy=node.policy,
+                    mode=node.mode,
                     # Guarding the press that opens the modal, not the submission: a stateful
                     # guard checked twice would deny the reader's own filled-in form.
                     guard=node.guard,
                     # The adapted spec, not `node.spec`: it is what the reader will actually
                     # be shown, and so what a late submission must be parsed against.
-                    form=FormBinding(node.key, spec, node.on_submit, node.policy, node.label, node.record),
+                    form=FormBinding(node.key, spec, node.on_submit, node.mode, node.label, node.record),
                 ),
             )
         )

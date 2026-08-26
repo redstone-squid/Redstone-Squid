@@ -15,13 +15,13 @@ from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, Self, overload
 
 from squid_layouts.emoji import EmojiLike, normalize_emoji
 from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.interactions import ActionPolicy, SubmitEvent
+from squid_layouts.interactions import ActionMode, SubmitEvent
 from squid_layouts.temporal import (
     AmbiguousLocalTimeError,
-    AmbiguousTimePolicy,
+    AmbiguousTimeMode,
     InvalidTimezoneOffsetError,
     NonexistentLocalTimeError,
-    NonexistentTimePolicy,
+    NonexistentTimeMode,
     ZonedDateTime,
     resolve_local_datetime,
     resolve_offset_datetime,
@@ -51,7 +51,7 @@ class FormError:
 type FormIssue = FieldError | FormError
 
 
-class FormValidationPolicy(StrEnum):
+class FormValidationMode(StrEnum):
     """What happens after a submitted form fails validation."""
 
     RETRY = "retry"
@@ -323,15 +323,15 @@ class DateTimeField(FormField[DateTimeValue]):
     minimum: DateTimeValue | None = None
     maximum: DateTimeValue | None = None
     placeholder: TextLike | None = "YYYY-MM-DD HH:MM"
-    ambiguous: AmbiguousTimePolicy = AmbiguousTimePolicy.REJECT
-    nonexistent: NonexistentTimePolicy = NonexistentTimePolicy.REJECT
+    ambiguous: AmbiguousTimeMode = AmbiguousTimeMode.REJECT
+    nonexistent: NonexistentTimeMode = NonexistentTimeMode.REJECT
 
     def __post_init__(self) -> None:
-        if not isinstance(self.ambiguous, AmbiguousTimePolicy):
-            message = "DateTimeField ambiguous must be an AmbiguousTimePolicy"
+        if not isinstance(self.ambiguous, AmbiguousTimeMode):
+            message = "DateTimeField ambiguous must be an AmbiguousTimeMode"
             raise TypeError(message)
-        if not isinstance(self.nonexistent, NonexistentTimePolicy):
-            message = "DateTimeField nonexistent must be a NonexistentTimePolicy"
+        if not isinstance(self.nonexistent, NonexistentTimeMode):
+            message = "DateTimeField nonexistent must be a NonexistentTimeMode"
             raise TypeError(message)
         for name, bound in (("minimum", self.minimum), ("maximum", self.maximum)):
             if bound is not None and (bound.tzinfo is None or bound.utcoffset() is None):
@@ -374,16 +374,16 @@ class ZonedDateTimeField(FormField[ZonedDateTime]):
     minimum: DateTimeValue | None = None
     maximum: DateTimeValue | None = None
     placeholder: TextLike | None = "YYYY-MM-DD HH:MM"
-    ambiguous: AmbiguousTimePolicy = AmbiguousTimePolicy.REJECT
-    nonexistent: NonexistentTimePolicy = NonexistentTimePolicy.REJECT
+    ambiguous: AmbiguousTimeMode = AmbiguousTimeMode.REJECT
+    nonexistent: NonexistentTimeMode = NonexistentTimeMode.REJECT
 
     def __post_init__(self) -> None:
         timezone_from_name(self.timezone)
-        if not isinstance(self.ambiguous, AmbiguousTimePolicy):
-            message = "ZonedDateTimeField ambiguous must be an AmbiguousTimePolicy"
+        if not isinstance(self.ambiguous, AmbiguousTimeMode):
+            message = "ZonedDateTimeField ambiguous must be an AmbiguousTimeMode"
             raise TypeError(message)
-        if not isinstance(self.nonexistent, NonexistentTimePolicy):
-            message = "ZonedDateTimeField nonexistent must be a NonexistentTimePolicy"
+        if not isinstance(self.nonexistent, NonexistentTimeMode):
+            message = "ZonedDateTimeField nonexistent must be a NonexistentTimeMode"
             raise TypeError(message)
         for name, bound in (("minimum", self.minimum), ("maximum", self.maximum)):
             if bound is not None and (bound.tzinfo is None or bound.utcoffset() is None):
@@ -615,7 +615,7 @@ class FormSpec:
     items: tuple[FormField[Any] | FormText, ...]
     prefill: Mapping[str, object] = dataclass_field(default_factory=dict)
     validator: FormValidator | None = dataclass_field(default=None, repr=False, compare=False)
-    validation_policy: FormValidationPolicy = FormValidationPolicy.RETRY
+    validation: FormValidationMode = FormValidationMode.RETRY
 
     def __post_init__(self) -> None:
         normalized = tuple(self.items)
@@ -705,8 +705,8 @@ class Form:
     """Descriptor sugar that compiles typed class attributes into a :class:`FormSpec`."""
 
     title: ClassVar[TextLike] = "Form"
-    validation_policy: ClassVar[FormValidationPolicy] = FormValidationPolicy.RETRY
-    action_policy: ClassVar[ActionPolicy] = ActionPolicy.EXCLUSIVE
+    validation: ClassVar[FormValidationMode] = FormValidationMode.RETRY
+    action_mode: ClassVar[ActionMode] = ActionMode.EXCLUSIVE
     _form_fields: ClassVar[tuple[tuple[str, FormField[Any]], ...]] = ()
 
     def __init_subclass__(cls, **kwargs: object) -> None:
@@ -746,7 +746,7 @@ class Form:
             fields,
             prefill,
             validator=self._validate_values,
-            validation_policy=self.validation_policy,
+            validation=self.validation,
         )
 
     def _bind(self, values: Mapping[str, object]) -> None:
@@ -784,7 +784,7 @@ class FormBinding:
     key: str
     spec: FormSpec
     on_submit: SubmitHandler
-    policy: ActionPolicy = ActionPolicy.EXCLUSIVE
+    mode: ActionMode = ActionMode.EXCLUSIVE
     label: TextLike = ""
     record: History | None = None
 
@@ -792,21 +792,21 @@ class FormBinding:
 type FormLike = FormSpec | Form
 
 
-def bind_form(form: FormLike, on_submit: SubmitHandler | None) -> tuple[FormSpec, SubmitHandler, ActionPolicy]:
+def bind_form(form: FormLike, on_submit: SubmitHandler | None) -> tuple[FormSpec, SubmitHandler, ActionMode]:
     """Resolve value-layer and descriptor forms to one presentation binding."""
     if isinstance(form, Form):
         if on_submit is not None:
             message = "a Form instance owns its on_submit method"
             raise TypeError(message)
-        return form.spec(), form._submit, form.action_policy
+        return form.spec(), form._submit, form.action_mode
     if on_submit is None:
         message = "presenting a FormSpec requires on_submit"
         raise TypeError(message)
-    return form, on_submit, ActionPolicy.EXCLUSIVE
+    return form, on_submit, ActionMode.EXCLUSIVE
 
 
 __all__ = [
-    "AmbiguousTimePolicy",
+    "AmbiguousTimeMode",
     "BoolField",
     "ChoiceField",
     "ChoiceOption",
@@ -825,12 +825,12 @@ __all__ = [
     "FormLike",
     "FormSpec",
     "FormText",
-    "FormValidationPolicy",
+    "FormValidationMode",
     "FormValidator",
     "FormValueError",
     "IntField",
     "MultiChoiceField",
-    "NonexistentTimePolicy",
+    "NonexistentTimeMode",
     "ScaleField",
     "SubmitHandler",
     "TextAreaField",
