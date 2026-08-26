@@ -1,4 +1,4 @@
-"""Reusable host defaults for Discord mounts."""
+"""Reusable host defaults for Discord message roots."""
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
@@ -49,7 +49,7 @@ class MessageRootOptions(TypedDict, total=False):
 
 @dataclass(frozen=True, slots=True)
 class MessageRootDefaults:
-    """Host-wide values used to construct mounts.
+    """Host-wide values used to construct message roots.
 
     Access remains deliberately absent: it identifies the actor allowed to use a specific
     mount and must be supplied at each construction site.

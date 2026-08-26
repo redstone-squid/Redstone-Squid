@@ -1,4 +1,4 @@
-"""Reusable per-open policy for Discord screens."""
+"""Reusable recipes for opening logical Discord sessions."""
 
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
@@ -41,11 +41,11 @@ class OpenContext:
 
     @classmethod
     def of(cls, source: discord.Interaction[Any] | Replyable) -> OpenContext:
-        """Build an opener from an interaction, or from whatever a command arrived on.
+        """Build an open context from an interaction or command context.
 
         Read duck-typed, the way `reply_to` peeks at `ctx.interaction`: an interaction names
         its user and guild directly, a command context names an `author` and a `guild`. The
-        two surfaces never meet in discord.py's type hierarchy, and a screen's policy does
+        two surfaces never meet in discord.py's type hierarchy, and a session recipe does
         not care which one a reader arrived through.
         """
         user = getattr(source, "user", None)
@@ -58,24 +58,24 @@ class OpenContext:
         return cls(user.id, guild_id)
 
     def user(self) -> UserScope:
-        """This opener's user, as a keyable scope."""
+        """This context's user, as a keyable scope."""
         return UserScope(self.user_id)
 
     def guild(self) -> GuildScope:
-        """This opener's guild, as a keyable scope. Raises in a DM."""
+        """This context's guild, as a keyable scope. Raises in a DM."""
         return GuildScope(self._require_guild("guild"))
 
     def user_guild(self) -> UserGuildScope:
-        """This opener's user within its guild, as a keyable scope. Raises in a DM."""
+        """This context's user within its guild, as a keyable scope. Raises in a DM."""
         return UserGuildScope(self.user_id, self._require_guild("user_guild"))
 
     def global_(self) -> GlobalScope:
-        """The process-global scope, which every opener reaches."""
+        """The process-global scope, which every open context reaches."""
         return GlobalScope()
 
     def _require_guild(self, kind: str) -> int:
         if self.guild_id is None:
-            message = f"{kind} scopes require an opener with a guild"
+            message = f"{kind} scopes require an open context with a guild"
             raise TypeError(message)
         return self.guild_id
 
@@ -92,8 +92,8 @@ class ScopeKind(StrEnum):
         """Build this kind of scope as a value, for a kind chosen at runtime.
 
         `SessionSpec` declares its scope as a member and resolves it here, so this returns the union.
-        A caller that knows the kind statically should ask the opener instead --
-        `opener.user_guild()` is a `UserGuildScope`, which is what lets a `SharedState[UserGuildScope]`
+        A caller that knows the kind statically should ask the open context instead --
+        `open_context.user_guild()` is a `UserGuildScope`, which is what lets a `SharedState[UserGuildScope]`
         pool refuse the wrong scope at the call site rather than missing at runtime. Both spellings
         build the same values, and those are the values a `SessionKey` already carries, so a panel
         holding its session key reaches a pool through `key.scope` with nothing to convert.
@@ -114,10 +114,10 @@ def _owner(open_context: OpenContext) -> AccessPolicy:
 
 
 def _manager(source: SessionManager | RuntimeSource) -> SessionManager:
-    """The registry itself, or the one belonging to the host `source` is installed on."""
+    """The manager itself, or the one belonging to the client runtime for `source`."""
     if isinstance(source, SessionManager):
         return source
-    # Imported here because a host installs a challenge presenter, which is a screen: the
+    # Imported here because a runtime installs a challenge presenter, which uses a session spec: the
     # two modules are genuinely mutually recursive, and this is the one direction that is
     # not needed at import time.
     from squid_ui_discord.runtime import ClientRuntime
@@ -130,7 +130,7 @@ type MessageRootOptionsResolver = Callable[[OpenContext], Awaitable[MessageRootO
 
 @dataclass(frozen=True, slots=True)
 class SessionSpec:
-    """Per-open session policy shared by every opening of one logical screen."""
+    """Reusable recipe shared by every opening of one logical screen."""
 
     name: str
     scope: ScopeKind = ScopeKind.USER
@@ -138,7 +138,7 @@ class SessionSpec:
     capacity: int | None = None
     """The most members one opening of this screen admits; `None` is unbounded.
 
-    Separate from `policy`, which governs how many sessions may occupy the key rather than
+    Separate from `admission`, which governs how many sessions may occupy the key rather than
     how many users may join one of them.
     """
     quota: int | None = None
@@ -174,7 +174,7 @@ class SessionSpec:
     async def open(
         self,
         component: Component,
-        destination: MessageDestination,
+        message_destination: MessageDestination,
         *,
         sessions: SessionManager | RuntimeSource,
         open_context: OpenContext,
@@ -191,7 +191,7 @@ class SessionSpec:
         message_root = sessions.defaults.mount(component, access=self.access(open_context), **options)
         return await sessions.open(
             message_root,
-            destination,
+            message_destination,
             key=self.key(open_context),
             admission=self.admission,
             actor_id=open_context.user_id,
@@ -203,7 +203,7 @@ class SessionSpec:
     async def attach(
         self,
         component: Component,
-        destination: MessageDestination,
+        message_destination: MessageDestination,
         *,
         sessions: SessionManager | RuntimeSource,
         open_context: OpenContext,
@@ -217,7 +217,9 @@ class SessionSpec:
             return Rejected((), RejectionReason.SESSION_FINISHED)
         options = await self._message_root_options(open_context, overrides)
         message_root = sessions.defaults.mount(component, access=self.access(open_context), **options)
-        return await parent_session.attach(message_root, destination, actor_id=open_context.user_id, parent=parent)
+        return await parent_session.attach(
+            message_root, message_destination, actor_id=open_context.user_id, parent=parent
+        )
 
     async def respond(
         self,

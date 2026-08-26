@@ -1,7 +1,7 @@
-"""Doubles and payload assertions for exercising a mount with no Discord attached.
+"""Doubles and payload assertions for exercising a message root with no Discord attached.
 
 Two halves. `fake_interaction`, `fake_message`, `delivered_to` and `commit_render` stand in
-for the Discord boundary, so a test can send a mount to nowhere and then drive it through
+for the Discord boundary, so a test can send a message root to nowhere and then drive it through
 `MessageRoot.dispatch` — the same funnel a real press takes. `payload_problems`, `modal_problems`
 and `assert_within_limits` check the other end: they walk the serialized wire payload, not the
 Python objects, so they verify exactly what Discord will see, including any chrome discord.py
@@ -150,7 +150,7 @@ def _fake_message_shape(
 def fake_interaction(
     user_id: int = 1, *, message_id: int = 99, expired: bool = False, components_v2: bool = True
 ) -> Any:
-    """A minimal interaction double for exercising mounts without Discord.
+    """A minimal interaction double for exercising message roots without Discord.
 
     `response.is_done()` starts false; flip `interaction.response._done` to simulate a
     consumed response, and set `interaction.response.type` to say what consumed it — a
@@ -217,8 +217,8 @@ def fake_message(
 def delivered_to(message: Any, *, handle: EditHandle | None = None) -> MessageDestination:
     """A destination that hands `message` straight back — a send with no Discord in it.
 
-    The mount ends up holding exactly the handle a real send would have given it, so tests
-    about editing, refreshing and finishing can start from a delivered mount.
+    The message root ends up holding exactly the handle a real send would have given it, so tests
+    about editing, refreshing and finishing can start from a delivered message root.
     """
 
     authority = handle if handle is not None else handle_for(message)
@@ -239,21 +239,21 @@ def commit_render(message_root: MessageRoot, *, disabled: bool = False) -> Mount
     Reaches past `send` on purpose: the alternative is making every one of these call sites
     await, for no coverage of anything the real send path does. For the same reason it runs no
     `on_load` -- a test that wants a loaded render wants the real seam,
-    `await mount.send(delivered_to(fake_message()))`.
+    `await message root.send(delivered_to(fake_message()))`.
     """
     view = _commit(message_root, disabled=disabled)
-    assert isinstance(view, MountedView), "this mount draws a classic message; use commit_classic_render"
+    assert isinstance(view, MountedView), "this message root draws a classic message; use commit_classic_render"
     return view
 
 
 def commit_classic_render(message_root: MessageRoot, *, disabled: bool = False) -> ClassicMountedView:
-    """`commit_render` for a mount whose target draws a classic message.
+    """`commit_render` for a message root whose target draws a classic message.
 
-    A separate function rather than a widened return type: a test knows which kind of mount
+    A separate function rather than a widened return type: a test knows which kind of message root
     it built, and every V2 caller would otherwise have to narrow a union it can never see.
     """
     view = _commit(message_root, disabled=disabled)
-    assert isinstance(view, ClassicMountedView), "this mount draws a Components V2 message; use commit_render"
+    assert isinstance(view, ClassicMountedView), "this message root draws a Components V2 message; use commit_render"
     return view
 
 

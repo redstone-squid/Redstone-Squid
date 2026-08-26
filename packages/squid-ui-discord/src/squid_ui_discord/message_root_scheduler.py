@@ -1,4 +1,4 @@
-"""Coalesced live updates and expiry watching for Discord mounts."""
+"""Coalesced live updates and expiry watching for Discord message roots."""
 
 import asyncio
 import logging
@@ -68,7 +68,7 @@ class MessageRootScheduler:
     Args:
         bus: Process-local topic bus used by :meth:`follow`. Without one, the scheduler remains
             a standalone out-of-band refresh scheduler.
-        concurrency: Maximum number of different mounts refreshed concurrently.
+        concurrency: Maximum number of different message roots refreshed concurrently.
         sweep_interval: Seconds between interaction-token expiry checks.
         clock: UTC wall clock used to compare interaction-token deadlines.
         profiler: Runtime profiler for queued refresh delivery.

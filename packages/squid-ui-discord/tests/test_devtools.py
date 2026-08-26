@@ -46,7 +46,7 @@ class FakeBot:
 
 
 @pytest.fixture(autouse=True)
-def _isolated_registry():
+def _isolated_manager():
     live._LIVE.clear()
     yield
     live._LIVE.clear()
@@ -212,7 +212,7 @@ class TestProfiles:
         await run(cog.inspect_profile, cog, ctx, subject.id)
 
         rendered = str(ctx.send.await_args.kwargs["view"].to_components())
-        assert f"Profile for mount {subject.id}" in rendered
+        assert f"Profile for message root {subject.id}" in rendered
         assert "send" in rendered
         assert "planner" in rendered
 

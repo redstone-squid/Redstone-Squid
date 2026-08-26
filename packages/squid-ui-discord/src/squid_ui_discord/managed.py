@@ -101,7 +101,7 @@ def _identity[ValueT](value: ValueT) -> RenderResult:
 async def run_managed_result(
     work: Work[RenderResult],
     *,
-    destination: MessageDestination,
+    message_destination: MessageDestination,
     make_root: MessageRootFactory,
     initial: RenderResult | None = None,
     render_success: None = None,
@@ -115,7 +115,7 @@ async def run_managed_result(
 async def run_managed_result[ValueT](
     work: Work[ValueT],
     *,
-    destination: MessageDestination,
+    message_destination: MessageDestination,
     make_root: MessageRootFactory,
     initial: RenderResult | None = None,
     render_success: SuccessRenderer[ValueT],
@@ -128,7 +128,7 @@ async def run_managed_result[ValueT](
 async def run_managed_result[ValueT](
     work: Work[ValueT],
     *,
-    destination: MessageDestination,
+    message_destination: MessageDestination,
     make_root: MessageRootFactory,
     initial: RenderResult | None = None,
     render_success: SuccessRenderer[ValueT] | None = None,
@@ -150,7 +150,7 @@ async def run_managed_result[ValueT](
     if initial is None:
         return await _run_without_initial(
             work,
-            destination=destination,
+            message_destination=message_destination,
             make_root=make_root,
             render_success=renderer,
             render_error=render_error,
@@ -165,7 +165,7 @@ async def run_managed_result[ValueT](
         render_error=render_error,
     )
     message_root = make_root(component)
-    delivered = await message_root.send(destination)
+    delivered = await message_root.send(message_destination)
     match component.execution.status:
         case Succeeded(value=value):
             if dismiss_on_success and isinstance(delivered, Delivered):
@@ -184,7 +184,7 @@ async def run_managed_result[ValueT](
 async def _run_without_initial[ValueT](
     work: Work[ValueT],
     *,
-    destination: MessageDestination,
+    message_destination: MessageDestination,
     make_root: MessageRootFactory,
     render_success: SuccessRenderer[ValueT],
     render_error: ErrorRenderer | None,
@@ -200,12 +200,12 @@ async def _run_without_initial[ValueT](
             await _observe_error(on_error, error, None)
             raise
         message_root = make_root(_Scene(render_error(error)))
-        delivered = await message_root.send(destination)
+        delivered = await message_root.send(message_destination)
         await _observe_error(on_error, error, delivered)
         raise
 
     message_root = make_root(_Scene(render_success(value)))
-    delivered = await message_root.send(destination)
+    delivered = await message_root.send(message_destination)
     if dismiss_on_success and isinstance(delivered, Delivered):
         await message_root.dismiss()
     return value

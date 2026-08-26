@@ -161,7 +161,7 @@ class DurableSession(Session):
     async def attach(
         self,
         message_root: MessageRoot,
-        destination: MessageDestination,
+        message_destination: MessageDestination,
         *,
         recipe: str,
         actor_id: int | None = None,
@@ -171,7 +171,9 @@ class DurableSession(Session):
         runtime = self._durable_runtime
         if runtime is None:
             return Rejected((self.snapshot,), RejectionReason.SESSION_FINISHED)
-        return await runtime._attach(self, message_root, destination, recipe=recipe, actor_id=actor_id, parent=parent)
+        return await runtime._attach(
+            self, message_root, message_destination, recipe=recipe, actor_id=actor_id, parent=parent
+        )
 
     async def join(
         self,
@@ -291,7 +293,7 @@ class DurableSessionRuntime:
     async def open(
         self,
         message_root: MessageRoot,
-        destination: MessageDestination,
+        message_destination: MessageDestination,
         *,
         recipe: str,
         key: SessionKey,
@@ -380,7 +382,7 @@ class DurableSessionRuntime:
             try:
                 return await self.sessions._open_coordinated(
                     message_root,
-                    destination,
+                    message_destination,
                     key=key,
                     admission=admission,
                     actor_id=actor_id,
@@ -555,7 +557,7 @@ class DurableSessionRuntime:
         self,
         session: DurableSession,
         message_root: MessageRoot,
-        destination: MessageDestination,
+        message_destination: MessageDestination,
         *,
         recipe: str,
         actor_id: int | None,
@@ -571,7 +573,7 @@ class DurableSessionRuntime:
             parent = session.root if parent is None else parent
             if parent not in session.message_roots or parent.finished:
                 return Rejected((session.snapshot,), RejectionReason.SESSION_FINISHED)
-            result = await message_root.send(destination)
+            result = await message_root.send(message_destination)
             if isinstance(result, Abandoned):
                 return result
             promoted = await self.frontend.promote(message_root, result.result)
