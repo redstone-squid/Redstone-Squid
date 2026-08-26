@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 # either a deferred annotation or inside a function body, so nothing resolves at import.
 import squid_discord
 import squid_layouts as sl
-from squid_discord.operations import DevToolsRuntime
+from squid_discord.devtools_runtime import DevToolsRuntime
 from squid_layouts.profiling import RuntimeSnapshot
 from squid_layouts.runtime.topics import BusSnapshot
 
@@ -235,7 +235,7 @@ class OperationalInspector(sl.Component):
             return nodes
         return (sl.status(self.notice, tone=sl.Tone.INFO), *nodes)
 
-    def _overview(self, snapshot: squid_discord.operations.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
+    def _overview(self, snapshot: squid_discord.devtools_runtime.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         counts = [
             f"mounts       {len(snapshot.mounts)}",
             f"sessions     {len(snapshot.sessions)}",
@@ -250,7 +250,7 @@ class OperationalInspector(sl.Component):
             self._controls(),
         ]
 
-    def _mounts(self, snapshot: squid_discord.operations.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
+    def _mounts(self, snapshot: squid_discord.devtools_runtime.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         if self.mount_id is not None:
             mount = squid_discord.live.find(self.mount_id)
             if mount is not None:
@@ -304,7 +304,7 @@ class OperationalInspector(sl.Component):
             nodes.insert(0, sl.status(notice, tone=sl.Tone.WARNING))
         return (*nodes, self._controls(back=True))
 
-    def _sessions(self, snapshot: squid_discord.operations.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
+    def _sessions(self, snapshot: squid_discord.devtools_runtime.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         if self.session_id is not None:
             session = next((item for item in snapshot.sessions if item.id == self.session_id), None)
             if session is not None:
@@ -363,7 +363,7 @@ class OperationalInspector(sl.Component):
             nodes.insert(0, sl.status(notice, tone=sl.Tone.WARNING))
         return (*nodes, self._controls(back=True))
 
-    def _queues(self, snapshot: squid_discord.operations.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
+    def _queues(self, snapshot: squid_discord.devtools_runtime.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         lines = [
             f"scheduler  {_reactor_summary(snapshot.scheduler)}",
             f"topics   {_topic_summary(snapshot.topics)}",
@@ -375,7 +375,7 @@ class OperationalInspector(sl.Component):
             )
         return [sl.section(sl.heading("Queues and subscribers"), sl.code("\n".join(lines))), self._controls(back=True)]
 
-    def _profile(self, snapshot: squid_discord.operations.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
+    def _profile(self, snapshot: squid_discord.devtools_runtime.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         health = snapshot.profiler.health
         lines = [
             f"process  {snapshot.profiler.process_id}",
@@ -387,7 +387,7 @@ class OperationalInspector(sl.Component):
         ]
         return [sl.section(sl.heading("Profiler"), sl.code("\n".join(lines))), self._controls(back=True)]
 
-    def _persistence(self, snapshot: squid_discord.operations.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
+    def _persistence(self, snapshot: squid_discord.devtools_runtime.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         durable = snapshot.durable
         if durable is None:
             body = "No durable session runtime is configured."
@@ -689,7 +689,7 @@ def _presentation(session: sl.runtime.PresentationSession) -> dict[str, object]:
     }
 
 
-def _members(session: squid_discord.operations.SessionInspection) -> str:
+def _members(session: squid_discord.devtools_runtime.SessionInspection) -> str:
     """Membership as `used/limit`, or a bare count when the session is unbounded."""
     count = len(session.members)
     return f"{count}" if session.capacity is None else f"{count}/{session.capacity}"

@@ -13,7 +13,7 @@ import squid_discord
 import squid_layouts as sl
 from squid_discord import Everyone, Mount, Owner, live
 from squid_discord.devtools import DevTools
-from squid_discord.operations import DevToolsRuntime
+from squid_discord.devtools_runtime import DevToolsRuntime
 from squid_discord.routing import Router
 from squid_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 from squid_layouts.primitives import Button, Heading, Row
