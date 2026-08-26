@@ -33,13 +33,15 @@ from squid_layouts.planning.frontier import (
     variant_state_bound,
 )
 from squid_layouts.planning.identity import stable_fingerprint, stable_value
-from squid_layouts.planning.limits import LIMITS, DiscordLimits
-from squid_layouts.planning.measurement import (
-    MeasuredLayout,
+from squid_layouts.planning.layout_measurement.diagnostics import (
     SolveNote,
     SolveNoteCode,
     SolveNoteSeverity,
     lossy_notes,
+)
+from squid_layouts.planning.limits import LIMITS, DiscordLimits
+from squid_layouts.planning.measurement import (
+    MeasuredLayout,
     measure,
 )
 from squid_layouts.planning.navigation import PlannedNav, materialized_navigation_state

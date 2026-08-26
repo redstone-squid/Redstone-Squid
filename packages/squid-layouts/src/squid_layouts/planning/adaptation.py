@@ -15,8 +15,9 @@ from squid_layouts.palette import DEFAULT_PALETTE, AccentDefault, Palette
 from squid_layouts.planning.breaking import BreakItem, balanced_breaks
 from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursorRequest, content_fingerprint
 from squid_layouts.planning.identity import stable_fingerprint
+from squid_layouts.planning.layout_measurement.text import split_text_node, text_total
 from squid_layouts.planning.limits import COMPONENTS, V2Limits
-from squid_layouts.planning.measurement import measure_nodes, split_text_node, text_total
+from squid_layouts.planning.measurement import measure_nodes
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET, StrategyAxis, StrategyCandidate, choose_strategy
 from squid_layouts.primitives.constraints import (
     Alt,

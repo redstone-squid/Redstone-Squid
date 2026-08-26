@@ -6,8 +6,10 @@ from squid_discord import V2_LIMITS as LIMITS
 from squid_discord import V2_TARGET
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.planning import TargetProfile, measure, plan
+from squid_layouts.planning.layout_measurement.model import RText
+from squid_layouts.planning.layout_measurement.text import BudgetRegion, make_unit, text_total
 from squid_layouts.planning.limits import ATTACHMENTS, COMPONENTS, DISPLAY_TEXT
-from squid_layouts.planning.measurement import RText, _BudgetRegion, _make_unit, measure_nodes, text_total
+from squid_layouts.planning.measurement import measure_nodes
 from squid_layouts.planning.target import ResourceCost
 from squid_layouts.primitives import Never, Panel, Text, Variants
 
@@ -101,22 +103,22 @@ class TestBudgetRegions:
     def test_a_budget_region_spanning_two_text_pools_is_rejected(self) -> None:
         """One `Budget` states one preferred size; applying it to two pools would double it."""
         units = [
-            _make_unit(Text("a"), RText(), 0, DISPLAY_TEXT),
-            _make_unit(Text("b"), RText(), 1, "embed_text"),
+            make_unit(Text("a"), RText(), 0, DISPLAY_TEXT),
+            make_unit(Text("b"), RText(), 1, "embed_text"),
         ]
-        region = _BudgetRegion(tuple(unit for unit in units if unit is not None), 0, 10, 0, best_effort=False)
+        region = BudgetRegion(tuple(unit for unit in units if unit is not None), 0, 10, 0, best_effort=False)
 
         with pytest.raises(LayoutInvariantError, match="spans the text axes display_text, embed_text"):
             _ = region.axis
 
     def test_a_single_pool_region_reports_that_pool(self) -> None:
-        unit = _make_unit(Text("a"), RText(), 0, DISPLAY_TEXT)
+        unit = make_unit(Text("a"), RText(), 0, DISPLAY_TEXT)
         assert unit is not None
 
-        assert _BudgetRegion((unit,), 0, 10, 0, best_effort=False).axis == DISPLAY_TEXT
+        assert BudgetRegion((unit,), 0, 10, 0, best_effort=False).axis == DISPLAY_TEXT
 
     def test_a_region_holding_no_text_claims_no_pool(self) -> None:
-        assert _BudgetRegion((), 0, 10, 0, best_effort=False).axis is None
+        assert BudgetRegion((), 0, 10, 0, best_effort=False).axis is None
 
 
 class TestParetoSearch:
