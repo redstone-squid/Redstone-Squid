@@ -123,7 +123,14 @@ build-backend = "setuptools.build_meta"
 packages = []
 
 [tool.uv.workspace]
-members = ["packages/*"]
+members = [
+    "packages/squid-reactivity",
+    "packages/squid-replication",
+    "packages/squid-storage",
+    "packages/squid-ui",
+    "packages/squid-ui-discord",
+    "packages/squid-ui-widgets",
+]
 
 [tool.uv.sources]
 squid-ui-discord = { workspace = true }
