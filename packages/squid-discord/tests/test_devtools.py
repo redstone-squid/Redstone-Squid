@@ -298,5 +298,5 @@ class TestProfiles:
         file = ctx.send.await_args.kwargs["files"][0]
         payload = json.loads(file.fp.read().decode())
         assert file.filename == "squid-operational-snapshot.json"
-        assert payload["profiler"]["schema_version"] == 2
+        assert payload["profiler"]["schema_version"] == 1
         assert payload["profiler"]["aggregates"][0]["key"]["name"] == "panel"

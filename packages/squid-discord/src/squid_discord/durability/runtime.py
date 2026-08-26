@@ -760,10 +760,7 @@ def _loads_snapshot(payload: str, *, local: bool) -> SessionSnapshot:
         opened_at = datetime.fromtimestamp(opened_timestamp, UTC)
         key = decode_session_key(raw["key"])
         actor_id = raw.get("actor_id")
-        # A payload written before membership existed has no "members" key at all, and its
-        # opener is the only member it can have had.
-        legacy_members = () if actor_id is None else (actor_id,)
-        members = _snapshot_ids(raw.get("members", legacy_members))
+        members = _snapshot_ids(raw.get("members"))
         attachment_actors = _snapshot_ids(raw.get("attachment_actors", ()))
     except (KeyError, TypeError, ValueError, OverflowError) as error:
         message = "durable session snapshot is malformed"
@@ -841,7 +838,7 @@ async def _finish_mounts(mounts: Sequence[Mount]) -> None:
 
 def _validate_snapshot_record(snapshot: SessionSnapshot, record: DurableSessionRecord) -> None:
     if snapshot.id != record.id or snapshot.key != record.key or snapshot.members != record.members:
-        message = "stored session snapshot does not match its snapshot record"
+        message = "stored session snapshot does not match its durable record"
         raise MountStateError(message)
 
 

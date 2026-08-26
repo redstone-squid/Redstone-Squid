@@ -134,20 +134,19 @@ class DurableMountRecord:
 
 
 class DurableMountCodec:
-    """Encode protocol 2 mount records and decode protocol 1 or 2 records."""
+    """Canonical JSON codec for operational mount record protocol 1."""
 
-    protocol = 2
-    supported = (1, 2)
+    protocol = 1
 
     @classmethod
     def dumps(cls, record: DurableMountRecord) -> str:
-        if record.protocol not in cls.supported:
+        if record.protocol != cls.protocol:
             message = f"unsupported durable mount record protocol {record.protocol}"
             raise MountStateError(message)
         raw = {
             "protocol": record.protocol,
-            ("snapshot" if record.protocol == 1 else "state"): json.loads(MountStateCodec.dumps(record.state)),
-            ("locator" if record.protocol == 1 else "address"): {
+            "state": json.loads(MountStateCodec.dumps(record.state)),
+            "address": {
                 "frontend": record.address.frontend,
                 "values": dict(record.address.values),
             },
@@ -167,12 +166,10 @@ class DurableMountCodec:
             raise MountStateError(str(error)) from error
         item = _object(raw)
         protocol = _integer(item, "protocol")
-        state_key = "snapshot" if protocol == 1 else "state"
-        address_key = "locator" if protocol == 1 else "address"
-        if protocol not in cls.supported or state_key not in item:
+        if protocol != cls.protocol or "state" not in item:
             message = f"unsupported durable mount record protocol {protocol}"
             raise MountStateError(message)
-        address = _object(item.get(address_key))
+        address = _object(item.get("address"))
         values = _object(address.get("values"))
         if not all(isinstance(key, str) and isinstance(value, str | int) for key, value in values.items()):
             message = "mount address values must contain string keys and string or integer values"
@@ -181,7 +178,7 @@ class DurableMountCodec:
         if expires_at is not None and not isinstance(expires_at, int | float):
             message = "mount record expires_at must be a number or null"
             raise MountStateError(message)
-        state_payload = json.dumps(item.get(state_key), ensure_ascii=False, separators=(",", ":"))
+        state_payload = json.dumps(item.get("state"), ensure_ascii=False, separators=(",", ":"))
         return DurableMountRecord(
             protocol,
             MountStateCodec.loads(state_payload),
