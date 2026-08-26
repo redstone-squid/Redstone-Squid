@@ -1,7 +1,7 @@
 """Portable planning, adaptation, and layout measurement APIs."""
 
 from squid_layouts.planning.adapter import AdapterProfile
-from squid_layouts.planning.cache import PlanCache
+from squid_layouts.planning.cache import PlanCache, PlanMemo
 from squid_layouts.planning.dialect import TargetDialect
 from squid_layouts.planning.discord import (
     CLASSIC_PROTOCOL_CAPABILITIES,
@@ -57,6 +57,7 @@ __all__ = [
     "LayoutOverflowError",
     "MeasuredLayout",
     "PlanCache",
+    "PlanMemo",
     "Position",
     "PositionPolicy",
     "PreparedExtension",

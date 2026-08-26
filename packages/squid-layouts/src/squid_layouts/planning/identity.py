@@ -22,7 +22,11 @@ def stable_value(value: object) -> object:
     if is_dataclass(value) and not isinstance(value, type):
         return {
             "type": type(value).__qualname__,
-            "fields": {item.name: stable_value(getattr(value, item.name)) for item in fields(value)},
+            "fields": {
+                item.name: stable_value(getattr(value, item.name))
+                for item in fields(value)
+                if item.metadata.get("stable_identity", True)
+            },
         }
     if isinstance(value, Mapping):
         return {str(key): stable_value(item) for key, item in sorted(value.items(), key=lambda item: str(item[0]))}

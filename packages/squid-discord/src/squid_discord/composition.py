@@ -18,7 +18,7 @@ from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.document import DocumentLike
 from squid_layouts.palette import DEFAULT_PALETTE, Palette
 from squid_layouts.planning.adapter import AdapterCapability
-from squid_layouts.planning.cache import PlanCache
+from squid_layouts.planning.cache import PlanCache, PlanMemo
 from squid_layouts.planning.limits import V2Limits
 from squid_layouts.planning.navigation import PlannedNav
 from squid_layouts.planning.planner import EMPTY_RESERVATION
@@ -96,6 +96,7 @@ def compose(
     nav: PlannedNav | None = None,
     session: PresentationSession | None = None,
     cache: PlanCache | None = None,
+    memo: PlanMemo | None = None,
     search_budget: int = DEFAULT_SEARCH_BUDGET,
     profile: OperationRecorder | None = None,
 ) -> Composition[discord.ui.LayoutView, scene.ComponentsV2]:
@@ -114,6 +115,7 @@ def compose(
             nav=nav,
             session=session,
             cache=cache,
+            memo=memo,
             search_budget=search_budget,
         )
         if planner_span is not None:

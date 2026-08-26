@@ -13,7 +13,7 @@ from squid_layouts.document import Document, DocumentLike, as_document
 from squid_layouts.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.palette import DEFAULT_PALETTE, Palette
 from squid_layouts.planning.adapter import ResourceCost
-from squid_layouts.planning.cache import CachedPlan, PlanCache
+from squid_layouts.planning.cache import CachedPlan, PlanCache, PlanMemo
 from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursorRequest, content_fingerprint
 from squid_layouts.planning.degradation import DegradationEffect, DegradationProfile
 from squid_layouts.planning.dialect import SceneBindings, TargetDialect
@@ -69,11 +69,49 @@ from squid_layouts.primitives.nodes import (
     Variants,
 )
 from squid_layouts.runtime.presentation import PresentationSession
-from squid_layouts.scene.model import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanSeverity
+from squid_layouts.scene.model import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity
 from squid_layouts.sources import Position
 from squid_layouts.text import NEUTRAL, Localization
 
 EMPTY_RESERVATION = ResourceCost()
+
+
+class _Identity:
+    """Identity comparison that also keeps its value alive while an exact memo does."""
+
+    __slots__ = ("value",)
+
+    def __init__(self, value: object) -> None:
+        self.value = value
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, _Identity) and self.value is other.value
+
+
+def _exact_key(
+    *,
+    target: object,
+    chrome: object,
+    localization: object,
+    palette: object,
+    reservation: ResourceCost,
+    strict: bool,
+    positions: object,
+    nav: object,
+    search_budget: int,
+) -> tuple[object, ...]:
+    return (
+        _Identity(target),
+        _Identity(chrome),
+        _Identity(localization),
+        _Identity(palette),
+        reservation,
+        strict,
+        _Identity(positions),
+        _Identity(nav),
+        getattr(nav, "version", 0),
+        search_budget,
+    )
 
 
 def _merge_assets(*groups: Sequence[Asset]) -> tuple[Asset, ...]:
@@ -477,6 +515,7 @@ def plan[ModeT, AdapterT, BodyT: scene.Body](
     nav: PlannedNav | None = None,
     session: PresentationSession | None = None,
     cache: PlanCache | None = None,
+    memo: PlanMemo | None = None,
     search_budget: int = DEFAULT_SEARCH_BUDGET,
 ) -> PlanResult[BodyT]:
     """Resolve a complete logical document for one target.
@@ -487,12 +526,30 @@ def plan[ModeT, AdapterT, BodyT: scene.Body](
     if search_budget < 1:
         message = "planner search budget must be positive"
         raise ValueError(message)
+    presentation = session if session is not None else PresentationSession()
+    exact_key = _exact_key(
+        target=target,
+        chrome=chrome,
+        localization=localization,
+        palette=palette,
+        reservation=reservation,
+        strict=strict,
+        positions=positions,
+        nav=nav,
+        search_budget=search_budget,
+    )
+    if memo is not None:
+        exact = memo.get(rendered, exact_key, presentation, presentation.revision)
+        if isinstance(exact, PlanResult):
+            return replace(
+                exact,
+                metrics=replace(exact.metrics, cache_hit=True, reuse=PlanReuse.EXACT),
+            )
     document = as_document(rendered)
     # Every axis is withheld the same way: by planning against a smaller target.
     target = target.reserve(reservation)
     dialect = target.dialect
     limits = target.limits
-    presentation = session if session is not None else PresentationSession()
     chrome = localize_chrome(chrome, localization)
     cache_key = _plan_cache_key(
         (document,),
@@ -528,7 +585,7 @@ def plan[ModeT, AdapterT, BodyT: scene.Body](
         selected_nodes = resolve_variants(lowered, dict(cached.variant_positions))
         collected = _collect_cached_bindings(selected_nodes, cached.scene, nav, chrome)
         resources = {f"asset:{asset.key}": asset for asset in assets}
-        return PlanResult(
+        result = PlanResult(
             scene=cast(scene.Document[BodyT], cached.scene),
             bindings=collected.bindings,
             form_bindings=collected.form_bindings,
@@ -537,10 +594,14 @@ def plan[ModeT, AdapterT, BodyT: scene.Body](
             metrics=PlanMetrics(
                 states_explored=cached.states_explored,
                 cache_hit=True,
+                reuse=PlanReuse.STRUCTURAL,
                 search_fallback=cached.search_fallback,
             ),
             session_updates=cached.session_updates,
         )
+        if memo is not None:
+            memo.put(rendered, exact_key, presentation, presentation.revision, result)
+        return result
 
     selected = _search(
         _Search(
@@ -674,6 +735,8 @@ def plan[ModeT, AdapterT, BodyT: scene.Body](
                 selected.state.fallbacks,
             ),
         )
+    if memo is not None and _cacheable(lowered):
+        memo.put(rendered, exact_key, presentation, presentation.revision, result)
     return result
 
 

@@ -4,7 +4,7 @@ from collections.abc import Callable, Mapping
 from typing import Any
 
 from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.planning.cache import PlanCache
+from squid_layouts.planning.cache import PlanCache, PlanMemo
 from squid_layouts.runtime.component import (
     Component,
     ComponentTree,
@@ -34,6 +34,7 @@ class ComponentRuntime:
         self.on_invalidate = on_invalidate
         self.context = dict(context or {})
         self.plan_cache = plan_cache if plan_cache is not None else PlanCache(32)
+        self.plan_memo = PlanMemo()
         self.components: dict[str, Component] = {}
         self._render_cache: dict[Component, _ComponentRender] = {}
         self._subtree_cache: dict[str, _ExpandedSubtree] = {}
@@ -191,4 +192,5 @@ class ComponentRuntime:
         self._component_paths.clear()
         self._candidate_tree = None
         self._committed_tree = None
+        self.plan_memo.clear()
         self.root._runtime = None

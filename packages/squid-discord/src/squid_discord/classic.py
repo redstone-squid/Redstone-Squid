@@ -34,7 +34,7 @@ from squid_layouts.document import DocumentLike
 from squid_layouts.errors import ExistingLayoutError
 from squid_layouts.palette import DEFAULT_PALETTE, Palette
 from squid_layouts.planning.adapter import AdapterCapability
-from squid_layouts.planning.cache import PlanCache
+from squid_layouts.planning.cache import PlanCache, PlanMemo
 from squid_layouts.planning.limits import CLASSIC_LIMITS, Axis, ClassicLimits
 from squid_layouts.planning.navigation import PlannedNav
 from squid_layouts.planning.planner import EMPTY_RESERVATION
@@ -67,6 +67,7 @@ def compose(
     nav: PlannedNav | None = None,
     session: PresentationSession | None = None,
     cache: PlanCache | None = None,
+    memo: PlanMemo | None = None,
     search_budget: int = DEFAULT_SEARCH_BUDGET,
     profile: OperationRecorder | None = None,
 ):
@@ -87,6 +88,7 @@ def compose(
             nav=nav,
             session=session,
             cache=cache,
+            memo=memo,
             search_budget=search_budget,
         )
         if planner_span is not None:
