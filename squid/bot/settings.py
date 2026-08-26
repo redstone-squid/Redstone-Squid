@@ -232,7 +232,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
             ),
         )
 
-    async def _reply(self, ctx: Context[BotT], presentation: sd.presentation.DiscordPresentation) -> None:
+    async def _reply(self, ctx: Context[BotT], presentation: sd.message_payload.MessagePayload) -> None:
         """Answer the caller privately through the presentation delivery boundary."""
         await reply_presentation(
             ctx,

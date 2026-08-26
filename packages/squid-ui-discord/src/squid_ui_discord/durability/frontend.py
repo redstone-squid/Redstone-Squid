@@ -8,8 +8,8 @@ import discord
 
 from squid_ui_discord.delivery import Abandoned, DeliveryResult, EditHandle, StaleHandleError, handle_for
 from squid_ui_discord.durability import FrontendAddress
+from squid_ui_discord.message_payload import MessageMode, MessagePayload
 from squid_ui_discord.message_root import MessageRoot
-from squid_ui_discord.presentation import DiscordMode, DiscordPresentation
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,7 +144,7 @@ class DiscordFrontend:
             handle = handle_for(item.message, mode=self._mode(item.binding.address))
 
             async def edit(
-                presentation: DiscordPresentation,
+                presentation: MessagePayload,
                 /,
                 *,
                 message: discord.Message = item.message,
@@ -205,12 +205,12 @@ class DiscordFrontend:
             raise TypeError(message)
         return channel_id, message_id
 
-    def _mode(self, address: FrontendAddress) -> DiscordMode | None:
+    def _mode(self, address: FrontendAddress) -> MessageMode | None:
         """The message mode this address recorded, or `None` for one written before it did."""
         mode = address.values.get("mode")
         if mode is None:
             return None
-        if not isinstance(mode, str) or mode not in set(DiscordMode):
+        if not isinstance(mode, str) or mode not in set(MessageMode):
             message = f"Discord address mode {mode!r} is not a message mode"
             raise TypeError(message)
-        return DiscordMode(mode)
+        return MessageMode(mode)

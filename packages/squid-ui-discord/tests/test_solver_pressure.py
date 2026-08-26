@@ -3,12 +3,12 @@
 import pytest
 
 import squid_ui as sl
-from squid_ui_discord import DISCORD_V2_DPY27
-from squid_ui_discord.target import v2
 from squid_ui import scene
 from squid_ui.planning import measure
 from squid_ui.planning.limits import V2Limits
 from squid_ui.primitives import Paginate, Text
+from squid_ui_discord import DISCORD_V2_DPY27
+from squid_ui_discord.target import v2
 
 
 class TestBudgetContract:

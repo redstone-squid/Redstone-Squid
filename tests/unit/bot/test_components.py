@@ -74,7 +74,7 @@ async def test_delivery_clears_legacy_fields_when_converting() -> None:
 
     await sd.delivery.handle_for(
         harness.message,
-        mode=sd.presentation.DiscordMode.CLASSIC,
+        mode=sd.message_payload.MessageMode.CLASSIC,
     ).write(layout)
 
     call = harness.edit.await_args

@@ -98,11 +98,11 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
                 return await self.bot.get_or_fetch_message(source.channel_id, source.message_id)
         return None
 
-    async def render_layout(self) -> sd.presentation.DiscordPresentation:
+    async def render_layout(self) -> sd.message_payload.MessagePayload:
         """Render a standalone Components V2 presentation for the build."""
         return render_static([await self.render_node()])
 
-    async def render_presentation(self) -> sd.presentation.DiscordPresentation:
+    async def render_presentation(self) -> sd.message_payload.MessagePayload:
         """Render the complete presentation used by post delivery."""
         return render_presentation([await self.render_node()])
 

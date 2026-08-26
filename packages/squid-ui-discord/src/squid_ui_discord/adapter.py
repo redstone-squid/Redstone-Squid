@@ -9,7 +9,6 @@ import discord
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 
-from squid_ui_discord.inspection import cost
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.adapter import (
     AdapterCapability,
@@ -19,6 +18,7 @@ from squid_ui.planning.adapter import (
 )
 from squid_ui.planning.target import Target
 from squid_ui.target_types import DiscordPy27Adapter, DiscordPyAdapter
+from squid_ui_discord.inspection import cost
 
 
 class _DiscordItemExtension:

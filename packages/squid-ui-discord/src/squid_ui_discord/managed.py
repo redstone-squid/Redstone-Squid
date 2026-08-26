@@ -15,7 +15,7 @@ from squid_reactivity.operations import (
     operation,
 )
 from squid_ui.runtime.component import Component, RenderResult
-from squid_ui_discord.delivery import Delivered, Destination, SendResult
+from squid_ui_discord.delivery import Delivered, MessageDestination, SendResult
 from squid_ui_discord.message_root import MessageRoot
 
 type Work[ValueT] = Callable[[], Awaitable[ValueT]]
@@ -101,7 +101,7 @@ def _identity[ValueT](value: ValueT) -> RenderResult:
 async def run_managed_result(
     work: Work[RenderResult],
     *,
-    destination: Destination,
+    destination: MessageDestination,
     make_root: MessageRootFactory,
     initial: RenderResult | None = None,
     render_success: None = None,
@@ -115,7 +115,7 @@ async def run_managed_result(
 async def run_managed_result[ValueT](
     work: Work[ValueT],
     *,
-    destination: Destination,
+    destination: MessageDestination,
     make_root: MessageRootFactory,
     initial: RenderResult | None = None,
     render_success: SuccessRenderer[ValueT],
@@ -128,7 +128,7 @@ async def run_managed_result[ValueT](
 async def run_managed_result[ValueT](
     work: Work[ValueT],
     *,
-    destination: Destination,
+    destination: MessageDestination,
     make_root: MessageRootFactory,
     initial: RenderResult | None = None,
     render_success: SuccessRenderer[ValueT] | None = None,
@@ -184,7 +184,7 @@ async def run_managed_result[ValueT](
 async def _run_without_initial[ValueT](
     work: Work[ValueT],
     *,
-    destination: Destination,
+    destination: MessageDestination,
     make_root: MessageRootFactory,
     render_success: SuccessRenderer[ValueT],
     render_error: ErrorRenderer | None,

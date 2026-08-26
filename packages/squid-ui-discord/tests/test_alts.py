@@ -6,11 +6,6 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 import squid_ui as sl
-from squid_ui_discord import (
-    conform,
-    render_static,
-)
-from squid_ui_discord.testing import assert_within_limits
 from squid_ui.planning import SolveNoteCode, measure
 from squid_ui.planning.layout_measurement.model import MeasuredPanel, MeasuredSection, MeasuredText
 from squid_ui.planning.layout_measurement.solver import MeasuredLayout
@@ -22,6 +17,11 @@ from squid_ui.primitives import (
     Text,
     alts,
 )
+from squid_ui_discord import (
+    conform,
+    render_static,
+)
+from squid_ui_discord.testing import assert_within_limits
 
 
 def _static_view(*args, **kwargs) -> discord.ui.LayoutView:

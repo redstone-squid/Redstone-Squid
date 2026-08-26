@@ -12,9 +12,6 @@ from typing import Any, ClassVar
 
 import discord
 
-from squid_ui_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
-from squid_ui_discord.conformance import conform_modal
-from squid_ui_discord.emoji import discord_emoji
 from squid_ui.capabilities import Capability
 from squid_ui.entity import EntityType
 from squid_ui.errors import LayoutInvariantError
@@ -44,6 +41,9 @@ from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.limits import COMPONENT_LIMITS, ComponentLimits
 from squid_ui.target_types import DiscordPyAdapter
 from squid_ui.text import NEUTRAL, Localization, TextLike, resolve_text
+from squid_ui_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
+from squid_ui_discord.conformance import conform_modal
+from squid_ui_discord.emoji import discord_emoji
 
 logger = logging.getLogger(__name__)
 

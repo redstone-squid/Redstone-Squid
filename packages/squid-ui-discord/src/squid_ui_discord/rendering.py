@@ -1,4 +1,4 @@
-"""Discord composition convenience built on the portable plan/draw seam."""
+"""Plan documents and render complete Discord message payloads."""
 
 import logging
 from collections.abc import Iterator, Mapping
@@ -30,7 +30,7 @@ from squid_ui.sources import Position
 from squid_ui.target_types import ComponentsV2Target, DiscordPyAdapter
 from squid_ui.text import NEUTRAL, Localization
 from squid_ui_discord.adapter import require_discord_py_target
-from squid_ui_discord.presentation import DiscordModeError, DiscordPresentation
+from squid_ui_discord.message_payload import MessageModeError, MessagePayload
 from squid_ui_discord.renderer import V2Renderer, Wire
 from squid_ui_discord.target import DISCORD_V2_DPY27, Target
 
@@ -47,7 +47,7 @@ def _span(profile: OperationRecorder | None, name: str) -> Iterator[SpanRecorder
 
 
 @dataclass(slots=True)
-class Composition[ViewT: (discord.ui.LayoutView, discord.ui.View | None), BodyT = scene.ComponentsV2]:
+class RenderedMessage[ViewT: (discord.ui.LayoutView, discord.ui.View | None), BodyT = scene.ComponentsV2]:
     """A resolved plan beside the complete Discord message it draws to.
 
     Generic over the view because the two modes differ in what they promise. A Components V2
@@ -55,22 +55,22 @@ class Composition[ViewT: (discord.ui.LayoutView, discord.ui.View | None), BodyT 
     `View` only when the document produced controls, and its embeds carry the rest.
     """
 
-    presentation: DiscordPresentation
+    payload: MessagePayload
     plan: PlanResult[BodyT]
 
     @property
     def view(self) -> ViewT:
-        """The drawn view, typed by which mode this composition is for."""
-        return cast(ViewT, self.presentation.view)
+        """The drawn view, typed by which message mode this render is for."""
+        return cast(ViewT, self.payload.view)
 
     @property
     def assets(self) -> tuple[Asset, ...]:
-        """Declarative files this composition expects to be uploaded with it."""
-        return self.presentation.assets
+        """Declarative files this rendered message expects to upload."""
+        return self.payload.assets
 
     def build_files(self) -> list[discord.File]:
         """Materialize fresh file wrappers; a sent `discord.File` cannot be re-sent."""
-        return self.presentation.build_files()
+        return self.payload.build_files()
 
     @property
     def page(self) -> int:
@@ -81,7 +81,7 @@ class Composition[ViewT: (discord.ui.LayoutView, discord.ui.View | None), BodyT 
         return self.plan.scene.pagers[0].pages if self.plan.scene.pagers else 1
 
 
-def compose(
+def render_message(
     rendered: DocumentLike,
     *,
     wire: Wire | None = None,
@@ -99,9 +99,9 @@ def compose(
     memo: PlanMemo | None = None,
     search_budget: int = DEFAULT_SEARCH_BUDGET,
     profile: OperationRecorder | None = None,
-) -> Composition[discord.ui.LayoutView, scene.ComponentsV2]:
+) -> RenderedMessage[discord.ui.LayoutView, scene.ComponentsV2]:
     """Plan a logical document, then draw its resolved Components V2 scene."""
-    adapter = require_discord_py_target(target, AdapterCapability.RENDER_V2, "compose Components V2")
+    adapter = require_discord_py_target(target, AdapterCapability.RENDER_V2, "render a Components V2 message")
     with _span(profile, "planner") as planner_span:
         result = plan_document(
             rendered,
@@ -129,10 +129,10 @@ def compose(
             profile.increment("planner.states_explored", result.metrics.states_explored)
     drawer = renderer if renderer is not None else V2Renderer(limits=target.limits, adapter=adapter)
     with _span(profile, "renderer"):
-        presentation = drawer.draw(result.scene, plan=result, wire=wire)
+        payload = drawer.draw(result.scene, plan=result, wire=wire)
     if result.report.events:
         logger.warning("layout degraded: %s", "; ".join(event.message for event in result.report.events))
-    return Composition(presentation, result)
+    return RenderedMessage(payload, result)
 
 
 def render_static(
@@ -144,9 +144,9 @@ def render_static(
     palette: Palette = DEFAULT_PALETTE,
     strict: bool = False,
     reservation: ResourceCost = EMPTY_RESERVATION,
-) -> DiscordPresentation:
+) -> MessagePayload:
     """Plan and draw a sessionless Components V2 document as a complete message."""
-    return compose(
+    return render_message(
         nodes.render() if isinstance(nodes, Component) else nodes,
         target=target,
         chrome=chrome,
@@ -154,7 +154,7 @@ def render_static(
         palette=palette,
         strict=strict,
         reservation=reservation,
-    ).presentation
+    ).payload
 
 
 def render_item(
@@ -176,16 +176,16 @@ def render_item(
     that object, and it is discarded on the way out, so nothing half-built survives the call.
 
     Raises:
-        DiscordModeError: The node rendered to no item at all.
+        MessageModeError: The node rendered to no item at all.
     """
-    presentation = render_static(
+    payload = render_static(
         [node], target=target, chrome=chrome, localization=localization, palette=palette, reservation=reservation
     )
-    layout = presentation.layout
+    layout = payload.layout
     children = layout.children
     if not children:
         message = "render_item needs a node that draws something; this one produced no item"
-        raise DiscordModeError(message)
+        raise MessageModeError(message)
     item = children[0]
     layout.remove_item(item)
     return item

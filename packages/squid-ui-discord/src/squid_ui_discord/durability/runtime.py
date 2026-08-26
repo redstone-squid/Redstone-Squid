@@ -16,7 +16,7 @@ import anyio
 from anyio.abc import TaskStatus
 
 from squid_storage import ClaimToken, DurableSessionStore, SessionRecord
-from squid_ui_discord.delivery import Abandoned, Delivered, Destination
+from squid_ui_discord.delivery import Abandoned, Delivered, MessageDestination
 from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.sessions import (
     DEFAULT_ADMISSION,
@@ -161,7 +161,7 @@ class DurableSession(Session):
     async def attach(
         self,
         message_root: MessageRoot,
-        destination: Destination,
+        destination: MessageDestination,
         *,
         recipe: str,
         actor_id: int | None = None,
@@ -291,7 +291,7 @@ class DurableSessionRuntime:
     async def open(
         self,
         message_root: MessageRoot,
-        destination: Destination,
+        destination: MessageDestination,
         *,
         recipe: str,
         key: SessionKey,
@@ -555,7 +555,7 @@ class DurableSessionRuntime:
         self,
         session: DurableSession,
         message_root: MessageRoot,
-        destination: Destination,
+        destination: MessageDestination,
         *,
         recipe: str,
         actor_id: int | None,

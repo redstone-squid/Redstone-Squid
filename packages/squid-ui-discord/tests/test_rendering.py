@@ -578,5 +578,5 @@ class TestRenderItem:
         assert host.children[0]._view is host
 
     def test_a_node_that_draws_nothing_is_refused_rather_than_indexed(self) -> None:
-        with pytest.raises(sd.DiscordModeError, match="produced no item"):
+        with pytest.raises(sd.MessageModeError, match="produced no item"):
             sd.render_item(sl.group())

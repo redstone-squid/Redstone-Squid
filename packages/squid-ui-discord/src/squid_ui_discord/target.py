@@ -5,7 +5,6 @@ from typing import overload
 
 import discord
 
-from squid_ui_discord.adapter import DISCORD_PY_27_ADAPTER
 from squid_ui import scene
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.discord import (
@@ -23,6 +22,7 @@ from squid_ui.target_types import (
     DiscordPy27Adapter,
     DiscordPyAdapter,
 )
+from squid_ui_discord.adapter import DISCORD_PY_27_ADAPTER
 
 V2_CAPABILITIES = DISCORD_PY_27_ADAPTER.combine_capabilities(V2_PROTOCOL_CAPABILITIES)
 CLASSIC_CAPABILITIES = CLASSIC_PROTOCOL_CAPABILITIES

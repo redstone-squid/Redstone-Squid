@@ -32,7 +32,7 @@ from squid_ui_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_c
 from squid_ui_discord.attachments import attachment_assets
 from squid_ui_discord.emoji import discord_emoji
 from squid_ui_discord.inspection import audit_classic_payload
-from squid_ui_discord.presentation import DiscordPresentation
+from squid_ui_discord.message_payload import MessagePayload
 from squid_ui_discord.render_cache import RenderProgramCache
 from squid_ui_discord.renderer import RoutedItem, RoutedSelectItem
 from squid_ui_discord.renderer import Wire as Wire
@@ -110,7 +110,7 @@ class ClassicRenderer:
         *,
         plan: PlanResult[scene.ClassicMessage] | None = None,
         wire: Wire | None = None,
-    ) -> DiscordPresentation:
+    ) -> MessagePayload:
         body = self._body(document)
         key = self._cache_key(document, plan)
         cached = self.cache.get(key)
@@ -126,7 +126,7 @@ class ClassicRenderer:
         embeds = tuple(self._embed(embed, index) for index, embed in enumerate(program.embeds))
         view = self._view(program, plan=plan, wire=wire)
         assets = () if plan is None else attachment_assets(plan)
-        presentation = DiscordPresentation.classic(
+        payload = MessagePayload.classic(
             content=program.content,
             embeds=embeds,
             view=view,
@@ -141,7 +141,7 @@ class ClassicRenderer:
                 message = "classic drawing violated its planned limits: " + "; ".join(problems)
                 raise DrawInvariantError(message)
         self.cache.put(key, program, certified=certified or (self.audit and certifiable))
-        return presentation
+        return payload
 
     def _cache_key(
         self,

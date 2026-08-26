@@ -7,9 +7,9 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+import squid_ui as sl
 import squid_ui_discord
 import squid_ui_discord.target
-import squid_ui as sl
 from squid_ui_discord import V2_LIMITS as LIMITS
 from squid_ui_discord import ExistingLayoutError, LimitViolationError, conform
 from squid_ui_discord.inspection import ViolationCode, audit, cost, measure
@@ -264,19 +264,23 @@ class TestReservedPlanning:
 
     def test_text_reservation_shrinks_the_composed_view(self):
         body = sl.primitives.Text("x" * 5000)
-        reserved = squid_ui_discord.compose([body], reservation=squid_ui_discord.ResourceCost({"display_text": 1500})).view
+        reserved = squid_ui_discord.render_message(
+            [body], reservation=squid_ui_discord.ResourceCost({"display_text": 1500})
+        ).view
         assert reserved.content_length() <= LIMITS.total_text - 1500
 
     def test_component_reservation_is_enforced(self):
         # Twelve text components fit an unreserved message and cannot fit five, so the
         # reservation has to be the difference between composing and refusing.
         document = [sl.primitives.Text(f"line {index}") for index in range(12)]
-        assert len(list(squid_ui_discord.compose(document).view.walk_children())) == 12
+        assert len(list(squid_ui_discord.render_message(document).view.walk_children())) == 12
         with pytest.raises(sl.errors.UnsolvableLayoutError):
-            squid_ui_discord.compose(document, reservation=squid_ui_discord.ResourceCost({"components": 35}))
+            squid_ui_discord.render_message(document, reservation=squid_ui_discord.ResourceCost({"components": 35}))
 
     def test_a_reserved_plan_plus_the_host_fits_the_real_budget(self):
         host = _view(discord.ui.TextDisplay("h" * 2000))
-        fragment_view = squid_ui_discord.compose([sl.primitives.Text("f" * 5000)], reservation=measure(host).cost).view
+        fragment_view = squid_ui_discord.render_message(
+            [sl.primitives.Text("f" * 5000)], reservation=measure(host).cost
+        ).view
         combined = host.content_length() + fragment_view.content_length()
         assert combined <= LIMITS.total_text
