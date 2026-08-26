@@ -1,5 +1,6 @@
 """Portable colour policy resolved while semantic layouts are planned."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -46,6 +47,42 @@ class Palette:
         }[tone]
 
 
+class PaletteRegistry:
+    """Named palette choices for future planning and mount construction."""
+
+    def __init__(self, palettes: Mapping[str, Palette], *, default: str) -> None:
+        self._palettes = dict(palettes)
+        self._validate_name(default)
+        if default not in self._palettes:
+            raise KeyError(f"default palette {default!r} is not registered")
+        self._default = default
+
+    def register(self, name: str, palette: Palette) -> None:
+        """Register or replace one named palette."""
+        self._validate_name(name)
+        self._palettes[name] = palette
+
+    def resolve(self, name: str | None = None) -> Palette:
+        """Resolve a named palette, or the current default when omitted."""
+        selected = self._default if name is None else name
+        try:
+            return self._palettes[selected]
+        except KeyError:
+            raise KeyError(f"unknown palette {selected!r}") from None
+
+    def set_default(self, name: str) -> None:
+        """Select the registered palette used by an unnamed resolution."""
+        self._validate_name(name)
+        if name not in self._palettes:
+            raise KeyError(f"unknown palette {name!r}")
+        self._default = name
+
+    @staticmethod
+    def _validate_name(name: str) -> None:
+        if not name:
+            raise ValueError("palette names must not be empty")
+
+
 DEFAULT_PALETTE = Palette()
 
 __all__ = [
@@ -54,5 +91,6 @@ __all__ = [
     "Accent",
     "AccentDefault",
     "Palette",
+    "PaletteRegistry",
     "Tone",
 ]
