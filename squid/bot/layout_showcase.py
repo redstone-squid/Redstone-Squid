@@ -1338,7 +1338,7 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 component,
                 access=sd.Owner(ctx.author.id),
                 locale=locale,
-                scheduler=self.bot.layout_reactor,
+                scheduler=self.bot.layout_scheduler,
             )
 
     @layout_group.command(name="lobby")

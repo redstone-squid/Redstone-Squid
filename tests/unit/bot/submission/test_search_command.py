@@ -145,12 +145,12 @@ async def test_public_build_panel_recovers_background_refresh_after_its_followup
     build = OtherBuild(id=42)
     renderer = SimpleNamespace(render_node=AsyncMock(side_effect=[sl.paragraph("Build 42"), sl.paragraph("Build 43")]))
     topic_bus = sl.runtime.LocalTopicBus()
-    layout_reactor = sd.MountScheduler(topic_bus)
+    layout_scheduler = sd.MountScheduler(topic_bus)
     bot = SimpleNamespace(
         services=SimpleNamespace(settings=SimpleNamespace()),
         for_build=lambda current: renderer,
         topic_bus=topic_bus,
-        layout_reactor=layout_reactor,
+        layout_scheduler=layout_scheduler,
     )
     cog = SearchCog.__new__(SearchCog)
     cog.bot = cast(Any, bot)

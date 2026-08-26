@@ -239,7 +239,7 @@ class OperationalInspector(sl.Component):
         counts = [
             f"mounts       {len(snapshot.mounts)}",
             f"sessions     {len(snapshot.sessions)}",
-            f"scheduler     {_reactor_summary(snapshot.scheduler)}",
+            f"scheduler     {_scheduler_summary(snapshot.scheduler)}",
             f"topics      {_topic_summary(snapshot.topics)}",
             f"profile     {_profile_summary(snapshot.profiler)}",
             f"persistence {_durable_summary(snapshot.durable)}",
@@ -365,7 +365,7 @@ class OperationalInspector(sl.Component):
 
     def _queues(self, snapshot: squid_discord.devtools_runtime.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         lines = [
-            f"scheduler  {_reactor_summary(snapshot.scheduler)}",
+            f"scheduler  {_scheduler_summary(snapshot.scheduler)}",
             f"topics   {_topic_summary(snapshot.topics)}",
         ]
         if snapshot.topics is not None:
@@ -579,7 +579,7 @@ def _duration(seconds: float) -> str:
     return f"{total // 3600}h{total % 3600 // 60:02d}m"
 
 
-def _reactor_summary(snapshot: squid_discord.MountSchedulerSnapshot | None) -> str:
+def _scheduler_summary(snapshot: squid_discord.MountSchedulerSnapshot | None) -> str:
     if snapshot is None:
         return "unconfigured"
     return f"queued={snapshot.queued} in_flight={snapshot.in_flight} failed={snapshot.failed}"

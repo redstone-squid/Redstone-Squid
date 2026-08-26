@@ -300,7 +300,7 @@ class SearchCog[
                 access=sd.Everyone(),
                 locale=locale,
                 timeout=300,
-                scheduler=self.bot.layout_reactor,
+                scheduler=self.bot.layout_scheduler,
             )
             await mount.send(sd.respond_to(interaction, ephemeral=False, wait=True))
             return

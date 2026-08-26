@@ -213,7 +213,7 @@ async def test_later_same_target_write_conflicts_without_clobbering() -> None:
 async def test_named_local_overwrite_policy_replaces_later_ephemeral_work() -> None:
     subject, _ = panel()
     with transaction():
-        subject.history.record("page", strategy=UndoMode.LOCAL_OVERWRITE)
+        subject.history.record("page", mode=UndoMode.LOCAL_OVERWRITE)
         subject.page = 4
     with transaction():
         subject.page = 8
@@ -227,7 +227,7 @@ async def test_named_local_overwrite_policy_replaces_later_ephemeral_work() -> N
 async def test_local_overwrite_policy_refuses_shared_state() -> None:
     subject, workspace = panel()
     with transaction():
-        subject.history.record("select", strategy=UndoMode.LOCAL_OVERWRITE)
+        subject.history.record("select", mode=UndoMode.LOCAL_OVERWRITE)
         workspace.selected = 7
     with transaction():
         workspace.selected = 9

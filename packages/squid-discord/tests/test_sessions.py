@@ -223,7 +223,7 @@ class TestReplacement:
             to_message(),
             key=KEY,
             actor_id=8,
-            policy=SessionPolicy(protect=Unprotected()),
+            policy=SessionPolicy(replacement=Unprotected()),
         )
 
         assert isinstance(first, Opened) and isinstance(result, Opened)
@@ -233,7 +233,7 @@ class TestReplacement:
 class TestCardinality:
     async def test_limit_greater_than_one_replaces_only_the_oldest_needed_session(self) -> None:
         registry = SessionRegistry()
-        policy = SessionPolicy(limit=2, protect=Unprotected())
+        policy = SessionPolicy(limit=2, replacement=Unprotected())
         mounts = [a_mount() for _ in range(3)]
         results = [await registry.open(mount, to_message(), key=KEY, policy=policy) for mount in mounts]
 
@@ -262,7 +262,7 @@ class TestCardinality:
                 return Replace(occupants[-request.required_victims :])
 
         registry = SessionRegistry()
-        initial = SessionPolicy(limit=2, protect=Unprotected())
+        initial = SessionPolicy(limit=2, replacement=Unprotected())
         first, second, third = a_mount(), a_mount(), a_mount()
         await registry.open(first, to_message(), key=KEY, policy=initial)
         await registry.open(second, to_message(), key=KEY, policy=initial)
@@ -271,7 +271,7 @@ class TestCardinality:
             third,
             to_message(),
             key=KEY,
-            policy=SessionPolicy(limit=2, collision=ReplaceNewest(), protect=Unprotected()),
+            policy=SessionPolicy(limit=2, collision=ReplaceNewest(), replacement=Unprotected()),
         )
 
         assert not first.finished and second.finished and not third.finished
@@ -291,7 +291,7 @@ class TestCardinality:
                 a_mount(),
                 to_message(),
                 key=KEY,
-                policy=SessionPolicy(collision=SelectNobody(), protect=Unprotected()),
+                policy=SessionPolicy(collision=SelectNobody(), replacement=Unprotected()),
             )
 
 
@@ -362,7 +362,7 @@ class TestAttachments:
             to_message(),
             key=KEY,
             actor_id=7,
-            policy=SessionPolicy(protect=ProtectCrossUserAttachments()),
+            policy=SessionPolicy(replacement=ProtectCrossUserAttachments()),
         )
 
         assert result == Rejected((first.session.snapshot,), RejectionReason.PROTECTED)
@@ -558,7 +558,7 @@ class TestMembership:
 
         protected = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
         unprotected = await registry.open(
-            a_mount(), to_message(), key=KEY, actor_id=7, policy=SessionPolicy(protect=Unprotected())
+            a_mount(), to_message(), key=KEY, actor_id=7, policy=SessionPolicy(replacement=Unprotected())
         )
 
         assert protected == Rejected((first.session.snapshot,), RejectionReason.PROTECTED)
@@ -628,7 +628,7 @@ class TestQuota:
             key=self.GUILD_ONE,
             actor_id=8,
             quota=1,
-            policy=SessionPolicy(protect=ProtectCrossUserAttachments()),
+            policy=SessionPolicy(replacement=ProtectCrossUserAttachments()),
         )
 
         assert isinstance(second, Rejected)

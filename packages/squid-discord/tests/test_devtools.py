@@ -261,7 +261,7 @@ class TestProfiles:
         rendered = str(ctx.send.await_args.kwargs["view"].to_components())
         assert "refused" in rendered
 
-    async def test_queue_command_infers_bus_and_profiler_from_reactor(self) -> None:
+    async def test_queue_command_infers_bus_and_profiler_from_scheduler(self) -> None:
         profiler = MemoryProfiler()
         bus = sl.runtime.LocalTopicBus()
         scheduler = squid_discord.MountScheduler(bus, profiler=profiler)
