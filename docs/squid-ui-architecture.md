@@ -196,6 +196,39 @@ interpolations and neutralizes mentions; `plain()` requests literal text; `raw_m
 known-safe interpolation back into trusted markup. Scenes preserve the dialect so every
 renderer can choose an appropriate Markdown implementation.
 
+### Declaring a component's dialect
+
+A node's type says which dialects can draw it. `Text` and `Heading` work anywhere; `Panel`,
+`Section`, `Gallery`, `File`, `Sep` and `Thumbnail` are Components V2 only; `Card` and
+`Content` are classic only. The mode is a *type parameter*, and it propagates: a container
+factory takes the meet of its children's modes, so one `Panel` nested three levels down makes
+the whole document `ComponentsV2Target`, and planning that against `classic()` is a static
+error rather than a runtime one.
+
+That reaches `Component` through `render`, so a component that uses a dialect-specific
+primitive declares which dialect it is for:
+
+```python
+class BuildPanel(sl.Component[sl.ComponentsV2Target]):
+    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
+        return sl.stack(sl.heading("Build"), sl.primitives.Panel(...))
+```
+
+An unannotated `sl.Component` is portable — it may use only nodes both dialects can draw —
+and is accepted by a mount for either, because `Component` is contravariant in its mode. The
+markers live at the package root: `sl.DiscordTarget`, `sl.ComponentsV2Target`,
+`sl.ClassicTarget`.
+
+Two cases this does not catch, both deliberate. A container mixing a V2-only and a
+classic-only child works in neither, but contravariance makes the union the solver's natural
+answer, so pyrefly accepts it against both targets; basedpyright rejects it at the call, and
+the planner rejects it at runtime. And widget content slots are dialect-erased, because
+`normalize_content` classifies an `object` and has no static type to carry a mode.
+
+Planning internals that walk any document take `AnyLayoutNode`, which is the deliberate
+opt-out: they rewrite whatever they are handed and leave the dialect judgement to the
+target's dialect.
+
 ## Patterns: one state machine, two shells
 
 Reusable interaction patterns are authored as pure `state -> tree` state machines. Control and
