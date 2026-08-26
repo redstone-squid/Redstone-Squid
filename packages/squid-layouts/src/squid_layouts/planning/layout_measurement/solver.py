@@ -18,22 +18,14 @@ from squid_layouts.chrome import DEFAULT_CHROME, Chrome, localize_chrome
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning.degradation import DegradationProfile, DegradationRecorder
 from squid_layouts.planning.layout_measurement.allocation import (
-    allocate as _allocate,
-)
-from squid_layouts.planning.layout_measurement.allocation import (
-    allocate_budgeted as _allocate_budgeted,
+    allocate,
+    allocate_budgeted,
 )
 from squid_layouts.planning.layout_measurement.costing import (
-    component_count as _component_count,
-)
-from squid_layouts.planning.layout_measurement.costing import (
-    prune as _prune,
-)
-from squid_layouts.planning.layout_measurement.costing import (
-    structural_cost as _structural_cost,
-)
-from squid_layouts.planning.layout_measurement.costing import (
-    validated_nav as _validated_nav,
+    component_count,
+    prune,
+    structural_cost,
+    validated_nav,
 )
 from squid_layouts.planning.layout_measurement.diagnostics import (
     LayoutOverflowError,
@@ -41,9 +33,7 @@ from squid_layouts.planning.layout_measurement.diagnostics import (
     SolveNoteCode,
     SolveNoteSeverity,
     lossy_notes,
-)
-from squid_layouts.planning.layout_measurement.diagnostics import (
-    note as _note,
+    note,
 )
 from squid_layouts.planning.layout_measurement.model import (
     PAGE_FOOTER_PREFIX,
@@ -53,10 +43,8 @@ from squid_layouts.planning.layout_measurement.model import (
     RPanel,
     RText,
 )
-from squid_layouts.planning.layout_measurement.realization import Builder as _Builder
-from squid_layouts.planning.layout_measurement.text import (
-    TextUnit as _Unit,
-)
+from squid_layouts.planning.layout_measurement.realization import Builder
+from squid_layouts.planning.layout_measurement.text import TextUnit
 from squid_layouts.planning.limits import (
     COMPONENTS,
     LIMITS,
@@ -131,12 +119,12 @@ class MeasuredLayout:
                 continue
             window = slice(pager.nav_at, pager.nav_at + pager.nav_count)
             previous = pager.nav_host[window]
-            realized = _Builder(limits=self.limits).realize_children(
-                _validated_nav(
+            realized = Builder(limits=self.limits).realize_children(
+                validated_nav(
                     self.nav(materialized_navigation_state(pager.key, Position(offset=shown), pager.pages, self.chrome))
                 )
             )
-            if len(realized) != pager.nav_count or _component_count(realized) != _component_count(previous):
+            if len(realized) != pager.nav_count or component_count(realized) != component_count(previous):
                 message = (
                     f"nav factory changed shape between pages of {pager.key!r}; "
                     "disable controls at the ends instead of hiding them"
@@ -164,7 +152,7 @@ class MeasuredLayout:
 # --- Solve ----------------------------------------------------------------------------------
 
 
-def _count_pages(unit: _Unit, per: int) -> list[str]:
+def _count_pages(unit: TextUnit, per: int) -> list[str]:
     """Group a Lines node's entries into pages of ``per`` entries."""
     entries = [ladder[0] for ladder in unit.ladders or ()]
     pages = [unit.join.join(entries[start : start + per]) for start in range(0, len(entries), per)]
@@ -219,9 +207,9 @@ def measure(
 
 
 def _configure_paginators(
-    builder: _Builder,
+    builder: Builder,
     chrome: Chrome,
-) -> tuple[list[_Unit], dict[int, str], dict[int, Callable[[int, int], str]]]:
+) -> tuple[list[TextUnit], dict[int, str], dict[int, Callable[[int, int], str]]]:
     units = [unit for unit in builder.units if isinstance(unit.overflow, Paginate)]
     keys: dict[int, str] = {}
     footers: dict[int, Callable[[int, int], str]] = {}
@@ -241,7 +229,7 @@ def _configure_paginators(
                 unit.count_pages = _count_pages(unit, policy.per)
             else:
                 builder.notes.append(
-                    _note(
+                    note(
                         SolveNoteCode.PAGINATE_PER_FALLBACK,
                         f"node {unit.index} is not a Lines node; paging on overflow instead of per entry",
                     )
@@ -278,9 +266,9 @@ def _requested_position(state: PositionState, key: str, *, first: bool) -> Posit
 class _Pass:
     """One complete measuring pass, kept so the last one can be used after the loop ends."""
 
-    builder: _Builder
+    builder: Builder
     children: list[Realized]
-    paginate_units: list[_Unit]
+    paginate_units: list[TextUnit]
     keys: dict[int, str]
     footers: dict[int, Callable[[int, int], str]]
     clamps: int
@@ -311,7 +299,7 @@ def _measure_once(
     while True:
         pass_notes = list(notes)
         degradation = DegradationRecorder.create()
-        builder = _Builder(limits=limits, notes=pass_notes)
+        builder = Builder(limits=limits, notes=pass_notes)
         children = builder.realize_children(resolved)
         paginate_units, keys, footers = _configure_paginators(builder, chrome)
         # Everything noted so far is a clamp to Discord's own shape; fitting starts here.
@@ -329,10 +317,10 @@ def _measure_once(
             )
             budget = capacity - builder.raw_text_cost.get(axis, 0) - reserved.get(axis) - footer_reservation
             if axis_regions:
-                _allocate_budgeted(axis_regions, axis_units, budget, pass_notes, chrome, degradation)
+                allocate_budgeted(axis_regions, axis_units, budget, pass_notes, chrome, degradation)
             else:
-                _allocate(axis_units, budget, pass_notes, chrome, degradation)
-        children = _prune(children)
+                allocate(axis_units, budget, pass_notes, chrome, degradation)
+        children = prune(children)
         text_used = dict(builder.raw_text_cost)
         for unit in builder.units:
             if not unit.slot.dropped:
@@ -379,7 +367,7 @@ def _measure_once(
         if nav is not None:
             additions.extend(
                 builder.realize_children(
-                    _validated_nav(nav(materialized_navigation_state(key, Position(offset=shown), pager.pages, chrome)))
+                    validated_nav(nav(materialized_navigation_state(key, Position(offset=shown), pager.pages, chrome)))
                 )
             )
         placement = _insert_after(children, unit.slot, additions)
@@ -390,11 +378,11 @@ def _measure_once(
         pager.nav_host, pager.nav_at, pager.nav_count = placement[0], placement[1] + 1, len(additions) - 1
         pagers.append(pager)
 
-    cost = ResourceCost({**text_used, **_structural_cost(children)})
+    cost = ResourceCost({**text_used, **structural_cost(children)})
     capacities = {name: getattr(limits, attribute) for name, attribute in limits.budgets.items()}
     for axis, spent, capacity in cost.over({**limits.text_axes, **capacities}):
         builder.notes.append(
-            _note(
+            note(
                 SolveNoteCode.COMPONENT_BUDGET if axis == COMPONENTS else SolveNoteCode.TEXT_BUDGET,
                 f"{spent} {axis} exceed {capacity}; the document needs restructuring",
             )

@@ -21,11 +21,11 @@ from squid_layouts.planning.layout_measurement.model import (
     RGroup,
     RText,
 )
-from squid_layouts.planning.limits import ClassicLimits
-from squid_layouts.planning.measurement import (
+from squid_layouts.planning.layout_measurement.solver import (
     MeasuredLayout,
     measure,
 )
+from squid_layouts.planning.limits import ClassicLimits
 from squid_layouts.planning.navigation import PlannedNav, materialized_navigation_state
 from squid_layouts.planning.target import TargetProfile
 from squid_layouts.primitives.constraints import Never, Paginate
