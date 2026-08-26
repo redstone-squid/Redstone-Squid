@@ -47,3 +47,47 @@ class PlanCache:
 
     def __len__(self) -> int:
         return len(self._entries)
+
+
+class PlanMemo:
+    """One runtime's callback-bearing exact result; :meth:`clear` ends its retention.
+
+    This is deliberately separate from :class:`PlanCache`: the latter is safe to share because
+    it is callback-free, while this memo retains only the current render of one owner.
+    """
+
+    def __init__(self) -> None:
+        self._source: object | None = None
+        self._key: object | None = None
+        self._session: object | None = None
+        self._session_revisions: set[int] = set()
+        self._result: object | None = None
+
+    def get(self, source: object, key: object, session: object, session_revision: int) -> object | None:
+        if (
+            self._source is source
+            and self._key == key
+            and self._session is session
+            and session_revision in self._session_revisions
+        ):
+            return self._result
+        return None
+
+    def put(self, source: object, key: object, session: object, session_revision: int, result: object) -> None:
+        self._source = source
+        self._key = key
+        self._session = session
+        self._session_revisions = {session_revision}
+        self._result = result
+
+    def promote(self, session: object, session_revision: int) -> None:
+        """Accept the post-commit revision of the session this result already describes."""
+        if self._session is session and self._result is not None:
+            self._session_revisions.add(session_revision)
+
+    def clear(self) -> None:
+        self._source = None
+        self._key = None
+        self._session = None
+        self._session_revisions.clear()
+        self._result = None

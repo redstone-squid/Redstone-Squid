@@ -1279,6 +1279,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                 nav=nav,
                 session=self.presentation,
                 cache=self.runtime.plan_cache,
+                memo=self.runtime.plan_memo,
                 profile=profile,
             )
             view = composition.presentation.view
@@ -1370,6 +1371,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             nav=lambda state: (),
             session=self.presentation,
             cache=self.runtime.plan_cache,
+            memo=self.runtime.plan_memo,
             profile=profile,
         )
         view = composition.presentation.view
@@ -1497,6 +1499,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         """
         self._settle(candidate, "commit")
         apply_updates(self.presentation, candidate.session_updates)
+        self.runtime.plan_memo.promote(self.presentation, self.presentation.revision)
         self._subscriptions.commit()
         self.runtime.commit(candidate.tree, rendered_revision=candidate.revision)
         self._handlers = candidate.handlers

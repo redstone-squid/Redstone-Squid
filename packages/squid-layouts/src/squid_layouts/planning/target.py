@@ -1,7 +1,7 @@
 """A render target: one protocol dialect paired with the adapter that realizes it."""
 
 from collections.abc import Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any, Self
 
 from squid_layouts import scene
@@ -41,6 +41,25 @@ class Target[LimitsT: DiscordLimits, BodyT: scene.Body, ModeT, AdapterT]:
     limits: LimitsT
     selected_adapter_capabilities: frozenset[str] | None = None
     """The adapter capabilities planning was frozen to, when a snapshot recorded a subset."""
+    _fingerprint: str = field(init=False, repr=False, compare=False, metadata={"stable_identity": False})
+
+    def __post_init__(self) -> None:
+        from squid_layouts.planning.identity import stable_fingerprint
+
+        object.__setattr__(
+            self,
+            "_fingerprint",
+            stable_fingerprint(
+                (
+                    self.dialect.id,
+                    self.dialect.version,
+                    sorted(self.protocol_capabilities),
+                    self.adapter.name,
+                    sorted(self.adapter_capabilities),
+                    self.limits.digest(),
+                )
+            ),
+        )
 
     @property
     def id(self) -> str:
@@ -117,18 +136,7 @@ class Target[LimitsT: DiscordLimits, BodyT: scene.Body, ModeT, AdapterT]:
         legal only by luck. The dialect object and the extension adapters are excluded
         deliberately: they are process-local objects, not facts about the message.
         """
-        from squid_layouts.planning.identity import stable_fingerprint
-
-        return stable_fingerprint(
-            (
-                self.dialect.id,
-                self.dialect.version,
-                sorted(self.protocol_capabilities),
-                self.adapter.name,
-                sorted(self.adapter_capabilities),
-                self.limits.digest(),
-            )
-        )
+        return self._fingerprint
 
     def capacity(self, axis: Axis) -> int | None:
         """This target's remaining room on one axis, or None if it does not budget it."""

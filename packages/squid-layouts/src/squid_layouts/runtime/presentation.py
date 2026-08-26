@@ -47,6 +47,15 @@ class PresentationSession:
     disclosures: dict[str, DisclosureState] = field(default_factory=dict)
     toggles: dict[str, ToggleState] = field(default_factory=dict)
     strategies: dict[str, StrategyState] = field(default_factory=dict)
+    _revision: int = field(default=0, init=False, repr=False, compare=False, metadata={"stable_identity": False})
+
+    @property
+    def revision(self) -> int:
+        """Monotonic identity of changes to this live presentation session."""
+        return self._revision
+
+    def _touch(self) -> None:
+        self._revision += 1
 
     def cursor(self, key: str) -> CursorState:
         return self.cursors.get(key, CursorState())
@@ -55,17 +64,24 @@ class PresentationSession:
         """Store one resolved position within the cursor's known extent."""
         current = self.cursor(key)
         selected = POSITION_POLICY.resolve(override=position, upper_bound=current.extent - 1)
-        self.cursors[key] = CursorState(
+        updated = CursorState(
             Position(selected.anchor, selected.offset, Direction.AROUND),
             extent=current.extent,
             fingerprint=current.fingerprint,
         )
+        if updated != current:
+            self.cursors[key] = updated
+            self._touch()
 
     def reset_cursor(self, key: str | None = None) -> None:
         if key is None:
+            if not self.cursors:
+                return
             self.cursors.clear()
+            self._touch()
         else:
-            self.cursors.pop(key, None)
+            if self.cursors.pop(key, None) is not None:
+                self._touch()
 
     def selection(self, key: str, *, initial: tuple[str, ...] = ()) -> SelectionState:
         """The stored selection, or ``initial`` when this key was never written.
@@ -76,19 +92,28 @@ class PresentationSession:
         return self.selections.get(key, SelectionState(initial))
 
     def select(self, key: str, selected: tuple[str, ...]) -> None:
-        self.selections[key] = SelectionState(selected)
+        value = SelectionState(selected)
+        if self.selections.get(key) != value:
+            self.selections[key] = value
+            self._touch()
 
     def disclosure(self, key: str, *, initial: bool = False) -> DisclosureState:
         return self.disclosures.get(key, DisclosureState(initial))
 
     def disclose(self, key: str, open_: bool) -> None:
-        self.disclosures[key] = DisclosureState(open_)
+        value = DisclosureState(open_)
+        if self.disclosures.get(key) != value:
+            self.disclosures[key] = value
+            self._touch()
 
     def toggle(self, key: str, *, initial: bool = False) -> ToggleState:
         return self.toggles.get(key, ToggleState(initial))
 
     def set_toggle(self, key: str, *, on: bool) -> None:
-        self.toggles[key] = ToggleState(on)
+        value = ToggleState(on)
+        if self.toggles.get(key) != value:
+            self.toggles[key] = value
+            self._touch()
 
     def strategy(self, key: str, adapter_id: str, adapter_version: int) -> str | None:
         """The remembered choice, or None when it was made by a different adapter.
@@ -103,7 +128,10 @@ class PresentationSession:
         return state.strategy_id
 
     def remember_strategy(self, key: str, adapter_id: str, adapter_version: int, strategy_id: str) -> None:
-        self.strategies[key] = StrategyState(key, adapter_id, adapter_version, strategy_id)
+        value = StrategyState(key, adapter_id, adapter_version, strategy_id)
+        if self.strategies.get(key) != value:
+            self.strategies[key] = value
+            self._touch()
 
 
 # --- Planning's writes, staged ------------------------------------------------------------
@@ -145,15 +173,25 @@ the reader exactly where the message still shows them.
 
 def apply_updates(session: PresentationSession, updates: Sequence[SessionUpdate]) -> None:
     """Commit planning's presentation writes, in the order planning made them."""
+    changed = False
     for update in updates:
         match update:
             case CursorUpdate(key=key, state=cursor):
-                session.cursors[key] = cursor
+                if session.cursors.get(key) != cursor:
+                    session.cursors[key] = cursor
+                    changed = True
             case StrategyUpdate(key=key, state=strategy):
-                session.strategies[key] = strategy
+                if session.strategies.get(key) != strategy:
+                    session.strategies[key] = strategy
+                    changed = True
             case ToggleUpdate(key=key, state=toggle):
-                session.toggles[key] = toggle
+                if session.toggles.get(key) != toggle:
+                    session.toggles[key] = toggle
+                    changed = True
             case ActivePagers(keys=keys):
                 for stale in tuple(session.cursors):
                     if stale not in keys:
                         del session.cursors[stale]
+                        changed = True
+    if changed:
+        session._touch()
