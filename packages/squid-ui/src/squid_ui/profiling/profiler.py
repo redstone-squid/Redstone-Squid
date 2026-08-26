@@ -6,7 +6,7 @@ import secrets
 import threading
 import time
 from collections import deque
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Container, Mapping, Sequence
 from contextlib import AbstractContextManager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
@@ -236,7 +236,26 @@ class _NoOpSpan(AbstractContextManager[SpanRecorder]):
         pass
 
 
-class _NoOpOperation(_NoOpSpan, OperationRecorder):
+class _NoOpOperation(AbstractContextManager[OperationRecorder], OperationRecorder):
+    """The no-op operation.
+
+    Deliberately not a `_NoOpSpan`: `OperationRecorder` and `SpanRecorder` are separate
+    protocols, so one object cannot enter as both. Sharing an instance made `__enter__`
+    advertise only the span half, which is what the profiler's `operation()` return type
+    could not honour.
+    """
+
+    def __enter__(self) -> OperationRecorder:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: object,
+    ) -> None:
+        return None
+
     def span(
         self,
         name: str,
@@ -244,7 +263,7 @@ class _NoOpOperation(_NoOpSpan, OperationRecorder):
         attributes: Mapping[str, AttributeValue] | None = None,
         links: Sequence[TraceLink] = (),
     ) -> AbstractContextManager[SpanRecorder]:
-        return self
+        return _NOOP_SPAN
 
     def set_result(self, result: TraceResult) -> None:
         pass
@@ -281,6 +300,7 @@ class _NoOpDetachedSpan(_NoOpSpan, DetachedSpanRecorder):
         pass
 
 
+_NOOP_SPAN = _NoOpSpan()
 _NOOP_DETACHED = _NoOpDetachedSpan()
 _NOOP = _NoOpOperation()
 
@@ -456,7 +476,7 @@ class _OperationScope(AbstractContextManager[OperationRecorder], OperationRecord
         links: Sequence[TraceLink] = (),
     ) -> AbstractContextManager[SpanRecorder]:
         if self._trace is None or self._fallback or self._trace.closed:
-            return _NOOP
+            return _NOOP_SPAN
         current = _current.get()
         parent = (
             current.span_id
@@ -767,12 +787,12 @@ class MemoryProfiler:
             self._rejected_attributes = 0
             self._internal_failures = 0
 
-    def _new_id(
+    def _new_id[IdT: (TraceId, SpanId)](
         self,
         size: int,
-        constructor: Callable[[bytes], TraceId | SpanId],
-        used: set[TraceId] | set[SpanId] | None = None,
-    ) -> TraceId | SpanId:
+        constructor: Callable[[bytes], IdT],
+        used: Container[IdT] | None = None,
+    ) -> IdT:
         for _ in range(3):
             value = self._id_source(size)
             if len(value) == size and any(value):
