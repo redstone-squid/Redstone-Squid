@@ -101,8 +101,18 @@ type RenderNode[ModeT = DiscordTarget] = LayoutNode[ModeT]
 type RenderResult[ModeT = DiscordTarget] = Document[ModeT] | LayoutNode[ModeT] | Sequence[LayoutNode[ModeT]]
 
 
+type AnyComponent = Component[Any]
+"""A mounted component of any target mode.
+
+`Component`'s `ModeT` defaults, so a bare `Component` annotation means `Component[DiscordTarget]`
+and rejects every other mode -- including `Self` inside `Component`'s own methods. The tree
+machinery below holds components of whatever mode the caller mounted, so it says so, in the same
+spirit as `AnyTarget`.
+"""
+
+
 class RuntimeOwner(Protocol):
-    def invalidate(self, component: Component | None = None, *, check_dependencies: bool = False) -> None: ...
+    def invalidate(self, component: AnyComponent | None = None, *, check_dependencies: bool = False) -> None: ...
 
 
 _CURRENT_CONTEXT: ContextVar[dict[ContextKey[Any], object] | None] = ContextVar(
@@ -161,7 +171,7 @@ class _ComponentRender:
 class _ExpandedSubtree:
     """A complete expansion below one stable component path, before parent namespacing."""
 
-    component: Component
+    component: AnyComponent
     inherited_context: dict[ContextKey[Any], object]
     nodes: tuple[LayoutNode, ...]
     components: dict[str, Component]
@@ -205,7 +215,7 @@ class Component(StateOwner, Generic[ModeT]):
     """Base class for mounted, stateful views."""
 
     _runtime: RuntimeOwner | None = None
-    _parent: Component | None = None
+    _parent: AnyComponent | None = None
     _loaded: bool = False
     """Whether this instance's :meth:`on_load` has completed. Owned by the frontend."""
     _reactive_internal_attributes = frozenset(
@@ -302,14 +312,14 @@ class Component(StateOwner, Generic[ModeT]):
 
 
 def render_component_tree(
-    root: Component,
+    root: AnyComponent,
     *,
     runtime: RuntimeOwner | None = None,
     context: dict[ContextKey[Any], object] | None = None,
-    defer: Callable[[Component], bool] | None = None,
+    defer: Callable[[AnyComponent], bool] | None = None,
     _render_cache: dict[Component, _ComponentRender] | None = None,
-    _dirty: set[Component] | None = None,
-    _forced: set[Component] | None = None,
+    _dirty: set[AnyComponent] | None = None,
+    _forced: set[AnyComponent] | None = None,
     _force_all: bool = False,
     _subtree_cache: dict[str, _ExpandedSubtree] | None = None,
     _dirty_paths: set[str] | None = None,
@@ -328,7 +338,7 @@ def render_component_tree(
     document_key: str | None = None
     identities: dict[int, str] = {}
     active: set[int] = set()
-    deferred: list[Component] = []
+    deferred: list[AnyComponent] = []
     observed_addresses: list[Address] = []
     observed_bindings: list[AsyncBinding] = []
     render_cache = {} if _render_cache is None else _render_cache
@@ -356,23 +366,22 @@ def render_component_tree(
         return left.keys() == right.keys() and all(key.matches(value, right[key]) for key, value in left.items())
 
     def rendered(
-        component: Component,
+        component: AnyComponent,
         path: str,
         inherited_context: dict[ContextKey[Any], object],
     ) -> _ComponentRender:
         cached = render_cache.get(component)
         revision = component.__dict__.get("_state_revision", 0)
         dependency_check = component in dirty and component not in forced
-        reusable = (
-            not _force_all
+        if (
+            cached is not None
+            and not _force_all
             and component not in forced
-            and cached is not None
             and cached.revision == revision
             and cached.root == (path == "$")
             and same_context(cached.inherited_context, inherited_context)
             and (component not in dirty or (dependency_check and cached.observation.current()))
-        )
-        if reusable:
+        ):
             current_addresses = cached.observation.addresses()
             cached.addresses = current_addresses
             observed_addresses.extend(current_addresses)
@@ -412,7 +421,7 @@ def render_component_tree(
         return snapshot
 
     def expand(
-        component: Component,
+        component: AnyComponent,
         path: str,
         inherited_context: dict[ContextKey[Any], object],
     ) -> list[LayoutNode]:
@@ -508,7 +517,7 @@ def render_component_tree(
             active.remove(identity)
 
     spliced: _SpliceResult | None = None
-    attempted_splices: set[Component] = set()
+    attempted_splices: set[AnyComponent] = set()
     try:
         spliced = _splice_dirty_subtrees(
             root,
@@ -556,7 +565,8 @@ def render_component_tree(
             spliced.removed,
             spliced.added,
         )
-    complete = not deferred and (root_subtree := subtree_cache.get("$")) is not None
+    # A deferred render has no complete root expansion, so there is no topology to carry.
+    root_subtree = None if deferred else subtree_cache.get("$")
     return ComponentTree(
         nodes,
         components,
@@ -565,19 +575,19 @@ def render_component_tree(
         tuple(deferred),
         unique_async_bindings(observed_bindings),
         tuple(dict.fromkeys(observed_addresses)),
-        root_subtree.topology if complete else object(),
+        root_subtree.topology if root_subtree is not None else object(),
     )
 
 
 def _splice_dirty_subtrees(
-    root: Component,
+    root: AnyComponent,
     force_all: bool,
-    dirty: set[Component],
+    dirty: set[AnyComponent],
     component_paths: dict[Component, str] | None,
     render_cache: dict[Component, _ComponentRender],
     subtree_cache: dict[str, _ExpandedSubtree],
     expand: Callable[[Component, str, dict[ContextKey[Any], object]], list[LayoutNode]],
-    attempted: set[Component],
+    attempted: set[AnyComponent],
 ) -> _SpliceResult | None:
     """Patch independently dirty cached subtrees through their structural parent routes."""
     if force_all or not dirty or root not in render_cache:
