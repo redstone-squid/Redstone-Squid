@@ -29,6 +29,8 @@ from squid_layouts.primitives import (
 )
 from squid_layouts.runtime.component import render_component_tree
 from squid_layouts.runtime.owner import ComponentRuntime
+from squid_layouts.runtime.shared import Shared
+from squid_layouts.runtime.topics import CellAddress, LocalTopicBus
 from squid_layouts.semantic import Action, Actions, Choice, Choices, Controlled, Group, List, ListItem
 
 
@@ -180,6 +182,76 @@ class TestRenderCaching:
 
         assert component.renders == 1
         assert unchanged.nodes == initial.nodes
+
+    def test_address_invalidation_backdates_and_reuses_the_committed_tree(self) -> None:
+        class Values(Shared[object]):
+            value: int = state(0)
+
+        values = Values(LocalTopicBus(), object())
+
+        class Parity(Component):
+            def __init__(self) -> None:
+                self.renders = 0
+
+            @sl.computed
+            def even(self) -> bool:
+                return values.value % 2 == 0
+
+            def render(self) -> Text:
+                self.renders += 1
+                return Text(str(self.even))
+
+        component = Parity()
+        runtime = ComponentRuntime(component)
+        initial = runtime.render()
+        runtime.commit(initial, rendered_revision=runtime.revision)
+        values.value = 2
+
+        runtime.invalidate_address(CellAddress(values, "value"))
+        unchanged = runtime.render(reuse_committed=True)
+
+        assert component.renders == 1
+        assert unchanged is initial
+
+    def test_address_invalidation_only_renders_the_dependent_sibling(self) -> None:
+        class Values(Shared[object]):
+            left: int = state(0)
+            right: int = state(0)
+
+        values = Values(LocalTopicBus(), object())
+
+        class Value(Component):
+            def __init__(self, name: str) -> None:
+                self.name = name
+                self.renders = 0
+
+            def render(self) -> Text:
+                self.renders += 1
+                return Text(str(getattr(values, self.name)))
+
+        class Root(Component):
+            def __init__(self) -> None:
+                self.left = Value("left")
+                self.right = Value("right")
+                self.renders = 0
+
+            def render(self):
+                self.renders += 1
+                return (self.boundary(self.left, key="left"), self.boundary(self.right, key="right"))
+
+        root = Root()
+        runtime = ComponentRuntime(root)
+        initial = runtime.render()
+        runtime.commit(initial, rendered_revision=runtime.revision)
+        values.left = 1
+
+        runtime.invalidate_address(CellAddress(values, "left"))
+        changed = runtime.render(reuse_committed=True)
+
+        assert root.renders == 1
+        assert root.left.renders == 2
+        assert root.right.renders == 1
+        assert changed.nodes == (Text("1"), Text("0"))
 
     def test_explicit_invalidation_rerenders_opaque_inputs(self) -> None:
         class Opaque(Component):
