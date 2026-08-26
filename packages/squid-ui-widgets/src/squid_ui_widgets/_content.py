@@ -5,11 +5,21 @@ from collections.abc import Iterable, Mapping
 
 from squid_ui.factories import is_layout_node, paragraph
 from squid_ui.runtime.component import Component
-from squid_ui.semantic import LayoutNode
+from squid_ui.semantic import AnyLayoutNode
 from squid_ui.text import Message, ResolvedText, TextLike
 
-type ContentItem = LayoutNode | Component
+type ContentItem = AnyLayoutNode | Component
 type ContentLike = ContentItem | TextLike | Iterable[ContentItem | TextLike]
+"""Whatever a caller hands a widget's content slot.
+
+Deliberately dialect-erased. `normalize_content` classifies an `object` at runtime, so
+there is no static type on the way in to carry a mode, and a widget cannot tell whether the
+nodes it was given are portable or V2-only. Tracking it would mean a `ModeT` on
+`StateMachine` and `MachineControls` and every machine implementing them; until that is
+worth doing, the planner remains the thing that rejects a V2-only node in a classic message
+here, and the static guarantee covers content written directly in a `render()` rather than
+routed through a widget slot.
+"""
 
 
 def normalize_content(value: object, *, name: str) -> tuple[ContentItem, ...]:
@@ -41,7 +51,7 @@ def _normalize_item(value: object, *, name: str) -> ContentItem:
     raise TypeError(message)
 
 
-def render_content(owner: Component, content: Iterable[ContentItem], *, prefix: str) -> tuple[LayoutNode, ...]:
+def render_content(owner: Component, content: Iterable[ContentItem], *, prefix: str) -> tuple[AnyLayoutNode, ...]:
     """Expand component children under stable embed keys while retaining semantic nodes."""
     return tuple(
         owner.boundary(item, key=f"{prefix}-{index}") if isinstance(item, Component) else item
