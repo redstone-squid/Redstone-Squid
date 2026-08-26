@@ -50,13 +50,13 @@ WRITABLE_EXTENSIONS = {
 they are accepted as uploads but never offered as a download target."""
 
 
-class _DownloadDocument(sl.Component):
+class _DownloadDocument(sl.Component[sl.ComponentsV2Target]):
     def __init__(self, label: sl.TextLike, asset: sl.document.Asset, *, description: sl.TextLike | None = None) -> None:
         self.label = label
         self.asset = asset
         self.description = description
 
-    def render(self) -> sl.LayoutNode:
+    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
         return sl.download(self.label, self.asset, key="download", description=self.description)
 
 

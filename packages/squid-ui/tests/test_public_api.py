@@ -10,7 +10,7 @@ import pytest
 
 import squid_ui as sl
 
-# ~105 names: the authoring vocabulary. See docs/plans/squid-ui-redesign/58-public-api-narrowing.md
+# ~115 names: the authoring vocabulary. See docs/plans/squid-ui-redesign/58-public-api-narrowing.md
 # for the promotion rule and the grouped rationale (namespaces, component model, document,
 # semantic factories, factory type aliases, adaptation verbs, text, node union, event types,
 # central nouns) this list encodes.
@@ -19,9 +19,14 @@ ROOT_API = frozenset(
         "ActionEvent",
         "ChildLike",
         "ChoiceEvent",
+        # The four dialect markers are authoring vocabulary now, not planner internals:
+        # a component using a dialect-specific primitive names one in its own base class.
+        "ClassicTarget",
         "Component",
+        "ComponentsV2Target",
         "Conditional",
         "ContextKey",
+        "DiscordTarget",
         "Document",
         "DocumentLike",
         "EntityEvent",
@@ -32,6 +37,7 @@ ROOT_API = frozenset(
         "Palette",
         "PaletteRegistry",
         "PressEvent",
+        "Renderable",
         "ScaleEvent",
         "SelectionEvent",
         "SubmitEvent",

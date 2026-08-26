@@ -6,6 +6,7 @@ import discord
 from discord import app_commands
 from discord.ext.commands import Cog, Context, guild_only, hybrid_group
 
+import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
@@ -104,7 +105,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         ctx: Context[BotT],
         setting: ScalarChannelSetting,
         channel: GuildMessageable | None = None,
-    ) -> RenderResult:
+    ) -> RenderResult[sl.ComponentsV2Target]:
         """Point one setting at a channel, or clear it. The panel edits several at once."""
         assert ctx.guild is not None
         locale = await resolve_locale(ctx, self.settings_service)
@@ -135,7 +136,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
     )
     @requires(SETTINGS_SERVER_EDIT)
     @managed_result
-    async def set_locale(self, ctx: Context[BotT], language: str) -> RenderResult:
+    async def set_locale(self, ctx: Context[BotT], language: str) -> RenderResult[sl.ComponentsV2Target]:
         """Set the language the bot responds with in this server."""
         assert ctx.guild is not None
         locale = await resolve_locale(ctx, self.settings_service)

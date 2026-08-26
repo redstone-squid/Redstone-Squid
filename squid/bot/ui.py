@@ -275,7 +275,7 @@ def message_destination(
 
 
 def contribute(
-    nodes: ui.DocumentLike,
+    nodes: ui.DocumentLike[ui.ComponentsV2Target],
     *,
     to: discord.ui.LayoutView,
     followed_by: Sequence[discord.ui.Item[Any]] = (),
@@ -299,7 +299,7 @@ def contribute(
 
 
 def render_item(
-    node: ui.LayoutNode,
+    node: ui.LayoutNode[ui.ComponentsV2Target],
     *,
     locale: str | None = None,
     reservation: sd.ResourceCost = sd.EMPTY_RESERVATION,
@@ -315,7 +315,7 @@ def render_item(
 
 
 def render_payload(
-    nodes: ui.DocumentLike,
+    nodes: ui.DocumentLike[ui.ComponentsV2Target],
     *,
     locale: str | None = None,
     strict: bool = False,
@@ -359,7 +359,7 @@ gets the same wiring as one opened through `bot.mounts`.
 
 
 def create_message_root(
-    component: ui.Component,
+    component: ui.Component[ui.ComponentsV2Target],
     *,
     source: sd.runtime.RuntimeSource,
     access: sd.AccessPolicy,
@@ -393,7 +393,7 @@ def create_message_root(
 
 async def send_component(
     ctx: Context[Any],
-    component: ui.Component,
+    component: ui.Component[ui.ComponentsV2Target],
     *,
     access: sd.AccessPolicy,
     locale: str | None = None,
@@ -414,7 +414,7 @@ async def send_component(
     return message_root
 
 
-class PagedList(ui.Component):
+class PagedList(ui.Component[ui.ComponentsV2Target]):
     """A card holding one page of a pre-rendered list, plus the controls to walk it.
 
     The reactive page primitive: `page_size` entries
@@ -443,7 +443,7 @@ class PagedList(ui.Component):
         self.separator = separator
         self.accent_colour = accent_colour
 
-    def render(self) -> Sequence[ui.primitives.Node]:
+    def render(self) -> Sequence[ui.LayoutNode[ui.ComponentsV2Target]]:
         # An entry list that fits on one page produces no pager, and so no controls: a row of
         # two dead buttons reads as a broken control rather than as an absent one.
         body: ui.primitives.Node = (
@@ -491,7 +491,7 @@ def card_node(
     sections: Sequence[CardSection] = (),
     footer: ui.TextLike | None = None,
     media: Sequence[str] = (),
-) -> ui.LayoutNode:
+) -> ui.LayoutNode[ui.ComponentsV2Target]:
     """Build a semantic card that can be composed inside a component render."""
     extra_media = media[1:]
     return ui.section(
@@ -544,7 +544,7 @@ def text_layout(
     """Create a simple V2 text response."""
     # Truncate-wrapped rather than bare: a plain paragraph lowers to Never, which *raises*
     # on an overlong message. This is the bot's most-used reply path, so it clips.
-    node: ui.LayoutNode = ui.truncate(ui.paragraph(content))
+    node: ui.LayoutNode[ui.ComponentsV2Target] = ui.truncate(ui.paragraph(content))
     if accent_colour is not None:
         node = ui.block(node, accent=accent_colour)
     return render_payload([node], locale=locale)
@@ -565,7 +565,7 @@ def error_layout(
     return render_payload([error_node(title, description)], locale=locale)
 
 
-def error_node(title: ui.TextLike, description: ui.TextLike | None) -> ui.LayoutNode:
+def error_node(title: ui.TextLike, description: ui.TextLike | None) -> ui.LayoutNode[ui.ComponentsV2Target]:
     """Build an error card for composition inside a component render."""
     return card_node(
         title,
@@ -591,7 +591,7 @@ def info_layout(
     return render_payload([info_node(title, description)], locale=locale)
 
 
-def info_node(title: ui.TextLike, description: ui.TextLike | None) -> ui.LayoutNode:
+def info_node(title: ui.TextLike, description: ui.TextLike | None) -> ui.LayoutNode[ui.ComponentsV2Target]:
     """Build an informational card for composition inside a component render."""
     return card_node(title, description, accent_colour=DISCORD_GREEN)
 
