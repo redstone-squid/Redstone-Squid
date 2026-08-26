@@ -1,16 +1,25 @@
-"""Naming rules that keep object lifetimes legible.
+"""Naming rules that keep the vocabulary in `docs/squid-vocabulary.md` from eroding.
 
-Lifetime is carried by verbs, not by nouns. The public surface has 93 distinct class-name
-suffixes and 60 of them are used exactly once, so a closed noun vocabulary would have to
-reject `Component`, `Mount`, `ScreenSpec` and `Destination` or grow until it was not a
-vocabulary. What nouns owe instead is consistency, which needs no dictionary: one meaning
-per word. The verbs are where a small closed set genuinely fits.
+Lifetime is carried by verbs, not by nouns. What nouns owe instead is consistency, which
+needs no dictionary: one meaning per word, and one word per meaning.
+
+The rules here are denylists rather than allowlists, which is deliberate and measured. An
+allowlist of legal suffixes was considered and rejected on the numbers: the six packages
+export 555 classes with 273 distinct last words, 179 of them used exactly once, and
+restricting to multi-word names only brings that to 173 and 102. A closed set would have to
+reject `Mount`, `Chrome`, `Palette` and every authoring node -- `Heading`, `Paragraph`,
+`Gallery` -- or grow an exemption list longer than the rule. A denylist scales to names
+nobody has written yet, which is the same reasoning `DISCOURAGED_VERBS` was written under.
+
+What is enforced is that the words the sweep retired stay retired, that an agent noun names
+a verb the dictionary has, and that no prefix is a single unreadable letter.
 """
 
 import ast
 import importlib
 import inspect
 import pkgutil
+import re
 from collections import defaultdict
 from pathlib import Path
 from types import ModuleType
@@ -50,6 +59,79 @@ A denylist rather than an allowlist, so it scales to names nobody has written ye
 `detach`, the stores release a *claim* rather than themselves, and `abort` is two-phase
 commit vocabulary paired with `prepare`/`apply`.
 """
+
+RETIRED_SUFFIXES = frozenset(
+    {"Outcome", "Verdict", "Feedback", "Receipt", "Summary", "Locator", "Protection", "Strategy"}
+)
+"""Words that each meant what another word already meant, and what they retired into.
+
+`Outcome` and `Receipt` are a `Result` or a `Status`; `Verdict` is a `Decision`; `Summary`
+is a `Snapshot` of something live or a `Report` about something finished; `Locator` is an
+`Address`; `Protection` is a `Policy`; `Strategy` is a `Mode` when it is an enum and a
+`Policy` when it is injected; `Feedback` was never an answer at all and became a `Spec`.
+"""
+
+RETIRED_SUFFIX_EXEMPTIONS = frozenset({"Summary"})
+"""`semantic.Summary` is the `<summary>` of a `Details` disclosure, not a suffix.
+
+HTML's own `details`/`summary` pair is the term of art the node mirrors, and the head noun
+carries the whole meaning. Listed rather than assumed, like every other exemption.
+"""
+
+RETIRED_VERBS = frozenset({"format_prefill", "list_records", "purge_expired", "drop", "allows", "refresh_now"})
+"""Method names that said in two words what one dictionary verb already said.
+
+`flush` is deliberately absent: persistence `flush` names a different subject -- writing
+pending bytes -- and `PersistedPool.flush` and `DurableSessionRuntime.flush` keep it. What
+retired was `Mount.flush`, which delivered a render and is now `Mount.refresh`.
+"""
+
+AGENT_NOUNS = {
+    "Adapter": "adapt",
+    "Browser": "browse",
+    "Converter": "convert",
+    "Editor": "edit",
+    "Inspector": "inspect",
+    "Loader": "load",
+    "Planner": "plan",
+    "Presenter": "present",
+    "Profiler": "profile",
+    "Reconciler": "reconcile",
+    "Recorder": "record",
+    "Renderer": "render",
+    "Resolver": "resolve",
+    "Responder": "respond",
+    "Router": "route",
+    "Runner": "run",
+    "Scheduler": "schedule",
+    "Supervisor": "supervise",
+}
+"""`Xer` performs the verb `x`, so the family is self-checking.
+
+This is what caught `Reactor`: there is no verb `react`, and the class actually schedules
+re-renders in response to topic traffic, so it is a `MountScheduler`.
+"""
+
+NOT_AGENT_NOUNS = frozenset(
+    {
+        # Plain nouns that happen to end in -er/-or. None of them performs a verb.
+        "Actor",
+        "Answer",
+        "Author",
+        "Cluster",
+        "Counter",
+        "Error",
+        "Footer",
+        "Ledger",
+        "Never",
+        "Owner",
+        "Pager",
+        "Roster",
+        "Separator",
+        "Trigger",
+    }
+)
+"""Words the `-er` rule must not read as derivations, listed so a new one is a decision."""
 
 
 SAME_CONCEPT_TWO_LAYERS = {
@@ -168,3 +250,62 @@ def test_termination_uses_the_agreed_verbs() -> None:
         if not verb.startswith("_")
     ]
     assert not offenders, f"use one of {sorted(TERMINATING_VERBS)} instead: {offenders}"
+
+
+def _last_word(name: str) -> str:
+    words = re.findall(r"[A-Z]+(?![a-z])|[A-Z][a-z0-9]*|[a-z0-9]+", name)
+    return words[-1] if words else name
+
+
+def test_retired_words_stay_retired() -> None:
+    """A synonym that came back would undo the sweep one class at a time.
+
+    `Outcome` alone named a `Status` enum in profiling and a `Result` union in the reactive
+    kernel, and nothing said they were different kinds of thing.
+    """
+    offenders = [
+        f"{path}::{node.name}"
+        for path, node in _classes_in_source()
+        if _last_word(node.name) in RETIRED_SUFFIXES and node.name not in RETIRED_SUFFIX_EXEMPTIONS
+    ]
+    assert not offenders, f"these words retired into the suffix table; see docs/squid-vocabulary.md: {offenders}"
+
+
+def test_retired_verbs_stay_retired() -> None:
+    """The write and read families each settled on one word, and it is not these."""
+    offenders = [
+        f"{path}::{node.name}.{verb}"
+        for path, node in _classes_in_source()
+        for verb in sorted(_method_names(node) & RETIRED_VERBS)
+    ]
+    assert not offenders, f"use the dictionary verb instead; see docs/squid-vocabulary.md: {offenders}"
+
+
+def test_agent_nouns_name_a_verb_the_dictionary_has() -> None:
+    """`Xer` is a derivation, not a free word: it claims to perform `x`.
+
+    A new `-er` class is therefore a decision -- either it performs a listed verb, or it is
+    an ordinary noun that happens to end in those letters and says so in `NOT_AGENT_NOUNS`.
+    """
+    unclassified = sorted(
+        {
+            _last_word(name)
+            for name in _exported_classes()
+            if (last := _last_word(name)).endswith(("er", "or"))
+            and len(last) > 3
+            and last not in AGENT_NOUNS
+            and last not in NOT_AGENT_NOUNS
+        }
+    )
+    assert not unclassified, (
+        "an -er name must name a verb it performs (add it to AGENT_NOUNS) or say it is not "
+        f"an agent noun (add it to NOT_AGENT_NOUNS): {unclassified}"
+    )
+
+
+def test_no_single_letter_prefixes() -> None:
+    """`RText` and `RPanel` spent a word on a letter; the word is `Measured`."""
+    offenders = [
+        f"{path}::{node.name}" for path, node in _classes_in_source() if re.match(r"^[A-Z][A-Z][a-z]", node.name)
+    ]
+    assert not offenders, f"spell the prefix as a word: {offenders}"
