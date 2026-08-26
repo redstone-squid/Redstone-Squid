@@ -468,7 +468,7 @@ and **before `render()` is ever called on it**: expansion stops at an embedded c
 still owes a load, so the tier is loaded and then re-rendered rather than rendered empty. The
 delivered view is therefore the loaded one -- one delivery, no loading paint, and no `load()`
 for a call site to forget. Siblings in a tier load concurrently; a raise delivers nothing and
-leaves the load eligible to retry. `Mount.send`, `flush` and `refresh_now` load; `finish`,
+leaves the load eligible to retry. `Mount.send` and `refresh` load; `finish`,
 `finish_via` and `_stage_view` deliberately do not. Use `sl.resource` for reactive async data whose
 pending, stale, or failed states the component can render. `on_load` remains the imperative, atomic
 hook for initialization that must finish before the component can render at all.
@@ -820,10 +820,15 @@ with `prepare`.
 
 ### Naming
 
-Lifetime is carried by verbs, not nouns. A closed noun vocabulary was designed and rejected:
-the public surface has 93 distinct class-name suffixes and 60 are used exactly once, so the
-table would have had to reject `Component`, `Mount`, `ScreenSpec` and `Destination` or grow until
-it was not a table. What nouns owe instead is consistency, which needs no dictionary:
+**The full dictionary is [squid-vocabulary.md](squid-vocabulary.md)**, which supersedes this
+section's "verbs closed, nouns open" position and was applied across the six packages on
+2026-08-26. What follows is the part that did not move.
+
+Lifetime is carried by verbs, not nouns. A closed noun vocabulary was designed and rejected
+twice, on the same measurement each time: the six packages export 555 classes with 273
+distinct last words, 179 used exactly once, so the table would have had to reject
+`Component`, `Mount`, `ScreenSpec` and `Chrome` or grow until it was not a table. What nouns
+owe instead is consistency, which needs no dictionary:
 
 1. **One meaning per word.** `MountSnapshot` named both a view of a live mount and the
    serialized state that outlives it, and both were exported from `squid_discord`.
