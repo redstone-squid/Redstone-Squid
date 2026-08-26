@@ -56,10 +56,10 @@ def test_install_makes_a_reactor_only_when_given_a_bus() -> None:
     without = install(cast(discord.Client, fake_client()))
     with_bus = install(cast(discord.Client, fake_client()), bus=LocalTopicBus())
 
-    assert without.reactor is None
+    assert without.scheduler is None
     assert without.defaults.scheduler is None
-    assert with_bus.reactor is not None
-    assert with_bus.defaults.scheduler is with_bus.reactor
+    assert with_bus.scheduler is not None
+    assert with_bus.defaults.scheduler is with_bus.scheduler
 
 
 def test_a_second_install_on_one_client_is_refused() -> None:
@@ -141,13 +141,13 @@ async def test_close_drops_the_installation_even_when_a_teardown_fails() -> None
 
 async def test_run_serves_the_reactor_and_the_challenge_runner_together() -> None:
     host = install(cast(discord.Client, fake_client()), bus=LocalTopicBus())
-    assert host.reactor is not None
+    assert host.scheduler is not None
 
     task = asyncio.create_task(host.run())
     await asyncio.sleep(0)
     await asyncio.sleep(0)
 
-    assert host.reactor._running
+    assert host.scheduler._running
     assert host.challenges._running
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
@@ -155,13 +155,13 @@ async def test_run_serves_the_reactor_and_the_challenge_runner_together() -> Non
 
 
 async def test_run_serves_a_refresh_the_host_reactor_queued() -> None:
-    """The reactor `install` built is the one `run` drains, not a spare."""
+    """The scheduler `install` built is the one `run` drains, not a spare."""
     bus = LocalTopicBus()
     host = install(cast(discord.Client, fake_client()), bus=bus)
-    assert host.reactor is not None
+    assert host.scheduler is not None
     mount = host.mount(Panel(), access=sd.Everyone(), timeout=None)
     mount.refresh = AsyncMock()  # pyrefly: ignore
-    host.reactor.follow(mount, Topic("build", "42"))
+    host.scheduler.follow(mount, Topic("build", "42"))
 
     task = asyncio.create_task(host.run())
     try:

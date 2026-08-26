@@ -26,7 +26,7 @@ def _utc_now() -> datetime:
 
 
 @dataclass(frozen=True, slots=True)
-class ReactorSnapshot:
+class MountSchedulerSnapshot:
     """One immutable diagnostic view of refresh scheduling pressure."""
 
     queued: int
@@ -62,11 +62,11 @@ class _Causes:
             self.omitted_links += 1
 
 
-class Reactor:
+class MountScheduler:
     """Own concurrent, per-mount-coalesced refreshes and live-update expiry checks.
 
     Args:
-        bus: Process-local topic bus used by :meth:`follow`. Without one, the reactor remains
+        bus: Process-local topic bus used by :meth:`follow`. Without one, the scheduler remains
             a standalone out-of-band refresh scheduler.
         concurrency: Maximum number of different mounts refreshed concurrently.
         sweep_interval: Seconds between interaction-token expiry checks.
@@ -88,13 +88,13 @@ class Reactor:
         monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         if concurrency < 1:
-            message = "reactor concurrency must be at least one"
+            message = "scheduler concurrency must be at least one"
             raise ValueError(message)
         if sweep_interval <= 0:
-            message = "reactor sweep interval must be positive"
+            message = "scheduler sweep interval must be positive"
             raise ValueError(message)
         if max_causal_links < 0:
-            message = "reactor causal link limit cannot be negative"
+            message = "scheduler causal link limit cannot be negative"
             raise ValueError(message)
         self.bus = bus
         self.profiler = profiler if profiler is not None else _NOOP_PROFILER
@@ -125,7 +125,7 @@ class Reactor:
             message = "cannot watch a finished mount"
             raise ValueError(message)
         if mount.scheduler is not self:
-            message = "a watched mount must use this reactor as its scheduler"
+            message = "a watched mount must use this scheduler as its scheduler"
             raise ValueError(message)
         self._watched.add(mount)
         active = True
@@ -162,9 +162,9 @@ class Reactor:
         self._queued.add(mount)
         self._queue.put_nowait(mount)
 
-    def snapshot(self) -> ReactorSnapshot:
+    def snapshot(self) -> MountSchedulerSnapshot:
         """Return queue depth, coalescing, and refresh status diagnostics."""
-        return ReactorSnapshot(
+        return MountSchedulerSnapshot(
             queued=len(self._queued),
             in_flight=len(self._in_flight),
             redeliver=len(self._redeliver),
@@ -179,12 +179,12 @@ class Reactor:
     async def wait_idle(self) -> None:
         """Wait until every refresh queued before the call has settled.
 
-        A running reactor owns the queue workers. Calling this while it is stopped would
+        A running scheduler owns the queue workers. Calling this while it is stopped would
         otherwise wait forever, so an operator gets an explicit lifecycle error instead.
         """
         if not self._running:
             if self._queued or self._in_flight:
-                message = "cannot wait for a stopped reactor with pending work"
+                message = "cannot wait for a stopped scheduler with pending work"
                 raise RuntimeError(message)
             return
         await self._queue.join()
@@ -199,7 +199,7 @@ class Reactor:
         """Refresh ``mount`` when any exact topic changes, returning an unfollow callback.
 
         Call this before the mount's initial send so a write cannot land between its first
-        read and subscription. The mount must use this reactor as its scheduler; that lets
+        read and subscription. The mount must use this scheduler as its scheduler; that lets
         several topic callbacks coalesce without running a mount concurrently with itself.
         Bindings are live-process state and must be recreated by a host recovery hook.
         """
@@ -210,7 +210,7 @@ class Reactor:
             message = "cannot follow a finished mount"
             raise ValueError(message)
         if mount.scheduler is not self:
-            message = "a followed mount must use this reactor as its scheduler"
+            message = "a followed mount must use this scheduler as its scheduler"
             raise ValueError(message)
         if not topics:
             message = "follow requires at least one topic"
@@ -253,7 +253,7 @@ class Reactor:
     async def run(self) -> None:
         """Serve refreshes and expiry checks until the host cancels this coroutine."""
         if self._running:
-            message = "reactor is already running"
+            message = "scheduler is already running"
             raise RuntimeError(message)
         self._running = True
         try:
@@ -285,9 +285,9 @@ class Reactor:
                         max(0.0, delivery_started - trace_started),
                         attributes={"triggers": causes.triggers, "cause_links_omitted": causes.omitted_links},
                     )
-                    operation.increment("reactor.triggers", causes.triggers)
-                    operation.increment("reactor.coalesced", max(0, causes.triggers - 1))
-                    operation.increment("reactor.cause_links_omitted", causes.omitted_links)
+                    operation.increment("scheduler.triggers", causes.triggers)
+                    operation.increment("scheduler.coalesced", max(0, causes.triggers - 1))
+                    operation.increment("scheduler.cause_links_omitted", causes.omitted_links)
                     link = self.profiler.capture_link()
                     try:
                         status = await mount.refresh(links=() if link is None else (link,))

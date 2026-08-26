@@ -11,7 +11,7 @@ import discord
 import pytest
 
 import squid_layouts as sl
-from squid_discord import Everyone, Mount, Reactor
+from squid_discord import Everyone, Mount, MountScheduler
 from squid_discord.testing import delivered_to, fake_interaction, fake_message
 from squid_layouts import Component, PressEvent, state
 from squid_layouts.primitives import Button, Row, Text
@@ -118,19 +118,19 @@ def address(workspace: Workspace, name: str) -> CellAddress:
     return CellAddress(workspace, name)
 
 
-async def drain(reactor: Reactor, bus: LocalTopicBus) -> None:
+async def drain(scheduler: MountScheduler, bus: LocalTopicBus) -> None:
     del bus
     async with anyio.create_task_group() as tasks:
-        tasks.start_soon(reactor.run)
-        await asyncio.wait_for(reactor._queue.join(), timeout=1)
+        tasks.start_soon(scheduler.run)
+        await asyncio.wait_for(scheduler._queue.join(), timeout=1)
         tasks.cancel_scope.cancel()
 
 
 async def test_two_mounts_react_once_each_to_one_commit() -> None:
     bus = LocalTopicBus()
-    reactor = Reactor(bus)
+    scheduler = MountScheduler(bus)
     workspace = Workspace(bus, Member(1))
-    mounts = [Mount(Panel(workspace), access=Everyone(), scheduler=reactor) for _ in range(2)]
+    mounts = [Mount(Panel(workspace), access=Everyone(), scheduler=scheduler) for _ in range(2)]
     refreshes: dict[str, int] = {}
     for mount in mounts:
         await mount.send(delivered_to(fake_message()))
@@ -147,18 +147,18 @@ async def test_two_mounts_react_once_each_to_one_commit() -> None:
     with transaction():
         workspace.selected = 3
         workspace.selected = 4
-    await drain(reactor, bus)
+    await drain(scheduler, bus)
 
     assert refreshes == {mounts[0].id: 1, mounts[1].id: 1}
 
 
 async def test_a_dropped_conditional_read_stops_refreshing() -> None:
     bus = LocalTopicBus()
-    reactor = Reactor(bus)
+    scheduler = MountScheduler(bus)
     workspace = Workspace(bus, Member(1))
     panel = Panel(workspace)
     panel.show_detail = True
-    mount = Mount(panel, access=Everyone(), scheduler=reactor)
+    mount = Mount(panel, access=Everyone(), scheduler=scheduler)
     await mount.send(delivered_to(fake_message()))
     assert set(mount.followed) == {address(workspace, "selected"), address(workspace, "detail")}
 
@@ -171,10 +171,10 @@ async def test_a_dropped_conditional_read_stops_refreshing() -> None:
 async def test_a_discarded_staged_render_leaves_no_permanent_follow() -> None:
     """Over-subscribe, never under-subscribe: a failed delivery's follow is dropped next render."""
     bus = LocalTopicBus()
-    reactor = Reactor(bus)
+    scheduler = MountScheduler(bus)
     workspace = Workspace(bus, Member(1))
     panel = Panel(workspace)
-    mount = Mount(panel, access=Everyone(), scheduler=reactor)
+    mount = Mount(panel, access=Everyone(), scheduler=scheduler)
     await mount.send(delivered_to(fake_message()))
 
     panel.show_detail = True
@@ -195,10 +195,10 @@ async def test_a_discarded_staged_render_keeps_the_visible_generations_follow() 
     nothing replays it once a successful render subscribes again.
     """
     bus = LocalTopicBus()
-    reactor = Reactor(bus)
+    scheduler = MountScheduler(bus)
     workspace = Workspace(bus, Member(1))
     panel = Swapper(workspace)
-    mount = Mount(panel, access=Everyone(), scheduler=reactor)
+    mount = Mount(panel, access=Everyone(), scheduler=scheduler)
     await mount.send(delivered_to(fake_message()))
     assert mount.followed == (address(workspace, "selected"),)
 
@@ -216,17 +216,17 @@ async def test_a_discarded_staged_render_keeps_the_visible_generations_follow() 
     mount.refresh = refresh  # pyrefly: ignore
     with transaction():
         workspace.selected = 3
-    await drain(reactor, bus)
+    await drain(scheduler, bus)
     assert refreshes == 1
 
 
 async def test_a_delivered_render_retires_what_the_old_one_needed() -> None:
     """The other half: pruning happens, just at the commit rather than at the stage."""
     bus = LocalTopicBus()
-    reactor = Reactor(bus)
+    scheduler = MountScheduler(bus)
     workspace = Workspace(bus, Member(1))
     panel = Swapper(workspace)
-    mount = Mount(panel, access=Everyone(), scheduler=reactor)
+    mount = Mount(panel, access=Everyone(), scheduler=scheduler)
     await mount.send(delivered_to(fake_message()))
 
     panel.other = True
@@ -237,9 +237,9 @@ async def test_a_delivered_render_retires_what_the_old_one_needed() -> None:
 
 async def test_no_follow_outlives_its_mount() -> None:
     bus = LocalTopicBus()
-    reactor = Reactor(bus)
+    scheduler = MountScheduler(bus)
     workspace = Workspace(bus, Member(1))
-    mount = Mount(Panel(workspace), access=Everyone(), scheduler=reactor)
+    mount = Mount(Panel(workspace), access=Everyone(), scheduler=scheduler)
     await mount.send(delivered_to(fake_message()))
     assert bus.snapshot().topics != ()
 
@@ -250,10 +250,10 @@ async def test_no_follow_outlives_its_mount() -> None:
 
 async def test_a_namespace_dropped_by_its_last_mount_is_collected() -> None:
     bus = LocalTopicBus()
-    reactor = Reactor(bus)
+    scheduler = MountScheduler(bus)
     workspace = Workspace(bus, Member(1))
     gone = weakref.ref(workspace)
-    mount = Mount(Panel(workspace), access=Everyone(), scheduler=reactor)
+    mount = Mount(Panel(workspace), access=Everyone(), scheduler=scheduler)
     await mount.send(delivered_to(fake_message()))
     await mount.finish(disable=False)
 
@@ -295,19 +295,19 @@ class TestSelfWrites:
 
     async def test_the_reactor_suppresses_the_self_published_render(self) -> None:
         bus = LocalTopicBus()
-        reactor = Reactor(bus)
+        scheduler = MountScheduler(bus)
         workspace = Workspace(bus, Member(1))
-        mount = Mount(Writer(workspace), access=Everyone(), scheduler=reactor, timeout=None)
+        mount = Mount(Writer(workspace), access=Everyone(), scheduler=scheduler, timeout=None)
         message: Any = fake_message()
         await mount.send(delivered_to(message))
         interaction = fake_interaction()
 
         await mount.dispatch("pick", interaction)
-        await drain(reactor, bus)
+        await drain(scheduler, bus)
 
         interaction.response.edit_message.assert_awaited_once()
         message.edit.assert_not_awaited()
-        assert reactor.snapshot().unchanged == 1
+        assert scheduler.snapshot().unchanged == 1
         assert mount.snapshot().suppressed == 1
 
     async def test_a_suppressed_refresh_keeps_the_live_generation_dispatchable(self) -> None:

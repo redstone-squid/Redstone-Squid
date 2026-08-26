@@ -21,11 +21,11 @@ def make_wizard() -> PollConfirmationComponent:
 
 
 def test_scheduler_backed_wizard_renews_its_private_session() -> None:
-    reactor = sd.Reactor()
+    scheduler = sd.MountScheduler()
 
-    mount = make_wizard().mount(source=make_layout_bot(), reactor=reactor)
+    mount = make_wizard().mount(source=make_layout_bot(), scheduler=scheduler)
 
-    assert mount.scheduler is reactor
+    assert mount.scheduler is scheduler
     assert isinstance(mount.expiry, sd.RenewEphemeral)
 
 

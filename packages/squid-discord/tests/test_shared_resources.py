@@ -12,7 +12,7 @@ import discord
 import pytest
 
 import squid_layouts as sl
-from squid_discord import Everyone, Mount, Reactor
+from squid_discord import Everyone, Mount, MountScheduler
 from squid_discord.testing import delivered_to, fake_message
 from squid_layouts.runtime.shared import describe
 
@@ -56,22 +56,22 @@ def texts(view: discord.ui.LayoutView) -> list[str]:
     return [item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)]
 
 
-async def mounted(catalog: Catalog, reactor: Reactor, message: object) -> Mount:
+async def mounted(catalog: Catalog, scheduler: MountScheduler, message: object) -> Mount:
     """Send a reader, and hand the mount back so the caller keeps it alive.
 
-    A reactor holds its mounts weakly, so a test that drops the reference is testing whether
+    A scheduler holds its mounts weakly, so a test that drops the reference is testing whether
     the collector ran rather than whether the refresh works.
     """
-    mount = Mount(Reader(catalog), access=Everyone(), scheduler=reactor, timeout=None)
+    mount = Mount(Reader(catalog), access=Everyone(), scheduler=scheduler, timeout=None)
     await mount.send(delivered_to(message))
     return mount
 
 
-async def drain(reactor: Reactor, bus: sl.runtime.LocalTopicBus) -> None:
+async def drain(scheduler: MountScheduler, bus: sl.runtime.LocalTopicBus) -> None:
     del bus
     async with anyio.create_task_group() as tasks:
-        tasks.start_soon(reactor.run)
-        await asyncio.wait_for(reactor._queue.join(), timeout=1)
+        tasks.start_soon(scheduler.run)
+        await asyncio.wait_for(scheduler._queue.join(), timeout=1)
         tasks.cancel_scope.cancel()
 
 
@@ -105,7 +105,7 @@ async def test_a_mount_reading_a_namespace_computed_follows_the_cells_behind_it(
     bus: sl.runtime.LocalTopicBus,
 ) -> None:
     """A computed carries no address: what moves is the cells, so those are what to follow."""
-    reactor = Reactor(bus)
+    scheduler = MountScheduler(bus)
     prefs = Prefs(bus, 1)
 
     class Panel(sl.Component):
@@ -113,14 +113,14 @@ async def test_a_mount_reading_a_namespace_computed_follows_the_cells_behind_it(
             return sl.paragraph(prefs.full)
 
     message = fake_message()
-    mount = Mount(Panel(), access=Everyone(), scheduler=reactor, timeout=None)
+    mount = Mount(Panel(), access=Everyone(), scheduler=scheduler, timeout=None)
     await mount.send(delivered_to(message))
 
     assert {describe(address) for address in mount.followed} == {"Prefs(1).first", "Prefs(1).last"}
 
     with sl.runtime.transaction():
         prefs.first = "Grace"
-    await drain(reactor, bus)
+    await drain(scheduler, bus)
     await mount.refresh()
 
     assert texts(message.edit.await_args.kwargs["view"]) == ["Grace Lovelace"]
@@ -130,19 +130,19 @@ async def test_a_mount_reading_a_namespace_computed_follows_the_cells_behind_it(
 
 
 async def test_one_namespace_resource_loads_once_for_every_mount_holding_it(bus: sl.runtime.LocalTopicBus) -> None:
-    reactor = Reactor(bus)
+    scheduler = MountScheduler(bus)
     catalog = Catalog(bus, 1)
 
-    mounts = [await mounted(catalog, reactor, fake_message(message_id=message_id)) for message_id in (1, 2)]
+    mounts = [await mounted(catalog, scheduler, fake_message(message_id=message_id)) for message_id in (1, 2)]
 
     assert catalog._loads == 1, "the second mount shared the value rather than loading its own"
     assert len(mounts) == 2
 
 
 async def test_a_namespace_resource_is_followed_by_its_own_address(bus: sl.runtime.LocalTopicBus) -> None:
-    reactor = Reactor(bus)
+    scheduler = MountScheduler(bus)
     catalog = Catalog(bus, 1)
-    mount = Mount(Reader(catalog), access=Everyone(), scheduler=reactor, timeout=None)
+    mount = Mount(Reader(catalog), access=Everyone(), scheduler=scheduler, timeout=None)
     await mount.send(delivered_to(fake_message()))
 
     followed = {describe(address) for address in mount.followed}
@@ -153,28 +153,28 @@ async def test_a_namespace_resource_is_followed_by_its_own_address(bus: sl.runti
 
 
 async def test_an_out_of_band_reload_redraws_every_mount(bus: sl.runtime.LocalTopicBus) -> None:
-    reactor = Reactor(bus)
+    scheduler = MountScheduler(bus)
     catalog = Catalog(bus, 1)
     messages = [fake_message(message_id=1), fake_message(message_id=2)]
-    mounts = [await mounted(catalog, reactor, message) for message in messages]
+    mounts = [await mounted(catalog, scheduler, message) for message in messages]
 
     await catalog.entries.reload()
-    await drain(reactor, bus)
+    await drain(scheduler, bus)
 
     assert [texts(message.edit.await_args.kwargs["view"]) for message in messages] == [["k1#2"], ["k1#2"]]
     assert all(mount.followed for mount in mounts)
 
 
 async def test_a_write_to_a_cell_the_loader_read_reloads_once_for_everyone(bus: sl.runtime.LocalTopicBus) -> None:
-    reactor = Reactor(bus)
+    scheduler = MountScheduler(bus)
     catalog = Catalog(bus, 1)
     messages = [fake_message(message_id=1), fake_message(message_id=2)]
-    mounts = [await mounted(catalog, reactor, message) for message in messages]
+    mounts = [await mounted(catalog, scheduler, message) for message in messages]
 
     with sl.runtime.transaction():
         catalog.key = "k2"
-    await drain(reactor, bus)
-    await drain(reactor, bus)
+    await drain(scheduler, bus)
+    await drain(scheduler, bus)
 
     assert catalog._loads == 2, "one reload served both mounts"
     assert all(mount.followed for mount in mounts)
@@ -182,14 +182,14 @@ async def test_a_write_to_a_cell_the_loader_read_reloads_once_for_everyone(bus: 
 
 
 async def test_a_replace_publishes_when_its_action_commits(bus: sl.runtime.LocalTopicBus) -> None:
-    reactor = Reactor(bus)
+    scheduler = MountScheduler(bus)
     catalog = Catalog(bus, 1)
     message = fake_message()
-    mount = await mounted(catalog, reactor, message)
+    mount = await mounted(catalog, scheduler, message)
 
     with sl.runtime.transaction():
         catalog.entries.replace("installed")
-    await drain(reactor, bus)
+    await drain(scheduler, bus)
 
     assert texts(message.edit.await_args.kwargs["view"]) == ["installed"]
     assert mount.followed
@@ -197,17 +197,17 @@ async def test_a_replace_publishes_when_its_action_commits(bus: sl.runtime.Local
 
 async def test_a_rolled_back_replace_publishes_nothing(bus: sl.runtime.LocalTopicBus) -> None:
     """Doc 48 staging, seen from the bus: an action that failed must not wake other mounts."""
-    reactor = Reactor(bus)
+    scheduler = MountScheduler(bus)
     catalog = Catalog(bus, 1)
     message = fake_message()
-    mount = await mounted(catalog, reactor, message)
+    mount = await mounted(catalog, scheduler, message)
     edits = message.edit.await_count
 
     with pytest.raises(RuntimeError), sl.runtime.transaction():
         catalog.entries.replace("installed")
         failure = "handler failed"
         raise RuntimeError(failure)
-    await drain(reactor, bus)
+    await drain(scheduler, bus)
 
     assert catalog.entries.value == "k1#1"
     assert message.edit.await_count == edits

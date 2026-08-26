@@ -116,13 +116,13 @@ class TestDetail:
 
     async def test_a_detail_view_distinguishes_an_armed_dirty_application(self) -> None:
         now = datetime.now(UTC)
-        reactor = squid_discord.Reactor(clock=lambda: now)
+        scheduler = squid_discord.MountScheduler(clock=lambda: now)
         interaction = fake_interaction(message_id=42)
         interaction.expires_at = now + timedelta(seconds=30)
         subject = Mount(
             Subject(),
             access=Everyone(),
-            scheduler=reactor,
+            scheduler=scheduler,
             timeout=None,
             expiry=squid_discord.RenewEphemeral(warning=60),
         )
