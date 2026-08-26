@@ -158,7 +158,7 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   as a 17-row table (`Key`/`Address` never end, `Handle`/`Token` expire, `Registry`/`Pool`/
   `Runtime`/`Store` end explicitly, `Snapshot`/`Report`/`Result` end immediately, `Record`/
   `State` outlive the process) and rejected on measurement. The public surface across `sl`,
-  `sl.discord`, its twenty sub-namespaces, `squid_reactivity` and `squid_stores` has **93
+  `sl.discord`, its twenty sub-namespaces, `squid_reactivity` and `squid_storage` has **93
   distinct class-name suffixes, 60 of them used exactly once**; only 15 recur three times or
   more. A closed table would have to reject `Component`, `Mount`, `Screen`, `Destination`,
   `Composition`, `Target` and `Work`, or grow until it was not a table. Record the numbers,

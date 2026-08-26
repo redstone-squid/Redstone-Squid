@@ -244,7 +244,7 @@ def test_the_engine_no_longer_carries_its_leaf_namespaces() -> None:
 def test_engine_imports_without_transport_or_store_dependencies() -> None:
     """The point of the split, asserted: the engine installs none of these.
 
-    `squid_stores` joins `discord` and `anyio` on the blocked list because it was a mandatory
+    `squid_storage` joins `discord` and `anyio` on the blocked list because it was a mandatory
     dependency of this package while only the Discord durability modules imported it.
     """
     code = """
@@ -253,7 +253,7 @@ import sys
 
 class BlockDownstream(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
-        if fullname.split(".", 1)[0] in {"discord", "anyio", "squid_stores", "squid_discord", "squid_patterns"}:
+        if fullname.split(".", 1)[0] in {"discord", "anyio", "squid_storage", "squid_discord", "squid_patterns"}:
             raise ModuleNotFoundError(fullname)
         return None
 
@@ -267,7 +267,7 @@ import squid_ui.runtime.shared
 import squid_ui.runtime.topics
 assert squid_ui.runtime.shared.Shared
 assert squid_ui.runtime.shared.SharedPool
-assert not {"discord", "anyio", "squid_stores", "squid_discord", "squid_patterns"} & set(sys.modules)
+assert not {"discord", "anyio", "squid_storage", "squid_discord", "squid_patterns"} & set(sys.modules)
 """
     subprocess.run([sys.executable, "-c", code], check=True)
 
@@ -278,5 +278,5 @@ def test_package_metadata_names_only_the_reactive_kernel() -> None:
     assert project["version"] == "0.1.0"
     assert project["dependencies"] == ["squid-reactivity"]
     # Both extras left with the adapter: `discord` carried discord.py/anyio/packaging, and
-    # `postgres` only ever forwarded to squid-stores for Discord durability.
+    # `postgres` only ever forwarded to squid-storage for Discord durability.
     assert "optional-dependencies" not in project

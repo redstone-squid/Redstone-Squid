@@ -371,7 +371,7 @@ lets a `Shared[UserGuildScope]` pool refuse the wrong scope at the call site. A 
 session key reaches a pool through `key.scope` with nothing to convert. `Opener` and `Scope` are
 deliberately not on `sd`; import them from `squid_discord.screens`.
 
-`squid_stores.PersistedPool` is the hydrating variant, for a namespace that should survive a
+`squid_storage.PersistedPool` is the hydrating variant, for a namespace that should survive a
 restart: `await load(scope)` in place of `get(scope)`, `run()` as the background writer, and
 `flush`/`close` to end it.
 
@@ -859,4 +859,4 @@ to describe, and saying so is noise.
   use is unaffected, and `Mount.pending` reports a render held back for this reason.
 - HTML action transport is not prescribed. Markup exposes action IDs; HTTP or WebSocket
   routing and authentication belong to the host.
-- The engine depends only on `squid-reactivity`. Two leaf packages sit on it as independent siblings: `squid-discord` for the discord.py adapter -- mounts, sessions, routing, durability, with `squid-discord[durable]` adding `squid-stores` -- and `squid-patterns` for the reusable application state machines. Neither imports the other. Discord *protocol* knowledge stays in the engine: the planner plans against Components V2 limits and dialects, and the HTML renderer reads the same target ids.
+- The engine depends only on `squid-reactivity`. Two leaf packages sit on it as independent siblings: `squid-discord` for the discord.py adapter -- mounts, sessions, routing, durability, with `squid-discord[durable]` adding `squid-storage` -- and `squid-patterns` for the reusable application state machines. Neither imports the other. Discord *protocol* knowledge stays in the engine: the planner plans against Components V2 limits and dialects, and the HTML renderer reads the same target ids.

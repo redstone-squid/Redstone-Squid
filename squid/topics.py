@@ -14,7 +14,7 @@ from squid.config import DatabaseConfig
 from squid.persistence.wake_listener import asyncpg_dsn
 from squid.posts.domain import ResourceKind
 from squid_reactivity import Address, Topic, TopicBus
-from squid_stores import PostgresTopicBridge
+from squid_storage import PostgresTopicBridge
 
 RESOURCE_TOPIC_CHANNEL = "squid_resource_topics"
 """The PostgreSQL channel every Squid process shares."""

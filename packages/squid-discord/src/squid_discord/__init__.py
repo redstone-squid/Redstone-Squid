@@ -154,7 +154,7 @@ _LAZY_NAMESPACES = frozenset({"durability"})
 """Namespaces imported on first use rather than by the bundle above.
 
 `durability` is the only part of this package that reaches outside its base dependencies: it
-is built on `squid_stores`, which arrives with the `durable` extra. Importing it eagerly would
+is built on `squid_storage`, which arrives with the `durable` extra. Importing it eagerly would
 make `import squid_discord` fail on an install that never persists a panel. It stays in
 `__all__` because it is documented surface, and `from squid_discord import durability` still
 works -- the import system consults this hook before falling back to the submodule.
