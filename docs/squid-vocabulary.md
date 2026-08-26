@@ -1,6 +1,8 @@
 # The Squid vocabulary
 
-**Status: draft for review. Nothing here is enforced yet.**
+**Status: applied 2026-08-26. `tests/architecture/test_naming.py` enforces what can be
+enforced; [What actually shipped](#what-actually-shipped) records where the sweep
+departed from this document and why.**
 
 One dictionary for the four packages — `squid-layouts`, `squid-reactive`, `squid-stores`,
 `squid-replicated` — covering head nouns, suffixes and method verbs. It supersedes the
@@ -92,7 +94,9 @@ resolves the `ActionOutcome` homonym without a coin-flip: the reactive union
 
 `Locator` retires into `Address`. That collides `MountLocator` with `MountAddress`, which is
 correct and overdue: both answer "where is this message", one for Discord and one
-frontend-neutrally, and only one of them should exist.
+frontend-neutrally, and only one of them should exist. *(Applied differently — reading the
+two shapes says they hold different values; see [What actually shipped](#what-actually-shipped)
+item 1.)*
 
 ### Configuration
 
@@ -188,7 +192,7 @@ Three pairs, each with a sharp job, and no fourth:
 
 | Pair | For | Example |
 |---|---|---|
-| `dumps` / `loads` | JSON text, on a class named `*Codec`, mirroring `json` | `SceneCodec` |
+| `dumps` / `loads` | JSON text, on a class named `*Codec`, mirroring `json` | `scene.Codec` |
 | `encode` / `decode` | a value to and from bytes or an opaque string | `KindKeyCodec`, `ClaimToken` |
 | `parse` / `format` | **user-entered text** to and from a value | form fields |
 
@@ -269,7 +273,8 @@ dependent names already agree with it, and `squid-stores` speaks it independentl
 **`Mount`** survives, under the discord.py/Vue mirroring exemption. It is Vue's own word for
 binding a component to a render target, and the alternatives all collide: `Panel` is an exact
 primitive, `View` is discord.py's, `Surface` and `Presentation` are taken. What must change is
-the *family* around it — `MountLocator` folds into `MountAddress`, and `MountSnapshot` and
+the *family* around it — `MountLocator` retires the word (see
+[What actually shipped](#what-actually-shipped) item 1), and `MountSnapshot` and
 `MountState` now have non-overlapping definitions rather than a near-synonym pair.
 
 The honest summary is that the trio was mostly right and its neighbours were wrong.
@@ -298,44 +303,97 @@ The seven the dictionary could not make on its own, and what they were decided t
 
 ## Sequencing
 
-**This sweep is blocked on the extraction of `squid-discord` and `squid-patterns`.** That
-work moves modules without renaming anything; running a rename sweep across the same files
-first would turn both into an unreviewable merge.
+**This sweep was blocked on the extraction of `squid-discord` and `squid-patterns`**, which
+landed in `9fb0bc96` and `ea064350`. That work moved modules without renaming anything;
+running a rename sweep across the same files first would have turned both into an
+unreviewable merge.
 
-The dependency is not only mechanical. Two of the rules above are namespace-sensitive and
-cannot be evaluated until the package boundaries are final:
+The dependency was not only mechanical. Two of the rules above are namespace-sensitive and
+could not be evaluated until the package boundaries were final:
 
-- **The redundant-prefix rule reads differently after the split.** `Discord*` currently names
-  a real variant that coexists with its alternatives in one namespace, which is why it was
-  exempted above. Once `squid_discord` becomes `squid_discord`, the prefix starts
-  repeating the package name for everything that moves — `DiscordMode`, `DiscordPresentation`,
-  `DiscordFrontend` — while staying necessary for everything that does not, because
-  `DiscordTarget` and `DiscordAdapter` live in `planning` and stay behind.
+- **The redundant-prefix rule reads differently after the split.** `Discord*` named a real
+  variant coexisting with its alternatives in one namespace, which is why it was exempted
+  above. After the split the prefix repeats the package name for everything that moved —
+  `DiscordMode`, `DiscordPresentation`, `DiscordFrontend` — while staying necessary for
+  everything that did not, because `DiscordTarget` and `DiscordAdapter` live in `planning`
+  and stayed behind. The sweep left those alone rather than splitting one word two ways; it
+  is the open item below.
 - **Module-name collisions change character.** `discord.guards` / `layouts.guards`,
-  `discord.routing` / `layouts.routing` and `patterns.confirm` / `guards.confirm` are
-  same-package collisions today and cross-package ones after. `discord.operations` is
-  mislabelled either way — it is DevTools, not operations in the `squid_reactive` sense — and
-  should be renamed regardless of when the split lands.
+  `discord.routing` / `layouts.routing` and `patterns.confirm` / `guards.confirm` were
+  same-package collisions and are cross-package ones now; the namespace disambiguates each,
+  so they stay. `discord.operations` was mislabelled either way — it is DevTools, not
+  operations in the `squid_reactive` sense — and is now `discord.devtools_runtime`.
 
-Three findings from checking the extraction's edges, recorded because they are decisions the
-split will otherwise make by accident:
+Three findings from checking the extraction's edges, kept because they are decisions the
+split would otherwise have made by accident:
 
-- `patterns` and `discord` do not import each other. They can be extracted independently, in
+- `patterns` and `discord` do not import each other. They were extractable independently, in
   either order.
-- `GridCell`, `place_roster` with its roster types, and `TallyOption` must **stay in
-  squid-layouts core**. `planning/adaptation.py` and `factories.py` depend on them, so the
-  extracted packages re-export rather than own them.
-- Both extracted packages will depend back on squid-layouts core, which is expected — but it
-  means the suffix and verb rules must be published from core, not duplicated per package.
+- `GridCell`, `place_roster` with its roster types, and `TallyOption` stay in **squid-layouts
+  core**. `planning/adaptation.py` and `factories.py` depend on them, so the extracted
+  packages re-export rather than own them.
+- Both extracted packages depend back on squid-layouts core, which is expected — but it means
+  the suffix and verb rules are published from core, not duplicated per package.
 
 ## What the test enforces
 
-`tests/architecture/test_naming.py` grows from three checks to six:
+`tests/architecture/test_naming.py` grew from three checks to seven:
 
-- every exported class's last word is in the suffix set or the exemption list
-- every public method's leading verb is in the verb dictionary or the exemption list
-- `Xer` classes have a matching verb `x`
+- retired suffixes stay retired — `Outcome`, `Verdict`, `Feedback`, `Receipt`, `Summary`,
+  `Locator`, `Protection`, `Strategy`, with `semantic.Summary` listed as an exemption
+- retired verbs stay retired — `format_prefill`, `list_records`, `purge_expired`, `drop`,
+  `allows`, `refresh_now`
+- `Xer` names a verb the dictionary has, via `AGENT_NOUNS`; a word that merely ends in
+  `-er` says so in `NOT_AGENT_NOUNS`
 - no single-letter prefixes
-- the existing one-name-one-class check, with `SAME_CONCEPT_TWO_LAYERS` kept and
-  `UNRELATED_CONCEPTS_SHARING_A_WORD` emptied
-- the existing terminating-verb checks, unchanged
+- the existing one-name-one-class check, with `SAME_CONCEPT_TWO_LAYERS` grown by the scene
+  layer and `UNRELATED_CONCEPTS_SHARING_A_WORD` down to `ActionKind`
+- the existing two terminating-verb checks, unchanged
+
+**The two allowlist checks this document asked for are not there, and the numbers are why.**
+An allowlist of legal suffixes would have to admit 273 distinct last words across 555
+exported classes, 179 of them used exactly once; restricting to multi-word names only brings
+that to 173 and 102. A closed set would reject `Mount`, `Chrome`, `Palette` and every
+authoring node — `Heading`, `Paragraph`, `Gallery` — or grow an exemption list longer than
+the rule, which is the failure mode plan 67 already measured and rejected. The same holds
+for a closed leading-verb allowlist over public methods. Denylists scale to names nobody has
+written yet, which is the reasoning `DISCOURAGED_VERBS` was already written under; each
+check above still fails on a fresh violation, verified by introducing one.
+
+## What actually shipped
+
+Seven places where the sweep departed from this document, each because applying the letter
+of it would have cost something real.
+
+1. **`MountLocator` and `MountAddress` did not merge.** They do not hold the same value:
+   one is a durable, frontend-neutral, JSON-round-tripping bag that also records the message
+   mode, the other is typed Discord coordinates with a jump URL for links and diagnostics.
+   Merging either way costs the durability layer its frontend-neutrality or devtools its
+   types. The word `Locator` still retires: it is `FrontendAddress` now.
+2. **`Feedback` became `BusySpec`, not a `Result`/`Status`/`Decision`.** It is not an answer
+   at all — it is a frozen recipe for the interim paint a slow handler shows — so it is a
+   `Spec`. Its authoring keyword moved with it: `sl.action(..., busy=BusySpec(...))`.
+3. **`UndoStrategy` became `UndoMode`, not `UndoPolicy`.** It is an enum, and `Policy` is
+   reserved for injected decision-makers; spelling it `UndoPolicy` would have created a
+   seventh misfiled `Policy` in the same commit that fixed six.
+4. **`semantic.Summary` stays.** It is the `<summary>` of a `Details` disclosure — HTML's own
+   term of art — rather than the retiring suffix. Listed in `RETIRED_SUFFIX_EXEMPTIONS`.
+5. **`PatternControls.content/action/choices/form` stay noun-shaped.** They mirror the
+   `sl.content`/`sl.action`/`sl.choices`/`sl.form` factories on purpose, and a pattern
+   reading `controls.action(...)` beside `sl.action(...)` is the point. `Pattern.component()`
+   and the five `files()` did take their verbs: `build_component()` and `build_files()`.
+6. **Scope is the packages, as stated.** The bot's own `purge_expired`, `list_records` and
+   `allows` name application repositories that never implemented these protocols. Renaming
+   one of them silently changed a FastAPI route's operation shape, caught by the committed
+   OpenAPI contract test, and all of them were reverted.
+7. **No wire format moved.** The scene codec still writes `"policy"` and `"dialect"`, the
+   durable record still writes `"locator"` and `"snapshot"`, the session store still has
+   `summary_payload` and `summary_bytes` columns, and the HTML previewer still emits
+   `data-squid-policy`. Each site carries a comment saying the Python name went and the wire
+   did not.
+
+Still open: the redundant `Discord*` prefix inside `squid_discord`. `DiscordMode`,
+`DiscordPresentation` and `DiscordFrontend` repeat the package name, while `DiscordTarget`
+and `DiscordAdapter` in `squid_layouts.planning` genuinely need it — one word cannot be both
+dropped and kept, and the call is a public API decision with taste in it rather than a
+mechanical fix.
