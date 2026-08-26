@@ -180,6 +180,7 @@ class ComponentRuntime:
                 cached is None
                 or cached.revision != component.__dict__.get("_state_revision", 0)
                 or not cached.observation.current()
+                or cached.observation.addresses() != cached.addresses
             ):
                 return False
         self._clear_render_invalidations()

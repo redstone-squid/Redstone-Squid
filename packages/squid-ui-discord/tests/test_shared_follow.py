@@ -192,6 +192,55 @@ async def test_backdated_scheduled_refresh_skips_render_planning_and_drawing(mon
     assert scheduler.snapshot().unchanged == 1
 
 
+async def test_equal_computed_value_switches_the_mounts_followed_branch() -> None:
+    class Values(SharedState[Member]):
+        use_b: bool = state(default=False)
+        a: int = state(1)
+        b: int = state(1)
+
+    bus = LocalTopicBus()
+    scheduler = MessageRootScheduler(bus)
+    values = Values(bus, Member(1))
+
+    class Panel(Component):
+        def __init__(self) -> None:
+            self.renders = 0
+
+        @sl.computed
+        def value(self) -> int:
+            return values.b if values.use_b else values.a
+
+        def render(self) -> Text:
+            self.renders += 1
+            return Text(str(self.value))
+
+    component = Panel()
+    message_root = MessageRoot(component, access=Everyone(), scheduler=scheduler, timeout=None)
+    message: Any = fake_message()
+    await message_root.send(delivered_to(message))
+    use_b = CellAddress(values, "use_b")
+    a = CellAddress(values, "a")
+    b = CellAddress(values, "b")
+    assert message_root.followed == (use_b, a)
+
+    with transaction():
+        values.use_b = True
+    await drain(scheduler, bus)
+
+    assert component.renders == 1
+    assert message.edit.await_count == 0
+    assert message_root.followed == (use_b, b)
+    assert scheduler.snapshot().unchanged == 1
+
+    with transaction():
+        values.b = 2
+    await drain(scheduler, bus)
+
+    assert component.renders == 2
+    assert message.edit.await_count == 1
+    assert _texts(message.edit.await_args.kwargs["view"]) == "2"
+
+
 async def test_explicit_scheduler_request_resamples_opaque_component_inputs() -> None:
     bus = LocalTopicBus()
     scheduler = MessageRootScheduler(bus)
