@@ -6,8 +6,8 @@ from typing import cast
 
 import pytest
 
-import squid_ui_discord
 import squid_ui as sl
+import squid_ui_discord
 import squid_ui_widgets as sp
 from squid_ui import scene
 from squid_ui.chrome import Chrome

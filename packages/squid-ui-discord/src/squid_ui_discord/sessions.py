@@ -10,7 +10,7 @@ from enum import Enum, StrEnum
 from typing import Protocol
 from uuid import uuid4
 
-from squid_ui_discord.delivery import Abandoned, Delivered, Destination
+from squid_ui_discord.delivery import Abandoned, Delivered, MessageDestination
 from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_options import MessageRootDefaults
 
@@ -458,7 +458,7 @@ class Session:
     async def attach(
         self,
         message_root: MessageRoot,
-        destination: Destination,
+        destination: MessageDestination,
         *,
         actor_id: int | None = None,
         parent: MessageRoot | None = None,
@@ -649,7 +649,7 @@ class SessionManager:
     async def open(
         self,
         message_root: MessageRoot,
-        destination: Destination,
+        destination: MessageDestination,
         *,
         key: Hashable | None = None,
         admission: AdmissionSpec = DEFAULT_ADMISSION,
@@ -710,7 +710,7 @@ class SessionManager:
     async def _open_coordinated[SessionT: Session](
         self,
         message_root: MessageRoot,
-        destination: Destination,
+        destination: MessageDestination,
         *,
         key: SessionKey,
         admission: AdmissionSpec,
@@ -839,7 +839,7 @@ class SessionManager:
     async def _open_locked(
         self,
         message_root: MessageRoot,
-        destination: Destination,
+        destination: MessageDestination,
         *,
         key: Hashable | None,
         admission: AdmissionSpec,

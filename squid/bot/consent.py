@@ -162,7 +162,7 @@ def _is_context(target: ConsentTarget) -> bool:
     return callable(getattr(target, "send", None))
 
 
-def _destination(target: ConsentTarget) -> sd.Destination:
+def _destination(target: ConsentTarget) -> sd.MessageDestination:
     """Choose the reply transport for a consent prompt.
 
     Ephemeral wherever the surface allows it: a consent notice names what the bot would store
@@ -172,7 +172,7 @@ def _destination(target: ConsentTarget) -> sd.Destination:
     return sd.deliver_to(target, ephemeral=ephemeral, wait=True)
 
 
-async def _send(target: ConsentTarget, presentation: sd.presentation.DiscordPresentation) -> None:
+async def _send(target: ConsentTarget, presentation: sd.message_payload.MessagePayload) -> None:
     """Send a plain presentation where the prompt itself would have gone."""
     await _destination(target)(presentation)
 

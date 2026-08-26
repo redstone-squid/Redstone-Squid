@@ -17,9 +17,9 @@ from typing import Any
 import discord
 from discord.ui.select import BaseSelect
 
-from squid_ui_discord.inspection import Violation, ViolationCode, audit
 from squid_ui.errors import LimitViolationError
 from squid_ui.planning.limits import COMPONENT_LIMITS, ELLIPSIS, LIMITS, ComponentLimits, V2Limits
+from squid_ui_discord.inspection import Violation, ViolationCode, audit
 
 __all__ = ["ELLIPSIS", "LimitViolationError", "conform", "conform_modal", "trim"]
 

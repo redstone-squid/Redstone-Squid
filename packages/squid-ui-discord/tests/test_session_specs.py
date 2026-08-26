@@ -29,9 +29,9 @@ class Panel(sl.Component):
         return [Heading("Panel")]
 
 
-def to_message() -> squid_ui_discord.Destination:
+def to_message() -> squid_ui_discord.MessageDestination:
     async def send(
-        presentation: squid_ui_discord.presentation.DiscordPresentation,
+        payload: squid_ui_discord.message_payload.MessagePayload,
     ) -> squid_ui_discord.delivery.DeliveryResult:
         message = fake_message()
         return squid_ui_discord.delivery.DeliveryResult(message, squid_ui_discord.delivery.handle_for(message))

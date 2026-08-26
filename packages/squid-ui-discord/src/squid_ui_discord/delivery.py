@@ -7,11 +7,11 @@ webhook tokens, `@original` semantics and HTTP error codes lives here, so caller
 ask whether a handle is expired and catch :class:`StaleHandleError` when it turns out to be.
 
 The initial send is the mirror image: a mount holds no message yet, so it asks for one
-through a :class:`Destination`. The destination returns a :class:`DeliveryResult` naming
+through a :class:`MessageDestination`. The destination returns a :class:`DeliveryResult` naming
 both the observable message and the exact edit authority the operation created. It owns every
 discord.py kwarg; the mount owns the stage/deliver/commit sequence around it.
 
-Both halves move :class:`~squid_ui_discord.presentation.DiscordPresentation` values,
+Both halves move :class:`~squid_ui_discord.message_payload.MessagePayload` values,
 not views: a handle knows which mode the message it addresses is in, so the legacy fields a
 pre-Components-V2 message has to clear are a stated transition rather than a guess at a
 `discord.Message` that is very often `None`.
@@ -33,7 +33,7 @@ from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.limits import LIMITS
 from squid_ui.target_types import DiscordPyAdapter
 from squid_ui_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
-from squid_ui_discord.presentation import DiscordMode, DiscordPresentation, mode_of
+from squid_ui_discord.message_payload import MessageMode, MessagePayload, message_mode
 
 # Discord's way of saying the credentials behind a handle are gone.
 _STALE_CODES = frozenset({10015, 10062, 50027})
@@ -101,7 +101,7 @@ class EditHandle(Protocol):
     """The deadline Discord stated, when it stated one. `None` is not a promise of permanence
     — borrowed credentials can go stale with no deadline we can read."""
 
-    mode: DiscordMode
+    mode: MessageMode
     """Which component mode the message is in *now*, which is what says whether the next
     write is a transition Discord offers. Kept current by every successful write."""
 
@@ -109,15 +109,15 @@ class EditHandle(Protocol):
         """Whether the stated deadline, if there is one, has passed."""
         ...
 
-    async def write(self, presentation: DiscordPresentation, *, keep_attachments: bool = False) -> None:
-        """Replace what the message shows with `presentation`.
+    async def write(self, payload: MessagePayload, *, keep_attachments: bool = False) -> None:
+        """Replace what the message shows with `payload`.
 
-        `keep_attachments` leaves the message's files alone; without it the presentation's
+        `keep_attachments` leaves the message's files alone; without it the payload's
         own assets become the message's whole attachment set.
 
         Raises:
             StaleHandleError: This handle no longer addresses its message.
-            DiscordModeError: The message cannot move to `presentation.mode`.
+            MessageModeError: The message cannot move to `payload.mode`.
         """
         ...
 
@@ -141,23 +141,21 @@ def _addresses_source(interaction: discord.Interaction[Any]) -> bool:
     return response_type is None or response_type in _UPDATE_RESPONSES
 
 
-def _write_fields(
-    presentation: DiscordPresentation, previous: DiscordMode, *, keep_attachments: bool
-) -> dict[str, Any]:
+def _write_fields(payload: MessagePayload, previous: MessageMode, *, keep_attachments: bool) -> dict[str, Any]:
     """The edit kwargs for one write, transition matrix included."""
-    fields = presentation._edit_fields(previous)
+    fields = payload._edit_fields(previous)
     if not keep_attachments:
-        fields["attachments"] = presentation.build_files()
+        fields["attachments"] = payload.build_files()
     return fields
 
 
-def _merged_files(host: Sequence[discord.File], presentation: DiscordPresentation) -> list[discord.File]:
-    """The host's own files followed by the presentation's, refused if Discord cannot take them.
+def _merged_files(host: Sequence[discord.File], payload: MessagePayload) -> list[discord.File]:
+    """The host's own files followed by the payload's, refused if Discord cannot take them.
 
     Overflow is rejected here rather than by Discord, whose answer names neither the count
     nor which half of the list overran it.
     """
-    files = [*host, *presentation.build_files()]
+    files = [*host, *payload.build_files()]
     if len(files) > LIMITS.attachments:
         message = f"a Discord message carries at most {LIMITS.attachments} attachments, not {len(files)}"
         raise LimitViolationError([message])
@@ -167,17 +165,17 @@ def _merged_files(host: Sequence[discord.File], presentation: DiscordPresentatio
 class _ChannelMessageHandle:
     """Writes to a channel message with the bot token."""
 
-    def __init__(self, message: discord.Message, *, mode: DiscordMode | None = None) -> None:
+    def __init__(self, message: discord.Message, *, mode: MessageMode | None = None) -> None:
         self._message = message
         self.permanent = True
         self.expires_at: datetime | None = None
-        self.mode = mode if mode is not None else mode_of(message)
+        self.mode = mode if mode is not None else message_mode(message)
 
     def expired(self) -> bool:
         return False
 
-    async def write(self, presentation: DiscordPresentation, *, keep_attachments: bool = False) -> None:
-        fields = _write_fields(presentation, self.mode, keep_attachments=keep_attachments)
+    async def write(self, payload: MessagePayload, *, keep_attachments: bool = False) -> None:
+        fields = _write_fields(payload, self.mode, keep_attachments=keep_attachments)
         try:
             self._message = await self._message.edit(allowed_mentions=None, **fields)
         except discord.HTTPException as error:
@@ -185,7 +183,7 @@ class _ChannelMessageHandle:
                 message = "the bot no longer has authority to edit this channel message"
                 raise StaleHandleError(message) from error
             raise
-        self.mode = presentation.mode
+        self.mode = payload.mode
 
     async def delete(self) -> None:
         try:
@@ -206,7 +204,7 @@ class _WebhookMessageHandle:
         message_id: int,
         message: discord.Message | None = None,
         *,
-        mode: DiscordMode,
+        mode: MessageMode,
     ) -> None:
         self._interaction = interaction
         self._message_id = message_id
@@ -218,9 +216,9 @@ class _WebhookMessageHandle:
     def expired(self) -> bool:
         return self._interaction.is_expired()
 
-    async def write(self, presentation: DiscordPresentation, *, keep_attachments: bool = False) -> None:
+    async def write(self, payload: MessagePayload, *, keep_attachments: bool = False) -> None:
         interaction = self._interaction
-        fields = _write_fields(presentation, self.mode, keep_attachments=keep_attachments)
+        fields = _write_fields(payload, self.mode, keep_attachments=keep_attachments)
         try:
             # An unspent response is the cheap path: it edits the source message with no
             # extra round trip. Afterwards the message has to be named explicitly.
@@ -233,7 +231,7 @@ class _WebhookMessageHandle:
                 message = "the credentials behind this interaction have expired"
                 raise StaleHandleError(message) from error
             raise
-        self.mode = presentation.mode
+        self.mode = payload.mode
 
     async def delete(self) -> None:
         try:
@@ -253,7 +251,7 @@ class _OriginalResponseHandle:
         interaction: discord.Interaction[Any],
         message: discord.Message | None = None,
         *,
-        mode: DiscordMode,
+        mode: MessageMode,
     ) -> None:
         self._interaction = interaction
         self._message = message
@@ -264,8 +262,8 @@ class _OriginalResponseHandle:
     def expired(self) -> bool:
         return self._interaction.is_expired()
 
-    async def write(self, presentation: DiscordPresentation, *, keep_attachments: bool = False) -> None:
-        fields = _write_fields(presentation, self.mode, keep_attachments=keep_attachments)
+    async def write(self, payload: MessagePayload, *, keep_attachments: bool = False) -> None:
+        fields = _write_fields(payload, self.mode, keep_attachments=keep_attachments)
         try:
             self._message = await self._interaction.edit_original_response(**fields)
         except discord.HTTPException as error:
@@ -273,7 +271,7 @@ class _OriginalResponseHandle:
                 message = "the credentials behind this interaction have expired"
                 raise StaleHandleError(message) from error
             raise
-        self.mode = presentation.mode
+        self.mode = payload.mode
 
     async def delete(self) -> None:
         try:
@@ -285,11 +283,11 @@ class _OriginalResponseHandle:
             raise
 
 
-def handle_for(message: discord.Message, *, mode: DiscordMode | None = None) -> EditHandle:
+def handle_for(message: discord.Message, *, mode: MessageMode | None = None) -> EditHandle:
     """A permanent bot-token handle for a message sent through a channel endpoint.
 
     `mode` states what the message is showing when the caller knows better than the flag —
-    a just-delivered presentation, or a mode read back out of a durable record.
+    a just-delivered payload, or a mode read back out of a durable record.
     """
     return _ChannelMessageHandle(message, mode=mode)
 
@@ -303,10 +301,10 @@ def handle_from(interaction: discord.Interaction[Any]) -> EditHandle | None:
     message = interaction.message
     if message is None or not _addresses_source(interaction):
         return None
-    return _WebhookMessageHandle(interaction, message.id, message, mode=mode_of(message))
+    return _WebhookMessageHandle(interaction, message.id, message, mode=message_mode(message))
 
 
-def handle_for_original(interaction: discord.Interaction[Any], *, mode: DiscordMode) -> EditHandle:
+def handle_for_original(interaction: discord.Interaction[Any], *, mode: MessageMode) -> EditHandle:
     """Return the edit authority for an interaction's original response.
 
     A deferred channel response has no source message for :func:`handle_from`, but its
@@ -372,13 +370,13 @@ class Replyable(Protocol):
     attribute to name the edit authority the send created; when a double carries one, it
     must answer `is_expired()`, `expires_at`, and `response.is_done()` like the real thing.
 
-    `content`, `embeds` and `view` are whatever the presentation names: a Components V2 send
+    `content`, `embeds` and `view` are whatever the payload names: a Components V2 send
     passes only `view`, because naming the legacy fields beside the V2 flag is a payload
     Discord is entitled to reject.
 
     `view` is `Any` because no single signature covers both modes — discord.py's own `send`
     is overloaded precisely so that a `LayoutView` and a `content` cannot be named together.
-    :class:`DiscordPresentation` is what enforces that, at construction, for both of them.
+    :class:`MessagePayload` is what enforces that, at construction, for both of them.
     """
 
     async def send(
@@ -393,7 +391,7 @@ class Replyable(Protocol):
     ) -> discord.Message: ...
 
 
-class Destination(Protocol):
+class MessageDestination(Protocol):
     """A way to create the message a mount will live on.
 
     The return value says what the mount gets to keep, not whether it worked:
@@ -405,12 +403,12 @@ class Destination(Protocol):
     - raise anything else — the delivery failed. The mount stays on its previous generation
       and the exception reaches the caller.
 
-    The presentation is the whole payload Squid owns. Transport policy stays here:
+    The payload is the whole payload Squid owns. Transport policy stays here:
     ephemerality, waiting, allowed mentions, DM fallback, and the host's own files, which
-    are merged ahead of `presentation.build_files()`.
+    are merged ahead of `payload.build_files()`.
     """
 
-    async def __call__(self, presentation: DiscordPresentation, /) -> DeliveryResult: ...
+    async def __call__(self, payload: MessagePayload, /) -> DeliveryResult: ...
 
 
 class Messageable(Protocol):
@@ -435,7 +433,7 @@ def reply_to(
     files: Sequence[discord.File] = (),
     allowed_mentions: discord.AllowedMentions | None = None,
     adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
-) -> Destination:
+) -> MessageDestination:
     """Answer the command that asked, in whatever channel it asked from.
 
     Mentions stay off unless asked for. The classic target exists partly so a message can
@@ -445,17 +443,17 @@ def reply_to(
     require_discord_py_capability(adapter, AdapterCapability.INTERACTION_DELIVERY, "deliver a command reply")
     mentions = no_mentions() if allowed_mentions is None else allowed_mentions
 
-    async def send(presentation: DiscordPresentation) -> DeliveryResult:
+    async def send(payload: MessagePayload) -> DeliveryResult:
         interaction = getattr(ctx, "interaction", None)
         active = interaction is not None and not interaction.is_expired()
         response_done = active and interaction.response.is_done()
         message = await ctx.send(
-            files=_merged_files(files, presentation),
+            files=_merged_files(files, payload),
             ephemeral=ephemeral,
             allowed_mentions=mentions,
-            **presentation._send_fields(),
+            **payload._send_fields(),
         )
-        mode = presentation.mode
+        mode = payload.mode
         if not active:
             return DeliveryResult(message, handle_for(message, mode=mode))
         if response_done:
@@ -472,7 +470,7 @@ def send_to(
     files: Sequence[discord.File] = ...,
     allowed_mentions: discord.AllowedMentions | None = ...,
     delete_after: float | None = ...,
-) -> Destination: ...
+) -> MessageDestination: ...
 
 
 @overload
@@ -482,7 +480,7 @@ def send_to(
     files: Sequence[discord.File] = ...,
     allowed_mentions: discord.AllowedMentions | None = ...,
     delete_after: float | None = ...,
-) -> Destination: ...
+) -> MessageDestination: ...
 
 
 def send_to(
@@ -491,8 +489,8 @@ def send_to(
     files: Sequence[discord.File] = (),
     allowed_mentions: discord.AllowedMentions | None = None,
     delete_after: float | None = None,
-) -> Destination:
-    """Send a complete presentation to a channel and retain bot-token edit authority.
+) -> MessageDestination:
+    """Send a complete payload to a channel and retain bot-token edit authority.
 
     Takes a real discord.py messageable or anything shaped like one. The two overloads exist
     because discord.py's `send` is overloaded per channel type precisely so a `LayoutView`
@@ -504,14 +502,14 @@ def send_to(
     target = cast(Messageable, channel)
     mentions = no_mentions() if allowed_mentions is None else allowed_mentions
 
-    async def send(presentation: DiscordPresentation) -> DeliveryResult:
+    async def send(payload: MessagePayload) -> DeliveryResult:
         message = await target.send(
-            files=_merged_files(files, presentation),
+            files=_merged_files(files, payload),
             allowed_mentions=mentions,
             **({"delete_after": delete_after} if delete_after is not None else {}),
-            **presentation._send_fields(),
+            **payload._send_fields(),
         )
-        return DeliveryResult(message, handle_for(message, mode=presentation.mode))
+        return DeliveryResult(message, handle_for(message, mode=payload.mode))
 
     return send
 
@@ -523,7 +521,7 @@ def respond_to(
     wait: bool = False,
     allowed_mentions: discord.AllowedMentions | None = None,
     adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
-) -> Destination:
+) -> MessageDestination:
     """Answer an interaction, whether or not it was already responded to.
 
     `wait` costs a round trip only when the caller needs the message itself. A fresh response
@@ -533,22 +531,22 @@ def respond_to(
     require_discord_py_capability(adapter, AdapterCapability.INTERACTION_DELIVERY, "deliver an interaction response")
     mentions = no_mentions() if allowed_mentions is None else allowed_mentions
 
-    async def send(presentation: DiscordPresentation) -> DeliveryResult:
-        files = _merged_files((), presentation)
-        mode = presentation.mode
+    async def send(payload: MessagePayload) -> DeliveryResult:
+        files = _merged_files((), payload)
+        mode = payload.mode
         if interaction.response.is_done():
             message = await interaction.followup.send(
                 files=files,
                 ephemeral=ephemeral,
                 wait=wait,
                 allowed_mentions=mentions,
-                **presentation._send_fields(),
+                **payload._send_fields(),
             )
             if message is None:
                 return DeliveryResult(None, None)
             return DeliveryResult(message, _WebhookMessageHandle(interaction, message.id, message, mode=mode))
         response = await interaction.response.send_message(  # pyrefly: ignore[no-matching-overload]
-            files=files, ephemeral=ephemeral, allowed_mentions=mentions, **presentation._send_fields()
+            files=files, ephemeral=ephemeral, allowed_mentions=mentions, **payload._send_fields()
         )
         callback_message = response.resource if isinstance(response.resource, discord.Message) else None
         message = await interaction.original_response() if wait and callback_message is None else callback_message
@@ -563,7 +561,7 @@ def edit_to(
     *,
     files: Sequence[discord.File] = (),
     allowed_mentions: discord.AllowedMentions | None = None,
-) -> Destination:
+) -> MessageDestination:
     """Write a mount's first render onto a message the bot already owns.
 
     The way a mount *arrives* on an existing message: `MessageRoot.send` runs its usual
@@ -573,13 +571,13 @@ def edit_to(
     was established somewhere else.
 
     The mode transition is read here rather than guessed: the message says what it is showing
-    now, the presentation says what it will show, and Discord refuses some pairs of the two.
+    now, the payload says what it will show, and Discord refuses some pairs of the two.
     """
     mentions = no_mentions() if allowed_mentions is None else allowed_mentions
 
-    async def send(presentation: DiscordPresentation) -> DeliveryResult:
-        fields = presentation._edit_fields(mode_of(message))
-        fields["attachments"] = _merged_files(files, presentation)
+    async def send(payload: MessagePayload) -> DeliveryResult:
+        fields = payload._edit_fields(message_mode(message))
+        fields["attachments"] = _merged_files(files, payload)
         try:
             edited = await message.edit(allowed_mentions=mentions, **fields)
         except discord.HTTPException as error:
@@ -587,7 +585,7 @@ def edit_to(
                 detail = "the bot no longer has authority to edit this message"
                 raise StaleHandleError(detail) from error
             raise
-        return DeliveryResult(edited, handle_for(edited, mode=presentation.mode))
+        return DeliveryResult(edited, handle_for(edited, mode=payload.mode))
 
     return send
 
@@ -598,7 +596,7 @@ def deliver_to(
     ephemeral: bool = False,
     wait: bool = True,
     allowed_mentions: discord.AllowedMentions | None = None,
-) -> Destination:
+) -> MessageDestination:
     """Answer whichever of the two invocation surfaces `target` is.
 
     `respond_to` for an interaction, `reply_to` for anything a command arrived on. Chosen by

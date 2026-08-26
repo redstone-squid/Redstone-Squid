@@ -2,8 +2,8 @@
 
 import discord
 
-import squid_ui_discord as sd
 import squid_ui as sl
+import squid_ui_discord as sd
 from squid.bot.i18n import t
 from squid.bot.ui import render_presentation
 from squid.core.i18n import _
@@ -12,7 +12,7 @@ from squid.starboard.application import EntryState
 
 def starboard_layout(
     state: EntryState, message: discord.Message, *, locale: str | None = None
-) -> sd.presentation.DiscordPresentation:
+) -> sd.message_payload.MessagePayload:
     """Render one source message as a semantic Components V2 card."""
     config = state.config
     entry = state.entry

@@ -7,10 +7,10 @@ from typing import Any, cast
 import anyio
 import pytest
 
-from squid_ui_discord.durability import PostgresTopicBridge
 from squid_ui import state
 from squid_ui.runtime import SharedState
 from squid_ui.runtime.topics import Address, CellAddress, KindKeyCodec, LocalTopicBus, Topic, TopicBus
+from squid_ui_discord.durability import PostgresTopicBridge
 
 
 class Workspace(SharedState[int]):

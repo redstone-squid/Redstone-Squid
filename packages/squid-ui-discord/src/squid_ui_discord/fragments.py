@@ -28,8 +28,8 @@ from squid_ui.planning.target import ResourceCost
 from squid_ui.scene.model import PlanReport, PlanResult
 from squid_ui.text import NEUTRAL, Localization
 from squid_ui_discord.attachments import files_for
-from squid_ui_discord.composition import compose
-from squid_ui_discord.inspection import DiscordReservation, audit, cost, measure
+from squid_ui_discord.inspection import MessageReservation, audit, cost, measure
+from squid_ui_discord.rendering import render_message
 from squid_ui_discord.target import DISCORD_V2_DPY27, Target
 
 
@@ -90,7 +90,7 @@ class Fragment:
     items: tuple[discord.ui.Item[Any], ...]
     plan: PlanResult
     assets: tuple[Asset, ...]
-    reservation: DiscordReservation
+    reservation: MessageReservation
     followed_by: tuple[discord.ui.Item[Any], ...] = ()
     _staging: discord.ui.LayoutView | None = field(default=None, repr=False)
     _attached: bool = field(default=False, repr=False)
@@ -208,7 +208,7 @@ def fragment(
 
     trailing = tuple(followed_by)
     reservation = host.cost + reserve + cost(*trailing)
-    composition = compose(
+    rendered = render_message(
         document,
         target=target,
         chrome=chrome,
@@ -218,14 +218,14 @@ def fragment(
         reservation=reservation,
         positions=positions,
     )
-    view = composition.view
+    view = rendered.view
     _reject_dispatchable(view)
 
     items = tuple(view.children)
     return Fragment(
         items=items,
-        plan=composition.plan,
-        assets=composition.assets,
+        plan=rendered.plan,
+        assets=rendered.assets,
         reservation=host,
         followed_by=trailing,
         _staging=view,
@@ -269,7 +269,7 @@ def contribute(
     return planned.attach(to, attachments=attachments)
 
 
-def _empty_reservation(attachments: int) -> DiscordReservation:
+def _empty_reservation(attachments: int) -> MessageReservation:
     return measure(discord.ui.LayoutView(timeout=None), attachments=attachments)
 
 
@@ -279,7 +279,7 @@ def _preflight(
     fragment_items: Sequence[discord.ui.Item[Any]],
     trailing: Sequence[discord.ui.Item[Any]],
     staging: discord.ui.LayoutView | None,
-    reservation: DiscordReservation,
+    reservation: MessageReservation,
     assets: Sequence[Asset],
     limits: V2Limits = LIMITS,
 ) -> None:

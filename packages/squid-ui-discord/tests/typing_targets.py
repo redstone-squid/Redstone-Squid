@@ -24,7 +24,7 @@ from squid_ui.renderer import Renderer
 from squid_ui.scene.model import PlanResult
 from squid_ui.semantic import FallbackContent
 from squid_ui_discord.classic_renderer import ClassicRenderer
-from squid_ui_discord.presentation import DiscordPresentation
+from squid_ui_discord.message_payload import MessagePayload
 from squid_ui_discord.renderer import V2Renderer
 from squid_ui_discord.target import classic, v2
 
@@ -89,11 +89,11 @@ assert_type(
 )
 
 
-def accepts_v2_renderer(value: Renderer[scene.ComponentsV2, DiscordPresentation]) -> None:
+def accepts_v2_renderer(value: Renderer[scene.ComponentsV2, MessagePayload]) -> None:
     del value
 
 
-def accepts_classic_renderer(value: Renderer[scene.ClassicMessage, DiscordPresentation]) -> None:
+def accepts_classic_renderer(value: Renderer[scene.ClassicMessage, MessagePayload]) -> None:
     del value
 
 

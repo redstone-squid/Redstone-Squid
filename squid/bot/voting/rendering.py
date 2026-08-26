@@ -9,8 +9,8 @@ import dataclasses
 from collections.abc import Mapping
 from textwrap import dedent
 
-import squid_ui_discord as sd
 import squid_ui as sl
+import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.bot.ui import DISCORD_GREEN, DISCORD_RED, DISCORD_YELLOW, CardField, card_layout, render_presentation
 from squid.bot.voting.controls import poll_controls
@@ -27,7 +27,7 @@ def render_build_review(
     card: sl.LayoutNode,
     snapshot: VoteSessionSnapshot,
     guild_id: int | None,
-) -> sd.presentation.DiscordPresentation:
+) -> sd.message_payload.MessagePayload:
     """Compose a build card with the review vote state beneath it.
 
     The card arrives as IR rather than as a built container so the whole post is solved in
@@ -72,7 +72,7 @@ def render_build_review(
     return render_presentation([post])
 
 
-def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> sd.presentation.DiscordPresentation:
+def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> sd.message_payload.MessagePayload:
     """Render the card asking whether a logged message should be deleted."""
     # Compare enum members rather than their string values: `status == "closed"` is true at
     # runtime for a StrEnum but reads as a non-overlapping comparison to a type checker, which
@@ -119,7 +119,7 @@ def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> sd.
 def render_generic_poll(
     snapshot: VoteSessionSnapshot,
     voter_discord_ids: Mapping[int, int] = {},
-) -> sd.presentation.DiscordPresentation:
+) -> sd.message_payload.MessagePayload:
     """Render a user-created poll, honouring its visibility setting.
 
     An open poll carries its own close and refresh controls; a closed one has nothing left

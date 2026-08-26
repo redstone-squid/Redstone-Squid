@@ -11,7 +11,7 @@ import pytest
 import squid_ui_discord
 
 RENAMED_SUBMODULES = (
-    "squid_ui_discord.composition",
+    "squid_ui_discord.rendering",
     "squid_ui_discord.conformance",
 )
 
@@ -34,7 +34,7 @@ def test_the_adapter_namespace_exposes_its_surface() -> None:
     assert squid_ui_discord.routing.routers
     assert squid_ui_discord.renderer.V2Renderer
     assert squid_ui_discord.classic_renderer.ClassicRenderer
-    assert squid_ui_discord.classic.compose
+    assert squid_ui_discord.classic.render_message
     assert squid_ui_discord.SessionKey
     assert squid_ui_discord.sessions.AdmissionSpec
     assert squid_ui_discord.SessionSpec
@@ -42,11 +42,11 @@ def test_the_adapter_namespace_exposes_its_surface() -> None:
     assert squid_ui_discord.OpenContext
     assert squid_ui_discord.ScopeKind
     assert squid_ui_discord.MessageRootOptionsResolver
-    assert squid_ui_discord.presentation.DiscordPresentation
-    assert squid_ui_discord.DiscordMode.COMPONENTS_V2
-    assert squid_ui_discord.DiscordModeError
-    assert squid_ui_discord.mode_of
-    assert squid_ui_discord.presentation.DiscordPresentation
+    assert squid_ui_discord.message_payload.MessagePayload
+    assert squid_ui_discord.MessageMode.COMPONENTS_V2
+    assert squid_ui_discord.MessageModeError
+    assert squid_ui_discord.message_mode
+    assert squid_ui_discord.message_payload.MessagePayload
     assert not hasattr(squid_ui_discord, "MountRegistry")
     assert not hasattr(squid_ui_discord, "WhenOpen")
     assert squid_ui_discord.guards.requires_role

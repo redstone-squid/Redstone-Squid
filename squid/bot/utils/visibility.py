@@ -48,7 +48,7 @@ def personal(ctx: Context[Any]) -> bool:
 
 async def deliver_privately(
     ctx: Context[Any],
-    presentation: sd.DiscordPresentation,
+    presentation: sd.MessagePayload,
     *,
     reason: str,
     locale: str | None = None,

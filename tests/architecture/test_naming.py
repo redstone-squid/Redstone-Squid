@@ -202,7 +202,7 @@ UNRELATED_CONCEPTS_SHARING_A_WORD: set[str] = set()
 
 `Destination`, `ProgressReporter`, and `ActionKind` used to be here. They were settled by renaming the semantic
 node and leaving the load-bearing word alone: `semantic.Destination` is `NavOption` beside
-`delivery.Destination`; `semantic.Progress` is `ProgressBar` beside `ProgressReporter`; and the
+`delivery.MessageDestination`; `semantic.Progress` is `ProgressBar` beside `ProgressReporter`; and the
 frontend and transactional classifications are `InteractionKind` and `ActionPurpose`.
 """
 

@@ -102,13 +102,13 @@ from squid_ui_discord.access import AccessPolicy, Allowed, Denied, Owner
 from squid_ui_discord.actions import ActionResponder
 from squid_ui_discord.adapter import require_discord_py_target
 from squid_ui_discord.attachments import attachment_assets, files_for
-from squid_ui_discord.classic import compose as classic_compose
+from squid_ui_discord.classic import render_message as render_classic_message
 from squid_ui_discord.classic_renderer import ClassicRenderer
-from squid_ui_discord.composition import Composition, compose
 from squid_ui_discord.emoji import discord_emoji
-from squid_ui_discord.presentation import DiscordMode, DiscordPresentation
+from squid_ui_discord.message_payload import MessageMode, MessagePayload
 from squid_ui_discord.render_cache import RenderProgramCache, RenderProgramCacheSnapshot
 from squid_ui_discord.renderer import V2Renderer
+from squid_ui_discord.rendering import RenderedMessage, render_message
 from squid_ui_discord.target import DISCORD_V2_DPY27, Target
 
 logger = logging.getLogger(__name__)
@@ -118,22 +118,22 @@ logger = logging.getLogger(__name__)
 class _DiscordBinding:
     """Everything a Discord dialect decides about a mount, in one value.
 
-    The target decides the composition, the renderer, the view factory, and the message
+    The target decides how to plan and render, the renderer, the view factory, and the message
     mode — and nothing else. Keying on the dialect id says so once, in place of four
-    branches that each re-derived the answer from a limits subclass. `DiscordMode` keeps its
-    own job of describing an *observed* message through `mode_of`; it is no longer inferred.
+    branches that each re-derived the answer from a limits subclass. `MessageMode` keeps its
+    own job of describing an *observed* message through `message_mode`; it is no longer inferred.
     """
 
-    composer: Callable[..., Composition[Any]]
-    mode: DiscordMode
+    render_message: Callable[..., RenderedMessage[Any]]
+    mode: MessageMode
     render_capability: str
     renderer: Callable[[MessageRoot[Any, Any], float | None], V2Renderer | ClassicRenderer]
 
 
 _BINDINGS: dict[str, _DiscordBinding] = {
     V2_TARGET_ID: _DiscordBinding(
-        composer=compose,
-        mode=DiscordMode.COMPONENTS_V2,
+        render_message=render_message,
+        mode=MessageMode.COMPONENTS_V2,
         render_capability=AdapterCapability.RENDER_V2,
         renderer=lambda message_root, timeout: V2Renderer(
             limits=message_root.limits,
@@ -142,8 +142,8 @@ _BINDINGS: dict[str, _DiscordBinding] = {
         ),
     ),
     CLASSIC_TARGET_ID: _DiscordBinding(
-        composer=classic_compose,
-        mode=DiscordMode.CLASSIC,
+        render_message=render_classic_message,
+        mode=MessageMode.CLASSIC,
         render_capability=AdapterCapability.RENDER_CLASSIC,
         renderer=lambda message_root, timeout: ClassicRenderer(
             limits=message_root.limits,
@@ -230,7 +230,7 @@ class ErrorHook(Protocol):
 class FinishHook(Protocol):
     """Observer told that a mount has finished, after its teardown."""
 
-    # Positional-only, as `Destination` is: a named parameter would make the protocol demand
+    # Positional-only, as `MessageDestination` is: a named parameter would make the protocol demand
     # that every observer spell the argument `mount`.
     def __call__(self, message_root: MessageRoot, /) -> Awaitable[None]: ...
 
@@ -618,7 +618,7 @@ class _Candidate:
     """One staged render generation, which becomes the mount's state only when committed."""
 
     view: AnyMountedView
-    composition: Composition[Any]
+    rendered: RenderedMessage[Any]
     tree: ComponentTree
     handlers: dict[str, ActionBinding]
     form_bindings: Mapping[str, FormBinding]
@@ -637,18 +637,18 @@ class _Candidate:
     """
 
     @property
-    def presentation(self) -> DiscordPresentation:
+    def payload(self) -> MessagePayload:
         """The complete message this render delivers to.
 
-        The composition already built it, in whichever mode the target chose. A mount does
+        The render already built it, in whichever mode the target chose. A message root does
         not reassemble one, because doing so would be a second place that has to know what
         each mode is allowed to carry.
         """
-        return self.composition.presentation
+        return self.rendered.payload
 
     @property
     def plan(self) -> PlanResult:
-        return self.composition.plan
+        return self.rendered.plan
 
 
 @dataclass(slots=True)
@@ -721,13 +721,13 @@ class _LifecycleCandidate:
     """A framework-owned visible generation that commits no component runtime state."""
 
     view: AnyMountedView
-    composition: Composition[Any]
+    rendered: RenderedMessage[Any]
     handlers: dict[str, _RenewalBinding]
     generation: int
 
     @property
-    def presentation(self) -> DiscordPresentation:
-        return self.composition.presentation
+    def payload(self) -> MessagePayload:
+        return self.rendered.payload
 
 
 @dataclass(frozen=True, slots=True)
@@ -1429,7 +1429,7 @@ class MessageRoot[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         generation = self._issued
         handlers: dict[str, ActionBinding] = {}
 
-        def draw() -> tuple[MountedView, Composition]:
+        def draw() -> tuple[MountedView, RenderedMessage]:
             handlers.clear()
 
             def wire(
@@ -1459,19 +1459,19 @@ class MessageRoot[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             if profile is not None:
                 profile.increment("renderer.program_hits", int(hit))
                 profile.increment("renderer.program_misses", int(not hit))
-            composition = Composition(presentation, staged.plan)
-            view = composition.presentation.view
+            rendered = RenderedMessage(presentation, staged.plan)
+            view = rendered.payload.view
             if not isinstance(view, MountedView | ClassicMountedView):
                 message = "mounted Discord renderer returned the wrong view type"
                 raise TypeError(message)
-            return view, composition
+            return view, rendered
 
         try:
-            view, composition = draw()
+            view, rendered = draw()
         except BaseException:
             self._subscriptions.discard()
             raise
-        assets = composition.assets
+        assets = rendered.assets
         if handlers.keys() != staged.handlers.keys() or assets != staged.assets:
             self._subscriptions.discard()
             view.stop()
@@ -1481,14 +1481,14 @@ class MessageRoot[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             _disable_all(view)
         return _Candidate(
             view,
-            composition,
+            rendered,
             tree,
             handlers,
-            composition.plan.form_bindings,
+            rendered.plan.form_bindings,
             generation,
             self.runtime.revision,
             assets,
-            composition.plan.session_updates,
+            rendered.plan.session_updates,
         )
 
     def _preflight(
@@ -1567,7 +1567,7 @@ class MessageRoot[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                 item.disabled = True
             return item
 
-        composition = self._composer()(
+        rendered = self._render_message()(
             document,
             wire=wire,
             renderer=self._renderer(self._remaining_timeout()),
@@ -1582,13 +1582,13 @@ class MessageRoot[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             memo=self.runtime.plan_memo,
             profile=profile,
         )
-        view = composition.presentation.view
+        view = rendered.payload.view
         if not isinstance(view, MountedView | ClassicMountedView):
             message = "mounted Discord renderer returned the wrong view type"
             raise TypeError(message)
         if disabled:
             _disable_all(view)
-        return _LifecycleCandidate(view, composition, handlers, generation)
+        return _LifecycleCandidate(view, rendered, handlers, generation)
 
     @contextmanager
     def _action_transaction(self, mode: ActionMode, context: ActionContext) -> Iterator[None]:
@@ -1622,9 +1622,9 @@ class MessageRoot[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             return
         self.runtime.invalidate_addresses(address for address in commit.patches.addresses() if address in watched)
 
-    def _composer(self) -> Callable[..., Composition[Any]]:
-        """Which composition this mount's target uses."""
-        return self._binding.composer
+    def _render_message(self) -> Callable[..., RenderedMessage[Any]]:
+        """Which plan-and-render entry point this message root's target uses."""
+        return self._binding.render_message
 
     def _renderer(self, timeout: float | None) -> V2Renderer | ClassicRenderer:
         return self._binding.renderer(self, timeout)
@@ -1774,7 +1774,7 @@ class MessageRoot[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         self._handlers = candidate.handlers
         self._form_bindings = {}
         self._generation = candidate.generation
-        self._plan = candidate.composition.plan
+        self._plan = candidate.rendered.plan
         self._lifecycle = MessageRootStatus.RENEWAL_ARMED
         candidate.view.timeout = self._remaining_timeout()
         self._swap_view(candidate.view)
@@ -2087,7 +2087,7 @@ class MessageRoot[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
 
     # --- Lifecycle ---------------------------------------------------------------------
 
-    async def send(self, destination: deliver.Destination) -> deliver.SendResult:
+    async def send(self, destination: deliver.MessageDestination) -> deliver.SendResult:
         """Deliver this mount's first render through `destination`.
 
         The commit point for an initial send, and the same stage -> deliver -> commit sequence
@@ -2120,7 +2120,7 @@ class MessageRoot[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                 try:
                     destination_type = f"{type(destination).__module__}.{type(destination).__qualname__}"
                     with profile.span("discord_write", attributes={"destination": destination_type}):
-                        result = await destination(candidate.presentation)
+                        result = await destination(candidate.payload)
                 except deliver.DeliveryAbandoned:
                     logger.debug("mount %s was not delivered: the destination abandoned it", self.id)
                     with profile.span("rollback"):
@@ -2171,11 +2171,11 @@ class MessageRoot[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         `files=False` leaves the message's attachments alone; a terminal disable-edit changes
         only the controls, and an empty asset set would otherwise strip them.
         """
-        return await self._write(candidate.presentation, keep_attachments=not files, through=through, profile=profile)
+        return await self._write(candidate.payload, keep_attachments=not files, through=through, profile=profile)
 
     async def _write(
         self,
-        presentation: DiscordPresentation,
+        presentation: MessagePayload,
         *,
         keep_attachments: bool,
         through: deliver.EditHandle | None,

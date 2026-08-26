@@ -182,7 +182,7 @@ type Visibility = Private | Literal["public", "personal"]
 
 async def reply(
     ctx: Context[Any],
-    presentation: sd.presentation.DiscordPresentation,
+    presentation: sd.message_payload.MessagePayload,
     *,
     visibility: Visibility = "public",
     locale: str | None = None,
@@ -212,7 +212,7 @@ async def reply(
 
 async def reply_presentation(
     ctx: Context[Any],
-    presentation: sd.presentation.DiscordPresentation,
+    presentation: sd.message_payload.MessagePayload,
     *,
     visibility: Visibility = "public",
     allowed_mentions: discord.AllowedMentions | None = None,
@@ -247,7 +247,7 @@ async def reply_presentation(
 
 async def respond_presentation(
     interaction: discord.Interaction[Any],
-    presentation: sd.DiscordPresentation,
+    presentation: sd.MessagePayload,
     *,
     ephemeral: bool = True,
     wait: bool = False,
@@ -268,7 +268,7 @@ def destination(
     visibility: Visibility = "public",
     locale: str | None = None,
     files: Sequence[discord.File] = (),
-) -> sd.Destination:
+) -> sd.MessageDestination:
     """Where a mount's first message goes, in the same vocabulary `reply` uses.
 
     The audience rule stays host-side: "public" answers in the channel, "personal" is
@@ -286,7 +286,7 @@ def destination(
             return sd.reply_to(ctx, ephemeral=True, files=files)
 
         async def privately(
-            presentation: sd.presentation.DiscordPresentation,
+            presentation: sd.message_payload.MessagePayload,
         ) -> sd.delivery.DeliveryResult:
             message = await deliver_privately(
                 ctx,
@@ -352,7 +352,7 @@ def render_static(
     locale: str | None = None,
     strict: bool = False,
     reservation: sd.ResourceCost = sd.EMPTY_RESERVATION,
-) -> sd.presentation.DiscordPresentation:
+) -> sd.message_payload.MessagePayload:
     """Render a sessionless document through the bot's chrome and catalogue."""
     return sd.render_static(
         nodes,
@@ -370,7 +370,7 @@ def render_presentation(
     locale: str | None = None,
     strict: bool = False,
     reservation: sd.ResourceCost = sd.EMPTY_RESERVATION,
-) -> sd.presentation.DiscordPresentation:
+) -> sd.message_payload.MessagePayload:
     """Render a complete presentation for framework-owned delivery."""
     return sd.render_static(
         nodes,
@@ -570,7 +570,7 @@ def card_layout(
     footer: ui.TextLike | None = None,
     media: Sequence[str] = (),
     locale: str | None = None,
-) -> sd.presentation.DiscordPresentation:
+) -> sd.message_payload.MessagePayload:
     """Create a standalone V2 card."""
     return render_static(
         [
@@ -590,7 +590,7 @@ def card_layout(
 
 def text_layout(
     content: ui.TextLike, *, accent_colour: int | None = None, locale: str | None = None
-) -> sd.presentation.DiscordPresentation:
+) -> sd.message_payload.MessagePayload:
     """Create a simple V2 text response."""
     # Truncate-wrapped rather than bare: a plain paragraph lowers to Never, which *raises*
     # on an overlong message. This is the bot's most-used reply path, so it clips.
@@ -611,7 +611,7 @@ def _prefixed(prefix: str, value: ui.TextLike) -> ui.TextLike:
 
 def error_layout(
     title: ui.TextLike, description: ui.TextLike | None, *, locale: str | None = None
-) -> sd.presentation.DiscordPresentation:
+) -> sd.message_payload.MessagePayload:
     return render_static([error_node(title, description)], locale=locale)
 
 
@@ -626,7 +626,7 @@ def error_node(title: ui.TextLike, description: ui.TextLike | None) -> ui.Layout
 
 def warning_layout(
     title: ui.TextLike, description: ui.TextLike | None, *, locale: str | None = None
-) -> sd.presentation.DiscordPresentation:
+) -> sd.message_payload.MessagePayload:
     return card_layout(
         _prefixed(":warning: ", title),
         description,
@@ -637,7 +637,7 @@ def warning_layout(
 
 def info_layout(
     title: ui.TextLike, description: ui.TextLike | None, *, locale: str | None = None
-) -> sd.presentation.DiscordPresentation:
+) -> sd.message_payload.MessagePayload:
     return render_static([info_node(title, description)], locale=locale)
 
 
@@ -653,7 +653,7 @@ def help_layout(
     sections: Sequence[CardSection] = (),
     footer: ui.TextLike | None = None,
     locale: str | None = None,
-) -> sd.presentation.DiscordPresentation:
+) -> sd.message_payload.MessagePayload:
     return card_layout(
         title,
         description,
@@ -670,12 +670,12 @@ def link_layout(
     description: ui.TextLike | None = None,
     label: ui.TextLike = _OPEN_LINK,
     locale: str | None = None,
-) -> sd.presentation.DiscordPresentation:
+) -> sd.message_payload.MessagePayload:
     """Create a card whose primary action opens a URL."""
     node = ui.section(
         ui.heading(title),
         description and ui.truncate(ui.paragraph(description)),
-        ui.actions(ui.link(label, url, key="open-link"), key="link"),
+        ui.action_controls(ui.link(label, url, key="open-link"), key="link"),
         accent=DISCORD_GREEN,
     )
     return render_static([node], locale=locale)

@@ -10,7 +10,7 @@ import discord
 
 from squid_ui.runtime.component import Component
 from squid_ui_discord.access import AccessPolicy, Owner
-from squid_ui_discord.delivery import Destination, Replyable, respond_to
+from squid_ui_discord.delivery import MessageDestination, Replyable, respond_to
 from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_options import MessageRootOptions
 from squid_ui_discord.sessions import (
@@ -174,7 +174,7 @@ class SessionSpec:
     async def open(
         self,
         component: Component,
-        destination: Destination,
+        destination: MessageDestination,
         *,
         sessions: SessionManager | RuntimeSource,
         open_context: OpenContext,
@@ -203,7 +203,7 @@ class SessionSpec:
     async def attach(
         self,
         component: Component,
-        destination: Destination,
+        destination: MessageDestination,
         *,
         sessions: SessionManager | RuntimeSource,
         open_context: OpenContext,

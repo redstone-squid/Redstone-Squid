@@ -22,11 +22,11 @@ from squid_ui.primitives import Text
 from squid_ui_discord import delivery
 from squid_ui_discord.durability import FrontendAddress
 from squid_ui_discord.durability.frontend import DiscordFrontend, Promoted, Reconnected, RecoveredBinding
-from squid_ui_discord.presentation import DiscordMode, DiscordModeError, DiscordPresentation, mode_of
+from squid_ui_discord.message_payload import MessageMode, MessageModeError, MessagePayload, message_mode
 from squid_ui_discord.testing import delivered_to, fake_interaction, fake_message
 
-CLASSIC = DiscordMode.CLASSIC
-V2 = DiscordMode.COMPONENTS_V2
+CLASSIC = MessageMode.CLASSIC
+V2 = MessageMode.COMPONENTS_V2
 
 
 class Panel(sl.Component):
@@ -65,58 +65,58 @@ def an_asset(key: str = "report") -> Asset:
     return Asset(key, f"{key}.txt", "text/plain", InlineAsset(b"full report"))
 
 
-def v2(view: discord.ui.LayoutView | None = None, *, assets: tuple[Asset, ...] = ()) -> DiscordPresentation:
-    return DiscordPresentation.components_v2(a_layout() if view is None else view, assets=assets)
+def v2(view: discord.ui.LayoutView | None = None, *, assets: tuple[Asset, ...] = ()) -> MessagePayload:
+    return MessagePayload.components_v2(a_layout() if view is None else view, assets=assets)
 
 
 class TestCoherence:
     """The invalid combinations are exactly the ones Discord answers with an unhelpful 400."""
 
     def test_components_v2_refuses_content_and_embeds(self) -> None:
-        with pytest.raises(DiscordModeError, match="cannot carry content"):
-            DiscordPresentation(V2, content="hi", view=a_layout())
+        with pytest.raises(MessageModeError, match="cannot carry content"):
+            MessagePayload(V2, content="hi", view=a_layout())
 
-        with pytest.raises(DiscordModeError, match="cannot carry embeds"):
-            DiscordPresentation(V2, embeds=(discord.Embed(title="hi"),), view=a_layout())
+        with pytest.raises(MessageModeError, match="cannot carry embeds"):
+            MessagePayload(V2, embeds=(discord.Embed(title="hi"),), view=a_layout())
 
     def test_components_v2_needs_a_layout_view(self) -> None:
-        with pytest.raises(DiscordModeError, match="needs a LayoutView"):
-            DiscordPresentation(V2, view=a_classic_view())
+        with pytest.raises(MessageModeError, match="needs a LayoutView"):
+            MessagePayload(V2, view=a_classic_view())
 
-        with pytest.raises(DiscordModeError, match="needs a LayoutView"):
-            DiscordPresentation(V2)
+        with pytest.raises(MessageModeError, match="needs a LayoutView"):
+            MessagePayload(V2)
 
     def test_classic_refuses_a_layout_view(self) -> None:
-        with pytest.raises(DiscordModeError, match="cannot carry a LayoutView"):
-            DiscordPresentation(CLASSIC, view=a_layout())
+        with pytest.raises(MessageModeError, match="cannot carry a LayoutView"):
+            MessagePayload(CLASSIC, view=a_layout())
 
     def test_classic_refuses_a_view_that_reports_components_v2(self) -> None:
-        with pytest.raises(DiscordModeError, match="sets the flag implicitly"):
-            DiscordPresentation(CLASSIC, content="hi", view=_FlaggedView(timeout=None))
+        with pytest.raises(MessageModeError, match="sets the flag implicitly"):
+            MessagePayload(CLASSIC, content="hi", view=_FlaggedView(timeout=None))
 
     def test_every_disagreement_is_reported_at_once(self) -> None:
-        with pytest.raises(DiscordModeError) as raised:
-            DiscordPresentation(V2, content="hi", embeds=(discord.Embed(title="hi"),))
+        with pytest.raises(MessageModeError) as raised:
+            MessagePayload(V2, content="hi", embeds=(discord.Embed(title="hi"),))
 
         assert str(raised.value).count(";") == 2
 
     def test_a_coherent_presentation_of_each_mode_is_accepted(self) -> None:
         assert v2().mode is V2
-        classic = DiscordPresentation.classic(content="hi", embeds=(discord.Embed(title="hi"),))
+        classic = MessagePayload.classic(content="hi", embeds=(discord.Embed(title="hi"),))
         assert classic.mode is CLASSIC
-        assert DiscordPresentation.classic(content="hi", view=a_classic_view()).view is not None
+        assert MessagePayload.classic(content="hi", view=a_classic_view()).view is not None
 
     def test_sequences_are_frozen_into_tuples(self) -> None:
-        presentation = DiscordPresentation.classic(content="hi", embeds=[discord.Embed(title="hi")])
-        assert isinstance(presentation.embeds, tuple)
+        payload = MessagePayload.classic(content="hi", embeds=[discord.Embed(title="hi")])
+        assert isinstance(payload.embeds, tuple)
         assert isinstance(v2(assets=(an_asset(),)).assets, tuple)
 
 
 class TestPayload:
     def test_files_are_repeatable_and_fresh_every_call(self) -> None:
-        presentation = v2(assets=(an_asset(),))
+        payload = v2(assets=(an_asset(),))
 
-        first, second = presentation.build_files(), presentation.build_files()
+        first, second = payload.build_files(), payload.build_files()
 
         assert [file.filename for file in first] == ["report.txt"]
         assert first[0] is not second[0]
@@ -126,12 +126,12 @@ class TestPayload:
         view = a_layout()
         assert v2(view).layout is view
 
-        with pytest.raises(DiscordModeError, match="no LayoutView"):
-            _ = DiscordPresentation.classic(content="hi").layout
+        with pytest.raises(MessageModeError, match="no LayoutView"):
+            _ = MessagePayload.classic(content="hi").layout
 
-    def test_mode_of_reads_the_flag_discord_set(self) -> None:
-        assert mode_of(fake_message()) is V2
-        assert mode_of(fake_message(components_v2=False)) is CLASSIC
+    def test_message_mode_reads_the_flag_discord_set(self) -> None:
+        assert message_mode(fake_message()) is V2
+        assert message_mode(fake_message(components_v2=False)) is CLASSIC
 
 
 class TestTransitions:
@@ -165,7 +165,7 @@ class TestTransitions:
         handle = delivery.handle_for(message)
         embed = discord.Embed(title="hi")
 
-        await handle.write(DiscordPresentation.classic(content="body", embeds=(embed,)))
+        await handle.write(MessagePayload.classic(content="body", embeds=(embed,)))
 
         fields = message.edit.await_args.kwargs
         assert fields["content"] == "body"
@@ -177,8 +177,8 @@ class TestTransitions:
         message = fake_message()
         handle = delivery.handle_for(message)
 
-        with pytest.raises(DiscordModeError, match="back off a sent message"):
-            await handle.write(DiscordPresentation.classic(content="body"))
+        with pytest.raises(MessageModeError, match="back off a sent message"):
+            await handle.write(MessagePayload.classic(content="body"))
 
         message.edit.assert_not_awaited()
 
@@ -193,8 +193,8 @@ class TestTransitions:
 
         fields = interaction.edit_original_response.await_args.kwargs
         assert "content" not in fields
-        with pytest.raises(DiscordModeError):
-            await handle.write(DiscordPresentation.classic(content="body"))
+        with pytest.raises(MessageModeError):
+            await handle.write(MessagePayload.classic(content="body"))
 
     async def test_the_webhook_handle_runs_the_same_matrix(self) -> None:
         interaction = fake_interaction(components_v2=False)
@@ -208,8 +208,8 @@ class TestTransitions:
         assert fields["embeds"] == []
         assert handle.mode is V2
 
-        with pytest.raises(DiscordModeError):
-            await handle.write(DiscordPresentation.classic(content="body"))
+        with pytest.raises(MessageModeError):
+            await handle.write(MessagePayload.classic(content="body"))
 
     async def test_a_handle_with_no_readable_message_still_refuses_the_illegal_edit(self) -> None:
         # `wait=False` on a fresh response: nothing ever fetched the message, so the mode the
@@ -220,8 +220,8 @@ class TestTransitions:
         assert result.message is None
         assert handle is not None and handle.mode is V2
 
-        with pytest.raises(DiscordModeError):
-            await handle.write(DiscordPresentation.classic(content="body"))
+        with pytest.raises(MessageModeError):
+            await handle.write(MessagePayload.classic(content="body"))
 
     async def test_keep_attachments_leaves_the_message_files_alone(self) -> None:
         message = fake_message()
@@ -281,7 +281,7 @@ class TestDestinations:
         ctx = _Replyable()
         embed = discord.Embed(title="hi")
 
-        await delivery.reply_to(ctx)(DiscordPresentation.classic(content="body", embeds=(embed,)))
+        await delivery.reply_to(ctx)(MessagePayload.classic(content="body", embeds=(embed,)))
 
         assert ctx.sent["content"] == "body"
         assert ctx.sent["embeds"] == [embed]
@@ -330,7 +330,7 @@ class TestDestinations:
 
         assert result.handle is not None
         assert result.handle.mode is V2
-        assert delivery.handle_for(message).mode is DiscordMode.CLASSIC
+        assert delivery.handle_for(message).mode is MessageMode.CLASSIC
 
     async def test_edit_to_runs_the_transition_matrix_for_the_message_it_edits(self) -> None:
         message = fake_message(components_v2=False)
@@ -344,8 +344,8 @@ class TestDestinations:
     async def test_edit_to_refuses_a_transition_discord_does_not_offer(self) -> None:
         message = fake_message()
 
-        with pytest.raises(DiscordModeError):
-            await delivery.edit_to(message)(DiscordPresentation.classic(content="body"))
+        with pytest.raises(MessageModeError):
+            await delivery.edit_to(message)(MessagePayload.classic(content="body"))
 
         message.edit.assert_not_awaited()
 

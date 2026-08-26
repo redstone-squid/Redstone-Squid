@@ -25,9 +25,9 @@ import discord
 from squid_ui import scene
 from squid_ui.planning.limits import COMPONENT_LIMITS, LIMITS, ComponentLimits, DiscordLimits, V2Limits
 from squid_ui.planning.target import Target
-from squid_ui_discord.delivery import DeliveryResult, Destination, EditHandle, handle_for
+from squid_ui_discord.delivery import DeliveryResult, EditHandle, MessageDestination, handle_for
+from squid_ui_discord.message_payload import MessagePayload
 from squid_ui_discord.message_root import AnyMountedView, ClassicMountedView, MessageRoot, MountedView
-from squid_ui_discord.presentation import DiscordPresentation
 
 type ComponentPayload = dict[str, Any]
 
@@ -214,7 +214,7 @@ def fake_message(
     return message
 
 
-def delivered_to(message: Any, *, handle: EditHandle | None = None) -> Destination:
+def delivered_to(message: Any, *, handle: EditHandle | None = None) -> MessageDestination:
     """A destination that hands `message` straight back — a send with no Discord in it.
 
     The mount ends up holding exactly the handle a real send would have given it, so tests
@@ -223,7 +223,7 @@ def delivered_to(message: Any, *, handle: EditHandle | None = None) -> Destinati
 
     authority = handle if handle is not None else handle_for(message)
 
-    async def send(presentation: DiscordPresentation) -> DeliveryResult:
+    async def send(payload: MessagePayload) -> DeliveryResult:
         return DeliveryResult(message, authority)
 
     return send

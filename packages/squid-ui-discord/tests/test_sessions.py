@@ -45,11 +45,11 @@ def a_root() -> squid_ui_discord.MessageRoot:
 _DEFAULT_MESSAGE = object()
 
 
-def to_message(message: Any = _DEFAULT_MESSAGE) -> squid_ui_discord.Destination:
+def to_message(message: Any = _DEFAULT_MESSAGE) -> squid_ui_discord.MessageDestination:
     delivered = fake_message() if message is _DEFAULT_MESSAGE else message
 
     async def send(
-        presentation: squid_ui_discord.presentation.DiscordPresentation,
+        payload: squid_ui_discord.message_payload.MessagePayload,
     ) -> squid_ui_discord.delivery.DeliveryResult:
         handle = None if delivered is None else squid_ui_discord.delivery.handle_for(delivered)
         return squid_ui_discord.delivery.DeliveryResult(delivered, handle)
@@ -57,9 +57,9 @@ def to_message(message: Any = _DEFAULT_MESSAGE) -> squid_ui_discord.Destination:
     return send
 
 
-def slowly() -> squid_ui_discord.Destination:
+def slowly() -> squid_ui_discord.MessageDestination:
     async def send(
-        presentation: squid_ui_discord.presentation.DiscordPresentation,
+        payload: squid_ui_discord.message_payload.MessagePayload,
     ) -> squid_ui_discord.delivery.DeliveryResult:
         await anyio.sleep(0)
         message = fake_message()
@@ -68,18 +68,18 @@ def slowly() -> squid_ui_discord.Destination:
     return send
 
 
-def abandoning() -> squid_ui_discord.Destination:
+def abandoning() -> squid_ui_discord.MessageDestination:
     async def send(
-        presentation: squid_ui_discord.presentation.DiscordPresentation,
+        payload: squid_ui_discord.message_payload.MessagePayload,
     ) -> squid_ui_discord.delivery.DeliveryResult:
         raise squid_ui_discord.delivery.DeliveryAbandoned
 
     return send
 
 
-def failing(error: Exception) -> squid_ui_discord.Destination:
+def failing(error: Exception) -> squid_ui_discord.MessageDestination:
     async def send(
-        presentation: squid_ui_discord.presentation.DiscordPresentation,
+        payload: squid_ui_discord.message_payload.MessagePayload,
     ) -> squid_ui_discord.delivery.DeliveryResult:
         raise error
 
