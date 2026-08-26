@@ -1,4 +1,4 @@
-"""The host supplies development policy and its session registry to library devtools."""
+"""The host supplies development policy and its session manager to library devtools."""
 
 from types import SimpleNamespace
 from typing import Any, cast
@@ -10,17 +10,17 @@ from squid_ui_discord import MessageRootScheduler, SessionManager
 from squid_ui_discord.devtools import DevTools
 
 
-async def test_setup_adds_the_generic_cog_with_the_host_registry() -> None:
-    registry = SessionManager()
+async def test_setup_adds_the_generic_cog_with_the_host_manager() -> None:
+    manager = SessionManager()
     profiler = MemoryProfiler()
     scheduler = MessageRootScheduler(profiler=profiler)
-    bot = SimpleNamespace(sessions=registry, layout_scheduler=scheduler, add_cog=AsyncMock())
+    bot = SimpleNamespace(sessions=manager, layout_scheduler=scheduler, add_cog=AsyncMock())
 
     await setup(cast(Any, bot))
 
     cog = bot.add_cog.await_args.args[0]
     assert isinstance(cog, DevTools)
-    assert cog._registry is registry
+    assert cog._manager is manager
     assert cog._scheduler is scheduler
     assert cog._profiler is profiler
 

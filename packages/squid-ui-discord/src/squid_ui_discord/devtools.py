@@ -63,7 +63,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
     def __init__(
         self,
         check: DevToolsCheck[BotT] = _owner_only,
-        registry: SessionManager | None = None,
+        manager: SessionManager | None = None,
         *,
         profiler: Profiler | None = None,
         scheduler: MessageRootScheduler | None = None,
@@ -73,12 +73,12 @@ class DevTools[BotT: commands.Bot](commands.Cog):
     ) -> None:
         self._check = check
         self._runtime = runtime or DevToolsRuntime(
-            sessions=registry,
+            sessions=manager,
             scheduler=scheduler,
             bus=bus,
             profiler=profiler,
         )
-        self._registry = self._runtime.sessions
+        self._manager = self._runtime.sessions
         self._scheduler = self._runtime.scheduler
         self._bus = self._runtime.bus
         self._profiler = self._runtime.profiler
@@ -107,15 +107,15 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         """Open the unified operational dashboard."""
         await self._open(ctx)
 
-    @ui_group.command(name="mounts")
+    @ui_group.command(name="roots")
     async def list_roots(self, ctx: Context[BotT]) -> None:
-        """Open the dashboard focused on live mounts."""
-        await self._open(ctx, focus="mounts")
+        """Open the dashboard focused on message roots."""
+        await self._open(ctx, focus="roots")
 
-    @ui_group.command(name="mount")
+    @ui_group.command(name="root")
     async def inspect_root(self, ctx: Context[BotT], message_root_id: str) -> None:
-        """Open the dashboard focused on one live mount."""
-        await self._open(ctx, focus="mounts", message_root_id=message_root_id)
+        """Open the dashboard focused on one message root."""
+        await self._open(ctx, focus="roots", message_root_id=message_root_id)
 
     @ui_group.command(name="sessions")
     async def list_sessions(self, ctx: Context[BotT]) -> None:
@@ -164,7 +164,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
 
     @ui_group.command(name="history")
     async def inspect_history(self, ctx: Context[BotT], message_root_id: str) -> None:
-        """Show action-history stacks for a mount without invoking inverses."""
+        """Show action-history stacks for a message root without invoking inverses."""
         try:
             inspection = self._runtime.inspect_root(message_root_id)
         except (TargetNotFound, RuntimeError) as error:
@@ -173,11 +173,11 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         body = (
             "\n\n".join(_history_text(history) for history in inspection.histories) or "No history stacks are declared."
         )
-        await self._send(ctx, [section(sl.heading(f"History for mount {message_root_id}"), code(body))])
+        await self._send(ctx, [section(sl.heading(f"History for message root {message_root_id}"), code(body))])
 
     @ui_group.command(name="profile")
     async def inspect_profile(self, ctx: Context[BotT], message_root_id: str | None = None) -> None:
-        """Show profiler health, or retained traces for one mount."""
+        """Show profiler health, or retained traces for one message root."""
         if message_root_id is None:
             snapshot = self._runtime.snapshot().profiler
             health = snapshot.health
@@ -207,10 +207,10 @@ class DevTools[BotT: commands.Bot](commands.Cog):
 
     @ui_group.command(name="timeline")
     async def inspect_timeline(self, ctx: Context[BotT], limit: int = 20, target: str | None = None) -> None:
-        """Show retained dispatches across every mount in the order they happened.
+        """Show retained dispatches across every message root in the order they happened.
 
-        `ui profile` answers how slow one mount is; this answers what people just did.
-        `target` narrows to one origin: `mount:<id>` or `actor:<user_id>`.
+        `ui profile` answers how slow one message root is; this answers what people just did.
+        `target` narrows to one origin: `root:<id>` or `actor:<user_id>`.
         """
         try:
             attribute, wanted = _timeline_filter(target)
@@ -280,7 +280,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
 
     @ui_group.command(name="refresh")
     async def refresh_root(self, ctx: Context[BotT], message_root_id: str) -> None:
-        """Force an immediate refresh for one mount."""
+        """Force an immediate refresh for one message root."""
         await self._run_operation(ctx, self._runtime.refresh_root(message_root_id))
 
     @ui_group.command(name="close")
@@ -327,7 +327,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
 
     @ui_group.command(name="scene")
     async def dump_scene(self, ctx: Context[BotT], message_root_id: str) -> None:
-        """Attach the committed scene document for a mount."""
+        """Attach the committed scene document for a message root."""
         snapshot = await self._snapshot_or_refuse(ctx, message_root_id)
         if snapshot is None:
             return
@@ -340,24 +340,26 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         assert isinstance(asset.source, InlineAsset)
         await self._send(
             ctx,
-            [paragraph(f"Scene for mount `{message_root_id}` ??{len(asset.source.data)} bytes.")],
+            [paragraph(f"Scene for message root `{message_root_id}` ??{len(asset.source.data)} bytes.")],
             files=[discord.File(io.BytesIO(asset.source.data), filename=asset.name)],
         )
 
     @ui_group.command(name="plan")
     async def dump_plan(self, ctx: Context[BotT], message_root_id: str) -> None:
-        """Show the retained plan report for a mount."""
-        snapshot = await self._snapshot_or_refuse(ctx, message_root_id)
-        if snapshot is not None:
-            await self._send(ctx, [section(sl.heading(f"Plan for mount {message_root_id}"), code(plan_text(snapshot)))])
-
-    @ui_group.command(name="metrics")
-    async def dump_metrics(self, ctx: Context[BotT], message_root_id: str) -> None:
-        """Show planner search and cache metrics for a mount."""
+        """Show the retained plan report for a message root."""
         snapshot = await self._snapshot_or_refuse(ctx, message_root_id)
         if snapshot is not None:
             await self._send(
-                ctx, [section(sl.heading(f"Metrics for mount {message_root_id}"), code(metrics_text(snapshot)))]
+                ctx, [section(sl.heading(f"Plan for message root {message_root_id}"), code(plan_text(snapshot)))]
+            )
+
+    @ui_group.command(name="metrics")
+    async def dump_metrics(self, ctx: Context[BotT], message_root_id: str) -> None:
+        """Show planner search and cache metrics for a message root."""
+        snapshot = await self._snapshot_or_refuse(ctx, message_root_id)
+        if snapshot is not None:
+            await self._send(
+                ctx, [section(sl.heading(f"Metrics for message root {message_root_id}"), code(metrics_text(snapshot)))]
             )
 
     async def _profile_root(self, ctx: Context[BotT], message_root_id: str) -> None:
@@ -368,11 +370,11 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         }
         ordered = sorted(traces.values(), key=lambda trace: trace.started, reverse=True)[:12]
         body = (
-            f"No retained profiles for mount {message_root_id}."
+            f"No retained profiles for message root {message_root_id}."
             if not ordered
             else "\n\n".join(_trace_text(trace) for trace in ordered)
         )
-        await self._send(ctx, [section(sl.heading(f"Profile for mount {message_root_id}"), code(body))])
+        await self._send(ctx, [section(sl.heading(f"Profile for message root {message_root_id}"), code(body))])
 
     async def _open(
         self,
@@ -395,7 +397,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
     async def _snapshot_or_refuse(self, ctx: Context[BotT], message_root_id: str) -> MessageRootSnapshot | None:
         message_root = find(message_root_id)
         if message_root is None:
-            await self._refuse(ctx, f"No live mount `{message_root_id}`. Run `dev ui mounts` for the current ids.")
+            await self._refuse(ctx, f"No message root `{message_root_id}`. Run `dev ui roots` for the current ids.")
             return None
         return message_root.snapshot()
 
@@ -530,13 +532,13 @@ def _root_attribute(trace: RuntimeTrace, key: str) -> AttributeValue:
 
 
 def _timeline_filter(target: str | None) -> tuple[str | None, str]:
-    """Split a ``mount:``/``actor:`` filter into the root-span attribute it selects on."""
+    """Split a ``root:``/``actor:`` filter into the root-span attribute it selects on."""
     if target is None:
         return None, ""
     prefix, separator, wanted = target.partition(":")
-    attribute = {"mount": "message_root_id", "actor": "actor"}.get(prefix)
+    attribute = {"root": "message_root_id", "actor": "actor"}.get(prefix)
     if not separator or attribute is None or not wanted:
-        message = f"Filter `{target}` is neither `mount:<id>` nor `actor:<user_id>`."
+        message = f"Filter `{target}` is neither `root:<id>` nor `actor:<user_id>`."
         raise ValueError(message)
     return attribute, wanted
 
@@ -546,7 +548,7 @@ def _timeline_text(trace: RuntimeTrace, origin: datetime) -> str:
     # clock it started at, so the two together are the only way back to a readable time.
     at = (origin + timedelta(seconds=trace.started)).strftime("%H:%M:%S")
     message_root_id = _root_attribute(trace, "message_root_id")
-    where = "route" if message_root_id is None else f"mount={message_root_id}"
+    where = "route" if message_root_id is None else f"message_root={message_root_id}"
     status = trace.result.status if trace.result.dispatch is None else trace.result.dispatch.disposition
     return (
         f"{at} {trace.name:<28.28} actor={_root_attribute(trace, 'actor')} "

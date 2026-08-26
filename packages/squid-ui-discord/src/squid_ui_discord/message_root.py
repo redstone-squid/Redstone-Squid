@@ -748,7 +748,7 @@ class MessageAddress:
 
 @dataclass(frozen=True, slots=True)
 class MessageRootSnapshot:
-    """One read-only look at a live mount, for host diagnostics.
+    """One read-only look at a live message root, for host diagnostics.
 
     A single call rather than a dozen properties: it fixes what a mount is willing to say
     about itself, and a caller cannot accidentally mutate what it reads. Everything here is
@@ -1004,7 +1004,7 @@ class MessageRoot[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         """The message mode this mount owns for its whole life.
 
         A mount has one target: changing it means opening a replacement mount, not swapping
-        a live mount's renderer out from under its action bindings.
+        a live message root's renderer out from under its action bindings.
         """
         self.limits = target.limits
         self._binding = _binding_for(target)
@@ -1827,7 +1827,7 @@ class MessageRoot[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         self.runtime.invalidate()
 
     def localize(self, localization: Localization) -> None:
-        """Change the locale used by the next render of this live mount."""
+        """Change the locale used by the next render of this live message root."""
         self.localization = localization
         self.chrome = localize_chrome(self._chrome, localization)
         self.runtime.set_context(CHROME_CONTEXT, self.chrome)
@@ -2087,17 +2087,17 @@ class MessageRoot[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
 
     # --- Lifecycle ---------------------------------------------------------------------
 
-    async def send(self, destination: deliver.MessageDestination) -> deliver.SendResult:
-        """Deliver this mount's first render through `destination`.
+    async def send(self, message_destination: deliver.MessageDestination) -> deliver.SendResult:
+        """Deliver this mount's first render through `message_destination`.
 
         The commit point for an initial send, and the same stage -> deliver -> commit sequence
         `flush` runs for an interaction edit: the host chooses where the message goes, the
-        mount owns everything around the call. A destination that raises leaves the mount on
+        mount owns everything around the call. A message_destination that raises leaves the mount on
         its previous generation with the render still pending, so a second `send` is a clean
         retry.
 
         The structured result distinguishes a committed delivery, including a handle-less
-        one, from a destination that deliberately abandoned delivery.
+        one, from a message_destination that deliberately abandoned delivery.
         """
         component = type(self.component)
         name = f"{component.__module__}.{component.__qualname__}"
@@ -2118,11 +2118,13 @@ class MessageRoot[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                 # deliberately make this the pending paint and settle after it commits.
                 candidate = cast(_Candidate, await self._stage_loaded(profile=profile))
                 try:
-                    destination_type = f"{type(destination).__module__}.{type(destination).__qualname__}"
-                    with profile.span("discord_write", attributes={"destination": destination_type}):
-                        result = await destination(candidate.payload)
+                    destination_type = (
+                        f"{type(message_destination).__module__}.{type(message_destination).__qualname__}"
+                    )
+                    with profile.span("discord_write", attributes={"message_destination": destination_type}):
+                        result = await message_destination(candidate.payload)
                 except deliver.DeliveryAbandoned:
-                    logger.debug("mount %s was not delivered: the destination abandoned it", self.id)
+                    logger.debug("mount %s was not delivered: the message_destination abandoned it", self.id)
                     with profile.span("rollback"):
                         self._rollback(candidate)
                     profile.set_result(TraceResult(TraceStatus.ABANDONED, presentation=PresentationStatus.ABANDONED))
@@ -2175,13 +2177,13 @@ class MessageRoot[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
 
     async def _write(
         self,
-        presentation: MessagePayload,
+        payload: MessagePayload,
         *,
         keep_attachments: bool,
         through: deliver.EditHandle | None,
         profile: OperationRecorder | None = None,
     ) -> deliver.EditHandle | None:
-        """Write one presentation through the first usable handle, and say which one that was.
+        """Write one payload through the first usable handle, and say which one that was.
 
         `keep_attachments` leaves the message's files alone, which is what every edit that
         changes only controls wants.
@@ -2191,12 +2193,12 @@ class MessageRoot[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                 continue
             try:
                 if profile is None:
-                    await handle.write(presentation, keep_attachments=keep_attachments)
+                    await handle.write(payload, keep_attachments=keep_attachments)
                 else:
                     source = "interaction" if handle is through else "standing"
                     handle_type = f"{type(handle).__module__}.{type(handle).__qualname__}"
                     with profile.span("discord_write", attributes={"source": source, "handle": handle_type}):
-                        await handle.write(presentation, keep_attachments=keep_attachments)
+                        await handle.write(payload, keep_attachments=keep_attachments)
             except deliver.StaleHandleError:
                 logger.debug("mount %s discarded a stale edit handle", self.id, exc_info=True)
                 if handle is self._handle:
@@ -3291,7 +3293,7 @@ class MessageRoot[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         not abort another's cleanup, nor teardown itself.
 
         Calling `finish` from inside a hook is a no-op, so an observer that cascades to other
-        mounts cannot loop back into this one. A hook registered on an already-finished mount
+        message roots cannot loop back into this one. A hook registered on an already-finished message root
         never fires -- `finished` is the caller's to check first.
         """
         self._finish_hooks.append(callback)
