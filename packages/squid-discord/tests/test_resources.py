@@ -9,7 +9,7 @@ from squid_layouts.planning import measure, plan
 from squid_layouts.planning.adapter import AdapterProfile
 from squid_layouts.planning.discord import components_v2_target
 from squid_layouts.planning.layout_measurement.costing import measure_nodes
-from squid_layouts.planning.layout_measurement.model import RText
+from squid_layouts.planning.layout_measurement.model import MeasuredText
 from squid_layouts.planning.layout_measurement.text import BudgetRegion, make_unit, text_total
 from squid_layouts.planning.limits import Axis, V2Limits
 from squid_layouts.planning.target import ResourceCost
@@ -117,8 +117,8 @@ class TestBudgetRegions:
     def test_a_budget_region_spanning_two_text_pools_is_rejected(self) -> None:
         """One `Budget` states one preferred size; applying it to two pools would double it."""
         units = [
-            make_unit(Text("a"), RText(), 0, Axis.DISPLAY_TEXT),
-            make_unit(Text("b"), RText(), 1, "embed_text"),
+            make_unit(Text("a"), MeasuredText(), 0, Axis.DISPLAY_TEXT),
+            make_unit(Text("b"), MeasuredText(), 1, "embed_text"),
         ]
         region = BudgetRegion(tuple(unit for unit in units if unit is not None), 0, 10, 0, best_effort=False)
 
@@ -126,7 +126,7 @@ class TestBudgetRegions:
             _ = region.axis
 
     def test_a_single_pool_region_reports_that_pool(self) -> None:
-        unit = make_unit(Text("a"), RText(), 0, Axis.DISPLAY_TEXT)
+        unit = make_unit(Text("a"), MeasuredText(), 0, Axis.DISPLAY_TEXT)
         assert unit is not None
 
         assert BudgetRegion((unit,), 0, 10, 0, best_effort=False).axis == Axis.DISPLAY_TEXT

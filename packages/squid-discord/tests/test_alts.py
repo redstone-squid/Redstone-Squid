@@ -12,7 +12,7 @@ from squid_discord import (
 )
 from squid_discord.testing import assert_within_limits
 from squid_layouts.planning import SolveNoteCode, measure
-from squid_layouts.planning.layout_measurement.model import RPanel, RSection, RText
+from squid_layouts.planning.layout_measurement.model import MeasuredPanel, MeasuredSection, MeasuredText
 from squid_layouts.planning.layout_measurement.solver import MeasuredLayout
 from squid_layouts.primitives import (
     Alt,
@@ -38,11 +38,11 @@ def _solved_texts(solved: MeasuredLayout) -> list[str]:
 
     def walk(children) -> None:
         for child in children:
-            if isinstance(child, RText):
+            if isinstance(child, MeasuredText):
                 texts.append(child.content)
-            elif isinstance(child, RSection):
+            elif isinstance(child, MeasuredSection):
                 texts.extend(text.content for text in child.texts)
-            elif isinstance(child, RPanel):
+            elif isinstance(child, MeasuredPanel):
                 walk(child.children)
 
     walk(solved.children)

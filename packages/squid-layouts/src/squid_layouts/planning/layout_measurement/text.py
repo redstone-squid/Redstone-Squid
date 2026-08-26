@@ -5,7 +5,7 @@ from dataclasses import dataclass, replace
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning.adapter import ResourceCost
 from squid_layouts.planning.breaking import BreakItem, balanced_breaks
-from squid_layouts.planning.layout_measurement.model import RText
+from squid_layouts.planning.layout_measurement.model import MeasuredText
 from squid_layouts.planning.limits import ELLIPSIS, TEXT_AXES, Axis
 from squid_layouts.primitives.constraints import Never, Overflow
 from squid_layouts.primitives.nodes import Code, Footer, Heading, Lines, Node, Text
@@ -18,7 +18,7 @@ class TextUnit:
     """One text-bearing node's mutable allocation state."""
 
     node: TextBearing
-    slot: RText
+    slot: MeasuredText
     index: int
     axis: str
     """Which message-wide text pool this unit draws from."""
@@ -70,7 +70,7 @@ def _escape_fences(content: str) -> str:
     return content.replace("```", "``\N{ZERO WIDTH SPACE}`")
 
 
-def make_unit(node: TextBearing, slot: RText, index: int, axis: str = Axis.DISPLAY_TEXT) -> TextUnit | None:
+def make_unit(node: TextBearing, slot: MeasuredText, index: int, axis: str = Axis.DISPLAY_TEXT) -> TextUnit | None:
     """Create the allocation unit for one text-bearing primitive."""
     prefix, suffix, ladders, join = "", "", None, "\n"
     ranks: tuple[int, ...] = ()
@@ -181,7 +181,7 @@ def split_text_node(
     """Losslessly split one text primitive into independently renderable fragments."""
     if not isinstance(node, Text | Heading | Footer | Code | Lines):
         return None
-    slot = RText()
+    slot = MeasuredText()
     unit = make_unit(node, slot, 0)
     if unit is None:
         return (node,)

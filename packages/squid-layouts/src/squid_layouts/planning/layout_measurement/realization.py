@@ -12,16 +12,16 @@ from squid_layouts.planning.layout_measurement.diagnostics import (
     note,
 )
 from squid_layouts.planning.layout_measurement.model import (
-    RCard,
-    RCardField,
-    RContent,
+    MeasuredCard,
+    MeasuredCardField,
+    MeasuredContent,
+    MeasuredGroup,
+    MeasuredPanel,
+    MeasuredSection,
+    MeasuredText,
+    MeasuredTime,
+    MeasuredZonedTime,
     Realized,
-    RGroup,
-    RPanel,
-    RSection,
-    RText,
-    RTime,
-    RZonedTime,
 )
 from squid_layouts.planning.layout_measurement.text import BudgetRegion, TextBearing, TextUnit, make_unit, trim_keep
 from squid_layouts.planning.limits import LIMITS, Axis, DiscordLimits
@@ -71,7 +71,7 @@ class Builder:
     def charge(self, characters: int) -> None:
         self.raw_text_cost[self.axis] = self.raw_text_cost.get(self.axis, 0) + characters
 
-    def unit(self, node: TextBearing, slot: RText) -> None:
+    def unit(self, node: TextBearing, slot: MeasuredText) -> None:
         made = make_unit(node, slot, len(self.units), self.axis)
         if made is not None:
             self.units.append(made)
@@ -86,7 +86,7 @@ class Builder:
         finally:
             self.axis = previous
 
-    def slot(self, value: CardText | None, cap: int, what: str) -> RText | None:
+    def slot(self, value: CardText | None, cap: int, what: str) -> MeasuredText | None:
         """Realize one card text slot, clamping it to its own local cap first."""
         if value is None:
             return None
@@ -103,11 +103,11 @@ class Builder:
                 )
             )
             content = trim_keep(content, cap, "head")
-        slot = RText()
+        slot = MeasuredText()
         self.unit(replace(node, content=content), slot)
         return slot
 
-    def card(self, node: Card) -> RCard:
+    def card(self, node: Card) -> MeasuredCard:
         embeds = self.limits.embeds
         if embeds is None:
             message = "a Card cannot be realized in a message mode that has no embeds"
@@ -121,15 +121,15 @@ class Builder:
                     SolveNoteSeverity.CLAMP,
                 )
             )
-        realized_fields: list[RCardField] = []
+        realized_fields: list[MeasuredCardField] = []
         for field_node in fields:
             name = self.slot(field_node.name, embeds.field_name, "field name")
             value = self.slot(field_node.value, embeds.field_value, "field value")
             if name is None or value is None:
                 message = "a CardField needs a non-empty name and value after trimming"
                 raise LayoutInvariantError(message)
-            realized_fields.append(RCardField(name, value, field_node.inline))
-        return RCard(
+            realized_fields.append(MeasuredCardField(name, value, field_node.inline))
+        return MeasuredCard(
             title=self.slot(node.title, embeds.title, "embed title"),
             url=node.url,
             blocks=self.realize_children(node.children),
@@ -218,16 +218,16 @@ class Builder:
     def realize(self, node: Node) -> Realized:
         match node:
             case Text() | Heading() | Footer() | Code() | Lines():
-                slot = RText()
+                slot = MeasuredText()
                 self.unit(node, slot)
                 return slot
             case Time(instant=instant, style=style, prefix=prefix):
                 unix = int(instant.timestamp())
                 self.charge(len(prefix or "") + len(f"<t:{unix}:{style}>"))
-                return RTime(instant, style, prefix)
+                return MeasuredTime(instant, style, prefix)
             case ZonedTime(value=value, prefix=prefix):
                 self.charge(len(prefix or "") + len(value.isoformat()))
-                return RZonedTime(value, prefix)
+                return MeasuredZonedTime(value, prefix)
             case Section(texts=texts, accessory=accessory):
                 if len(texts) > 3:
                     self.notes.append(
@@ -238,24 +238,24 @@ class Builder:
                         )
                     )
                     texts = texts[:3]
-                slots: list[RText] = []
+                slots: list[MeasuredText] = []
                 for text_node in texts:
-                    slot = RText()
+                    slot = MeasuredText()
                     self.unit(text_node, slot)
                     slots.append(slot)
                 if isinstance(accessory, RawItem):
                     self.charge(accessory.text_cost)
-                return RSection(texts=slots, accessory=accessory)
+                return MeasuredSection(texts=slots, accessory=accessory)
             case Content(content=text, overflow=overflow, priority=priority):
-                slot = RText()
+                slot = MeasuredText()
                 with self.pool(Axis.CONTENT_TEXT):
                     self.unit(Text(text, overflow=overflow, priority=priority), slot)
-                return RContent(slot)
+                return MeasuredContent(slot)
             case Card():
                 with self.pool(Axis.EMBED_TEXT):
                     return self.card(node)
             case Panel(children=children, accent=accent, spoiler=spoiler):
-                return RPanel(children=self.realize_children(children), accent=accent, spoiler=spoiler)
+                return MeasuredPanel(children=self.realize_children(children), accent=accent, spoiler=spoiler)
             case Budget(
                 children=children,
                 minimum=minimum,
@@ -266,9 +266,9 @@ class Builder:
                 first = len(self.units)
                 realized = self.realize_children(children)
                 self.budgets.append(BudgetRegion(tuple(self.units[first:]), minimum, preferred, stretch, best_effort))
-                return RGroup(realized)
+                return MeasuredGroup(realized)
             case Break(children=children):
-                return RGroup(self.realize_children(children))
+                return MeasuredGroup(self.realize_children(children))
             case Gallery(items=items):
                 if len(items) > 10:
                     self.notes.append(

@@ -17,7 +17,7 @@ from squid_layouts.planning import (
     measure,
     plan,
 )
-from squid_layouts.planning.layout_measurement.model import RPanel, RText
+from squid_layouts.planning.layout_measurement.model import MeasuredPanel, MeasuredText
 from squid_layouts.planning.navigation import NavigationContext, default_nav
 from squid_layouts.primitives import (
     ActionGroup,
@@ -45,9 +45,9 @@ def _rendered(solved) -> str:
 
     def walk(children) -> None:
         for child in children:
-            if isinstance(child, RText):
+            if isinstance(child, MeasuredText):
                 parts.append(child.content)
-            elif isinstance(child, RPanel):
+            elif isinstance(child, MeasuredPanel):
                 walk(child.children)
 
     walk(solved.children)
