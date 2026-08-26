@@ -56,9 +56,7 @@ class MergeConfirmation(sl.Component):
 
     def render(self) -> tuple[sl.LayoutNode, ...]:
         return (
-            sl.section(
-                sl.heading(t(self.locale, _("Confirm account merge"))), sl.paragraph(self.prompt), accent=DISCORD_BLUE
-            ),
+            sl.section(sl.heading(t(self.locale, _("Confirm account merge"))), sl.paragraph(self.prompt)),
             sl.primitives.Row(
                 (
                     sl.primitives.Button(
@@ -252,13 +250,11 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             return card_layout(
                 t(locale, _("Hidden creator page")),
                 t(locale, _("This creator has hidden their page. Their build credit is still listed.")),
-                accent_colour=DISCORD_BLUE,
                 fields=public_profile_fields(public, locale),
             )
         return card_layout(
             public.display_name or fallback_name,
             public.bio,
-            accent_colour=DISCORD_BLUE,
             fields=public_profile_fields(public, locale),
             media=() if public.avatar_url is None else (public.avatar_url,),
         )
@@ -332,7 +328,6 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
                     ),
                     code=code,
                 ),
-                accent_colour=DISCORD_BLUE,
                 footer=t(
                     locale,
                     _("Expires {expiry}. Give it to nobody but yourself: it hands this account over."),

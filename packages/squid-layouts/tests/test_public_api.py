@@ -30,6 +30,7 @@ ROOT_API = frozenset(
         "NavigateEvent",
         "OpenEvent",
         "Palette",
+        "PaletteRegistry",
         "PressEvent",
         "ScaleEvent",
         "SelectionEvent",
