@@ -22,8 +22,10 @@ from squid_layouts.chrome import DEFAULT_CHROME
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning import SolveNoteCode, measure
 from squid_layouts.planning.adaptation import lower_semantics
+from squid_layouts.planning.layout_measurement.model import RText
+from squid_layouts.planning.layout_measurement.text import split_pages
 from squid_layouts.planning.limits import COMPONENTS
-from squid_layouts.planning.measurement import RText, _component_count, split_pages
+from squid_layouts.planning.measurement import _component_count
 from squid_layouts.planning.navigation import NavigationContext, default_nav, page_select_nav
 from squid_layouts.primitives import (
     Button,
