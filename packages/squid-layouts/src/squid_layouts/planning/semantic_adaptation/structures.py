@@ -4,7 +4,7 @@ from collections.abc import Sequence
 
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.grids import GridCell
-from squid_layouts.interactions import ActionBinding, PressEvent, SelectionEvent
+from squid_layouts.interactions import ActionBinding
 from squid_layouts.planning.semantic_adaptation.common import (
     _button_style,
     _page_items,
@@ -26,6 +26,7 @@ from squid_layouts.planning.semantic_adaptation.decisions import (
 from squid_layouts.planning.semantic_adaptation.decisions import (
     table_axis as _table_axis,
 )
+from squid_layouts.planning.semantic_adaptation.handlers import ForwardSelection, RouteSelection
 from squid_layouts.planning.semantic_adaptation.model import (
     LoweringContext as _Context,
 )
@@ -162,23 +163,16 @@ def _grid(node: Grid, path: str, context: _Context) -> list[Node]:
     if strategy == "buttons":
         rows: list[Node] = []
         for start in range(0, len(node.cells), node.columns):
-            buttons: list[Button] = []
-            for cell in node.cells[start : start + node.columns]:
-
-                async def pick(event: PressEvent, cell_key: str = cell.key) -> None:
-                    await node.on_pick(
-                        SelectionEvent(event.actor, event.responder, event.locale, event.context, (cell_key,))
-                    )
-
-                buttons.append(
-                    Button(
-                        _resolve(cell.label, context),
-                        pick,
-                        f"{node.key}.{cell.key}",
-                        style=_button_style(cell.tone, Emphasis.NORMAL),
-                        disabled=not cell.available,
-                    )
+            buttons = [
+                Button(
+                    _resolve(cell.label, context),
+                    ForwardSelection(node.on_pick, cell.key),
+                    f"{node.key}.{cell.key}",
+                    style=_button_style(cell.tone, Emphasis.NORMAL),
+                    disabled=not cell.available,
                 )
+                for cell in node.cells[start : start + node.columns]
+            ]
             rows.append(Row(tuple(buttons)))
         return rows
 
@@ -211,18 +205,12 @@ def _roster(node: Roster, context: _Context) -> list[Node]:
         if full and node.placement.rejects_overflow:
             lowered.append(Text(_resolve(context.chrome.full, context), overflow=Never()))
         if node.on_join is not None:
-
-            async def join(event: PressEvent, slot_key: str = slot.key) -> None:
-                await node.on_join(
-                    SelectionEvent(event.actor, event.responder, event.locale, event.context, (slot_key,))
-                )
-
             lowered.append(
                 Row(
                     (
                         Button(
                             _resolve(slot.label, context),
-                            join,
+                            ForwardSelection(node.on_join, slot.key),
                             f"{node.key}.{slot.key}",
                             style=_button_style(slot.tone, Emphasis.NORMAL),
                             disabled=not available,
@@ -389,14 +377,9 @@ def _picker(actions: Sequence[Action], key: str, label: str | None, context: _Co
         for action in actions
     }
 
-    async def route(event: SelectionEvent) -> None:
-        binding = routes.get(event.values[0]) if len(event.values) == 1 else None
-        if binding is not None:
-            await binding.handler(event)
-
     return SelectMenu(
         tuple(Option(_resolve(action.label, context), action.key) for action in actions),
-        route,
+        RouteSelection(routes),
         key,
         placeholder=label or "Choose an action",
         routes=routes,

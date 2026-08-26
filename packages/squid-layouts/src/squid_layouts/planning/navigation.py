@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from squid_layouts.chrome import Chrome
 from squid_layouts.interactions import SelectionEvent
+from squid_layouts.planning.generated import GeneratedHandler
 from squid_layouts.primitives.nodes import (
     Button,
     Gallery,
@@ -26,6 +27,15 @@ MATERIALIZED_SEEK_KEY = "__cursor_seek"
 
 SEEK_OPTION_LIMIT = 25
 """Options one jump select may carry -- Discord's per-menu maximum."""
+
+
+@dataclass(frozen=True, slots=True)
+class _SeekSelection(GeneratedHandler[SelectionEvent]):
+    seek: Callable[[int], Awaitable[None]]
+
+    async def __call__(self, event: SelectionEvent) -> None:
+        if event.values:
+            await self.seek(int(event.values[0]))
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,15 +173,11 @@ def seek_control(context: NavigationContext) -> SelectMenu | None:
         return None
     label = state.page_option
 
-    async def on_select(event: SelectionEvent) -> None:
-        if event.values:
-            await seek(int(event.values[0]))
-
     return SelectMenu(
         options=tuple(
             Option(label(number + 1), str(number), default=number == page) for number in _seek_pages(page, extent)
         ),
-        on_select=on_select,
+        on_select=_SeekSelection(seek),
         key=state.seek_key,
         placeholder=state.seek_label or None,
     )

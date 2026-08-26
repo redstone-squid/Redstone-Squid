@@ -4,12 +4,14 @@ from dataclasses import replace
 from time import perf_counter
 
 from squid_discord import DISCORD_V2_DPY27, compose
-from squid_layouts import Palette, fallback, scene
+from squid_layouts import Palette, fallback, form, scene
+from squid_layouts.forms import FormSpec, TextField
 from squid_layouts.planning import PlanCache, PlanMemo, plan
 from squid_layouts.planning.adapter import AdapterProfile
 from squid_layouts.planning.cache import CachedPlan
 from squid_layouts.planning.discord import components_v2_target
 from squid_layouts.planning.limits import LIMITS, V2Limits
+from squid_layouts.planning.semantic_adaptation.handlers import ChooseChoice
 from squid_layouts.planning.types import DiscordAdapter
 from squid_layouts.primitives import (
     Button,
@@ -23,7 +25,19 @@ from squid_layouts.primitives import (
 )
 from squid_layouts.runtime import PresentationSession
 from squid_layouts.scene.model import PlanReport
-from squid_layouts.semantic import Action, Actions, Heading, List, ListItem, Paragraph, Section, Stack
+from squid_layouts.semantic import (
+    Action,
+    Actions,
+    Choice,
+    Choices,
+    Heading,
+    List,
+    ListItem,
+    Managed,
+    Paragraph,
+    Section,
+    Stack,
+)
 from squid_layouts.text import Localization, Message
 
 
@@ -46,6 +60,12 @@ async def _previous(_event) -> None: ...
 
 
 async def _next(_event) -> None: ...
+
+
+async def _submitted_first(_event) -> None: ...
+
+
+async def _submitted_second(_event) -> None: ...
 
 
 def test_palette_is_part_of_plan_cache_identity() -> None:
@@ -112,20 +132,63 @@ def test_cache_hit_reuses_every_decision_without_measuring(monkeypatch) -> None:
 
     monkeypatch.setattr(planner_module, "measure", counted)
     cache = PlanCache()
-    document = (
-        *(Paragraph(f"component {index}") for index in range(35)),
-        Actions(
-            tuple(Action(f"run.{index}", f"Run {index}", _first) for index in range(5)),
-            key="tools",
-        ),
-    )
 
-    miss = plan(document, target=DISCORD_V2_DPY27, cache=cache)
-    hit = plan(document, target=DISCORD_V2_DPY27, cache=cache)
+    def document(handler):
+        return (
+            *(Paragraph(f"component {index}") for index in range(35)),
+            Actions(
+                tuple(Action(f"run.{index}", f"Run {index}", handler) for index in range(5)),
+                key="tools",
+            ),
+        )
+
+    miss = plan(document(_first), target=DISCORD_V2_DPY27, cache=cache)
+    monkeypatch.setattr(planner_module, "lower_semantics", _never_measured)
+    hit = plan(document(_second), target=DISCORD_V2_DPY27, cache=cache)
 
     assert attempts == miss.metrics.states_explored == 2
     assert hit.metrics == replace(miss.metrics, cache_hit=True, reuse=scene.PlanReuse.STRUCTURAL)
     assert hit.scene is miss.scene
+    assert all(route.handler is _second for route in hit.bindings["tools.default.0"].routes.values())
+
+
+def test_structural_program_rebinds_generated_form_adapter_without_lowering(monkeypatch) -> None:
+    import squid_layouts.planning.planner as planner_module
+
+    cache = PlanCache()
+    spec = FormSpec("Edit", (TextField(key="name", label="Name"),))
+    first = plan(
+        form("Edit", spec, key="edit", on_submit=_submitted_first),
+        target=DISCORD_V2_DPY27,
+        cache=cache,
+    )
+
+    monkeypatch.setattr(planner_module, "lower_semantics", _never_measured)
+    hit = plan(
+        form("Edit", spec, key="edit", on_submit=_submitted_second),
+        target=DISCORD_V2_DPY27,
+        cache=cache,
+    )
+
+    assert hit.scene is first.scene
+    assert hit.form_bindings["edit"].on_submit is _submitted_second
+
+
+def test_structural_program_rebinds_managed_controls_to_the_current_session(monkeypatch) -> None:
+    import squid_layouts.planning.planner as planner_module
+
+    cache = PlanCache()
+    document = Choices("pick", (Choice("a", "A"), Choice("b", "B")), Managed(()))
+    first_session = PresentationSession()
+    current_session = PresentationSession()
+    plan(document, target=DISCORD_V2_DPY27, session=first_session, cache=cache)
+
+    monkeypatch.setattr(planner_module, "lower_semantics", _never_measured)
+    hit = plan(document, target=DISCORD_V2_DPY27, session=current_session, cache=cache)
+
+    handler = hit.bindings["pick.a"].handler
+    assert isinstance(handler, ChooseChoice)
+    assert handler.commit.session is current_session
 
 
 def test_cache_hit_reuses_variant_positions_and_rebinds_the_selected_rung() -> None:
@@ -192,7 +255,9 @@ def test_plan_cache_evicts_the_least_recently_used_entry() -> None:
     assert len(cache) == 2
 
 
-def test_cache_hit_rebinds_solver_generated_pager_controls() -> None:
+def test_cache_hit_rebinds_solver_generated_pager_controls(monkeypatch) -> None:
+    import squid_layouts.planning.planner as planner_module
+
     cache = PlanCache()
 
     def nav(state):
@@ -207,6 +272,7 @@ def test_cache_hit_rebinds_solver_generated_pager_controls() -> None:
 
     document = Code("x" * 9000, overflow=Paginate(key="traceback"))
     plan(document, target=DISCORD_V2_DPY27, nav=nav, cache=cache)
+    monkeypatch.setattr(planner_module, "lower_semantics", _never_measured)
     cached = plan(document, target=DISCORD_V2_DPY27, nav=nav, cache=cache)
 
     assert cached.metrics.cache_hit
