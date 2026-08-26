@@ -14,7 +14,7 @@ from discord import app_commands
 from discord.ext.commands import Cog, Context, hybrid_group
 
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.ui import info_layout, reply_presentation
+from squid.bot.ui import info_layout, reply_payload
 from squid.bot.utils.accounts import account_id_for
 from squid.bot.utils.autocomplete import autocompletes, guild_context, suggests
 from squid.bot.utils.permissions import (
@@ -81,7 +81,7 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
 
     async def _reply(self, ctx: Context[BotT], title: str, body: str) -> None:
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        await reply_presentation(
+        await reply_payload(
             ctx,
             info_layout(t(locale, title), body or t(locale, _("Nothing to show."))),
             visibility="personal" if personal(ctx) else "public",

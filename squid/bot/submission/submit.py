@@ -22,7 +22,7 @@ from squid.bot.submission.media import CatboxMirror
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.components import EphemeralBuildEditButton
 from squid.bot.submission.ui.views import SubmissionFormComponent
-from squid.bot.ui import error_layout, render_presentation, respond_presentation, text_layout
+from squid.bot.ui import error_layout, render_payload, respond_payload, text_layout
 from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.bot.utils.permissions import enforce
 from squid.bot.utils.sticky_message import StickyMessage
@@ -117,7 +117,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             if build_size is not None:
                 draft.dimensions = parse_dimensions(build_size)
         except ValueError as error:
-            await respond_presentation(
+            await respond_payload(
                 interaction,
                 error_layout(t(locale, _("Check the dimensions")), str(error)),
             )
@@ -225,7 +225,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             _("## Submitted for review\nSubmission ID: `{id}`\nStaff can now review and vote on this build."),
             id=build.id,
         )
-        preview = render_presentation(
+        preview = render_payload(
             [
                 sl.primitives.Text(heading),
                 await self.bot.for_build(build).render_node(),
@@ -404,7 +404,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         # A context menu cannot carry `requires(...)`, so the same denial is raised by hand.
         await enforce(interaction, BUILD_SUBMISSION_RECALC)
         if not self._is_build_log_message(message):
-            await respond_presentation(
+            await respond_payload(
                 interaction,
                 error_layout(
                     t(locale, _("Nothing to recalculate")),
@@ -417,7 +417,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             IdentityProvider.DISCORD, str(message.author.id)
         )
         if account is None or account.id is None or account.needs_consent_refresh:
-            await respond_presentation(
+            await respond_payload(
                 interaction,
                 error_layout(
                     t(locale, _("Author has not consented")),
@@ -436,4 +436,4 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             return
 
         await self.infer_build_from_message(message)
-        await respond_presentation(interaction, text_layout(t(locale, _("Build recalculated."))))
+        await respond_payload(interaction, text_layout(t(locale, _("Build recalculated."))))

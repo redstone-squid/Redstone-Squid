@@ -5,7 +5,7 @@ import discord
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.i18n import t
-from squid.bot.ui import render_presentation
+from squid.bot.ui import render_payload
 from squid.core.i18n import _
 from squid.starboard.application import EntryState
 
@@ -49,4 +49,4 @@ def starboard_layout(
     if entry.raw_count != entry.score:
         score += t(locale, _(" ({count} reactions)"), count=entry.raw_count)
     children.append(sl.primitives.Footer(f"{score} · <#{message.channel.id}>"))
-    return render_presentation([sl.primitives.Panel(tuple(children), accent=config.colour)], locale=locale)
+    return render_payload([sl.primitives.Panel(tuple(children), accent=config.colour)], locale=locale)
