@@ -158,7 +158,7 @@ async def test_open_publishes_one_whole_session_and_finish_deletes_it() -> None:
         assert isinstance(result.session, DurableSession)
         records = await store.list()
         assert len(records) == 1
-        record = DurableSessionCodec.loads(records[0].snapshot_payload)
+        record = DurableSessionCodec.loads(records[0].record_payload)
         assert record.key == SessionKey.user("counter", 7)
         assert tuple(state.id for state in record.mounts) == ("root",)
 
@@ -178,7 +178,7 @@ async def test_initial_summary_records_the_opener_as_a_participant() -> None:
 
         assert isinstance(result, Opened)
         records = await store.list()
-        assert json.loads(records[0].summary_payload)["members"] == [7]
+        assert json.loads(records[0].snapshot_payload)["members"] == [7]
         tasks.cancel_scope.cancel()
 
 
@@ -257,7 +257,7 @@ async def test_suppressed_runtime_commit_checkpoints_hidden_component_state() ->
             while True:
                 stored = await store.load(opened.session.id)
                 assert stored is not None
-                snapshot = DurableSessionCodec.loads(stored.snapshot_payload).mounts[0].state
+                snapshot = DurableSessionCodec.loads(stored.record_payload).mounts[0].state
                 if snapshot.components[0].state.get("advanced") is True:
                     break
                 await anyio.sleep(0)
@@ -303,7 +303,7 @@ async def test_attached_mount_is_checkpointed_in_the_same_record() -> None:
         )
 
         assert isinstance(attached, Opened)
-        record = DurableSessionCodec.loads((await store.list())[0].snapshot_payload)
+        record = DurableSessionCodec.loads((await store.list())[0].record_payload)
         assert len(record.mounts) == 2
         assert record.mounts[1].parent_id == "root"
         assert record.mounts[1].actor_id == 8
@@ -392,7 +392,7 @@ async def test_corrupt_record_does_not_block_healthy_recovery() -> None:
     assert stored is not None
     token = await store.claim(broken_id, "corruptor", 1.0)
     assert token is not None
-    assert await store.save(token, stored.summary_payload, "{")
+    assert await store.save(token, stored.snapshot_payload, "{")
     assert await store.release(token)
 
     second_runtime = runtime(store, FakeFrontend())
@@ -443,7 +443,7 @@ async def test_missing_child_is_pruned_from_the_whole_session_record() -> None:
         assert isinstance(attached, Opened)
         stored = await store.load(opened.session.id)
         assert stored is not None
-        child_id = DurableSessionCodec.loads(stored.snapshot_payload).mounts[1].id
+        child_id = DurableSessionCodec.loads(stored.record_payload).mounts[1].id
         record_id = opened.session.id
         tasks.cancel_scope.cancel()
 
@@ -456,7 +456,7 @@ async def test_missing_child_is_pruned_from_the_whole_session_record() -> None:
             while True:
                 stored = await store.load(record_id)
                 assert stored is not None
-                if len(DurableSessionCodec.loads(stored.snapshot_payload).mounts) == 1:
+                if len(DurableSessionCodec.loads(stored.record_payload).mounts) == 1:
                     break
                 await anyio.sleep(0)
         tasks.cancel_scope.cancel()
@@ -526,7 +526,7 @@ async def test_a_durable_join_is_checkpointed_and_survives_recovery() -> None:
         assert (await opened.session.join(8)).status is MembershipStatus.JOINED
 
         # Checkpointed by the join itself, with no maintenance sweep in between.
-        payload = (await store.list())[0].snapshot_payload
+        payload = (await store.list())[0].record_payload
         raw = json.loads(payload)
         assert raw["protocol"] == DurableSessionCodec.protocol
         assert {"state", "address"} <= raw["mounts"][0].keys()
@@ -620,7 +620,7 @@ async def test_a_failed_membership_checkpoint_leaves_the_session_dirty_and_usabl
         assert session.health is DurabilityHealth.CHECKPOINT_PENDING
 
         await durable.flush()
-        record = DurableSessionCodec.loads((await store.list())[0].snapshot_payload)
+        record = DurableSessionCodec.loads((await store.list())[0].record_payload)
         assert record.members == frozenset({7, 8})
         assert session.health is DurabilityHealth.HEALTHY
         tasks.cancel_scope.cancel()
@@ -656,13 +656,13 @@ async def test_a_protocol_1_record_recovers_unbounded_with_its_opener_as_member(
 
     # Rewrite the stored pair as a record and summary from before membership existed.
     stored = (await store.list())[0]
-    snapshot = json.loads(stored.snapshot_payload)
+    snapshot = json.loads(stored.record_payload)
     snapshot["protocol"] = 1
     for mount in snapshot["mounts"]:
         mount["snapshot"] = mount.pop("state")
         mount["locator"] = mount.pop("address")
     del snapshot["members"], snapshot["capacity"]
-    summary = json.loads(stored.summary_payload)
+    summary = json.loads(stored.snapshot_payload)
     del summary["members"]
     store._records[stored.key] = StoredSessionRecord(
         stored.key, stored.scope, json.dumps(summary), json.dumps(snapshot)
@@ -684,7 +684,7 @@ async def test_a_protocol_1_record_recovers_unbounded_with_its_opener_as_member(
 
         # Recovery requests a checkpoint, which rewrites the record at the current protocol.
         await second.flush()
-        upgraded = DurableSessionCodec.loads((await store.list())[0].snapshot_payload)
+        upgraded = DurableSessionCodec.loads((await store.list())[0].record_payload)
         assert upgraded.protocol == 3
         tasks.cancel_scope.cancel()
 
@@ -700,10 +700,10 @@ async def test_a_summary_disagreeing_with_its_record_is_refused() -> None:
         tasks.cancel_scope.cancel()
 
     stored = (await store.list())[0]
-    summary = json.loads(stored.summary_payload)
+    summary = json.loads(stored.snapshot_payload)
     summary["members"] = [7, 8]
     store._records[stored.key] = StoredSessionRecord(
-        stored.key, stored.scope, json.dumps(summary), stored.snapshot_payload
+        stored.key, stored.scope, json.dumps(summary), stored.record_payload
     )
 
     async with anyio.create_task_group() as tasks:
@@ -732,7 +732,7 @@ async def test_a_durable_quota_survives_recovery() -> None:
             domain="game",
         )
         assert isinstance(opened, Opened)
-        record = DurableSessionCodec.loads((await store.list())[0].snapshot_payload)
+        record = DurableSessionCodec.loads((await store.list())[0].record_payload)
         assert record.quota == 1
         assert record.domain == "game"
         tasks.cancel_scope.cancel()

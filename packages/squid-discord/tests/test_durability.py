@@ -46,7 +46,7 @@ def _registry(*, version: int = 1, migrations=None) -> ComponentRegistry:
     return registry
 
 
-def _snapshot_store(kind: str, path: Path, clock: Callable[[], float]) -> DurableSessionStore:
+def _session_store(kind: str, path: Path, clock: Callable[[], float]) -> DurableSessionStore:
     if kind == "memory":
         return MemorySessionStore(clock=clock)
     return SQLiteSessionStore(path, table_name="durable_sessions", clock=clock)
@@ -65,8 +65,8 @@ async def _publish(
     token = await store.commit(
         reservation,
         key=key,
-        summary_payload=f"summary:{key}",
         snapshot_payload=f"snapshot:{key}",
+        record_payload=f"record:{key}",
         victims=victims,
         lease_seconds=10.0,
     )
@@ -75,9 +75,9 @@ async def _publish(
 
 
 @pytest.mark.parametrize("kind", ["memory", "sqlite"])
-async def test_fenced_snapshot_store_contract(kind: str, tmp_path: Path) -> None:
+async def test_fenced_session_store_contract(kind: str, tmp_path: Path) -> None:
     now = [100.0]
-    store = _snapshot_store(kind, tmp_path / "snapshots.sqlite3", lambda: now[0])
+    store = _session_store(kind, tmp_path / "sessions.sqlite3", lambda: now[0])
 
     assert await store.load("missing") is None
     first = await _publish(store, key="first", owner="alpha")
@@ -95,16 +95,16 @@ async def test_fenced_snapshot_store_contract(kind: str, tmp_path: Path) -> None
     assert not await store.renew(alpha, 10.0)
     assert not await store.save(alpha, "stale", "stale")
     assert not await store.delete(alpha)
-    assert await store.save(beta, "replacement summary", "replacement snapshot")
+    assert await store.save(beta, "replacement snapshot", "replacement record")
     loaded = await store.load("first")
-    assert loaded is not None and loaded.snapshot_payload == "replacement snapshot"
+    assert loaded is not None and loaded.record_payload == "replacement record"
     assert await store.delete(beta)
     assert await store.load("first") is None
 
 
 @pytest.mark.parametrize("kind", ["memory", "sqlite"])
 async def test_admission_atomically_retires_victims_and_fences_their_writers(kind: str, tmp_path: Path) -> None:
-    store = _snapshot_store(kind, tmp_path / "snapshots.sqlite3", lambda: 100.0)
+    store = _session_store(kind, tmp_path / "sessions.sqlite3", lambda: 100.0)
     victim = await _publish(store, key="victim")
     newcomer = await _publish(store, key="newcomer", victims=("victim",))
 
@@ -116,7 +116,7 @@ async def test_admission_atomically_retires_victims_and_fences_their_writers(kin
 
 async def test_lost_admission_token_cannot_publish(tmp_path: Path) -> None:
     now = [100.0]
-    store = SQLiteSessionStore(tmp_path / "snapshots.sqlite3", clock=lambda: now[0])
+    store = SQLiteSessionStore(tmp_path / "sessions.sqlite3", clock=lambda: now[0])
     stale = await store.reserve("scope", "first", 10.0)
     assert stale is not None
     now[0] = 110.1
@@ -127,8 +127,8 @@ async def test_lost_admission_token_cannot_publish(tmp_path: Path) -> None:
         await store.commit(
             stale,
             key="stale",
-            summary_payload="summary",
             snapshot_payload="snapshot",
+            record_payload="record",
             victims=(),
             lease_seconds=10.0,
         )
@@ -138,7 +138,7 @@ async def test_lost_admission_token_cannot_publish(tmp_path: Path) -> None:
 
 
 async def test_sqlite_store_serializes_claim_contention(tmp_path: Path) -> None:
-    path = tmp_path / "snapshots.sqlite3"
+    path = tmp_path / "sessions.sqlite3"
     writer = SQLiteSessionStore(path)
     token = await _publish(writer, key="session")
     assert await writer.release(token)
@@ -155,9 +155,9 @@ async def test_sqlite_store_serializes_claim_contention(tmp_path: Path) -> None:
     assert sorted(results) == [False, True]
 
 
-def test_snapshot_store_rejects_unsafe_table_names(tmp_path: Path) -> None:
+def test_session_store_rejects_unsafe_table_names(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="SQL identifier"):
-        SQLiteSessionStore(tmp_path / "snapshots.sqlite3", table_name="snapshots; DROP TABLE users")
+        SQLiteSessionStore(tmp_path / "sessions.sqlite3", table_name="snapshots; DROP TABLE users")
 
 
 def test_component_tree_state_and_page_cursors_round_trip_as_canonical_json() -> None:
