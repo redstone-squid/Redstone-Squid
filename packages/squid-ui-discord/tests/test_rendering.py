@@ -169,6 +169,51 @@ class TestRenderCaching:
         assert len(root.child.services) == 2
         assert root.child.services[-1] is not first_service
 
+    def test_context_cache_version_can_certify_distinct_values(self) -> None:
+        class Service:
+            def __init__(self, version: int) -> None:
+                self.version = version
+
+        service_key = ContextKey[Service]("service", cache_version=lambda service: service.version)
+
+        class Child(Component):
+            def __init__(self) -> None:
+                self.renders = 0
+
+            def render(self) -> Text:
+                self.renders += 1
+                return Text(str(self.inject(service_key).version))
+
+        class Root(Component):
+            service_version: int = state(0)
+            unrelated: int = state(0)
+
+            def __init__(self) -> None:
+                self.child = Child()
+
+            def render(self):
+                _ = self.unrelated
+                self.provide(service_key, Service(self.service_version))
+                return self.boundary(self.child, key="child")
+
+        root = Root()
+        runtime = ComponentRuntime(root)
+        initial = runtime.render()
+        runtime.commit(initial, rendered_revision=runtime.revision)
+
+        root.unrelated = 1
+        equivalent = runtime.render(reuse_committed=True)
+        runtime.commit(equivalent, rendered_revision=runtime.revision)
+
+        assert root.child.renders == 1
+        assert equivalent.nodes == (Text("0"),)
+
+        root.service_version = 1
+        changed = runtime.render(reuse_committed=True)
+
+        assert root.child.renders == 2
+        assert changed.nodes == (Text("1"),)
+
     @settings(max_examples=20, deadline=None)
     @given(
         st.lists(
