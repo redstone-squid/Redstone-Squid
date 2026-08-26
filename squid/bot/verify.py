@@ -8,7 +8,7 @@ import discord
 from discord import app_commands
 from discord.ext.commands import Cog, Context, hybrid_group
 
-import squid_discord as sd
+import squid_ui_discord as sd
 import squid_ui as sl
 from squid.accounts.domain import (
     CURRENT_CONSENT_VERSION,

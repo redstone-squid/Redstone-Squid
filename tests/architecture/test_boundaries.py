@@ -13,7 +13,7 @@ SCAN_ROOTS = (
     Path("squid"),
     Path("packages/squid-reactivity/src"),
     Path("packages/squid-ui/src"),
-    Path("packages/squid-discord/src"),
+    Path("packages/squid-ui-discord/src"),
     Path("packages/squid-ui-widgets/src"),
     Path("packages/squid-replication/src"),
 )
@@ -68,7 +68,7 @@ def test_layouts_package_stays_standalone() -> None:
         .should_not_import("sqlalchemy*")
         .should_not_import("fastapi*")
         .should_not_import("nucleation*")
-        .should_not_import("squid_discord*")
+        .should_not_import("squid_ui_discord*")
         .should_not_import("squid_ui_widgets*")
         .check("squid_ui", only_direct_imports=True)
     )
@@ -77,14 +77,14 @@ def test_layouts_package_stays_standalone() -> None:
 def test_discord_package_stays_a_leaf() -> None:
     """The transport adapter is downstream of everything; nothing may point back at it."""
     (
-        archrule("squid-discord depends on the engine, not on the host")
-        .match("squid_discord*")
+        archrule("squid-ui-discord depends on the engine, not on the host")
+        .match("squid_ui_discord*")
         .should_not_import("squid")
         .should_not_import("squid.*")
         .should_not_import("sqlalchemy*")
         .should_not_import("fastapi*")
         .should_not_import("nucleation*")
-        .check("squid_discord", only_direct_imports=True)
+        .check("squid_ui_discord", only_direct_imports=True)
     )
 
 
@@ -110,7 +110,7 @@ def test_reactive_package_has_no_hard_dependencies() -> None:
 def test_patterns_package_is_transport_free() -> None:
     """State machines render through the engine; they never name a runtime.
 
-    The payoff of the extraction: `squid_ui_widgets` sits beside `squid_discord`, not below it,
+    The payoff of the extraction: `squid_ui_widgets` sits beside `squid_ui_discord`, not below it,
     so a pattern cannot quietly acquire a Discord dependency and become unusable anywhere else.
     """
     (
@@ -118,7 +118,7 @@ def test_patterns_package_is_transport_free() -> None:
         .match("squid_ui_widgets*")
         .should_not_import("discord*")
         .should_not_import("anyio*")
-        .should_not_import("squid_discord*")
+        .should_not_import("squid_ui_discord*")
         .should_not_import("squid_storage*")
         .should_not_import("squid")
         .should_not_import("squid.*")
@@ -128,7 +128,7 @@ def test_patterns_package_is_transport_free() -> None:
 
 def test_only_the_bot_transport_uses_the_ui_packages() -> None:
     """Presentation is `squid.bot`'s business; no other layer may reach for a UI package."""
-    for package in ("squid_ui*", "squid_discord*", "squid_ui_widgets*"):
+    for package in ("squid_ui*", "squid_ui_discord*", "squid_ui_widgets*"):
         (
             archrule(f"{package} is a Discord presentation concern")
             .match("squid*")
@@ -191,9 +191,9 @@ def test_static_layout_rendering_stays_behind_the_host_wrapper() -> None:
                 continue
             resolved = ".".join((aliases.get(target.id, target.id), *reversed(parts)))
             # These are dotted *call* targets (package attribute -> function), not module
-            # paths: squid_discord.composition defines compose(), so a call resolves
-            # to "squid_discord.compose" regardless of which file compose() lives in.
-            if resolved in {"squid_discord.compose", "squid_discord.render_static"}:
+            # paths: squid_ui_discord.composition defines compose(), so a call resolves
+            # to "squid_ui_discord.compose" regardless of which file compose() lives in.
+            if resolved in {"squid_ui_discord.compose", "squid_ui_discord.render_static"}:
                 violations.append(f"{path}:{node.lineno}")
 
     assert violations == []
@@ -564,7 +564,7 @@ def test_the_engine_needs_no_transport_install() -> None:
     TYPE_CHECKING, which is where a back-edge would hide from a plain dependency check.
     """
     root = Path("packages/squid-ui/src/squid_ui")
-    blocked = {"anyio", "discord", "squid_storage", "squid_discord", "squid_ui_widgets"}
+    blocked = {"anyio", "discord", "squid_storage", "squid_ui_discord", "squid_ui_widgets"}
     violations: list[str] = []
     for path in root.rglob("*.py"):
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):

@@ -13,7 +13,7 @@ from typing import cast
 
 import discord
 
-import squid_discord as sd
+import squid_ui_discord as sd
 import squid_ui as sl
 import squid_ui_widgets as sp
 from squid.accounts.application import AccountService

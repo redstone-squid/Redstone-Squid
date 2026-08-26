@@ -1,6 +1,6 @@
 """The controls an open poll's card carries."""
 
-import squid_discord as sd
+import squid_ui_discord as sd
 from squid.bot.voting.rendering import render_generic_poll
 from squid.voting.domain import VoteSessionResult, VoteStatus
 from tests.helpers.voting import poll_snapshot

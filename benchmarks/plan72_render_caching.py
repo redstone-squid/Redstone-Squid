@@ -10,8 +10,8 @@ import json
 import time
 from dataclasses import asdict, dataclass
 
-from squid_discord import Everyone, Mount
-from squid_discord.testing import commit_render
+from squid_ui_discord import Everyone, Mount
+from squid_ui_discord.testing import commit_render
 from squid_ui import Component, computed, state
 from squid_ui.primitives import Text
 

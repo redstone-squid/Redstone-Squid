@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, override
 
 from discord import Interaction, TextChannel
 
-import squid_discord as sd
+import squid_ui_discord as sd
 import squid_ui as sl
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.bot.consent import CONSENT_SCREEN, ConsentPrompt
@@ -20,7 +20,7 @@ from squid.bot.ui import (
 )
 from squid.bot.utils.sticky_message import StickyMessage
 from squid.core.i18n import _
-from squid_discord.sessions import Opened, Rejected
+from squid_ui_discord.sessions import Opened, Rejected
 
 if TYPE_CHECKING:
     # importing this causes a circular import at runtime

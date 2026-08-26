@@ -210,7 +210,7 @@ def make_layout_bot(**attributes: Any) -> Any:
     `LayoutHost.of(source)`, so a test building one needs a real installation rather than a
     bare `SessionRegistry`. The installation is weakly keyed, so it leaves with the double.
     """
-    import squid_discord as sd
+    import squid_ui_discord as sd
     from squid.bot.ui import HOST_DEFAULTS
     from squid_reactivity import LocalTopicBus
 

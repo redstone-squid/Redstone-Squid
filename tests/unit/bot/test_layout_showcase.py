@@ -8,7 +8,7 @@ import discord
 import pytest
 from discord.ext import commands
 
-import squid_discord as sd
+import squid_ui_discord as sd
 import squid_ui as sl
 from squid.bot.layout_showcase import (
     Appearance,
@@ -19,9 +19,9 @@ from squid.bot.layout_showcase import (
     PreviewPanel,
     Session,
 )
-from squid_discord import Everyone, Mount, MountScheduler, Owner, SessionKey, SessionRegistry
-from squid_discord.sessions import UserScope
-from squid_discord.testing import (
+from squid_ui_discord import Everyone, Mount, MountScheduler, Owner, SessionKey, SessionRegistry
+from squid_ui_discord.sessions import UserScope
+from squid_ui_discord.testing import (
     assert_within_limits,
     commit_render,
     delivered_to,

@@ -9,7 +9,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-import squid_discord as sd
+import squid_ui_discord as sd
 from squid.accounts.errors import ConsentRequiredError
 from squid.bot.ui import error_layout, reply_presentation, respond_presentation
 from squid.bot.utils.permissions import PermissionNodeRequired

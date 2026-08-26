@@ -4,7 +4,7 @@ from typing import Protocol, cast
 
 import discord
 
-import squid_discord as sd
+import squid_ui_discord as sd
 from squid.bot.routes._root import routes
 
 

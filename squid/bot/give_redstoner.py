@@ -17,7 +17,7 @@ from squid.bot.utils.permissions import check_is_home_server, hide_unless, requi
 from squid.community.domain import RedstonerDecisionKind
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import REDSTONER_PANEL_MANAGE, REDSTONER_ROLE_RESYNC
-from squid_discord import send_to
+from squid_ui_discord import send_to
 
 if TYPE_CHECKING:
     import squid.bot.app
