@@ -3,26 +3,26 @@
 from typing import Any
 
 from squid_layouts.scene.model import (
-    SceneButton,
-    SceneClassicMessage,
-    SceneComponentsV2,
-    SceneEntitySelect,
-    SceneExtension,
-    SceneFile,
-    SceneGallery,
-    SceneLink,
-    ScenePanel,
-    ScenePremiumButton,
-    SceneRoutedButton,
-    SceneRoutedSelect,
-    SceneRow,
-    SceneSection,
-    SceneSelect,
-    SceneSeparator,
-    SceneText,
-    SceneThumbnail,
-    SceneTime,
-    SceneZonedTime,
+    Button,
+    ClassicMessage,
+    ComponentsV2,
+    EntitySelect,
+    Extension,
+    File,
+    Gallery,
+    Link,
+    Panel,
+    PremiumButton,
+    RoutedButton,
+    RoutedSelect,
+    Row,
+    Section,
+    Select,
+    Separator,
+    Text,
+    Thumbnail,
+    Time,
+    ZonedTime,
 )
 
 
@@ -35,7 +35,7 @@ def _node(kind: str, properties: dict[str, Any], *required: str) -> dict[str, An
     }
 
 
-SCENE_SCHEMA: dict[str, Any] = {
+SCHEMA: dict[str, Any] = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://schem-at.github.io/squid-layouts/scene-v1.schema.json",
     "title": "squid-layouts resolved scene protocol 1",
@@ -76,14 +76,14 @@ SCENE_SCHEMA: dict[str, Any] = {
     },
     "required": ["protocol", "target", "target_version", "body", "assets", "pagers"],
     "$defs": {
-        "body": {"oneOf": [{"$ref": f"#/$defs/{kind}"} for kind in (SceneComponentsV2.KIND, SceneClassicMessage.KIND)]},
+        "body": {"oneOf": [{"$ref": f"#/$defs/{kind}"} for kind in (ComponentsV2.KIND, ClassicMessage.KIND)]},
         "components_v2": _node(
-            SceneComponentsV2.KIND,
+            ComponentsV2.KIND,
             {"children": {"type": "array", "items": {"$ref": "#/$defs/node"}}},
             "children",
         ),
         "classic_message": _node(
-            SceneClassicMessage.KIND,
+            ClassicMessage.KIND,
             {
                 "content": {"type": ["string", "null"]},
                 "embeds": {"type": "array", "items": {"$ref": "#/$defs/embed"}},
@@ -193,35 +193,35 @@ SCENE_SCHEMA: dict[str, Any] = {
             "oneOf": [
                 {"$ref": f"#/$defs/{kind}"}
                 for kind in (
-                    SceneText.KIND,
-                    SceneTime.KIND,
-                    SceneZonedTime.KIND,
-                    SceneFile.KIND,
-                    SceneSeparator.KIND,
-                    SceneLink.KIND,
-                    SceneButton.KIND,
-                    SceneRoutedButton.KIND,
-                    ScenePremiumButton.KIND,
-                    SceneSelect.KIND,
-                    SceneRoutedSelect.KIND,
-                    SceneEntitySelect.KIND,
-                    SceneRow.KIND,
-                    SceneThumbnail.KIND,
-                    SceneGallery.KIND,
-                    SceneSection.KIND,
-                    ScenePanel.KIND,
-                    SceneExtension.KIND,
+                    Text.KIND,
+                    Time.KIND,
+                    ZonedTime.KIND,
+                    File.KIND,
+                    Separator.KIND,
+                    Link.KIND,
+                    Button.KIND,
+                    RoutedButton.KIND,
+                    PremiumButton.KIND,
+                    Select.KIND,
+                    RoutedSelect.KIND,
+                    EntitySelect.KIND,
+                    Row.KIND,
+                    Thumbnail.KIND,
+                    Gallery.KIND,
+                    Section.KIND,
+                    Panel.KIND,
+                    Extension.KIND,
                 )
             ]
         },
         "text": _node(
-            SceneText.KIND,
+            Text.KIND,
             {"content": {"type": "string"}, "dialect": {"enum": ["plain", "discord-markdown"]}},
             "content",
             "dialect",
         ),
         "time": _node(
-            SceneTime.KIND,
+            Time.KIND,
             {
                 "instant": {"type": "string", "format": "date-time"},
                 "style": {"enum": ["t", "T", "d", "D", "f", "F", "R"]},
@@ -232,7 +232,7 @@ SCENE_SCHEMA: dict[str, Any] = {
             "prefix",
         ),
         "zoned_time": _node(
-            SceneZonedTime.KIND,
+            ZonedTime.KIND,
             {
                 "instant": {"type": "string", "format": "date-time"},
                 "timezone": {"type": "string", "minLength": 1},
@@ -243,7 +243,7 @@ SCENE_SCHEMA: dict[str, Any] = {
             "prefix",
         ),
         "file": _node(
-            SceneFile.KIND,
+            File.KIND,
             {
                 "asset_key": {"type": "string"},
                 "name": {"type": "string"},
@@ -255,13 +255,13 @@ SCENE_SCHEMA: dict[str, Any] = {
             "media_type",
         ),
         "separator": _node(
-            SceneSeparator.KIND,
+            Separator.KIND,
             {"large": {"type": "boolean"}, "visible": {"type": "boolean"}},
             "large",
             "visible",
         ),
         "link": _node(
-            SceneLink.KIND,
+            Link.KIND,
             {
                 "label": {"type": ["string", "null"]},
                 "url": {"type": "string", "maxLength": 512},
@@ -272,12 +272,12 @@ SCENE_SCHEMA: dict[str, Any] = {
             "url",
         ),
         "premium_button": _node(
-            ScenePremiumButton.KIND,
+            PremiumButton.KIND,
             {"sku_id": {"type": "integer", "minimum": 1}},
             "sku_id",
         ),
         "button": _node(
-            SceneButton.KIND,
+            Button.KIND,
             {
                 "label": {"type": ["string", "null"]},
                 "action": {"type": "string"},
@@ -294,7 +294,7 @@ SCENE_SCHEMA: dict[str, Any] = {
             "policy",
         ),
         "routed_button": _node(
-            SceneRoutedButton.KIND,
+            RoutedButton.KIND,
             {
                 "label": {"type": ["string", "null"]},
                 "route_id": {"type": "string", "maxLength": 100},
@@ -309,7 +309,7 @@ SCENE_SCHEMA: dict[str, Any] = {
             "disabled",
         ),
         "select": _node(
-            SceneSelect.KIND,
+            Select.KIND,
             {
                 "options": {"type": "array", "items": {"$ref": "#/$defs/option"}},
                 "action": {"type": "string"},
@@ -328,7 +328,7 @@ SCENE_SCHEMA: dict[str, Any] = {
             "policy",
         ),
         "routed_select": _node(
-            SceneRoutedSelect.KIND,
+            RoutedSelect.KIND,
             {
                 "options": {"type": "array", "items": {"$ref": "#/$defs/option"}, "maxItems": 25},
                 "route_id": {"type": "string", "maxLength": 100},
@@ -345,7 +345,7 @@ SCENE_SCHEMA: dict[str, Any] = {
             "disabled",
         ),
         "entity_select": _node(
-            SceneEntitySelect.KIND,
+            EntitySelect.KIND,
             {
                 "entity_type": {"enum": ["user", "role", "channel", "mentionable"]},
                 "action": {"type": "string"},
@@ -408,7 +408,7 @@ SCENE_SCHEMA: dict[str, Any] = {
             "required": ["label", "value", "description", "default"],
         },
         "row": _node(
-            SceneRow.KIND,
+            Row.KIND,
             {
                 "items": {
                     "type": "array",
@@ -426,7 +426,7 @@ SCENE_SCHEMA: dict[str, Any] = {
             "items",
         ),
         "thumbnail": _node(
-            SceneThumbnail.KIND,
+            Thumbnail.KIND,
             {
                 "url": {"type": "string"},
                 "description": {"type": ["string", "null"]},
@@ -436,7 +436,7 @@ SCENE_SCHEMA: dict[str, Any] = {
             "description",
         ),
         "gallery": _node(
-            SceneGallery.KIND,
+            Gallery.KIND,
             {"items": {"type": "array", "items": {"$ref": "#/$defs/gallery_item"}}},
             "items",
         ),
@@ -451,7 +451,7 @@ SCENE_SCHEMA: dict[str, Any] = {
             "required": ["url", "description"],
         },
         "section": _node(
-            SceneSection.KIND,
+            Section.KIND,
             {
                 "texts": {"type": "array", "items": {"$ref": "#/$defs/text"}},
                 "accessory": {
@@ -469,7 +469,7 @@ SCENE_SCHEMA: dict[str, Any] = {
             "accessory",
         ),
         "panel": _node(
-            ScenePanel.KIND,
+            Panel.KIND,
             {
                 "children": {"type": "array", "items": {"$ref": "#/$defs/node"}},
                 "accent": {"type": ["integer", "null"], "minimum": 0, "maximum": 16777215},
@@ -479,7 +479,7 @@ SCENE_SCHEMA: dict[str, Any] = {
             "accent",
         ),
         "extension": _node(
-            SceneExtension.KIND,
+            Extension.KIND,
             {
                 "extension": {"type": "string"},
                 "version": {"type": "integer", "minimum": 0},

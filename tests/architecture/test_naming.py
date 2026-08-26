@@ -67,6 +67,26 @@ SAME_CONCEPT_TWO_LAYERS = {
     "Choice",
     "Text",
     "Time",
+    # `sl.scene.X` is what `sl.X` lowers to. The `Scene` prefix that used to keep these
+    # apart repeated the import path and said nothing else, so it was dropped; the pairing
+    # is the whole point, and `sl.scene` is the namespace that disambiguates.
+    "Asset",
+    "Button",
+    "Document",
+    "EntitySelect",
+    "Extension",
+    "File",
+    "Gallery",
+    "GalleryItem",
+    "Link",
+    "Option",
+    "Panel",
+    "PremiumButton",
+    "RoutedButton",
+    "RoutedSelect",
+    "Row",
+    "Thumbnail",
+    "ZonedTime",
 }
 """Shared names that are deliberate: the same concept at two layers, or a namespaced form."""
 

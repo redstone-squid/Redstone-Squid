@@ -27,6 +27,7 @@ from squid_discord.inspection import (
 )
 from squid_discord.presentation import DiscordMode, DiscordModeError, DiscordPresentation
 from squid_discord.target import DISCORD_V1_DPY27, Target
+from squid_layouts import scene
 from squid_layouts.assets import Asset
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.document import DocumentLike
@@ -43,7 +44,7 @@ from squid_layouts.planning.target import ResourceCost
 from squid_layouts.profiling import OperationRecorder
 from squid_layouts.runtime.component import Component
 from squid_layouts.runtime.presentation import PresentationSession
-from squid_layouts.scene.model import PlanReport, PlanResult, SceneClassicMessage
+from squid_layouts.scene.model import PlanReport, PlanResult
 from squid_layouts.sources import Position
 from squid_layouts.target_types import ClassicTarget, DiscordPyAdapter
 from squid_layouts.text import NEUTRAL, Localization
@@ -56,7 +57,7 @@ def compose(
     *,
     wire: Wire | None = None,
     renderer: ClassicRenderer | None = None,
-    target: Target[ClassicLimits, SceneClassicMessage, ClassicTarget, DiscordPyAdapter] = DISCORD_V1_DPY27,
+    target: Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, DiscordPyAdapter] = DISCORD_V1_DPY27,
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,
@@ -108,7 +109,7 @@ def compose(
 def render_static(
     nodes: DocumentLike | Component,
     *,
-    target: Target[ClassicLimits, SceneClassicMessage, ClassicTarget, DiscordPyAdapter] = DISCORD_V1_DPY27,
+    target: Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, DiscordPyAdapter] = DISCORD_V1_DPY27,
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,

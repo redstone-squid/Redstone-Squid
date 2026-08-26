@@ -11,24 +11,17 @@ from urllib.parse import urlsplit
 
 import discord
 
+from squid_layouts import scene
 from squid_layouts.assets import Asset, InlineAsset, StoredAsset
-from squid_layouts.scene.model import (
-    PlanResult,
-    SceneClassicMessage,
-    SceneComponentsV2,
-    SceneDocument,
-    SceneFile,
-    SceneNode,
-    ScenePanel,
-)
+from squid_layouts.scene.model import PlanResult
 
 
-def scene_nodes(scene: SceneDocument) -> tuple[SceneNode, ...]:
+def scene_nodes(document: scene.Document) -> tuple[scene.Node, ...]:
     """Every drawable node in a scene, whichever kind of message it resolved to."""
-    match scene.body:
-        case SceneComponentsV2(children=children):
+    match document.body:
+        case scene.ComponentsV2(children=children):
             return children
-        case SceneClassicMessage(rows=rows):
+        case scene.ClassicMessage(rows=rows):
             # A classic body's text lives in embeds, which cannot reference a file; only its
             # controls can carry a link, and only rows hold controls.
             return tuple(control for row in rows for control in row.controls)
@@ -55,14 +48,14 @@ def files_for(assets: Sequence[Asset]) -> list[discord.File]:
     return files
 
 
-def linked_file_assets(nodes: Sequence[SceneNode], resources: Mapping[str, object]) -> frozenset[str]:
+def linked_file_assets(nodes: Sequence[scene.Node], resources: Mapping[str, object]) -> frozenset[str]:
     """Asset keys the scene already references by URL, which cost no attachment slot."""
     linked: set[str] = set()
     for node in nodes:
-        if isinstance(node, ScenePanel):
+        if isinstance(node, scene.Panel):
             linked.update(linked_file_assets(node.children, resources))
             continue
-        if not isinstance(node, SceneFile):
+        if not isinstance(node, scene.File):
             continue
         resource = resources.get(f"asset:{node.asset_key}")
         if not isinstance(resource, Asset) or not isinstance(resource.source, StoredAsset):
