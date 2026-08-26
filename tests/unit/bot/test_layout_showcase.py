@@ -19,7 +19,7 @@ from squid.bot.layout_showcase import (
     PreviewPanel,
     Session,
 )
-from squid_discord import Everyone, Mount, Owner, Reactor, SessionKey, SessionRegistry
+from squid_discord import Everyone, Mount, MountScheduler, Owner, SessionKey, SessionRegistry
 from squid_discord.sessions import UserScope
 from squid_discord.testing import (
     assert_within_limits,
@@ -330,14 +330,14 @@ async def test_demo_command_and_controls_are_public() -> None:
 class TestSharedAppearance:
     """The worked example: two live panels agreeing on view state neither of them owns."""
 
-    def panels(self) -> tuple[sl.runtime.LocalTopicBus, Reactor, Appearance, Session, Mount, Mount]:
+    def panels(self) -> tuple[sl.runtime.LocalTopicBus, MountScheduler, Appearance, Session, Mount, Mount]:
         bus = sl.runtime.LocalTopicBus()
-        reactor = Reactor(bus)
+        scheduler = MountScheduler(bus)
         scope = UserScope(7)
         appearance, session = Appearance(bus, scope), Session(bus, scope)
-        writer = Mount(AppearancePanel(appearance, session), access=Owner(7), scheduler=reactor, timeout=None)
-        reader = Mount(PreviewPanel(appearance, session), access=Owner(7), scheduler=reactor, timeout=None)
-        return bus, reactor, appearance, session, writer, reader
+        writer = Mount(AppearancePanel(appearance, session), access=Owner(7), scheduler=scheduler, timeout=None)
+        reader = Mount(PreviewPanel(appearance, session), access=Owner(7), scheduler=scheduler, timeout=None)
+        return bus, scheduler, appearance, session, writer, reader
 
     async def test_the_reading_panel_follows_what_it_rendered(self) -> None:
         _, _, appearance, session, writer, reader = self.panels()
@@ -351,13 +351,13 @@ class TestSharedAppearance:
         assert writer.followed == ()
 
     async def test_a_press_on_one_panel_schedules_the_other(self) -> None:
-        bus, reactor, _, _, writer, reader = self.panels()
+        bus, scheduler, _, _, writer, reader = self.panels()
         await writer.send(delivered_to(fake_message(message_id=1)))
         await reader.send(delivered_to(fake_message(message_id=2)))
 
         await writer.dispatch("controls.density", fake_interaction(user_id=7))
 
-        assert reader in reactor._queued
+        assert reader in scheduler._queued
 
     async def test_the_injected_namespace_reaches_a_leaf_and_undo_covers_it(self) -> None:
         _, _, appearance, _, writer, _ = self.panels()

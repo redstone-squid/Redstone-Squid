@@ -145,7 +145,7 @@ async def test_public_build_panel_recovers_background_refresh_after_its_followup
     build = OtherBuild(id=42)
     renderer = SimpleNamespace(render_node=AsyncMock(side_effect=[sl.paragraph("Build 42"), sl.paragraph("Build 43")]))
     topic_bus = sl.runtime.LocalTopicBus()
-    layout_reactor = sd.Reactor(topic_bus)
+    layout_reactor = sd.MountScheduler(topic_bus)
     bot = SimpleNamespace(
         services=SimpleNamespace(settings=SimpleNamespace()),
         for_build=lambda current: renderer,
@@ -159,7 +159,7 @@ async def test_public_build_panel_recovers_background_refresh_after_its_followup
     mounts: list[sd.Mount] = []
 
     def capture_mount(component: sl.Component, **kwargs: Any) -> sd.Mount:
-        mount = sd.Mount(component, access=Everyone(), timeout=None, scheduler=kwargs.get("reactor"))
+        mount = sd.Mount(component, access=Everyone(), timeout=None, scheduler=kwargs.get("scheduler"))
         mounts.append(mount)
         return mount
 

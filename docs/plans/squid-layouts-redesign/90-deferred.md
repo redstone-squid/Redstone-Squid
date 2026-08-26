@@ -18,7 +18,7 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
 - **Redux-style global store** *(still rejected)* — (CascadeUI's cross-view model: dispatch → middleware →
   reducers → subscribers). The local `Component + state() + computed + transaction`
   model is simpler and fits the frontend-neutral tree. Cross-view updates already have a
-  path: shared services + `Reactor.schedule`/`Mount.refresh`. If a real many-views-one-
+  path: shared services + `MountScheduler.schedule`/`Mount.refresh`. If a real many-views-one-
   domain need appears, add a host-side event bus, not a store in the package.
   **Revisited 2026-08-22**: the bus is [26](26-topic-bus.md), moved package-side by the
   productization decision; the store half of this rejection stands in full — the bus is

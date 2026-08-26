@@ -397,7 +397,7 @@ def create_mount(
     locale: str | None = None,
     chrome: ui.chrome.Chrome | None = None,
     timeout: float | None = 180,
-    reactor: sd.Reactor | None = None,
+    scheduler: sd.MountScheduler | None = None,
     expiry: sd.mount.ExpiryPolicy | None = _DEFAULT_EXPIRY,
 ) -> sd.Mount:
     """A mount wired to the bot's chrome and shared interaction error handler.
@@ -406,7 +406,7 @@ def create_mount(
     the panel is being built for. It is what finds the installed host, and so the challenge
     presenter a guard needs.
 
-    `reactor` stays explicit rather than inherited from the host: a panel is refreshed only by
+    `scheduler` stays explicit rather than inherited from the host: a panel is refreshed only by
     its own clicks unless it says it reacts to something else.
     """
     defaults = sd.LayoutHost.of(source).defaults
@@ -417,7 +417,7 @@ def create_mount(
         access=access,
         localization=localization_for(locale),
         timeout=timeout,
-        scheduler=reactor,
+        scheduler=scheduler,
         expiry=expiry,
     )
 
@@ -430,15 +430,15 @@ async def send_component(
     locale: str | None = None,
     timeout: float = 180,
     visibility: Visibility = "public",
-    reactor: sd.Reactor | None = None,
+    scheduler: sd.MountScheduler | None = None,
 ) -> sd.Mount:
     """Mount a component and send it as the reply to a command.
 
-    Pass ``reactor`` for a panel that must react to something another mount changes -- a
+    Pass ``scheduler`` for a panel that must react to something another mount changes -- a
     shared namespace, or a bot topic. Without one the mount is refreshed only by its own
     clicks.
     """
-    mount = create_mount(component, source=ctx, access=access, locale=locale, timeout=timeout, reactor=reactor)
+    mount = create_mount(component, source=ctx, access=access, locale=locale, timeout=timeout, scheduler=scheduler)
     await mount.send(destination(ctx, visibility=visibility, locale=locale))
     return mount
 

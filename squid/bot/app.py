@@ -165,11 +165,11 @@ class RedstoneSquid(Bot):
         # that is the local bus, and the reconciler's poll is what the other processes get.
         self.topic_publisher: TopicPublisher = self.topic_bus
         # One assembly for the whole process, reachable from any interaction as
-        # `LayoutHost.of(...)`: the session registry, the reactor, and the challenge runner
+        # `LayoutHost.of(...)`: the session registry, the scheduler, and the challenge runner
         # a guard's dialog resumes an approved press through.
         self.layout_host = install(self, defaults=HOST_DEFAULTS, bus=self.topic_bus, profiler=self.layout_profiler)
-        assert self.layout_host.reactor is not None, "a topic bus was given, so there is a reactor"
-        self.layout_reactor = self.layout_host.reactor
+        assert self.layout_host.scheduler is not None, "a topic bus was given, so there is a scheduler"
+        self.layout_reactor = self.layout_host.scheduler
         self.layout_challenges = self.layout_host.challenges
         # How many of each panel a user may have open, and which mounts die with their
         # parent. Reached from a handler as `interaction.client.mounts`.
@@ -221,7 +221,7 @@ class RedstoneSquid(Bot):
         # watcher keeps honest, so it runs before any extension loads rather than
         # as a side effect of one of them being enabled.
         start_permission_epoch_watch(self.background_tasks, self.services.permission_epoch)
-        self.background_tasks.start(self.layout_reactor.run(), name="layout-reactor")
+        self.background_tasks.start(self.layout_reactor.run(), name="layout-scheduler")
         self.background_tasks.start(self.layout_challenges.run(), name="layout-challenges")
         if self.database_config is not None:
             self.topic_bridge = await open_topic_bridge(self.database_config, self.topic_bus)

@@ -16,7 +16,7 @@ from squid_discord.operations import (
     DevToolsPolicy,
     DevToolsRuntime,
 )
-from squid_discord.reactor import ReactorSnapshot
+from squid_discord.scheduler import MountSchedulerSnapshot
 from squid_discord.sessions import Opened
 from squid_discord.testing import delivered_to, fake_message
 from squid_layouts.profiling import MemoryProfiler, OperationKind
@@ -133,7 +133,7 @@ class _IdleQueue:
             self.on_wait()
 
 
-class _IdleReactor:
+class _IdleScheduler:
     def __init__(self) -> None:
         self.profiler = MemoryProfiler()
         self.queued = 0
@@ -142,8 +142,8 @@ class _IdleReactor:
         self.waits = 0
         self.on_wait: Callable[[], None] | None = None
 
-    def snapshot(self) -> ReactorSnapshot:
-        return ReactorSnapshot(self.queued, self.in_flight, self.redeliver, 0, 0, 0, 0, 0)
+    def snapshot(self) -> MountSchedulerSnapshot:
+        return MountSchedulerSnapshot(self.queued, self.in_flight, self.redeliver, 0, 0, 0, 0, 0)
 
     async def wait_idle(self) -> None:
         self.waits += 1
@@ -156,41 +156,41 @@ class _IdleReactor:
 
 async def test_wait_idle_reaches_a_fixed_point_when_bus_schedules_reactor() -> None:
     bus = _IdleQueue()
-    reactor = _IdleReactor()
+    scheduler = _IdleScheduler()
     bus.queued = 1
 
     def bus_delivery() -> None:
         bus.queued = 0
-        reactor.queued = 1
+        scheduler.queued = 1
 
     bus.on_wait = bus_delivery
 
-    runtime = DevToolsRuntime(bus=bus, reactor=reactor)  # type: ignore[arg-type]
+    runtime = DevToolsRuntime(bus=bus, scheduler=scheduler)  # type: ignore[arg-type]
 
     await runtime.wait_idle()
 
     assert bus.waits == 1
-    assert reactor.waits == 1
+    assert scheduler.waits == 1
 
 
 async def test_wait_idle_reaches_a_fixed_point_when_reactor_publishes_to_bus() -> None:
     bus = _IdleQueue()
-    reactor = _IdleReactor()
-    reactor.queued = 1
+    scheduler = _IdleScheduler()
+    scheduler.queued = 1
 
     def reactor_delivery() -> None:
-        reactor.on_wait = None
-        reactor.queued = 0
+        scheduler.on_wait = None
+        scheduler.queued = 0
         bus.queued = 1
 
-    reactor.on_wait = reactor_delivery
+    scheduler.on_wait = reactor_delivery
 
-    runtime = DevToolsRuntime(bus=bus, reactor=reactor)  # type: ignore[arg-type]
+    runtime = DevToolsRuntime(bus=bus, scheduler=scheduler)  # type: ignore[arg-type]
 
     await runtime.wait_idle()
 
     assert bus.waits == 2
-    assert reactor.waits == 2
+    assert scheduler.waits == 2
 
 
 async def test_policy_can_disable_confirmation_required_actions() -> None:

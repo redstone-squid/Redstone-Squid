@@ -23,8 +23,8 @@ from squid_discord.operations import (
     RuntimeUnavailable,
     TargetNotFound,
 )
-from squid_discord.reactor import Reactor, ReactorSnapshot
 from squid_discord.routing import routers
+from squid_discord.scheduler import MountScheduler, MountSchedulerSnapshot
 from squid_discord.sessions import SessionRegistry
 from squid_layouts.document import InlineAsset
 from squid_layouts.factories import code, paragraph, section
@@ -66,7 +66,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         registry: SessionRegistry | None = None,
         *,
         profiler: Profiler | None = None,
-        reactor: Reactor | None = None,
+        scheduler: MountScheduler | None = None,
         bus: TopicBus | None = None,
         runtime: DevToolsRuntime | None = None,
         action_ledger: ActionLedger | None = None,
@@ -74,12 +74,12 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         self._check = check
         self._runtime = runtime or DevToolsRuntime(
             sessions=registry,
-            reactor=reactor,
+            scheduler=scheduler,
             bus=bus,
             profiler=profiler,
         )
         self._registry = self._runtime.sessions
-        self._reactor = self._runtime.reactor
+        self._reactor = self._runtime.scheduler
         self._bus = self._runtime.bus
         self._profiler = self._runtime.profiler
         self._action_ledger = action_ledger or ActionLedger(limit=200)
@@ -151,7 +151,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         """Show queue pressure and subscriber registrations."""
         snapshot = self._runtime.snapshot()
         lines = [
-            f"reactor  {_reactor_text(snapshot.reactor)}",
+            f"scheduler  {_reactor_text(snapshot.scheduler)}",
             f"topics   {_topics_text(snapshot.topics)}",
         ]
         if snapshot.topics is not None:
@@ -477,7 +477,7 @@ def _causal_event_text(event: CausalEventSnapshot) -> str:
             )
 
 
-def _reactor_text(snapshot: ReactorSnapshot | None) -> str:
+def _reactor_text(snapshot: MountSchedulerSnapshot | None) -> str:
     if snapshot is None:
         return "unconfigured"
     return f"queued={snapshot.queued} in_flight={snapshot.in_flight} failed={snapshot.failed}"

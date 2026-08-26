@@ -109,12 +109,12 @@ class BuildInfoComponent(sl.Component):
             locale=self.locale,
         ).send(interaction, ephemeral=self._ephemeral, parent=sd.responder(event).mount)
 
-    def mount(self, *, source: sd.host.HostSource, reactor: sd.Reactor | None = None) -> sd.Mount:
+    def mount(self, *, source: sd.host.HostSource, scheduler: sd.MountScheduler | None = None) -> sd.Mount:
         return create_mount(
             self,
             source=source,
             access=self._access,
             locale=self.locale,
             timeout=self._timeout,
-            reactor=reactor,
+            scheduler=scheduler,
         )

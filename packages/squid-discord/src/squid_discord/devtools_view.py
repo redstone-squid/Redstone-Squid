@@ -239,7 +239,7 @@ class OperationalInspector(sl.Component):
         counts = [
             f"mounts       {len(snapshot.mounts)}",
             f"sessions     {len(snapshot.sessions)}",
-            f"reactor     {_reactor_summary(snapshot.reactor)}",
+            f"scheduler     {_reactor_summary(snapshot.scheduler)}",
             f"topics      {_topic_summary(snapshot.topics)}",
             f"profile     {_profile_summary(snapshot.profiler)}",
             f"persistence {_durable_summary(snapshot.durable)}",
@@ -365,7 +365,7 @@ class OperationalInspector(sl.Component):
 
     def _queues(self, snapshot: squid_discord.operations.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         lines = [
-            f"reactor  {_reactor_summary(snapshot.reactor)}",
+            f"scheduler  {_reactor_summary(snapshot.scheduler)}",
             f"topics   {_topic_summary(snapshot.topics)}",
         ]
         if snapshot.topics is not None:
@@ -579,7 +579,7 @@ def _duration(seconds: float) -> str:
     return f"{total // 3600}h{total % 3600 // 60:02d}m"
 
 
-def _reactor_summary(snapshot: squid_discord.ReactorSnapshot | None) -> str:
+def _reactor_summary(snapshot: squid_discord.MountSchedulerSnapshot | None) -> str:
     if snapshot is None:
         return "unconfigured"
     return f"queued={snapshot.queued} in_flight={snapshot.in_flight} failed={snapshot.failed}"
@@ -667,7 +667,7 @@ def _pair(topic: object) -> tuple[sl.runtime.Shared[Any] | None, object]:
     """An observed address split into its namespace and cell, or `(None, topic)` otherwise.
 
     Read from what the render observed rather than from what it subscribed to, so a mount
-    with no reactor still reports the shared state it is showing.
+    with no scheduler still reports the shared state it is showing.
     """
     match topic:
         case (sl.runtime.Shared() as owner, descriptor):

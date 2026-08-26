@@ -54,7 +54,7 @@ planning, that is a DrawInvariantError, not a second degradation mechanism.
 
 | Need | API | Result |
 |---|---|---|
-| Runtime for one discord.py client | sd.install(client, defaults=..., bus=...) | LayoutHost: registry, reactor, challenge runner |
+| Runtime for one discord.py client | sd.install(client, defaults=..., bus=...) | LayoutHost: registry, scheduler, challenge runner |
 | That runtime, from an interaction or context | sd.LayoutHost.of(source) | the installed host, or `LayoutHostMissing` |
 | Stateful Discord interaction | sd.Mount(component, access=...) | lifecycle, access, events, paging, edits |
 | Scoped live UI lifetime | sd.SessionRegistry | root/child cascade, cardinality, replacement |
@@ -345,7 +345,7 @@ per scope*, `sl.runtime.SharedPool` writes that lifetime down where it is known 
 its latest render read, reconciled at stage time, and `sl.runtime.addresses(lambda: appearance.accent)`
 names an address by hand for a host that wants to follow one itself. A mount repaints its own
 writes inside the interaction that made them -- `Mount.observed` is what it rendered,
-`Mount.followed` what it managed to subscribe to -- so a missing reactor costs live updates
+`Mount.followed` what it managed to subscribe to -- so a missing scheduler costs live updates
 from *other* mounts and nothing else. Nothing durable belongs
 here; anything the application would still want with nobody looking at it is a service.
 
@@ -543,9 +543,9 @@ promised the next opportunity rather than the current instant.
 Cross-mount refresh uses a payload-free `sl.runtime.TopicBus`: a topic is an exact hashable address,
 not state. Subscribers re-read application services before asking their mount to refresh, so the
 data layer remains the only source of truth. `LocalTopicBus` delivers synchronously and isolates
-subscriber failures through a reporting hook; Reactor scheduling coalesces per mount, and different
+subscriber failures through a reporting hook; MountScheduler scheduling coalesces per mount, and different
 mounts refresh concurrently without one mount rendering over itself. The host supervises
-`Reactor.run()` explicitly. Subscriber tests publish and assert immediately.
+`MountScheduler.run()` explicitly. Subscriber tests publish and assert immediately.
 
 Publish from the existing committed-change funnel or durable change-feed drain. Never attach the
 bus to a message already owned by a durable reconciliation loop: that creates a second writer. In

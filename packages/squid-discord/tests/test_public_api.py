@@ -52,7 +52,7 @@ def test_the_adapter_namespace_exposes_its_surface() -> None:
     assert squid_discord.durability.DurableBot
     assert squid_discord.durability.DiscordFrontend
     assert not hasattr(squid_discord.durability, "MountManager")
-    assert squid_discord.Reactor.follow
+    assert squid_discord.MountScheduler.follow
     for removed in ("SessionPolicy", "Opener", "Scope", "Router", "V2Renderer", "ClassicRenderer", "AuditReport"):
         assert removed not in squid_discord.__all__ and not hasattr(squid_discord, removed)
 
