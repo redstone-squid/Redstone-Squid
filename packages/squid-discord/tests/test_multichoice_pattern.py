@@ -171,7 +171,7 @@ async def test_immediate_policy_commits_valid_changes_without_apply() -> None:
         "Roles",
         (sp.MultiChoiceGroup("roles", "Roles", _options("role", 3)),),
         minimum=1,
-        commit=sp.CommitPolicy.IMMEDIATE,
+        commit=sp.CommitMode.IMMEDIATE,
     ).build_component(on_commit=committed)
     mount = Mount(panel, access=Everyone(), timeout=None)
     commit_render(mount)
@@ -190,7 +190,7 @@ def test_immediate_policy_retains_invalid_staging_until_next_valid_change() -> N
         "Roles",
         (sp.MultiChoiceGroup("roles", "Roles", _options("role", 3)),),
         maximum=1,
-        commit=sp.CommitPolicy.IMMEDIATE,
+        commit=sp.CommitMode.IMMEDIATE,
     )
 
     invalid = pattern.transition(pattern.initial_state, "select:roles", values=("role-0", "role-1"))
@@ -205,7 +205,7 @@ def test_immediate_modal_submission_commits_in_one_transition() -> None:
     pattern = sp.MultiChoicePanel(
         "Roles",
         (sp.MultiChoiceGroup("roles", "Roles", _options("role", 3)),),
-        commit=sp.CommitPolicy.IMMEDIATE,
+        commit=sp.CommitMode.IMMEDIATE,
     )
 
     state = pattern.transition(pattern.initial_state, "modal", submitted={"selection": ("role-2",)})

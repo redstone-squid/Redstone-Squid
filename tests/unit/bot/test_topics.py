@@ -25,7 +25,7 @@ class Projection(sl.Component):
     def __init__(self, read) -> None:
         self._read = read
 
-    @sl.resource(pending=sl.resources.PendingPolicy.ATOMIC)
+    @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
     async def value(self) -> str:
         sl.runtime.watch(resource_topic("build", "42"))
         return self._read()

@@ -381,7 +381,7 @@ def _picker(actions: Sequence[Action], key: str, label: str | None, context: _Co
         action.key: ActionBinding(
             action.key,
             action.on_trigger,
-            action.policy,
+            action.mode,
             guard=action.guard,
             label=_resolve(action.label, context),
             record=action.record,
@@ -420,7 +420,7 @@ def _button(action: Action, context: _Context) -> Button:
         action.key,
         style=_button_style(action.tone, action.emphasis),
         disabled=not action.available,
-        policy=action.policy,
+        mode=action.mode,
         guard=action.guard,
         busy=action.busy,
         record=action.record,

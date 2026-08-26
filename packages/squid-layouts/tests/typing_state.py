@@ -15,7 +15,7 @@ from squid_layouts.runtime import (
     AtomicResourceStatus,
     Failed,
     Pending,
-    PendingPolicy,
+    PendingMode,
     Ready,
     Resource,
     ResourceStatus,
@@ -63,7 +63,7 @@ assert_type(addresses(lambda: Scoped(bus, 7).theme), tuple[Any, ...])
 
 
 class ResourceTypes(Component):
-    @resource(pending=PendingPolicy.ATOMIC)
+    @resource(pending=PendingMode.ATOMIC)
     async def atomic(self) -> int:
         return 1
 

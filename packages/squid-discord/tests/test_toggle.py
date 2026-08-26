@@ -6,7 +6,7 @@ import squid_layouts as sl
 from squid_discord import DISCORD_V2_DPY27
 from squid_layouts import scene
 from squid_layouts.forms import FormLike, SubmitHandler
-from squid_layouts.interactions import ActionPolicy, Actor, PressEvent, Visibility
+from squid_layouts.interactions import ActionMode, Actor, PressEvent, Visibility
 from squid_layouts.primitives.styles import ActionStyle
 from squid_layouts.runtime import PresentationSession
 from squid_layouts.runtime.component import render_component_tree
@@ -32,7 +32,7 @@ class _Responder:
         *,
         key: str = "form",
         on_submit: SubmitHandler | None = None,
-        policy: ActionPolicy | None = None,
+        mode: ActionMode | None = None,
         label: sl.TextLike = "",
         record=None,
     ) -> None: ...
