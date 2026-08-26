@@ -13,12 +13,12 @@ from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursor
 from squid_layouts.planning.dialect import SceneBindings
 from squid_layouts.planning.identity import stable_fingerprint
 from squid_layouts.planning.layout_measurement.model import (
+    MeasuredPanel,
+    MeasuredSection,
+    MeasuredText,
+    MeasuredTime,
+    MeasuredZonedTime,
     Realized,
-    RPanel,
-    RSection,
-    RText,
-    RTime,
-    RZonedTime,
 )
 from squid_layouts.planning.layout_measurement.solver import (
     MeasuredLayout,
@@ -70,19 +70,19 @@ class _V2Converter:
 
     def node(self, node: Realized, path: str) -> scene.Node:
         match node:
-            case RText(content=content):
+            case MeasuredText(content=content):
                 return scene.Text(content)
-            case RTime(instant=instant, style=style, prefix=prefix):
+            case MeasuredTime(instant=instant, style=style, prefix=prefix):
                 return scene.Time(instant.astimezone(UTC).isoformat(), style, prefix)
-            case RZonedTime(value=value, prefix=prefix):
+            case MeasuredZonedTime(value=value, prefix=prefix):
                 return scene.ZonedTime(value.instant.isoformat(), value.timezone, prefix)
             case File(asset_key=asset_key, name=name, media_type=media_type, spoiler=spoiler):
                 return scene.File(asset_key, name, media_type, spoiler)
-            case RPanel(children=children, accent=accent, spoiler=spoiler):
+            case MeasuredPanel(children=children, accent=accent, spoiler=spoiler):
                 return scene.Panel(
                     tuple(self.node(child, f"{path}.{index}") for index, child in enumerate(children)), accent, spoiler
                 )
-            case RSection(texts=texts, accessory=accessory):
+            case MeasuredSection(texts=texts, accessory=accessory):
                 return scene.Section(
                     tuple(scene.Text(text.content) for text in texts),
                     self.accessory(accessory, f"{path}.accessory"),
