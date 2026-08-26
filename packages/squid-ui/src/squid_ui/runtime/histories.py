@@ -424,6 +424,7 @@ class HistoryEntry:
     original_commit: ActionCommit | None = None
     compensation_execution: CompensationExecution | None = None
     mode: UndoMode = UndoMode.CONDITIONAL
+    retentions: tuple[object, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -593,6 +594,7 @@ class History:
                     token.stage_inverse(inverse)
 
                 def committed(commit: ActionCommit, continuation: object) -> None:
+                    self._release_entry(entry)
                     entry.undo_action_id = commit.context.action_id
                     entry.redo_plan = UndoPlan.from_commit(commit)
                     entry.state = HistoryEntryState.UNDONE
@@ -600,6 +602,7 @@ class History:
                     entry.last_result = result
                     self._remove_identity(self._undone, entry)
                     if retain_redo:
+                        entry.retentions = self._retain_plan(entry.redo_plan)
                         self._redoable.append(entry)
                     self._owner.invalidate()
 
@@ -801,7 +804,9 @@ class History:
                     token.stage_inverse(inverse)
 
                 def committed(commit: ActionCommit, continuation: object) -> None:
+                    self._release_entry(entry)
                     entry.undo_plan = UndoPlan.from_commit(commit)
+                    entry.retentions = self._retain_plan(entry.undo_plan)
                     entry.state = HistoryEntryState.READY
                     result = HistoryResult(HistoryResultStatus.APPLIED, entry, commit.context.action_id)
                     entry.last_result = result
@@ -835,6 +840,7 @@ class History:
             entry = self._select(stack, action_id)
             if entry is not None and entry.state is HistoryEntryState.CONFLICTED:
                 self._remove_identity(stack, entry)
+                self._release_entry(entry)
                 self._owner.invalidate()
                 return entry
         return None
@@ -842,6 +848,8 @@ class History:
     def clear(self) -> None:
         if not (self._undone or self._redoable):
             return
+        for entry in (*self._undone, *self._redoable):
+            self._release_entry(entry)
         self._undone.clear()
         self._redoable.clear()
         self._owner.invalidate()
@@ -853,10 +861,40 @@ class History:
         on_action_commit(callback, key=self)
 
     def _push(self, entry: HistoryEntry) -> None:
+        entry.retentions = self._retain_plan(entry.undo_plan)
         self._undone.append(entry)
-        del self._undone[: max(0, len(self._undone) - self.limit)]
+        evicted = self._undone[: max(0, len(self._undone) - self.limit)]
+        for candidate in evicted:
+            self._release_entry(candidate)
+        del self._undone[: len(evicted)]
+        for candidate in self._redoable:
+            self._release_entry(candidate)
         self._redoable.clear()
         self._owner.invalidate()
+
+    @staticmethod
+    def _retain_plan(plan: UndoPlan) -> tuple[object, ...]:
+        leases: list[object] = []
+        try:
+            for change in plan.participants:
+                retain = getattr(change.token, "retain", None)
+                if retain is not None:
+                    leases.append(retain())
+        except BaseException:
+            for lease in leases:
+                release = getattr(lease, "release", None)
+                if release is not None:
+                    release()
+            raise
+        return tuple(leases)
+
+    @staticmethod
+    def _release_entry(entry: HistoryEntry) -> None:
+        retentions, entry.retentions = entry.retentions, ()
+        for lease in retentions:
+            release = getattr(lease, "release", None)
+            if release is not None:
+                release()
 
     @staticmethod
     def _select(stack: list[HistoryEntry], action_id: object | None) -> HistoryEntry | None:
