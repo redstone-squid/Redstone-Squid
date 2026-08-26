@@ -46,11 +46,11 @@ devtools, and durability.
 
 ```
 pip install squid-discord              # mounts, sessions, routing
-pip install squid-discord[durable]     # adds squid-stores for panels that survive a restart
+pip install squid-discord[durable]     # adds squid-storage for panels that survive a restart
 pip install squid-discord[postgres]    # durable panels on PostgreSQL
 ```
 
-`durability` is imported lazily, so the base install genuinely never imports `squid_stores` --
+`durability` is imported lazily, so the base install genuinely never imports `squid_storage` --
 `tests/test_public_api.py::test_base_install_needs_no_store_backend` is what keeps that true.
 
 ## Host integration

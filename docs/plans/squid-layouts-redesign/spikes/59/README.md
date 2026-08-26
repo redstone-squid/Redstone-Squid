@@ -32,8 +32,8 @@ It fires on *any* variant spelled that way, so `SharedT: Shared[ScopeT]` cannot 
 inference. **The already-shipped `PersistedPool` uses exactly this spelling** and therefore emits
 this error today, plus three consequential ones — `SharedT` degrades to `object`, so
 `created.bus`, `created.scope` and `created._add_commit_listener` all fail `missing-attribute`
-(`pyrefly check packages/squid-stores/src/squid_stores/persisted.py` → 4 errors). Nobody noticed
-because the tree is not at zero and `packages/squid-stores/tests` is not in `testpaths`.
+(`pyrefly check packages/squid-storage/src/squid_storage/persisted.py` → 4 errors). Nobody noticed
+because the tree is not at zero and `packages/squid-storage/tests` is not in `testpaths`.
 
 **2. The plan's original signature lands on outcome 3 — the silent one.**
 
