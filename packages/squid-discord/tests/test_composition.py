@@ -9,6 +9,7 @@ from hypothesis import strategies as st
 
 import squid_discord as sd
 import squid_layouts as sl
+import squid_layouts.runtime.owner as owner_module
 from squid_discord import Everyone, Mount
 from squid_discord.testing import commit_render, fake_interaction
 from squid_layouts import Component, ContextKey, PressEvent, state
@@ -183,7 +184,7 @@ class TestRenderCaching:
         assert component.renders == 1
         assert unchanged.nodes == initial.nodes
 
-    def test_address_invalidation_backdates_and_reuses_the_committed_tree(self) -> None:
+    def test_address_invalidation_backdates_before_tree_expansion(self, monkeypatch) -> None:
         class Values(Shared[object]):
             value: int = state(0)
 
@@ -205,13 +206,22 @@ class TestRenderCaching:
         runtime = ComponentRuntime(component)
         initial = runtime.render()
         runtime.commit(initial, rendered_revision=runtime.revision)
+        committed_components = runtime.components
         values.value = 2
 
         runtime.invalidate_address(CellAddress(values, "value"))
+
+        def unexpected_expansion(*_args, **_kwargs):
+            message = "fully backdated invalidations must not walk the component tree"
+            raise AssertionError(message)
+
+        monkeypatch.setattr(owner_module, "render_component_tree", unexpected_expansion)
         unchanged = runtime.render(reuse_committed=True)
 
         assert component.renders == 1
         assert unchanged is initial
+        runtime.commit(unchanged, rendered_revision=runtime.revision)
+        assert runtime.components is committed_components
 
     def test_address_invalidation_only_renders_the_dependent_sibling(self) -> None:
         class Values(Shared[object]):
