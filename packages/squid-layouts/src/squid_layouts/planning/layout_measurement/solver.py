@@ -45,11 +45,7 @@ from squid_layouts.planning.layout_measurement.model import (
 )
 from squid_layouts.planning.layout_measurement.realization import Builder
 from squid_layouts.planning.layout_measurement.text import TextUnit
-from squid_layouts.planning.limits import (
-    COMPONENTS,
-    LIMITS,
-    DiscordLimits,
-)
+from squid_layouts.planning.limits import LIMITS, Axis, DiscordLimits
 from squid_layouts.planning.navigation import (
     PlannedNav,
     materialized_navigation_state,
@@ -379,11 +375,10 @@ def _measure_once(
         pagers.append(pager)
 
     cost = ResourceCost({**text_used, **structural_cost(children)})
-    capacities = {name: getattr(limits, attribute) for name, attribute in limits.budgets.items()}
-    for axis, spent, capacity in cost.over({**limits.text_axes, **capacities}):
+    for axis, spent, capacity in cost.over({**limits.text_axes, **limits.capacities}):
         builder.notes.append(
             note(
-                SolveNoteCode.COMPONENT_BUDGET if axis == COMPONENTS else SolveNoteCode.TEXT_BUDGET,
+                SolveNoteCode.COMPONENT_BUDGET if axis == Axis.COMPONENTS else SolveNoteCode.TEXT_BUDGET,
                 f"{spent} {axis} exceed {capacity}; the document needs restructuring",
             )
         )

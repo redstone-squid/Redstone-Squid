@@ -24,7 +24,7 @@ from squid_layouts.planning.layout_measurement.model import (
     RZonedTime,
 )
 from squid_layouts.planning.layout_measurement.text import BudgetRegion, TextBearing, TextUnit, make_unit, trim_keep
-from squid_layouts.planning.limits import CONTENT_TEXT, DISPLAY_TEXT, EMBED_TEXT, LIMITS, DiscordLimits
+from squid_layouts.planning.limits import LIMITS, Axis, DiscordLimits
 from squid_layouts.primitives.nodes import (
     Boundary,
     Break,
@@ -65,7 +65,7 @@ class Builder:
     raw_text_cost: dict[str, int] = field(default_factory=dict)
     """Text no overflow policy can shrink, per axis: timestamps and prepared native items."""
     budgets: list[BudgetRegion] = field(default_factory=list)
-    axis: str = DISPLAY_TEXT
+    axis: str = Axis.DISPLAY_TEXT
     """The pool text realized right now draws from; target shape moves it, nothing else."""
 
     def charge(self, characters: int) -> None:
@@ -108,8 +108,11 @@ class Builder:
         return slot
 
     def card(self, node: Card) -> RCard:
-        limits = self.limits
-        fields = node.fields[: getattr(limits, "embed_fields", len(node.fields))]
+        embeds = self.limits.embeds
+        if embeds is None:
+            message = "a Card cannot be realized in a message mode that has no embeds"
+            raise LayoutInvariantError(message)
+        fields = node.fields[: embeds.fields]
         if len(fields) != len(node.fields):
             self.notes.append(
                 note(
@@ -120,24 +123,20 @@ class Builder:
             )
         realized_fields: list[RCardField] = []
         for field_node in fields:
-            name = self.slot(field_node.name, getattr(limits, "field_name", 256), "field name")
-            value = self.slot(field_node.value, getattr(limits, "field_value", 1024), "field value")
+            name = self.slot(field_node.name, embeds.field_name, "field name")
+            value = self.slot(field_node.value, embeds.field_value, "field value")
             if name is None or value is None:
                 message = "a CardField needs a non-empty name and value after trimming"
                 raise LayoutInvariantError(message)
             realized_fields.append(RCardField(name, value, field_node.inline))
         return RCard(
-            title=self.slot(node.title, getattr(limits, "embed_title", 256), "embed title"),
+            title=self.slot(node.title, embeds.title, "embed title"),
             url=node.url,
             blocks=self.realize_children(node.children),
             fields=realized_fields,
-            footer=None
-            if node.footer is None
-            else self.slot(node.footer.text, getattr(limits, "embed_footer", 2048), "embed footer"),
+            footer=None if node.footer is None else self.slot(node.footer.text, embeds.footer, "embed footer"),
             footer_icon=None if node.footer is None else node.footer.icon_url,
-            author=None
-            if node.author is None
-            else self.slot(node.author.name, getattr(limits, "embed_author", 256), "embed author"),
+            author=None if node.author is None else self.slot(node.author.name, embeds.author, "embed author"),
             author_url=None if node.author is None else node.author.url,
             author_icon=None if node.author is None else node.author.icon_url,
             accent=node.accent,
@@ -147,7 +146,7 @@ class Builder:
         )
 
     def _clamp_button[ButtonT: Button | LinkButton | RoutedButton](self, button: ButtonT) -> ButtonT:
-        if button.label is None or len(button.label) <= self.limits.button_label:
+        if button.label is None or len(button.label) <= self.limits.components.button_label:
             return button
         self.notes.append(
             note(
@@ -156,27 +155,27 @@ class Builder:
                 SolveNoteSeverity.CLAMP,
             )
         )
-        return replace(button, label=trim_keep(button.label, self.limits.button_label, "head"))
+        return replace(button, label=trim_keep(button.label, self.limits.components.button_label, "head"))
 
     def _clamp_select[SelectT: SelectMenu | RoutedSelect](self, select: SelectT) -> SelectT:
         limits = self.limits
         options = select.options
-        if len(options) > limits.select_options:
+        if len(options) > limits.components.select_options:
             self.notes.append(
                 note(
                     SolveNoteCode.CLAMP_SELECT_OPTIONS,
-                    f"{len(options)} select options clamped to {limits.select_options}",
+                    f"{len(options)} select options clamped to {limits.components.select_options}",
                     SolveNoteSeverity.CLAMP,
                 )
             )
-            options = options[: limits.select_options]
+            options = options[: limits.components.select_options]
         clamped_options = []
         for option in options:
-            label = trim_keep(option.label, limits.option_label, "head")
-            value = option.value[: limits.option_value]
+            label = trim_keep(option.label, limits.components.option_label, "head")
+            value = option.value[: limits.components.option_value]
             description = option.description
-            if description is not None and len(description) > limits.option_description:
-                description = trim_keep(description, limits.option_description, "head")
+            if description is not None and len(description) > limits.components.option_description:
+                description = trim_keep(description, limits.components.option_description, "head")
             if (label, value, description) != (option.label, option.value, option.description):
                 self.notes.append(
                     note(SolveNoteCode.CLAMP_SELECT_OPTION_TEXT, "select option text clamped", SolveNoteSeverity.CLAMP)
@@ -184,7 +183,7 @@ class Builder:
                 option = Option(label=label, value=value, description=description, default=option.default)
             clamped_options.append(option)
         placeholder = select.placeholder
-        if placeholder is not None and len(placeholder) > limits.select_placeholder:
+        if placeholder is not None and len(placeholder) > limits.components.select_placeholder:
             self.notes.append(
                 note(
                     SolveNoteCode.CLAMP_SELECT_PLACEHOLDER,
@@ -192,7 +191,7 @@ class Builder:
                     SolveNoteSeverity.CLAMP,
                 )
             )
-            placeholder = trim_keep(placeholder, limits.select_placeholder, "head")
+            placeholder = trim_keep(placeholder, limits.components.select_placeholder, "head")
         return replace(
             select,
             options=tuple(clamped_options),
@@ -202,7 +201,7 @@ class Builder:
 
     def _clamp_entity_select(self, select: EntitySelect) -> EntitySelect:
         placeholder = select.placeholder
-        if placeholder is not None and len(placeholder) > self.limits.select_placeholder:
+        if placeholder is not None and len(placeholder) > self.limits.components.select_placeholder:
             self.notes.append(
                 note(
                     SolveNoteCode.CLAMP_SELECT_PLACEHOLDER,
@@ -210,7 +209,7 @@ class Builder:
                     SolveNoteSeverity.CLAMP,
                 )
             )
-            placeholder = trim_keep(placeholder, self.limits.select_placeholder, "head")
+            placeholder = trim_keep(placeholder, self.limits.components.select_placeholder, "head")
         return replace(select, placeholder=placeholder)
 
     def realize_children(self, nodes: Sequence[Node]) -> list[Realized]:
@@ -249,11 +248,11 @@ class Builder:
                 return RSection(texts=slots, accessory=accessory)
             case Content(content=text, overflow=overflow, priority=priority):
                 slot = RText()
-                with self.pool(CONTENT_TEXT):
+                with self.pool(Axis.CONTENT_TEXT):
                     self.unit(Text(text, overflow=overflow, priority=priority), slot)
                 return RContent(slot)
             case Card():
-                with self.pool(EMBED_TEXT):
+                with self.pool(Axis.EMBED_TEXT):
                     return self.card(node)
             case Panel(children=children, accent=accent, spoiler=spoiler):
                 return RPanel(children=self.realize_children(children), accent=accent, spoiler=spoiler)

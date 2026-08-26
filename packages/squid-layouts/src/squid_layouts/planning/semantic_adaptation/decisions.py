@@ -4,7 +4,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import replace
 
 from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.planning.limits import V2Limits
+from squid_layouts.planning.limits import DiscordLimits
 from squid_layouts.planning.search import StrategyAxis, StrategyCandidate
 from squid_layouts.planning.semantic_adaptation.model import FallbackAxis, SemanticDecisions
 from squid_layouts.primitives.nodes import Panel
@@ -63,7 +63,7 @@ GRID_ADAPTER_VERSION = 1
 def nominate_decisions(
     nodes: Sequence[LayoutNode],
     *,
-    limits: V2Limits,
+    limits: DiscordLimits,
     session: PresentationSession,
     fallbacks: Mapping[str, int] | None = None,
 ) -> SemanticDecisions:
@@ -190,8 +190,8 @@ def strategy_axis(
     return StrategyAxis(path, key, adapter_id, adapter_version, flexibility, preferred, candidates, baseline)
 
 
-def individual_fits(controls: int, limits: V2Limits) -> bool:
-    rows = (controls + limits.row_buttons - 1) // limits.row_buttons
+def individual_fits(controls: int, limits: DiscordLimits) -> bool:
+    rows = (controls + limits.components.row_buttons - 1) // limits.components.row_buttons
     return limits.fits_controls(controls, rows)
 
 
@@ -207,7 +207,7 @@ def item_state(node: Items, session: PresentationSession) -> tuple[str | None, b
             return opened, node.key in session.selections or initial is not None
 
 
-def items_axis(node: Items, path: str, limits: V2Limits, session: PresentationSession) -> StrategyAxis:
+def items_axis(node: Items, path: str, limits: DiscordLimits, session: PresentationSession) -> StrategyAxis:
     opened, fixed = item_state(node, session)
     if fixed:
         available = ("opened",) if opened is not None else ("overview",)
@@ -230,14 +230,14 @@ def items_axis(node: Items, path: str, limits: V2Limits, session: PresentationSe
         available=available,
         order=("overview", "opened"),
         session=session,
-        active_pagers=frozenset({"overview"}) if len(node.items) > limits.select_options else frozenset(),
+        active_pagers=frozenset({"overview"}) if len(node.items) > limits.components.select_options else frozenset(),
     )
     if opened is None and node.display is not ItemDisplay.OPENED:
         axis = replace(axis, baseline=None)
     return axis
 
 
-def navigation_axis(node: Navigation, path: str, limits: V2Limits, session: PresentationSession) -> StrategyAxis:
+def navigation_axis(node: Navigation, path: str, limits: DiscordLimits, session: PresentationSession) -> StrategyAxis:
     available = tuple(destination for destination in node.destinations if destination.available)
     strategies = ["individual"]
     if not individual_fits(len(available), limits):
@@ -261,7 +261,7 @@ def navigation_axis(node: Navigation, path: str, limits: V2Limits, session: Pres
         available=tuple(strategies),
         order=("individual", "grouped"),
         session=session,
-        active_pagers=frozenset({"grouped"}) if len(available) > limits.select_options else frozenset(),
+        active_pagers=frozenset({"grouped"}) if len(available) > limits.components.select_options else frozenset(),
     )
 
 
@@ -285,13 +285,13 @@ def table_axis(node: Table, path: str, session: PresentationSession) -> Strategy
     )
 
 
-def grid_axis(node: Grid, path: str, limits: V2Limits, session: PresentationSession) -> StrategyAxis:
+def grid_axis(node: Grid, path: str, limits: DiscordLimits, session: PresentationSession) -> StrategyAxis:
     rows = (len(node.cells) + node.columns - 1) // node.columns
     strategies: list[str] = []
-    if node.columns <= limits.row_buttons and limits.fits_controls(len(node.cells), rows):
+    if node.columns <= limits.components.row_buttons and limits.fits_controls(len(node.cells), rows):
         strategies.append("buttons")
     available_cells = sum(cell.available for cell in node.cells)
-    strategies.append("coordinate" if available_cells <= limits.select_options else "paged_select")
+    strategies.append("coordinate" if available_cells <= limits.components.select_options else "paged_select")
     available = tuple(strategies)
     return strategy_axis(
         path=path,
@@ -322,7 +322,7 @@ def media_axis(node: Media, path: str, session: PresentationSession) -> Strategy
     )
 
 
-def action_axis(node: Actions, path: str, limits: V2Limits, session: PresentationSession) -> StrategyAxis:
+def action_axis(node: Actions, path: str, limits: DiscordLimits, session: PresentationSession) -> StrategyAxis:
     actions = [action for item in node.items for action in contained_actions(item)]
     forced_pager = any(len(tuple(contained_actions(item))) > 75 for item in node.items if isinstance(item, ActionGroup))
     if not any(isinstance(item, ActionGroup) for item in node.items):

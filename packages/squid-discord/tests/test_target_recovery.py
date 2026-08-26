@@ -55,7 +55,7 @@ class TestFingerprints:
 
     def test_tightening_a_limit_changes_the_fingerprint(self) -> None:
         """Because a stored render fitted to 10 embeds was never fitted to 2."""
-        tightened = Target.classic(limits=ClassicLimits(embeds=2))
+        tightened = Target.classic(limits=ClassicLimits(embed_count=2))
 
         assert tightened.fingerprint != CLASSIC_TARGET.fingerprint
 
@@ -117,13 +117,13 @@ class TestRecovery:
     def test_a_changed_profile_is_refused_rather_than_silently_substituted(self) -> None:
         """Rebuilding against different budgets would make the stored render legal by luck."""
         components, snapshot = captured(CLASSIC_TARGET)
-        drifted = TargetRegistry(Target.classic(limits=ClassicLimits(embeds=2)), builtins=False)
+        drifted = TargetRegistry(Target.classic(limits=ClassicLimits(embed_count=2)), builtins=False)
 
         with pytest.raises(LayoutInvariantError, match="no longer matches the profile"):
             components.restore(snapshot, targets=drifted, access=Everyone())
 
     def test_a_custom_target_recovers_once_it_is_registered(self) -> None:
-        custom = Target.classic(limits=ClassicLimits(embeds=2))
+        custom = Target.classic(limits=ClassicLimits(embed_count=2))
         components = registry()
         mount = Mount(Screen(), target=custom, access=Everyone())
         commit(custom, mount)
@@ -171,14 +171,14 @@ class TestRecovery:
 
     def test_a_custom_profile_may_replace_a_built_in_under_its_own_id(self) -> None:
         """`Target.classic(limits=...)` keeps the built-in id — it is still a classic message."""
-        compact = Target.classic(limits=ClassicLimits(embeds=2))
+        compact = Target.classic(limits=ClassicLimits(embed_count=2))
 
         assert TargetRegistry(compact).resolve(compact.id, compact.version, compact.fingerprint) is compact
 
     def test_replacing_a_built_in_still_refuses_a_snapshot_planned_against_the_old_one(self) -> None:
         """Nothing is lost by allowing the override: the fingerprint does the real work."""
         components, snapshot = captured(CLASSIC_TARGET)
-        targets = TargetRegistry(Target.classic(limits=ClassicLimits(embeds=2)))
+        targets = TargetRegistry(Target.classic(limits=ClassicLimits(embed_count=2)))
 
         with pytest.raises(LayoutInvariantError, match="no longer matches the profile"):
             components.restore(snapshot, targets=targets, access=Everyone())

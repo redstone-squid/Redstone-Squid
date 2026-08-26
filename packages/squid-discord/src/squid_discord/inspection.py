@@ -18,17 +18,11 @@ from discord.ui.select import BaseSelect
 from squid_discord.presentation import DiscordMode, DiscordPresentation
 from squid_layouts.errors import ExistingLayoutError, LimitViolationError
 from squid_layouts.planning.limits import (
-    ATTACHMENTS,
     CLASSIC_LIMITS,
-    COMPONENTS,
-    CONTENT_TEXT,
-    CONTROLS,
-    DISPLAY_TEXT,
-    EMBED_TEXT,
-    EMBEDS,
     LIMITS,
-    ROWS,
+    Axis,
     ClassicLimits,
+    ComponentLimits,
     DiscordLimits,
     V2Limits,
 )
@@ -267,17 +261,17 @@ def measure_classic(
     embed_text = sum(len(embed) for embed in host.embeds)
     files = attachments + len(host.assets)
     common = {
-        EMBED_TEXT: embed_text,
-        EMBEDS: len(host.embeds),
-        ROWS: len({*rows}),
-        CONTROLS: controls,
-        ATTACHMENTS: files,
+        Axis.EMBED_TEXT: embed_text,
+        Axis.EMBEDS: len(host.embeds),
+        Axis.ROWS: len({*rows}),
+        Axis.CONTROLS: controls,
+        Axis.ATTACHMENTS: files,
     }
     content = host.content
-    usage = ResourceCost({**common, CONTENT_TEXT: len(content or "")})
+    usage = ResourceCost({**common, Axis.CONTENT_TEXT: len(content or "")})
     # All or nothing: a host that set `content` at all owns the whole slot, because a
     # message has one content field and Squid cannot append to someone else's.
-    reserved = ResourceCost({**common, CONTENT_TEXT: limits.content if content is not None else 0})
+    reserved = ResourceCost({**common, Axis.CONTENT_TEXT: limits.content if content is not None else 0})
 
     return DiscordReservation(
         usage=usage,
@@ -315,7 +309,7 @@ def _measure_v2(
         if isinstance(custom_id, str):
             custom_ids.append(CustomIdSite(custom_id, path))
 
-    spent = ResourceCost({COMPONENTS: components, DISPLAY_TEXT: text, ATTACHMENTS: attachments})
+    spent = ResourceCost({Axis.COMPONENTS: components, Axis.DISPLAY_TEXT: text, Axis.ATTACHMENTS: attachments})
     return DiscordReservation(
         # Identical for Components V2: every axis it budgets is additive, so what the host
         # spends and what it withholds are the same number.
@@ -342,14 +336,14 @@ def audit(
 
     for item, path in _walk(view.children):
         components += 1
-        _audit_custom_id(item, path, limits, seen_ids, violations)
+        _audit_custom_id(item, path, limits.components, seen_ids, violations)
         match item:
             case discord.ui.TextDisplay():
                 text_total += len(item.content)
             case discord.ui.Button():
-                _audit_button(item, path, limits, violations)
+                _audit_button(item, path, limits.components, violations)
             case BaseSelect():
-                _audit_select(item, path, limits, violations)
+                _audit_select(item, path, limits.components, violations)
             case discord.ui.MediaGallery():
                 _audit_gallery(item, path, limits, violations)
             case discord.ui.Thumbnail():
@@ -357,7 +351,7 @@ def audit(
             case discord.ui.Section():
                 _audit_section(item, path, limits, violations)
             case discord.ui.ActionRow():
-                _audit_row(item, path, limits, violations)
+                _audit_row(item, path, limits.components, violations)
             case _:
                 pass
 
@@ -393,7 +387,7 @@ def audit(
 def _audit_custom_id(
     item: object,
     path: Path,
-    limits: V2Limits,
+    limits: ComponentLimits,
     seen: dict[str, Path],
     violations: list[Violation],
 ) -> None:
@@ -424,7 +418,7 @@ def _audit_custom_id(
         seen[custom_id] = path
 
 
-def _audit_button(button: discord.ui.Button, path: Path, limits: V2Limits, violations: list[Violation]) -> None:
+def _audit_button(button: discord.ui.Button, path: Path, limits: ComponentLimits, violations: list[Violation]) -> None:
     if button.label is not None and len(button.label) > limits.button_label:
         violations.append(
             Violation(
@@ -457,7 +451,7 @@ def _audit_button(button: discord.ui.Button, path: Path, limits: V2Limits, viola
         )
 
 
-def _audit_select(select: BaseSelect, path: Path, limits: V2Limits, violations: list[Violation]) -> None:
+def _audit_select(select: BaseSelect, path: Path, limits: ComponentLimits, violations: list[Violation]) -> None:
     if select.placeholder is not None and len(select.placeholder) > limits.select_placeholder:
         violations.append(
             Violation(
@@ -488,7 +482,7 @@ def _audit_select(select: BaseSelect, path: Path, limits: V2Limits, violations: 
 def _audit_option(
     option: discord.SelectOption,
     path: Path,
-    limits: V2Limits,
+    limits: ComponentLimits,
     violations: list[Violation],
     owner: object,
 ) -> None:
@@ -574,7 +568,7 @@ def _audit_section(section: discord.ui.Section, path: Path, limits: V2Limits, vi
         )
 
 
-def _audit_row(row: discord.ui.ActionRow, path: Path, limits: V2Limits, violations: list[Violation]) -> None:
+def _audit_row(row: discord.ui.ActionRow, path: Path, limits: ComponentLimits, violations: list[Violation]) -> None:
     buttons = [child for child in row.children if isinstance(child, discord.ui.Button)]
     if len(buttons) > limits.row_buttons:
         violations.append(
@@ -607,8 +601,8 @@ def audit_classic_payload(
 
     if content is not None and len(content) > limits.content:
         problems.append(f"content is {len(content)} characters; the limit is {limits.content}")
-    if len(embeds) > limits.embeds:
-        problems.append(f"{len(embeds)} embeds exceed {limits.embeds}")
+    if len(embeds) > limits.embed_count:
+        problems.append(f"{len(embeds)} embeds exceed {limits.embed_count}")
 
     seen_urls: set[str] = set()
     for index, embed in enumerate(embeds):
@@ -641,17 +635,17 @@ def _audit_embed(embed: discord.Embed, index: int, limits: ClassicLimits) -> lis
         if isinstance(value, str) and len(value) > cap:
             problems.append(f"embed {index} {what} is {len(value)} characters; the limit is {cap}")
 
-    check(payload.get("title"), limits.embed_title, "title")
-    check(payload.get("description"), limits.embed_description, "description")
-    check((payload.get("footer") or {}).get("text"), limits.embed_footer, "footer")
-    check((payload.get("author") or {}).get("name"), limits.embed_author, "author")
+    check(payload.get("title"), limits.embeds.title, "title")
+    check(payload.get("description"), limits.embeds.description, "description")
+    check((payload.get("footer") or {}).get("text"), limits.embeds.footer, "footer")
+    check((payload.get("author") or {}).get("name"), limits.embeds.author, "author")
 
     fields = payload.get("fields") or []
-    if len(fields) > limits.embed_fields:
-        problems.append(f"embed {index} has {len(fields)} fields; the limit is {limits.embed_fields}")
+    if len(fields) > limits.embeds.fields:
+        problems.append(f"embed {index} has {len(fields)} fields; the limit is {limits.embeds.fields}")
     for position, field in enumerate(fields):
-        check(field.get("name"), limits.field_name, f"field {position} name")
-        check(field.get("value"), limits.field_value, f"field {position} value")
+        check(field.get("name"), limits.embeds.field_name, f"field {position} name")
+        check(field.get("value"), limits.embeds.field_value, f"field {position} value")
         if not (field.get("name") or "").strip():
             problems.append(f"embed {index} field {position} has an empty name")
         if not (field.get("value") or "").strip():
@@ -684,16 +678,18 @@ def _audit_view(view: discord.ui.View, limits: ClassicLimits) -> list[str]:
             problems.append(f"row {index} mixes a select with {len(items) - 1} other controls")
         if selects > 1:
             problems.append(f"row {index} holds {selects} selects; a row holds one")
-        if not selects and len(items) > limits.row_buttons:
-            problems.append(f"row {index} holds {len(items)} buttons; the limit is {limits.row_buttons}")
+        if not selects and len(items) > limits.components.row_buttons:
+            problems.append(f"row {index} holds {len(items)} buttons; the limit is {limits.components.row_buttons}")
 
     seen: set[str] = set()
     for item in children:
         custom_id = getattr(item, "custom_id", None)
         if not isinstance(custom_id, str):
             continue
-        if len(custom_id) > limits.custom_id:
-            problems.append(f"custom id {custom_id!r} is {len(custom_id)} characters; the limit is {limits.custom_id}")
+        if len(custom_id) > limits.components.custom_id:
+            problems.append(
+                f"custom id {custom_id!r} is {len(custom_id)} characters; the limit is {limits.components.custom_id}"
+            )
         if custom_id in seen:
             problems.append(f"custom id {custom_id!r} appears twice in one message")
         seen.add(custom_id)

@@ -41,7 +41,7 @@ from squid_layouts.forms import (
     ZonedDateTimeField,
 )
 from squid_layouts.planning.adapter import ADAPTER_MODAL_FORMS, AdapterProfile
-from squid_layouts.planning.limits import LIMITS, V2Limits
+from squid_layouts.planning.limits import COMPONENT_LIMITS, ComponentLimits
 from squid_layouts.target_types import DiscordPyAdapter
 from squid_layouts.text import NEUTRAL, Localization, TextLike, resolve_text
 
@@ -440,7 +440,7 @@ def build_modal(
     *,
     on_submit: SubmitHandler | None = None,
     timeout: float | None = None,
-    limits: V2Limits = LIMITS,
+    limits: ComponentLimits = COMPONENT_LIMITS,
     strict: bool = False,
     adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
 ) -> discord.ui.Modal:
@@ -462,7 +462,7 @@ def build_form_modal(
     on_submit: FormSubmitHandler,
     timeout: float | None = None,
     localization: Localization = NEUTRAL,
-    limits: V2Limits = LIMITS,
+    limits: ComponentLimits = COMPONENT_LIMITS,
     strict: bool = False,
     adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
 ) -> discord.ui.Modal:

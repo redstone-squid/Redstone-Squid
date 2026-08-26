@@ -24,7 +24,7 @@ from squid_layouts.planning import SolveNoteCode, measure
 from squid_layouts.planning.layout_measurement.costing import component_count
 from squid_layouts.planning.layout_measurement.model import RText
 from squid_layouts.planning.layout_measurement.text import split_pages
-from squid_layouts.planning.limits import COMPONENTS
+from squid_layouts.planning.limits import Axis
 from squid_layouts.planning.navigation import NavigationContext, default_nav, page_select_nav
 from squid_layouts.planning.semantic_adaptation.lowering import lower_semantics
 from squid_layouts.primitives import (
@@ -450,7 +450,7 @@ class TestRepage:
 
     def test_repage_moves_the_page_without_moving_the_fit(self):
         solved = measure(self._paginated(), nav=self._nav)
-        before = solved.cost.get(COMPONENTS)
+        before = solved.cost.get(Axis.COMPONENTS)
         pager = solved.pager
         assert pager is not None and solved.pages > 2
         solved.reposition({"lines": Position(offset=2)})

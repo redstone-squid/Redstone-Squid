@@ -18,7 +18,7 @@ from squid_layouts.planning.layout_measurement.diagnostics import (
     note,
 )
 from squid_layouts.planning.layout_measurement.realization import Builder
-from squid_layouts.planning.limits import COMPONENTS, V2Limits
+from squid_layouts.planning.limits import Axis, DiscordLimits
 from squid_layouts.planning.target import ResourceCost
 from squid_layouts.primitives.nodes import Break, Budget, Card, Fidelity, Node, Panel, Variants
 
@@ -191,17 +191,17 @@ def variant_state_bound(nodes: Sequence[Node], cutoff: int) -> int:
     return multiply([count_node(node) for node in nodes])
 
 
-def static_cost(nodes: Sequence[Node], limits: V2Limits) -> ResourceCost:
+def static_cost(nodes: Sequence[Node], limits: DiscordLimits) -> ResourceCost:
     """A rung's own resource cost, with every nested ladder left at rung 0."""
     builder = Builder(limits=limits)
     children = prune(builder.realize_children(resolve_variants(nodes, {})))
     text = dict(builder.raw_text_cost)
     for unit in builder.units:
         text[unit.axis] = text.get(unit.axis, 0) + unit.need
-    return ResourceCost({**text, COMPONENTS: component_count(children)})
+    return ResourceCost({**text, Axis.COMPONENTS: component_count(children)})
 
 
-def guided_step(nodes: Sequence[Node], positions: Positions, limits: V2Limits) -> dict[VariantPath, int] | None:
+def guided_step(nodes: Sequence[Node], positions: Positions, limits: DiscordLimits) -> dict[VariantPath, int] | None:
     """Pick the one step a budget-starved product should take next.
 
     Breadth and priority still decide *which* ladders are eligible; among equals the step

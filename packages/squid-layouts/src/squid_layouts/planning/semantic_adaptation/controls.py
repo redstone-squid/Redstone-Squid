@@ -83,7 +83,7 @@ def _form(node: FormTrigger, context: _Context) -> list[Node]:
     if Capability.FORMS_MODAL not in context.capabilities:
         message = "target does not support forms"
         raise LayoutInvariantError(message)
-    spec = node.spec.adapt(context.capabilities, maximum_fields=context.limits.modal_components)
+    spec = node.spec.adapt(context.capabilities, maximum_fields=context.limits.components.modal_components)
 
     async def present(event: PressEvent) -> None:
         await event.present_form(
@@ -182,7 +182,7 @@ def _choices(node: Choices, path: str, context: _Context) -> list[Node]:
             )
         return [PrimitiveActionGroup(tuple(buttons))]
     page_key = f"{node.key}.choices"
-    if len(available) > context.limits.select_options and node.maximum != 1:
+    if len(available) > context.limits.components.select_options and node.maximum != 1:
         message = (
             f"{path}: Choices has {len(available)} options and selects up to {node.maximum}; "
             "cross-page multi-selection is ambiguous, so group the choices or use Items"

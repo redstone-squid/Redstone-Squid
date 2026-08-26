@@ -14,44 +14,55 @@ Documentation consulted, pinned here so a future reader can re-verify rather tha
 Almost none of these are enforced client-side. discord.py checks `len(embeds) > 10` and the
 25-child cap on `discord.ui.View`; everything else — the 6,000-character aggregate and every
 per-value embed cap — is server-only, which is why the renderer runs a strict payload audit.
+
+The caps split three ways, and the split is what lets a function say what it reads.
+`ComponentLimits` holds what every component obeys in either mode, `EmbedLimits` what one
+embed may hold, and a `DiscordLimits` subclass the message-wide budgets that mode alone
+knows. A shared planning layer takes a `DiscordLimits` and may touch only what it declares.
 """
 
-from collections.abc import Mapping
-from dataclasses import dataclass
+from collections.abc import Iterator, Mapping
+from dataclasses import dataclass, fields, is_dataclass, replace
+from enum import StrEnum
+from typing import Self
 
 ELLIPSIS = "\N{HORIZONTAL ELLIPSIS}"
 
-DISPLAY_TEXT = "display_text"
-"""Components V2 TextDisplay content, budgeted across the whole message."""
 
-CONTENT_TEXT = "content_text"
-"""A classic message's `content` field."""
+class Axis(StrEnum):
+    """One message-wide budget a document is measured against.
 
-EMBED_TEXT = "embed_text"
-"""Every embed's titles, descriptions, field names and values, footers, and authors."""
+    Only whole-message totals are axes. A local cap describes what a legal component *is*
+    rather than how much room is left, so reducing one would change the document rather
+    than the reservation.
+    """
 
-TEXT_AXES = frozenset({DISPLAY_TEXT, CONTENT_TEXT, EMBED_TEXT})
+    DISPLAY_TEXT = "display_text"
+    """Components V2 TextDisplay content, budgeted across the whole message."""
+    CONTENT_TEXT = "content_text"
+    """A classic message's `content` field."""
+    EMBED_TEXT = "embed_text"
+    """Every embed's titles, descriptions, field names and values, footers, and authors."""
+    COMPONENTS = "components"
+    ATTACHMENTS = "attachments"
+    EMBEDS = "embeds"
+    ROWS = "rows"
+    CONTROLS = "controls"
+
+
+TEXT_AXES = frozenset({Axis.DISPLAY_TEXT, Axis.CONTENT_TEXT, Axis.EMBED_TEXT})
 """Every axis that holds message text, whichever target is in play."""
-
-COMPONENTS = "components"
-ATTACHMENTS = "attachments"
-EMBEDS = "embeds"
-ROWS = "rows"
-CONTROLS = "controls"
 
 
 @dataclass(frozen=True, slots=True)
-class DiscordLimits:
-    """What every Discord message obeys, whichever component mode it is in.
+class ComponentLimits:
+    """Caps every Discord component obeys, whichever message mode holds it.
 
     Row width, control text, custom-ID length, and modal shape are properties of Discord's
-    components rather than of a message mode, so they are stated once. A mode-specific
-    strategy may not borrow another mode's *message-wide* totals, which is why those live
-    on the subclasses.
+    components rather than of a message mode, so they are stated once and both modes share
+    the same instance. A function that reads only these should say `ComponentLimits`: that
+    is what makes it usable from either mode's path.
     """
-
-    attachments: int = 10
-    """A conservative library cap. Discord's message docs do not state a number."""
 
     # ActionRow.
     row_buttons: int = 5
@@ -78,18 +89,88 @@ class DiscordLimits:
 
     custom_id: int = 100
 
-    @property
-    def budgets(self) -> Mapping[str, str]:
-        """Every message-wide axis this mode budgets, to the attribute holding its cap.
 
-        The limits own this rather than the target profile, because the caps and the names
-        for them have to agree and there is no way to keep two declarations in step.
+COMPONENT_LIMITS = ComponentLimits()
+"""The component caps currently enforced by Discord, in either message mode."""
+
+
+@dataclass(frozen=True, slots=True)
+class EmbedLimits:
+    """What one embed may hold.
+
+    These are local caps: they describe what a legal embed *is*, not how much room is left,
+    and they are clamped and validated exactly as `ComponentLimits.button_label` is. The
+    message-wide `Axis.EMBED_TEXT` pool that several embeds share is a budget and lives on
+    `ClassicLimits`.
+    """
+
+    title: int = 256
+    description: int = 4096
+    fields: int = 25
+    field_name: int = 256
+    field_value: int = 1024
+    footer: int = 2048
+    author: int = 256
+
+
+EMBED_LIMITS = EmbedLimits()
+"""The per-embed caps currently enforced by Discord."""
+
+
+def _cap_values(value: object, prefix: str = "") -> Iterator[tuple[str, object]]:
+    """Every leaf cap under `value`, by dotted name."""
+    if not is_dataclass(value) or isinstance(value, type):
+        return
+    for cap in fields(value):
+        held = getattr(value, cap.name)
+        name = f"{prefix}{cap.name}"
+        if is_dataclass(held) and not isinstance(held, type):
+            yield from _cap_values(held, f"{name}.")
+        else:
+            yield name, held
+
+
+@dataclass(frozen=True, slots=True)
+class DiscordLimits:
+    """What every Discord message obeys, whichever component mode it is in.
+
+    Abstract: message-wide budgets live on the subclasses, because a mode-specific strategy
+    may not borrow another mode's totals. What is shared is stated here, and a shared
+    planning layer may read only what this class declares — anything mode-specific goes
+    through a declared member or moves onto the dialect.
+    """
+
+    components: ComponentLimits = COMPONENT_LIMITS
+    attachments: int = 10
+    """A conservative cap: 10 files per message. Discord's message docs do not state it."""
+    embeds: EmbedLimits | None = None
+    """What one embed may hold, or None in a mode that has no embeds.
+
+    Optional because the capability is: a Components V2 message cannot carry an embed at
+    all. Reading it through the None forces the guard the shared measurer used to skip by
+    substituting an invented default.
+    """
+
+    @property
+    def capacities(self) -> Mapping[Axis, int]:
+        """Every message-wide budget this mode declares, with the room it has left.
+
+        The limits own this rather than the target, because the caps and the names for
+        them have to agree and there is no way to keep two declarations in step.
+        """
+        raise NotImplementedError
+
+    def with_capacities(self, reductions: Mapping[Axis, int]) -> Self:
+        """These limits with each named amount withheld from that axis, clamped at zero.
+
+        Axes this mode does not budget are ignored; `Target.reserve` rejects those by name
+        before it gets here, so reaching this method with one is already a caller's bug.
         """
         raise NotImplementedError
 
     @property
-    def text_axes(self) -> Mapping[str, int]:
-        """Every independent text pool this mode budgets, by axis name.
+    def text_axes(self) -> Mapping[Axis, int]:
+        """Every independent text pool this mode budgets, by axis.
 
         Independent is the operative word. Two pools do not lend to each other, so the
         allocator runs once per pool over the units tagged to it rather than once over a
@@ -112,6 +193,14 @@ class DiscordLimits:
         """The most components one page of this mode may spend."""
         raise NotImplementedError
 
+    def digest(self) -> tuple[tuple[str, object], ...]:
+        """Every cap these limits hold, by dotted name in name order, for a stable digest.
+
+        A target's fingerprint covers this, so two targets sharing an id but differing in
+        any cap are told apart rather than silently interchanged.
+        """
+        return tuple(sorted(_cap_values(self)))
+
 
 @dataclass(frozen=True, slots=True)
 class V2Limits(DiscordLimits):
@@ -130,14 +219,26 @@ class V2Limits(DiscordLimits):
     gallery_item_description: int = 1024
 
     @property
-    def budgets(self) -> Mapping[str, str]:
-        return {DISPLAY_TEXT: "total_text", COMPONENTS: "total_components", ATTACHMENTS: "attachments"}
+    def capacities(self) -> Mapping[Axis, int]:
+        return {
+            Axis.DISPLAY_TEXT: self.total_text,
+            Axis.COMPONENTS: self.total_components,
+            Axis.ATTACHMENTS: self.attachments,
+        }
+
+    def with_capacities(self, reductions: Mapping[Axis, int]) -> Self:
+        return replace(
+            self,
+            total_text=max(0, self.total_text - reductions.get(Axis.DISPLAY_TEXT, 0)),
+            total_components=max(0, self.total_components - reductions.get(Axis.COMPONENTS, 0)),
+            attachments=max(0, self.attachments - reductions.get(Axis.ATTACHMENTS, 0)),
+        )
 
     @property
-    def text_axes(self) -> Mapping[str, int]:
+    def text_axes(self) -> Mapping[Axis, int]:
         # Exactly one pool, which is why this looks like ceremony here and stops looking
         # like it the moment a target has two.
-        return {DISPLAY_TEXT: self.total_text}
+        return {Axis.DISPLAY_TEXT: self.total_text}
 
     def fits_controls(self, controls: int, rows: int) -> bool:
         # An ActionRow and each of its buttons are all components against one total.
@@ -152,42 +253,45 @@ class V2Limits(DiscordLimits):
 class ClassicLimits(DiscordLimits):
     """Hard limits for a pre-Components-V2 message: content, embeds, and action rows."""
 
+    embeds: EmbedLimits | None = EMBED_LIMITS
+
     # Message-wide budgets.
     content: int = 2000
     """Length of the `content` field. Its own pool: it never borrows from embed text."""
     embed_text: int = 6000
     """Titles, descriptions, field names and values, footers, and author names, added up
     across every embed on the message. Server-enforced only."""
-    embeds: int = 10
+    embed_count: int = 10
+    """Embeds per message, which discord.py checks locally."""
     rows: int = 5
     controls: int = 25
-    """Children a `discord.ui.View` accepts, which is the only one discord.py checks."""
-
-    # Per-embed shape. Local caps like these describe what a legal embed *is*; they are not
-    # budget, and reducing one would change what a legal document is rather than how much
-    # room is left. They are clamped and validated exactly as `button_label` is.
-    embed_title: int = 256
-    embed_description: int = 4096
-    embed_fields: int = 25
-    field_name: int = 256
-    field_value: int = 1024
-    embed_footer: int = 2048
-    embed_author: int = 256
+    """Children a `discord.ui.View` accepts, which is the only other one discord.py checks."""
 
     @property
-    def budgets(self) -> Mapping[str, str]:
+    def capacities(self) -> Mapping[Axis, int]:
         return {
-            CONTENT_TEXT: "content",
-            EMBED_TEXT: "embed_text",
-            EMBEDS: "embeds",
-            ROWS: "rows",
-            CONTROLS: "controls",
-            ATTACHMENTS: "attachments",
+            Axis.CONTENT_TEXT: self.content,
+            Axis.EMBED_TEXT: self.embed_text,
+            Axis.EMBEDS: self.embed_count,
+            Axis.ROWS: self.rows,
+            Axis.CONTROLS: self.controls,
+            Axis.ATTACHMENTS: self.attachments,
         }
 
+    def with_capacities(self, reductions: Mapping[Axis, int]) -> Self:
+        return replace(
+            self,
+            content=max(0, self.content - reductions.get(Axis.CONTENT_TEXT, 0)),
+            embed_text=max(0, self.embed_text - reductions.get(Axis.EMBED_TEXT, 0)),
+            embed_count=max(0, self.embed_count - reductions.get(Axis.EMBEDS, 0)),
+            rows=max(0, self.rows - reductions.get(Axis.ROWS, 0)),
+            controls=max(0, self.controls - reductions.get(Axis.CONTROLS, 0)),
+            attachments=max(0, self.attachments - reductions.get(Axis.ATTACHMENTS, 0)),
+        )
+
     @property
-    def text_axes(self) -> Mapping[str, int]:
-        return {CONTENT_TEXT: self.content, EMBED_TEXT: self.embed_text}
+    def text_axes(self) -> Mapping[Axis, int]:
+        return {Axis.CONTENT_TEXT: self.content, Axis.EMBED_TEXT: self.embed_text}
 
     def fits_controls(self, controls: int, rows: int) -> bool:
         return controls <= self.controls and rows <= self.rows

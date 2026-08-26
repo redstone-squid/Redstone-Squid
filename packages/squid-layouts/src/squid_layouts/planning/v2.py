@@ -191,8 +191,8 @@ def _lower(
                 raise LayoutInvariantError(message)
             case ActionGroup(items=items):
                 lowered.extend(
-                    Row(tuple(items[start : start + limits.row_buttons]))
-                    for start in range(0, len(items), limits.row_buttons)
+                    Row(tuple(items[start : start + limits.components.row_buttons]))
+                    for start in range(0, len(items), limits.components.row_buttons)
                 )
             case MediaCollection(items=items):
                 lowered.extend(
@@ -268,21 +268,21 @@ def _validate_v2(nodes: Sequence[Node], limits: V2Limits) -> None:
             case Button(label=label) | RoutedButton(label=label):
                 if label is None and node.emoji is None:
                     fail(path, "interactive button needs a label or emoji")
-                if label is not None and len(label) > limits.button_label:
-                    fail(path, f"button label exceeds {limits.button_label}")
+                if label is not None and len(label) > limits.components.button_label:
+                    fail(path, f"button label exceeds {limits.components.button_label}")
             case LinkButton(label=label, url=url):
                 if label is None and node.emoji is None:
                     fail(path, "link button needs a label or emoji")
-                if label is not None and len(label) > limits.button_label:
-                    fail(path, f"button label exceeds {limits.button_label}")
-                if len(url) > limits.link_url:
-                    fail(path, f"link URL exceeds {limits.link_url}")
+                if label is not None and len(label) > limits.components.button_label:
+                    fail(path, f"button label exceeds {limits.components.button_label}")
+                if len(url) > limits.components.link_url:
+                    fail(path, f"link URL exceeds {limits.components.link_url}")
             case PremiumButton(sku_id=sku_id):
                 if sku_id <= 0:
                     fail(path, "premium button SKU must be positive")
             case Row(items=items):
-                if len(items) > limits.row_buttons:
-                    fail(path, f"row has {len(items)} controls; maximum is {limits.row_buttons}")
+                if len(items) > limits.components.row_buttons:
+                    fail(path, f"row has {len(items)} controls; maximum is {limits.components.row_buttons}")
                 for index, item in enumerate(items):
                     if isinstance(item, Button | RoutedButton | LinkButton | PremiumButton):
                         walk(item, f"{path}.{index}")
@@ -291,33 +291,36 @@ def _validate_v2(nodes: Sequence[Node], limits: V2Limits) -> None:
             ):
                 if not options:
                     fail(path, "select needs at least one option")
-                if len(options) > limits.select_options:
+                if len(options) > limits.components.select_options:
                     remedy = (
                         "split the routed picker into separate routes"
                         if isinstance(node, RoutedSelect)
                         else "use an option-paging semantic node"
                     )
                     fail(path, f"select has {len(options)} options; {remedy}")
-                if placeholder is not None and len(placeholder) > limits.select_placeholder:
-                    fail(path, f"select placeholder exceeds {limits.select_placeholder}")
+                if placeholder is not None and len(placeholder) > limits.components.select_placeholder:
+                    fail(path, f"select placeholder exceeds {limits.components.select_placeholder}")
                 if minimum < 0 or maximum < minimum or maximum > max(1, len(options)):
                     fail(path, "select value bounds are invalid")
                 for index, option in enumerate(options):
-                    if len(option.label) > limits.option_label:
-                        fail(f"{path}.option.{index}", f"label exceeds {limits.option_label}")
-                    if len(option.value) > limits.option_value:
-                        fail(f"{path}.option.{index}", f"value exceeds {limits.option_value}")
-                    if option.description is not None and len(option.description) > limits.option_description:
-                        fail(f"{path}.option.{index}", f"description exceeds {limits.option_description}")
+                    if len(option.label) > limits.components.option_label:
+                        fail(f"{path}.option.{index}", f"label exceeds {limits.components.option_label}")
+                    if len(option.value) > limits.components.option_value:
+                        fail(f"{path}.option.{index}", f"value exceeds {limits.components.option_value}")
+                    if (
+                        option.description is not None
+                        and len(option.description) > limits.components.option_description
+                    ):
+                        fail(f"{path}.option.{index}", f"description exceeds {limits.components.option_description}")
             case EntitySelect(
                 placeholder=placeholder,
                 default_values=defaults,
                 min_values=minimum,
                 max_values=maximum,
             ):
-                if placeholder is not None and len(placeholder) > limits.select_placeholder:
-                    fail(path, f"select placeholder exceeds {limits.select_placeholder}")
-                if minimum < 0 or maximum < minimum or maximum > limits.select_options:
+                if placeholder is not None and len(placeholder) > limits.components.select_placeholder:
+                    fail(path, f"select placeholder exceeds {limits.components.select_placeholder}")
+                if minimum < 0 or maximum < minimum or maximum > limits.components.select_options:
                     fail(path, "entity select value bounds are invalid")
                 if len(defaults) > maximum:
                     fail(path, "entity select has more defaults than max_values")

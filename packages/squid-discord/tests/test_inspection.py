@@ -163,7 +163,7 @@ class TestAudit:
     def test_raise_if_invalid_names_every_violation(self):
         view = _view(
             discord.ui.TextDisplay("x" * (LIMITS.total_text + 1)),
-            _row(discord.ui.Button(label="y" * (LIMITS.button_label + 1))),
+            _row(discord.ui.Button(label="y" * (LIMITS.components.button_label + 1))),
         )
         with pytest.raises(LimitViolationError) as excinfo:
             audit(view).raise_if_invalid()
@@ -181,11 +181,11 @@ class TestConformProjectsTheSameFindings:
 
     @staticmethod
     def _broken() -> discord.ui.LayoutView:
-        select = discord.ui.Select(placeholder="p" * (LIMITS.select_placeholder + 1))
-        select.options = [discord.SelectOption(label="l" * (LIMITS.option_label + 1), value="v")]
+        select = discord.ui.Select(placeholder="p" * (LIMITS.components.select_placeholder + 1))
+        select.options = [discord.SelectOption(label="l" * (LIMITS.components.option_label + 1), value="v")]
         return _view(
             discord.ui.TextDisplay("x" * (LIMITS.total_text + 1)),
-            _row(discord.ui.Button(label="b" * (LIMITS.button_label + 1))),
+            _row(discord.ui.Button(label="b" * (LIMITS.components.button_label + 1))),
             _row(select),
         )
 
@@ -236,9 +236,9 @@ class TestReservationAxes:
             squid_discord.ResourceCost({"display_text": 500, "components": 5, "attachments": 2})
         )
         assert isinstance(reserved.limits, type(LIMITS))
-        assert reserved.limits.row_buttons == LIMITS.row_buttons
+        assert reserved.limits.components.row_buttons == LIMITS.components.row_buttons
         assert reserved.limits.section_texts == LIMITS.section_texts
-        assert reserved.limits.select_options == LIMITS.select_options
+        assert reserved.limits.components.select_options == LIMITS.components.select_options
 
     def test_unknown_resources_are_rejected(self):
         with pytest.raises(sl.errors.LayoutInvariantError, match="no reservable resource"):

@@ -1,13 +1,11 @@
 """Sanity pins for the limits table."""
 
-import dataclasses
-
 from squid_discord import V2_LIMITS as LIMITS
 
 
 def test_limits_are_positive():
-    for field in dataclasses.fields(LIMITS):
-        assert getattr(LIMITS, field.name) > 0, field.name
+    for name, value in LIMITS.digest():
+        assert value is None or value > 0, name
 
 
 def test_headline_budgets():

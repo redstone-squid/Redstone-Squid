@@ -8,7 +8,7 @@ from squid_layouts.chrome import Chrome
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.palette import DEFAULT_PALETTE, AccentDefault, Palette
 from squid_layouts.planning.cursors import CursorCoordinator
-from squid_layouts.planning.limits import V2Limits
+from squid_layouts.planning.limits import DiscordLimits
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_layouts.planning.semantic_adaptation.common import (
     _resolve,
@@ -162,7 +162,7 @@ from squid_layouts.text import Localization
 def lower_semantics(
     nodes: Sequence[LayoutNode],
     *,
-    limits: V2Limits,
+    limits: DiscordLimits,
     chrome: Chrome,
     localization: Localization,
     session: PresentationSession,
@@ -333,9 +333,10 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             )
             return [Lines(lines, overflow=Paginate(key=key, per=page_size))]
         case Fields(fields=fields):
-            if Capability.LAYOUT_EMBED_FIELDS in context.capabilities:
+            embeds = context.limits.embeds
+            if Capability.LAYOUT_EMBED_FIELDS in context.capabilities and embeds is not None:
                 entries = _card_fields(fields, context)
-                per_card = getattr(context.limits, "embed_fields", 25)
+                per_card = embeds.fields
                 # More fields than one embed holds continue into the next card. Lossless:
                 # every field is still shown, in order, on an adjacent embed.
                 return [

@@ -356,12 +356,12 @@ def _grouped(actions: Sequence[Action], key: str, label: str | None, path: str, 
     else:
         result.extend(
             _picker(
-                tuple(eligible[start : start + context.limits.select_options]),
+                tuple(eligible[start : start + context.limits.components.select_options]),
                 f"{key}.{start // 25}",
                 label,
                 context,
             )
-            for start in range(0, len(eligible), context.limits.select_options)
+            for start in range(0, len(eligible), context.limits.components.select_options)
         )
     if direct:
         result.extend(_individual(direct, f"{key}.direct", context))

@@ -19,7 +19,7 @@ from discord.ui.select import BaseSelect
 
 from squid_discord.inspection import Violation, ViolationCode, audit
 from squid_layouts.errors import LimitViolationError
-from squid_layouts.planning.limits import ELLIPSIS, LIMITS, V2Limits
+from squid_layouts.planning.limits import COMPONENT_LIMITS, ELLIPSIS, LIMITS, ComponentLimits, V2Limits
 
 __all__ = ["ELLIPSIS", "LimitViolationError", "conform", "conform_modal", "trim"]
 
@@ -73,7 +73,7 @@ def _repair(violation: Violation, view: discord.ui.LayoutView, limits: V2Limits)
     item = violation.item
     match violation.code:
         case ViolationCode.BUTTON_LABEL if isinstance(item, discord.ui.Button):
-            _conform_button(item, limits)
+            _conform_button(item, limits.components)
         case (
             ViolationCode.SELECT_PLACEHOLDER
             | ViolationCode.SELECT_OPTIONS
@@ -81,7 +81,7 @@ def _repair(violation: Violation, view: discord.ui.LayoutView, limits: V2Limits)
             | ViolationCode.OPTION_VALUE
             | ViolationCode.OPTION_DESCRIPTION
         ) if isinstance(item, BaseSelect):
-            _conform_select(item, limits)
+            _conform_select(item, limits.components)
         case ViolationCode.GALLERY_ITEMS | ViolationCode.GALLERY_ITEM_DESCRIPTION if isinstance(
             item, discord.ui.MediaGallery
         ):
@@ -93,7 +93,9 @@ def _repair(violation: Violation, view: discord.ui.LayoutView, limits: V2Limits)
             pass
 
 
-def conform_modal(modal: discord.ui.Modal, *, strict: bool = False, limits: V2Limits = LIMITS) -> list[str]:
+def conform_modal(
+    modal: discord.ui.Modal, *, strict: bool = False, limits: ComponentLimits = COMPONENT_LIMITS
+) -> list[str]:
     """Clamp ``modal`` in place to Discord's limits; same contract as :func:`conform`."""
     interventions: list[str] = []
 
@@ -131,7 +133,7 @@ def conform_modal(modal: discord.ui.Modal, *, strict: bool = False, limits: V2Li
     return interventions
 
 
-def _report_custom_id(item: object, limits: V2Limits, notes: Notes) -> None:
+def _report_custom_id(item: object, limits: ComponentLimits, notes: Notes) -> None:
     """Report an over-budget custom id, never clamp it.
 
     Every other string here degrades gracefully when trimmed. A custom id does not: a
@@ -145,14 +147,14 @@ def _report_custom_id(item: object, limits: V2Limits, notes: Notes) -> None:
         _note(notes, f"custom id {len(custom_id)} > {limits.custom_id} (not clampable): {custom_id[:32]!r}...")
 
 
-def _conform_button(button: discord.ui.Button, limits: V2Limits, notes: Notes = None) -> None:
+def _conform_button(button: discord.ui.Button, limits: ComponentLimits, notes: Notes = None) -> None:
     _report_custom_id(button, limits, notes)
     if button.label is not None and len(button.label) > limits.button_label:
         _note(notes, f"button label {len(button.label)} > {limits.button_label}")
         button.label = trim(button.label, limits.button_label)
 
 
-def _conform_select(select: BaseSelect, limits: V2Limits, notes: Notes = None) -> None:
+def _conform_select(select: BaseSelect, limits: ComponentLimits, notes: Notes = None) -> None:
     _report_custom_id(select, limits, notes)
     if select.placeholder is not None and len(select.placeholder) > limits.select_placeholder:
         _note(notes, f"select placeholder {len(select.placeholder)} > {limits.select_placeholder}")
@@ -184,7 +186,7 @@ def _conform_select(select: BaseSelect, limits: V2Limits, notes: Notes = None) -
 
 def _conform_modal_options(
     component: discord.ui.RadioGroup | discord.ui.CheckboxGroup,
-    limits: V2Limits,
+    limits: ComponentLimits,
     notes: Notes = None,
 ) -> None:
     _report_custom_id(component, limits, notes)
@@ -223,7 +225,7 @@ def _conform_gallery(gallery: discord.ui.MediaGallery, limits: V2Limits, notes: 
         gallery.items = items
 
 
-def _conform_text_input(text_input: discord.ui.TextInput, limits: V2Limits, notes: Notes = None) -> None:
+def _conform_text_input(text_input: discord.ui.TextInput, limits: ComponentLimits, notes: Notes = None) -> None:
     cap = limits.text_input_value
     if text_input.max_length is not None and text_input.max_length > cap:
         _note(notes, f"text input max_length {text_input.max_length} > {cap}")

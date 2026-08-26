@@ -34,7 +34,7 @@ from squid_layouts.errors import ExistingLayoutError
 from squid_layouts.palette import DEFAULT_PALETTE, Palette
 from squid_layouts.planning.adapter import ADAPTER_RENDER_CLASSIC
 from squid_layouts.planning.cache import PlanCache
-from squid_layouts.planning.limits import CLASSIC_LIMITS, CONTROLS, EMBED_TEXT, EMBEDS, ClassicLimits
+from squid_layouts.planning.limits import CLASSIC_LIMITS, Axis, ClassicLimits
 from squid_layouts.planning.navigation import PlannedNav
 from squid_layouts.planning.planner import EMPTY_RESERVATION
 from squid_layouts.planning.planner import plan as plan_document
@@ -284,9 +284,9 @@ def _trailing_cost(embeds: Sequence[discord.Embed], controls: Sequence[discord.u
     """Room the host will need for what it has not added yet."""
     return ResourceCost(
         {
-            EMBEDS: len(embeds),
-            EMBED_TEXT: sum(len(embed) for embed in embeds),
-            CONTROLS: len(controls),
+            Axis.EMBEDS: len(embeds),
+            Axis.EMBED_TEXT: sum(len(embed) for embed in embeds),
+            Axis.CONTROLS: len(controls),
         }
     )
 
