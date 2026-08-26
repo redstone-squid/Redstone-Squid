@@ -47,7 +47,7 @@ preferences = SharedPool(Preferences, bus)
 assert_type(preferences, SharedPool[UserGuildScope, Preferences])
 assert_type(preferences.get(UserGuildScope(1, 2)), Preferences)
 assert_type(preferences.get_existing(UserGuildScope(1, 2)), Preferences | None)
-assert_type(preferences.drop(UserGuildScope(1, 2)), Preferences | None)
+assert_type(preferences.delete(UserGuildScope(1, 2)), Preferences | None)
 
 # A `UserScope` handed to a user-guild pool is a type error, not a runtime miss. This is the
 # assertion the whole signature exists for; if the ignore below ever goes unused, inference has

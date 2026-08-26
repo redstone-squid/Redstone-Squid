@@ -86,7 +86,7 @@ class Menu:
     def initial_state(self) -> MenuState:
         return self._initial_state
 
-    def component(self, *, initial: MenuState | None = None) -> ComponentShell[MenuState]:
+    def build_component(self, *, initial: MenuState | None = None) -> ComponentShell[MenuState]:
         """Build the in-memory shell, with Close ending its mount."""
         return ComponentShell(self, initial=initial, finish_actions=("close",))
 

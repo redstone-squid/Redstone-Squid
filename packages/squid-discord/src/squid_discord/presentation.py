@@ -118,7 +118,7 @@ class DiscordPresentation:
             raise DiscordModeError(message)
         return self.view
 
-    def files(self) -> list[discord.File]:
+    def build_files(self) -> list[discord.File]:
         """Materialize fresh file wrappers; a sent `discord.File` cannot be re-sent."""
         return files_for(self.assets)
 

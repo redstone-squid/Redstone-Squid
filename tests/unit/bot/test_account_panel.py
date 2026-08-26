@@ -207,19 +207,19 @@ async def test_a_press_needing_consent_ends_instead_of_holding_the_panel(
     panel, opened = _gated_panel(monkeypatch)
     monkeypatch.setattr("squid_discord.native", lambda event: event.responder.interaction)
     monkeypatch.setattr("squid_discord.responder", lambda event: event.responder)
-    mount = SimpleNamespace(refresh=AsyncMock())
+    mount = SimpleNamespace(schedule=AsyncMock())
 
     await panel._edit_page(cast(Any, _press(mount)))
 
     assert panel._profile_editor is None
-    mount.refresh.assert_not_awaited()
+    mount.schedule.assert_not_awaited()
 
     await opened["on_answer"](cast(Any, None), AccountConsent.grant_current())
 
     # The press resumes where the reader left it, on the panel's own message.
     assert panel._profile_editor is not None
     cast(AsyncMock, panel._accounts.grant_current_consent).assert_awaited_once()
-    mount.refresh.assert_awaited_once()
+    mount.schedule.assert_awaited_once()
 
 
 async def test_declining_leaves_the_panel_exactly_as_it_was(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -227,7 +227,7 @@ async def test_declining_leaves_the_panel_exactly_as_it_was(monkeypatch: pytest.
     panel, opened = _gated_panel(monkeypatch)
     monkeypatch.setattr("squid_discord.native", lambda event: event.responder.interaction)
     monkeypatch.setattr("squid_discord.responder", lambda event: event.responder)
-    mount = SimpleNamespace(refresh=AsyncMock())
+    mount = SimpleNamespace(schedule=AsyncMock())
 
     await panel._edit_page(cast(Any, _press(mount)))
     await opened["on_answer"](cast(Any, None), None)
@@ -235,7 +235,7 @@ async def test_declining_leaves_the_panel_exactly_as_it_was(monkeypatch: pytest.
     assert panel._profile_editor is None
     assert panel._needs_consent
     cast(AsyncMock, panel._accounts.grant_current_consent).assert_not_awaited()
-    mount.refresh.assert_not_awaited()
+    mount.schedule.assert_not_awaited()
 
 
 async def test_a_toggle_needing_consent_still_applies_once_the_reader_agrees(
@@ -251,7 +251,7 @@ async def test_a_toggle_needing_consent_still_applies_once_the_reader_agrees(
     monkeypatch.setattr("squid_discord.responder", lambda event: event.responder)
     panel._identities = (DISCORD,)
     panel.selected_id = DISCORD.id
-    mount = SimpleNamespace(refresh=AsyncMock())
+    mount = SimpleNamespace(schedule=AsyncMock())
 
     await panel._toggle_identity(cast(Any, _press(mount)))
 
@@ -262,7 +262,7 @@ async def test_a_toggle_needing_consent_still_applies_once_the_reader_agrees(
     cast(AsyncMock, panel._accounts.set_identity_visibility).assert_awaited_once_with(
         ACCOUNT_ID, DISCORD.id, is_public=True
     )
-    mount.refresh.assert_awaited_once()
+    mount.schedule.assert_awaited_once()
 
 
 class _Recorder:

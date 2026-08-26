@@ -37,7 +37,7 @@ async def test_postgres_snapshot_store_contract(postgres_container: PostgresCont
         )
         assert first is not None
         assert second is not None
-        assert tuple(record.key for record in await store.list_records()) == ("first", "second")
+        assert tuple(record.key for record in await store.list()) == ("first", "second")
         loaded = await store.load("first")
         assert loaded is not None
         assert loaded.snapshot_payload == "payload 1"

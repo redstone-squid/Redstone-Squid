@@ -318,7 +318,7 @@ def test_zoned_datetime_field_prefill_round_trips_exact_overlap() -> None:
     field = sl.forms.ZonedDateTimeField(timezone="America/New_York")
     value = sl.temporal.ZonedDateTime(datetime(2026, 11, 1, 6, 30, tzinfo=UTC), "America/New_York")
 
-    prefill = field.format_prefill(value)
+    prefill = field.format(value)
 
     assert prefill == "2026-11-01T01:30:00-05:00"
     assert field.parse(prefill) == value
@@ -337,8 +337,8 @@ def test_zoned_datetime_field_applies_instant_bounds() -> None:
 def test_temporal_field_prefill_uses_isoformat() -> None:
     instant = datetime(2026, 8, 22, 14, 30, tzinfo=UTC)
 
-    assert sl.forms.TimeField().format_prefill(time(14, 30)) == "14:30:00"
-    assert sl.forms.DateTimeField().format_prefill(instant) == "2026-08-22T14:30:00+00:00"
+    assert sl.forms.TimeField().format(time(14, 30)) == "14:30:00"
+    assert sl.forms.DateTimeField().format(instant) == "2026-08-22T14:30:00+00:00"
 
 
 async def test_multi_choice_orders_values_by_declaration_and_accepts_one_key() -> None:
@@ -370,8 +370,8 @@ async def test_multi_choice_reports_unknown_cardinality_and_required_errors(fiel
 def test_multi_choice_prefill_round_trips_typed_values_and_keys() -> None:
     field = _multi_choice(required=False)
 
-    assert field.format_prefill((3, 1)) == ("one", "three")
-    assert field.format_prefill(["two", "one"]) == ("one", "two")
+    assert field.format((3, 1)) == ("one", "three")
+    assert field.format(["two", "one"]) == ("one", "two")
 
 
 def test_multi_choice_rejects_duplicate_option_keys() -> None:
@@ -505,8 +505,8 @@ def test_scale_field_labels_named_points_and_numbers_the_rest() -> None:
 def test_scale_field_prefill_is_the_option_key() -> None:
     field = sl.forms.ScaleField(key="score")
 
-    assert field.format_prefill(4) == "4"
-    assert field.format_prefill(None) is None
+    assert field.format(4) == "4"
+    assert field.format(None) is None
 
 
 def test_scale_field_needs_a_span_to_pick_from() -> None:

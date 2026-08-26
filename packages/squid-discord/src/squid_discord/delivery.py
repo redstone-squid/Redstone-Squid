@@ -147,7 +147,7 @@ def _write_fields(
     """The edit kwargs for one write, transition matrix included."""
     fields = presentation._edit_fields(previous)
     if not keep_attachments:
-        fields["attachments"] = presentation.files()
+        fields["attachments"] = presentation.build_files()
     return fields
 
 
@@ -157,7 +157,7 @@ def _merged_files(host: Sequence[discord.File], presentation: DiscordPresentatio
     Overflow is rejected here rather than by Discord, whose answer names neither the count
     nor which half of the list overran it.
     """
-    files = [*host, *presentation.files()]
+    files = [*host, *presentation.build_files()]
     if len(files) > LIMITS.attachments:
         message = f"a Discord message carries at most {LIMITS.attachments} attachments, not {len(files)}"
         raise LimitViolationError([message])
@@ -407,7 +407,7 @@ class Destination(Protocol):
 
     The presentation is the whole payload Squid owns. Transport policy stays here:
     ephemerality, waiting, allowed mentions, DM fallback, and the host's own files, which
-    are merged ahead of `presentation.files()`.
+    are merged ahead of `presentation.build_files()`.
     """
 
     async def __call__(self, presentation: DiscordPresentation, /) -> DeliveryResult: ...

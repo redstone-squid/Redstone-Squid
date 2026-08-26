@@ -407,7 +407,7 @@ class SubmissionFormComponent(sl.Component):
         self.validation_error = None
         self.mutated(self.build)
         if self._mount is not None:
-            await self._mount.flush(interaction)
+            await self._mount.refresh(interaction)
 
     async def wait(self) -> bool | None:
         with anyio.move_on_after(self._timeout) as scope:
@@ -689,7 +689,7 @@ class BuildEditComponent(sl.Component):
         self._replace(build, await interaction.client.for_build(build).render_node())
         self.invalidate()
         if self._mount is not None:
-            await self._mount.flush(interaction)
+            await self._mount.refresh(interaction)
 
     async def send(
         self,

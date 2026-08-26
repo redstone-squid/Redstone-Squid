@@ -75,9 +75,9 @@ class ScopedStore(Protocol):
         ttl: timedelta | None = None,
     ) -> None: ...
 
-    async def drop[S: Hashable, V](self, slot: Slot[S, V], scope: S) -> bool: ...
+    async def delete[S: Hashable, V](self, slot: Slot[S, V], scope: S) -> bool: ...
 
-    async def purge_expired(self) -> int: ...
+    async def purge(self) -> int: ...
 
 
 @dataclass(slots=True)
@@ -177,11 +177,11 @@ class MemoryScopedStore:
         async with self._lock:
             self._values[(slot.name, scope)] = _MemoryValue(payload, slot.version, ttl_seconds, expires_at)
 
-    async def drop[S: Hashable, V](self, slot: Slot[S, V], scope: S) -> bool:
+    async def delete[S: Hashable, V](self, slot: Slot[S, V], scope: S) -> bool:
         async with self._lock:
             return self._values.pop((slot.name, scope), _MISSING) is not _MISSING
 
-    async def purge_expired(self) -> int:
+    async def purge(self) -> int:
         now = self._clock()
         async with self._lock:
             expired = [
@@ -241,12 +241,12 @@ class SQLiteScopedStore:
         await self._initialize()
         await asyncio.to_thread(self._put, slot.name, scope_key, payload, slot.version, ttl_seconds)
 
-    async def drop[S: Hashable, V](self, slot: Slot[S, V], scope: S) -> bool:
+    async def delete[S: Hashable, V](self, slot: Slot[S, V], scope: S) -> bool:
         scope_key = _encode_scope(scope, self._scope_encoder)
         await self._initialize()
         return await asyncio.to_thread(self._drop, slot.name, scope_key)
 
-    async def purge_expired(self) -> int:
+    async def purge(self) -> int:
         await self._initialize()
         return await asyncio.to_thread(self._purge_expired)
 
@@ -445,7 +445,7 @@ class PostgresScopedStore:
                 ttl_seconds,
             )
 
-    async def drop[S: Hashable, V](self, slot: Slot[S, V], scope: S) -> bool:
+    async def delete[S: Hashable, V](self, slot: Slot[S, V], scope: S) -> bool:
         scope_key = _encode_scope(scope, self._scope_encoder)
         await self._initialize()
         async with self.pool.acquire() as connection, connection.transaction():
@@ -456,7 +456,7 @@ class PostgresScopedStore:
             )
         return result.endswith("1")
 
-    async def purge_expired(self) -> int:
+    async def purge(self) -> int:
         await self._initialize()
         async with self.pool.acquire() as connection, connection.transaction():
             result = await connection.execute(
