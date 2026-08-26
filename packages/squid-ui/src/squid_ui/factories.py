@@ -20,7 +20,7 @@ from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Se
 from datetime import datetime
 from string.templatelib import Template
 from types import UnionType
-from typing import TYPE_CHECKING, Literal, NoReturn, TypeAliasType, TypeIs, get_args
+from typing import TYPE_CHECKING, Literal, NoReturn, TypeAliasType, TypeIs, get_args, get_origin
 
 from squid_ui.assets import Asset
 from squid_ui.entity import ChannelType, EntityRef, EntityType
@@ -114,6 +114,7 @@ from squid_ui.semantic import (
     ZonedTimestamp,
 )
 from squid_ui.tallies import TallyOption
+from squid_ui.target_types import DiscordTarget
 from squid_ui.temporal import ZonedDateTime
 from squid_ui.text import Message, ResolvedText, TextLike, md
 
@@ -132,12 +133,25 @@ deliberately *not* accepted: ``x and y`` evaluates to ``y`` or to the falsy ``x`
 would render a literal ``0`` in looser designs — a type error rather than a surprise.
 """
 
-type ChildLike = Conditional[LayoutNode | TextLike | Template]
-"""Anything acceptable in a container's child position; text is promoted to `Paragraph`."""
+type ChildLike[ModeT = DiscordTarget] = Conditional[LayoutNode[ModeT] | TextLike | Template]
+"""Anything acceptable in a container's child position; text is promoted to `Paragraph`.
+
+`ModeT` is what makes a nested dialect mistake a type error. A container factory solves it
+from its children, so a `Panel` two levels down inside an otherwise portable document makes
+the whole document `ComponentsV2Target`, and handing that to a classic target does not
+type-check. See `docs/plans/squid-ui-redesign/spikes/73/` for the measurement that chose
+plain inference over an overload ladder, and for the one case it does not catch.
+"""
 
 
 def _node_types(annotation: object) -> Iterator[type]:
-    """Flatten a union of type aliases into the concrete classes it admits."""
+    """Flatten a union of type aliases into the concrete classes it admits.
+
+    The `get_origin` branch is not decoration: once the containers became generic in their
+    dialect, `Stack[ModeT]` stopped being a `type`, every container silently fell out of
+    `_NODE_TYPES`, and `is_layout_node(sl.stack(...))` went quietly False -- which reads at
+    runtime as "a stack is not content".
+    """
     if isinstance(annotation, TypeAliasType):
         yield from _node_types(annotation.__value__)
     elif isinstance(annotation, UnionType):
@@ -145,6 +159,8 @@ def _node_types(annotation: object) -> Iterator[type]:
             yield from _node_types(member)
     elif isinstance(annotation, type):
         yield annotation
+    elif isinstance(origin := get_origin(annotation), type):
+        yield origin
 
 
 # Derived from the union rather than hand-listed, so a new node type is accepted the moment
@@ -198,8 +214,8 @@ def _is_component(value: object) -> bool:
     return isinstance(value, Component)
 
 
-def _children(values: tuple[ChildLike, ...], origin: str) -> tuple[LayoutNode, ...]:
-    collected: list[LayoutNode] = []
+def _children[ModeT](values: tuple[ChildLike[ModeT], ...], origin: str) -> tuple[LayoutNode[ModeT], ...]:
+    collected: list[LayoutNode[ModeT]] = []
     for index, value in enumerate(values):
         if value is None or value is False:
             continue
@@ -212,9 +228,13 @@ def _children(values: tuple[ChildLike, ...], origin: str) -> tuple[LayoutNode, .
     return tuple(collected)
 
 
-def _collect[ItemT](
-    values: Iterable[Conditional[ItemT]], kinds: tuple[type[ItemT], ...], origin: str
-) -> tuple[ItemT, ...]:
+def _collect[ItemT](values: Iterable[Conditional[ItemT]], kinds: tuple[type, ...], origin: str) -> tuple[ItemT, ...]:
+    """Drop omitted entries and reject anything that is not one of `kinds`.
+
+    `kinds` is the erased runtime table, not `type[ItemT]`: a generic entry such as `Item`
+    has no runtime class per mode, so tying the two would solve `ItemT` to the erased class
+    and lose the caller's.
+    """
     collected: list[ItemT] = []
     for index, value in enumerate(values):
         if value is None or value is False:
@@ -229,52 +249,52 @@ def _collect[ItemT](
 # --- containers ---------------------------------------------------------------------------
 
 
-def group(*children: ChildLike) -> Group:
+def group[ModeT = DiscordTarget](*children: ChildLike[ModeT]) -> Group[ModeT]:
     """Related content with no layout opinion; lowers to its children in place."""
     return Group(_children(children, "sl.group()"))
 
 
-def stack(*children: ChildLike) -> Stack:
+def stack[ModeT = DiscordTarget](*children: ChildLike[ModeT]) -> Stack[ModeT]:
     """Content read top to bottom."""
     return Stack(_children(children, "sl.stack()"))
 
 
-def cluster(*children: ChildLike) -> Cluster:
+def cluster[ModeT = DiscordTarget](*children: ChildLike[ModeT]) -> Cluster[ModeT]:
     """Content read as a set rather than a sequence."""
     return Cluster(_children(children, "sl.cluster()"))
 
 
-def themed(palette: Palette, *children: ChildLike) -> Themed:
+def themed[ModeT = DiscordTarget](palette: Palette, *children: ChildLike[ModeT]) -> Themed[ModeT]:
     """Apply a presentation palette to one semantic subtree."""
     return Themed(_children(children, "sl.themed()"), palette)
 
 
-def block(*children: ChildLike, accent: Accent = INHERIT) -> Block:
+def block[ModeT = DiscordTarget](*children: ChildLike[ModeT], accent: Accent = INHERIT) -> Block[ModeT]:
     """An untitled region; ``accent`` is a house-colour override."""
     return Block(_children(children, "sl.block()"), accent)
 
 
-def section(
+def section[ModeT = DiscordTarget](
     heading: Heading,
-    *children: ChildLike,
+    *children: ChildLike[ModeT],
     accent: Accent = INHERIT,
     thumbnail: str | None = None,
-) -> Section:
+) -> Section[ModeT]:
     """A titled block of related content; ``accent`` is a house-colour override."""
     return Section(heading, _children(children, "sl.section()"), accent, thumbnail)
 
 
-def article(
+def article[ModeT = DiscordTarget](
     heading: Heading,
-    *children: ChildLike,
+    *children: ChildLike[ModeT],
     accent: Accent = INHERIT,
     thumbnail: str | None = None,
-) -> Article:
+) -> Article[ModeT]:
     """A self-contained block that stands on its own."""
     return Article(heading, _children(children, "sl.article()"), accent, thumbnail)
 
 
-def aside(*children: ChildLike, tone: Tone = Tone.NEUTRAL) -> Aside:
+def aside[ModeT = DiscordTarget](*children: ChildLike[ModeT], tone: Tone = Tone.NEUTRAL) -> Aside[ModeT]:
     """Tangential or advisory content, coloured by tone."""
     return Aside(_children(children, "sl.aside()"), tone)
 
@@ -292,12 +312,12 @@ def uncontrolled[ValueT](initial: ValueT) -> Uncontrolled[ValueT]:
     return Uncontrolled(initial)
 
 
-def details(
+def details[ModeT = DiscordTarget](
     summary: Summary,
-    *children: ChildLike,
+    *children: ChildLike[ModeT],
     key: str,
     open: DisclosureOwnership = CLOSED,
-) -> Details:
+) -> Details[ModeT]:
     """Content the reader expands; ``key`` carries its disclosure state."""
     return Details(key, summary, _children(children, "sl.details()"), open)
 
@@ -332,7 +352,9 @@ def form(
     return FormTrigger(key, _text(label), resolved, handler, selected_mode, tone, emphasis, guard, record)
 
 
-def item(label: ItemLabel, *children: ChildLike, key: str, summary: TextValue | None = None) -> Item:
+def item[ModeT = DiscordTarget](
+    label: ItemLabel, *children: ChildLike[ModeT], key: str, summary: TextValue | None = None
+) -> Item[ModeT]:
     """One entry of an `items` collection."""
     return Item(key, label, _children(children, "sl.item()"), _opt_text(summary))
 
@@ -342,13 +364,13 @@ def item_label(content: TextValue) -> ItemLabel:
     return ItemLabel(_text(content))
 
 
-def items(
-    *entries: Conditional[Item],
+def items[ModeT = DiscordTarget](
+    *entries: Conditional[Item[ModeT]],
     key: str,
     opened: ItemOwnership = UNOPENED,
     display: ItemDisplay = ItemDisplay.AUTO,
     flexibility: Flexibility = Flexibility.NORMAL,
-) -> Items:
+) -> Items[ModeT]:
     """A set of entries the reader browses; ``key`` carries the opened entry."""
     return Items(key, _collect(entries, (Item,), "sl.items()"), opened, display, flexibility)
 

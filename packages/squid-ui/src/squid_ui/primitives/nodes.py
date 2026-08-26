@@ -383,7 +383,7 @@ class Card(Renderable[ClassicTarget]):
 
 
 @dataclass(frozen=True, slots=True)
-class Extension[ModeT = Any](Renderable[ModeT]):
+class Extension[ModeT = DiscordTarget](Renderable[ModeT]):
     """Target extension with a mandatory portable fallback."""
 
     kind: str
@@ -464,7 +464,7 @@ class Panel(Renderable[ComponentsV2Target]):
 
 
 @dataclass(frozen=True, slots=True)
-class Budget[ModeT = Any](Renderable[ModeT]):
+class Budget[ModeT = DiscordTarget](Renderable[ModeT]):
     """Transparent group carrying an author-sized character reservation and ceiling."""
 
     children: tuple[Node, ...]
@@ -475,7 +475,7 @@ class Budget[ModeT = Any](Renderable[ModeT]):
 
 
 @dataclass(frozen=True, slots=True)
-class Break[ModeT = Any](Renderable[ModeT]):
+class Break[ModeT = DiscordTarget](Renderable[ModeT]):
     """Transparent group carrying region-break annotations through semantic lowering."""
 
     children: tuple[Node, ...]
@@ -504,7 +504,7 @@ class Fidelity(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class Variant[ModeT = Any]:
+class Variant[ModeT = DiscordTarget]:
     """One structural representation of a region and the capabilities it requires.
 
     ``nodes`` is a tuple because a variant may lower to several nodes — an ControlGroup becomes
@@ -527,7 +527,7 @@ class Variant[ModeT = Any]:
 
 
 @dataclass(frozen=True, slots=True)
-class Variants[ModeT = Any](Renderable[ModeT]):
+class Variants[ModeT = DiscordTarget](Renderable[ModeT]):
     """An ordered ladder of structural representations for one region.
 
     Overflow policies shrink *text*; nothing they do returns a component, so a document with
@@ -649,7 +649,7 @@ type Node = (
     | Variants
 )
 
-type PrimitiveNode[ModeT = Any] = Renderable[ModeT]
+type PrimitiveNode[ModeT = DiscordTarget] = Renderable[ModeT]
 
 
 def as_nodes(rendered: Node | Sequence[Node]) -> list[Node]:

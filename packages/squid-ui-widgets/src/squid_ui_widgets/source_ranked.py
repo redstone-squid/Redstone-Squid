@@ -18,7 +18,7 @@ from squid_ui.primitives import Lines
 from squid_ui.runtime.component import Component, RenderResult
 from squid_ui.runtime.reactivity import state
 from squid_ui.runtime.resources import Failed, Pending, Ready, resource
-from squid_ui.semantic import LayoutNode
+from squid_ui.semantic import AnyLayoutNode
 from squid_ui.sources import (
     ORIGIN,
     CountPrecision,
@@ -29,7 +29,7 @@ from squid_ui.sources import (
     window_footer,
 )
 from squid_ui.text import TextLike
-from squid_ui_widgets._content import ContentLike, normalize_content, require_key
+from squid_ui_widgets._content import ContentLike, normalize_content, render_content, require_key
 from squid_ui_widgets._ranked import Projector, RankedEntry, RankedRows
 
 type SourceContentHook = ContentLike | Callable[[int | None], ContentLike]
@@ -117,13 +117,9 @@ class SourceRankedList[EntryT](Component):
     async def _retry(self, _event: ActionEvent) -> None:
         self._request = _WindowRequest(self._request.operation, self._request.position)
 
-    def _hook(self, hook: SourceContentHook, total: int | None, *, name: str) -> tuple[LayoutNode, ...]:
+    def _hook(self, hook: SourceContentHook, total: int | None, *, name: str) -> tuple[AnyLayoutNode, ...]:
         value = hook(total) if callable(hook) else hook
-        content = normalize_content(value, name=name)
-        return tuple(
-            self.boundary(item, key=f"{name}-{index}") if isinstance(item, Component) else item
-            for index, item in enumerate(content)
-        )
+        return render_content(self, normalize_content(value, name=name), prefix=name)
 
     def render(self) -> RenderResult:
         match self.loaded.status:

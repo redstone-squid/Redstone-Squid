@@ -2,16 +2,16 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
 
 from squid_ui.assets import Asset, AssetSource, InlineAsset, StoredAsset
 from squid_ui.semantic import LayoutNode
+from squid_ui.target_types import DiscordTarget
 
 __all__ = ["Asset", "AssetSource", "Document", "DocumentLike", "InlineAsset", "StoredAsset", "as_document"]
 
 
 @dataclass(frozen=True, slots=True)
-class Document[ModeT = Any]:
+class Document[ModeT = DiscordTarget]:
     """Visual nodes and delivery assets derived from one component state snapshot."""
 
     children: tuple[LayoutNode[ModeT], ...]
@@ -19,7 +19,7 @@ class Document[ModeT = Any]:
     key: str | None = None
 
 
-type DocumentLike[ModeT = Any] = Document[ModeT] | LayoutNode[ModeT] | Sequence[LayoutNode[ModeT]]
+type DocumentLike[ModeT = DiscordTarget] = Document[ModeT] | LayoutNode[ModeT] | Sequence[LayoutNode[ModeT]]
 
 
 def as_document[ModeT](rendered: DocumentLike[ModeT]) -> Document[ModeT]:

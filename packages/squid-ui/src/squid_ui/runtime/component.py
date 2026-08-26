@@ -59,6 +59,10 @@ from squid_ui.semantic import (
     ActionControls as SemanticActionControls,
 )
 from squid_ui.semantic import (
+    AnyLayoutNode,
+    LayoutNode,
+)
+from squid_ui.semantic import (
     Choices as SemanticChoices,
 )
 from squid_ui.semantic import ControlGroup as SemanticControlGroup
@@ -72,9 +76,6 @@ from squid_ui.semantic import (
 from squid_ui.semantic import Grid as SemanticGrid
 from squid_ui.semantic import (
     Items as SemanticItems,
-)
-from squid_ui.semantic import (
-    LayoutNode,
 )
 from squid_ui.semantic import (
     Link as SemanticLink,
@@ -94,9 +95,10 @@ from squid_ui.semantic import (
     Table as SemanticTable,
 )
 from squid_ui.semantic import Toggle as SemanticToggle
+from squid_ui.target_types import DiscordTarget
 
-type RenderNode[ModeT = Any] = LayoutNode[ModeT]
-type RenderResult[ModeT = Any] = Document[ModeT] | LayoutNode[ModeT] | Sequence[LayoutNode[ModeT]]
+type RenderNode[ModeT = DiscordTarget] = LayoutNode[ModeT]
+type RenderResult[ModeT = DiscordTarget] = Document[ModeT] | LayoutNode[ModeT] | Sequence[LayoutNode[ModeT]]
 
 
 class RuntimeOwner(Protocol):
@@ -185,7 +187,7 @@ class _SpliceResult:
     added: tuple[tuple[str, Component], ...]
 
 
-class Component[ModeT = Any](StateOwner):
+class Component[ModeT = DiscordTarget](StateOwner):
     """Base class for mounted, stateful views."""
 
     _runtime: RuntimeOwner | None = None
@@ -691,7 +693,7 @@ def _splice_nodes(
     return rewrite(nodes, splice.route)
 
 
-def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
+def _namespace(nodes: list[AnyLayoutNode], prefix: str) -> list[AnyLayoutNode]:
     """Rewrite an embedded subtree's control keys under ``prefix``.
 
     Explicit control keys are scoped under the embed path, so inserting a sibling cannot
@@ -701,7 +703,7 @@ def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
     def key_for(node: Button | SelectMenu) -> str:
         return f"{prefix}.{node.key}"
 
-    def rewrite_text[T: (Text, Heading, Footer, Code, Lines)](node: T) -> T:
+    def rewrite_text[T: Text | Heading | Footer | Code | Lines](node: T) -> T:
         overflow = node.overflow
         if isinstance(overflow, Paginate) and overflow.key is not None:
             return replace(node, overflow=replace(overflow, key=f"{prefix}.{overflow.key}"))
@@ -721,7 +723,7 @@ def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
             )
         return replace(item, key=f"{prefix}.{item.key}")
 
-    def rewrite(node: LayoutNode) -> LayoutNode:
+    def rewrite(node: AnyLayoutNode) -> AnyLayoutNode:
         match node:
             case SemanticActionControls(items=items, key=key):
                 return replace(
