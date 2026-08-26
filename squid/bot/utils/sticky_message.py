@@ -116,8 +116,8 @@ class StickyMessage(abc.ABC):
 
             presentation = await self.render(channel)
             try:
-                receipt = await send_to(channel)(presentation)
-                new_msg = receipt.message
+                result = await send_to(channel)(presentation)
+                new_msg = result.message
                 if new_msg is None:
                     logger.warning("Sticky delivery returned no message for channel %s", channel.id)
                     return

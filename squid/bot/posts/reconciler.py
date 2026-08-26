@@ -108,8 +108,8 @@ class PostReconciler[BotT: "squid.bot.app.RedstoneSquid"]:
         if channel is None:
             logger.debug("Skipping a post to an unreachable channel %s", want.channel_id)
             return
-        receipt = await send_to(channel, allowed_mentions=want.allowed_mentions)(want.presentation)
-        message = receipt.message
+        result = await send_to(channel, allowed_mentions=want.allowed_mentions)(want.presentation)
+        message = result.message
         if message is None:
             detail = "channel post delivery returned no message"
             raise RuntimeError(detail)

@@ -18,7 +18,7 @@ from squid.core.i18n import _, translate
 from squid_layouts.runtime.component import RenderResult
 
 type OperationWork = Callable[
-    [sl.operations.Progress[RenderResult | None], sd.delivery.DeliveryReceipt],
+    [sl.operations.Progress[RenderResult | None], sd.delivery.DeliveryResult],
     Awaitable[RenderResult],
 ]
 _INITIAL_PROGRESS: RenderResult | None = None
@@ -42,7 +42,7 @@ class CommandOperation(sl.Component):
         self._work = work
         self._initial = initial
         self._locale = locale
-        self._receipt: sd.delivery.DeliveryReceipt | None = None
+        self._result: sd.delivery.DeliveryResult | None = None
         self.execution = self._execute.start()
 
     @sl.operation(initial=_INITIAL_PROGRESS)
@@ -50,12 +50,12 @@ class CommandOperation(sl.Component):
         self,
         progress: sl.operations.Progress[RenderResult | None],
     ) -> RenderResult:
-        receipt = self._receipt
-        if receipt is None:
+        result = self._result
+        if result is None:
             message = "a command operation cannot start before its initial delivery"
             raise RuntimeError(message)
 
-        return await self._work(progress, receipt)
+        return await self._work(progress, result)
 
     def render(self) -> RenderResult:
         match self.execution.status:
@@ -163,11 +163,11 @@ def managed_result[**P](
                     if dismiss_on_success:
                         await mount.dismiss()
                 case sl.operations.Failed(error=error):
-                    receipt = delivered.receipt if isinstance(delivered, sd.delivery.Delivered) else None
+                    result = delivered.result if isinstance(delivered, sd.delivery.Delivered) else None
                     await record_operation_error(
                         error,
                         locale=locale,
-                        receipt=receipt,
+                        result=result,
                         presented=isinstance(delivered, sd.delivery.Delivered) and delivered.settled,
                         reports=_error_reports(bound.arguments),
                     )
@@ -241,10 +241,10 @@ async def run_command_operation(
 
     async def capture(
         presentation: sd.presentation.DiscordPresentation,
-    ) -> sd.delivery.DeliveryReceipt:
-        receipt = await destination(presentation)
-        component._receipt = receipt
-        return receipt
+    ) -> sd.delivery.DeliveryResult:
+        result = await destination(presentation)
+        component._result = result
+        return result
 
     delivered = await mount.send(capture)
     match component.execution.status:
@@ -252,11 +252,11 @@ async def run_command_operation(
             if dismiss_on_success:
                 await mount.dismiss()
         case sl.operations.Failed(error=error):
-            receipt = delivered.receipt if isinstance(delivered, sd.delivery.Delivered) else None
+            result = delivered.result if isinstance(delivered, sd.delivery.Delivered) else None
             await record_operation_error(
                 error,
                 locale=locale,
-                receipt=receipt,
+                result=result,
                 presented=isinstance(delivered, sd.delivery.Delivered) and delivered.settled,
                 reports=reports,
             )

@@ -185,8 +185,8 @@ class TestTransitions:
     async def test_the_original_response_handle_runs_the_same_matrix(self) -> None:
         interaction = fake_interaction(components_v2=False)
         destination = delivery.respond_to(interaction, wait=True)
-        receipt = await destination(v2())
-        handle = receipt.handle
+        result = await destination(v2())
+        handle = result.handle
         assert handle is not None
 
         await handle.write(v2())
@@ -215,9 +215,9 @@ class TestTransitions:
         # `wait=False` on a fresh response: nothing ever fetched the message, so the mode the
         # destination delivered is the only thing that knows what is on it.
         interaction = fake_interaction()
-        receipt = await delivery.respond_to(interaction)(v2())
-        handle = receipt.handle
-        assert receipt.message is None
+        result = await delivery.respond_to(interaction)(v2())
+        handle = result.handle
+        assert result.message is None
         assert handle is not None and handle.mode is V2
 
         with pytest.raises(DiscordModeError):
@@ -309,27 +309,27 @@ class TestDestinations:
     async def test_the_delivered_mode_is_what_the_handle_starts_from(self) -> None:
         ctx = _Replyable()
 
-        receipt = await delivery.reply_to(ctx)(v2())
+        result = await delivery.reply_to(ctx)(v2())
 
-        assert receipt.handle is not None
-        assert receipt.handle.mode is V2
+        assert result.handle is not None
+        assert result.handle.mode is V2
 
     async def test_edit_to_writes_a_message_the_bot_already_owns(self) -> None:
         message = fake_message()
 
-        receipt = await delivery.edit_to(message)(v2())
+        result = await delivery.edit_to(message)(v2())
 
-        assert receipt.message is message
+        assert result.message is message
         assert isinstance(message.edit.await_args.kwargs["view"], discord.ui.LayoutView)
 
     async def test_edit_to_hands_back_a_handle_carrying_the_presentations_mode(self) -> None:
         """The bare `handle_for` a host would reach for reads the flag, which is now stale."""
         message = fake_message(components_v2=False)
 
-        receipt = await delivery.edit_to(message)(v2())
+        result = await delivery.edit_to(message)(v2())
 
-        assert receipt.handle is not None
-        assert receipt.handle.mode is V2
+        assert result.handle is not None
+        assert result.handle.mode is V2
         assert delivery.handle_for(message).mode is DiscordMode.CLASSIC
 
     async def test_edit_to_runs_the_transition_matrix_for_the_message_it_edits(self) -> None:
@@ -368,10 +368,10 @@ class TestDestinations:
     async def test_deliver_to_answers_a_command_through_reply_to(self) -> None:
         ctx = _Replyable()
 
-        receipt = await delivery.deliver_to(ctx, ephemeral=True)(v2())
+        result = await delivery.deliver_to(ctx, ephemeral=True)(v2())
 
         assert ctx.sent["ephemeral"] is True
-        assert receipt.handle is not None
+        assert result.handle is not None
 
     async def test_deliver_to_answers_an_interaction_through_respond_to(self) -> None:
         interaction = fake_interaction(user_id=7)
@@ -402,7 +402,7 @@ class TestDurableMode:
         client = SimpleNamespace(get_channel=lambda _id: _Channel(message), fetch_channel=AsyncMock())
         frontend = DiscordFrontend(client)  # type: ignore[arg-type]
 
-        promoted = await frontend.promote(mount, sent.receipt)
+        promoted = await frontend.promote(mount, sent.result)
 
         assert isinstance(promoted, Promoted)
         assert promoted.address.values["mode"] == "components_v2"

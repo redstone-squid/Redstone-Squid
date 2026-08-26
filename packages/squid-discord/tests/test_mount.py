@@ -2050,7 +2050,7 @@ class TestDeliveryAtomicity:
 
 
 class _Destination:
-    """A recording destination. `message` is whatever its receipt exposes to the mount."""
+    """A recording destination. `message` is whatever its result exposes to the mount."""
 
     def __init__(
         self,
@@ -2104,7 +2104,7 @@ class TestSend:
 
         assert isinstance(sent, delivery.Delivered)
         assert sent.settled
-        assert sent.receipt.message is message
+        assert sent.result.message is message
         assert "inc" in mount._handlers
         assert mount._generation == 1
         assert not mount.pending
@@ -2161,7 +2161,7 @@ class TestSend:
 
         # Delivered, so the render is live -- but nothing came back to write through.
         assert isinstance(sent, delivery.Delivered)
-        assert sent.receipt.message is None
+        assert sent.result.message is None
         assert mount._generation == 1
         assert not mount.pending
         assert mount.handle is None
@@ -2208,7 +2208,7 @@ class TestSend:
         message = fake_message()
         resent = await mount.send(_Destination(message))
         assert isinstance(resent, delivery.Delivered)
-        assert resent.receipt.message is message
+        assert resent.result.message is message
         # Generation 2, not 1: the abandoned candidate does not hand its control ids on.
         assert mount._generation == 2
         assert not mount.pending
@@ -2757,7 +2757,7 @@ class TestDestinations:
         sent = await mount.send(delivery.respond_to(interaction, wait=False))
 
         assert isinstance(sent, delivery.Delivered)
-        assert sent.receipt.message is None
+        assert sent.result.message is None
         assert mount.handle is not None and not mount.handle.permanent
         assert mount.handle.expires_at == interaction.expires_at
         interaction.original_response.assert_not_awaited()
@@ -2778,7 +2778,7 @@ class TestDestinations:
         sent = await mount.send(delivery.respond_to(interaction, ephemeral=False, wait=True))
 
         assert isinstance(sent, delivery.Delivered)
-        assert sent.receipt.message is message
+        assert sent.result.message is message
         assert mount.handle is not None and not mount.handle.permanent
         assert mount.handle.expires_at == interaction.expires_at
 
@@ -2814,7 +2814,7 @@ class TestDestinations:
         sent = await mount.send(delivery.respond_to(interaction, wait=False))
 
         assert isinstance(sent, delivery.Delivered)
-        assert sent.receipt.message is message
+        assert sent.result.message is message
         assert mount.handle is not None
         assert not mount.handle.permanent
 
