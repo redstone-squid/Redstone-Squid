@@ -18,9 +18,44 @@ SCAN_ROOTS = (
     Path("packages/squid-replicated/src"),
 )
 
+COMPILER_PASS_ROOT = Path("packages/squid-layouts/src/squid_layouts/planning")
+
 
 def _scanned_files() -> list[Path]:
     return [path for root in SCAN_ROOTS for path in root.rglob("*.py")]
+
+
+def test_compiler_pass_packages_are_not_facades() -> None:
+    """Pass packages identify owners; their initializers must not aggregate those owners."""
+    for package in ("layout_measurement", "semantic_adaptation"):
+        path = COMPILER_PASS_ROOT / package / "__init__.py"
+        body = ast.parse(path.read_text(encoding="utf-8")).body
+        assert len(body) == 1
+        assert isinstance(body[0], ast.Expr)
+        assert isinstance(body[0].value, ast.Constant)
+        assert isinstance(body[0].value.value, str)
+
+
+def test_removed_compiler_pass_modules_have_no_compatibility_surface() -> None:
+    """The former monolith paths stay deleted rather than becoming forwarding shims."""
+    removed = {
+        "squid_layouts.planning.adaptation",
+        "squid_layouts.planning.measurement",
+    }
+    assert [name for name in removed if (COMPILER_PASS_ROOT / f"{name.rpartition('.')[2]}.py").exists()] == []
+
+    violations: list[tuple[Path, int, str]] = []
+    for path in _scanned_files():
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Import):
+                imported = (alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module is not None:
+                imported = (node.module,)
+            else:
+                continue
+            violations.extend((path, node.lineno, module) for module in imported if module in removed)
+
+    assert violations == []
 
 
 def test_layouts_package_stays_standalone() -> None:
