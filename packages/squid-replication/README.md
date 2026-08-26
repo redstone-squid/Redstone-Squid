@@ -4,7 +4,7 @@ Optional replicated-state integration for Squid actions. The package keeps backe
 private, exposes immutable Python snapshots, stages mutations as transaction participants, and
 routes decoded remote updates through the same runtime commit gate as local actions.
 
-The default deterministic engine is a reference/conformance backend for counters and tagged sets.
+The deterministic `ReferenceBackend` is a reference/conformance backend for counters and tagged sets.
 It proves operation identity, idempotent delivery, convergence, semantic inverse planning, and mixed
 ordinary/replicated atomicity; it is not a networking or durable-storage product.
 
@@ -15,10 +15,10 @@ action-addressable inverse tokens, reordered delivery, restart, and multi-contai
 register conflicts, compaction, ownership, security, and representative workloads remain gated.
 
 ```python
-from squid_replication import Replica
+from squid_replication import ReferenceBackend, Replica
 from squid_reactivity import transaction
 
-scope = Replica("replica-a")
+scope = Replica("replica-a", backend=ReferenceBackend())
 document = scope.open("project-7")
 
 with transaction():
