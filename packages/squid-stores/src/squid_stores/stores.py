@@ -12,22 +12,18 @@ from os import PathLike
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
-_SCHEMA_VERSION = 2
-_LEGACY_SCHEMA_KEY = "__squid_layouts_schema_version__"
-# The table keeps its original name: renaming the class is a source change, renaming a
-# deployed table is a migration. Every message below that says "snapshot" is about this
-# table or its schema, and is accurate.
-_DEFAULT_TABLE_NAME = "squid_layout_snapshots"
+_SCHEMA_VERSION = 1
+_DEFAULT_TABLE_NAME = "squid_sessions"
 
 
 @dataclass(frozen=True, slots=True)
 class StoredSessionRecord:
-    """One published durable session and its distributed-admission summary."""
+    """One published durable session and its admission snapshot."""
 
     key: str
     scope: str
-    summary_payload: str
     snapshot_payload: str
+    record_payload: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,7 +68,7 @@ class DurableSessionStore(Protocol):
 
     async def renew(self, token: ClaimToken, lease_seconds: float) -> bool: ...
 
-    async def save(self, token: ClaimToken, summary_payload: str, snapshot_payload: str) -> bool: ...
+    async def save(self, token: ClaimToken, snapshot_payload: str, record_payload: str) -> bool: ...
 
     async def delete(self, token: ClaimToken) -> bool: ...
 
@@ -87,8 +83,8 @@ class DurableSessionStore(Protocol):
         reservation: AdmissionToken,
         *,
         key: str,
-        summary_payload: str,
         snapshot_payload: str,
+        record_payload: str,
         victims: tuple[str, ...],
         lease_seconds: float,
     ) -> ClaimToken | None: ...
@@ -147,14 +143,14 @@ class MemorySessionStore:
             current.expires_at = self._clock() + lease_seconds
             return True
 
-    async def save(self, token: ClaimToken, summary_payload: str, snapshot_payload: str) -> bool:
+    async def save(self, token: ClaimToken, snapshot_payload: str, record_payload: str) -> bool:
         async with self._lock:
             if self._active_claim(token) is None:
                 return False
             record = self._records.get(token.key)
             if record is None:
                 return False
-            self._records[token.key] = StoredSessionRecord(token.key, record.scope, summary_payload, snapshot_payload)
+            self._records[token.key] = StoredSessionRecord(token.key, record.scope, snapshot_payload, record_payload)
             return True
 
     async def delete(self, token: ClaimToken) -> bool:
@@ -196,8 +192,8 @@ class MemorySessionStore:
         reservation: AdmissionToken,
         *,
         key: str,
-        summary_payload: str,
         snapshot_payload: str,
+        record_payload: str,
         victims: tuple[str, ...],
         lease_seconds: float,
     ) -> ClaimToken | None:
@@ -214,7 +210,7 @@ class MemorySessionStore:
                 self._records.pop(victim, None)
                 self._claims.pop(victim, None)
             fence = self._mint_fence()
-            self._records[key] = StoredSessionRecord(key, reservation.scope, summary_payload, snapshot_payload)
+            self._records[key] = StoredSessionRecord(key, reservation.scope, snapshot_payload, record_payload)
             self._claims[key] = _MemoryLease(reservation.owner, fence, self._clock() + lease_seconds)
             self._admissions.pop(reservation.scope, None)
             return ClaimToken(key, reservation.owner, fence)
@@ -307,9 +303,9 @@ class SQLiteSessionStore:
         await self._initialize()
         return await asyncio.to_thread(self._renew, token, lease_seconds)
 
-    async def save(self, token: ClaimToken, summary_payload: str, snapshot_payload: str) -> bool:
+    async def save(self, token: ClaimToken, snapshot_payload: str, record_payload: str) -> bool:
         await self._initialize()
-        return await asyncio.to_thread(self._save, token, summary_payload, snapshot_payload)
+        return await asyncio.to_thread(self._save, token, snapshot_payload, record_payload)
 
     async def delete(self, token: ClaimToken) -> bool:
         await self._initialize()
@@ -335,8 +331,8 @@ class SQLiteSessionStore:
         reservation: AdmissionToken,
         *,
         key: str,
-        summary_payload: str,
         snapshot_payload: str,
+        record_payload: str,
         victims: tuple[str, ...],
         lease_seconds: float,
     ) -> ClaimToken | None:
@@ -345,7 +341,7 @@ class SQLiteSessionStore:
         _validate_lease_seconds(lease_seconds)
         await self._initialize()
         return await asyncio.to_thread(
-            self._commit, reservation, key, summary_payload, snapshot_payload, victims, lease_seconds
+            self._commit, reservation, key, snapshot_payload, record_payload, victims, lease_seconds
         )
 
     async def abandon(self, reservation: AdmissionToken) -> bool:
@@ -373,8 +369,8 @@ class SQLiteSessionStore:
                 CREATE TABLE IF NOT EXISTS {self.table_name} (
                     key TEXT PRIMARY KEY,
                     scope TEXT NOT NULL,
-                    summary_payload TEXT NOT NULL,
                     snapshot_payload TEXT NOT NULL,
+                    record_payload TEXT NOT NULL,
                     claim_owner TEXT,
                     claim_fence INTEGER,
                     lease_until REAL,
@@ -385,9 +381,6 @@ class SQLiteSessionStore:
                 )
                 """
             )
-            columns = {str(row[1]) for row in connection.execute(f"PRAGMA table_info({self.table_name})")}
-            if "payload" in columns:
-                self._migrate_v1(connection)
             connection.execute(
                 f"CREATE INDEX IF NOT EXISTS {self.table_name}_scope_idx ON {self.table_name} (scope, key)"
             )
@@ -426,64 +419,17 @@ class SQLiteSessionStore:
             )
             connection.commit()
 
-    def _migrate_v1(self, connection: sqlite3.Connection) -> None:
-        version = connection.execute(
-            f"SELECT payload FROM {self.table_name} WHERE key = ?", (_LEGACY_SCHEMA_KEY,)
-        ).fetchone()
-        if version is None or str(version[0]) != "1":
-            message = "legacy snapshot store schema version is missing or malformed"
-            raise RuntimeError(message)
-        replacement = f"{self.table_name}_v2"
-        connection.execute(f"DROP TABLE IF EXISTS {replacement}")
-        connection.execute(
-            f"""
-            CREATE TABLE {replacement} (
-                key TEXT PRIMARY KEY,
-                scope TEXT NOT NULL,
-                summary_payload TEXT NOT NULL,
-                snapshot_payload TEXT NOT NULL,
-                claim_owner TEXT,
-                claim_fence INTEGER,
-                lease_until REAL,
-                CHECK (
-                    (claim_owner IS NULL AND claim_fence IS NULL AND lease_until IS NULL)
-                    OR (claim_owner IS NOT NULL AND claim_fence IS NOT NULL AND lease_until IS NOT NULL)
-                )
-            )
-            """
-        )
-        rows = connection.execute(
-            f"SELECT key, payload, owner, lease_until FROM {self.table_name} WHERE key <> ? ORDER BY key",
-            (_LEGACY_SCHEMA_KEY,),
-        ).fetchall()
-        fence = 0
-        for key, payload, owner, lease_until in rows:
-            claim_fence = None
-            if owner is not None and lease_until is not None:
-                fence += 1
-                claim_fence = fence
-            connection.execute(
-                f"""
-                INSERT INTO {replacement}
-                    (key, scope, summary_payload, snapshot_payload, claim_owner, claim_fence, lease_until)
-                VALUES (?, ?, '', ?, ?, ?, ?)
-                """,
-                (key, key, payload, owner, claim_fence, lease_until),
-            )
-        connection.execute(f"DROP TABLE {self.table_name}")
-        connection.execute(f"ALTER TABLE {replacement} RENAME TO {self.table_name}")
-
     def _list_records(self) -> tuple[StoredSessionRecord, ...]:
         with closing(self._connect()) as connection:
             rows = connection.execute(
-                f"SELECT key, scope, summary_payload, snapshot_payload FROM {self.table_name} ORDER BY key"
+                f"SELECT key, scope, snapshot_payload, record_payload FROM {self.table_name} ORDER BY key"
             ).fetchall()
         return tuple(StoredSessionRecord(*(str(value) for value in row)) for row in rows)
 
     def _load(self, key: str) -> StoredSessionRecord | None:
         with closing(self._connect()) as connection:
             row = connection.execute(
-                f"SELECT key, scope, summary_payload, snapshot_payload FROM {self.table_name} WHERE key = ?",
+                f"SELECT key, scope, snapshot_payload, record_payload FROM {self.table_name} WHERE key = ?",
                 (key,),
             ).fetchone()
         return None if row is None else StoredSessionRecord(*(str(value) for value in row))
@@ -518,14 +464,14 @@ class SQLiteSessionStore:
             )
         return cursor.rowcount == 1
 
-    def _save(self, token: ClaimToken, summary_payload: str, snapshot_payload: str) -> bool:
+    def _save(self, token: ClaimToken, snapshot_payload: str, record_payload: str) -> bool:
         with closing(self._connect()) as connection, connection:
             cursor = connection.execute(
                 f"""
-                UPDATE {self.table_name} SET summary_payload = ?, snapshot_payload = ?
+                UPDATE {self.table_name} SET snapshot_payload = ?, record_payload = ?
                 WHERE key = ? AND claim_owner = ? AND claim_fence = ? AND lease_until > ?
                 """,
-                (summary_payload, snapshot_payload, token.key, token.owner, token._fence, self._clock()),
+                (snapshot_payload, record_payload, token.key, token.owner, token._fence, self._clock()),
             )
         return cursor.rowcount == 1
 
@@ -586,7 +532,7 @@ class SQLiteSessionStore:
             if valid is None:
                 return None
             rows = connection.execute(
-                f"SELECT key, scope, summary_payload, snapshot_payload FROM {self.table_name} WHERE scope = ? ORDER BY key",
+                f"SELECT key, scope, snapshot_payload, record_payload FROM {self.table_name} WHERE scope = ? ORDER BY key",
                 (reservation.scope,),
             ).fetchall()
         return tuple(StoredSessionRecord(*(str(value) for value in row)) for row in rows)
@@ -595,8 +541,8 @@ class SQLiteSessionStore:
         self,
         reservation: AdmissionToken,
         key: str,
-        summary_payload: str,
         snapshot_payload: str,
+        record_payload: str,
         victims: tuple[str, ...],
         lease_seconds: float,
     ) -> ClaimToken | None:
@@ -623,14 +569,14 @@ class SQLiteSessionStore:
             connection.execute(
                 f"""
                 INSERT INTO {self.table_name}
-                    (key, scope, summary_payload, snapshot_payload, claim_owner, claim_fence, lease_until)
+                    (key, scope, snapshot_payload, record_payload, claim_owner, claim_fence, lease_until)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     key,
                     reservation.scope,
-                    summary_payload,
                     snapshot_payload,
+                    record_payload,
                     reservation.owner,
                     fence,
                     now + lease_seconds,
@@ -672,7 +618,7 @@ class SQLiteSessionStore:
             f"UPDATE {self._metadata_table} SET value = value + 1 WHERE name = 'next_fence' RETURNING value"
         ).fetchone()
         if row is None:
-            message = "snapshot store fence counter is missing"
+            message = "session store fence counter is missing"
             raise RuntimeError(message)
         return int(row[0])
 
@@ -720,8 +666,8 @@ def _check_schema_version(raw: str) -> None:
     try:
         version = int(raw)
     except ValueError as error:
-        message = "snapshot store schema version is malformed"
+        message = "session store schema version is malformed"
         raise RuntimeError(message) from error
     if version != _SCHEMA_VERSION:
-        message = f"snapshot store schema {version} does not match supported version {_SCHEMA_VERSION}"
+        message = f"session store schema {version} does not match supported version {_SCHEMA_VERSION}"
         raise RuntimeError(message)
