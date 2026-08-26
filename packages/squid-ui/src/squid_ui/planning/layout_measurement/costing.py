@@ -120,7 +120,7 @@ def _item_component_cost(item: object) -> int:
     return item.component_cost if isinstance(item, RawItem) else 1
 
 
-def structural_cost(children: Sequence[Realized]) -> dict[str, int]:
+def structural_cost(children: Sequence[Realized]) -> dict[Axis, int]:
     """Count every structural axis at once, whichever target budgets them."""
     totals = {Axis.COMPONENTS: 0, Axis.EMBEDS: 0, Axis.ROWS: 0, Axis.CONTROLS: 0}
 

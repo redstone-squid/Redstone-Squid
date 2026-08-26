@@ -40,7 +40,7 @@ from squid_ui.planning.layout_measurement.solver import (
     MeasuredLayout,
     measure,
 )
-from squid_ui.planning.limits import MessageLimits
+from squid_ui.planning.limits import Axis, MessageLimits
 from squid_ui.planning.navigation import PlannedNav, materialized_navigation_state
 from squid_ui.planning.search import (
     DEFAULT_SEARCH_BUDGET,
@@ -377,7 +377,7 @@ class _Candidate:
     broker: CursorCoordinator
     structural: DegradationProfile
     cost: CostVector
-    capacities: Mapping[str, int]
+    capacities: Mapping[Axis, int]
 
     @property
     def degradation(self) -> DegradationProfile:
