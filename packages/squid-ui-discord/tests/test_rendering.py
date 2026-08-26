@@ -126,6 +126,49 @@ class TestBoundaries:
 
 
 class TestRenderCaching:
+    def test_equal_but_distinct_context_value_rerenders_the_consumer(self) -> None:
+        service_key = ContextKey[object]("service")
+
+        class EqualService:
+            def __init__(self, value: int) -> None:
+                self.value = value
+
+            def __eq__(self, other: object) -> bool:
+                return isinstance(other, EqualService)
+
+        class Child(Component):
+            def __init__(self) -> None:
+                self.services: list[object] = []
+
+            def render(self) -> Text:
+                service = self.inject(service_key)
+                self.services.append(service)
+                assert isinstance(service, EqualService)
+                return Text(str(service.value))
+
+        class Root(Component):
+            value: int = state(0)
+
+            def __init__(self) -> None:
+                self.child = Child()
+
+            def render(self):
+                self.provide(service_key, EqualService(self.value))
+                return self.boundary(self.child, key="child")
+
+        root = Root()
+        runtime = ComponentRuntime(root)
+        initial = runtime.render()
+        runtime.commit(initial, rendered_revision=runtime.revision)
+        first_service = root.child.services[-1]
+
+        root.value = 1
+        changed = runtime.render(reuse_committed=True)
+
+        assert changed.nodes == (Text("1"),)
+        assert len(root.child.services) == 2
+        assert root.child.services[-1] is not first_service
+
     @settings(max_examples=20, deadline=None)
     @given(
         st.lists(

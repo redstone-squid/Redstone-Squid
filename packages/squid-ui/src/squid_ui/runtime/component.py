@@ -317,18 +317,7 @@ def render_component_tree(
         return nodes, (), None
 
     def same_context(left: dict[ContextKey[Any], object], right: dict[ContextKey[Any], object]) -> bool:
-        if left.keys() != right.keys():
-            return False
-        for key, value in left.items():
-            other = right[key]
-            if value is other:
-                continue
-            try:
-                if value != other:
-                    return False
-            except Exception:
-                return False
-        return True
+        return left.keys() == right.keys() and all(value is right[key] for key, value in left.items())
 
     def rendered(
         component: Component,
