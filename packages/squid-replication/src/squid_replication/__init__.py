@@ -1,32 +1,32 @@
 """Optional immutable-snapshot replicated state for Squid actions."""
 
 from squid_replication.document import (
-    PreparedReplicatedInverse,
-    ReplicatedChangeToken,
-    ReplicatedClosedError,
+    PreparedReplicationInverse,
+    ReplicationChangeToken,
+    ReplicaClosedError,
     ReplicatedCounter,
     ReplicatedDocument,
-    ReplicatedResyncRequiredError,
-    ReplicatedScope,
+    ReplicationResyncRequiredError,
+    Replica,
     ReplicatedSet,
 )
-from squid_replication.engine import ReplicatedEngine, StagedReplica
-from squid_replication.fake import FakeEngine, FakeSnapshot, FakeVersion
-from squid_replication.transport import ReplicatedUpdate
+from squid_replication.engine import ReplicationEngine, ReplicaBranch
+from squid_replication.reference import ReferenceEngine, ReferenceSnapshot, ReferenceVersion
+from squid_replication.transport import ReplicationUpdate
 
 __all__ = [
-    "FakeEngine",
-    "FakeSnapshot",
-    "FakeVersion",
-    "PreparedReplicatedInverse",
-    "ReplicatedChangeToken",
-    "ReplicatedClosedError",
+    "ReferenceEngine",
+    "ReferenceSnapshot",
+    "ReferenceVersion",
+    "PreparedReplicationInverse",
+    "ReplicationChangeToken",
+    "ReplicaClosedError",
     "ReplicatedCounter",
     "ReplicatedDocument",
-    "ReplicatedEngine",
-    "ReplicatedResyncRequiredError",
-    "ReplicatedScope",
+    "ReplicationEngine",
+    "ReplicationResyncRequiredError",
+    "Replica",
     "ReplicatedSet",
-    "ReplicatedUpdate",
-    "StagedReplica",
+    "ReplicationUpdate",
+    "ReplicaBranch",
 ]

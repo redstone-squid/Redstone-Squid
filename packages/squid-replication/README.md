@@ -15,10 +15,10 @@ action-addressable inverse tokens, reordered delivery, restart, and multi-contai
 register conflicts, compaction, ownership, security, and representative workloads remain gated.
 
 ```python
-from squid_replication import ReplicatedScope
+from squid_replication import Replica
 from squid_reactivity import transaction
 
-scope = ReplicatedScope("replica-a")
+scope = Replica("replica-a")
 document = scope.open("project-7")
 
 with transaction():
@@ -29,4 +29,4 @@ assert document.counter("votes").value == 1
 scope.close()
 ```
 
-`ReplicatedScope.close()` ends every document, subscription, and mutation authority it owns.
+`Replica.close()` ends every document, subscription, and mutation authority it owns.

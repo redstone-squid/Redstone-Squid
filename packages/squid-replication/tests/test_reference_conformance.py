@@ -24,15 +24,15 @@ from squid_reactivity import (
 from squid_reactivity.core import _CURRENT
 from squid_reactivity.testing import InterleavingHarness
 from squid_replication import (
-    FakeEngine,
-    PreparedReplicatedInverse,
-    ReplicatedChangeToken,
-    ReplicatedClosedError,
-    ReplicatedResyncRequiredError,
-    ReplicatedScope,
-    ReplicatedUpdate,
+    ReferenceEngine,
+    PreparedReplicationInverse,
+    ReplicationChangeToken,
+    ReplicaClosedError,
+    ReplicationResyncRequiredError,
+    Replica,
+    ReplicationUpdate,
 )
-from squid_replication.fake import FakeOperation, PreparedFakeUpdate
+from squid_replication.reference import ReferenceOperation, PreparedReferenceUpdate
 
 
 class LocalModel(StateOwner):
@@ -54,7 +54,7 @@ def _outside(callback, *args) -> None:
 
 
 def test_staging_reads_its_branch_without_mutating_canonical_state() -> None:
-    document = ReplicatedScope("a").open("project")
+    document = Replica("a").open("project")
     votes = document.counter("votes")
 
     with transaction():
@@ -68,7 +68,7 @@ def test_staging_reads_its_branch_without_mutating_canonical_state() -> None:
 
 
 def test_failed_mixed_cell_counter_set_action_changes_nothing() -> None:
-    document = ReplicatedScope("a").open("project")
+    document = Replica("a").open("project")
     model = LocalModel()
 
     with pytest.raises(RuntimeError, match="failed"), transaction():
@@ -83,8 +83,8 @@ def test_failed_mixed_cell_counter_set_action_changes_nothing() -> None:
 
 
 def test_duplicate_and_reordered_delivery_converges() -> None:
-    first = ReplicatedScope("a").open("project")
-    second = ReplicatedScope("b").open("project")
+    first = Replica("a").open("project")
+    second = Replica("b").open("project")
     with transaction():
         first.counter("votes").increment(2)
         first.set("tags").add("red")
@@ -105,8 +105,8 @@ def test_duplicate_and_reordered_delivery_converges() -> None:
 
 
 def test_committed_local_updates_are_routed_and_attributed_after_commit() -> None:
-    document = ReplicatedScope("replica-a").open("project")
-    observed: list[ReplicatedUpdate] = []
+    document = Replica("replica-a").open("project")
+    observed: list[ReplicationUpdate] = []
     document.subscribe_updates(observed.append)
 
     with transaction():
@@ -115,15 +115,15 @@ def test_committed_local_updates_are_routed_and_attributed_after_commit() -> Non
 
     update = observed[0]
     assert update.document_id == "project"
-    assert update.backend_id == "squid-fake-v1"
+    assert update.backend_id == "squid-reference-v1"
     assert update.source_replica_id == "replica-a"
     assert update.origin_action_id is not None
     assert document.drain_updates() == (update,)
 
 
 def test_transport_envelope_rejects_wrong_document_and_tampering() -> None:
-    source = ReplicatedScope("a").open("source")
-    target = ReplicatedScope("b").open("target")
+    source = Replica("a").open("source")
+    target = Replica("b").open("target")
     with transaction():
         source.counter("votes").increment(1)
     encoded = source.export_since()
@@ -138,7 +138,7 @@ def test_transport_envelope_rejects_wrong_document_and_tampering() -> None:
 
 
 def test_three_replicas_converge_for_every_delivery_order() -> None:
-    replicas = [ReplicatedScope(name).open("project") for name in ("a", "b", "c")]
+    replicas = [Replica(name).open("project") for name in ("a", "b", "c")]
     for index, replica in enumerate(replicas, start=1):
         with transaction():
             replica.counter("votes").increment(index)
@@ -154,8 +154,8 @@ def test_three_replicas_converge_for_every_delivery_order() -> None:
 
 
 def test_remote_import_invalidates_and_has_a_remote_action_result() -> None:
-    source = ReplicatedScope("a").open("project")
-    target = ReplicatedScope("b").open("project")
+    source = Replica("a").open("project")
+    target = Replica("b").open("project")
     with transaction():
         source.counter("votes").increment(1)
     updates = source.export_since()
@@ -177,8 +177,8 @@ def test_remote_import_invalidates_and_has_a_remote_action_result() -> None:
 
 
 def test_scheduler_places_remote_import_before_local_validation() -> None:
-    source = ReplicatedScope("a").open("project")
-    target = ReplicatedScope("b").open("project")
+    source = Replica("a").open("project")
+    target = Replica("b").open("project")
     model = LocalModel()
     with transaction():
         source.counter("votes").increment(1)
@@ -195,8 +195,8 @@ def test_scheduler_places_remote_import_before_local_validation() -> None:
 
 
 def test_superseded_replicated_read_rejects_local_publication() -> None:
-    source = ReplicatedScope("a").open("project")
-    target = ReplicatedScope("b").open("project")
+    source = Replica("a").open("project")
+    target = Replica("b").open("project")
     model = LocalModel()
     with transaction():
         source.counter("votes").increment(1)
@@ -212,8 +212,8 @@ def test_superseded_replicated_read_rejects_local_publication() -> None:
 
 
 def test_a_read_only_replicated_read_does_not_block_an_unrelated_local_write() -> None:
-    source = ReplicatedScope("a").open("project")
-    target = ReplicatedScope("b").open("project")
+    source = Replica("a").open("project")
+    target = Replica("b").open("project")
     model = LocalModel()
     with transaction():
         source.counter("votes").increment(1)
@@ -231,8 +231,8 @@ def test_a_read_only_replicated_read_does_not_block_an_unrelated_local_write() -
 
 
 def test_action_token_selectively_inverts_counter_and_add_after_remote_work() -> None:
-    local = ReplicatedScope("a").open("project")
-    remote = ReplicatedScope("b").open("project")
+    local = Replica("a").open("project")
+    remote = Replica("b").open("project")
     commits: list[ActionCommit] = []
     with transaction():
         on_action_commit(lambda commit, continuation: commits.append(commit))
@@ -246,7 +246,7 @@ def test_action_token_selectively_inverts_counter_and_add_after_remote_work() ->
 
     token = commits[0].participant_changes[0].token
     inverse = token.plan_inverse()
-    assert isinstance(inverse, PreparedReplicatedInverse)
+    assert isinstance(inverse, PreparedReplicationInverse)
     with transaction():
         token.stage_inverse(inverse)
 
@@ -255,8 +255,8 @@ def test_action_token_selectively_inverts_counter_and_add_after_remote_work() ->
 
 
 async def test_undoing_one_removal_leaves_a_concurrent_removal_of_the_same_tag_standing() -> None:
-    local = ReplicatedScope("a").open("project")
-    remote = ReplicatedScope("b").open("project")
+    local = Replica("a").open("project")
+    remote = Replica("b").open("project")
     with transaction():
         local.set("tags").add("shared")
     remote.import_update(local.export_since())
@@ -277,7 +277,7 @@ async def test_undoing_one_removal_leaves_a_concurrent_removal_of_the_same_tag_s
 
     token = commits[0].participant_changes[0].token
     inverse = token.plan_inverse()
-    assert isinstance(inverse, PreparedReplicatedInverse)
+    assert isinstance(inverse, PreparedReplicationInverse)
     with transaction():
         token.stage_inverse(inverse)
     local.import_update(remote.export_since())
@@ -286,7 +286,7 @@ async def test_undoing_one_removal_leaves_a_concurrent_removal_of_the_same_tag_s
 
 
 async def test_undoing_a_discard_of_an_absent_value_adds_nothing() -> None:
-    document = ReplicatedScope("a").open("project")
+    document = Replica("a").open("project")
     history = History(HistoryOwner())
     with transaction():
         history.record("drop a value that was never there")
@@ -299,7 +299,7 @@ async def test_undoing_a_discard_of_an_absent_value_adds_nothing() -> None:
 
 
 async def test_undo_and_redo_of_a_discard_round_trip() -> None:
-    document = ReplicatedScope("a").open("project")
+    document = Replica("a").open("project")
     tags = document.set("tags")
     with transaction():
         tags.add("mine")
@@ -323,7 +323,7 @@ async def test_undo_and_redo_of_a_discard_round_trip() -> None:
 
 
 def test_action_token_reloads_against_a_recreated_document() -> None:
-    source = ReplicatedScope("a").open("project")
+    source = Replica("a").open("project")
     commits: list[ActionCommit] = []
     with transaction():
         on_action_commit(lambda commit, continuation: commits.append(commit))
@@ -332,11 +332,11 @@ def test_action_token_reloads_against_a_recreated_document() -> None:
     encoded = token.encode()
     update = source.export_since()
 
-    restored = ReplicatedScope("restored").open("project")
+    restored = Replica("restored").open("project")
     restored.import_update(update)
-    reloaded = ReplicatedChangeToken.decode(restored, encoded)
+    reloaded = ReplicationChangeToken.decode(restored, encoded)
     inverse = reloaded.plan_inverse()
-    assert isinstance(inverse, PreparedReplicatedInverse)
+    assert isinstance(inverse, PreparedReplicationInverse)
     with transaction():
         reloaded.stage_inverse(inverse)
 
@@ -344,30 +344,30 @@ def test_action_token_reloads_against_a_recreated_document() -> None:
 
 
 def test_a_restarted_replica_restores_its_clock_from_imported_history() -> None:
-    original = ReplicatedScope("a").open("project")
+    original = Replica("a").open("project")
     with transaction():
         original.counter("votes").increment(2)
         original.set("tags").add("mine")
     history = original.export_since()
 
-    restarted = ReplicatedScope("a").open("project")
+    restarted = Replica("a").open("project")
     restarted.import_update(history)
     with transaction():
         restarted.counter("votes").increment(5)
 
     assert restarted.counter("votes").value == 7
-    peer = ReplicatedScope("b").open("project")
+    peer = Replica("b").open("project")
     peer.import_update(restarted.export_since())
     assert peer.counter("votes").value == 7
 
 
 def test_a_restarted_replica_that_mutates_before_importing_refuses_the_collision() -> None:
-    original = ReplicatedScope("a").open("project")
+    original = Replica("a").open("project")
     with transaction():
         original.counter("votes").increment(2)
     history = original.export_since()
 
-    restarted = ReplicatedScope("a").open("project")
+    restarted = Replica("a").open("project")
     with transaction():
         restarted.counter("votes").increment(5)
 
@@ -376,20 +376,20 @@ def test_a_restarted_replica_that_mutates_before_importing_refuses_the_collision
 
 
 def test_applying_a_reused_identity_with_different_content_records_nothing() -> None:
-    engine = FakeEngine("a")
+    engine = ReferenceEngine("a")
     recorded = engine.operation("increment", "votes", 2)
-    engine.apply(PreparedFakeUpdate(None, (recorded,)))
-    forged = FakeOperation(recorded.identity, "increment", "votes", 5)
+    engine.apply(PreparedReferenceUpdate(None, (recorded,)))
+    forged = ReferenceOperation(recorded.identity, "increment", "votes", 5)
     fresh = engine.operation("increment", "votes", 1)
 
     with pytest.raises(ValueError, match="was reused"):
-        engine.apply(PreparedFakeUpdate(None, (fresh, forged)))
+        engine.apply(PreparedReferenceUpdate(None, (fresh, forged)))
 
     assert engine.snapshot().counter("votes") == 2
 
 
 def test_compaction_epoch_expires_retained_history_tokens_without_fallback() -> None:
-    document = ReplicatedScope("a").open("project")
+    document = Replica("a").open("project")
     commits: list[ActionCommit] = []
     with transaction():
         on_action_commit(lambda commit, continuation: commits.append(commit))
@@ -405,14 +405,14 @@ def test_compaction_epoch_expires_retained_history_tokens_without_fallback() -> 
 
 
 def test_prepared_inverse_cannot_cross_a_compaction_epoch() -> None:
-    document = ReplicatedScope("a").open("project")
+    document = Replica("a").open("project")
     commits: list[ActionCommit] = []
     with transaction():
         on_action_commit(lambda commit, continuation: commits.append(commit))
         document.counter("votes").increment(2)
     token = commits[0].participant_changes[0].token
     inverse = token.plan_inverse()
-    assert isinstance(inverse, PreparedReplicatedInverse)
+    assert isinstance(inverse, PreparedReplicationInverse)
     document.expire_history_tokens()
 
     with pytest.raises(ReactiveConflictError, match="expired"), transaction():
@@ -422,21 +422,21 @@ def test_prepared_inverse_cannot_cross_a_compaction_epoch() -> None:
 
 
 def test_durable_history_token_rejects_wrong_document_and_schema() -> None:
-    source = ReplicatedScope("a").open("source")
+    source = Replica("a").open("source")
     commits: list[ActionCommit] = []
     with transaction():
         on_action_commit(lambda commit, continuation: commits.append(commit))
         source.counter("votes").increment(1)
     encoded = commits[0].participant_changes[0].token.encode()
 
-    target = ReplicatedScope("b").open("target")
+    target = Replica("b").open("target")
     with pytest.raises(ValueError, match="wrong backend or document"):
-        ReplicatedChangeToken.decode(target, encoded)
+        ReplicationChangeToken.decode(target, encoded)
 
     payload = json.loads(encoded)
     payload["schema"] = 2
     with pytest.raises(ValueError, match="unsupported or corrupt"):
-        ReplicatedChangeToken.decode(source, json.dumps(payload).encode())
+        ReplicationChangeToken.decode(source, json.dumps(payload).encode())
 
 
 @pytest.mark.parametrize(
@@ -444,26 +444,26 @@ def test_durable_history_token_rejects_wrong_document_and_schema() -> None:
     [
         b"not-json",
         json.dumps({"backend": "wrong", "schema": 1, "kind": "update", "operations": []}).encode(),
-        json.dumps({"backend": "squid-fake-v1", "schema": 2}).encode(),
+        json.dumps({"backend": "squid-reference-v1", "schema": 2}).encode(),
     ],
 )
 def test_corrupted_wrong_backend_and_wrong_schema_updates_are_rejected(payload: bytes) -> None:
-    document = ReplicatedScope("a").open("project")
+    document = Replica("a").open("project")
 
     with pytest.raises(ValueError):
         document.import_update(payload)
 
 
 def test_oversized_updates_are_rejected_before_decoding() -> None:
-    document = ReplicatedScope("a").open("project")
+    document = Replica("a").open("project")
 
     with pytest.raises(ValueError, match="maximum encoded size"):
         document.import_update(b" " * 1_500_001)
 
 
 def test_duplicate_update_identity_is_ignored_before_backend_prepare() -> None:
-    source = ReplicatedScope("a").open("project")
-    target = ReplicatedScope("b").open("project")
+    source = Replica("a").open("project")
+    target = Replica("b").open("project")
     with transaction():
         source.counter("votes").increment(1)
     encoded = source.export_since()
@@ -475,9 +475,9 @@ def test_duplicate_update_identity_is_ignored_before_backend_prepare() -> None:
 
 
 def test_envelope_rejects_invalid_identifiers() -> None:
-    update = ReplicatedUpdate(
+    update = ReplicationUpdate(
         "project",
-        "squid-fake-v1",
+        "squid-reference-v1",
         "a",
         uuid.uuid7(),
         b"payload",
@@ -486,31 +486,31 @@ def test_envelope_rejects_invalid_identifiers() -> None:
     body["update_id"] = "not-a-uuid"
 
     with pytest.raises(ValueError, match="identifiers"):
-        ReplicatedUpdate.decode(json.dumps(body).encode())
+        ReplicationUpdate.decode(json.dumps(body).encode())
 
 
 def test_scope_disposal_prevents_late_import_and_mutation() -> None:
-    scope = ReplicatedScope("a")
+    scope = Replica("a")
     document = scope.open("project")
     scope.close()
 
-    with pytest.raises(ReplicatedClosedError):
+    with pytest.raises(ReplicaClosedError):
         document.import_update(b"{}")
-    with pytest.raises(ReplicatedClosedError), transaction():
+    with pytest.raises(ReplicaClosedError), transaction():
         document.counter("votes").increment(1)
-    with pytest.raises(ReplicatedClosedError):
+    with pytest.raises(ReplicaClosedError):
         document.drain_updates()
     # Both subscriptions, on the same terms: a closed document delivers nothing, so accepting
     # a listener for one would only be a quieter way of never calling it.
-    with pytest.raises(ReplicatedClosedError):
+    with pytest.raises(ReplicaClosedError):
         document.subscribe(lambda snapshot: None)
-    with pytest.raises(ReplicatedClosedError):
+    with pytest.raises(ReplicaClosedError):
         document.subscribe_updates(lambda update: None)
 
 
 def test_scope_disposal_clears_documents_subscriptions_pending_exports_and_deduplication() -> None:
-    source = ReplicatedScope("source").open("project")
-    scope = ReplicatedScope("target")
+    source = Replica("source").open("project")
+    scope = Replica("target")
     document = scope.open("project")
 
     class Listener:
@@ -543,7 +543,7 @@ def test_scope_disposal_clears_documents_subscriptions_pending_exports_and_dedup
 
 
 def test_remote_deduplication_retention_is_bounded() -> None:
-    document = ReplicatedScope("a").open("project")
+    document = Replica("a").open("project")
 
     for index in range(10_005):
         document._remember_update(str(index))
@@ -553,7 +553,7 @@ def test_remote_deduplication_retention_is_bounded() -> None:
 
 
 def test_pending_outbound_retention_is_bounded() -> None:
-    document = ReplicatedScope("source").open("project")
+    document = Replica("source").open("project")
 
     for _ in range(1_005):
         with transaction():
@@ -564,15 +564,15 @@ def test_pending_outbound_retention_is_bounded() -> None:
 
 
 def test_outbound_overflow_requires_a_resync_before_draining_again() -> None:
-    document = ReplicatedScope("source").open("project")
-    peer = ReplicatedScope("peer").open("project")
+    document = Replica("source").open("project")
+    peer = Replica("peer").open("project")
 
     for _ in range(1_005):
         with transaction():
             document.counter("votes").increment(1)
 
     assert document.resync_required
-    with pytest.raises(ReplicatedResyncRequiredError, match="dropped 5 outbound updates"):
+    with pytest.raises(ReplicationResyncRequiredError, match="dropped 5 outbound updates"):
         document.drain_updates()
 
     peer.import_update(document.export_since())
@@ -588,7 +588,7 @@ def test_outbound_overflow_requires_a_resync_before_draining_again() -> None:
 
 
 def test_a_document_within_its_outbound_bound_never_demands_a_resync() -> None:
-    document = ReplicatedScope("source").open("project")
+    document = Replica("source").open("project")
 
     for _ in range(1_000):
         with transaction():
@@ -600,8 +600,8 @@ def test_a_document_within_its_outbound_bound_never_demands_a_resync() -> None:
 
 
 async def test_history_coordinates_cell_and_semantic_replicated_inverse() -> None:
-    local = ReplicatedScope("a").open("project")
-    remote = ReplicatedScope("b").open("project")
+    local = Replica("a").open("project")
+    remote = Replica("b").open("project")
     model = LocalModel()
     history = History(HistoryOwner())
     with transaction():
@@ -624,8 +624,8 @@ async def test_history_coordinates_cell_and_semantic_replicated_inverse() -> Non
 
 
 async def test_replicated_redo_and_second_undo_follow_fresh_semantic_tokens() -> None:
-    local = ReplicatedScope("a").open("project")
-    remote = ReplicatedScope("b").open("project")
+    local = Replica("a").open("project")
+    remote = Replica("b").open("project")
     history = History(HistoryOwner())
     with transaction():
         history.record("vote and tag")
