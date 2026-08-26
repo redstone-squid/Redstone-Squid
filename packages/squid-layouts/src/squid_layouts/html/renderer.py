@@ -110,8 +110,7 @@ class Renderer:
     ) -> str:
         match node:
             case scene.Text(content=content, markup=markup):
-                # The HTML attribute keeps its name for the same reason the JSON key does.
-                return f'<div class="squid-text" data-squid-dialect="{markup.value}">{escape(content)}</div>'
+                return f'<div class="squid-text" data-squid-markup="{markup.value}">{escape(content)}</div>'
             case scene.Time(instant=instant, style=style, prefix=prefix):
                 return (
                     f'<div class="squid-text">{escape(prefix or "")}'
@@ -170,7 +169,7 @@ class Renderer:
                 icon = f'<span class="squid-button__emoji">{escape(emoji.name)}</span> ' if emoji else ""
                 return (
                     f'<button type="button" class="squid-button squid-button--{style.value}" '
-                    f'data-squid-action="{_attribute(action)}" data-squid-policy="{mode.value}"'
+                    f'data-squid-action="{_attribute(action)}" data-squid-mode="{mode.value}"'
                     f"{disabled_attribute}>{icon}{escape(label or '')}</button>"
                 )
             case scene.RoutedButton(label=label, route_id=route_id, style=style, emoji=emoji, disabled=disabled):
@@ -220,7 +219,7 @@ class Renderer:
                 )
                 return (
                     f'<select class="squid-select" data-squid-action="{_attribute(action)}" '
-                    f'data-squid-policy="{mode.value}" data-squid-min="{minimum}" data-squid-max="{maximum}"'
+                    f'data-squid-mode="{mode.value}" data-squid-min="{minimum}" data-squid-max="{maximum}"'
                     f"{multiple}{disabled_attribute}>{prompt}{rendered}</select>"
                 )
             case scene.RoutedSelect(
