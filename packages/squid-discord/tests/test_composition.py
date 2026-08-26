@@ -28,6 +28,7 @@ from squid_layouts.primitives import (
     Text,
 )
 from squid_layouts.runtime.component import render_component_tree
+from squid_layouts.runtime.owner import ComponentRuntime
 from squid_layouts.semantic import Action, Actions, Choice, Choices, Controlled, Group, List, ListItem
 
 
@@ -116,6 +117,126 @@ class TestBoundaries:
         button = row.items[0]
         assert isinstance(button, Button)
         assert button.key == "inc"
+
+
+class TestRenderCaching:
+    def test_one_changed_leaf_does_not_render_its_parent_or_sibling(self) -> None:
+        class Counting(Component):
+            value: int = state(0)
+
+            def __init__(self, label: str) -> None:
+                self.label = label
+                self.renders = 0
+
+            def render(self) -> Text:
+                self.renders += 1
+                return Text(f"{self.label}:{self.value}")
+
+        class Root(Component):
+            def __init__(self) -> None:
+                self.left = Counting("left")
+                self.right = Counting("right")
+                self.renders = 0
+
+            def render(self):
+                self.renders += 1
+                return (self.boundary(self.left, key="left"), self.boundary(self.right, key="right"))
+
+        root = Root()
+        runtime = ComponentRuntime(root)
+        initial = runtime.render()
+        runtime.commit(initial, rendered_revision=runtime.revision)
+
+        root.left.value = 1
+        changed = runtime.render(reuse_committed=True)
+
+        assert root.renders == 1
+        assert root.left.renders == 2
+        assert root.right.renders == 1
+        assert changed.nodes == (Text("left:1"), Text("right:0"))
+
+    def test_computed_backdating_keeps_the_render_snapshot(self) -> None:
+        class Parity(Component):
+            source: int = state(0)
+
+            def __init__(self) -> None:
+                self.renders = 0
+
+            @sl.computed
+            def even(self) -> bool:
+                return self.source % 2 == 0
+
+            def render(self) -> Text:
+                self.renders += 1
+                return Text(str(self.even))
+
+        component = Parity()
+        runtime = ComponentRuntime(component)
+        initial = runtime.render()
+        runtime.commit(initial, rendered_revision=runtime.revision)
+
+        component.source = 2
+        unchanged = runtime.render(reuse_committed=True)
+
+        assert component.renders == 1
+        assert unchanged.nodes == initial.nodes
+
+    def test_explicit_invalidation_rerenders_opaque_inputs(self) -> None:
+        class Opaque(Component):
+            def __init__(self) -> None:
+                self.value = "first"
+                self.renders = 0
+
+            def render(self) -> Text:
+                self.renders += 1
+                return Text(self.value)
+
+        component = Opaque()
+        runtime = ComponentRuntime(component)
+        initial = runtime.render()
+        runtime.commit(initial, rendered_revision=runtime.revision)
+        component.value = "second"
+        component.invalidate()
+
+        changed = runtime.render(reuse_committed=True)
+
+        assert component.renders == 2
+        assert changed.nodes == (Text("second"),)
+
+    def test_inline_component_construction_keeps_replacement_semantics(self) -> None:
+        events: list[str] = []
+
+        class Inline(Tracked):
+            pass
+
+        class Stable(Component):
+            value: int = state(0)
+
+            def render(self) -> Text:
+                return Text(str(self.value))
+
+        class Root(Component):
+            def __init__(self) -> None:
+                self.stable = Stable()
+
+            def render(self):
+                return (
+                    self.boundary(Inline("inline", events), key="inline"),
+                    self.boundary(self.stable, key="stable"),
+                )
+
+        root = Root()
+        runtime = ComponentRuntime(root)
+        initial = runtime.render()
+        runtime.commit(initial, rendered_revision=runtime.revision)
+        original = runtime.components["inline"]
+
+        root.stable.value = 1
+        changed = runtime.render(reuse_committed=True)
+        runtime.commit(changed, rendered_revision=runtime.revision)
+
+        assert runtime.components["inline"] is not original
+        assert events[-2:] == ["unmount:inline", "mount:inline"]
 
 
 @pytest.mark.parametrize(

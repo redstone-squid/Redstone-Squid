@@ -86,6 +86,7 @@ from squid_layouts.semantic import (
 from squid_layouts.semantic import Toggle as SemanticToggle
 from squid_reactive.core import (
     _RENDER_OBSERVATION,
+    Observation,
     Reactive,
     observe_render,
 )
@@ -95,7 +96,7 @@ type RenderResult[ModeT = Any] = Document[ModeT] | LayoutNode[ModeT] | Sequence[
 
 
 class RuntimeOwner(Protocol):
-    def invalidate(self) -> None: ...
+    def invalidate(self, component: Component | None = None, *, check_dependencies: bool = False) -> None: ...
 
 
 _CURRENT_CONTEXT: ContextVar[dict[ContextKey[Any], object] | None] = ContextVar(
@@ -130,6 +131,21 @@ class ComponentTree:
     """
 
 
+@dataclass(slots=True)
+class _ComponentRender:
+    """One component's current pure render result and everything that read produced."""
+
+    revision: int
+    root: bool
+    inherited_context: dict[ContextKey[Any], object]
+    child_context: dict[ContextKey[Any], object]
+    nodes: tuple[RenderNode, ...]
+    assets: tuple[Asset, ...]
+    document_key: str | None
+    observation: Observation
+    async_bindings: tuple[AsyncBinding, ...]
+
+
 class Component[ModeT = Any](Reactive):
     """Base class for mounted, stateful views."""
 
@@ -137,7 +153,9 @@ class Component[ModeT = Any](Reactive):
     _parent: Component | None = None
     _loaded: bool = False
     """Whether this instance's :meth:`on_load` has completed. Owned by the frontend."""
-    _reactive_internal_attributes = frozenset({"_runtime", "_parent", "_loaded"})
+    _reactive_internal_attributes = frozenset(
+        {"_runtime", "_parent", "_loaded", "_state_revision", "_dependency_invalidation"}
+    )
     _reactive_require_state = False
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
@@ -152,7 +170,11 @@ class Component[ModeT = Any](Reactive):
         needs drawing again. `names` is for a subclass that wants to know which fields moved.
         """
         del names
-        self.invalidate()
+        self.__dict__["_dependency_invalidation"] = True
+        try:
+            self.invalidate()
+        finally:
+            self.__dict__.pop("_dependency_invalidation", None)
 
     def on_state_rollback(self) -> None:
         self.__dict__["_state_revision"] = self.__dict__.get("_state_revision", 0) + 1
@@ -190,9 +212,11 @@ class Component[ModeT = Any](Reactive):
 
     def invalidate(self) -> None:
         """Mark this component's message as needing a re-render."""
-        self.__dict__["_state_revision"] = self.__dict__.get("_state_revision", 0) + 1
+        dependency = self.__dict__.get("_dependency_invalidation", False)
+        if not dependency:
+            self.__dict__["_state_revision"] = self.__dict__.get("_state_revision", 0) + 1
         if self._runtime is not None:
-            self._runtime.invalidate()
+            self._runtime.invalidate(self, check_dependencies=dependency)
         elif self._parent is not None:
             self._parent.invalidate()
 
@@ -221,6 +245,10 @@ def render_component_tree(
     runtime: RuntimeOwner | None = None,
     context: dict[ContextKey[Any], object] | None = None,
     defer: Callable[[Component], bool] | None = None,
+    _render_cache: dict[Component, _ComponentRender] | None = None,
+    _dirty: set[Component] | None = None,
+    _forced: set[Component] | None = None,
+    _force_all: bool = False,
 ) -> ComponentTree:
     """Render and expand a component tree, preserving keyed component identity.
 
@@ -236,24 +264,94 @@ def render_component_tree(
     identities: dict[int, str] = {}
     active: set[int] = set()
     deferred: list[Component] = []
+    observed_addresses: list[Address] = []
+    observed_bindings: list[AsyncBinding] = []
+    render_cache = {} if _render_cache is None else _render_cache
+    dirty = set() if _dirty is None else _dirty
+    forced = set() if _forced is None else _forced
 
-    def items(rendered: RenderResult, path: str) -> tuple[RenderNode, ...]:
-        nonlocal document_key
+    def items(rendered: RenderResult, path: str) -> tuple[tuple[RenderNode, ...], tuple[Asset, ...], str | None]:
         if isinstance(rendered, Document):
-            if rendered.key is not None:
-                if path != "$":
-                    message = f"{path}: only the root component may return a keyed Document"
-                    raise LayoutInvariantError(message)
-                document_key = rendered.key
-            assets.extend(rendered.assets)
-            return rendered.children
-        return tuple(rendered) if isinstance(rendered, Sequence) else (rendered,)
+            if rendered.key is not None and path != "$":
+                message = f"{path}: only the root component may return a keyed Document"
+                raise LayoutInvariantError(message)
+            return rendered.children, rendered.assets, rendered.key
+        nodes = tuple(rendered) if isinstance(rendered, Sequence) else (rendered,)
+        return nodes, (), None
+
+    def same_context(left: dict[ContextKey[Any], object], right: dict[ContextKey[Any], object]) -> bool:
+        if left.keys() != right.keys():
+            return False
+        for key, value in left.items():
+            other = right[key]
+            if value is other:
+                continue
+            try:
+                if value != other:
+                    return False
+            except Exception:
+                return False
+        return True
+
+    def rendered(
+        component: Component,
+        path: str,
+        inherited_context: dict[ContextKey[Any], object],
+    ) -> _ComponentRender:
+        cached = render_cache.get(component)
+        revision = component.__dict__.get("_state_revision", 0)
+        dependency_check = component in dirty and component not in forced
+        reusable = (
+            not _force_all
+            and component not in forced
+            and cached is not None
+            and cached.revision == revision
+            and cached.root == (path == "$")
+            and same_context(cached.inherited_context, inherited_context)
+            and (component not in dirty or (dependency_check and cached.observation.current()))
+        )
+        if reusable:
+            observed_addresses.extend(cached.observation.addresses())
+            observed_bindings.extend(cached.async_bindings)
+            assets.extend(cached.assets)
+            return cached
+
+        local_context = dict(inherited_context)
+        token = _CURRENT_CONTEXT.set(local_context)
+        try:
+            with observe_render() as observation, observe_async_bindings() as bindings:
+                if active_observation := _RENDER_OBSERVATION.get():
+                    active_observation.entering_own_render(component)
+                value = component.render()
+                own_nodes, own_assets, own_key = items(value, path)
+        finally:
+            _CURRENT_CONTEXT.reset(token)
+        snapshot = _ComponentRender(
+            revision,
+            path == "$",
+            dict(inherited_context),
+            local_context,
+            own_nodes,
+            own_assets,
+            own_key,
+            observation,
+            unique_async_bindings(bindings),
+        )
+        observed_addresses.extend(observation.addresses())
+        observed_bindings.extend(snapshot.async_bindings)
+        assets.extend(own_assets)
+        if not any(isinstance(value, Component) for value in observation.constructed.values()):
+            render_cache[component] = snapshot
+        else:
+            render_cache.pop(component, None)
+        return snapshot
 
     def expand(
         component: Component,
         path: str,
         inherited_context: dict[ContextKey[Any], object],
     ) -> list[LayoutNode]:
+        nonlocal document_key
         identity = id(component)
         if identity in active:
             message = f"{path}: component embedding cycle"
@@ -266,8 +364,8 @@ def render_component_tree(
         component._runtime = runtime
         active.add(identity)
         embed_keys: set[str] = set()
-        context = dict(inherited_context)
-        token = _CURRENT_CONTEXT.set(context)
+        snapshot = rendered(component, path, inherited_context)
+        context = snapshot.child_context
 
         def expand_item(item: RenderNode, item_path: str) -> list[LayoutNode]:
             if isinstance(item, Boundary):
@@ -289,35 +387,30 @@ def render_component_tree(
             return [map_layout_children(item, item_path, expand_item)]
 
         try:
-            # Past this point, a write of this component's own state is no longer construction:
-            # its own render() is the thing that could tear, so the exemption ends here and not
-            # a moment later.
-            if observation := _RENDER_OBSERVATION.get():
-                observation.entering_own_render(component)
             nodes: list[LayoutNode] = []
-            for index, item in enumerate(items(component.render(), path)):
+            for index, item in enumerate(snapshot.nodes):
                 nodes.extend(expand_item(item, f"{path}.{index}"))
+            if snapshot.document_key is not None:
+                document_key = snapshot.document_key
             return nodes
         finally:
-            _CURRENT_CONTEXT.reset(token)
             active.remove(identity)
 
-    with observe_render() as observation, observe_async_bindings() as observed:
-        try:
-            nodes = tuple(expand(root, "$", context or {}))
-        except _AtomicResourcePending as pending:
-            # Atomic state is never rendered while pending. Keep the resource observation from
-            # the aborted discovery pass so the frontend can settle it before retrying.
-            observed.append(pending.resource)
-            nodes = ()
+    try:
+        nodes = tuple(expand(root, "$", context or {}))
+    except _AtomicResourcePending as pending:
+        # Atomic state is never rendered while pending. Keep the resource observation from
+        # the aborted discovery pass so the frontend can settle it before retrying.
+        observed_bindings.append(pending.resource)
+        nodes = ()
     return ComponentTree(
         nodes,
         components,
         tuple(assets),
         document_key,
         tuple(deferred),
-        unique_async_bindings(observed),
-        observation.addresses(),
+        unique_async_bindings(observed_bindings),
+        tuple(dict.fromkeys(observed_addresses)),
     )
 
 
