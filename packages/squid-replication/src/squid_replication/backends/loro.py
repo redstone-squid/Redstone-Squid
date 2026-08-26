@@ -7,6 +7,7 @@ import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from importlib.metadata import version as distribution_version
+from types import MappingProxyType
 from typing import Any
 
 from squid_reactivity import ConflictDetail
@@ -25,6 +26,7 @@ _MAX_OPERATIONS = 10_000
 _MAX_PATH_BYTES = 512
 _MAX_ROOTS = 256
 _MAX_CONTAINER_ITEMS = 100_000
+_MAX_SNAPSHOT_BYTES = 8_388_608
 _ROOT_PREFIX = "$squid$"
 _OPERATION_FIELDS = {
     "increment": frozenset({"value"}),
@@ -215,7 +217,7 @@ class LoroDocumentInverse:
 
 
 def _operation(kind: str, path: str, **data: Any) -> LoroOperation:
-    return LoroOperation(str(uuid.uuid7()), kind, path, _json_object(data))
+    return LoroOperation(str(uuid.uuid7()), kind, path, _immutable_json_object(data))
 
 
 def _json_value(value: object) -> Any:
@@ -228,6 +230,18 @@ def _json_value(value: object) -> Any:
 
 def _json_object(value: Mapping[str, object]) -> dict[str, Any]:
     return {key: _json_value(item) for key, item in value.items()}
+
+
+def _immutable_json(value: object) -> Any:
+    if isinstance(value, Mapping):
+        return MappingProxyType({str(key): _immutable_json(item) for key, item in value.items()})
+    if isinstance(value, tuple | list):
+        return tuple(_immutable_json(item) for item in value)
+    return value
+
+
+def _immutable_json_object(value: Mapping[str, object]) -> Mapping[str, Any]:
+    return MappingProxyType({key: _immutable_json(item) for key, item in value.items()})
 
 
 def _token_operations_valid(operations: tuple[LoroOperation, ...]) -> bool:
@@ -243,7 +257,82 @@ def _token_operations_valid(operations: tuple[LoroOperation, ...]) -> bool:
             return False
         if not isinstance(operation.path, str) or len(operation.path.encode()) > _MAX_PATH_BYTES:
             return False
+        data = operation.data
+        if operation.kind == "increment" and (isinstance(data["value"], bool) or not isinstance(data["value"], int)):
+            return False
+        if operation.kind in {"add", "remove", "restore"} and not isinstance(data["value"], str):
+            return False
+        if operation.kind in {"remove", "restore"} and (
+            not isinstance(data["tags"], tuple | list) or any(not isinstance(tag, str) for tag in data["tags"])
+        ):
+            return False
+        if operation.kind == "restore" and not isinstance(data["undoes"], str):
+            return False
+        if operation.kind == "text_insert" and (not _valid_index(data["index"]) or not isinstance(data["value"], str)):
+            return False
+        if operation.kind == "text_delete" and (not _valid_index(data["index"]) or not _valid_index(data["count"])):
+            return False
+        if operation.kind.startswith("list_") or operation.kind.startswith("movable_"):
+            item_id = data.get("item_id")
+            item_ids = data.get("item_ids")
+            items = data.get("items")
+            if item_id is not None and not _valid_uuid(item_id):
+                return False
+            if item_ids is not None and (
+                not isinstance(item_ids, tuple | list) or any(not _valid_uuid(value) for value in item_ids)
+            ):
+                return False
+            if items is not None and not _valid_items(items):
+                return False
+        if operation.kind.startswith("map_") and (
+            not isinstance(data["key"], str) or not isinstance(data["previous_present"], bool)
+        ):
+            return False
+        if operation.kind.startswith("tree_"):
+            if not _valid_uuid(data["node_id"]):
+                return False
+            key = data.get("key")
+            if key is not None and not isinstance(key, str):
+                return False
+            previous_present = data.get("previous_present")
+            if previous_present is not None and not isinstance(previous_present, bool):
+                return False
+            if operation.kind == "tree_delete" and not _valid_subtree(data["subtree"]):
+                return False
     return True
+
+
+def _valid_index(value: object) -> bool:
+    return not isinstance(value, bool) and isinstance(value, int) and value >= 0
+
+
+def _valid_uuid(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    try:
+        uuid.UUID(value)
+    except ValueError:
+        return False
+    return True
+
+
+def _valid_items(value: object) -> bool:
+    return isinstance(value, tuple | list) and all(
+        isinstance(item, tuple | list) and len(item) == 3 and _valid_uuid(item[0]) and isinstance(item[1], str)
+        for item in value
+    )
+
+
+def _valid_subtree(value: object) -> bool:
+    if not isinstance(value, Mapping) or not _valid_uuid(value.get("node_id")):
+        return False
+    parent_id = value.get("parent_id")
+    if parent_id is not None and not _valid_uuid(parent_id):
+        return False
+    if not _valid_index(value.get("index")) or not isinstance(value.get("metadata"), Mapping):
+        return False
+    children = value.get("children")
+    return isinstance(children, tuple | list) and all(_valid_subtree(child) for child in children)
 
 
 def _root_name(kind: str, path: str) -> str:
@@ -633,7 +722,7 @@ class LoroDocumentBranch:
         else:
             message = f"unknown Loro operation {operation.kind!r}"
             raise ValueError(message)
-        return LoroOperation(operation.identity, operation.kind, operation.path, data)
+        return LoroOperation(operation.identity, operation.kind, operation.path, _immutable_json_object(data))
 
     def _apply_tree(self, operation: LoroOperation, data: dict[str, Any]) -> None:
         tree = self.doc.get_tree(_root_name("tree", operation.path))
@@ -713,8 +802,15 @@ class LoroDocumentBranch:
         if base != self._before or self._engine.version() != self._before:
             message = "Loro document changed after this branch was staged"
             raise RuntimeError(message)
-        self.doc.commit()
-        update = self.doc.export(self._engine.module.ExportMode.Updates(self._base_vv))
+        try:
+            self.doc.commit()
+            _snapshot(self.doc)
+            update = self.doc.export(self._engine.module.ExportMode.Updates(self._base_vv))
+        except BaseException as error:
+            if type(error) is BaseException:
+                message = "Loro failed to encode an isolated staged update"
+                raise ReplicationBackendIntegrityError(message) from error
+            raise
         if len(update) > _MAX_UPDATE_BYTES:
             message = "Loro update exceeds the maximum encoded size"
             raise ValueError(message)
@@ -733,7 +829,13 @@ class LoroDocumentBranch:
         if not isinstance(inverse, LoroDocumentInverse):
             message = "Loro inverse has the wrong backend type"
             raise TypeError(message)
-        self.doc.apply_diff(inverse.safe_diff)
+        try:
+            self.doc.apply_diff(inverse.safe_diff)
+        except BaseException as error:
+            if type(error) is BaseException:
+                message = "Loro rejected a previously planned filtered inverse"
+                raise ReplicationBackendIntegrityError(message) from error
+            raise
         for kind, path in inverse.safe_containers:
             self._operations.append(_operation(f"{kind}_diff", path))
         for operation in inverse.operations:
@@ -747,6 +849,9 @@ def _snapshot(document: Any) -> ReplicatedSnapshot:
         raise TypeError(message)
     if len(deep) > _MAX_ROOTS:
         message = f"Loro document exceeds the {_MAX_ROOTS}-container limit"
+        raise ValueError(message)
+    if len(json.dumps(deep, separators=(",", ":")).encode()) > _MAX_SNAPSHOT_BYTES:
+        message = "Loro document exceeds the immutable snapshot size limit"
         raise ValueError(message)
     counters: list[tuple[str, int]] = []
     sets: list[tuple[str, frozenset[str]]] = []
@@ -884,7 +989,7 @@ def _set_snapshot(entries: dict[str, object]) -> frozenset[str]:
     removals: dict[str, set[str]] = {}
     cancelled: set[str] = set()
     for key, value in entries.items():
-        if key.startswith("r:") and isinstance(value, dict) and isinstance(value.get("tags"), list):
+        if key.startswith("r:") and isinstance(value, dict) and isinstance(value.get("tags"), list | tuple):
             for tag in value["tags"]:
                 if isinstance(tag, str):
                     removals.setdefault(tag, set()).add(key[2:])
@@ -912,6 +1017,7 @@ class LoroEngine:
     """A full-document Loro engine whose containers never escape as public values."""
 
     backend_id = LoroBackend.backend_id
+    container_kinds = frozenset({"counter", "set", "text", "list", "movable", "map", "tree"})
 
     def __init__(self, replica_id: str, peer_id: int) -> None:
         try:
@@ -1012,19 +1118,32 @@ class LoroEngine:
         return LoroDocumentPrepared(None, update, before, branch.oplog_frontiers.encode(), ())
 
     def export_since(self, version: object | None = None) -> bytes:
-        if version is None:
-            mode = self.module.ExportMode.Snapshot()
-        else:
-            if not isinstance(version, bytes):
-                message = "Loro version must be encoded frontiers"
-                raise TypeError(message)
-            frontiers = self.module.Frontiers.decode(version)
-            vv = self.doc.frontiers_to_vv(frontiers)
-            if vv is None:
-                message = "Loro version is unavailable"
-                raise ValueError(message)
+        if version is not None and not isinstance(version, bytes):
+            message = "Loro version must be encoded frontiers"
+            raise TypeError(message)
+        try:
+            if version is None:
+                mode = self.module.ExportMode.Snapshot()
+            else:
+                frontiers = self.module.Frontiers.decode(version)
+                vv = self.doc.frontiers_to_vv(frontiers)
+        except BaseException as error:
+            if type(error) is BaseException:
+                message = "Loro version is corrupt"
+                raise ReplicationCorruptUpdateError(message) from error
+            raise
+        if version is not None and vv is None:
+            message = "Loro version is unavailable"
+            raise ValueError(message)
+        if version is not None:
             mode = self.module.ExportMode.Updates(vv)
-        return self.doc.export(mode)
+        try:
+            return self.doc.export(mode)
+        except BaseException as error:
+            if type(error) is BaseException:
+                message = "Loro export state is corrupt"
+                raise ReplicationBackendIntegrityError(message) from error
+            raise
 
     def change_token(self, prepared: LoroDocumentPrepared) -> object | None:
         if not prepared.operations:
@@ -1049,7 +1168,7 @@ class LoroEngine:
             "before": base64.b64encode(token.before).decode(),
             "operations": [
                 {
-                    "data": dict(operation.data),
+                    "data": _json_object(operation.data),
                     "id": operation.identity,
                     "kind": operation.kind,
                     "path": operation.path,
@@ -1104,9 +1223,9 @@ class LoroEngine:
             if len(path.encode()) > _MAX_PATH_BYTES:
                 message = "Loro token operation path exceeds the encoded limit"
                 raise ValueError(message)
-            decoded.append(LoroOperation(identity, kind, path, item["data"]))
+            decoded.append(LoroOperation(identity, kind, path, _immutable_json_object(item["data"])))
         try:
-            return LoroDocumentToken(
+            decoded_token = LoroDocumentToken(
                 base64.b64decode(payload["before"], validate=True),
                 base64.b64decode(payload["after"], validate=True),
                 tuple(decoded),
@@ -1116,6 +1235,19 @@ class LoroEngine:
         except (ValueError, TypeError) as error:
             message = "Loro token contains corrupt frontier data"
             raise ReplicationCorruptUpdateError(message) from error
+        if not _token_operations_valid(decoded_token.operations):
+            message = "Loro token contains invalid semantic operations"
+            raise ReplicationCorruptUpdateError(message)
+        try:
+            self.module.Frontiers.decode(decoded_token.before)
+            self.module.Frontiers.decode(decoded_token.after)
+            self.module.Frontiers.decode(decoded_token.shallow_root)
+        except BaseException as error:
+            if type(error) is BaseException:
+                message = "Loro token contains invalid frontier encodings"
+                raise ReplicationCorruptUpdateError(message) from error
+            raise
+        return decoded_token
 
     def plan_inverse(self, token: object) -> object | ConflictDetail:
         if not isinstance(token, LoroDocumentToken):

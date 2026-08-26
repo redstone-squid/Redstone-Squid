@@ -18,6 +18,7 @@ from squid_replication.document import (
     ReplicationCorruptUpdateError,
     ReplicationHistoryLease,
     ReplicationResyncRequiredError,
+    UnsupportedReplicationContainerError,
 )
 from squid_replication.engine import ReplicaBranch, ReplicationBackend, ReplicationEngine
 from squid_replication.model import (
@@ -61,4 +62,5 @@ __all__ = [
     "ReplicationHistoryLease",
     "ReplicationResyncRequiredError",
     "ReplicationUpdate",
+    "UnsupportedReplicationContainerError",
 ]
