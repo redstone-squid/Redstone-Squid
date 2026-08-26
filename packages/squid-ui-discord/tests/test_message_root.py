@@ -3093,6 +3093,156 @@ class TestResourceLoading:
         trace = _operation_trace(profiler, OperationKind.SEND)
         assert "resource_settle.atomic" in {span.name for span in trace.spans}
 
+    async def test_cached_atomic_dependency_settles_before_the_refresh_render(self) -> None:
+        class KeyedAtomic(Component):
+            key: int = state(0)
+
+            def __init__(self) -> None:
+                self.loads = 0
+                self.renders = 0
+
+            @resource(pending=PendingMode.ATOMIC)
+            async def value(self) -> str:
+                self.loads += 1
+                return f"value:{self.key}"
+
+            def render(self) -> Text:
+                self.renders += 1
+                status = self.value.status
+                assert isinstance(status, Ready)
+                return Text(status.value)
+
+        panel = KeyedAtomic()
+        message: Any = fake_message()
+        profiler = MemoryProfiler()
+        message_root = MessageRoot(panel, access=Everyone(), profiler=profiler, timeout=None)
+        await message_root.send(_Destination(message))
+        profiler.clear()
+
+        panel.key = 1
+        await message_root.refresh()
+
+        assert panel.loads == 2
+        assert panel.renders == 3
+        message.edit.assert_awaited_once()
+        trace = _operation_trace(profiler, OperationKind.REFRESH)
+        render_spans = tuple(span for span in trace.spans if span.name == "runtime_render")
+        settle = next(span for span in trace.spans if span.name == "resource_settle.atomic")
+        assert len(render_spans) == 1
+        assert ("source", "cached") in {(attribute.key, attribute.value) for attribute in settle.attributes}
+
+    async def test_dirty_ancestor_does_not_settle_a_removed_atomic_resource(self) -> None:
+        class Child(Component):
+            key: int = state(0)
+
+            def __init__(self) -> None:
+                self.loads = 0
+
+            @resource(pending=PendingMode.ATOMIC)
+            async def value(self) -> int:
+                self.loads += 1
+                return self.key
+
+            def render(self) -> Text:
+                status = self.value.status
+                assert isinstance(status, Ready)
+                return Text(str(status.value))
+
+        class Parent(Component):
+            visible: bool = state(default=True)
+
+            def __init__(self) -> None:
+                self.child = Child()
+
+            def render(self):
+                return self.boundary(self.child, key="child") if self.visible else Text("removed")
+
+        panel = Parent()
+        message_root = MessageRoot(panel, access=Everyone(), timeout=None)
+        await message_root.send(_Destination(fake_message()))
+
+        panel.child.key = 1
+        panel.visible = False
+        await message_root.refresh()
+
+        assert panel.child.loads == 1
+
+    async def test_cached_atomic_siblings_settle_in_one_task_group(self) -> None:
+        class Child(Component):
+            key: int = state(0)
+
+            def __init__(self) -> None:
+                self.renders = 0
+
+            @resource(pending=PendingMode.ATOMIC)
+            async def value(self) -> int:
+                return self.key
+
+            def render(self) -> Text:
+                self.renders += 1
+                status = self.value.status
+                assert isinstance(status, Ready)
+                return Text(str(status.value))
+
+        class Parent(Component):
+            def __init__(self) -> None:
+                self.children = (Child(), Child())
+
+            def render(self):
+                return tuple(self.boundary(child, key=str(index)) for index, child in enumerate(self.children))
+
+        panel = Parent()
+        profiler = MemoryProfiler()
+        message_root = MessageRoot(panel, access=Everyone(), profiler=profiler, timeout=None)
+        await message_root.send(_Destination(fake_message()))
+        profiler.clear()
+        starting_renders = tuple(child.renders for child in panel.children)
+
+        for child in panel.children:
+            child.key = 1
+        await message_root.refresh()
+
+        trace = _operation_trace(profiler, OperationKind.REFRESH)
+        settle = next(span for span in trace.spans if span.name == "resource_settle.atomic")
+        attributes = {(attribute.key, attribute.value) for attribute in settle.attributes}
+        assert tuple(child.renders for child in panel.children) == tuple(count + 1 for count in starting_renders)
+        assert ("count", 2) in attributes
+        assert ("source", "cached") in attributes
+        assert ("strategy", "task_group") in attributes
+
+    async def test_mixed_render_sources_use_atomic_discovery_fallback(self) -> None:
+        class Mixed(Component):
+            key: int = state(0)
+            label: str = state("first")
+
+            def __init__(self) -> None:
+                self.renders = 0
+
+            @resource(pending=PendingMode.ATOMIC)
+            async def value(self) -> int:
+                return self.key
+
+            def render(self) -> Text:
+                self.renders += 1
+                status = self.value.status
+                assert isinstance(status, Ready)
+                return Text(f"{self.label}:{status.value}")
+
+        panel = Mixed()
+        profiler = MemoryProfiler()
+        message_root = MessageRoot(panel, access=Everyone(), profiler=profiler, timeout=None)
+        await message_root.send(_Destination(fake_message()))
+        profiler.clear()
+
+        panel.key = 1
+        panel.label = "second"
+        await message_root.refresh()
+
+        trace = _operation_trace(profiler, OperationKind.REFRESH)
+        settle = next(span for span in trace.spans if span.name == "resource_settle.atomic")
+        assert panel.renders == 4
+        assert ("source", "discovered") in {(attribute.key, attribute.value) for attribute in settle.attributes}
+
     async def test_atomic_state_excludes_pending_and_keeps_previous_ready_value(self) -> None:
         async def load() -> str:
             return "loaded"
