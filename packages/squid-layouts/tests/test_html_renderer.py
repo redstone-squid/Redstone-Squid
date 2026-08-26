@@ -39,6 +39,10 @@ def test_html_renderer_preserves_structure_and_action_ids_without_callbacks() ->
     assert 'class="squid-panel"' in rendered
     assert 'data-squid-action="form.save"' in rendered
     assert 'data-squid-action="form.choice"' in rendered
+    assert 'data-squid-markup="discord-markdown"' in rendered
+    assert rendered.count('data-squid-mode="exclusive"') == 2
+    assert "data-squid-dialect" not in rendered
+    assert "data-squid-policy" not in rendered
     assert "<script>" not in rendered
     assert "&lt;script&gt;" in rendered
     assert '<time datetime="2026-08-22T14:30:00+00:00" data-squid-style="R">' in rendered
