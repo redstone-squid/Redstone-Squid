@@ -15,7 +15,7 @@ from squid_ui.runtime.resources import Failed, Pending, Ready, resource
 from squid_ui.semantic import ActionDisplay, ChoiceEvent, LayoutNode, Tone
 from squid_ui.sources import LoadedWindow, WindowLoader, WindowSource, window_footer
 from squid_ui.text import TextLike
-from squid_patterns._content import require_key
+from squid_ui_widgets._content import require_key
 
 type LookupSearch[ItemT] = Callable[[str], WindowSource[ItemT]]
 type LookupPickHandler[ItemT] = Callable[[ActionEvent, tuple[ItemT, ...]], Awaitable[None]]

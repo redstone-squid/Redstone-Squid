@@ -4,11 +4,11 @@ import discord
 import pytest
 
 import squid_ui as sl
-import squid_patterns as sp
+import squid_ui_widgets as sp
 from squid_discord import Everyone, Mount
 from squid_discord.testing import commit_render, fake_interaction
 from squid_ui.semantic import FormTrigger, Stack
-from squid_patterns import REVIEW_STEP
+from squid_ui_widgets import REVIEW_STEP
 
 
 def _form(title: str, key: str) -> sl.forms.FormSpec:

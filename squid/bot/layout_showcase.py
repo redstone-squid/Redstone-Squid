@@ -12,7 +12,7 @@ from discord.ext.commands import Cog, Context, guild_only
 
 import squid_discord as sd
 import squid_ui as sl
-import squid_patterns as sp
+import squid_ui_widgets as sp
 from squid.bot.i18n import resolve_locale
 from squid.bot.ui import (
     DISCORD_BLUE,

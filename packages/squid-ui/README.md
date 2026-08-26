@@ -10,13 +10,13 @@ every markdown prefix and code fence exactly, allocates the shared budgets by pr
 degrades content the way its author said it should degrade.
 
 > **The discord.py runtime lives in [`squid-discord`](../squid-discord/README.md), and the
-> reusable application patterns in [`squid-patterns`](../squid-patterns/README.md).** Mounts,
+> reusable application patterns in [`squid-ui-widgets`](../squid-ui-widgets/README.md).** Mounts,
 > sessions, routing, delivery, adoption, roles, devtools and durable panels moved there; the
 > examples below that call `sd.Mount(...)` need it installed. What stays here is Discord
 > *protocol* knowledge — Components V2 and classic limits, the two dialects, the scene shapes,
 > the capability tags — because that is what the planner plans against, and none of it imports
 > discord.py. Examples below that use `sp.Wizard`, `sp.Editor` or `sp.guards.confirm` need
-> `squid-patterns`. Installing `squid-ui` alone pulls in neither discord.py nor a store
+> `squid-ui-widgets`. Installing `squid-ui` alone pulls in neither discord.py nor a store
 > backend, and neither leaf package.
 
 ```python
