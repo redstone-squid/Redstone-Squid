@@ -265,6 +265,14 @@ class ComponentRuntime:
             self.dirty = rendered_revision is not None and self.revision != rendered_revision
             return
 
+        if self._committed_tree is not None and tree._topology is self._committed_tree._topology:
+            self._committed_tree = tree
+            if rendered_revision is None or self.revision == rendered_revision:
+                self._candidate_tree = tree
+                self._candidate_revision = self.revision
+            self.dirty = rendered_revision is not None and self.revision != rendered_revision
+            return
+
         def depth(path: str) -> int:
             return 0 if path == "$" else path.count(".") + 1
 
