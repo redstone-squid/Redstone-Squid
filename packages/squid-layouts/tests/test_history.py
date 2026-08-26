@@ -25,7 +25,7 @@ from squid_layouts.runtime import (
     LocalTopicBus,
     MemoryCompensationOutbox,
     Shared,
-    UndoStrategy,
+    UndoMode,
     history,
     history_actions,
     inspect_cells,
@@ -34,10 +34,10 @@ from squid_layouts.runtime import (
 from squid_layouts.semantic import Action
 from squid_reactive import (
     ActionLedger,
-    ChangeSummary,
+    ChangeReport,
     OperationEventSnapshot,
     ParticipantChange,
-    add_action_outcome_sink,
+    add_action_result_sink,
     join_action,
     on_action_commit,
 )
@@ -213,7 +213,7 @@ async def test_later_same_target_write_conflicts_without_clobbering() -> None:
 async def test_named_local_overwrite_policy_replaces_later_ephemeral_work() -> None:
     subject, _ = panel()
     with transaction():
-        subject.history.record("page", strategy=UndoStrategy.LOCAL_OVERWRITE)
+        subject.history.record("page", strategy=UndoMode.LOCAL_OVERWRITE)
         subject.page = 4
     with transaction():
         subject.page = 8
@@ -227,7 +227,7 @@ async def test_named_local_overwrite_policy_replaces_later_ephemeral_work() -> N
 async def test_local_overwrite_policy_refuses_shared_state() -> None:
     subject, workspace = panel()
     with transaction():
-        subject.history.record("select", strategy=UndoStrategy.LOCAL_OVERWRITE)
+        subject.history.record("select", strategy=UndoMode.LOCAL_OVERWRITE)
         workspace.selected = 7
     with transaction():
         workspace.selected = 9
@@ -358,7 +358,7 @@ async def test_participant_planning_failure_returns_failed_without_partial_inver
             return None
 
         def describe_change(self, prepared: None) -> ParticipantChange:
-            return ParticipantChange("bad", BadToken(), ChangeSummary(participants=1))
+            return ParticipantChange("bad", BadToken(), ChangeReport(participants=1))
 
         def apply(self, prepared: None) -> None:
             pass
@@ -456,7 +456,7 @@ async def test_external_success_then_local_conflict_needs_reconciliation_without
 async def test_compensation_intent_and_local_inverse_are_causal_actions() -> None:
     subject, _ = panel()
     ledger = ActionLedger()
-    add_action_outcome_sink(ledger)
+    add_action_result_sink(ledger)
 
     async def compensate(key: str) -> None:
         pass
@@ -465,15 +465,15 @@ async def test_compensation_intent_and_local_inverse_are_causal_actions() -> Non
         with transaction():
             subject.history.record("page", compensate=CompensationSpec(compensate, lambda commit: "page"))
             subject.page = 4
-        original = ledger.outcomes[-1]
+        original = ledger.results[-1]
 
         result = await subject.history.undo()
     finally:
         ledger.close()
 
     assert result.applied
-    descendants = [outcome for outcome in ledger.outcomes if outcome.root_action_id == original.root_action_id]
-    assert [outcome.kind for outcome in descendants] == ["action", "compensation", "compensation"]
+    descendants = [result for result in ledger.results if result.root_action_id == original.root_action_id]
+    assert [result.kind for result in descendants] == ["action", "compensation", "compensation"]
     assert descendants[1].cause is not None and descendants[1].cause.kind == "operation"
     operation_events = [event for event in ledger.events if isinstance(event, OperationEventSnapshot)]
     assert [event.status for event in operation_events] == ["reverting", "external_succeeded", "reverted"]

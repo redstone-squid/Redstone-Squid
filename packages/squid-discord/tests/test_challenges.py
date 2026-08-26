@@ -17,7 +17,7 @@ from squid_discord.testing import commit_render, delivered_to, fake_interaction,
 from squid_layouts import ActionEvent, Component, state
 from squid_layouts import form as sl_form
 from squid_layouts.forms import FormSpec, TextField
-from squid_layouts.guards import Challenge, ChallengeResolver, GuardLedger, GuardVerdict, approvals
+from squid_layouts.guards import Challenge, ChallengeResolver, GuardDecision, GuardLedger, approvals
 from squid_layouts.interactions import ActionPolicy
 from squid_layouts.profiling import DispatchDisposition, MemoryProfiler, OperationKind
 from squid_layouts.runtime.reactivity import readonly_transaction, transaction
@@ -390,9 +390,9 @@ class TestLedger:
         guard = sl.guards.all_of(sl.guards.cooldown(30), sl.guards.when(lambda event: False, reason="No."))
         event = _event()
 
-        assert not cast(GuardVerdict, await guard.admit(event, ledger)).allowed
+        assert not cast(GuardDecision, await guard.admit(event, ledger)).allowed
         cooldown_only = sl.guards.cooldown(30)
-        assert not cast(GuardVerdict, await cooldown_only.admit(event, ledger)).allowed
+        assert not cast(GuardDecision, await cooldown_only.admit(event, ledger)).allowed
 
 
 class TestComposition:
@@ -412,7 +412,7 @@ class TestComposition:
 
         outcome = await guard.admit(_event(), GuardLedger().for_action("go"))
 
-        assert isinstance(outcome, GuardVerdict) and not outcome.allowed
+        assert isinstance(outcome, GuardDecision) and not outcome.allowed
         assert not asked
 
     async def test_any_of_returns_a_question_rather_than_counting_it_as_a_no(self):
@@ -437,7 +437,7 @@ class TestComposition:
 
         outcome = await guard.admit(_event(), GuardLedger().for_action("go"))
 
-        assert isinstance(outcome, GuardVerdict)
+        assert isinstance(outcome, GuardDecision)
         assert outcome.reason == "Second."
 
     async def test_two_questions_in_one_chain_converge(self):

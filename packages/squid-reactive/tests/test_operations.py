@@ -10,7 +10,7 @@ from squid_reactive import (
     Reactive,
     ResourceEventSnapshot,
     action_scope,
-    add_action_outcome_sink,
+    add_action_result_sink,
     state,
     transaction,
 )
@@ -126,7 +126,7 @@ async def test_each_start_has_fresh_identity_and_retry_state() -> None:
 async def test_operation_start_and_terminal_state_form_causal_ledger_nodes() -> None:
     owner = Owner()
     ledger = ActionLedger()
-    add_action_outcome_sink(ledger)
+    add_action_result_sink(ledger)
     action = ActionContext.create("publish")
     try:
         with action_scope(action):
@@ -155,7 +155,7 @@ async def test_operation_completion_publishes_state_as_a_fresh_caused_action() -
 
     owner = StatefulOwner()
     ledger = ActionLedger()
-    add_action_outcome_sink(ledger)
+    add_action_result_sink(ledger)
     execution = owner.work.start()
     try:
         result = await execution
@@ -165,9 +165,9 @@ async def test_operation_completion_publishes_state_as_a_fresh_caused_action() -
         ledger.close()
 
     assert owner.value == 42
-    outcome = ledger.outcomes[0]
-    assert outcome.cause == execution.context.causal_ref()
-    assert outcome.root_action_id == str(outcome.action_id)
+    result = ledger.results[0]
+    assert result.cause == execution.context.causal_ref()
+    assert result.root_action_id == str(result.action_id)
 
 
 async def test_action_operation_response_and_resource_generation_form_one_graph() -> None:
@@ -188,7 +188,7 @@ async def test_action_operation_response_and_resource_generation_form_one_graph(
     owner = GraphOwner()
     root = ActionContext.create("click")
     ledger = ActionLedger(limit=20)
-    add_action_outcome_sink(ledger)
+    add_action_result_sink(ledger)
     try:
         with transaction(action_context=root):
             execution = owner.fetch.start()
@@ -202,7 +202,7 @@ async def test_action_operation_response_and_resource_generation_form_one_graph(
 
     operation_event = next(event for event in ledger.events if isinstance(event, OperationEventSnapshot))
     resource_event = next(event for event in ledger.events if isinstance(event, ResourceEventSnapshot))
-    response_outcome = next(outcome for outcome in ledger.outcomes if outcome.name == "publish response")
+    response_outcome = next(result for result in ledger.results if result.name == "publish response")
     assert operation_event.cause == root.causal_ref()
     assert response_outcome.cause == execution.context.causal_ref()
     assert resource_event.cause is not None and resource_event.cause.identity == str(response.action_id)

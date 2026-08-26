@@ -10,7 +10,7 @@ from squid_reactive import (
     LocalTopicBus,
     ReactiveConflictError,
     Shared,
-    add_action_outcome_sink,
+    add_action_result_sink,
     join_action,
     on_action_commit,
     state,
@@ -64,7 +64,7 @@ def test_scheduler_classifies_cancellation_before_publication_once() -> None:
     model = Model(LocalTopicBus(), "model")
     schedule = InterleavingHarness()
     ledger = ActionLedger()
-    add_action_outcome_sink(ledger)
+    add_action_result_sink(ledger)
     schedule.at("commit.before_validation", lambda: (_ for _ in ()).throw(asyncio.CancelledError()))
     try:
         with schedule.installed(), pytest.raises(asyncio.CancelledError), transaction():
@@ -73,15 +73,15 @@ def test_scheduler_classifies_cancellation_before_publication_once() -> None:
         ledger.close()
 
     assert model.result == ""
-    assert len(ledger.outcomes) == 1
-    assert ledger.outcomes[0].terminal == "rolled_back"
-    assert ledger.outcomes[0].reason == "cancelled"
+    assert len(ledger.results) == 1
+    assert ledger.results[0].terminal == "rolled_back"
+    assert ledger.results[0].reason == "cancelled"
 
 
 def test_scheduler_observes_prepare_abort_and_failure_isolated_hook_order() -> None:
     schedule = InterleavingHarness()
     ledger = ActionLedger()
-    add_action_outcome_sink(ledger)
+    add_action_result_sink(ledger)
     calls: list[str] = []
 
     class Participant:
@@ -108,8 +108,8 @@ def test_scheduler_observes_prepare_abort_and_failure_isolated_hook_order() -> N
         ledger.close()
 
     assert calls == ["prepare", "abort"]
-    assert len(ledger.outcomes) == 1
-    assert ledger.outcomes[0].reason == "participant_prepare_failed"
+    assert len(ledger.results) == 1
+    assert ledger.results[0].reason == "participant_prepare_failed"
     assert schedule.seen.index("commit.before_participant_prepare") < schedule.seen.index("rollback.before_abort")
 
     hook_schedule = InterleavingHarness()
@@ -120,14 +120,14 @@ def test_scheduler_observes_prepare_abort_and_failure_isolated_hook_order() -> N
 
 def test_scheduler_records_read_only_noop_and_integrity_commit_exactly_once() -> None:
     ledger = ActionLedger()
-    add_action_outcome_sink(ledger)
+    add_action_result_sink(ledger)
     read_only = InterleavingHarness()
     try:
         with read_only.installed(), transaction():
             pass
-        assert len(ledger.outcomes) == 1
-        assert ledger.outcomes[0].terminal == "committed"
-        assert ledger.outcomes[0].changes.cells == 0
+        assert len(ledger.results) == 1
+        assert ledger.results[0].terminal == "committed"
+        assert ledger.results[0].changes.cells == 0
         assert read_only.seen[:2] == ["transaction.enter_body", "transaction.close_staging"]
 
         class BrokenParticipant:
@@ -152,9 +152,9 @@ def test_scheduler_records_read_only_noop_and_integrity_commit_exactly_once() ->
     finally:
         ledger.close()
 
-    assert len(ledger.outcomes) == 2
-    assert ledger.outcomes[1].terminal == "committed"
-    assert ledger.outcomes[1].tags == frozenset({"framework_integrity_failure"})
+    assert len(ledger.results) == 2
+    assert ledger.results[1].terminal == "committed"
+    assert ledger.results[1].tags == frozenset({"framework_integrity_failure"})
     assert "commit.before_publication" in integrity.seen
     assert "commit.after_cell_publication" in integrity.seen
 
@@ -163,7 +163,7 @@ def test_change_description_failure_aborts_with_the_prepared_value() -> None:
     prepared_value = object()
     aborted: list[object | None] = []
     ledger = ActionLedger()
-    add_action_outcome_sink(ledger)
+    add_action_result_sink(ledger)
 
     class Participant(ActionParticipant[object]):
         def prepare(self, view) -> object:
@@ -189,5 +189,5 @@ def test_change_description_failure_aborts_with_the_prepared_value() -> None:
         ledger.close()
 
     assert aborted == [prepared_value]
-    assert len(ledger.outcomes) == 1
-    assert ledger.outcomes[0].reason == "participant_prepare_failed"
+    assert len(ledger.results) == 1
+    assert ledger.results[0].reason == "participant_prepare_failed"

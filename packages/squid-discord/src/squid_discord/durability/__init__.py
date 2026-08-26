@@ -50,9 +50,9 @@ __all__ = [
     "DurableSessionRecord",
     "DurableSessionRuntime",
     "DurableSessionStore",
+    "FrontendAddress",
     "MemorySessionStore",
     "Missing",
-    "MountLocator",
     "MountState",
     "MountStateCodec",
     "MountStateError",
@@ -116,7 +116,7 @@ class MountState:
 
 
 @dataclass(frozen=True, slots=True)
-class MountLocator:
+class FrontendAddress:
     """Frontend-neutral coordinates needed to reconnect a rendered message."""
 
     frontend: str
@@ -129,7 +129,7 @@ class DurableMountRecord:
 
     protocol: int
     state: MountState
-    locator: MountLocator
+    address: FrontendAddress
     expires_at: float | None = None
 
 
@@ -148,9 +148,10 @@ class DurableMountCodec:
             # Wire key stays "snapshot": the field was renamed for legibility, and
             # changing what is written would strand every record already in a store.
             "snapshot": json.loads(MountStateCodec.dumps(record.state)),
+            # Same for "locator": `FrontendAddress` retired the word, the wire did not.
             "locator": {
-                "frontend": record.locator.frontend,
-                "values": dict(record.locator.values),
+                "frontend": record.address.frontend,
+                "values": dict(record.address.values),
             },
             "expires_at": record.expires_at,
         }
@@ -171,10 +172,10 @@ class DurableMountCodec:
         if protocol != cls.protocol or "snapshot" not in item:
             message = f"unsupported durable mount record protocol {protocol}"
             raise MountStateError(message)
-        locator = _object(item.get("locator"))
-        values = _object(locator.get("values"))
+        address = _object(item.get("locator"))
+        values = _object(address.get("values"))
         if not all(isinstance(key, str) and isinstance(value, str | int) for key, value in values.items()):
-            message = "mount locator values must contain string keys and string or integer values"
+            message = "mount address values must contain string keys and string or integer values"
             raise MountStateError(message)
         expires_at = item.get("expires_at")
         if expires_at is not None and not isinstance(expires_at, int | float):
@@ -184,7 +185,7 @@ class DurableMountCodec:
         return DurableMountRecord(
             protocol,
             MountStateCodec.loads(snapshot_payload),
-            MountLocator(_string(locator, "frontend"), values),
+            FrontendAddress(_string(address, "frontend"), values),
             float(expires_at) if expires_at is not None else None,
         )
 
@@ -344,7 +345,7 @@ class RestoreContext:
     session_key: SessionKey
     actor_id: int | None
     mount_actor_id: int | None
-    locator: MountLocator
+    address: FrontendAddress
     expires_at: float | None
     parent_id: str | None
 

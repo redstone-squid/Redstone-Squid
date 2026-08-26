@@ -15,7 +15,7 @@ from squid_discord import Everyone, Mount, Reactor
 from squid_discord.testing import delivered_to, fake_interaction, fake_message
 from squid_layouts import Component, PressEvent, state
 from squid_layouts.primitives import Button, Row, Text
-from squid_layouts.profiling import PresentationOutcome
+from squid_layouts.profiling import PresentationStatus
 from squid_layouts.runtime import CellAddress, LocalTopicBus, Shared, transaction
 
 
@@ -48,17 +48,17 @@ class Panel(Component):
 class Writer(Component):
     """A panel that writes the cell it renders, which is the case the bus alone handles badly."""
 
-    def __init__(self, workspace: Workspace, *, feedback: sl.interactions.Feedback | None = None, run=None) -> None:
+    def __init__(self, workspace: Workspace, *, busy: sl.interactions.BusySpec | None = None, run=None) -> None:
         self.workspace = workspace
         self.run = run
-        self.feedback = feedback
+        self.busy = busy
 
     def render(self):
         return [
             Text(str(self.workspace.selected)),
             Row(
                 (
-                    Button(label="pick", on_click=self.pick, key="pick", feedback=self.feedback),
+                    Button(label="pick", on_click=self.pick, key="pick", busy=self.busy),
                     Button(label="aside", on_click=self.aside, key="aside"),
                     Button(label="boom", on_click=self.boom, key="boom"),
                 )
@@ -275,10 +275,10 @@ async def test_a_scheduler_that_cannot_follow_says_so_once(caplog: pytest.LogCap
 class TestSelfWrites:
     """A mount that writes a cell it renders repaints in the click, not one edit later."""
 
-    def panel(self, *, feedback: sl.interactions.Feedback | None = None, run=None) -> tuple[Workspace, Writer, Mount]:
+    def panel(self, *, busy: sl.interactions.BusySpec | None = None, run=None) -> tuple[Workspace, Writer, Mount]:
         bus = LocalTopicBus()
         workspace = Workspace(bus, Member(1))
-        panel = Writer(workspace, feedback=feedback, run=run)
+        panel = Writer(workspace, busy=busy, run=run)
         return workspace, panel, Mount(panel, access=Everyone(), timeout=None, pending_after=30)
 
     async def test_the_writing_mount_repaints_in_its_own_interaction(self) -> None:
@@ -315,11 +315,11 @@ class TestSelfWrites:
         await mount.send(delivered_to(fake_message()))
         generation = mount.generation
 
-        outcome = await mount.refresh_now()
+        status = await mount.refresh_now()
         interaction = fake_interaction()
         await mount.dispatch("aside", interaction, generation=generation)
 
-        assert outcome is PresentationOutcome.UNCHANGED
+        assert status is PresentationStatus.UNCHANGED
         assert mount.generation == generation
         assert workspace.detail == "unrendered"
 
@@ -347,7 +347,7 @@ class TestSelfWrites:
     async def test_a_feedback_action_does_not_flash_the_stale_scene(self) -> None:
         """The bug this fixed: flush found nothing, so `restore` repainted the committed plan."""
         release = asyncio.Event()
-        workspace, _, mount = self.panel(feedback=sl.interactions.Feedback(pending="Working…"), run=release.wait)
+        workspace, _, mount = self.panel(busy=sl.interactions.BusySpec(pending="Working…"), run=release.wait)
         mount.pending_after = 0
         await mount.send(delivered_to(fake_message()))
         interaction = fake_interaction()

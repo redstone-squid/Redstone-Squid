@@ -7,7 +7,7 @@ webhook tokens, `@original` semantics and HTTP error codes lives here, so caller
 ask whether a handle is expired and catch :class:`StaleHandleError` when it turns out to be.
 
 The initial send is the mirror image: a mount holds no message yet, so it asks for one
-through a :class:`Destination`. The destination returns a :class:`DeliveryReceipt` naming
+through a :class:`Destination`. The destination returns a :class:`DeliveryResult` naming
 both the observable message and the exact edit authority the operation created. It owns every
 discord.py kwarg; the mount owns the stage/deliver/commit sequence around it.
 
@@ -70,7 +70,7 @@ class DeliveryAbandoned(Exception):
 class Delivered:
     """A mount render committed through a destination."""
 
-    receipt: DeliveryReceipt
+    receipt: DeliveryResult
     settled: bool
     """Whether every async binding observed by the delivered generation reached a terminal status."""
 
@@ -316,7 +316,7 @@ def handle_for_original(interaction: discord.Interaction[Any], *, mode: DiscordM
 
 
 @dataclass(frozen=True, slots=True)
-class DeliveryReceipt:
+class DeliveryResult:
     """What a delivery exposed and the authority it created to edit it."""
 
     message: discord.Message | None
@@ -345,11 +345,11 @@ def _callback_receipt(
     handle: EditHandle,
     *,
     fallback: discord.Message | None = None,
-) -> DeliveryReceipt:
+) -> DeliveryResult:
     """Keep the message metadata Discord returned with an interaction callback."""
     resource = response.resource
     message = resource if isinstance(resource, discord.Message) else fallback
-    return DeliveryReceipt(message, handle, response.message_id, response.is_ephemeral())
+    return DeliveryResult(message, handle, response.message_id, response.is_ephemeral())
 
 
 async def respond_text(interaction: discord.Interaction[Any], content: str, *, ephemeral: bool = True) -> None:
@@ -410,7 +410,7 @@ class Destination(Protocol):
     are merged ahead of `presentation.files()`.
     """
 
-    async def __call__(self, presentation: DiscordPresentation, /) -> DeliveryReceipt: ...
+    async def __call__(self, presentation: DiscordPresentation, /) -> DeliveryResult: ...
 
 
 class Messageable(Protocol):
@@ -445,7 +445,7 @@ def reply_to(
     require_discord_py_capability(adapter, AdapterCapability.INTERACTION_DELIVERY, "deliver a command reply")
     mentions = no_mentions() if allowed_mentions is None else allowed_mentions
 
-    async def send(presentation: DiscordPresentation) -> DeliveryReceipt:
+    async def send(presentation: DiscordPresentation) -> DeliveryResult:
         interaction = getattr(ctx, "interaction", None)
         active = interaction is not None and not interaction.is_expired()
         response_done = active and interaction.response.is_done()
@@ -457,10 +457,10 @@ def reply_to(
         )
         mode = presentation.mode
         if not active:
-            return DeliveryReceipt(message, handle_for(message, mode=mode))
+            return DeliveryResult(message, handle_for(message, mode=mode))
         if response_done:
-            return DeliveryReceipt(message, _WebhookMessageHandle(interaction, message.id, message, mode=mode))
-        return DeliveryReceipt(message, _OriginalResponseHandle(interaction, message, mode=mode))
+            return DeliveryResult(message, _WebhookMessageHandle(interaction, message.id, message, mode=mode))
+        return DeliveryResult(message, _OriginalResponseHandle(interaction, message, mode=mode))
 
     return send
 
@@ -504,14 +504,14 @@ def send_to(
     target = cast(Messageable, channel)
     mentions = no_mentions() if allowed_mentions is None else allowed_mentions
 
-    async def send(presentation: DiscordPresentation) -> DeliveryReceipt:
+    async def send(presentation: DiscordPresentation) -> DeliveryResult:
         message = await target.send(
             files=_merged_files(files, presentation),
             allowed_mentions=mentions,
             **({"delete_after": delete_after} if delete_after is not None else {}),
             **presentation._send_fields(),
         )
-        return DeliveryReceipt(message, handle_for(message, mode=presentation.mode))
+        return DeliveryResult(message, handle_for(message, mode=presentation.mode))
 
     return send
 
@@ -533,7 +533,7 @@ def respond_to(
     require_discord_py_capability(adapter, AdapterCapability.INTERACTION_DELIVERY, "deliver an interaction response")
     mentions = no_mentions() if allowed_mentions is None else allowed_mentions
 
-    async def send(presentation: DiscordPresentation) -> DeliveryReceipt:
+    async def send(presentation: DiscordPresentation) -> DeliveryResult:
         files = _merged_files((), presentation)
         mode = presentation.mode
         if interaction.response.is_done():
@@ -545,8 +545,8 @@ def respond_to(
                 **presentation._send_fields(),
             )
             if message is None:
-                return DeliveryReceipt(None, None)
-            return DeliveryReceipt(message, _WebhookMessageHandle(interaction, message.id, message, mode=mode))
+                return DeliveryResult(None, None)
+            return DeliveryResult(message, _WebhookMessageHandle(interaction, message.id, message, mode=mode))
         response = await interaction.response.send_message(  # pyrefly: ignore[no-matching-overload]
             files=files, ephemeral=ephemeral, allowed_mentions=mentions, **presentation._send_fields()
         )
@@ -577,7 +577,7 @@ def edit_to(
     """
     mentions = no_mentions() if allowed_mentions is None else allowed_mentions
 
-    async def send(presentation: DiscordPresentation) -> DeliveryReceipt:
+    async def send(presentation: DiscordPresentation) -> DeliveryResult:
         fields = presentation._edit_fields(mode_of(message))
         fields["attachments"] = _merged_files(files, presentation)
         try:
@@ -587,7 +587,7 @@ def edit_to(
                 detail = "the bot no longer has authority to edit this message"
                 raise StaleHandleError(detail) from error
             raise
-        return DeliveryReceipt(edited, handle_for(edited, mode=presentation.mode))
+        return DeliveryResult(edited, handle_for(edited, mode=presentation.mode))
 
     return send
 

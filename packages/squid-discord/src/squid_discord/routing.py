@@ -47,7 +47,7 @@ import discord
 from squid_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
 from squid_discord.mount import ErrorHook
 from squid_layouts.planning.adapter import AdapterCapability, AdapterProfile
-from squid_layouts.profiling import NoOpProfiler, OperationKind, OperationRecorder, Profiler, TraceOutcome, TraceResult
+from squid_layouts.profiling import NoOpProfiler, OperationKind, OperationRecorder, Profiler, TraceResult, TraceStatus
 from squid_layouts.routing import Route
 from squid_layouts.target_types import DiscordPyAdapter
 
@@ -722,13 +722,13 @@ class Router[BotT: discord.Client]:
                     handled = await self._run_middleware(middleware, request, endpoint, profile=profile)
                 except Exception as error:
                     profile.set_result(
-                        TraceResult(TraceOutcome.FAILED, f"{type(error).__module__}.{type(error).__qualname__}")
+                        TraceResult(TraceStatus.FAILED, f"{type(error).__module__}.{type(error).__qualname__}")
                     )
                     with profile.span("error_hook"):
                         await self._handle_error(interaction, error, source)
                     finish_acknowledgement("error_hook")
                 else:
-                    profile.set_result(TraceResult(TraceOutcome.COMPLETED, None if handled else "short_circuited"))
+                    profile.set_result(TraceResult(TraceStatus.COMPLETED, None if handled else "short_circuited"))
 
             async def watchdog() -> None:
                 await anyio.sleep(self.acknowledgement_timeout)

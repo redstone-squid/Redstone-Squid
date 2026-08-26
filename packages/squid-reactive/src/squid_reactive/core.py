@@ -28,12 +28,12 @@ from typing import Any, ClassVar, Protocol, Self, overload
 from squid_reactive.actions import (
     ActionCommit,
     ActionContext,
-    ActionOutcome,
+    ActionResult,
     ActionRollback,
     Aftermath,
-    ChangeSummary,
+    ChangeReport,
     ConflictDetail,
-    ExceptionSummary,
+    ExceptionReport,
     ObservedRead,
     ParticipantChange,
     RollbackReason,
@@ -674,7 +674,7 @@ class _Transaction:
     rollback_hooks: list[tuple[object | None, Callable[[ActionRollback, Aftermath], None]]] = field(
         default_factory=list
     )
-    outcome_hooks: list[tuple[object | None, Callable[[ActionOutcome, Aftermath], None]]] = field(default_factory=list)
+    outcome_hooks: list[tuple[object | None, Callable[[ActionResult, Aftermath], None]]] = field(default_factory=list)
     context: ActionContext = field(default_factory=ActionContext.create)
     participants: dict[object, ActionParticipant[Any]] = field(default_factory=dict)
     applied: bool = False
@@ -689,7 +689,7 @@ class _Transaction:
     write_block: str | None = None
     """Why state may not be written right now, while the transaction itself stays open."""
     aborted: bool = False
-    cleanup_errors: list[ExceptionSummary] = field(default_factory=list)
+    cleanup_errors: list[ExceptionReport] = field(default_factory=list)
     prepared_participants: tuple[tuple[ActionParticipant[Any], Any], ...] = ()
     commit_record: ActionCommit | None = None
 
@@ -985,7 +985,7 @@ class _Transaction:
         self,
         cause: BaseException,
         prepared: Sequence[tuple[ActionParticipant[Any], Any]] | None = None,
-    ) -> tuple[ExceptionSummary, ...]:
+    ) -> tuple[ExceptionReport, ...]:
         if self.aborted:
             return tuple(self.cleanup_errors)
         self.aborted = True
@@ -994,12 +994,12 @@ class _Transaction:
             id(participant): value
             for participant, value in (self.prepared_participants if prepared is None else prepared)
         }
-        failures: list[ExceptionSummary] = []
+        failures: list[ExceptionReport] = []
         for participant in reversed(tuple(self.participants.values())):
             try:
                 participant.abort(values.get(id(participant)), cause)
             except Exception as error:
-                summary = ExceptionSummary.capture(error)
+                summary = ExceptionReport.capture(error)
                 failures.append(summary)
                 self.cleanup_errors.append(summary)
                 _log.exception("a transaction participant failed to abort")
@@ -1071,7 +1071,7 @@ def _rollback_reason(error: BaseException, *, during_commit: bool) -> RollbackRe
 
 
 def _notify_hooks(
-    outcome: ActionOutcome,
+    outcome: ActionResult,
     hooks: Sequence[tuple[object | None, Callable[[Any, Aftermath], None]]],
 ) -> None:
     if not hooks:
@@ -1113,8 +1113,8 @@ def _emit_rollback(current: _Transaction, error: BaseException, *, during_commit
         _rollback_reason(error, during_commit=during_commit),
         current.reads(),
         error.detail if isinstance(error, ReactiveConflictError) else None,
-        ExceptionSummary.capture(error),
-        ChangeSummary(len(current.writes), len(current.participants)),
+        ExceptionReport.capture(error),
+        ChangeReport(len(current.writes), len(current.participants)),
         cleanup_errors,
     )
     emit_outcome(rollback)
@@ -1257,7 +1257,7 @@ def on_action_rollback(callback: Callable[[ActionRollback, Aftermath], None], *,
     _add_action_hook("rollback", callback, key=key)
 
 
-def on_action_outcome(callback: Callable[[ActionOutcome, Aftermath], None], *, key: object | None = None) -> None:
+def on_action_result(callback: Callable[[ActionResult, Aftermath], None], *, key: object | None = None) -> None:
     """Run a failure-isolated callback after either terminal outcome."""
     _add_action_hook("outcome", callback, key=key)
 

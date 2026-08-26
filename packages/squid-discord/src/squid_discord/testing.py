@@ -22,7 +22,7 @@ from unittest.mock import AsyncMock
 
 import discord
 
-from squid_discord.delivery import DeliveryReceipt, Destination, EditHandle, handle_for
+from squid_discord.delivery import DeliveryResult, Destination, EditHandle, handle_for
 from squid_discord.mount import AnyMountedView, ClassicMountedView, Mount, MountedView
 from squid_discord.presentation import DiscordPresentation
 from squid_layouts import scene
@@ -223,8 +223,8 @@ def delivered_to(message: Any, *, handle: EditHandle | None = None) -> Destinati
 
     authority = handle if handle is not None else handle_for(message)
 
-    async def send(presentation: DiscordPresentation) -> DeliveryReceipt:
-        return DeliveryReceipt(message, authority)
+    async def send(presentation: DiscordPresentation) -> DeliveryResult:
+        return DeliveryResult(message, authority)
 
     return send
 

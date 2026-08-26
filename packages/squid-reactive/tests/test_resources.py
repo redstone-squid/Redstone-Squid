@@ -12,7 +12,7 @@ from squid_reactive import (
     Shared,
     Topic,
     action_scope,
-    add_action_outcome_sink,
+    add_action_result_sink,
     state,
     transaction,
     watch,
@@ -129,7 +129,7 @@ async def test_cancelled_load_attempt_remains_pending_and_retryable() -> None:
 async def test_resource_generations_are_causal_without_profiler_retention() -> None:
     source = Source()
     ledger = ActionLedger()
-    add_action_outcome_sink(ledger)
+    add_action_result_sink(ledger)
     action = ActionContext.create("refresh")
     try:
         with action_scope(action):
@@ -212,7 +212,7 @@ async def test_an_installed_scope_abandons_a_superseded_load() -> None:
     """Cancellation supplied by the host stops the loader instead of discarding its result."""
     owner = _Checkpointed()
     ledger = ActionLedger()
-    add_action_outcome_sink(ledger)
+    add_action_result_sink(ledger)
     try:
         with abandon_superseded_loads(anyio.CancelScope):
             async with anyio.create_task_group() as tasks:
@@ -237,7 +237,7 @@ async def test_a_superseded_load_runs_to_completion_without_an_installed_scope()
     """The dependency-free default: nothing stops the loader, only its result is dropped."""
     owner = _Checkpointed()
     ledger = ActionLedger()
-    add_action_outcome_sink(ledger)
+    add_action_result_sink(ledger)
     try:
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(owner.value._load)

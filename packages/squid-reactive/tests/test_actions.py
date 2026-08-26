@@ -14,21 +14,21 @@ from squid_reactive import (
     ActionContext,
     ActionKind,
     ActionLedger,
-    ActionOutcomeCodec,
-    ActionOutcomeSnapshot,
+    ActionResultCodec,
+    ActionResultSnapshot,
     ActionRollback,
     ActionValidationError,
     ActorRef,
     AftermathFailureSnapshot,
-    DurableOutcomePolicy,
-    DurableOutcomeSink,
+    DurableResultPolicy,
+    DurableResultSink,
     LocalTopicBus,
     Reactive,
     ReactiveConflictError,
     ReactiveWriteError,
     RedactionPolicy,
     Shared,
-    add_action_outcome_sink,
+    add_action_result_sink,
     apply_conditional_patches,
     computed,
     join_action,
@@ -36,7 +36,7 @@ from squid_reactive import (
     on_action_rollback,
     readonly_transaction,
     relaxed_read,
-    remove_action_outcome_sink,
+    remove_action_result_sink,
     state,
     strong_read,
     transaction,
@@ -65,7 +65,7 @@ def _outside_write(preferences: Preferences, name: str, value: str) -> None:
 
 def test_each_action_emits_one_identified_terminal_outcome() -> None:
     ledger = ActionLedger()
-    add_action_outcome_sink(ledger)
+    add_action_result_sink(ledger)
     preferences = Preferences(LocalTopicBus(), 1)
     context = ActionContext.create("change theme")
     try:
@@ -74,17 +74,17 @@ def test_each_action_emits_one_identified_terminal_outcome() -> None:
     finally:
         ledger.close()
 
-    assert len(ledger.outcomes) == 1
-    outcome = ledger.outcomes[0]
-    assert outcome.action_id == str(context.action_id)
-    assert outcome.terminal == "committed"
-    assert outcome.changes.cells == 1
+    assert len(ledger.results) == 1
+    result = ledger.results[0]
+    assert result.action_id == str(context.action_id)
+    assert result.terminal == "committed"
+    assert result.changes.cells == 1
 
 
 def test_outcome_registration_does_not_retain_an_abandoned_sink() -> None:
     ledger = ActionLedger()
     reference = weakref.ref(ledger)
-    add_action_outcome_sink(ledger)
+    add_action_result_sink(ledger)
 
     del ledger
     gc.collect()
@@ -94,7 +94,7 @@ def test_outcome_registration_does_not_retain_an_abandoned_sink() -> None:
 
 def test_read_only_actions_emit_terminal_outcomes() -> None:
     ledger = ActionLedger()
-    add_action_outcome_sink(ledger)
+    add_action_result_sink(ledger)
     try:
         with readonly_transaction():
             pass
@@ -103,7 +103,7 @@ def test_read_only_actions_emit_terminal_outcomes() -> None:
     finally:
         ledger.close()
 
-    assert [outcome.terminal for outcome in ledger.outcomes] == ["committed", "rolled_back"]
+    assert [result.terminal for result in ledger.results] == ["committed", "rolled_back"]
 
 
 def test_handler_failure_emits_rollback_after_staged_state_dies() -> None:
@@ -272,7 +272,7 @@ def test_hook_failure_is_isolated_from_commit(caplog: pytest.LogCaptureFixture) 
 
 def test_hook_failure_is_a_bounded_causal_diagnostic_node() -> None:
     ledger = ActionLedger()
-    add_action_outcome_sink(ledger)
+    add_action_result_sink(ledger)
 
     def fail(commit, aftermath) -> None:
         raise RuntimeError("secret hook detail")
@@ -283,17 +283,17 @@ def test_hook_failure_is_a_bounded_causal_diagnostic_node() -> None:
     finally:
         ledger.close()
 
-    assert len(ledger.outcomes) == 1
+    assert len(ledger.results) == 1
     failure = ledger.events[-1]
     assert isinstance(failure, AftermathFailureSnapshot)
-    assert failure.cause.identity == ledger.outcomes[0].action_id
+    assert failure.cause.identity == ledger.results[0].action_id
     assert failure.exception.type_name == "RuntimeError"
     assert failure.exception.message == "[redacted]"
 
 
 def test_sink_and_participant_finalize_failures_are_causal_diagnostic_nodes() -> None:
     class FailingSink:
-        def accept(self, outcome) -> None:
+        def accept(self, result) -> None:
             raise RuntimeError("sink secret")
 
     class FinalizeFailure:
@@ -314,25 +314,25 @@ def test_sink_and_participant_finalize_failures_are_causal_diagnostic_nodes() ->
 
     failing = FailingSink()
     ledger = ActionLedger()
-    add_action_outcome_sink(failing)
-    add_action_outcome_sink(ledger)
+    add_action_result_sink(failing)
+    add_action_result_sink(ledger)
     try:
         with transaction():
             join_action(object(), FinalizeFailure)
     finally:
         ledger.close()
-        remove_action_outcome_sink(failing)
+        remove_action_result_sink(failing)
 
     failures = [event for event in ledger.events if isinstance(event, AftermathFailureSnapshot)]
-    assert {failure.stage for failure in failures} == {"outcome_sink", "participant_finalize"}
+    assert {failure.stage for failure in failures} == {"result_sink", "participant_finalize"}
     assert all(failure.exception.message == "[redacted]" for failure in failures)
-    assert len(ledger.outcomes) == 1
+    assert len(ledger.results) == 1
 
 
 def test_apply_contract_failure_preserves_one_integrity_commit() -> None:
     preferences = Preferences(LocalTopicBus(), 1)
     ledger = ActionLedger()
-    add_action_outcome_sink(ledger)
+    add_action_result_sink(ledger)
 
     class BrokenParticipant:
         def prepare(self, view) -> None:
@@ -358,9 +358,9 @@ def test_apply_contract_failure_preserves_one_integrity_commit() -> None:
         ledger.close()
 
     assert preferences.theme == "dark"
-    assert len(ledger.outcomes) == 1
-    assert ledger.outcomes[0].terminal == "committed"
-    assert ledger.outcomes[0].tags == frozenset({"framework_integrity_failure"})
+    assert len(ledger.results) == 1
+    assert ledger.results[0].terminal == "committed"
+    assert ledger.results[0].tags == frozenset({"framework_integrity_failure"})
 
 
 def test_aftermath_direct_mutation_is_rejected() -> None:
@@ -385,7 +385,7 @@ def test_aftermath_direct_mutation_is_rejected() -> None:
 def test_aftermath_recovery_is_a_fresh_causally_linked_action() -> None:
     preferences = Preferences(LocalTopicBus(), 1)
     ledger = ActionLedger()
-    add_action_outcome_sink(ledger)
+    add_action_result_sink(ledger)
 
     def recover(rollback, aftermath) -> None:
         with aftermath.start_action("present error"):
@@ -399,35 +399,35 @@ def test_aftermath_recovery_is_a_fresh_causally_linked_action() -> None:
         ledger.close()
 
     assert preferences.theme == "recovered"
-    assert [outcome.terminal for outcome in ledger.outcomes] == ["rolled_back", "committed"]
-    assert ledger.outcomes[1].cause is not None
-    assert ledger.outcomes[1].cause.identity == ledger.outcomes[0].action_id
-    assert ledger.outcomes[1].root_action_id == ledger.outcomes[0].root_action_id
+    assert [result.terminal for result in ledger.results] == ["rolled_back", "committed"]
+    assert ledger.results[1].cause is not None
+    assert ledger.results[1].cause.identity == ledger.results[0].action_id
+    assert ledger.results[1].root_action_id == ledger.results[0].root_action_id
 
 
 def test_undo_kind_is_explicit_identity_not_hook_timing() -> None:
     context = ActionContext.create("undo", kind=ActionKind.UNDO)
     ledger = ActionLedger()
-    add_action_outcome_sink(ledger)
+    add_action_result_sink(ledger)
     try:
         with transaction(action_context=context):
             pass
     finally:
         ledger.close()
-    assert ledger.outcomes[0].kind == "undo"
+    assert ledger.results[0].kind == "undo"
 
 
 def test_portable_schema_one_round_trips_and_rejects_unknown_versions() -> None:
     ledger = ActionLedger()
-    add_action_outcome_sink(ledger)
+    add_action_result_sink(ledger)
     try:
         with transaction():
             pass
     finally:
         ledger.close()
-    codec = ActionOutcomeCodec()
+    codec = ActionResultCodec()
 
-    assert codec.decode(codec.encode(ledger.outcomes[0])) == ledger.outcomes[0]
+    assert codec.decode(codec.encode(ledger.results[0])) == ledger.results[0]
     with pytest.raises(ValueError, match="unsupported"):
         codec.decode(b'{"schema":2}')
     with pytest.raises(ValueError, match="corrupt"):
@@ -438,14 +438,14 @@ def test_portable_schema_one_round_trips_and_rejects_unknown_versions() -> None:
 
 def test_application_validation_has_a_distinct_rollback_reason() -> None:
     ledger = ActionLedger()
-    add_action_outcome_sink(ledger)
+    add_action_result_sink(ledger)
     try:
         with pytest.raises(ActionValidationError), transaction():
             raise ActionValidationError("name is required")
     finally:
         ledger.close()
 
-    assert ledger.outcomes[0].reason == "validation_failed"
+    assert ledger.results[0].reason == "validation_failed"
 
 
 def test_portable_snapshot_redacts_by_default_and_can_opt_into_safe_metadata() -> None:
@@ -456,7 +456,7 @@ def test_portable_snapshot_redacts_by_default_and_can_opt_into_safe_metadata() -
     )
     ledger = ActionLedger()
     rollbacks: list[ActionRollback] = []
-    add_action_outcome_sink(ledger)
+    add_action_result_sink(ledger)
     try:
         with pytest.raises(RuntimeError), transaction(action_context=context):
             on_action_rollback(lambda rollback, aftermath: rollbacks.append(rollback))
@@ -464,22 +464,22 @@ def test_portable_snapshot_redacts_by_default_and_can_opt_into_safe_metadata() -
     finally:
         ledger.close()
 
-    snapshot = ledger.outcomes[0]
+    snapshot = ledger.results[0]
     assert snapshot.actor == ActorRef("user", "42")
     assert snapshot.metadata == ()
     assert snapshot.exception is not None and snapshot.exception.message == "[redacted]"
-    opted_in = ActionOutcomeSnapshot.from_outcome(
+    opted_in = ActionResultSnapshot.from_result(
         rollbacks[0], RedactionPolicy(include_metadata=True, include_exception_messages=True)
     )
     assert dict(opted_in.metadata) == {"tenant": "safe", "token": "secret"}
     assert opted_in.exception is not None and opted_in.exception.message == "private failure message"
 
 
-def test_each_outcome_sink_receives_its_declared_redaction_projection() -> None:
+def test_each_result_sink_receives_its_declared_redaction_projection() -> None:
     default = ActionLedger()
     privileged = ActionLedger()
-    add_action_outcome_sink(default)
-    add_action_outcome_sink(
+    add_action_result_sink(default)
+    add_action_result_sink(
         privileged,
         policy=RedactionPolicy(include_actor=False, include_metadata=True, include_exception_messages=True),
     )
@@ -491,25 +491,25 @@ def test_each_outcome_sink_receives_its_declared_redaction_projection() -> None:
         default.close()
         privileged.close()
 
-    assert default.outcomes[0].actor == ActorRef("user", "42")
-    assert default.outcomes[0].metadata == ()
-    assert default.outcomes[0].exception is not None
-    assert default.outcomes[0].exception.message == "[redacted]"
-    assert privileged.outcomes[0].actor is None
-    assert dict(privileged.outcomes[0].metadata) == {"tenant": "safe"}
-    assert privileged.outcomes[0].exception is not None
-    assert privileged.outcomes[0].exception.message == "failure detail"
+    assert default.results[0].actor == ActorRef("user", "42")
+    assert default.results[0].metadata == ()
+    assert default.results[0].exception is not None
+    assert default.results[0].exception.message == "[redacted]"
+    assert privileged.results[0].actor is None
+    assert dict(privileged.results[0].metadata) == {"tenant": "safe"}
+    assert privileged.results[0].exception is not None
+    assert privileged.results[0].exception.message == "failure detail"
 
 
 def test_durable_sink_encodes_outcomes_and_declares_host_policy() -> None:
     encoded: list[bytes] = []
-    policy = DurableOutcomePolicy(
+    policy = DurableResultPolicy(
         redaction=RedactionPolicy(include_actor=False),
         actor_privacy="omitted",
         encryption="AES-256 at rest",
         retention="30 days",
     )
-    sink = DurableOutcomeSink(encoded.append, policy=policy)
+    sink = DurableResultSink(encoded.append, policy=policy)
     try:
         with transaction(action_context=ActionContext.create(actor=ActorRef("user", "42"))):
             pass

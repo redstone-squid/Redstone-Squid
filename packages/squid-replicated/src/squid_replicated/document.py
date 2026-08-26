@@ -14,7 +14,7 @@ from squid_reactive.actions import (
     ActionKind,
     ActorRef,
     CausalRef,
-    ChangeSummary,
+    ChangeReport,
     ConflictDetail,
     ParticipantChange,
 )
@@ -184,7 +184,7 @@ class _ReplicationParticipant:
         if not prepared.operations:
             return None
         token = ReplicatedChangeToken(weakref.ref(self.document), prepared.operations, self.document.token_epoch)
-        return ParticipantChange(self.document.identity, token, ChangeSummary(participants=1))
+        return ParticipantChange(self.document.identity, token, ChangeReport(participants=1))
 
     def apply(self, prepared: PreparedFakeUpdate) -> None:
         self.document.engine.apply(prepared)
