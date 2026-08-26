@@ -35,7 +35,7 @@ KIND_LABELS = {
 }
 
 
-class NotificationPanel(sl.Component):
+class NotificationPanel(sl.Component[sl.ComponentsV2Target]):
     """A mounted notification workspace with semantic choices and actions."""
 
     selected_ids: tuple[str, ...] = sl.state(())
@@ -80,7 +80,7 @@ class NotificationPanel(sl.Component):
     def subscriptions(self) -> tuple[NotificationSubscription, ...]:
         return self._subscriptions[:MAX_LISTED]
 
-    def render(self) -> tuple[sl.LayoutNode, ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self.closed:
             return (sl.section(sl.heading(t(self.locale, _("Notifications closed")))),)
         on, off = t(self.locale, _("On")), t(self.locale, _("Off"))
@@ -91,7 +91,7 @@ class NotificationPanel(sl.Component):
         )
         description = t(self.locale, _("Toggle where notifications arrive, and unfollow what you no longer want."))
         suspension_note = self._suspension_note()
-        nodes: list[sl.LayoutNode] = [
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
             sl.section(
                 sl.heading(t(self.locale, _("Notifications"))),
                 sl.truncate(sl.paragraph(description)),

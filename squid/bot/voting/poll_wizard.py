@@ -214,7 +214,7 @@ async def present_poll_form(
     await interaction.response.send_modal(modal)
 
 
-class PollConfirmationComponent(sl.Component):
+class PollConfirmationComponent(sl.Component[sl.ComponentsV2Target]):
     """A semantic poll preview and publication workspace."""
 
     published: bool = sl.state(default=False)
@@ -235,7 +235,7 @@ class PollConfirmationComponent(sl.Component):
         self.options = options
         self.allow_network = allow_network
 
-    def render(self) -> tuple[sl.LayoutNode, ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self.published:
             return (sl.status("Poll published."),)
         preview = "\n".join(
@@ -250,7 +250,7 @@ class PollConfirmationComponent(sl.Component):
         ]
         if self.allow_network:
             fields.append(sl.field("Reaches", self._scope_label()))
-        nodes: list[sl.LayoutNode] = [
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
             sl.section(sl.heading(preview), sl.fields(*fields)),
             sl.choices(
                 *(

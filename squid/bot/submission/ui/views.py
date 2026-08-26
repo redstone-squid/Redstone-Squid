@@ -177,7 +177,7 @@ def _submission_details_form(build: BuildDraft, locale: str | None) -> sl.forms.
     )
 
 
-class SubmissionFormComponent(sl.Component):
+class SubmissionFormComponent(sl.Component[sl.ComponentsV2Target]):
     """A semantic, resumable submission workspace."""
 
     value: bool | None = sl.state(None)
@@ -213,7 +213,7 @@ class SubmissionFormComponent(sl.Component):
         width, height, _depth = self.build.door_dimensions
         return self.build.door_orientation is not None and width is not None and height is not None
 
-    def render(self) -> tuple[sl.LayoutNode, ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self.closed:
             return (sl.section(sl.heading(t(self.locale, _("Submission closed")))),)
         missing = []
@@ -439,7 +439,7 @@ def _edit_form(items: Sequence[BuildField[Any]], page: int, locale: str | None) 
     return sl.forms.FormSpec(t(locale, _("Edit build, section {page}"), page=page), tuple(fields))
 
 
-class BuildEditComponent(sl.Component):
+class BuildEditComponent(sl.Component[sl.ComponentsV2Target]):
     """A mounted build editor with semantic pagination, forms, and confirmation."""
 
     page: int = sl.state(1)
@@ -456,11 +456,13 @@ class BuildEditComponent(sl.Component):
         *,
         locale: str | None = None,
         timeout: float = 300,
-        node: sl.LayoutNode | None = None,
+        node: sl.LayoutNode[sl.ComponentsV2Target] | None = None,
     ) -> None:
-        self._seed: tuple[Build, sl.LayoutNode | None] | None = (build, node)
+        self._seed: tuple[Build, sl.LayoutNode[sl.ComponentsV2Target] | None] | None = (build, node)
         self._build_id = build.id
-        self._refresh: Callable[[int], Awaitable[tuple[Build, sl.LayoutNode] | None]] | None = None
+        self._refresh: Callable[[int], Awaitable[tuple[Build, sl.LayoutNode[sl.ComponentsV2Target]] | None]] | None = (
+            None
+        )
         self.builds = builds
         self.locale = locale
         self._timeout = timeout
@@ -475,7 +477,7 @@ class BuildEditComponent(sl.Component):
         self._root: sd.MessageRoot | None = None
 
     @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
-    async def projection(self) -> tuple[Build, sl.LayoutNode | None]:
+    async def projection(self) -> tuple[Build, sl.LayoutNode[sl.ComponentsV2Target] | None]:
         """Load the edited build and keep its preview current with the build topic."""
         if self._build_id is not None:
             sl.runtime.watch(resource_topic("build", str(self._build_id)))
@@ -491,7 +493,7 @@ class BuildEditComponent(sl.Component):
             raise LookupError(message)
         return latest
 
-    def _current(self) -> tuple[Build, sl.LayoutNode | None]:
+    def _current(self) -> tuple[Build, sl.LayoutNode[sl.ComponentsV2Target] | None]:
         if self._seed is not None:
             return self._seed
         state = self.projection.status
@@ -506,7 +508,7 @@ class BuildEditComponent(sl.Component):
     def build(self) -> Build:
         return self._current()[0]
 
-    def _replace(self, build: Build, node: sl.LayoutNode | None) -> None:
+    def _replace(self, build: Build, node: sl.LayoutNode[sl.ComponentsV2Target] | None) -> None:
         if self._seed is not None:
             self._seed = (build, node)
         else:
@@ -539,7 +541,7 @@ class BuildEditComponent(sl.Component):
             return True
         return await allows(interaction, BUILD_SUBMISSION_EDIT)
 
-    def render(self) -> tuple[sl.LayoutNode, ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self.saved:
             return (
                 sl.section(
@@ -587,7 +589,7 @@ class BuildEditComponent(sl.Component):
                 )
             )
         controls.append(sl.action_control(t(self.locale, _("Close")), self._close, key="close"))
-        nodes: list[sl.LayoutNode] = [
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
             sl.section(
                 sl.heading(t(self.locale, _("Edit build"))),
                 sl.truncate(sl.paragraph(description)),
@@ -716,7 +718,7 @@ class BuildEditComponent(sl.Component):
             )
             self._seed = (build, node)
 
-        async def refresh(build_id: int) -> tuple[Build, sl.LayoutNode] | None:
+        async def refresh(build_id: int) -> tuple[Build, sl.LayoutNode[sl.ComponentsV2Target]] | None:
             latest = await self.builds.get(build_id)
             if latest is None:
                 return None

@@ -113,7 +113,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         assert isinstance(container, discord.ui.Container)
         return container
 
-    async def render_node(self) -> sl.LayoutNode:
+    async def render_node(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
         """The build card as layout IR, for callers composing a whole message at once."""
         build = self.build
         current_java_version = await self.bot.services.versions.newest("Java")
@@ -143,7 +143,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         # A nested section per group: each field steps its own Condense ladder independently
         # rather than a whole group stepping in lockstep — finer granularity, not a
         # regression. Groups with no matching fields render as nothing.
-        def group(title: str, names: set[str]) -> sl.LayoutNode | None:
+        def group(title: str, names: set[str]) -> sl.LayoutNode[sl.ComponentsV2Target] | None:
             entries = tuple(
                 sl.field(
                     name,

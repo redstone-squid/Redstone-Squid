@@ -173,7 +173,7 @@ class SessionSpec:
 
     async def open(
         self,
-        component: Component,
+        component: Component[Any],  # the dialect ends here: `OpenResult` exposes no typed mount
         message_destination: MessageDestination,
         *,
         sessions: SessionManager | RuntimeSource,
@@ -202,7 +202,7 @@ class SessionSpec:
 
     async def attach(
         self,
-        component: Component,
+        component: Component[Any],  # the dialect ends here: `OpenResult` exposes no typed mount
         message_destination: MessageDestination,
         *,
         sessions: SessionManager | RuntimeSource,
@@ -223,7 +223,7 @@ class SessionSpec:
 
     async def respond(
         self,
-        component: Component,
+        component: Component[Any],  # the dialect ends here: `OpenResult` exposes no typed mount
         interaction: discord.Interaction[Any],
         *,
         sessions: SessionManager | RuntimeSource | None = None,
@@ -246,7 +246,7 @@ class SessionSpec:
 
     async def respond_attached(
         self,
-        component: Component,
+        component: Component[Any],  # the dialect ends here: `OpenResult` exposes no typed mount
         interaction: discord.Interaction[Any],
         *,
         parent: MessageRoot,

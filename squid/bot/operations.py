@@ -18,25 +18,27 @@ from squid.core.i18n import _, translate
 from squid_ui.runtime.component import RenderResult
 
 type OperationWork = Callable[
-    [sl.operations.ProgressReporter[RenderResult | None], sd.delivery.DeliveryResult],
-    Awaitable[RenderResult],
+    [sl.operations.ProgressReporter[RenderResult[sl.ComponentsV2Target] | None], sd.delivery.DeliveryResult],
+    Awaitable[RenderResult[sl.ComponentsV2Target]],
 ]
-_INITIAL_PROGRESS: RenderResult | None = None
+_INITIAL_PROGRESS: RenderResult[sl.ComponentsV2Target] | None = None
 
-type ManagedResultHandler[**P] = Callable[P, Awaitable[RenderResult]]
+type ManagedResultHandler[**P] = Callable[P, Awaitable[RenderResult[sl.ComponentsV2Target]]]
 type ManagedResultCallback[**P] = Callable[P, Coroutine[Any, Any, None]]
 
 
-class CommandOperation(sl.Component):
+class CommandOperation(sl.Component[sl.ComponentsV2Target]):
     """A command effect whose progress and terminal outcome are its rendered state."""
 
-    execution: sl.operations.OperationExecution[RenderResult, RenderResult | None]
+    execution: sl.operations.OperationExecution[
+        RenderResult[sl.ComponentsV2Target], RenderResult[sl.ComponentsV2Target] | None
+    ]
 
     def __init__(
         self,
         work: OperationWork,
         *,
-        initial: RenderResult,
+        initial: RenderResult[sl.ComponentsV2Target],
         locale: str | None,
     ) -> None:
         self._work = work
@@ -48,8 +50,8 @@ class CommandOperation(sl.Component):
     @sl.operation(initial=_INITIAL_PROGRESS)
     async def _execute(
         self,
-        progress: sl.operations.ProgressReporter[RenderResult | None],
-    ) -> RenderResult:
+        progress: sl.operations.ProgressReporter[RenderResult[sl.ComponentsV2Target] | None],
+    ) -> RenderResult[sl.ComponentsV2Target]:
         result = self._result
         if result is None:
             message = "a command operation cannot start before its initial delivery"
@@ -57,7 +59,7 @@ class CommandOperation(sl.Component):
 
         return await self._work(progress, result)
 
-    def render(self) -> RenderResult:
+    def render(self) -> RenderResult[sl.ComponentsV2Target]:
         match self.execution.status:
             case sl.operations.Pending(progress=progress):
                 return self._initial if progress is None else progress
@@ -70,18 +72,18 @@ class CommandOperation(sl.Component):
                 return self._initial if progress is None else progress
 
 
-class _ManagedResultComponent(sl.Component):
+class _ManagedResultComponent(sl.Component[sl.ComponentsV2Target]):
     """Run one command callback after its initial layout has been delivered."""
 
-    execution: sl.operations.OperationExecution[RenderResult, None]
+    execution: sl.operations.OperationExecution[RenderResult[sl.ComponentsV2Target], None]
 
     def __init__(
         self,
-        callback: Callable[..., Awaitable[RenderResult]],
+        callback: Callable[..., Awaitable[RenderResult[sl.ComponentsV2Target]]],
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
         *,
-        initial: RenderResult,
+        initial: RenderResult[sl.ComponentsV2Target],
         locale: str | None,
     ) -> None:
         self._callback = callback
@@ -92,11 +94,11 @@ class _ManagedResultComponent(sl.Component):
         self.execution = self._execute.start()
 
     @sl.operation(initial=None)
-    async def _execute(self, _progress: sl.operations.ProgressReporter[None]) -> RenderResult:
+    async def _execute(self, _progress: sl.operations.ProgressReporter[None]) -> RenderResult[sl.ComponentsV2Target]:
         """Evaluate the command callback once the mount has committed its initial delivery."""
         return await self._callback(*self._args, **self._kwargs)
 
-    def render(self) -> RenderResult:
+    def render(self) -> RenderResult[sl.ComponentsV2Target]:
         """Render the initial card until the callback supplies its terminal layout."""
         match self.execution.status:
             case sl.operations.Pending():

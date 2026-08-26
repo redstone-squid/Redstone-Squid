@@ -237,7 +237,9 @@ class SearchCog[
         alias=app_commands.locale_str(_("The additional name.")),
     )
     @managed_result
-    async def add_restriction_alias(self, ctx: Context[BotT], restriction: str, alias: str) -> RenderResult:
+    async def add_restriction_alias(
+        self, ctx: Context[BotT], restriction: str, alias: str
+    ) -> RenderResult[sl.ComponentsV2Target]:
         """Add another name for a restriction."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
 
@@ -286,7 +288,7 @@ class SearchCog[
 
             node = await self.bot.for_build(build).render_node()
 
-            async def refresh(current_id: int) -> tuple[Build, sl.LayoutNode] | None:
+            async def refresh(current_id: int) -> tuple[Build, sl.LayoutNode[sl.ComponentsV2Target]] | None:
                 latest = await self.queries.get(current_id)
                 if latest is None:
                     return None
@@ -308,7 +310,7 @@ class SearchCog[
         await self._view_build_prefix(ctx, build_id)
 
     @managed_result
-    async def _view_build_prefix(self, ctx: Context[BotT], build_id: int) -> RenderResult:
+    async def _view_build_prefix(self, ctx: Context[BotT], build_id: int) -> RenderResult[sl.ComponentsV2Target]:
         """Render a prefix-command build view through a managed result mount."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
         build = await self.queries.get(build_id)
@@ -324,7 +326,7 @@ class SearchCog[
     @app_commands.rename(build_id="id")
     @app_commands.describe(build_id=app_commands.locale_str(_("The ID of the build you want to confirm.")))
     @managed_result
-    async def confirm_build(self, ctx: Context[BotT], build_id: int) -> RenderResult:
+    async def confirm_build(self, ctx: Context[BotT], build_id: int) -> RenderResult[sl.ComponentsV2Target]:
         """Mark a submission as confirmed and publish it."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
 
@@ -337,7 +339,7 @@ class SearchCog[
     @app_commands.rename(build_id="id")
     @app_commands.describe(build_id=app_commands.locale_str(_("The ID of the build you want to deny.")))
     @managed_result
-    async def deny_build(self, ctx: Context[BotT], build_id: int) -> RenderResult:
+    async def deny_build(self, ctx: Context[BotT], build_id: int) -> RenderResult[sl.ComponentsV2Target]:
         """Mark a submission as denied."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
 

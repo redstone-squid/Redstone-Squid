@@ -98,9 +98,9 @@ class ClientRuntime[ClientT: discord.Client]:
     def defaults(self, defaults: MessageRootDefaults) -> None:
         self.sessions.defaults = defaults
 
-    def mount(
-        self, component: Component, *, access: AccessPolicy, **overrides: Unpack[MessageRootOptions]
-    ) -> MessageRoot:
+    def mount[ModeT](
+        self, component: Component[ModeT], *, access: AccessPolicy, **overrides: Unpack[MessageRootOptions]
+    ) -> MessageRoot[ModeT]:
         """Construct a mount from this host's defaults, applying per-call overrides.
 
         The reason a panel needs no object but the host: chrome, localization, the error

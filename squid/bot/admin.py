@@ -8,6 +8,7 @@ from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context, Greedy
 
+import squid_ui as sl
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.operations import managed_result
@@ -314,7 +315,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     @commands.command(name="raise-error", aliases=["e"], hidden=True)
     @commands.is_owner()
     @managed_result(dismiss_on_success=True)
-    async def raise_error(self, ctx: Context[BotT]) -> RenderResult:
+    async def raise_error(self, ctx: Context[BotT]) -> RenderResult[sl.ComponentsV2Target]:
         """Raises an error for testing purposes."""
         msg = "This is a test error."
         raise ValueError(msg)

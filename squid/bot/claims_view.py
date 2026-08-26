@@ -20,7 +20,7 @@ REVIEW_SECONDS = 300
 CLAIMS_PER_PAGE = 5
 
 
-class ClaimReviewComponent(sl.Component):
+class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
     """A mounted claim queue whose choices and decisions share one semantic surface."""
 
     selected_id: int | None = sl.state(None)
@@ -54,7 +54,7 @@ class ClaimReviewComponent(sl.Component):
     def selected(self) -> AliasClaim | None:
         return next((claim for claim in self._claims if claim.id == self.selected_id), None)
 
-    def render(self) -> tuple[sl.LayoutNode, ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self.closed:
             return (
                 sl.section(

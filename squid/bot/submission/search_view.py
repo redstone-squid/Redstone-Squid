@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 
 BuildLoader = Callable[[int], Awaitable[Build | None]]
-BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode]]
+BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode[sl.ComponentsV2Target]]]
 
 
 def _hit_identity(hit: SearchHit) -> str:
@@ -76,8 +76,8 @@ class _SearchSource:
         return page
 
 
-class _SearchDetail(sl.Component):
-    _build_node: sl.LayoutNode | None = sl.state(None, persist=False, opaque=True)
+class _SearchDetail(sl.Component[sl.ComponentsV2Target]):
+    _build_node: sl.LayoutNode[sl.ComponentsV2Target] | None = sl.state(None, persist=False, opaque=True)
 
     def __init__(
         self,
@@ -92,7 +92,7 @@ class _SearchDetail(sl.Component):
         self._load_build = load_build
         self._render_build = render_build
 
-    def render(self) -> tuple[sl.LayoutNode, ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         detail = self._build_node or sl.section(
             sl.heading(_detail_title(self.hit)),
             sl.truncate(sl.paragraph(_detail_text(self.hit, self.locale))),
@@ -125,7 +125,7 @@ class _SearchDetail(sl.Component):
         self._build_node = await self._render_build(build)
 
 
-class SearchResultsView(sl.Component):
+class SearchResultsView(sl.Component[sl.ComponentsV2Target]):
     """Compatibility wrapper around the shared resource-backed Browser pattern."""
 
     closed: bool = sl.state(default=False)
@@ -223,13 +223,13 @@ class SearchResultsView(sl.Component):
             render_build=self._render_build,
         )
 
-    def _overview(self, loaded: sl.sources.LoadedWindow[SearchHit]) -> sl.LayoutNode | tuple[()]:
+    def _overview(self, loaded: sl.sources.LoadedWindow[SearchHit]) -> sl.LayoutNode[sl.ComponentsV2Target] | tuple[()]:
         warnings = self._source.page_for(loaded).warnings
         if not warnings:
             return ()
         return sl.note("\n".join(f"⚠ {escape_markdown(item)}" for item in warnings))
 
-    def render(self) -> tuple[sl.LayoutNode, ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self.closed:
             return (
                 sl.section(

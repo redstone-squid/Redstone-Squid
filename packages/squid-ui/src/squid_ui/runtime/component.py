@@ -13,7 +13,7 @@ root component is attached to a MessageRoot; children reach it through their par
 from collections.abc import Callable, Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
-from typing import Any, Protocol
+from typing import Any, Generic, Protocol, TypeVar
 
 from squid_reactivity.core import (
     _RENDER_OBSERVATION,
@@ -187,7 +187,21 @@ class _SpliceResult:
     added: tuple[tuple[str, Component], ...]
 
 
-class Component[ModeT = DiscordTarget](StateOwner):
+ModeT = TypeVar("ModeT", contravariant=True, default=DiscordTarget)
+"""The dialects a component's rendered nodes can be drawn in.
+
+Declared the old way, and contravariant on purpose, in a file that otherwise uses PEP 695.
+`ModeT` reaches this class only through `RenderResult[ModeT]`, which is contravariant
+because `Renderable` puts the mode in a parameter position -- and neither pyrefly nor
+basedpyright infers variance through that nesting, so both settle on invariant. Invariant is
+the one answer that makes the whole design useless: a portable `sl.Component` could not be
+mounted on a Components V2 screen, and every consumer would have to restate a dialect it
+does not care about. PEP 695 has no syntax for declaring variance, so this is the only way
+to say it.
+"""
+
+
+class Component(StateOwner, Generic[ModeT]):
     """Base class for mounted, stateful views."""
 
     _runtime: RuntimeOwner | None = None
@@ -224,8 +238,15 @@ class Component[ModeT = DiscordTarget](StateOwner):
         """Describe the message for the current state. Pure and synchronous."""
         raise NotImplementedError
 
-    def boundary(self, child: Component, *, key: str) -> Boundary:
-        """Place child in this render tree under a stable key and namespace."""
+    def boundary(self, child: Component[ModeT], *, key: str) -> Boundary:
+        """Place child in this render tree under a stable key and namespace.
+
+        The child is bound to this component's own dialect. `Component` is contravariant in
+        it -- `render` returns a `RenderResult[ModeT]`, which is contravariant -- so a
+        portable child goes anywhere, while a V2-only child may only be embedded by a parent
+        that is itself V2-only. A bare `Component` here would have accepted portable children
+        alone, which is every child except the ones a V2 screen is actually built from.
+        """
         return Boundary(child, key)
 
     async def on_load(self) -> None:

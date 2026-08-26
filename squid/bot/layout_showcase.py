@@ -137,7 +137,7 @@ sl.rating(key="ownership.rating", value=sl.controlled(self.rating, self._rate))"
 # A schema, not a Discord modal. RETRY re-presents it with the errors
 # and everything already typed; **prefill seeds it from state.
 return sl.form("Open the feedback form", FeedbackForm(**prefill), key="feedback")""",
-    "composition": """class Dashboard(sl.Component):
+    "composition": """class Dashboard(sl.Component[sl.ComponentsV2Target]):
     def __init__(self):
         self.left = Counter("Left")
         self.right = Counter("Right")
@@ -242,7 +242,7 @@ def _fail_demo_action() -> Never:
     raise DemoRollback(message)
 
 
-class DemoCounter(sl.Component):
+class DemoCounter(sl.Component[sl.ComponentsV2Target]):
     """A tiny child component used twice to demonstrate keyed composition."""
 
     count: int = sl.state(0)
@@ -250,7 +250,7 @@ class DemoCounter(sl.Component):
     def __init__(self, label: sl.TextLike) -> None:
         self.label = label
 
-    def render(self) -> sl.primitives.Node:
+    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
         return sl.primitives.Panel(
             (
                 sl.primitives.Heading(self.label, level=3),
@@ -314,7 +314,7 @@ class FeedbackForm(sl.forms.Form):
         await self._on_recorded(self, event)
 
 
-class LayoutShowcase(sl.Component):
+class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
     """One mounted tour of planning, pagination, ownership, forms, and composition."""
 
     section: str = sl.state("pagination")
@@ -364,7 +364,7 @@ class LayoutShowcase(sl.Component):
     def status(self) -> sl.text.Message:
         return L("Section: {section} · reactive clicks: {clicks}", section=self.section, clicks=self.clicks)
 
-    def render(self) -> Sequence[sl.LayoutNode]:
+    def render(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         controls = (
             sl.primitives.SelectMenu(
                 tuple(
@@ -397,7 +397,7 @@ class LayoutShowcase(sl.Component):
         )
         return (header, *self._render_section())
 
-    def _render_section(self) -> Sequence[sl.LayoutNode]:
+    def _render_section(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         match self.section:
             case "adaptation":
                 exhibit = self._adaptation()
@@ -425,7 +425,7 @@ class LayoutShowcase(sl.Component):
                 exhibit = self._pagination()
         return (*exhibit, self._source_example())
 
-    def _pagination(self) -> Sequence[sl.primitives.Node]:
+    def _pagination(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         return (
             sl.primitives.Panel(
                 (
@@ -447,7 +447,7 @@ class LayoutShowcase(sl.Component):
             ),
         )
 
-    def _adaptation(self) -> Sequence[sl.LayoutNode]:
+    def _adaptation(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         actions = tuple(
             sl.semantic.ActionControl(f"action.{index}", L("Action {number}", number=index), self._action_notice)
             for index in range(1, 37)
@@ -467,7 +467,7 @@ class LayoutShowcase(sl.Component):
             sl.semantic.ActionControls(actions, key="showcase-actions"),
         )
 
-    def _degradation(self) -> Sequence[sl.LayoutNode]:
+    def _degradation(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         long_explanation = " ".join(
             [
                 "This deliberately oversized explanation remains important, so Truncate shortens it instead of "
@@ -499,7 +499,7 @@ class LayoutShowcase(sl.Component):
             ),
         )
 
-    def _data(self) -> Sequence[sl.LayoutNode]:
+    def _data(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         return (
             sl.section(
                 sl.heading(L(t"Typed data, not pre-formatted strings")),
@@ -530,7 +530,7 @@ class LayoutShowcase(sl.Component):
             ),
         )
 
-    def _ownership(self) -> Sequence[sl.LayoutNode]:
+    def _ownership(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         return (
             sl.section(
                 sl.heading(L(t"Who owns a control's value")),
@@ -568,7 +568,7 @@ class LayoutShowcase(sl.Component):
             sl.rating(key="ownership.rating", value=sl.controlled(self.rating, self._rate)),
         )
 
-    def _grid(self) -> Sequence[sl.LayoutNode]:
+    def _grid(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         blocked = {5, 10}
         cells = tuple(
             sp.GridCell(
@@ -595,7 +595,7 @@ class LayoutShowcase(sl.Component):
             sl.grid(*cells, key="showcase-grid", columns=4, on_pick=self._pick_grid),
         )
 
-    def _forms(self) -> Sequence[sl.LayoutNode]:
+    def _forms(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         prefill: dict[str, object] = {}
         if self.feedback_exhibit:
             prefill["exhibit"] = self.feedback_exhibit
@@ -629,7 +629,7 @@ class LayoutShowcase(sl.Component):
             ),
         )
 
-    def _composition(self) -> Sequence[sl.LayoutNode]:
+    def _composition(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         return (
             sl.section(
                 sl.heading(L(t"Keyed component composition")),
@@ -644,7 +644,7 @@ class LayoutShowcase(sl.Component):
             self.boundary(self.right, key="right"),
         )
 
-    def _localization(self) -> Sequence[sl.LayoutNode]:
+    def _localization(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         unsafe = "*operator input* @everyone [not a link](https://example.com)"
         return (
             sl.section(
@@ -665,7 +665,7 @@ class LayoutShowcase(sl.Component):
             ),
         )
 
-    def _history(self) -> Sequence[sl.LayoutNode]:
+    def _history(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         return (
             sl.section(
                 sl.heading(L(t"Action outcomes and conflict-safe history")),
@@ -711,7 +711,7 @@ class LayoutShowcase(sl.Component):
             ),
         )
 
-    def _replication(self) -> Sequence[sl.LayoutNode]:
+    def _replication(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         local_counter = self.local_document.counter("votes").value
         local_reviewers = self.local_document.set("reviewers").value
         peer_counter = self.peer_document.counter("votes").value
@@ -753,7 +753,7 @@ class LayoutShowcase(sl.Component):
             ),
         )
 
-    def _effects(self) -> Sequence[sl.LayoutNode]:
+    def _effects(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         return (
             sl.section(
                 sl.heading(L(t"Operations and compensation sagas")),
@@ -1095,7 +1095,7 @@ APPEARANCE = sl.ContextKey[Appearance]("showcase.appearance")
 _DENSITIES = ("comfortable", "compact")
 
 
-class AppearanceControls(sl.Component):
+class AppearanceControls(sl.Component[sl.ComponentsV2Target]):
     """A leaf that never receives the namespace as an argument -- it injects it.
 
     `inject` is render-time, so the handlers close over the handle the render found rather
@@ -1105,7 +1105,7 @@ class AppearanceControls(sl.Component):
 
     history: sl.runtime.History = sl.runtime.history(limit=5)
 
-    def render(self) -> sl.LayoutNode:
+    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
         appearance = self.inject(APPEARANCE)
         return sl.primitives.ControlGroup(
             (
@@ -1146,7 +1146,7 @@ class AppearanceControls(sl.Component):
         await self.history.undo()
 
 
-class AppearancePanel(sl.Component):
+class AppearancePanel(sl.Component[sl.ComponentsV2Target]):
     """The panel that writes. It provides the namespace rather than passing it down."""
 
     def __init__(self, appearance: Appearance, session: Session) -> None:
@@ -1154,7 +1154,7 @@ class AppearancePanel(sl.Component):
         self.session = session
         self.controls = AppearanceControls()
 
-    def render(self) -> sl.LayoutNode:
+    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
         self.provide(APPEARANCE, self.appearance)
         return sl.primitives.Panel(
             (
@@ -1172,14 +1172,14 @@ class AppearancePanel(sl.Component):
         self.session.focus = "details" if self.session.focus == "overview" else "overview"
 
 
-class PreviewPanel(sl.Component):
+class PreviewPanel(sl.Component[sl.ComponentsV2Target]):
     """The panel that only reads. It declares no dependency and follows both cells anyway."""
 
     def __init__(self, appearance: Appearance, session: Session) -> None:
         self.appearance = appearance
         self.session = session
 
-    def render(self) -> sl.LayoutNode:
+    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
         return sl.primitives.Panel(
             (
                 sl.primitives.Heading(L(t"Preview")),
@@ -1196,7 +1196,7 @@ class PreviewPanel(sl.Component):
         )
 
 
-class Lobby(sl.Component):
+class Lobby(sl.Component[sl.ComponentsV2Target]):
     """A guild lobby whose roster is session membership, not view state.
 
     Membership belongs to the logical session: it survives a redraw, it is what replacement
@@ -1218,7 +1218,7 @@ class Lobby(sl.Component):
         self._root = create_message_root(self, source=source, access=sd.Everyone(), locale=locale, timeout=None)
         return self._root
 
-    def render(self) -> sl.LayoutNode:
+    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
         session = self._session()
         if session is None:
             return sl.section(sl.heading(L(t"Lobby")), sl.paragraph(L(t"This lobby has closed.")))

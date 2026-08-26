@@ -68,7 +68,7 @@ class _Answer:
     consent: AccountConsent | None = None
 
 
-class ConsentPrompt(sl.Component):
+class ConsentPrompt(sl.Component[sl.ComponentsV2Target]):
     """A semantic consent prompt with a native-free waiting lifecycle."""
 
     closed: bool = sl.state(default=False)
@@ -104,7 +104,7 @@ class ConsentPrompt(sl.Component):
     def notice_version(self) -> str:
         return CURRENT_CONSENT_VERSION
 
-    def render(self) -> tuple[sl.LayoutNode, ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         card_fields = tuple(sl.field(field.name, field.value) for field in self._fields)
         return (
             sl.section(
