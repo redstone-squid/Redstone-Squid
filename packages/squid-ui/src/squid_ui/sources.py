@@ -31,7 +31,7 @@ ORIGIN = Position()
 
 
 @dataclass(frozen=True, slots=True)
-class PositionPolicy:
+class PositionResolver:
     """Resolve the shared override/anchor/staleness/stored/initial precedence ladder."""
 
     def resolve(
@@ -63,7 +63,7 @@ class PositionPolicy:
         return replace(selected, offset=offset)
 
 
-POSITION_POLICY = PositionPolicy()
+POSITION_RESOLVER = PositionResolver()
 
 
 class CountPrecision(StrEnum):
@@ -184,7 +184,7 @@ class WindowLoader[ItemT]:
         identity: Callable[[ItemT], str],
         *,
         initial: Position = ORIGIN,
-        policy: PositionPolicy = POSITION_POLICY,
+        policy: PositionResolver = POSITION_RESOLVER,
     ) -> None:
         if extent < 1:
             message = "WindowLoader.extent must be at least 1"
@@ -293,12 +293,12 @@ def window_footer[ItemT](
 
 __all__ = [
     "ORIGIN",
-    "POSITION_POLICY",
+    "POSITION_RESOLVER",
     "CountPrecision",
     "Direction",
     "LoadedWindow",
     "Position",
-    "PositionPolicy",
+    "PositionResolver",
     "SourceCapabilities",
     "Window",
     "WindowLoader",

@@ -3,13 +3,13 @@
 from collections.abc import Awaitable, Callable
 
 import squid_ui as sl
-from squid_ui_discord import DISCORD_V2_DPY27
 from squid_ui import scene
 from squid_ui.forms import FormLike, SubmitHandler
 from squid_ui.interactions import ActionMode, Actor, PressEvent, Visibility
 from squid_ui.primitives.styles import ActionStyle
-from squid_ui.runtime import PresentationSession
+from squid_ui.runtime import PresentationState
 from squid_ui.runtime.component import render_component_tree
+from squid_ui_discord import DISCORD_V2_DPY27
 
 
 class _Responder:
@@ -62,7 +62,7 @@ def _recorder[EventT]() -> tuple[list[EventT], Callable[[EventT], Awaitable[None
 
 
 def test_factory_builds_one_boolean_node() -> None:
-    ownership = sl.managed(initial=True)
+    ownership = sl.uncontrolled(initial=True)
 
     assert sl.toggle("Notifications", key="notices", on=ownership, tone=sl.Tone.SUCCESS) == sl.semantic.Toggle(
         "notices", "Notifications", ownership, tone=sl.Tone.SUCCESS
@@ -70,7 +70,7 @@ def test_factory_builds_one_boolean_node() -> None:
 
 
 async def test_managed_toggle_flips_session_state_and_invalidates() -> None:
-    session = PresentationSession()
+    session = PresentationState()
     responder = _Responder()
     node = sl.toggle("Notifications", key="notices")
 
@@ -86,7 +86,7 @@ async def test_managed_toggle_flips_session_state_and_invalidates() -> None:
 
 
 async def test_controlled_toggle_reports_flipped_value_without_writing_session() -> None:
-    session = PresentationSession()
+    session = PresentationState()
     session.set_toggle("notices", on=True)
     seen: list[sl.ToggleEvent]
     seen, record = _recorder()
@@ -105,7 +105,7 @@ def test_toggle_lowering_uses_one_toned_button_and_custom_labels() -> None:
         sl.toggle(
             "Web",
             key="web",
-            on=sl.managed(initial=True),
+            on=sl.uncontrolled(initial=True),
             on_label="Enabled",
             off_label="Disabled",
             tone=sl.Tone.DANGER,

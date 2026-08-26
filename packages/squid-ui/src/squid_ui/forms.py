@@ -592,7 +592,7 @@ class ExtensionField[ValueT](FormField[ValueT]):
 
 
 @dataclass(frozen=True, slots=True)
-class FormEvaluation:
+class FormResult:
     """Typed values and validation errors from one submission attempt."""
 
     values: Mapping[str, object]
@@ -645,7 +645,7 @@ class FormSpec:
         """The submitted keys this schema parses, in declaration order."""
         return tuple(field.key for field in self.items if isinstance(field, FormField))
 
-    async def evaluate(self, attempted: Mapping[str, object]) -> FormEvaluation:
+    async def evaluate(self, attempted: Mapping[str, object]) -> FormResult:
         """Parse every field, then run cross-field validation only after parsing succeeds."""
         raw = MappingProxyType(dict(attempted))
         values: dict[str, object] = {}
@@ -661,7 +661,7 @@ class FormSpec:
             validated = self.validator(MappingProxyType(values))
             issues = await validated if inspect.isawaitable(validated) else validated
             errors.extend(issues)
-        return FormEvaluation(MappingProxyType(values), raw, tuple(errors))
+        return FormResult(MappingProxyType(values), raw, tuple(errors))
 
     def prefill_for(self, field: FormField[Any]) -> object:
         """Return the serialized prefill for one field."""
@@ -819,10 +819,10 @@ __all__ = [
     "Form",
     "FormBinding",
     "FormError",
-    "FormEvaluation",
     "FormField",
     "FormIssue",
     "FormLike",
+    "FormResult",
     "FormSpec",
     "FormText",
     "FormValidationMode",

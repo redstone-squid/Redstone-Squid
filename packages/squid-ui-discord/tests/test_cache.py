@@ -3,7 +3,6 @@
 from dataclasses import replace
 from time import perf_counter
 
-from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, compose
 from squid_ui import Palette, fallback, form, scene
 from squid_ui.forms import FormSpec, TextField
 from squid_ui.planning import PlanCache, PlanMemo, plan
@@ -23,7 +22,7 @@ from squid_ui.primitives import (
     Variant,
     Variants,
 )
-from squid_ui.runtime import PresentationSession
+from squid_ui.runtime import PresentationState
 from squid_ui.scene.model import PlanReport
 from squid_ui.semantic import (
     Action,
@@ -33,12 +32,13 @@ from squid_ui.semantic import (
     Heading,
     List,
     ListItem,
-    Managed,
     Paragraph,
     Section,
     Stack,
+    Uncontrolled,
 )
 from squid_ui.text import Localization, Message
+from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, compose
 
 
 def _target(name: str, *, capabilities: frozenset[str] = frozenset(), limits: V2Limits = LIMITS):
@@ -105,7 +105,7 @@ def test_plan_cache_separates_targets_with_different_capabilities() -> None:
 
 def test_cache_hit_reuses_structure_and_rebinds_current_handler() -> None:
     cache = PlanCache()
-    session = PresentationSession()
+    session = PresentationState()
     first = plan(
         Actions((Action("run", "Run", _first),), key="tools"), target=DISCORD_V2_DPY27, session=session, cache=cache
     )
@@ -178,9 +178,9 @@ def test_structural_program_rebinds_managed_controls_to_the_current_session(monk
     import squid_ui.planning.planner as planner_module
 
     cache = PlanCache()
-    document = Choices("pick", (Choice("a", "A"), Choice("b", "B")), Managed(()))
-    first_session = PresentationSession()
-    current_session = PresentationSession()
+    document = Choices("pick", (Choice("a", "A"), Choice("b", "B")), Uncontrolled(()))
+    first_session = PresentationState()
+    current_session = PresentationState()
     plan(document, target=DISCORD_V2_DPY27, session=first_session, cache=cache)
 
     monkeypatch.setattr(planner_module, "lower_semantics", _never_measured)
@@ -283,11 +283,11 @@ def test_cache_hit_rebinds_solver_generated_pager_controls(monkeypatch) -> None:
 def test_a_cache_hit_stages_the_same_session_writes_as_a_miss() -> None:
     """The session is part of the key, so a hit must not silently skip its writes."""
     document = Code("x" * 9000, overflow=Paginate(key="traceback"))
-    miss = plan(document, target=DISCORD_V2_DPY27, session=PresentationSession())
+    miss = plan(document, target=DISCORD_V2_DPY27, session=PresentationState())
 
     cache = PlanCache()
-    plan(document, target=DISCORD_V2_DPY27, session=PresentationSession(), cache=cache)
-    hit = plan(document, target=DISCORD_V2_DPY27, session=PresentationSession(), cache=cache)
+    plan(document, target=DISCORD_V2_DPY27, session=PresentationState(), cache=cache)
+    hit = plan(document, target=DISCORD_V2_DPY27, session=PresentationState(), cache=cache)
 
     assert hit.metrics.cache_hit
     assert hit.session_updates == miss.session_updates
@@ -298,7 +298,7 @@ def test_exact_memo_skips_cache_key_lowering_and_binding_collection(monkeypatch)
     import squid_ui.planning.planner as planner_module
 
     document = Actions((Action("run", "Run", _first),), key="tools")
-    session = PresentationSession()
+    session = PresentationState()
     memo = PlanMemo()
     first = plan(document, target=DISCORD_V2_DPY27, session=session, cache=PlanCache(), memo=memo)
 
