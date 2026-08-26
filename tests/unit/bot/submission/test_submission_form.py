@@ -23,7 +23,7 @@ def test_submission_form_uses_semantic_controls() -> None:
 
     assert isinstance(nodes[0], sl.semantic.Section)
     assert any(isinstance(node, sl.semantic.Choices) for node in nodes)
-    assert any(isinstance(node, sl.primitives.Row) for node in nodes)
+    assert any(isinstance(node, sl.semantic.Actions) for node in nodes)
 
 
 def test_basics_form_describes_portable_fields() -> None:

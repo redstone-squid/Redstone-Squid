@@ -91,7 +91,7 @@ class BuildInfoComponent(sl.Component):
         build, node = self._current()
         if build.id is None:
             # Nothing stored to point a route at yet, so the control lives in this session.
-            edit = sl.primitives.Row((sl.primitives.Button(t(self.locale, _("Edit")), self._edit, "edit"),))
+            edit = sl.actions(sl.action(t(self.locale, _("Edit")), self._edit, key="edit"), key="build-actions")
         else:
             edit = sl.primitives.Section(
                 (sl.primitives.Text(t(self.locale, _("Edit this build.")), priority=-10),),
