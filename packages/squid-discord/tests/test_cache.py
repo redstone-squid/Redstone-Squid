@@ -311,6 +311,50 @@ def test_exact_memo_skips_cache_key_lowering_and_binding_collection(monkeypatch)
     assert exact.metrics.reuse is scene.PlanReuse.EXACT
 
 
+def test_lossless_text_growth_replans_locally_without_global_search(monkeypatch) -> None:
+    import squid_layouts.planning.planner as planner_module
+
+    cases = []
+    for make_document in (Text, Paragraph):
+        expected = plan(make_document("x" * 2500), target=DISCORD_V2_DPY27)
+        cache = PlanCache()
+        plan(make_document("x" * 2000), target=DISCORD_V2_DPY27, cache=cache)
+        cases.append((make_document, expected, cache))
+
+    monkeypatch.setattr(planner_module, "_search", _never_measured)
+    for make_document, expected, cache in cases:
+        incremental = plan(make_document("x" * 2500), target=DISCORD_V2_DPY27, cache=cache)
+
+        assert incremental.scene == expected.scene
+        assert incremental.report == expected.report
+        assert incremental.metrics == scene.PlanMetrics(
+            states_explored=1,
+            cache_hit=True,
+            reuse=scene.PlanReuse.INCREMENTAL,
+        )
+
+
+def test_incremental_text_growth_falls_back_when_it_crosses_headroom(monkeypatch) -> None:
+    import squid_layouts.planning.planner as planner_module
+
+    cache = PlanCache()
+    plan(Text("x" * 2000), target=DISCORD_V2_DPY27, cache=cache)
+    searches = 0
+    original = planner_module._search
+
+    def counted(*args, **kwargs):
+        nonlocal searches
+        searches += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(planner_module, "_search", counted)
+    result = plan(Text("x" * 4500), target=DISCORD_V2_DPY27, cache=cache)
+
+    assert searches == 1
+    assert result.metrics.reuse is scene.PlanReuse.MISS
+    assert not result.metrics.cache_hit
+
+
 def test_plan_cache_separates_locales() -> None:
     cache = PlanCache()
     document = Paragraph(Message("Hello"))

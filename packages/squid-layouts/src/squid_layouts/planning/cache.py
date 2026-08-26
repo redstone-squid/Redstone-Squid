@@ -34,6 +34,7 @@ class PlanCache:
             raise ValueError(message)
         self.capacity = capacity
         self._entries: OrderedDict[str, CachedPlan] = OrderedDict()
+        self._incremental: OrderedDict[str, None] = OrderedDict()
 
     def get(self, key: str) -> CachedPlan | None:
         value = self._entries.get(key)
@@ -46,6 +47,20 @@ class PlanCache:
         self._entries.move_to_end(key)
         while len(self._entries) > self.capacity:
             self._entries.popitem(last=False)
+
+    def admits_incremental(self, key: str) -> bool:
+        """Whether a prior lossless plan certified this configuration and region shape."""
+        if key not in self._incremental:
+            return False
+        self._incremental.move_to_end(key)
+        return True
+
+    def certify_incremental(self, key: str) -> None:
+        """Record one lossless, uncoupled region shape as eligible for local replanning."""
+        self._incremental[key] = None
+        self._incremental.move_to_end(key)
+        while len(self._incremental) > self.capacity:
+            self._incremental.popitem(last=False)
 
     def __len__(self) -> int:
         return len(self._entries)
