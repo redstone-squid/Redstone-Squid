@@ -1,7 +1,8 @@
 """Plan logical documents into immutable target-resolved scenes."""
 
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field, replace
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field, fields, is_dataclass, replace
+from enum import Enum
 from heapq import heappop, heappush
 from itertools import count
 from typing import Any, cast
@@ -27,6 +28,7 @@ from squid_layouts.planning.frontier import (
     variant_profile,
     variant_state_bound,
 )
+from squid_layouts.planning.generated import GeneratedHandler
 from squid_layouts.planning.identity import stable_fingerprint, stable_value
 from squid_layouts.planning.layout_measurement.diagnostics import (
     SolveNote,
@@ -86,6 +88,164 @@ class _Identity:
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, _Identity) and self.value is other.value
+
+
+@dataclass(frozen=True, slots=True)
+class _DynamicSlot:
+    index: int
+
+
+@dataclass(frozen=True, slots=True)
+class _GeneratedHandlerTemplate:
+    handler_type: type[GeneratedHandler[Any]]
+    values: tuple[tuple[str, object], ...]
+
+
+class _UnboundDynamic(Exception):
+    pass
+
+
+def _walk_value(value: object, visit: Callable[[object], None]) -> None:
+    if callable(value):
+        visit(value)
+        return
+    if isinstance(value, Enum | str | bytes | int | float | bool) or value is None:
+        return
+    if is_dataclass(value) and not isinstance(value, type):
+        for item in fields(value):
+            _walk_value(getattr(value, item.name), visit)
+        return
+    if isinstance(value, Mapping):
+        for key, item in sorted(value.items(), key=lambda entry: str(entry[0])):
+            _walk_value(key, visit)
+            _walk_value(item, visit)
+        return
+    if isinstance(value, Sequence):
+        for item in value:
+            _walk_value(item, visit)
+        return
+    visit(value)
+
+
+def _dynamic_values(value: object) -> tuple[object, ...]:
+    found: list[object] = []
+    _walk_value(value, found.append)
+    return tuple(found)
+
+
+def _program_dynamic_values(
+    document: Document,
+    *,
+    target: object,
+    limits: object,
+    chrome: Chrome,
+    localization: object,
+    palette: object,
+    presentation: object,
+    positions: object,
+    nav: PlannedNav | None,
+    capabilities: object,
+    planned: scene.Document[Any],
+) -> tuple[object, ...]:
+    external = (
+        target,
+        limits,
+        chrome,
+        localization,
+        palette,
+        presentation,
+        positions,
+        nav,
+        capabilities,
+    )
+    dynamic = tuple(value for value in external if value is not None) + _dynamic_values(document)
+    if nav is not None:
+        for pager in planned.pagers:
+            nodes = nav(materialized_navigation_state(pager.key, Position(offset=pager.page), pager.pages, chrome))
+            dynamic += _dynamic_values(nodes)
+    return dynamic
+
+
+def _dynamic_index(value: object, dynamic: tuple[object, ...]) -> int | None:
+    if isinstance(value, Enum | str | bytes | int | float | bool) or value is None:
+        return None
+    return next((index for index, current in enumerate(dynamic) if current is value), None)
+
+
+def _template(value: object, dynamic: tuple[object, ...]) -> object:
+    if (index := _dynamic_index(value, dynamic)) is not None:
+        return _DynamicSlot(index)
+    if isinstance(value, GeneratedHandler):
+        return _GeneratedHandlerTemplate(
+            type(value),
+            tuple((item.name, _template(getattr(value, item.name), dynamic)) for item in fields(value) if item.init),
+        )
+    if callable(value) or (
+        not isinstance(value, Enum | str | bytes | int | float | bool | Mapping | Sequence)
+        and value is not None
+        and not (is_dataclass(value) and not isinstance(value, type))
+    ):
+        raise _UnboundDynamic
+    if isinstance(value, Enum | str | bytes | int | float | bool) or value is None:
+        return value
+    if is_dataclass(value) and not isinstance(value, type):
+        changes = {item.name: _template(getattr(value, item.name), dynamic) for item in fields(value) if item.init}
+        return replace(value, **changes)
+    if isinstance(value, Mapping):
+        return {_template(key, dynamic): _template(item, dynamic) for key, item in value.items()}
+    if isinstance(value, Sequence):
+        return tuple(_template(item, dynamic) for item in value)
+    raise _UnboundDynamic
+
+
+def _materialize(value: object, dynamic: tuple[object, ...]) -> object:
+    if isinstance(value, _DynamicSlot):
+        return dynamic[value.index]
+    if isinstance(value, _GeneratedHandlerTemplate):
+        return value.handler_type(
+            **{name: _materialize(item, dynamic) for name, item in value.values},
+        )
+    if isinstance(value, Enum | str | bytes | int | float | bool) or value is None:
+        return value
+    if is_dataclass(value) and not isinstance(value, type):
+        changes = {item.name: _materialize(getattr(value, item.name), dynamic) for item in fields(value) if item.init}
+        return replace(value, **changes)
+    if isinstance(value, Mapping):
+        return {_materialize(key, dynamic): _materialize(item, dynamic) for key, item in value.items()}
+    if isinstance(value, Sequence):
+        return tuple(_materialize(item, dynamic) for item in value)
+    return value
+
+
+def _compile_template(nodes: Sequence[Node], dynamic: tuple[object, ...]) -> object | None:
+    try:
+        return _template(tuple(nodes), dynamic)
+    except _UnboundDynamic:
+        return None
+
+
+def _declared_assets(document: Document) -> tuple[Asset, ...]:
+    found: list[Asset] = list(document.assets)
+
+    def walk(value: object) -> None:
+        if isinstance(value, Asset):
+            found.append(value)
+            return
+        if is_dataclass(value) and not isinstance(value, type):
+            for item in fields(value):
+                walk(getattr(value, item.name))
+            return
+        if isinstance(value, Mapping):
+            for key, item in value.items():
+                walk(key)
+                walk(item)
+            return
+        if isinstance(value, Sequence) and not isinstance(value, str | bytes):
+            for item in value:
+                walk(item)
+
+    walk(document.children)
+    return _merge_assets(found)
 
 
 def _exact_key(
@@ -566,6 +726,49 @@ def plan[ModeT, AdapterT, BodyT: scene.Body](
     )
     cached = cache.get(cache_key) if cache is not None else None
     if cached is not None:
+        selected_nodes: tuple[Node, ...] | None = None
+        if cached.lowered_template is not None:
+            dynamic = _program_dynamic_values(
+                document,
+                target=target,
+                limits=limits,
+                chrome=chrome,
+                localization=localization,
+                palette=palette,
+                presentation=presentation,
+                positions=positions,
+                nav=nav,
+                capabilities=target.capabilities,
+                planned=cached.scene,
+            )
+            try:
+                restored = _materialize(cached.lowered_template, dynamic)
+            except _UnboundDynamic, IndexError, TypeError, ValueError:
+                pass
+            else:
+                if isinstance(restored, tuple):
+                    selected_nodes = cast(tuple[Node, ...], restored)
+        if selected_nodes is not None:
+            assets = _declared_assets(document)
+            collected = _collect_cached_bindings(selected_nodes, cached.scene, nav, chrome)
+            resources = {f"asset:{asset.key}": asset for asset in assets}
+            result = PlanResult(
+                scene=cast(scene.Document[BodyT], cached.scene),
+                bindings=collected.bindings,
+                form_bindings=collected.form_bindings,
+                report=cached.report,
+                resources=resources,
+                metrics=PlanMetrics(
+                    states_explored=cached.states_explored,
+                    cache_hit=True,
+                    reuse=PlanReuse.STRUCTURAL,
+                    search_fallback=cached.search_fallback,
+                ),
+                session_updates=cached.session_updates,
+            )
+            if memo is not None:
+                memo.put(rendered, exact_key, presentation, presentation.revision, result)
+            return result
         broker = CursorCoordinator(presentation, chrome, nav, positions)
         semantic = lower_semantics(
             document.children,
@@ -733,6 +936,22 @@ def plan[ModeT, AdapterT, BodyT: scene.Body](
                 semantic.search_fallback,
                 selected.state.variants,
                 selected.state.fallbacks,
+                _compile_template(
+                    lowered,
+                    _program_dynamic_values(
+                        document,
+                        target=target,
+                        limits=limits,
+                        chrome=chrome,
+                        localization=localization,
+                        palette=palette,
+                        presentation=presentation,
+                        positions=positions,
+                        nav=nav,
+                        capabilities=target.capabilities,
+                        planned=planned,
+                    ),
+                ),
             ),
         )
     if memo is not None and _cacheable(lowered):

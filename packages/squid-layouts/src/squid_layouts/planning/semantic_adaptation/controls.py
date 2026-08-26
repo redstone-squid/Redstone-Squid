@@ -7,7 +7,6 @@ from squid_layouts.capabilities import Capability
 from squid_layouts.entity import EntityKind, EntityRef
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import FormBinding
-from squid_layouts.interactions import ActionEvent, EntitySelectionEvent, PressEvent, SelectionEvent
 from squid_layouts.planning.semantic_adaptation.common import (
     _button_style,
     _page_items,
@@ -22,6 +21,23 @@ from squid_layouts.planning.semantic_adaptation.decisions import (
 )
 from squid_layouts.planning.semantic_adaptation.decisions import (
     navigation_axis as _navigation_axis,
+)
+from squid_layouts.planning.semantic_adaptation.handlers import (
+    ChoiceCommit,
+    ChooseChoice,
+    CloseItem,
+    EntityCommit,
+    FlipToggle,
+    FocusItem,
+    GoToDestination,
+    ItemCommit,
+    NavigationCommit,
+    PresentForm,
+    SelectChoices,
+    SelectDestination,
+    SelectEntities,
+    SelectEntityFallback,
+    ToggleDetails,
 )
 from squid_layouts.planning.semantic_adaptation.model import (
     LoweringContext as _Context,
@@ -58,23 +74,18 @@ from squid_layouts.primitives.nodes import (
 from squid_layouts.primitives.styles import ActionStyle
 from squid_layouts.semantic import (
     Choice,
-    ChoiceEvent,
     Choices,
     Controlled,
     Details,
     Emphasis,
     Entities,
-    EntityEvent,
     FormTrigger,
     Items,
     LayoutNode,
     Managed,
-    NavigateEvent,
     Navigation,
-    OpenEvent,
     RoutedChoices,
     Toggle,
-    ToggleEvent,
 )
 from squid_layouts.sources import Position
 
@@ -85,22 +96,12 @@ def _form(node: FormTrigger, context: _Context) -> list[Node]:
         raise LayoutInvariantError(message)
     spec = node.spec.adapt(context.capabilities, maximum_fields=context.limits.components.modal_components)
 
-    async def present(event: PressEvent) -> None:
-        await event.present_form(
-            spec,
-            key=node.key,
-            on_submit=node.on_submit,
-            mode=node.mode,
-            label=node.label,
-            record=node.record,
-        )
-
     return [
         PrimitiveActionGroup(
             (
                 FormButton(
                     _resolve(node.label, context),
-                    present,
+                    PresentForm(spec, node.key, node.on_submit, node.mode, node.label, node.record),
                     node.key,
                     style=_button_style(node.tone, node.emphasis),
                     mode=node.mode,
@@ -146,40 +147,18 @@ def _choices(node: Choices, path: str, context: _Context) -> list[Node]:
         case Managed(initial=initial):
             previous = context.session.selection(node.key, initial=tuple(initial)).selected
 
-    async def commit(event: ActionEvent, selected: tuple[str, ...]) -> None:
-        match node.selection:
-            case Controlled(on_change=on_change):
-                await on_change(
-                    ChoiceEvent(
-                        event.actor,
-                        event.responder,
-                        event.locale,
-                        event.context,
-                        selected,
-                        tuple(key for key in selected if key not in previous),
-                        tuple(key for key in previous if key not in selected),
-                    )
-                )
-            case Managed():
-                await event.acknowledge()
-                context.session.select(node.key, selected)
-                event.invalidate()
+    commit = ChoiceCommit(node.selection, node.key, previous, context.session)
 
     if node.maximum == 1 and 2 <= len(available) <= 5:
-        buttons: list[Button] = []
-        for choice in available:
-
-            async def choose(event: PressEvent, key: str = choice.key) -> None:
-                await commit(event, (key,))
-
-            buttons.append(
-                Button(
-                    _resolve(choice.label, context),
-                    choose,
-                    f"{node.key}.{choice.key}",
-                    style=ActionStyle.PRIMARY if choice.key in previous else ActionStyle.SECONDARY,
-                )
+        buttons = [
+            Button(
+                _resolve(choice.label, context),
+                ChooseChoice(commit, choice.key),
+                f"{node.key}.{choice.key}",
+                style=ActionStyle.PRIMARY if choice.key in previous else ActionStyle.SECONDARY,
             )
+            for choice in available
+        ]
         return [PrimitiveActionGroup(tuple(buttons))]
     page_key = f"{node.key}.choices"
     if len(available) > context.limits.components.select_options and node.maximum != 1:
@@ -189,9 +168,6 @@ def _choices(node: Choices, path: str, context: _Context) -> list[Node]:
         )
         raise LayoutInvariantError(message)
     visible, page, pages = _page_items(available, page_key, context, identity=lambda choice: choice.key)
-
-    async def choose_values(event: SelectionEvent) -> None:
-        await commit(event, tuple(event.values))
 
     options = tuple(
         Option(
@@ -205,7 +181,7 @@ def _choices(node: Choices, path: str, context: _Context) -> list[Node]:
     result: list[Node] = [
         SelectMenu(
             options,
-            choose_values,
+            SelectChoices(commit),
             node.key,
             min_values=node.minimum,
             max_values=min(node.maximum, len(options)),
@@ -233,34 +209,13 @@ def _entities(node: Entities, path: str, context: _Context) -> list[Node]:
             stored = context.session.selection(node.key, initial=initial_keys).selected
             previous = tuple(_entity_ref(key) for key in stored)
 
-    async def commit(event: ActionEvent, selected: tuple[EntityRef, ...]) -> None:
-        match node.selection:
-            case Controlled(on_change=on_change):
-                await on_change(
-                    EntityEvent(
-                        event.actor,
-                        event.responder,
-                        event.locale,
-                        event.context,
-                        selected,
-                        tuple(value for value in selected if value not in previous),
-                        tuple(value for value in previous if value not in selected),
-                    )
-                )
-            case Managed():
-                await event.acknowledge()
-                context.session.select(node.key, tuple(_entity_key(value) for value in selected))
-                event.invalidate()
+    commit = EntityCommit(node.selection, node.key, previous, context.session)
 
     if Capability.ACTIONS_DISCORD_ENTITY in context.capabilities:
-
-        async def select_entities(event: EntitySelectionEvent) -> None:
-            await commit(event, event.values)
-
         return [
             EntitySelect(
                 node.entity_type,
-                select_entities,
+                SelectEntities(commit),
                 node.key,
                 placeholder=_resolve(node.placeholder, context) if node.placeholder is not None else None,
                 default_values=previous,
@@ -276,9 +231,7 @@ def _entities(node: Entities, path: str, context: _Context) -> list[Node]:
     available = tuple(choice for choice in node.choices if choice.available)
     by_key = {_entity_key(choice.ref): choice.ref for choice in available}
     previous = tuple(value for value in previous if _entity_key(value) in by_key)
-
-    async def choose_fallback(event: ChoiceEvent) -> None:
-        await commit(event, tuple(by_key[key] for key in event.selected if key in by_key))
+    commit = EntityCommit(node.selection, node.key, previous, context.session)
 
     fallback = Choices(
         key=node.key,
@@ -286,7 +239,10 @@ def _entities(node: Entities, path: str, context: _Context) -> list[Node]:
             Choice(_entity_key(choice.ref), choice.label, choice.description, choice.available)
             for choice in node.choices
         ),
-        selection=Controlled(tuple(_entity_key(value) for value in previous), choose_fallback),
+        selection=Controlled(
+            tuple(_entity_key(value) for value in previous),
+            SelectEntityFallback(commit, by_key),
+        ),
         minimum=node.minimum,
         maximum=node.maximum,
         flexibility=node.flexibility,
@@ -329,30 +285,16 @@ def _items(
     strategy = _select_strategy(_items_axis(node, path, context.limits, context.session), context)
     if strategy == "opened" and opened is None and node.items:
         opened = node.items[0].key
-
-    async def open_(event: ActionEvent, entry: str | None) -> None:
-        match node.opened:
-            case Controlled(on_change=on_change):
-                await on_change(OpenEvent(event.actor, event.responder, event.locale, event.context, opened=entry))
-            case Managed():
-                await event.acknowledge()
-                context.session.select(node.key, () if entry is None else (entry,))
-                event.invalidate()
+    commit = ItemCommit(node.opened, node.key, context.session)
 
     if opened is not None:
         item = next(item for item in node.items if item.key == opened)
 
-        async def back(event: PressEvent) -> None:
-            await open_(event, None)
-
         return [
             PrimitiveHeading(_resolve(item.label.content, context), level=3, overflow=Never()),
             *lower_children(item.children, f"{path}.{item.key}", context),
-            Row((Button(context.chrome.back, back, f"{node.key}.back"),)),
+            Row((Button(context.chrome.back, CloseItem(commit), f"{node.key}.back"),)),
         ]
-
-    async def focus(event: SelectionEvent) -> None:
-        await open_(event, event.values[0] if event.values else None)
 
     page_key = f"{node.key}.items"
     visible, page, pages = _page_items(node.items, page_key, context, identity=lambda item: item.key)
@@ -365,7 +307,7 @@ def _items(
         Lines(summaries, overflow=Never()),
         SelectMenu(
             tuple(Option(_resolve(item.label.content, context), item.key) for item in visible),
-            focus,
+            FocusItem(commit),
             f"{node.key}.focus",
             placeholder="Choose an item",
         ),
@@ -391,23 +333,11 @@ def _navigation(node: Navigation, path: str, context: _Context) -> list[Node]:
             current = remembered[0] if remembered and remembered[0] in keys else None
     if current is None and available:
         current = available[0].key
-
-    async def navigate(event: ActionEvent, destination: str) -> None:
-        match node.current:
-            case Controlled(on_change=on_change):
-                await on_change(NavigateEvent(event.actor, event.responder, event.locale, event.context, destination))
-            case Managed():
-                await event.acknowledge()
-                context.session.select(node.key, (destination,))
-                event.invalidate()
+    commit = NavigationCommit(node.current, node.key, context.session)
 
     if grouped:
         page_key = f"{node.key}.destinations"
         visible, page, pages = _page_items(available, page_key, context, identity=lambda item: item.key)
-
-        async def select_destination(event: SelectionEvent) -> None:
-            if event.values:
-                await navigate(event, event.values[0])
 
         result: list[Node] = [
             SelectMenu(
@@ -419,26 +349,21 @@ def _navigation(node: Navigation, path: str, context: _Context) -> list[Node]:
                     )
                     for destination in visible
                 ),
-                select_destination,
+                SelectDestination(commit),
                 node.key,
             )
         ]
         result.extend(context.pages.controls(page_key, Position(offset=page), pages))
         return result
-    buttons: list[Button] = []
-    for destination in available:
-
-        async def go(event: PressEvent, key: str = destination.key) -> None:
-            await navigate(event, key)
-
-        buttons.append(
-            Button(
-                _resolve(destination.label, context),
-                go,
-                f"{node.key}.{destination.key}",
-                style=ActionStyle.PRIMARY if destination.key == current else ActionStyle.SECONDARY,
-            )
+    buttons = [
+        Button(
+            _resolve(destination.label, context),
+            GoToDestination(commit, destination.key),
+            f"{node.key}.{destination.key}",
+            style=ActionStyle.PRIMARY if destination.key == current else ActionStyle.SECONDARY,
         )
+        for destination in available
+    ]
     return [PrimitiveActionGroup(tuple(buttons))]
 
 
@@ -454,16 +379,17 @@ def _details(
         case Managed(initial=initial):
             open_ = context.session.disclosure(node.key, initial=initial).open
 
-    async def toggle(event: PressEvent) -> None:
-        match node.open:
-            case Controlled(on_change=on_change):
-                await on_change(OpenEvent(event.actor, event.responder, event.locale, event.context, opened=not open_))
-            case Managed(initial=seed):
-                await event.acknowledge()
-                context.session.disclose(node.key, not context.session.disclosure(node.key, initial=seed).open)
-                event.invalidate()
-
-    result: list[Node] = [Row((Button(_resolve(node.summary.content, context), toggle, f"{node.key}.toggle"),))]
+    result: list[Node] = [
+        Row(
+            (
+                Button(
+                    _resolve(node.summary.content, context),
+                    ToggleDetails(node, open_, context.session),
+                    f"{node.key}.toggle",
+                ),
+            )
+        )
+    ]
     if open_:
         result.extend(lower_children(node.children, path, context))
     return result
@@ -476,23 +402,13 @@ def _toggle(node: Toggle, context: _Context) -> list[Node]:
         case Managed(initial=initial):
             on = context.session.toggle(node.key, initial=initial).on
 
-    async def flip(event: PressEvent) -> None:
-        match node.on:
-            case Controlled(on_change=on_change):
-                await on_change(ToggleEvent(event.actor, event.responder, event.locale, event.context, not on))
-            case Managed(initial=initial):
-                await event.acknowledge()
-                current = context.session.toggle(node.key, initial=initial).on
-                context.session.set_toggle(node.key, on=not current)
-                event.invalidate()
-
     state_label = node.on_label if on else node.off_label
     if state_label is None:
         state_label = context.chrome.on if on else context.chrome.off
     label = f"{_resolve(node.label, context)}: {_resolve(state_label, context)}"
     button = Button(
         label,
-        flip,
+        FlipToggle(node, on, context.session),
         node.key,
         style=_button_style(node.tone, Emphasis.NORMAL),
         disabled=not node.available,
