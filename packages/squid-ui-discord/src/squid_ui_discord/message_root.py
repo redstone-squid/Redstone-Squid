@@ -19,7 +19,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, fields, is_dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any, Protocol, cast, runtime_checkable
+from typing import Any, Protocol, TypedDict, cast, runtime_checkable
 
 import anyio
 import discord
@@ -555,7 +555,25 @@ class _EntityDispatch:
         )
 
 
-def _entity_kwargs(node: scene.EntitySelect, message_root: MessageRoot, key: str, generation: int) -> dict[str, object]:
+class _EntitySelectKwargs(TypedDict):
+    """The constructor arguments every entity select shares.
+
+    Spelled out rather than left as `dict[str, object]` because these are splatted into four
+    different discord.py select constructors, and an erased mapping makes every parameter of
+    every one of them unverifiable.
+    """
+
+    placeholder: str | None
+    min_values: int
+    max_values: int
+    disabled: bool
+    custom_id: str
+    default_values: list[discord.SelectDefaultValue]
+
+
+def _entity_kwargs(
+    node: scene.EntitySelect, message_root: MessageRoot, key: str, generation: int
+) -> _EntitySelectKwargs:
     return {
         "placeholder": node.placeholder,
         "min_values": node.min_values,

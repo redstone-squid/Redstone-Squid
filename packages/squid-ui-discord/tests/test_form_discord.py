@@ -7,9 +7,17 @@ import discord
 import pytest
 
 import squid_ui as sl
+from squid_ui.entity import EntityKind, EntityRef
 from squid_ui.forms import FormText
 from squid_ui_discord import Everyone, MessageRoot
-from squid_ui_discord.modal import CheckboxGroupField, EntityField, EntityType, FileField, build_form_modal
+from squid_ui_discord.modal import (
+    CheckboxGroupField,
+    EntityField,
+    EntityType,
+    FileField,
+    _entity_defaults,
+    build_form_modal,
+)
 from squid_ui_discord.testing import commit_render, fake_interaction
 
 
@@ -359,3 +367,37 @@ def test_a_wide_scale_falls_back_to_a_parsed_text_input() -> None:
     assert component.default == "42"
     assert component.placeholder == "0\N{EN DASH}100"
     assert field.parse("42") == 42
+
+
+@pytest.mark.parametrize(
+    ("prefill", "expected"),
+    [
+        (None, []),
+        (7, [(7, discord.SelectDefaultValueType.role)]),
+        ([7, 8], [(7, discord.SelectDefaultValueType.role), (8, discord.SelectDefaultValueType.role)]),
+        (EntityRef(kind=EntityKind.USER, id=9), [(9, discord.SelectDefaultValueType.user)]),
+        (
+            discord.SelectDefaultValue(id=11, type=discord.SelectDefaultValueType.channel),
+            [(11, discord.SelectDefaultValueType.channel)],
+        ),
+    ],
+)
+def test_entity_prefills_resolve_to_explicitly_typed_default_values(prefill, expected) -> None:
+    """A bare `discord.Object` would make discord.py guess the kind, and reject it outright on a
+    mentionable select, so every prefill shape has to carry its type across explicitly."""
+    defaults = _entity_defaults(prefill, EntityType.ROLE)
+
+    assert [(value.id, value.type) for value in defaults] == expected
+
+
+def test_entity_prefill_of_unknown_kind_is_dropped_rather_than_guessed() -> None:
+    defaults = _entity_defaults(["not an entity", object()], EntityType.ROLE)
+
+    assert defaults == []
+
+
+def test_mentionable_entity_prefill_drops_bare_ids_it_cannot_type() -> None:
+    """A mentionable select accepts both users and roles, so an id alone does not say which."""
+    defaults = _entity_defaults([5, EntityRef(kind=EntityKind.ROLE, id=6)], EntityType.MENTIONABLE)
+
+    assert [(value.id, value.type) for value in defaults] == [(6, discord.SelectDefaultValueType.role)]
