@@ -258,6 +258,9 @@ class ComponentRuntime:
             message = "a discovery render cannot be committed"
             raise LayoutInvariantError(message)
 
+        def depth(path: str) -> int:
+            return 0 if path == "$" else path.count(".") + 1
+
         if tree is self._committed_tree:
             if rendered_revision is None or self.revision == rendered_revision:
                 self._candidate_tree = tree
@@ -265,16 +268,35 @@ class ComponentRuntime:
             self.dirty = rendered_revision is not None and self.revision != rendered_revision
             return
 
-        if self._committed_tree is not None and tree._topology is self._committed_tree._topology:
+        if self._committed_tree is not None and tree._topology_base is self._committed_tree._topology:
+            for path, component in sorted(
+                tree._removed_components,
+                key=lambda item: depth(item[0]),
+                reverse=True,
+            ):
+                component.on_unmount()
+                component._runtime = None
+                if path != "$":
+                    component._parent = None
+                if self.components.get(path) is component:
+                    self.components.pop(path)
+                self._component_paths.pop(component, None)
+            for path, component in sorted(tree._added_components, key=lambda item: depth(item[0])):
+                self.components[path] = component
+                self._component_paths[component] = path
+                component.on_mount()
+            for path, component in tree._removed_components:
+                if component not in self._component_paths:
+                    self._render_cache.pop(component, None)
+                cached_subtree = self._subtree_cache.get(path)
+                if cached_subtree is not None and cached_subtree.component is component:
+                    self._subtree_cache.pop(path)
             self._committed_tree = tree
             if rendered_revision is None or self.revision == rendered_revision:
                 self._candidate_tree = tree
                 self._candidate_revision = self.revision
             self.dirty = rendered_revision is not None and self.revision != rendered_revision
             return
-
-        def depth(path: str) -> int:
-            return 0 if path == "$" else path.count(".") + 1
 
         removed = [
             (path, component)
