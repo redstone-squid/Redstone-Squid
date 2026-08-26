@@ -12,6 +12,7 @@ from squid_discord.adapter import require_discord_py_target
 from squid_discord.presentation import DiscordModeError, DiscordPresentation
 from squid_discord.renderer import V2Renderer, Wire
 from squid_discord.target import DISCORD_V2_DPY27, Target
+from squid_layouts import scene
 from squid_layouts.assets import Asset
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.document import DocumentLike
@@ -27,7 +28,7 @@ from squid_layouts.planning.target import ResourceCost
 from squid_layouts.profiling import OperationRecorder, SpanRecorder
 from squid_layouts.runtime.component import Component
 from squid_layouts.runtime.presentation import PresentationSession
-from squid_layouts.scene.model import PlanResult, SceneComponentsV2
+from squid_layouts.scene.model import PlanResult
 from squid_layouts.semantic import LayoutNode
 from squid_layouts.sources import Position
 from squid_layouts.target_types import ComponentsV2Target, DiscordPyAdapter
@@ -46,7 +47,7 @@ def _span(profile: OperationRecorder | None, name: str) -> Iterator[SpanRecorder
 
 
 @dataclass(slots=True)
-class Composition[ViewT: (discord.ui.LayoutView, discord.ui.View | None), BodyT = SceneComponentsV2]:
+class Composition[ViewT: (discord.ui.LayoutView, discord.ui.View | None), BodyT = scene.ComponentsV2]:
     """A resolved plan beside the complete Discord message it draws to.
 
     Generic over the view because the two modes differ in what they promise. A Components V2
@@ -85,7 +86,7 @@ def compose(
     *,
     wire: Wire | None = None,
     renderer: V2Renderer | None = None,
-    target: Target[V2Limits, SceneComponentsV2, ComponentsV2Target, DiscordPyAdapter] = DISCORD_V2_DPY27,
+    target: Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, DiscordPyAdapter] = DISCORD_V2_DPY27,
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,
@@ -97,7 +98,7 @@ def compose(
     cache: PlanCache | None = None,
     search_budget: int = DEFAULT_SEARCH_BUDGET,
     profile: OperationRecorder | None = None,
-) -> Composition[discord.ui.LayoutView, SceneComponentsV2]:
+) -> Composition[discord.ui.LayoutView, scene.ComponentsV2]:
     """Plan a logical document, then draw its resolved Components V2 scene."""
     adapter = require_discord_py_target(target, AdapterCapability.RENDER_V2, "compose Components V2")
     with _span(profile, "planner") as planner_span:
@@ -135,7 +136,7 @@ def compose(
 def render_static(
     nodes: DocumentLike | Component,
     *,
-    target: Target[V2Limits, SceneComponentsV2, ComponentsV2Target, DiscordPyAdapter] = DISCORD_V2_DPY27,
+    target: Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, DiscordPyAdapter] = DISCORD_V2_DPY27,
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,
@@ -157,7 +158,7 @@ def render_static(
 def render_item(
     node: LayoutNode,
     *,
-    target: Target[V2Limits, SceneComponentsV2, ComponentsV2Target, DiscordPyAdapter] = DISCORD_V2_DPY27,
+    target: Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, DiscordPyAdapter] = DISCORD_V2_DPY27,
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,

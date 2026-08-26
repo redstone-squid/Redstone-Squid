@@ -10,6 +10,7 @@ from squid_discord import DISCORD_V2_DPY27, render_static
 from squid_discord import (
     V2_LIMITS as LIMITS,
 )
+from squid_layouts import scene
 from squid_layouts.errors import LayoutDegradedError
 from squid_layouts.planning import (
     SolveNoteCode,
@@ -35,15 +36,7 @@ from squid_layouts.primitives import (
     Variant,
     Variants,
 )
-from squid_layouts.scene.model import (
-    PlanResult,
-    SceneNode,
-    ScenePanel,
-    SceneRow,
-    SceneSection,
-    SceneSelect,
-    SceneText,
-)
+from squid_layouts.scene.model import PlanResult
 
 
 def _rendered(solved) -> str:
@@ -69,13 +62,13 @@ def _planned(nodes: Sequence[Node], **options) -> PlanResult:
 def _text(result: PlanResult) -> str:
     parts: list[str] = []
 
-    def walk(children: Sequence[SceneNode]) -> None:
+    def walk(children: Sequence[scene.Node]) -> None:
         for child in children:
-            if isinstance(child, SceneText):
+            if isinstance(child, scene.Text):
                 parts.append(child.content)
-            elif isinstance(child, ScenePanel):
+            elif isinstance(child, scene.Panel):
                 walk(child.children)
-            elif isinstance(child, SceneSection):
+            elif isinstance(child, scene.Section):
                 walk(child.texts)
 
     walk(result.scene.components_v2.children)
@@ -85,17 +78,17 @@ def _text(result: PlanResult) -> str:
 def _components(result: PlanResult) -> int:
     """What the drawn view will hold, counted the same way the planner budgets it."""
 
-    def count(children: Sequence[SceneNode]) -> int:
+    def count(children: Sequence[scene.Node]) -> int:
         total = 0
         for child in children:
             match child:
-                case ScenePanel(children=inner):
+                case scene.Panel(children=inner):
                     total += 1 + count(inner)
-                case SceneSection(texts=texts):
+                case scene.Section(texts=texts):
                     total += 2 + len(texts)
-                case SceneRow(items=items):
+                case scene.Row(items=items):
                     total += 1 + len(items)
-                case SceneSelect():
+                case scene.Select():
                     total += 2
                 case _:
                     total += 1
@@ -353,11 +346,11 @@ def test_a_rung_may_lower_to_several_nodes() -> None:
         ActionGroup(buttons),
         SelectMenu(tuple(Option(f"b{index}", str(index)) for index in range(8)), choose, key="k"),
     )
-    scene = plan([ladder], target=DISCORD_V2_DPY27).scene
+    document = plan([ladder], target=DISCORD_V2_DPY27).scene
     # Two rows of five and three spliced in place, not wrapped in a Panel that would cost
     # the very container component the ladder exists to save.
-    assert [len(child.items) for child in scene.components_v2.children if isinstance(child, SceneRow)] == [5, 3]
-    assert len(scene.components_v2.children) == 2
+    assert [len(child.items) for child in document.components_v2.children if isinstance(child, scene.Row)] == [5, 3]
+    assert len(document.components_v2.children) == 2
 
 
 @given(st.integers(min_value=1, max_value=20))

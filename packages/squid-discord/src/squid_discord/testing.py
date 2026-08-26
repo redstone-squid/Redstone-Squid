@@ -25,14 +25,14 @@ import discord
 from squid_discord.delivery import DeliveryReceipt, Destination, EditHandle, handle_for
 from squid_discord.mount import AnyMountedView, ClassicMountedView, Mount, MountedView
 from squid_discord.presentation import DiscordPresentation
+from squid_layouts import scene
 from squid_layouts.planning.limits import COMPONENT_LIMITS, LIMITS, ComponentLimits, DiscordLimits, V2Limits
 from squid_layouts.planning.target import Target
-from squid_layouts.scene.model import SceneBody
 
 type ComponentPayload = dict[str, Any]
 
 
-def without_capabilities[LimitsT: DiscordLimits, BodyT: SceneBody, ModeT, AdapterT](
+def without_capabilities[LimitsT: DiscordLimits, BodyT: scene.Body, ModeT, AdapterT](
     target: Target[LimitsT, BodyT, ModeT, AdapterT], *capabilities: str
 ) -> Target[LimitsT, BodyT, ModeT, AdapterT]:
     """A copy of `target` whose dialect declares fewer protocol capabilities.

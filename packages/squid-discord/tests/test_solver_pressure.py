@@ -5,10 +5,10 @@ import pytest
 import squid_layouts as sl
 from squid_discord import DISCORD_V2_DPY27
 from squid_discord.target import v2
+from squid_layouts import scene
 from squid_layouts.planning import measure
 from squid_layouts.planning.limits import V2Limits
 from squid_layouts.primitives import Paginate, Text
-from squid_layouts.scene.model import ScenePanel, SceneText
 
 
 class TestBudgetContract:
@@ -107,8 +107,8 @@ class TestRegionPagination:
     @staticmethod
     def _texts(result: sl.scene.PlanResult) -> list[str]:
         panel = result.scene.components_v2.children[0]
-        assert isinstance(panel, ScenePanel)
-        return [child.content for child in panel.children if isinstance(child, SceneText)]
+        assert isinstance(panel, scene.Panel)
+        return [child.content for child in panel.children if isinstance(child, scene.Text)]
 
     def test_sugar_validates_its_region_contract(self) -> None:
         with pytest.raises(ValueError, match="key must not be empty"):
@@ -124,7 +124,7 @@ class TestRegionPagination:
             target=DISCORD_V2_DPY27,
         )
 
-        assert [child.content for child in result.scene.components_v2.children if isinstance(child, SceneText)] == [
+        assert [child.content for child in result.scene.components_v2.children if isinstance(child, scene.Text)] == [
             "first",
             "second",
         ]

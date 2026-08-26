@@ -16,7 +16,7 @@ from squid_layouts.text import Markup
 
 
 @dataclass(frozen=True, slots=True)
-class SceneText:
+class Text:
     KIND: ClassVar[str] = "text"
 
     content: str
@@ -24,7 +24,7 @@ class SceneText:
 
 
 @dataclass(frozen=True, slots=True)
-class SceneTime:
+class Time:
     KIND: ClassVar[str] = "time"
 
     instant: str
@@ -33,7 +33,7 @@ class SceneTime:
 
 
 @dataclass(frozen=True, slots=True)
-class SceneZonedTime:
+class ZonedTime:
     KIND: ClassVar[str] = "zoned_time"
 
     instant: str
@@ -42,7 +42,7 @@ class SceneZonedTime:
 
 
 @dataclass(frozen=True, slots=True)
-class SceneFile:
+class File:
     KIND: ClassVar[str] = "file"
 
     asset_key: str
@@ -52,7 +52,7 @@ class SceneFile:
 
 
 @dataclass(frozen=True, slots=True)
-class SceneSeparator:
+class Separator:
     KIND: ClassVar[str] = "separator"
 
     large: bool = False
@@ -60,7 +60,7 @@ class SceneSeparator:
 
 
 @dataclass(frozen=True, slots=True)
-class SceneLink:
+class Link:
     KIND: ClassVar[str] = "link"
 
     label: str | None
@@ -70,14 +70,14 @@ class SceneLink:
 
 
 @dataclass(frozen=True, slots=True)
-class ScenePremiumButton:
+class PremiumButton:
     KIND: ClassVar[str] = "premium_button"
 
     sku_id: int
 
 
 @dataclass(frozen=True, slots=True)
-class SceneButton:
+class Button:
     KIND: ClassVar[str] = "button"
 
     label: str | None
@@ -89,7 +89,7 @@ class SceneButton:
 
 
 @dataclass(frozen=True, slots=True)
-class SceneRoutedButton:
+class RoutedButton:
     """A button carrying its own route id, with no binding for a frontend to wire.
 
     That absence is the point: a renderer can draw one without a live session, which is
@@ -107,7 +107,7 @@ class SceneRoutedButton:
 
 
 @dataclass(frozen=True, slots=True)
-class SceneOption:
+class Option:
     label: str
     value: str
     description: str | None = None
@@ -116,10 +116,10 @@ class SceneOption:
 
 
 @dataclass(frozen=True, slots=True)
-class SceneSelect:
+class Select:
     KIND: ClassVar[str] = "select"
 
-    options: tuple[SceneOption, ...]
+    options: tuple[Option, ...]
     action: str
     placeholder: str | None = None
     min_values: int = 1
@@ -129,10 +129,10 @@ class SceneSelect:
 
 
 @dataclass(frozen=True, slots=True)
-class SceneRoutedSelect:
+class RoutedSelect:
     KIND: ClassVar[str] = "routed_select"
 
-    options: tuple[SceneOption, ...]
+    options: tuple[Option, ...]
     route_id: str
     placeholder: str | None = None
     min_values: int = 1
@@ -141,7 +141,7 @@ class SceneRoutedSelect:
 
 
 @dataclass(frozen=True, slots=True)
-class SceneEntitySelect:
+class EntitySelect:
     KIND: ClassVar[str] = "entity_select"
 
     entity_type: EntityType
@@ -156,14 +156,14 @@ class SceneEntitySelect:
 
 
 @dataclass(frozen=True, slots=True)
-class SceneRow:
+class Row:
     KIND: ClassVar[str] = "row"
 
-    items: tuple[SceneLink | ScenePremiumButton | SceneButton | SceneRoutedButton | SceneExtension, ...]
+    items: tuple[Link | PremiumButton | Button | RoutedButton | Extension, ...]
 
 
 @dataclass(frozen=True, slots=True)
-class SceneThumbnail:
+class Thumbnail:
     KIND: ClassVar[str] = "thumbnail"
 
     url: str
@@ -172,32 +172,32 @@ class SceneThumbnail:
 
 
 @dataclass(frozen=True, slots=True)
-class SceneGalleryItem:
+class GalleryItem:
     url: str
     description: str | None = None
     spoiler: bool = False
 
 
 @dataclass(frozen=True, slots=True)
-class SceneGallery:
+class Gallery:
     KIND: ClassVar[str] = "gallery"
 
-    items: tuple[SceneGalleryItem, ...]
+    items: tuple[GalleryItem, ...]
 
 
 @dataclass(frozen=True, slots=True)
-class SceneSection:
+class Section:
     KIND: ClassVar[str] = "section"
 
-    texts: tuple[SceneText, ...]
-    accessory: SceneThumbnail | SceneLink | ScenePremiumButton | SceneButton | SceneRoutedButton | SceneExtension
+    texts: tuple[Text, ...]
+    accessory: Thumbnail | Link | PremiumButton | Button | RoutedButton | Extension
 
 
 @dataclass(frozen=True, slots=True)
-class ScenePanel:
+class Panel:
     KIND: ClassVar[str] = "panel"
 
-    children: tuple[SceneNode, ...]
+    children: tuple[Node, ...]
     accent: Color | None = None
     spoiler: bool = False
 
@@ -207,7 +207,7 @@ type JsonValue = str | int | float | bool | None | Sequence[JsonValue] | Mapping
 
 
 @dataclass(frozen=True, slots=True)
-class SceneExtension:
+class Extension:
     """Versioned target payload prepared by a registered extension adapter."""
 
     KIND: ClassVar[str] = "extension"
@@ -217,23 +217,23 @@ class SceneExtension:
     payload: Mapping[str, JsonValue]
 
 
-type SceneNode = (
-    SceneText
-    | SceneTime
-    | SceneZonedTime
-    | SceneFile
-    | SceneSeparator
-    | SceneRow
-    | SceneSelect
-    | SceneRoutedSelect
-    | SceneEntitySelect
-    | SceneRoutedButton
-    | ScenePremiumButton
-    | SceneThumbnail
-    | SceneGallery
-    | SceneSection
-    | ScenePanel
-    | SceneExtension
+type Node = (
+    Text
+    | Time
+    | ZonedTime
+    | File
+    | Separator
+    | Row
+    | Select
+    | RoutedSelect
+    | EntitySelect
+    | RoutedButton
+    | PremiumButton
+    | Thumbnail
+    | Gallery
+    | Section
+    | Panel
+    | Extension
 )
 
 
@@ -247,36 +247,36 @@ type SceneNode = (
 
 
 @dataclass(frozen=True, slots=True)
-class SceneComponentsV2:
+class ComponentsV2:
     """A Components V2 message: the component tree is the whole message."""
 
     KIND: ClassVar[str] = "components_v2"
 
-    children: tuple[SceneNode, ...] = ()
+    children: tuple[Node, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
-class SceneEmbedField:
+class EmbedField:
     name: str
     value: str
     inline: bool = False
 
 
 @dataclass(frozen=True, slots=True)
-class SceneEmbedAuthor:
+class EmbedAuthor:
     name: str
     url: str | None = None
     icon_url: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
-class SceneEmbedFooter:
+class EmbedFooter:
     text: str
     icon_url: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
-class SceneEmbedMedia:
+class EmbedMedia:
     """One embed image or thumbnail. The description is kept even where Discord drops it."""
 
     url: str
@@ -284,7 +284,7 @@ class SceneEmbedMedia:
 
 
 @dataclass(frozen=True, slots=True)
-class SceneEmbed:
+class Embed:
     """One resolved embed. Every grouping and overflow decision is already made.
 
     Server-generated properties — provider, video, and the fields Discord fills from a URL
@@ -295,71 +295,62 @@ class SceneEmbed:
     title: str | None = None
     url: str | None = None
     description: str | None = None
-    fields: tuple[SceneEmbedField, ...] = ()
-    footer: SceneEmbedFooter | None = None
-    author: SceneEmbedAuthor | None = None
+    fields: tuple[EmbedField, ...] = ()
+    footer: EmbedFooter | None = None
+    author: EmbedAuthor | None = None
     colour: Color | None = None
-    image: SceneEmbedMedia | None = None
-    thumbnail: SceneEmbedMedia | None = None
+    image: EmbedMedia | None = None
+    thumbnail: EmbedMedia | None = None
     timestamp: str | None = None
     """An ISO-8601 instant, or None. Stored as text so the scene stays plain data."""
 
 
-type SceneControl = (
-    SceneLink
-    | ScenePremiumButton
-    | SceneButton
-    | SceneRoutedButton
-    | SceneSelect
-    | SceneRoutedSelect
-    | SceneEntitySelect
-    | SceneExtension
-)
+type Control = Link | PremiumButton | Button | RoutedButton | Select | RoutedSelect | EntitySelect | Extension
 
 
 @dataclass(frozen=True, slots=True)
-class SceneClassicRow:
+class ClassicRow:
     """One classic action row. Row assignment is a planning decision, not a drawing one."""
 
-    controls: tuple[SceneControl, ...] = ()
+    controls: tuple[Control, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
-class SceneClassicMessage:
+class ClassicMessage:
     """A pre-Components-V2 message: content, embeds, and up to five action rows."""
 
     KIND: ClassVar[str] = "classic_message"
 
     content: str | None = None
-    embeds: tuple[SceneEmbed, ...] = ()
-    rows: tuple[SceneClassicRow, ...] = ()
+    embeds: tuple[Embed, ...] = ()
+    rows: tuple[ClassicRow, ...] = ()
 
 
-type SceneBody = SceneComponentsV2 | SceneClassicMessage
+type Body = ComponentsV2 | ClassicMessage
 
 
 _KIND_OWNERS: dict[str, type] = {}
 for _kind_cls in (
-    SceneText,
-    SceneTime,
-    SceneZonedTime,
-    SceneFile,
-    SceneSeparator,
-    SceneLink,
-    ScenePremiumButton,
-    SceneButton,
-    SceneRoutedButton,
-    SceneSelect,
-    SceneRoutedSelect,
-    SceneEntitySelect,
-    SceneRow,
-    SceneThumbnail,
-    SceneGallery,
-    SceneSection,
-    ScenePanel,
-    SceneExtension,
-    SceneComponentsV2,
-    SceneClassicMessage,
+    Text,
+    Time,
+    ZonedTime,
+    File,
+    Separator,
+    Link,
+    PremiumButton,
+    Button,
+    RoutedButton,
+    Select,
+    RoutedSelect,
+    EntitySelect,
+    Row,
+    Thumbnail,
+    Gallery,
+    Section,
+    Panel,
+    Extension,
+    ComponentsV2,
+    ClassicMessage,
 ):
     if _kind_cls.KIND in _KIND_OWNERS:
         # A reused tag would let the codec's `match kind:` misroute an unrelated node type.
@@ -370,14 +361,14 @@ del _kind_cls
 
 
 @dataclass(frozen=True, slots=True)
-class SceneAsset:
+class Asset:
     key: str
     name: str
     media_type: str
 
 
 @dataclass(frozen=True, slots=True)
-class ScenePager:
+class Pager:
     key: str
     page: int
     pages: int
@@ -385,24 +376,24 @@ class ScenePager:
 
 
 @dataclass(frozen=True, slots=True)
-class SceneDocument[BodyT = SceneBody]:
+class Document[BodyT = Body]:
     """A target-resolved scene with no callbacks or native frontend objects."""
 
     protocol: int
     target: str
     target_version: int
     body: BodyT
-    assets: tuple[SceneAsset, ...] = ()
-    pagers: tuple[ScenePager, ...] = ()
+    assets: tuple[Asset, ...] = ()
+    pagers: tuple[Pager, ...] = ()
 
     @property
-    def components_v2(self) -> SceneComponentsV2:
+    def components_v2(self) -> ComponentsV2:
         """The Components V2 body, for a caller that only speaks V2.
 
         Raises:
             LayoutInvariantError: This scene resolved to some other kind of message.
         """
-        if not isinstance(self.body, SceneComponentsV2):
+        if not isinstance(self.body, ComponentsV2):
             message = f"scene for target {self.target!r} has a {type(self.body).__name__} body, not Components V2"
             raise LayoutInvariantError(message)
         return self.body
@@ -451,8 +442,8 @@ class PlanMetrics:
 
 
 @dataclass(frozen=True, slots=True)
-class PlanResult[BodyT = SceneBody]:
-    scene: SceneDocument[BodyT]
+class PlanResult[BodyT = Body]:
+    scene: Document[BodyT]
     bindings: Mapping[str, ActionBinding]
     report: PlanReport
     form_bindings: Mapping[str, FormBinding] = field(default_factory=dict)

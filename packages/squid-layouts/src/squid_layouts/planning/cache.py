@@ -4,13 +4,14 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any
 
+from squid_layouts import scene
 from squid_layouts.runtime.presentation import SessionUpdate
-from squid_layouts.scene.model import PlanReport, SceneDocument
+from squid_layouts.scene.model import PlanReport
 
 
 @dataclass(frozen=True, slots=True)
 class CachedPlan:
-    scene: SceneDocument[Any]
+    scene: scene.Document[Any]
     report: PlanReport
     session_updates: tuple[SessionUpdate, ...] = ()
     """Replayed on a hit: the session is part of the key, so these stay correct."""

@@ -6,6 +6,7 @@ from typing import overload
 import discord
 
 from squid_discord.adapter import DISCORD_PY_27_ADAPTER
+from squid_layouts import scene
 from squid_layouts.planning.adapter import AdapterProfile
 from squid_layouts.planning.discord import (
     CLASSIC_PROTOCOL_CAPABILITIES,
@@ -16,7 +17,6 @@ from squid_layouts.planning.discord import (
 from squid_layouts.planning.limits import CLASSIC_LIMITS, LIMITS, ClassicLimits, V2Limits
 from squid_layouts.planning.target import Target
 from squid_layouts.primitives.nodes import Extension, PrimitiveNode
-from squid_layouts.scene.model import SceneClassicMessage, SceneComponentsV2
 from squid_layouts.target_types import (
     ClassicTarget,
     ComponentsV2Target,
@@ -29,16 +29,18 @@ CLASSIC_CAPABILITIES = CLASSIC_PROTOCOL_CAPABILITIES
 
 
 @overload
-def v2(*, limits: V2Limits = LIMITS) -> Target[V2Limits, SceneComponentsV2, ComponentsV2Target, DiscordPy27Adapter]: ...
+def v2(
+    *, limits: V2Limits = LIMITS
+) -> Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, DiscordPy27Adapter]: ...
 @overload
 def v2[ProfileT: DiscordPyAdapter](
     *, adapter: AdapterProfile[ProfileT], limits: V2Limits = LIMITS
-) -> Target[V2Limits, SceneComponentsV2, ComponentsV2Target, ProfileT]: ...
+) -> Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, ProfileT]: ...
 def v2(
     *,
     adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
     limits: V2Limits = LIMITS,
-) -> Target[V2Limits, SceneComponentsV2, ComponentsV2Target, DiscordPyAdapter]:
+) -> Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, DiscordPyAdapter]:
     """A Components V2 target realized by discord.py."""
     return components_v2_target(adapter, limits=limits)
 
@@ -46,16 +48,16 @@ def v2(
 @overload
 def classic(
     *, limits: ClassicLimits = CLASSIC_LIMITS
-) -> Target[ClassicLimits, SceneClassicMessage, ClassicTarget, DiscordPy27Adapter]: ...
+) -> Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, DiscordPy27Adapter]: ...
 @overload
 def classic[ProfileT: DiscordPyAdapter](
     *, adapter: AdapterProfile[ProfileT], limits: ClassicLimits = CLASSIC_LIMITS
-) -> Target[ClassicLimits, SceneClassicMessage, ClassicTarget, ProfileT]: ...
+) -> Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, ProfileT]: ...
 def classic(
     *,
     adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
     limits: ClassicLimits = CLASSIC_LIMITS,
-) -> Target[ClassicLimits, SceneClassicMessage, ClassicTarget, DiscordPyAdapter]:
+) -> Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, DiscordPyAdapter]:
     """A classic-message target realized by discord.py."""
     return classic_target(adapter, limits=limits)
 

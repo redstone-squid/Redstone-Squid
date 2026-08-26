@@ -6,6 +6,7 @@ from heapq import heappop, heappush
 from itertools import count
 from typing import Any, cast
 
+from squid_layouts import scene
 from squid_layouts.assets import Asset
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome, localize_chrome
 from squid_layouts.document import Document, DocumentLike, as_document
@@ -68,17 +69,7 @@ from squid_layouts.primitives.nodes import (
     Variants,
 )
 from squid_layouts.runtime.presentation import PresentationSession
-from squid_layouts.scene.codec import SceneCodec
-from squid_layouts.scene.model import (
-    PlanEvent,
-    PlanMetrics,
-    PlanReport,
-    PlanResult,
-    PlanSeverity,
-    SceneAsset,
-    SceneBody,
-    SceneDocument,
-)
+from squid_layouts.scene.model import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanSeverity
 from squid_layouts.sources import Position
 from squid_layouts.text import NEUTRAL, Localization
 
@@ -473,7 +464,7 @@ def _search(search: _Search, *, search_budget: int) -> _Candidate:
     )
 
 
-def plan[ModeT, AdapterT, BodyT: SceneBody](
+def plan[ModeT, AdapterT, BodyT: scene.Body](
     rendered: DocumentLike[ModeT],
     *,
     target: Target[Any, BodyT, ModeT, AdapterT],
@@ -538,7 +529,7 @@ def plan[ModeT, AdapterT, BodyT: SceneBody](
         collected = _collect_cached_bindings(selected_nodes, cached.scene, nav, chrome)
         resources = {f"asset:{asset.key}": asset for asset in assets}
         return PlanResult(
-            scene=cast(SceneDocument[BodyT], cached.scene),
+            scene=cast(scene.Document[BodyT], cached.scene),
             bindings=collected.bindings,
             form_bindings=collected.form_bindings,
             report=cached.report,
@@ -626,15 +617,15 @@ def plan[ModeT, AdapterT, BodyT: SceneBody](
             f"but its dialect produced {type(body).__name__}"
         )
         raise LayoutInvariantError(message)
-    scene = SceneDocument(
-        protocol=SceneCodec.protocol,
+    planned = scene.Document(
+        protocol=scene.Codec.protocol,
         target=target.id,
         target_version=target.version,
         body=cast(BodyT, body),
-        assets=tuple(SceneAsset(asset.key, asset.name, asset.media_type) for asset in assets),
+        assets=tuple(scene.Asset(asset.key, asset.name, asset.media_type) for asset in assets),
         pagers=broker.pagers,
     )
-    fingerprint = SceneCodec.fingerprint(scene)
+    fingerprint = scene.Codec.fingerprint(planned)
     report = PlanReport(
         events=semantic.events
         + root_events
@@ -651,14 +642,14 @@ def plan[ModeT, AdapterT, BodyT: SceneBody](
             )
             for note in measured.notes
         ),
-        logical_fingerprint=stable_fingerprint((document,)),
+        logical_fingerprint=stable_fingerprint((planned,)),
         scene_fingerprint=fingerprint,
     )
     resources = dict(bindings.resources)
     resources.update({f"asset:{asset.key}": asset for asset in assets})
     updates = semantic.updates + broker.updates
     result = PlanResult(
-        scene=scene,
+        scene=planned,
         bindings=bindings.bindings,
         form_bindings=bindings.form_bindings,
         report=report,
@@ -673,7 +664,7 @@ def plan[ModeT, AdapterT, BodyT: SceneBody](
         cache.put(
             cache_key,
             CachedPlan(
-                scene,
+                planned,
                 report,
                 updates,
                 selected.state.strategies,
@@ -795,14 +786,14 @@ def _collect_bindings(nodes: Sequence[Node]) -> SceneBindings:
 
 def _collect_cached_bindings(
     nodes: Sequence[Node],
-    scene: SceneDocument,
+    document: scene.Document,
     nav: PlannedNav | None,
     chrome: Chrome,
 ) -> SceneBindings:
     collected = _collect_bindings(nodes)
     if nav is None:
         return collected
-    for pager in scene.pagers:
+    for pager in document.pagers:
         generated = _collect_bindings(
             nav(materialized_navigation_state(pager.key, Position(offset=pager.page), pager.pages, chrome))
         )

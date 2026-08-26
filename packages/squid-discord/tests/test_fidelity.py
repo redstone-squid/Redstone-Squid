@@ -3,6 +3,7 @@
 import pytest
 
 from squid_discord import V2_LIMITS as LIMITS
+from squid_layouts import scene
 from squid_layouts.errors import LayoutDegradedError
 from squid_layouts.planning import plan
 from squid_layouts.planning.adapter import AdapterProfile
@@ -11,7 +12,6 @@ from squid_layouts.planning.discord import components_v2_target
 from squid_layouts.planning.limits import V2Limits
 from squid_layouts.planning.types import DiscordAdapter
 from squid_layouts.primitives import Fidelity, Panel, Text, Variant, Variants
-from squid_layouts.scene.model import SceneText
 
 
 def _target(name: str, *, capabilities: frozenset[str] = frozenset(), limits: V2Limits = LIMITS):
@@ -43,9 +43,9 @@ def events(document) -> list[tuple[str, str]]:
 class TestStrictMode:
     def test_an_exact_later_rung_survives_strict_planning(self) -> None:
         """Stepping is not loss. A smaller faithful shape must not fail `strict=True`."""
-        scene = plan(ladder(Variant((Text("compact"),))), target=TARGET, strict=True).scene
+        document = plan(ladder(Variant((Text("compact"),))), target=TARGET, strict=True).scene
 
-        assert scene.components_v2.children == (SceneText("compact"),)
+        assert document.components_v2.children == (scene.Text("compact"),)
 
     def test_a_reformatted_rung_is_rejected_by_strict_planning(self) -> None:
         document = ladder(Variant((Text("compact"),), fidelity=Fidelity.REFORMATTED))
@@ -84,7 +84,7 @@ class TestOrdering:
             Variant((Text("exact"),)),
         )
 
-        assert plan(document, target=TARGET).scene.components_v2.children == (SceneText("exact"),)
+        assert plan(document, target=TARGET).scene.components_v2.children == (scene.Text("exact"),)
 
     def test_a_reformatted_rung_beats_a_lossy_earlier_one(self) -> None:
         document = ladder(
@@ -92,13 +92,13 @@ class TestOrdering:
             Variant((Text("reformatted"),), fidelity=Fidelity.REFORMATTED),
         )
 
-        assert plan(document, target=TARGET).scene.components_v2.children == (SceneText("reformatted"),)
+        assert plan(document, target=TARGET).scene.components_v2.children == (scene.Text("reformatted"),)
 
     def test_the_first_exact_rung_still_wins_among_equals(self) -> None:
         """With fidelity tied, rung distance decides — that is what preference means."""
         document = ladder(Variant((Text("first"),)), Variant((Text("second"),)))
 
-        assert plan(document, target=TARGET).scene.components_v2.children == (SceneText("first"),)
+        assert plan(document, target=TARGET).scene.components_v2.children == (scene.Text("first"),)
 
 
 class TestProfileAxes:
