@@ -1,6 +1,6 @@
 """Dispatch for stateless routed controls.
 
-The counterpart to `Mount` for the tier that outlives the process. A mount owns handlers
+The counterpart to `MessageRoot` for the tier that outlives the process. A mount owns handlers
 in memory and re-issues ids per generation; a router owns a table of `Route`s and resolves
 an incoming custom id against it, so a button drawn a year ago by a since-restarted
 process still reaches code.
@@ -49,7 +49,7 @@ from squid_ui.profiling import NoOpProfiler, OperationKind, OperationRecorder, P
 from squid_ui.routing import Route
 from squid_ui.target_types import DiscordPyAdapter
 from squid_ui_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
-from squid_ui_discord.mount import ErrorHook
+from squid_ui_discord.message_root import ErrorHook
 
 logger = logging.getLogger(__name__)
 _NOOP_PROFILER = NoOpProfiler()

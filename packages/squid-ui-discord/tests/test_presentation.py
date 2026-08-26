@@ -396,20 +396,20 @@ class TestDurableMode:
 
     async def test_promotion_records_the_mode_and_recovery_restores_it(self) -> None:
         message = fake_message()
-        mount = squid_ui_discord.Mount(Panel(), access=squid_ui_discord.Everyone(), timeout=None)
-        sent = await mount.send(delivered_to(message))
+        message_root = squid_ui_discord.MessageRoot(Panel(), access=squid_ui_discord.Everyone(), timeout=None)
+        sent = await message_root.send(delivered_to(message))
         assert isinstance(sent, delivery.Delivered)
         client = SimpleNamespace(get_channel=lambda _id: _Channel(message), fetch_channel=AsyncMock())
         frontend = DiscordFrontend(client)  # type: ignore[arg-type]
 
-        promoted = await frontend.promote(mount, sent.result)
+        promoted = await frontend.promote(message_root, sent.result)
 
         assert isinstance(promoted, Promoted)
         assert promoted.address.values["mode"] == "components_v2"
 
         # The stored mode wins over the flag on the message that comes back, which is what
         # makes it a restored fact rather than a re-derived one.
-        restored = squid_ui_discord.Mount(Panel(), access=squid_ui_discord.Everyone(), timeout=None)
+        restored = squid_ui_discord.MessageRoot(Panel(), access=squid_ui_discord.Everyone(), timeout=None)
         address = FrontendAddress("discord", {**promoted.address.values, "mode": "classic"})
         message.edit.reset_mock()
 
@@ -421,22 +421,22 @@ class TestDurableMode:
 
     async def test_a_record_written_before_the_mode_existed_falls_back_to_the_flag(self) -> None:
         message = fake_message()
-        mount = squid_ui_discord.Mount(Panel(), access=squid_ui_discord.Everyone(), timeout=None)
+        message_root = squid_ui_discord.MessageRoot(Panel(), access=squid_ui_discord.Everyone(), timeout=None)
         client = SimpleNamespace(get_channel=lambda _id: _Channel(message), fetch_channel=AsyncMock())
         frontend = DiscordFrontend(client)  # type: ignore[arg-type]
         address = FrontendAddress("discord", {"channel_id": message.channel.id, "message_id": message.id})
 
-        result = await frontend.reconnect([RecoveredBinding("mount-1", mount, address)])
+        result = await frontend.reconnect([RecoveredBinding("mount-1", message_root, address)])
 
         assert isinstance(result, Reconnected)
         assert "content" not in message.edit.await_args.kwargs
 
     def test_the_mode_survives_a_durable_record_round_trip(self) -> None:
         address = FrontendAddress("discord", {"channel_id": 5, "message_id": 99, "mode": "components_v2"})
-        record = squid_ui_discord.durability.DurableMountRecord(
+        record = squid_ui_discord.durability.DurableMessageRootRecord(
             protocol=1,
-            state=squid_ui_discord.durability.MountState(
-                protocol=squid_ui_discord.durability.MountStateCodec.protocol,
+            state=squid_ui_discord.durability.MessageRootState(
+                protocol=squid_ui_discord.durability.MessageRootStateCodec.protocol,
                 component_key="panel",
                 component_version=1,
                 components=(),
@@ -446,11 +446,11 @@ class TestDurableMode:
             address=address,
         )
 
-        encoded = squid_ui_discord.durability.DurableMountCodec.dumps(record)
+        encoded = squid_ui_discord.durability.DurableMessageRootCodec.dumps(record)
         assert '"state"' in encoded
         assert '"address"' in encoded
         assert '"snapshot"' not in encoded
         assert '"locator"' not in encoded
 
-        restored = squid_ui_discord.durability.DurableMountCodec.loads(encoded)
+        restored = squid_ui_discord.durability.DurableMessageRootCodec.loads(encoded)
         assert restored.address.values["mode"] == "components_v2"

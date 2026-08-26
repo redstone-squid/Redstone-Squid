@@ -9,8 +9,8 @@ import anyio
 import discord
 from discord.ext import commands
 
-import squid_ui_discord as sd
 import squid_ui as sl
+import squid_ui_discord as sd
 from squid.accounts.application import AccountService
 from squid.accounts.domain import (
     CURRENT_CONSENT_VERSION,
@@ -112,15 +112,15 @@ class ConsentPrompt(sl.Component):
                 sl.truncate(sl.paragraph(self._summary)),
                 bool(card_fields) and sl.fields(*card_fields),
             ),
-            sl.actions(
-                sl.action(
+            sl.action_controls(
+                sl.action_control(
                     self._accept_label,
                     self._accept,
                     key="accept",
                     tone=sl.Tone.SUCCESS,
                 ),
-                sl.action(t(self.locale, _("Cancel")), self._cancel, key="cancel"),
-                sl.action(t(self.locale, _("Privacy notice")), self._privacy, key="privacy"),
+                sl.action_control(t(self.locale, _("Cancel")), self._cancel, key="cancel"),
+                sl.action_control(t(self.locale, _("Privacy notice")), self._privacy, key="privacy"),
                 key="consent-actions",
             ),
         )
@@ -290,10 +290,10 @@ async def _open_prompt(
     user_id: int,
     locale: str | None,
     timeout: float,
-    parent: sd.Mount | None,
+    parent: sd.MessageRoot | None,
 ) -> bool:
     """Put the prompt on screen, telling the reader why not when it could not be opened."""
-    options: sd.MountOptions = {"localization": localization_for(locale), "timeout": timeout}
+    options: sd.MessageRootOptions = {"localization": localization_for(locale), "timeout": timeout}
     if parent is None:
         opened = await CONSENT_SCREEN.open(
             component,
@@ -326,7 +326,7 @@ async def prompt_for_consent(
     locale: str | None = None,
     preview: LinkPreview | None = None,
     timeout: float = 120.0,
-    parent: sd.Mount | None = None,
+    parent: sd.MessageRoot | None = None,
 ) -> AccountConsent | NotAskedType | None:
     """Show the notice and wait, returning the consent the user granted.
 
@@ -348,7 +348,7 @@ async def request_consent(
     locale: str | None = None,
     preview: LinkPreview | None = None,
     timeout: float = 120.0,
-    parent: sd.Mount | None = None,
+    parent: sd.MessageRoot | None = None,
 ) -> bool:
     """Show the notice and return, running `on_answer` from the prompt's own press.
 
@@ -391,7 +391,7 @@ async def with_consented_account(
     if account is not None and account.id is not None and not account.needs_consent_refresh:
         await work(event, account.id)
         return
-    mount = sd.responder(event).mount
+    message_root = sd.responder(event).message_root
 
     async def answered(prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
         if consent is None:
@@ -399,7 +399,7 @@ async def with_consented_account(
         granted = await accounts.get_or_create_identity(IdentityProvider.DISCORD, str(user.id), consent=consent)
         assert granted.id is not None, "get_or_create_identity always returns a persisted account"
         await work(prompt, granted.id)
-        await mount.schedule()
+        await message_root.schedule()
 
     await request_consent(
         interaction,
@@ -407,7 +407,7 @@ async def with_consented_account(
         on_answer=answered,
         locale=locale,
         timeout=timeout,
-        parent=mount,
+        parent=message_root,
     )
 
 
@@ -417,7 +417,7 @@ async def ensure_consented_account(
     *,
     locale: str | None = None,
     timeout: float = 120.0,
-    parent: sd.Mount | None = None,
+    parent: sd.MessageRoot | None = None,
 ) -> int | None:
     """Return the user's account id after current consent has been granted.
 

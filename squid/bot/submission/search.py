@@ -13,8 +13,8 @@ from discord.ext import commands
 from discord.ext.commands import Cog, Context, when_mentioned
 from discord.utils import escape_markdown
 
-import squid_ui_discord as sd
 import squid_ui as sl
+import squid_ui_discord as sd
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.operations import managed_result
 from squid.bot.submission.build_info import BuildInfoComponent
@@ -26,7 +26,7 @@ from squid.bot.submission.search_view import SearchResultsView
 from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.ui import (
     PagedList,
-    create_mount,
+    create_message_root,
     destination,
     error_layout,
     error_node,
@@ -219,8 +219,8 @@ class SearchCog[
             load_build=load_build,
             render_build=lambda build: self.bot.for_build(build).render_node(),
         )
-        mount = view.mount(source=ctx)
-        await mount.send(destination(ctx, locale=locale))
+        message_root = view.mount(source=ctx)
+        await message_root.send(destination(ctx, locale=locale))
 
     @commands.hybrid_group(name="restrictions")
     @requires(RESTRICTION_ALIAS_CREATE)
@@ -294,7 +294,7 @@ class SearchCog[
 
             component = BuildInfoComponent(build, node, refresh=refresh, locale=locale)
             navigator = sd.navigation.Navigator(component)
-            mount = create_mount(
+            message_root = create_message_root(
                 navigator,
                 source=interaction,
                 access=sd.Everyone(),
@@ -302,7 +302,7 @@ class SearchCog[
                 timeout=300,
                 scheduler=self.bot.layout_scheduler,
             )
-            await mount.send(sd.respond_to(interaction, ephemeral=False, wait=True))
+            await message_root.send(sd.respond_to(interaction, ephemeral=False, wait=True))
             return
 
         await self._view_build_prefix(ctx, build_id)

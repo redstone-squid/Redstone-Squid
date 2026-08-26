@@ -9,8 +9,8 @@ import pytest
 import squid_ui as sl
 import squid_ui_discord
 from squid_ui.primitives import Button, Heading, Row, Text
-from squid_ui_discord import Everyone, Mount, Owner, live
-from squid_ui_discord.devtools_view import MountInspector, metrics_text, plan_text, scene_attachment
+from squid_ui_discord import Everyone, MessageRoot, Owner, live
+from squid_ui_discord.devtools_view import MessageRootInspector, metrics_text, plan_text, scene_attachment
 from squid_ui_discord.testing import assert_within_limits, commit_render, delivered_to, fake_interaction
 
 
@@ -46,15 +46,15 @@ def _isolated_registry():
     live._LIVE.clear()
 
 
-async def live_subject(**kwargs: Any) -> Mount:
-    mount = Mount(Subject(), access=kwargs.pop("access", Everyone()), **kwargs)
-    await mount.send(delivered_to(squid_ui_discord.testing.fake_message(message_id=42)))
-    return mount
+async def live_subject(**kwargs: Any) -> MessageRoot:
+    message_root = MessageRoot(Subject(), access=kwargs.pop("access", Everyone()), **kwargs)
+    await message_root.send(delivered_to(squid_ui_discord.testing.fake_message(message_id=42)))
+    return message_root
 
 
-def mount_inspector(inspector: MountInspector) -> tuple[Mount, discord.ui.LayoutView]:
-    mount = Mount(inspector, access=Owner(1))
-    return mount, commit_render(mount)
+def message_root_inspector(inspector: MessageRootInspector) -> tuple[MessageRoot, discord.ui.LayoutView]:
+    message_root = MessageRoot(inspector, access=Owner(1))
+    return message_root, commit_render(message_root)
 
 
 def _texts(view: discord.ui.LayoutView) -> list[str]:
@@ -63,14 +63,14 @@ def _texts(view: discord.ui.LayoutView) -> list[str]:
 
 class TestList:
     def test_the_inspector_authors_high_level_semantic_nodes(self) -> None:
-        nodes = MountInspector().render()
+        nodes = MessageRootInspector().render()
 
         assert isinstance(nodes[0], sl.semantic.Section)
         assert isinstance(nodes[-1], sl.semantic.ActionControls)
 
-    async def test_it_lists_a_live_mount_with_a_link_to_its_message(self) -> None:
+    async def test_it_lists_a_live_message_root_with_a_link_to_its_message(self) -> None:
         subject = await live_subject()
-        _, view = mount_inspector(MountInspector())
+        _, view = message_root_inspector(MessageRootInspector())
 
         body = "\n".join(_texts(view))
         assert subject.id in body
@@ -78,34 +78,34 @@ class TestList:
         assert "/42" in body
 
     def test_an_empty_process_says_so_rather_than_drawing_a_dead_picker(self) -> None:
-        _, view = mount_inspector(MountInspector())
+        _, view = message_root_inspector(MessageRootInspector())
 
         assert "Nothing is mounted" in "\n".join(_texts(view))
         assert not [item for item in view.walk_children() if isinstance(item, discord.ui.Select)]
 
-    async def test_the_picker_opens_the_chosen_mount(self) -> None:
+    async def test_the_picker_opens_the_chosen_root(self) -> None:
         subject = await live_subject()
-        inspector = MountInspector()
-        mount, _ = mount_inspector(inspector)
+        inspector = MessageRootInspector()
+        message_root, _ = message_root_inspector(inspector)
 
-        await mount.dispatch("open", fake_interaction(), [subject.id])
+        await message_root.dispatch("open", fake_interaction(), [subject.id])
 
         assert inspector.focus == subject.id
-        assert f"Mount {subject.id}" in "\n".join(_texts(commit_render(mount)))
+        assert f"MessageRoot {subject.id}" in "\n".join(_texts(commit_render(message_root)))
 
     async def test_it_marks_itself_in_its_own_list(self) -> None:
-        inspector = MountInspector()
-        mount, _ = mount_inspector(inspector)
-        inspector.own_id = mount.id
+        inspector = MessageRootInspector()
+        message_root, _ = message_root_inspector(inspector)
+        inspector.own_id = message_root.id
 
-        assert "(this panel)" in "\n".join(_texts(commit_render(mount)))
+        assert "(this panel)" in "\n".join(_texts(commit_render(message_root)))
 
 
 class TestDetail:
     async def test_a_detail_view_reports_state_plan_and_handlers(self) -> None:
         subject = await live_subject(access=Owner(7))
         await subject.refresh()
-        _, view = mount_inspector(MountInspector(focus=subject.id))
+        _, view = message_root_inspector(MessageRootInspector(focus=subject.id))
 
         body = "\n".join(_texts(view))
         assert "'opened': False" in body
@@ -116,10 +116,10 @@ class TestDetail:
 
     async def test_a_detail_view_distinguishes_an_armed_dirty_application(self) -> None:
         now = datetime.now(UTC)
-        scheduler = squid_ui_discord.MountScheduler(clock=lambda: now)
+        scheduler = squid_ui_discord.MessageRootScheduler(clock=lambda: now)
         interaction = fake_interaction(message_id=42)
         interaction.expires_at = now + timedelta(seconds=30)
-        subject = Mount(
+        subject = MessageRoot(
             Subject(),
             access=Everyone(),
             scheduler=scheduler,
@@ -137,7 +137,7 @@ class TestDetail:
         await subject.refresh()
         subject.invalidate()
 
-        _, view = mount_inspector(MountInspector(focus=subject.id))
+        _, view = message_root_inspector(MessageRootInspector(focus=subject.id))
         body = "\n".join(_texts(view))
 
         assert "renewal armed" in body
@@ -147,7 +147,7 @@ class TestDetail:
     async def test_a_detail_view_reports_cell_versions_and_computed_sources(self) -> None:
         subject = await live_subject()
         await subject.dispatch("open", fake_interaction(message_id=42))
-        _, view = mount_inspector(MountInspector(focus=subject.id))
+        _, view = message_root_inspector(MessageRootInspector(focus=subject.id))
 
         body = "\n".join(_texts(view))
         assert "opened v1" in body
@@ -156,49 +156,49 @@ class TestDetail:
 
     async def test_it_reflects_the_subject_changing_under_it(self) -> None:
         subject = await live_subject()
-        inspector = MountInspector(focus=subject.id)
-        mount, _ = mount_inspector(inspector)
+        inspector = MessageRootInspector(focus=subject.id)
+        message_root, _ = message_root_inspector(inspector)
         await subject.dispatch("open", fake_interaction(message_id=42))
 
         # A handler that changes nothing leaves the mount clean, so Refresh has to be a
         # state change of its own or the message would keep showing the old dump.
-        await mount.dispatch("refresh", fake_interaction())
+        await message_root.dispatch("refresh", fake_interaction())
 
-        assert "'opened': True" in "\n".join(_texts(commit_render(mount)))
+        assert "'opened': True" in "\n".join(_texts(commit_render(message_root)))
 
-    async def test_a_mount_that_finished_while_the_panel_was_open_falls_back_to_the_list(self) -> None:
+    async def test_a_message_root_that_finished_while_the_panel_was_open_falls_back_to_the_list(self) -> None:
         subject = await live_subject()
-        inspector = MountInspector(focus=subject.id)
-        mount, _ = mount_inspector(inspector)
+        inspector = MessageRootInspector(focus=subject.id)
+        message_root, _ = message_root_inspector(inspector)
         await subject.finish(disable=False)
 
-        await mount.dispatch("refresh", fake_interaction())
-        body = "\n".join(_texts(commit_render(mount)))
+        await message_root.dispatch("refresh", fake_interaction())
+        body = "\n".join(_texts(commit_render(message_root)))
 
         assert "no longer live" in body
         assert "Live mounts" in body
 
     async def test_back_returns_to_the_list(self) -> None:
         subject = await live_subject()
-        inspector = MountInspector(focus=subject.id)
-        mount, _ = mount_inspector(inspector)
+        inspector = MessageRootInspector(focus=subject.id)
+        message_root, _ = message_root_inspector(inspector)
 
-        await mount.dispatch("back", fake_interaction())
+        await message_root.dispatch("back", fake_interaction())
 
         assert inspector.focus is None
 
     async def test_a_detail_view_fits_discord(self) -> None:
         subject = await live_subject()
-        _, view = mount_inspector(MountInspector(focus=subject.id))
+        _, view = message_root_inspector(MessageRootInspector(focus=subject.id))
 
         assert_within_limits(view)
 
-    async def test_a_registry_key_labels_its_mount(self) -> None:
+    async def test_a_registry_key_labels_its_root(self) -> None:
         registry = squid_ui_discord.SessionRegistry()
-        subject = Mount(Subject(), access=Everyone())
+        subject = MessageRoot(Subject(), access=Everyone())
         await registry.open(subject, delivered_to(squid_ui_discord.testing.fake_message()), key=("editor", 7))
 
-        _, view = mount_inspector(MountInspector(registry=registry))
+        _, view = message_root_inspector(MessageRootInspector(registry=registry))
 
         assert "('editor', 7)" in "\n".join(_texts(view))
 
@@ -214,8 +214,8 @@ class TestSceneDump:
         assert isinstance(asset.source, sl.document.InlineAsset)
         assert sl.scene.Codec.loads(asset.source.data.decode()) == subject.snapshot().scene
 
-    def test_a_mount_with_no_committed_render_has_no_scene(self) -> None:
-        assert scene_attachment(Mount(Subject(), access=Everyone()).snapshot()) is None
+    def test_a_message_root_with_no_committed_render_has_no_scene(self) -> None:
+        assert scene_attachment(MessageRoot(Subject(), access=Everyone()).snapshot()) is None
 
 
 class TestPlanDiagnostics:
@@ -228,7 +228,7 @@ class TestPlanDiagnostics:
         assert "cache:" in metrics_text(snapshot)
 
     def test_uncommitted_mounts_explain_missing_diagnostics(self) -> None:
-        snapshot = Mount(Subject(), access=Everyone()).snapshot()
+        snapshot = MessageRoot(Subject(), access=Everyone()).snapshot()
 
         assert "no plan report" in plan_text(snapshot)
         assert "no planner metrics" in metrics_text(snapshot)

@@ -13,7 +13,7 @@ from squid_ui.primitives import Text
 from squid_ui.scene import ClassicMessage, Codec, Embed
 from squid_ui.scene import Scene as RenderedScene
 from squid_ui.semantic import ActionControl, ActionControls
-from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, Mount
+from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, MessageRoot
 from squid_ui_discord.classic_renderer import ClassicRenderer
 from squid_ui_discord.render_cache import RenderProgramCache
 from squid_ui_discord.renderer import StaticView, V2Renderer
@@ -151,7 +151,7 @@ def test_classic_program_hits_return_fresh_objects_and_skip_certified_audit(monk
     assert cache.snapshot().certified == 1
 
 
-async def test_mount_reuses_a_revisited_scene_program() -> None:
+async def test_message_root_reuses_a_revisited_scene_program() -> None:
     class Switching(Component):
         value: str = state("first")
 
@@ -159,18 +159,18 @@ async def test_mount_reuses_a_revisited_scene_program() -> None:
             return Text(self.value)
 
     component = Switching()
-    mount = Mount(component, access=Everyone(), timeout=None)
-    await mount.send(delivered_to(fake_message()))
+    message_root = MessageRoot(component, access=Everyone(), timeout=None)
+    await message_root.send(delivered_to(fake_message()))
     component.value = "second"
-    await mount.refresh()
+    await message_root.refresh()
     component.value = "first"
-    await mount.refresh()
+    await message_root.refresh()
 
-    snapshot = mount.snapshot().render_cache
+    snapshot = message_root.snapshot().render_cache
     assert snapshot.hits == 1
     assert snapshot.misses == 2
-    await mount.finish(disable=False)
-    assert len(mount.render_cache) == 0
+    await message_root.finish(disable=False)
+    assert len(message_root.render_cache) == 0
 
 
 async def test_explicit_render_cache_shares_programs_without_sharing_frontend_objects() -> None:
@@ -179,8 +179,8 @@ async def test_explicit_render_cache_shares_programs_without_sharing_frontend_ob
             return Text("shared")
 
     cache = RenderProgramCache()
-    first = Mount(Static(), access=Everyone(), timeout=None, render_cache=cache)
-    second = Mount(Static(), access=Everyone(), timeout=None, render_cache=cache)
+    first = MessageRoot(Static(), access=Everyone(), timeout=None, render_cache=cache)
+    second = MessageRoot(Static(), access=Everyone(), timeout=None, render_cache=cache)
 
     await first.send(delivered_to(fake_message()))
     await second.send(delivered_to(fake_message()))

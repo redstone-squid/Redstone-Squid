@@ -94,8 +94,8 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 sl.primitives.Text(t(locale, _("Redstoner role controls"))),
                 # Not translated: one panel is read by everyone in the channel, so the
                 # guild's locale would still be the wrong language for most of them.
-                sl.actions(
-                    sl.routed_action(
+                sl.action_controls(
+                    sl.routed_action_control(
                         "I'm not a redstoner",
                         remove_redstoner_role.id(),
                         key="remove-redstoner",

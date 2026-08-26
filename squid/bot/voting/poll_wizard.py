@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING, Any, cast
 
 import discord
 
-import squid_ui_discord as sd
 import squid_ui as sl
+import squid_ui_discord as sd
 from squid.bot._types import GuildMessageable
 from squid.voting.domain import (
     MAX_POLL_DURATION_SECONDS,
@@ -204,7 +204,7 @@ async def present_poll_form(
         await POLL_SCREEN.respond(
             component,
             form_interaction,
-            sessions=form_interaction.client.mounts,
+            sessions=form_interaction.client.message_roots,
             wait=True,
             scheduler=scheduler,
             expiry=sd.RenewEphemeral() if scheduler is not None else sd.PauseUpdates(),
@@ -281,15 +281,15 @@ class PollConfirmationComponent(sl.Component):
                 )
             )
         nodes.append(
-            sl.actions(
-                sl.action(
+            sl.action_controls(
+                sl.action_control(
                     "Publish",
                     self._publish,
                     key="publish",
                     tone=sl.Tone.SUCCESS,
                 ),
-                sl.action("Edit", self._edit, key="edit"),
-                sl.action(
+                sl.action_control("Edit", self._edit, key="edit"),
+                sl.action_control(
                     "Cancel",
                     self._cancel,
                     key="cancel",

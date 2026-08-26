@@ -221,7 +221,7 @@ def make_layout_bot(**attributes: Any) -> Any:
     # reads, and the double is a bag of them rather than a class declaring any.
     client.__dict__.update(
         layout_host=host,
-        mounts=host.mounts,
+        message_roots=host.message_roots,
         layout_scheduler=host.scheduler,
         layout_challenges=host.challenges,
     )

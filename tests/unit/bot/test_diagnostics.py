@@ -13,15 +13,15 @@ from whenever import Instant
 import squid.bot.app
 from squid.bot.diagnostics import Diagnostics
 from squid.bot.diagnostics_view import ErrorReportBrowser, report_attachment
-from squid.bot.ui import create_mount
+from squid.bot.ui import create_message_root
 from squid.diagnostics.domain import ErrorReport
+from squid_ui.sources import Position
 from squid_ui_discord import (
     V2_LIMITS as LIMITS,
 )
-from squid_ui_discord import Mount, Owner
-from squid_ui_discord.mount import MountedView
+from squid_ui_discord import MessageRoot, Owner
+from squid_ui_discord.message_root import MountedView
 from squid_ui_discord.testing import assert_within_limits, commit_render, fake_interaction
-from squid_ui.sources import Position
 from tests.helpers.discord import make_layout_bot
 
 
@@ -84,20 +84,20 @@ def make_cog(*, report: ErrorReport | None = None, reports: tuple[ErrorReport, .
     return Diagnostics(cast("squid.bot.app.RedstoneSquid", bot))
 
 
-def mount_browser(browser: ErrorReportBrowser) -> tuple[Mount, discord.ui.LayoutView]:
-    mount = create_mount(browser, source=make_layout_bot(), access=Owner(1), chrome=browser.chrome())
-    return mount, commit_render(mount)
+def message_root_browser(browser: ErrorReportBrowser) -> tuple[MessageRoot, discord.ui.LayoutView]:
+    message_root = create_message_root(browser, source=make_layout_bot(), access=Owner(1), chrome=browser.chrome())
+    return message_root, commit_render(message_root)
 
 
 def _texts(view: discord.ui.LayoutView) -> list[str]:
     return [c.content for c in view.walk_children() if isinstance(c, discord.ui.TextDisplay)]
 
 
-def _code_pages(mount: Mount) -> list[str]:
+def _code_pages(message_root: MessageRoot) -> list[str]:
     """Every page of the fenced body, walked via the mount's own nav handlers."""
     pages = []
     while True:
-        view = commit_render(mount)
+        view = commit_render(message_root)
         pages.append(next(text for text in _texts(view) if text.startswith("```")))
         next_button = next(
             item
@@ -106,14 +106,14 @@ def _code_pages(mount: Mount) -> list[str]:
         )
         if next_button.disabled:
             return pages
-        cursor = mount.presentation.cursor("traceback")
-        mount.presentation.move_cursor("traceback", Position(offset=cursor.position.offset + 1))
+        cursor = message_root.presentation.cursor("traceback")
+        message_root.presentation.move_cursor("traceback", Position(offset=cursor.position.offset + 1))
 
 
 async def test_recent_list_offers_every_entry_for_opening() -> None:
     """The audit's complaint: a listed reference could only be read, then retyped."""
     reports = (make_report("aaa111"), make_report("bbb222", work_lost=True))
-    _, view = mount_browser(ErrorReportBrowser(reports))
+    _, view = message_root_browser(ErrorReportBrowser(reports))
 
     payload = view.to_components()
     select = payload[1]["components"][0]
@@ -123,10 +123,10 @@ async def test_recent_list_offers_every_entry_for_opening() -> None:
 
 async def test_opening_a_listed_report_replaces_the_list_in_place() -> None:
     browser = ErrorReportBrowser((make_report("aaa111"),))
-    mount, _ = mount_browser(browser)
+    message_root, _ = message_root_browser(browser)
     interaction = fake_interaction()
 
-    await mount.dispatch("open", interaction, ["0"])
+    await message_root.dispatch("open", interaction, ["0"])
 
     payload = str(interaction.response.edit_message.await_args.kwargs["view"].to_components())
     assert "Error aaa111" in payload
@@ -138,7 +138,7 @@ async def test_a_long_traceback_is_readable_past_one_page() -> None:
     """Previously the card showed a fixed 1200-character tail and nothing could reach the rest."""
     frames = "\n".join(f"  File 'module{index}.py', line {index}, in frame{index}" for index in range(300))
     browser = ErrorReportBrowser(report=make_report(traceback=f"Traceback:\n{frames}\nValueError: boom"))
-    mount, view = mount_browser(browser)
+    message_root, view = message_root_browser(browser)
 
     # The failing frame is at the end, so that is where the report opens.
     first_shown = next(text for text in _texts(view) if text.startswith("```"))
@@ -147,13 +147,13 @@ async def test_a_long_traceback_is_readable_past_one_page() -> None:
     assert footers
     assert "page 1 of" not in footers[0]
 
-    mount.presentation.move_cursor("traceback", Position())
-    earliest = commit_render(mount)
+    message_root.presentation.move_cursor("traceback", Position())
+    earliest = commit_render(message_root)
     assert "frame0" in "\n".join(_texts(earliest))
 
 
 async def test_paging_controls_absent_for_a_short_traceback() -> None:
-    _, view = mount_browser(ErrorReportBrowser(report=make_report(traceback="one frame")))
+    _, view = message_root_browser(ErrorReportBrowser(report=make_report(traceback="one frame")))
 
     buttons = [item.label for item in view.walk_children() if isinstance(item, discord.ui.Button)]
     assert "Earlier" not in buttons
@@ -163,19 +163,19 @@ async def test_paging_controls_absent_for_a_short_traceback() -> None:
 async def test_paging_stops_at_both_ends() -> None:
     frames = "\n".join("frame " + "x" * 90 for _ in range(200))
     browser = ErrorReportBrowser(report=make_report(traceback=frames))
-    mount, view = mount_browser(browser)
+    message_root, view = message_root_browser(browser)
 
     nav = [item for item in view.walk_children() if isinstance(item, discord.ui.Button) and item.custom_id]
     later = next(item for item in nav if ":__cursor_next" in (item.custom_id or ""))
     assert later.disabled  # opened at the end
     interaction = fake_interaction()
-    await mount.dispatch("__cursor_next.traceback", interaction)
+    await message_root.dispatch("__cursor_next.traceback", interaction)
     interaction.response.defer.assert_awaited_once()  # nothing to advance to
 
 
 async def test_the_log_tail_is_shown_and_keeps_its_last_lines() -> None:
     browser = ErrorReportBrowser(report=make_report(log_tail=("first line", "second line")))
-    _, view = mount_browser(browser)
+    _, view = message_root_browser(browser)
 
     text = "\n".join(_texts(view))
     assert "Log tail" in text
@@ -186,14 +186,14 @@ async def test_every_page_fits_the_real_display_budget() -> None:
     """The PAGE_CHARS killer: each page, chrome and footer included, fits the actual budget."""
     long_line = "x" * 9001
     browser = ErrorReportBrowser(report=make_report(traceback=f"{long_line}\nValueError: boom"))
-    mount, _ = mount_browser(browser)
+    message_root, _ = message_root_browser(browser)
 
-    mount.presentation.move_cursor("traceback", Position())
-    pages = _code_pages(mount)
+    message_root.presentation.move_cursor("traceback", Position())
+    pages = _code_pages(message_root)
     assert len(pages) > 1
     for page_index in range(len(pages)):
-        mount.presentation.move_cursor("traceback", Position(offset=page_index))
-        view = commit_render(mount)
+        message_root.presentation.move_cursor("traceback", Position(offset=page_index))
+        view = commit_render(message_root)
         assert_within_limits(view)
         assert sum(len(text) for text in _texts(view)) <= LIMITS.total_text
     assert "ValueError: boom" in pages[-1]
@@ -204,10 +204,10 @@ async def test_every_page_fits_the_real_display_budget() -> None:
 
 async def test_choosing_a_report_attaches_its_full_text() -> None:
     browser = ErrorReportBrowser((make_report("aaa111"),))
-    mount, _ = mount_browser(browser)
+    message_root, _ = message_root_browser(browser)
     interaction = fake_interaction()
 
-    await mount.dispatch("open", interaction, ["0"])
+    await message_root.dispatch("open", interaction, ["0"])
 
     attachments = interaction.response.edit_message.await_args.kwargs["attachments"]
     assert [file.filename for file in attachments] == ["error-aaa111.txt"]
@@ -215,11 +215,11 @@ async def test_choosing_a_report_attaches_its_full_text() -> None:
 
 async def test_going_back_removes_the_attachment() -> None:
     browser = ErrorReportBrowser((make_report("aaa111"),))
-    mount, _ = mount_browser(browser)
-    await mount.dispatch("open", fake_interaction(), ["0"])
+    message_root, _ = message_root_browser(browser)
+    await message_root.dispatch("open", fake_interaction(), ["0"])
     interaction = fake_interaction()
 
-    await mount.dispatch("back", interaction)
+    await message_root.dispatch("back", interaction)
 
     assert interaction.response.edit_message.await_args.kwargs["attachments"] == []
 
@@ -273,7 +273,7 @@ async def test_recent_delivers_the_view_privately(in_guild: bool) -> None:
 
 
 async def test_a_fence_inside_a_traceback_cannot_close_the_card_fence() -> None:
-    _, view = mount_browser(ErrorReportBrowser(report=make_report(traceback="ValueError: ```not markdown```")))
+    _, view = message_root_browser(ErrorReportBrowser(report=make_report(traceback="ValueError: ```not markdown```")))
 
     fenced = next(text for text in _texts(view) if "not markdown" in text)
     assert "```not" not in fenced

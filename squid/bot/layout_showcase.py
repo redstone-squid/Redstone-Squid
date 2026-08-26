@@ -10,8 +10,8 @@ from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Context, guild_only
 
-import squid_ui_discord as sd
 import squid_ui as sl
+import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.bot.i18n import resolve_locale
 from squid.bot.ui import (
@@ -19,16 +19,16 @@ from squid.bot.ui import (
     DISCORD_GREEN,
     DISCORD_YELLOW,
     L,
-    create_mount,
+    create_message_root,
     destination,
     localization_for,
     send_component,
 )
 from squid.core.i18n import _
+from squid_replication import Replica, ReplicatedDocument
 from squid_ui_discord import SessionKey
 from squid_ui_discord.screens import Opener
 from squid_ui_discord.sessions import UserScope
-from squid_replication import ReplicatedDocument, Replica
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -64,7 +64,7 @@ _SOURCE_EXAMPLES = {
 # No page size: the solver fills Discord's actual text budget.
 return sl.section(sl.heading("Measured pagination"), lines)""",
     "adaptation": """actions = tuple(
-    sl.action(
+    sl.action_control(
         L("Action {number}", number=number),
         on_action,
         key=f"action.{number}",
@@ -73,7 +73,7 @@ return sl.section(sl.heading("Measured pagination"), lines)""",
 )
 
 # Declare intent once. Discord lowers this to pickers of 25 and 11.
-return sl.actions(*actions, key="showcase-actions")""",
+return sl.action_controls(*actions, key="showcase-actions")""",
     "degradation": """return sl.primitives.Panel((
     sl.primitives.Heading("Deliberate degradation"),
 
@@ -90,7 +90,7 @@ return sl.actions(*actions, key="showcase-actions")""",
     sl.heading("Typed data"),
 
     # A quantity, a proportion, and an instant -- not three pre-formatted strings.
-    sl.measure(len(rows), "Loaded samples", unit="rows"),
+    sl.metric(len(rows), "Loaded samples", unit="rows"),
     sl.progress(clicks, label="Clicks toward ten", maximum=10),
 
     # One node; Discord draws it in each reader's own timezone.
@@ -164,7 +164,7 @@ async def switch_language(self, event: sl.PressEvent) -> None:
     "history": """history: sl.runtime.History = sl.runtime.history(limit=5)
 
 # The whole committed action becomes one conditional inverse plan.
-sl.action("Rename project", self.rename, key="history.rename", record=self.history)
+sl.action_control("Rename project", self.rename, key="history.rename", record=self.history)
 
 result = await self.history.undo()
 match result.status:
@@ -449,7 +449,7 @@ class LayoutShowcase(sl.Component):
 
     def _adaptation(self) -> Sequence[sl.LayoutNode]:
         actions = tuple(
-            sl.semantic.Action(f"action.{index}", L("Action {number}", number=index), self._action_notice)
+            sl.semantic.ActionControl(f"action.{index}", L("Action {number}", number=index), self._action_notice)
             for index in range(1, 37)
         )
         return (
@@ -464,7 +464,7 @@ class LayoutShowcase(sl.Component):
                 ),
                 accent=DISCORD_YELLOW,
             ),
-            sl.semantic.Actions(actions, key="showcase-actions"),
+            sl.semantic.ActionControls(actions, key="showcase-actions"),
         )
 
     def _degradation(self) -> Sequence[sl.LayoutNode]:
@@ -510,7 +510,7 @@ class LayoutShowcase(sl.Component):
                         "every reader in their own timezone without this component knowing any of them."
                     )
                 ),
-                sl.measure(len(self.entries), L(t"Loaded samples"), unit="rows"),
+                sl.metric(len(self.entries), L(t"Loaded samples"), unit="rows"),
                 sl.progress(self.clicks, label=L(t"Reactive clicks toward ten"), maximum=10),
                 sl.timestamp(self.opened_at, style=sl.semantic.TimeStyle.RELATIVE, label=L(t"Showcase opened")),
                 accent=DISCORD_BLUE,
@@ -659,8 +659,8 @@ class LayoutShowcase(sl.Component):
                 sl.note(L(t"Switching language invalidates this same mount; no component is rebuilt or replaced.")),
                 accent=DISCORD_BLUE,
             ),
-            sl.actions(
-                sl.action(L(t"Switch language"), self._switch_language, key="switch-language"),
+            sl.action_controls(
+                sl.action_control(L(t"Switch language"), self._switch_language, key="switch-language"),
                 key="localization-actions",
             ),
         )
@@ -689,22 +689,24 @@ class LayoutShowcase(sl.Component):
                 ),
                 accent=DISCORD_GREEN,
             ),
-            sl.actions(
-                sl.action(
+            sl.action_controls(
+                sl.action_control(
                     L(t"Rename project"),
                     self._rename_project,
                     key="history.rename",
                     tone=sl.Tone.SUCCESS,
                     record=self.action_history,
                 ),
-                sl.action(L(t"Sibling edit"), self._sibling_edit, key="history.sibling"),
+                sl.action_control(L(t"Sibling edit"), self._sibling_edit, key="history.sibling"),
                 key="history-write-actions",
             ),
-            sl.actions(
-                sl.action(L(t"Undo rename"), self._undo_rename, key="history.undo"),
-                sl.action(L(t"Redo rename"), self._redo_rename, key="history.redo"),
-                sl.action(L(t"Drop conflict"), self._drop_history_conflict, key="history.drop"),
-                sl.action(L(t"Cause rollback"), self._cause_rollback, key="history.rollback", tone=sl.Tone.DANGER),
+            sl.action_controls(
+                sl.action_control(L(t"Undo rename"), self._undo_rename, key="history.undo"),
+                sl.action_control(L(t"Redo rename"), self._redo_rename, key="history.redo"),
+                sl.action_control(L(t"Drop conflict"), self._drop_history_conflict, key="history.drop"),
+                sl.action_control(
+                    L(t"Cause rollback"), self._cause_rollback, key="history.rollback", tone=sl.Tone.DANGER
+                ),
                 key="history-outcome-actions",
             ),
         )
@@ -737,16 +739,16 @@ class LayoutShowcase(sl.Component):
                 ),
                 accent=DISCORD_BLUE,
             ),
-            sl.actions(
-                sl.action(
+            sl.action_controls(
+                sl.action_control(
                     L(t"Add my +2 review"),
                     self._add_local_review,
                     key="replication.local",
                     record=self.replication_history,
                     tone=sl.Tone.SUCCESS,
                 ),
-                sl.action(L(t"Merge peer +3"), self._merge_peer_review, key="replication.peer"),
-                sl.action(L(t"Undo my review"), self._undo_local_review, key="replication.undo"),
+                sl.action_control(L(t"Merge peer +3"), self._merge_peer_review, key="replication.peer"),
+                sl.action_control(L(t"Undo my review"), self._undo_local_review, key="replication.undo"),
                 key="replication-actions",
             ),
         )
@@ -780,12 +782,16 @@ class LayoutShowcase(sl.Component):
                 ),
                 accent=DISCORD_YELLOW,
             ),
-            sl.actions(
-                sl.action(L(t"Start publication"), self._start_publication, key="effects.publish"),
-                sl.action(L(t"Accept result"), self._accept_publication, key="effects.accept"),
-                sl.action(L(t"Create channel"), self._create_channel, key="effects.create", tone=sl.Tone.SUCCESS),
-                sl.action(L(t"Fail next compensation"), self._fail_next_compensation, key="effects.fail"),
-                sl.action(L(t"Undo / retry channel"), self._undo_channel, key="effects.undo", tone=sl.Tone.DANGER),
+            sl.action_controls(
+                sl.action_control(L(t"Start publication"), self._start_publication, key="effects.publish"),
+                sl.action_control(L(t"Accept result"), self._accept_publication, key="effects.accept"),
+                sl.action_control(
+                    L(t"Create channel"), self._create_channel, key="effects.create", tone=sl.Tone.SUCCESS
+                ),
+                sl.action_control(L(t"Fail next compensation"), self._fail_next_compensation, key="effects.fail"),
+                sl.action_control(
+                    L(t"Undo / retry channel"), self._undo_channel, key="effects.undo", tone=sl.Tone.DANGER
+                ),
                 key="effects-actions",
             ),
         )
@@ -902,7 +908,7 @@ class LayoutShowcase(sl.Component):
 
     async def _switch_language(self, event: sl.ActionEvent) -> None:
         self.display_locale = "en" if event.locale == "zh-CN" else "zh-CN"
-        sd.responder(event).mount.localize(localization_for(self.display_locale))
+        sd.responder(event).message_root.localize(localization_for(self.display_locale))
 
     async def _action_notice(self, event: sl.ActionEvent) -> None:
         await event.notice(L(t"The semantic action kept its own callback after adaptation."))
@@ -948,7 +954,9 @@ class LayoutShowcase(sl.Component):
             with sl.runtime.fresh_action_transaction(action_context=context):
                 self.project_name = "THIS STAGED VALUE MUST NOT APPEAR"
 
-                def rolled_back(rollback: sl.runtime.ActionRollback, continuation: sl.runtime.ActionContinuation) -> None:
+                def rolled_back(
+                    rollback: sl.runtime.ActionRollback, continuation: sl.runtime.ActionContinuation
+                ) -> None:
                     with continuation.start_action("Present rollback outcome"):
                         self.outcome_result = (
                             f"ROLLED BACK · {rollback.reason.value} · action "
@@ -1202,13 +1210,13 @@ class Lobby(sl.Component):
     def __init__(self, sessions: sd.SessionRegistry, host_id: int) -> None:
         self.sessions = sessions
         self.host_id = host_id
-        self._mount: sd.Mount | None = None
+        self._root: sd.MessageRoot | None = None
 
-    def mount(self, *, source: sd.host.HostSource, locale: str | None = None) -> sd.Mount:
+    def mount(self, *, source: sd.host.HostSource, locale: str | None = None) -> sd.MessageRoot:
         # Kept so the panel can find its own session; the mount cannot be handed to the
         # component that renders it any other way.
-        self._mount = create_mount(self, source=source, access=sd.Everyone(), locale=locale, timeout=None)
-        return self._mount
+        self._root = create_message_root(self, source=source, access=sd.Everyone(), locale=locale, timeout=None)
+        return self._root
 
     def render(self) -> sl.LayoutNode:
         session = self._session()
@@ -1227,9 +1235,9 @@ class Lobby(sl.Component):
             sl.heading(L(t"Lobby")),
             sl.roster(placement, key="lobby-roster", on_join=self._join),
             sl.paragraph(status),
-            sl.actions(
-                sl.action(L(t"Leave"), self._leave, key="leave"),
-                sl.action(L(t"Start"), self._start, key="start"),
+            sl.action_controls(
+                sl.action_control(L(t"Leave"), self._leave, key="leave"),
+                sl.action_control(L(t"Start"), self._start, key="start"),
                 key="lobby",
             ),
         )
@@ -1263,7 +1271,7 @@ class Lobby(sl.Component):
         self.started_with = len(session.members)
 
     def _session(self) -> sd.sessions.Session | None:
-        return None if self._mount is None else self.sessions.session_for(self._mount)
+        return None if self._root is None else self.sessions.session_for(self._root)
 
 
 _JOIN_NOTICES = {
@@ -1347,8 +1355,8 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         """Open a four-seat lobby whose roster lives in the session, not the panel."""
         assert ctx.guild is not None
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        panel = Lobby(self.bot.mounts, ctx.author.id)
-        await self.bot.mounts.open(
+        panel = Lobby(self.bot.message_roots, ctx.author.id)
+        await self.bot.message_roots.open(
             panel.mount(source=ctx, locale=locale),
             destination(ctx, locale=locale),
             key=SessionKey.guild("showcase-lobby", ctx.guild.id),

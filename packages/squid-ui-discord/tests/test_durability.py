@@ -8,22 +8,22 @@ from typing import cast
 import anyio
 import pytest
 
-from squid_ui_discord import Everyone, Mount
+from squid_ui import Component, state
+from squid_ui.primitives import Lines, Paginate, Text
+from squid_ui.sources import Position
+from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord.durability import (
-    ComponentState,
     ComponentRegistry,
+    ComponentState,
     DurableSessionStore,
     MemorySessionStore,
-    MountStateCodec,
-    MountStateError,
-    MountState,
+    MessageRootState,
+    MessageRootStateCodec,
+    MessageRootStateError,
     SQLiteSessionStore,
     migrate_component_state,
 )
 from squid_ui_discord.testing import commit_render
-from squid_ui import Component, state
-from squid_ui.primitives import Lines, Paginate, Text
-from squid_ui.sources import Position
 
 
 class DurableChild(Component):
@@ -166,16 +166,16 @@ def test_session_store_rejects_unsafe_table_names(tmp_path: Path) -> None:
 
 def test_component_tree_state_and_page_cursors_round_trip_as_canonical_json() -> None:
     root = DurableRoot()
-    mount = Mount(root, access=Everyone(), timeout=None)
-    commit_render(mount)
+    message_root = MessageRoot(root, access=Everyone(), timeout=None)
+    commit_render(message_root)
     root.count = 7
     root.child.entries = (*root.child.entries, "entry 6")
-    commit_render(mount)
-    mount.presentation.move_cursor("child.items", Position(offset=2))
+    commit_render(message_root)
+    message_root.presentation.move_cursor("child.items", Position(offset=2))
 
-    snapshot = _registry().capture(mount, "counter")
-    encoded = MountStateCodec.dumps(snapshot)
-    restored = _registry().restore(MountStateCodec.loads(encoded), access=Everyone(), timeout=None)
+    snapshot = _registry().capture(message_root, "counter")
+    encoded = MessageRootStateCodec.dumps(snapshot)
+    restored = _registry().restore(MessageRootStateCodec.loads(encoded), access=Everyone(), timeout=None)
     commit_render(restored)
     restored_root = restored.component
 
@@ -184,7 +184,7 @@ def test_component_tree_state_and_page_cursors_round_trip_as_canonical_json() ->
     assert restored_root.child.entries[-1] == "entry 6"
     assert restored.presentation.cursor("child.items").position.offset == 2
     assert "transient" not in next(component.state for component in snapshot.components if component.path == "$")
-    assert encoded == MountStateCodec.dumps(MountStateCodec.loads(encoded))
+    assert encoded == MessageRootStateCodec.dumps(MessageRootStateCodec.loads(encoded))
 
 
 def test_non_json_persistent_state_fails_at_capture_boundary() -> None:
@@ -196,19 +196,19 @@ def test_non_json_persistent_state_fails_at_capture_boundary() -> None:
 
     registry = ComponentRegistry()
     registry.register("invalid", version=1, factory=Invalid)
-    mount = Mount(Invalid(), access=Everyone(), timeout=None)
-    commit_render(mount)
+    message_root = MessageRoot(Invalid(), access=Everyone(), timeout=None)
+    commit_render(message_root)
 
-    with pytest.raises(MountStateError, match="not JSON serializable"):
-        registry.capture(mount, "invalid")
+    with pytest.raises(MessageRootStateError, match="not JSON serializable"):
+        registry.capture(message_root, "invalid")
 
 
 def test_version_mismatch_requires_a_sequential_migration() -> None:
-    mount = Mount(DurableRoot(), access=Everyone(), timeout=None)
-    commit_render(mount)
-    snapshot = _registry().capture(mount, "counter")
+    message_root = MessageRoot(DurableRoot(), access=Everyone(), timeout=None)
+    commit_render(message_root)
+    snapshot = _registry().capture(message_root, "counter")
 
-    with pytest.raises(MountStateError, match="no migration"):
+    with pytest.raises(MessageRootStateError, match="no migration"):
         _registry(version=2).restore(snapshot, access=Everyone())
 
     migrated = _registry(
@@ -219,19 +219,19 @@ def test_version_mismatch_requires_a_sequential_migration() -> None:
 
 
 def test_migration_must_advance_exactly_one_version() -> None:
-    mount = Mount(DurableRoot(), access=Everyone(), timeout=None)
-    commit_render(mount)
-    snapshot = _registry().capture(mount, "counter")
+    message_root = MessageRoot(DurableRoot(), access=Everyone(), timeout=None)
+    commit_render(message_root)
+    snapshot = _registry().capture(message_root, "counter")
     registry = _registry(version=2, migrations={1: lambda current: replace(current, component_version=3)})
 
-    with pytest.raises(MountStateError, match="must produce version 2"):
+    with pytest.raises(MessageRootStateError, match="must produce version 2"):
         registry.restore(snapshot, access=Everyone())
 
 
-def _snapshot() -> MountState:
-    mount = Mount(DurableRoot(), access=Everyone(), timeout=None)
-    commit_render(mount)
-    return _registry().capture(mount, "counter")
+def _snapshot() -> MessageRootState:
+    message_root = MessageRoot(DurableRoot(), access=Everyone(), timeout=None)
+    commit_render(message_root)
+    return _registry().capture(message_root, "counter")
 
 
 def test_component_state_helper_changes_one_path_and_preserves_the_rest() -> None:
@@ -275,7 +275,7 @@ def test_component_state_helper_rejects_missing_or_duplicate_paths(path: str) ->
         child = next(component for component in snapshot.components if component.path == "child")
         snapshot = replace(snapshot, components=(*snapshot.components, child))
 
-    with pytest.raises(MountStateError, match="missing|duplicate"):
+    with pytest.raises(MessageRootStateError, match=r"missing|duplicate"):
         migrate_component_state(snapshot, path, dict)
 
 
@@ -290,14 +290,14 @@ def test_component_state_helper_rejects_missing_or_duplicate_paths(path: str) ->
 def test_component_state_helper_rejects_malformed_or_non_json_results(
     transform: Callable[[Mapping[str, object]], object],
 ) -> None:
-    with pytest.raises(MountStateError, match="mapping with string keys|not JSON serializable"):
+    with pytest.raises(MessageRootStateError, match=r"mapping with string keys|not JSON serializable"):
         migrate_component_state(
             _snapshot(), "$", cast(Callable[[Mapping[str, object]], Mapping[str, object]], transform)
         )
 
 
 def test_component_state_helper_rejects_an_empty_type_identity() -> None:
-    with pytest.raises(MountStateError, match="type identity"):
+    with pytest.raises(MessageRootStateError, match="type identity"):
         migrate_component_state(_snapshot(), "$", dict, type_id="")
 
 

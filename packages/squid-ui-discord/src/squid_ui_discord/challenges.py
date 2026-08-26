@@ -3,7 +3,7 @@
 Two halves that a mount cannot supply for itself. It holds no session registry -- the lookup
 runs the other way -- so it cannot open the dialog; and it has no task of its own that
 predates a press, so it cannot run the resumption anywhere safe. Both are host-supplied,
-through `MountDefaults(challenge=...)`.
+through `MessageRootDefaults(challenge=...)`.
 
 The supervisor half is not a convenience. `transaction()` flattens rather than nests, so a
 press resumed from inside the approving handler would stage its writes in the dialog's
@@ -16,11 +16,11 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 
+from squid_ui.guards import ChallengeResolver
 from squid_ui_discord.delivery import respond_to
-from squid_ui_discord.mount import ChallengeRequest, ChallengeSupervisor, ResumedPress
+from squid_ui_discord.message_root import ChallengeRequest, ChallengeSupervisor, ResumedPress
 from squid_ui_discord.screens import Opener, ScreenSpec
 from squid_ui_discord.sessions import SessionRegistry
-from squid_ui.guards import ChallengeResolver
 
 logger = logging.getLogger(__name__)
 
@@ -150,10 +150,10 @@ class DialogPresenter:
             respond_to(request.interaction, ephemeral=True, wait=True),
             sessions=self.sessions,
             opener=Opener.of(request.interaction),
-            parent=request.mount,
+            parent=request.message_root,
             # Locale is a fact about the reader, not about the host, so the question is asked
             # in the language the panel that asked it is speaking -- chrome labels included.
-            localization=request.mount.localization,
+            localization=request.message_root.localization,
             # The deadline is the dialog's whole life: an unanswered challenge dies with its
             # mount, having written no approval, which is a decline with nothing to undo.
             timeout=request.challenge.deadline,

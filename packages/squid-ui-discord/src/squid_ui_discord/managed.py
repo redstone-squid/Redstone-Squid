@@ -5,16 +5,24 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import cast, overload
 
-from squid_ui_discord.delivery import Delivered, Destination, SendResult
-from squid_ui_discord.mount import Mount
+from squid_reactivity.operations import (
+    Cancelled,
+    Failed,
+    OperationExecution,
+    Pending,
+    ProgressReporter,
+    Succeeded,
+    operation,
+)
 from squid_ui.runtime.component import Component, RenderResult
-from squid_reactivity.operations import Cancelled, Failed, OperationExecution, Pending, ProgressReporter, Succeeded, operation
+from squid_ui_discord.delivery import Delivered, Destination, SendResult
+from squid_ui_discord.message_root import MessageRoot
 
 type Work[ValueT] = Callable[[], Awaitable[ValueT]]
 type SuccessRenderer[ValueT] = Callable[[ValueT], RenderResult]
 type ErrorRenderer = Callable[[Exception], RenderResult]
 type ErrorObserver = Callable[[ManagedError], Awaitable[None]]
-type MountFactory = Callable[[Component], Mount]
+type MessageRootFactory = Callable[[Component], MessageRoot]
 type ManagedDelivery = SendResult | None
 
 
@@ -94,7 +102,7 @@ async def run_managed_result(
     work: Work[RenderResult],
     *,
     destination: Destination,
-    make_mount: MountFactory,
+    make_root: MessageRootFactory,
     initial: RenderResult | None = None,
     render_success: None = None,
     render_error: ErrorRenderer | None = None,
@@ -108,7 +116,7 @@ async def run_managed_result[ValueT](
     work: Work[ValueT],
     *,
     destination: Destination,
-    make_mount: MountFactory,
+    make_root: MessageRootFactory,
     initial: RenderResult | None = None,
     render_success: SuccessRenderer[ValueT],
     render_error: ErrorRenderer | None = None,
@@ -121,7 +129,7 @@ async def run_managed_result[ValueT](
     work: Work[ValueT],
     *,
     destination: Destination,
-    make_mount: MountFactory,
+    make_root: MessageRootFactory,
     initial: RenderResult | None = None,
     render_success: SuccessRenderer[ValueT] | None = None,
     render_error: ErrorRenderer | None = None,
@@ -143,7 +151,7 @@ async def run_managed_result[ValueT](
         return await _run_without_initial(
             work,
             destination=destination,
-            make_mount=make_mount,
+            make_root=make_root,
             render_success=renderer,
             render_error=render_error,
             on_error=on_error,
@@ -156,12 +164,12 @@ async def run_managed_result[ValueT](
         render_success=renderer,
         render_error=render_error,
     )
-    mount = make_mount(component)
-    delivered = await mount.send(destination)
+    message_root = make_root(component)
+    delivered = await message_root.send(destination)
     match component.execution.status:
         case Succeeded(value=value):
             if dismiss_on_success and isinstance(delivered, Delivered):
-                await mount.dismiss()
+                await message_root.dismiss()
             return value
         case Failed(error=error):
             await _observe_error(on_error, error, delivered)
@@ -177,7 +185,7 @@ async def _run_without_initial[ValueT](
     work: Work[ValueT],
     *,
     destination: Destination,
-    make_mount: MountFactory,
+    make_root: MessageRootFactory,
     render_success: SuccessRenderer[ValueT],
     render_error: ErrorRenderer | None,
     on_error: ErrorObserver | None,
@@ -191,15 +199,15 @@ async def _run_without_initial[ValueT](
         if render_error is None:
             await _observe_error(on_error, error, None)
             raise
-        mount = make_mount(_Scene(render_error(error)))
-        delivered = await mount.send(destination)
+        message_root = make_root(_Scene(render_error(error)))
+        delivered = await message_root.send(destination)
         await _observe_error(on_error, error, delivered)
         raise
 
-    mount = make_mount(_Scene(render_success(value)))
-    delivered = await mount.send(destination)
+    message_root = make_root(_Scene(render_success(value)))
+    delivered = await message_root.send(destination)
     if dismiss_on_success and isinstance(delivered, Delivered):
-        await mount.dismiss()
+        await message_root.dismiss()
     return value
 
 
@@ -213,7 +221,7 @@ __all__ = [
     "ErrorRenderer",
     "ManagedDelivery",
     "ManagedError",
-    "MountFactory",
+    "MessageRootFactory",
     "SuccessRenderer",
     "Work",
     "run_managed_result",

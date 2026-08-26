@@ -8,8 +8,11 @@ from dataclasses import dataclass
 import anyio
 import pytest
 
-import squid_ui_discord
 import squid_ui as sl
+import squid_ui_discord
+from squid_storage import SessionRecord
+from squid_ui.primitives import Text
+from squid_ui.profiling import PresentationStatus
 from squid_ui_discord import Everyone, SessionKey, SessionRegistry
 from squid_ui_discord.delivery import DeliveryResult
 from squid_ui_discord.durability import (
@@ -20,8 +23,8 @@ from squid_ui_discord.durability import (
     DurableSessionRuntime,
     FrontendAddress,
     MemorySessionStore,
+    MessageRootStateError,
     Missing,
-    MountStateError,
     NotDurable,
     Promoted,
     Reconnected,
@@ -37,9 +40,6 @@ from squid_ui_discord.sessions import (
     Unprotected,
 )
 from squid_ui_discord.testing import delivered_to, fake_message
-from squid_ui.primitives import Text
-from squid_ui.profiling import PresentationStatus
-from squid_storage import SessionRecord
 
 
 class Counter(sl.Component):
@@ -62,13 +62,13 @@ class FakeFrontend:
     missing_ids: frozenset[str] = frozenset()
     unreachable_ids: frozenset[str] = frozenset()
 
-    async def promote(self, mount: squid_ui_discord.Mount, result: DeliveryResult):
+    async def promote(self, message_root: squid_ui_discord.MessageRoot, result: DeliveryResult):
         if self.reject_next:
             self.reject_next = False
             return NotDurable("test destination is temporary")
         if result.message is None or result.handle is None or result.ephemeral:
             return NotDurable("message has no durable binding")
-        await mount.adopt_handle(result.handle)
+        await message_root.adopt_handle(result.handle)
         return Promoted(
             FrontendAddress(
                 "fake",
@@ -78,19 +78,23 @@ class FakeFrontend:
         )
 
     async def reconnect(self, bindings: Sequence[RecoveredBinding]):
-        missing = tuple(binding.record_mount_id for binding in bindings if binding.record_mount_id in self.missing_ids)
+        missing = tuple(
+            binding.record_message_root_id for binding in bindings if binding.record_message_root_id in self.missing_ids
+        )
         if missing:
             return Missing(missing, tuple("test message is gone" for _ in missing))
         unreachable = tuple(
-            binding.record_mount_id for binding in bindings if binding.record_mount_id in self.unreachable_ids
+            binding.record_message_root_id
+            for binding in bindings
+            if binding.record_message_root_id in self.unreachable_ids
         )
         if unreachable:
             return Unreachable(unreachable, tuple("test frontend is unavailable" for _ in unreachable))
         for binding in bindings:
             message_id = binding.address.values["message_id"]
             assert isinstance(message_id, int)
-            await binding.mount.send(delivered_to(fake_message(message_id=message_id)))
-        return Reconnected(tuple(binding.record_mount_id for binding in bindings))
+            await binding.message_root.send(delivered_to(fake_message(message_id=message_id)))
+        return Reconnected(tuple(binding.record_message_root_id for binding in bindings))
 
 
 def components() -> ComponentRegistry:
@@ -98,12 +102,12 @@ def components() -> ComponentRegistry:
     registry.register(
         "counter",
         version=1,
-        restore=lambda context: squid_ui_discord.Mount(Counter(), access=Everyone(), timeout=None),
+        restore=lambda context: squid_ui_discord.MessageRoot(Counter(), access=Everyone(), timeout=None),
     )
     registry.register(
         "hidden-draft",
         version=1,
-        restore=lambda context: squid_ui_discord.Mount(HiddenDraft(), access=Everyone(), timeout=None),
+        restore=lambda context: squid_ui_discord.MessageRoot(HiddenDraft(), access=Everyone(), timeout=None),
     )
     return registry
 
@@ -133,16 +137,16 @@ async def open_counter(
     key: SessionKey | None = None,
     expires_at: float | None = None,
 ):
-    mount = squid_ui_discord.Mount(Counter(), access=Everyone(), timeout=None)
+    message_root = squid_ui_discord.MessageRoot(Counter(), access=Everyone(), timeout=None)
     result = await runtime.open(
-        mount,
+        message_root,
         delivered_to(fake_message(message_id=message_id)),
         recipe="counter",
         key=SessionKey.user("counter", 7) if key is None else key,
         actor_id=7,
         expires_at=expires_at,
     )
-    return mount, result
+    return message_root, result
 
 
 async def test_open_publishes_one_whole_session_and_finish_deletes_it() -> None:
@@ -151,7 +155,7 @@ async def test_open_publishes_one_whole_session_and_finish_deletes_it() -> None:
 
     async with anyio.create_task_group() as tasks:
         report = await tasks.start(durable.run)
-        mount, result = await open_counter(durable)
+        message_root, result = await open_counter(durable)
 
         assert report.restored == ()
         assert isinstance(result, Opened)
@@ -160,11 +164,11 @@ async def test_open_publishes_one_whole_session_and_finish_deletes_it() -> None:
         assert len(records) == 1
         record = DurableSessionCodec.loads(records[0].record_payload)
         assert record.key == SessionKey.user("counter", 7)
-        assert tuple(state.id for state in record.mounts) == ("root",)
+        assert tuple(state.id for state in record.message_roots) == ("root",)
 
         await result.session.finish()
         assert await store.list() == ()
-        assert mount.finished
+        assert message_root.finished
         tasks.cancel_scope.cancel()
 
 
@@ -200,9 +204,9 @@ async def test_a_remote_summary_protects_another_user_from_replacement() -> None
             report = await inner.start(second.run)
             assert len(report.claimed_elsewhere) == 1
 
-            mount = squid_ui_discord.Mount(Counter(), access=Everyone(), timeout=None)
+            message_root = squid_ui_discord.MessageRoot(Counter(), access=Everyone(), timeout=None)
             result = await second.open(
-                mount,
+                message_root,
                 delivered_to(fake_message(message_id=100)),
                 recipe="counter",
                 key=key,
@@ -213,7 +217,7 @@ async def test_a_remote_summary_protects_another_user_from_replacement() -> None
             assert result.reason is RejectionReason.PROTECTED
             assert result.occupants[0].participants == frozenset({7})
             assert not result.occupants[0].is_local
-            assert mount.handle is None
+            assert message_root.handle is None
             inner.cancel_scope.cancel()
         tasks.cancel_scope.cancel()
 
@@ -236,12 +240,12 @@ async def test_suppressed_runtime_commit_checkpoints_hidden_component_state() ->
     store = MemorySessionStore()
     durable = runtime(store, FakeFrontend())
     component = HiddenDraft()
-    mount = squid_ui_discord.Mount(component, access=Everyone(), timeout=None)
+    message_root = squid_ui_discord.MessageRoot(component, access=Everyone(), timeout=None)
 
     async with anyio.create_task_group() as tasks:
         await tasks.start(durable.run)
         opened = await durable.open(
-            mount,
+            message_root,
             delivered_to(fake_message(message_id=7)),
             recipe="hidden-draft",
             key=SessionKey.user("hidden-draft", 7),
@@ -249,15 +253,15 @@ async def test_suppressed_runtime_commit_checkpoints_hidden_component_state() ->
         )
         assert isinstance(opened, Opened)
         component.advanced = True
-        mount.invalidate()
+        message_root.invalidate()
 
-        assert await mount.refresh() is PresentationStatus.UNCHANGED
+        assert await message_root.refresh() is PresentationStatus.UNCHANGED
 
         with anyio.fail_after(1):
             while True:
                 stored = await store.load(opened.session.id)
                 assert stored is not None
-                snapshot = DurableSessionCodec.loads(stored.record_payload).mounts[0].state
+                snapshot = DurableSessionCodec.loads(stored.record_payload).message_roots[0].state
                 if snapshot.components[0].state.get("advanced") is True:
                     break
                 await anyio.sleep(0)
@@ -285,7 +289,7 @@ async def test_failed_promotion_keeps_the_durable_incumbent() -> None:
         tasks.cancel_scope.cancel()
 
 
-async def test_attached_mount_is_checkpointed_in_the_same_record() -> None:
+async def test_attached_message_root_is_checkpointed_in_the_same_record() -> None:
     store = MemorySessionStore()
     durable = runtime(store, FakeFrontend())
 
@@ -293,7 +297,7 @@ async def test_attached_mount_is_checkpointed_in_the_same_record() -> None:
         await tasks.start(durable.run)
         _, opened = await open_counter(durable, message_id=1)
         assert isinstance(opened, Opened)
-        child = squid_ui_discord.Mount(Counter(), access=Everyone(), timeout=None)
+        child = squid_ui_discord.MessageRoot(Counter(), access=Everyone(), timeout=None)
 
         attached = await opened.session.attach(
             child,
@@ -304,21 +308,21 @@ async def test_attached_mount_is_checkpointed_in_the_same_record() -> None:
 
         assert isinstance(attached, Opened)
         record = DurableSessionCodec.loads((await store.list())[0].record_payload)
-        assert len(record.mounts) == 2
-        assert record.mounts[1].parent_id == "root"
-        assert record.mounts[1].actor_id == 8
+        assert len(record.message_roots) == 2
+        assert record.message_roots[1].parent_id == "root"
+        assert record.message_roots[1].actor_id == 8
 
         raw = json.loads(DurableSessionCodec.dumps(record))
-        grandchild = dict(raw["mounts"][1])
+        grandchild = dict(raw["message_roots"][1])
         grandchild["id"] = "grandchild"
-        grandchild["parent_id"] = raw["mounts"][1]["id"]
-        raw["mounts"].insert(1, grandchild)
-        with pytest.raises(MountStateError, match="parents must precede"):
+        grandchild["parent_id"] = raw["message_roots"][1]["id"]
+        raw["message_roots"].insert(1, grandchild)
+        with pytest.raises(MessageRootStateError, match="parents must precede"):
             DurableSessionCodec.loads(json.dumps(raw))
 
-        raw["mounts"].pop(1)
+        raw["message_roots"].pop(1)
         raw["opened_at"] = float("nan")
-        with pytest.raises(MountStateError, match="must be a number"):
+        with pytest.raises(MessageRootStateError, match="must be a number"):
             DurableSessionCodec.loads(json.dumps(raw))
         tasks.cancel_scope.cancel()
 
@@ -360,9 +364,9 @@ async def test_remote_summaries_participate_in_distributed_cardinality() -> None
         async with anyio.create_task_group() as contender_tasks:
             report = await contender_tasks.start(contender.run)
             assert len(report.claimed_elsewhere) == 1
-            mount = squid_ui_discord.Mount(Counter(), access=Everyone(), timeout=None)
+            message_root = squid_ui_discord.MessageRoot(Counter(), access=Everyone(), timeout=None)
             result = await contender.open(
-                mount,
+                message_root,
                 delivered_to(fake_message(message_id=2)),
                 recipe="counter",
                 key=SessionKey.user("counter", 7),
@@ -433,7 +437,7 @@ async def test_missing_child_is_pruned_from_the_whole_session_record() -> None:
         await tasks.start(first_runtime.run)
         _, opened = await open_counter(first_runtime, message_id=1)
         assert isinstance(opened, Opened)
-        child = squid_ui_discord.Mount(Counter(), access=Everyone(), timeout=None)
+        child = squid_ui_discord.MessageRoot(Counter(), access=Everyone(), timeout=None)
         attached = await opened.session.attach(
             child,
             delivered_to(fake_message(message_id=2)),
@@ -443,7 +447,7 @@ async def test_missing_child_is_pruned_from_the_whole_session_record() -> None:
         assert isinstance(attached, Opened)
         stored = await store.load(opened.session.id)
         assert stored is not None
-        child_id = DurableSessionCodec.loads(stored.record_payload).mounts[1].id
+        child_id = DurableSessionCodec.loads(stored.record_payload).message_roots[1].id
         record_id = opened.session.id
         tasks.cancel_scope.cancel()
 
@@ -456,7 +460,7 @@ async def test_missing_child_is_pruned_from_the_whole_session_record() -> None:
             while True:
                 stored = await store.load(record_id)
                 assert stored is not None
-                if len(DurableSessionCodec.loads(stored.record_payload).mounts) == 1:
+                if len(DurableSessionCodec.loads(stored.record_payload).message_roots) == 1:
                     break
                 await anyio.sleep(0)
         tasks.cancel_scope.cancel()
@@ -512,9 +516,9 @@ async def test_a_durable_join_is_checkpointed_and_survives_recovery() -> None:
     async with anyio.create_task_group() as tasks:
         first = runtime(store, FakeFrontend())
         await tasks.start(first.run)
-        mount = squid_ui_discord.Mount(Counter(), access=Everyone(), timeout=None)
+        message_root = squid_ui_discord.MessageRoot(Counter(), access=Everyone(), timeout=None)
         opened = await first.open(
-            mount,
+            message_root,
             delivered_to(fake_message(message_id=99)),
             recipe="counter",
             key=key,
@@ -529,9 +533,9 @@ async def test_a_durable_join_is_checkpointed_and_survives_recovery() -> None:
         payload = (await store.list())[0].record_payload
         raw = json.loads(payload)
         assert raw["protocol"] == DurableSessionCodec.protocol
-        assert {"state", "address"} <= raw["mounts"][0].keys()
-        assert "snapshot" not in raw["mounts"][0]
-        assert "locator" not in raw["mounts"][0]
+        assert {"state", "address"} <= raw["message_roots"][0].keys()
+        assert "snapshot" not in raw["message_roots"][0]
+        assert "locator" not in raw["message_roots"][0]
         record = DurableSessionCodec.loads(payload)
         assert record.members == frozenset({7, 8})
         assert record.capacity == 3
@@ -557,12 +561,12 @@ async def test_a_recovered_attachment_actor_is_attributed_but_not_a_member() -> 
     async with anyio.create_task_group() as tasks:
         first = runtime(store, FakeFrontend())
         await tasks.start(first.run)
-        mount = squid_ui_discord.Mount(Counter(), access=Everyone(), timeout=None)
+        message_root = squid_ui_discord.MessageRoot(Counter(), access=Everyone(), timeout=None)
         opened = await first.open(
-            mount, delivered_to(fake_message(message_id=99)), recipe="counter", key=key, actor_id=7
+            message_root, delivered_to(fake_message(message_id=99)), recipe="counter", key=key, actor_id=7
         )
         assert isinstance(opened, Opened)
-        child = squid_ui_discord.Mount(Counter(), access=Everyone(), timeout=None)
+        child = squid_ui_discord.MessageRoot(Counter(), access=Everyone(), timeout=None)
         await opened.session.attach(child, delivered_to(fake_message(message_id=100)), recipe="counter", actor_id=8)
         tasks.cancel_scope.cancel()
 
@@ -648,9 +652,7 @@ async def test_a_record_without_membership_is_refused() -> None:
     stored = (await store.list())[0]
     record = json.loads(stored.record_payload)
     del record["members"]
-    store._records[stored.key] = SessionRecord(
-        stored.key, stored.scope, stored.snapshot_payload, json.dumps(record)
-    )
+    store._records[stored.key] = SessionRecord(stored.key, stored.scope, stored.snapshot_payload, json.dumps(record))
 
     async with anyio.create_task_group() as tasks:
         second = runtime(store, FakeFrontend())
@@ -673,9 +675,7 @@ async def test_a_snapshot_disagreeing_with_its_record_is_refused() -> None:
     stored = (await store.list())[0]
     snapshot = json.loads(stored.snapshot_payload)
     snapshot["members"] = [7, 8]
-    store._records[stored.key] = SessionRecord(
-        stored.key, stored.scope, json.dumps(snapshot), stored.record_payload
-    )
+    store._records[stored.key] = SessionRecord(stored.key, stored.scope, json.dumps(snapshot), stored.record_payload)
 
     async with anyio.create_task_group() as tasks:
         second = runtime(store, FakeFrontend())
@@ -694,7 +694,7 @@ async def test_a_durable_quota_survives_recovery() -> None:
         first = runtime(store, FakeFrontend())
         await tasks.start(first.run)
         opened = await first.open(
-            squid_ui_discord.Mount(Counter(), access=Everyone(), timeout=None),
+            squid_ui_discord.MessageRoot(Counter(), access=Everyone(), timeout=None),
             delivered_to(fake_message(message_id=99)),
             recipe="counter",
             key=key,
@@ -718,7 +718,7 @@ async def test_a_durable_quota_survives_recovery() -> None:
         assert recovered.domain == "game"
         # The recovered session counts, so the same user cannot open a second game.
         blocked = await second.open(
-            squid_ui_discord.Mount(Counter(), access=Everyone(), timeout=None),
+            squid_ui_discord.MessageRoot(Counter(), access=Everyone(), timeout=None),
             delivered_to(fake_message(message_id=100)),
             recipe="counter",
             key=SessionKey.guild("game", 6),

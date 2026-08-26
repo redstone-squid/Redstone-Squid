@@ -5,16 +5,16 @@ from dataclasses import dataclass
 import discord
 import pytest
 
-import squid_ui_discord
 import squid_ui as sl
+import squid_ui_discord
 import squid_ui_widgets as sp
-from squid_ui_discord import Everyone, Mount
-from squid_ui_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 from squid_ui import scene
 from squid_ui.planning.navigation import SEEK_OPTION_LIMIT, NavigationContext, _seek_pages, page_select_nav
 from squid_ui.primitives import Button, Lines, Row
 from squid_ui.semantic import Stack
 from squid_ui.sources import Position, Window
+from squid_ui_discord import Everyone, MessageRoot
+from squid_ui_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 
 
 def _texts(view: discord.ui.LayoutView) -> list[str]:
@@ -43,14 +43,14 @@ async def test_tabs_component_shell_switches_content_and_adapts_large_strips() -
         heading="Settings",
     )
     tabs = pattern.build_component()
-    mount = Mount(tabs, access=Everyone(), timeout=None)
+    message_root = MessageRoot(tabs, access=Everyone(), timeout=None)
 
-    view = commit_render(mount)
+    view = commit_render(message_root)
     assert "general body" in _texts(view)
     assert "privacy body" not in _texts(view)
 
-    await mount.dispatch("settings.privacy", fake_interaction())
-    view = commit_render(mount)
+    await message_root.dispatch("settings.privacy", fake_interaction())
+    view = commit_render(message_root)
     assert tabs.machine_state == sp.TabsState("privacy")
     assert "privacy body" in _texts(view)
     assert "general body" not in _texts(view)
@@ -60,13 +60,13 @@ async def test_tabs_component_shell_switches_content_and_adapts_large_strips() -
         key="many-tabs",
     )
     many = many_pattern.build_component()
-    many_mount = Mount(many, access=Everyone(), timeout=None)
-    many_view = commit_render(many_mount)
+    many_root = MessageRoot(many, access=Everyone(), timeout=None)
+    many_view = commit_render(many_root)
     select = next(item for item in many_view.walk_children() if isinstance(item, discord.ui.Select))
     assert select.custom_id is not None and select.custom_id.endswith(":many-tabs")
     assert len(select.options) == 6
 
-    await many_mount.dispatch("many-tabs", fake_interaction(), ["4"])
+    await many_root.dispatch("many-tabs", fake_interaction(), ["4"])
     assert many.machine_state == sp.TabsState("4")
 
 
@@ -75,12 +75,12 @@ async def test_tabs_component_shell_embeds_only_selected_content() -> None:
         [sp.Tab("one", "One", Screen("one")), sp.Tab("two", "Two", Screen("two"))],
         key="screens",
     ).build_component()
-    mount = Mount(tabs, access=Everyone(), timeout=None)
+    message_root = MessageRoot(tabs, access=Everyone(), timeout=None)
 
-    view = commit_render(mount)
+    view = commit_render(message_root)
     assert "screen: one" in _texts(view)
     assert "screen: two" not in _texts(view)
-    assert set(mount._handlers) == {"screens.one", "screens.two"}
+    assert set(message_root._handlers) == {"screens.one", "screens.two"}
 
 
 def test_tabs_router_shell_encodes_next_state_and_input_state() -> None:
@@ -120,24 +120,24 @@ async def test_menu_component_shell_drills_down_and_owns_chrome() -> None:
         ],
         key="settings",
     ).build_component()
-    mount = Mount(menu, access=Everyone(), timeout=None)
+    message_root = MessageRoot(menu, access=Everyone(), timeout=None)
 
-    view = commit_render(mount)
+    view = commit_render(message_root)
     assert _texts(view) == ["## Settings"]
     assert _labels(view)[-3:] == ["Back", "Home", "Close"]
 
-    await mount.dispatch("settings.administration", fake_interaction())
-    view = commit_render(mount)
+    await message_root.dispatch("settings.administration", fake_interaction())
+    view = commit_render(message_root)
     assert menu.machine_state == sp.MenuState(("administration",))
     assert "screen: administration" in _texts(view)
     assert "Audit" in _labels(view)
 
-    await mount.dispatch("settings.audit", fake_interaction())
+    await message_root.dispatch("settings.audit", fake_interaction())
     assert menu.machine_state == sp.MenuState(("administration", "audit"))
-    await mount.dispatch("settings.home", fake_interaction())
+    await message_root.dispatch("settings.home", fake_interaction())
     assert menu.machine_state == sp.MenuState()
-    await mount.dispatch("settings.close", fake_interaction())
-    assert mount._finished
+    await message_root.dispatch("settings.close", fake_interaction())
+    assert message_root._finished
 
 
 def test_menu_entry_supports_shorthand_keys_and_rejects_duplicates() -> None:
@@ -221,7 +221,7 @@ def test_ranked_list_projects_entries_and_renders_an_explicit_window() -> None:
     listing = next(node for node in rendered.children if isinstance(node, Lines))
     assert listing.lines == ("1. **Ada** — 30", "2. **Grace** — 20")
 
-    view = commit_render(Mount(ranked, access=Everyone(), timeout=None))
+    view = commit_render(MessageRoot(ranked, access=Everyone(), timeout=None))
     assert "1. **Ada** — 30\n2. **Grace** — 20" in _texts(view)
 
     assert "Showing 3 entries" in _texts(view)
@@ -252,12 +252,12 @@ async def test_source_ranked_list_gates_numeric_chrome_by_capability(
         capabilities=capabilities,
     )
     ranked = sp.SourceRankedList(source, key="leaderboard", identity=lambda entry: entry[0], page_size=2)
-    mount = Mount(ranked, access=Everyone(), timeout=None)
+    message_root = MessageRoot(ranked, access=Everyone(), timeout=None)
 
-    await mount.send(delivered_to(fake_message()))
+    await message_root.send(delivered_to(fake_message()))
 
-    assert mount._view is not None
-    numeric = [text for text in _texts(mount._view) if text.startswith("-#")]
+    assert message_root._view is not None
+    numeric = [text for text in _texts(message_root._view) if text.startswith("-#")]
     assert numeric == ([] if expected is None else [expected])
 
 
@@ -272,13 +272,13 @@ async def test_source_ranked_list_fetches_in_handlers_and_uses_source_navigation
         ),
     )
     ranked = sp.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], page_size=2)
-    mount = Mount(ranked, access=Everyone(), timeout=None)
-    await mount.send(delivered_to(fake_message()))
+    message_root = MessageRoot(ranked, access=Everyone(), timeout=None)
+    await message_root.send(delivered_to(fake_message()))
 
-    assert mount._view is not None
-    assert _labels(mount._view) == ["Newer"]
+    assert message_root._view is not None
+    assert _labels(message_root._view) == ["Newer"]
     interaction = fake_interaction()
-    await mount.dispatch("stream.next", interaction)
+    await message_root.dispatch("stream.next", interaction)
 
     pending = interaction.response.edit_message.await_args.kwargs["view"]
     assert "1. **Ada** — 30\n2. **Grace** — 20" in _texts(pending)
@@ -300,16 +300,16 @@ async def test_source_ranked_list_retains_stale_rows_and_retries_the_failed_requ
             count=sl.sources.CountPrecision.EXACT,
         ),
     )
-    mount = Mount(
+    message_root = MessageRoot(
         sp.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], page_size=2),
         access=Everyone(),
         timeout=None,
     )
-    await mount.send(delivered_to(fake_message()))
+    await message_root.send(delivered_to(fake_message()))
 
     source.fail_next = True
     failed_interaction = fake_interaction()
-    await mount.dispatch("stream.next", failed_interaction)
+    await message_root.dispatch("stream.next", failed_interaction)
 
     failed = failed_interaction.followup.edit_message.await_args.kwargs["view"]
     assert "1. **Ada** — 30\n2. **Grace** — 20" in _texts(failed)
@@ -317,7 +317,7 @@ async def test_source_ranked_list_retains_stale_rows_and_retries_the_failed_requ
     assert "Retry" in _labels(failed)
 
     retry_interaction = fake_interaction()
-    await mount.dispatch("stream.retry", retry_interaction)
+    await message_root.dispatch("stream.retry", retry_interaction)
 
     pending = retry_interaction.response.edit_message.await_args.kwargs["view"]
     assert "-# Loading…" in _texts(pending)
@@ -331,16 +331,16 @@ async def test_a_jumpable_source_seeks_by_page() -> None:
         (("Ada", 30), ("Grace", 20), ("Edsger", 10), ("Barbara", 5), ("Donald", 1)),
         capabilities=sl.sources.SourceCapabilities(offsets=True, jumpable=True, count=sl.sources.CountPrecision.EXACT),
     )
-    mount = Mount(
+    message_root = MessageRoot(
         sp.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], page_size=2),
         access=Everyone(),
         timeout=None,
         nav=page_select_nav,
     )
-    await mount.send(delivered_to(fake_message()))
+    await message_root.send(delivered_to(fake_message()))
 
     interaction = fake_interaction()
-    await mount.dispatch("stream.seek", interaction, ["2"])
+    await message_root.dispatch("stream.seek", interaction, ["2"])
 
     # Page 2 of a page_size=2 source is item offset 4, not item offset 2.
     assert source.requests[-1] == Position(offset=4)
@@ -362,17 +362,17 @@ async def test_a_sequential_source_offers_no_jump_control() -> None:
         seen.append(context)
         return page_select_nav(context)
 
-    mount = Mount(
+    message_root = MessageRoot(
         sp.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], page_size=2),
         access=Everyone(),
         timeout=None,
         nav=nav,
     )
-    await mount.send(delivered_to(fake_message()))
+    await message_root.send(delivered_to(fake_message()))
 
     assert seen[-1].on_seek is None
-    assert mount._view is not None
-    assert not [item for item in mount._view.walk_children() if isinstance(item, discord.ui.Select)]
+    assert message_root._view is not None
+    assert not [item for item in message_root._view.walk_children() if isinstance(item, discord.ui.Select)]
 
 
 @pytest.mark.parametrize(
@@ -389,7 +389,7 @@ def test_a_jump_select_always_fits_and_always_offers_the_visible_page(page: int,
     assert pages[-1] == extent - 1
 
 
-async def test_source_ranked_list_uses_the_mount_navigation_factory() -> None:
+async def test_source_ranked_list_uses_the_message_root_navigation_factory() -> None:
     source = ScoreSource(
         (("Ada", 30), ("Grace", 20), ("Edsger", 10)),
         capabilities=sl.sources.SourceCapabilities(offsets=True, count=sl.sources.CountPrecision.EXACT),
@@ -400,29 +400,29 @@ async def test_source_ranked_list_uses_the_mount_navigation_factory() -> None:
         seen.append(context.state)
         return (Row((Button("More", context.on_next, "more"),)),)
 
-    mount = Mount(
+    message_root = MessageRoot(
         sp.SourceRankedList(source, key="leaderboard", identity=lambda entry: entry[0], page_size=2),
         access=Everyone(),
         timeout=None,
         nav=nav,
     )
-    await mount.send(delivered_to(fake_message()))
+    await message_root.send(delivered_to(fake_message()))
 
     assert seen[-1].key == "leaderboard"
     assert seen[-1].visible_range == (1, 2)
     assert seen[-1].total == 3
-    assert mount._view is not None and _labels(mount._view) == ["More"]
+    assert message_root._view is not None and _labels(message_root._view) == ["More"]
 
 
 async def test_ranked_list_keeps_global_ranks_on_later_pages() -> None:
     ranked = sp.RankedList(
         [("Ada", 30), ("Grace", 20), ("Edsger", 10)], key="leaderboard", page_size=2
     ).build_component()
-    mount = Mount(ranked, access=Everyone(), timeout=None)
-    commit_render(mount)
+    message_root = MessageRoot(ranked, access=Everyone(), timeout=None)
+    commit_render(message_root)
 
-    await mount.dispatch("leaderboard.next", fake_interaction())
-    view = commit_render(mount)
+    await message_root.dispatch("leaderboard.next", fake_interaction())
+    view = commit_render(message_root)
     assert ranked.machine_state == sp.RankedListState(Position(offset=1))
     assert "3. **Edsger** — 10" in _texts(view)
 
