@@ -205,7 +205,7 @@ class NotificationPanel(sl.Component):
             return None
         return t(self.locale, _("Discord rejected a DM, so DMs are suspended until you re-enable them."))
 
-    def mount(self, *, source: sd.host.HostSource) -> sd.MessageRoot:
+    def mount(self, *, source: sd.runtime.RuntimeSource) -> sd.MessageRoot:
         return create_message_root(
             self,
             source=source,

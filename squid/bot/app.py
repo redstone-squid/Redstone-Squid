@@ -165,15 +165,15 @@ class RedstoneSquid(Bot):
         # that is the local bus, and the reconciler's poll is what the other processes get.
         self.topic_publisher: TopicPublisher = self.topic_bus
         # One assembly for the whole process, reachable from any interaction as
-        # `LayoutHost.of(...)`: the session registry, the scheduler, and the challenge runner
+        # `ClientRuntime.of(...)`: the session registry, the scheduler, and the challenge runner
         # a guard's dialog resumes an approved press through.
-        self.layout_host = install(self, defaults=HOST_DEFAULTS, bus=self.topic_bus, profiler=self.layout_profiler)
-        assert self.layout_host.scheduler is not None, "a topic bus was given, so there is a scheduler"
-        self.layout_scheduler = self.layout_host.scheduler
-        self.layout_challenges = self.layout_host.challenges
+        self.client_runtime = install(self, defaults=HOST_DEFAULTS, bus=self.topic_bus, profiler=self.layout_profiler)
+        assert self.client_runtime.scheduler is not None, "a topic bus was given, so there is a scheduler"
+        self.layout_scheduler = self.client_runtime.scheduler
+        self.layout_challenges = self.client_runtime.challenges
         # How many of each panel a user may have open, and which mounts die with their
         # parent. Reached from a handler as `interaction.client.mounts`.
-        self.message_roots = self.layout_host.message_roots
+        self.sessions = self.client_runtime.sessions
 
     def is_operational(self) -> bool:
         """Return whether Discord and every critical bot-owned job are healthy."""
@@ -199,7 +199,7 @@ class RedstoneSquid(Bot):
         # because each one is a gateway round trip: a slow Discord must not stall shutdown,
         # and an undisabled panel times out on its own anyway.
         with anyio.move_on_after(3.0):
-            await self.layout_host.close()
+            await self.client_runtime.close()
         await self.background_tasks.close()
         # After the supervisor, so the bridge's listener is already cancelled and cannot
         # log a torn connection on the way out. Bounded, then hung up: shutdown must not

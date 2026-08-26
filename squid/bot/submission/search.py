@@ -293,7 +293,7 @@ class SearchCog[
                 return latest, await self.bot.for_build(latest).render_node()
 
             component = BuildInfoComponent(build, node, refresh=refresh, locale=locale)
-            navigator = sd.navigation.Navigator(component)
+            navigator = sd.navigation.StackNavigator(component)
             message_root = create_message_root(
                 navigator,
                 source=interaction,

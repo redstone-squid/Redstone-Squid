@@ -403,7 +403,7 @@ HOST_DEFAULTS = sd.MessageRootDefaults(chrome=CHROME, palette=PALETTES.resolve()
 
 Only the half that can be written down as a value. The other half -- a challenge presenter,
 which needs the session registry and the background runner -- is assembled by
-`sd.install` and reached back through `LayoutHost.of`, so a panel built from a click
+`sd.install` and reached back through `ClientRuntime.of`, so a panel built from a click
 gets the same wiring as one opened through `bot.mounts`.
 """
 
@@ -411,7 +411,7 @@ gets the same wiring as one opened through `bot.mounts`.
 def create_message_root(
     component: ui.Component,
     *,
-    source: sd.host.HostSource,
+    source: sd.runtime.RuntimeSource,
     access: sd.AccessPolicy,
     locale: str | None = None,
     chrome: ui.chrome.Chrome | None = None,
@@ -428,7 +428,7 @@ def create_message_root(
     `scheduler` stays explicit rather than inherited from the host: a panel is refreshed only by
     its own clicks unless it says it reacts to something else.
     """
-    defaults = sd.LayoutHost.of(source).defaults
+    defaults = sd.ClientRuntime.of(source).defaults
     if chrome is not None:
         defaults = defaults.replace(chrome=chrome)
     return defaults.mount(

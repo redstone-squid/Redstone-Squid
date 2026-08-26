@@ -10,7 +10,7 @@ import squid_ui_discord as sd
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.operations import managed_result
-from squid.bot.settings_view import FOLLOW_DISCORD, SETTINGS_SCREEN, SettingsCapabilities, SettingsPanel
+from squid.bot.settings_view import FOLLOW_DISCORD, SETTINGS_SESSION_SPEC, SettingsCapabilities, SettingsPanel
 from squid.bot.ui import (
     destination,
     error_layout,
@@ -60,11 +60,11 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         )
         # One panel per admin per guild: a second `/settings` replaces the first rather than
         # leaving two live panels writing the same settings service.
-        await SETTINGS_SCREEN.open(
+        await SETTINGS_SESSION_SPEC.open(
             view,
             destination(ctx, visibility="personal", locale=locale),
             sessions=ctx,
-            opener=sd.Opener.of(ctx),
+            open_context=sd.OpenContext.of(ctx),
             localization=localization_for(locale),
         )
 

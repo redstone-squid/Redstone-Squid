@@ -1,6 +1,6 @@
 """Stack navigation by composition.
 
-`Navigator` embeds whichever child component is on top of its stack and appends the
+`StackNavigator` embeds whichever child component is on top of its stack and appends the
 Back/Home/Close row *last, because it renders last* — no `__init_subclass__` machinery
 rewriting subclass constructors to keep controls in order. It is an ordinary consumer of
 `Component.embed`: the screens are children in the component tree, reaching the mount through
@@ -14,7 +14,7 @@ from squid_ui.primitives.styles import ActionStyle
 from squid_ui.runtime.component import Component
 
 
-class Navigator(Component):
+class StackNavigator(Component):
     """A component that shows one child at a time and owns the navigation controls."""
 
     def __init__(self, root: Component) -> None:

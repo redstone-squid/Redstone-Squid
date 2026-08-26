@@ -6,7 +6,7 @@ from typing import Any, cast
 import discord
 
 import squid_ui_discord as sd
-from squid.bot.voting.poll_wizard import POLL_SCREEN, PollConfirmationComponent, PollDraft
+from squid.bot.voting.poll_wizard import POLL_SESSION_SPEC, PollConfirmationComponent, PollDraft
 from squid_ui_discord.testing import delivered_to, fake_interaction, fake_message
 from tests.helpers.discord import make_layout_bot
 from tests.helpers.voting import GENERIC_OPTIONS
@@ -27,11 +27,11 @@ async def open_wizard(
     message: discord.Message | None = None,
 ) -> sd.MessageRoot:
     bot = make_layout_bot()
-    opened = await POLL_SCREEN.open(
+    opened = await POLL_SESSION_SPEC.open(
         wizard,
         delivered_to(message or fake_message()),
-        sessions=bot.message_roots,
-        opener=sd.Opener(OWNER_ID, 7),
+        sessions=bot.sessions,
+        open_context=sd.OpenContext(OWNER_ID, 7),
         scheduler=scheduler,
         expiry=sd.RenewEphemeral() if scheduler is not None else sd.PauseUpdates(),
     )

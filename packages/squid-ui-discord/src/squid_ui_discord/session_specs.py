@@ -14,33 +14,33 @@ from squid_ui_discord.delivery import Destination, Replyable, respond_to
 from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_options import MessageRootOptions
 from squid_ui_discord.sessions import (
-    DEFAULT_SESSION_POLICY,
+    DEFAULT_ADMISSION,
+    AdmissionSpec,
     GlobalScope,
     GuildScope,
     OpenResult,
     Rejected,
     RejectionReason,
     SessionKey,
-    SessionPolicy,
-    SessionRegistry,
+    SessionManager,
     SessionScope,
     UserGuildScope,
     UserScope,
 )
 
 if TYPE_CHECKING:
-    from squid_ui_discord.host import HostSource
+    from squid_ui_discord.runtime import RuntimeSource
 
 
 @dataclass(frozen=True, slots=True)
-class Opener:
+class OpenContext:
     """Discord identity from which screen policy is derived."""
 
     user_id: int
     guild_id: int | None = None
 
     @classmethod
-    def of(cls, source: discord.Interaction[Any] | Replyable) -> Opener:
+    def of(cls, source: discord.Interaction[Any] | Replyable) -> OpenContext:
         """Build an opener from an interaction, or from whatever a command arrived on.
 
         Read duck-typed, the way `reply_to` peeks at `ctx.interaction`: an interaction names
@@ -80,18 +80,18 @@ class Opener:
         return self.guild_id
 
 
-class Scope(StrEnum):
-    """Session-key scope derivable from an :class:`Opener`."""
+class ScopeKind(StrEnum):
+    """Session-key scope derivable from an :class:`OpenContext`."""
 
     USER = "user"
     GUILD = "guild"
     USER_GUILD = "user_guild"
     GLOBAL = "global"
 
-    def resolve(self, opener: Opener) -> SessionScope:
+    def resolve(self, open_context: OpenContext) -> SessionScope:
         """Build this kind of scope as a value, for a kind chosen at runtime.
 
-        `ScreenSpec` declares its scope as a member and resolves it here, so this returns the union.
+        `SessionSpec` declares its scope as a member and resolves it here, so this returns the union.
         A caller that knows the kind statically should ask the opener instead --
         `opener.user_guild()` is a `UserGuildScope`, which is what lets a `SharedState[UserGuildScope]`
         pool refuse the wrong scope at the call site rather than missing at runtime. Both spellings
@@ -99,42 +99,42 @@ class Scope(StrEnum):
         holding its session key reaches a pool through `key.scope` with nothing to convert.
         """
         match self:
-            case Scope.USER:
-                return opener.user()
-            case Scope.GUILD:
-                return opener.guild()
-            case Scope.USER_GUILD:
-                return opener.user_guild()
-            case Scope.GLOBAL:
-                return opener.global_()
+            case ScopeKind.USER:
+                return open_context.user()
+            case ScopeKind.GUILD:
+                return open_context.guild()
+            case ScopeKind.USER_GUILD:
+                return open_context.user_guild()
+            case ScopeKind.GLOBAL:
+                return open_context.global_()
 
 
-def _owner(opener: Opener) -> AccessPolicy:
-    return Owner(opener.user_id)
+def _owner(open_context: OpenContext) -> AccessPolicy:
+    return Owner(open_context.user_id)
 
 
-def _registry(source: SessionRegistry | HostSource) -> SessionRegistry:
+def _manager(source: SessionManager | RuntimeSource) -> SessionManager:
     """The registry itself, or the one belonging to the host `source` is installed on."""
-    if isinstance(source, SessionRegistry):
+    if isinstance(source, SessionManager):
         return source
     # Imported here because a host installs a challenge presenter, which is a screen: the
     # two modules are genuinely mutually recursive, and this is the one direction that is
     # not needed at import time.
-    from squid_ui_discord.host import LayoutHost
+    from squid_ui_discord.runtime import ClientRuntime
 
-    return LayoutHost.of(source).message_roots
+    return ClientRuntime.of(source).sessions
 
 
-type ScreenOptionsResolver = Callable[[Opener], Awaitable[MessageRootOptions]]
+type MessageRootOptionsResolver = Callable[[OpenContext], Awaitable[MessageRootOptions]]
 
 
 @dataclass(frozen=True, slots=True)
-class ScreenSpec:
+class SessionSpec:
     """Per-open session policy shared by every opening of one logical screen."""
 
     name: str
-    scope: Scope = Scope.USER
-    policy: SessionPolicy = DEFAULT_SESSION_POLICY
+    scope: ScopeKind = ScopeKind.USER
+    admission: AdmissionSpec = DEFAULT_ADMISSION
     capacity: int | None = None
     """The most members one opening of this screen admits; `None` is unbounded.
 
@@ -153,20 +153,22 @@ class ScreenSpec:
     Set it when several screens share one family -- a lobby and the match it becomes are one
     "game" for the purpose of "one game at a time".
     """
-    access: Callable[[Opener], AccessPolicy] = _owner
+    access: Callable[[OpenContext], AccessPolicy] = _owner
     options: Mapping[str, object] = field(default_factory=dict)
-    resolve_options: ScreenOptionsResolver | None = None
+    resolve_options: MessageRootOptionsResolver | None = None
 
     def __post_init__(self) -> None:
         """Snapshot mount options into a read-only mapping."""
         object.__setattr__(self, "options", MappingProxyType(dict(self.options)))
 
-    def key(self, opener: Opener) -> SessionKey:
+    def key(self, open_context: OpenContext) -> SessionKey:
         """Derive this screen's session key from an opener."""
-        return SessionKey(self.name, self.scope.resolve(opener))
+        return SessionKey(self.name, self.scope.resolve(open_context))
 
-    async def _message_root_options(self, opener: Opener, overrides: MessageRootOptions) -> MessageRootOptions:
-        resolved = {} if self.resolve_options is None else await self.resolve_options(opener)
+    async def _message_root_options(
+        self, open_context: OpenContext, overrides: MessageRootOptions
+    ) -> MessageRootOptions:
+        resolved = {} if self.resolve_options is None else await self.resolve_options(open_context)
         return cast(MessageRootOptions, {**self.options, **resolved, **overrides})
 
     async def open(
@@ -174,8 +176,8 @@ class ScreenSpec:
         component: Component,
         destination: Destination,
         *,
-        sessions: SessionRegistry | HostSource,
-        opener: Opener,
+        sessions: SessionManager | RuntimeSource,
+        open_context: OpenContext,
         **overrides: Unpack[MessageRootOptions],
     ) -> OpenResult:
         """Construct and open a root mount using this screen's policy.
@@ -184,15 +186,15 @@ class ScreenSpec:
         interaction or command context the opening came from will do, which is what spares a
         caller holding neither from dispatching over the two invocation surfaces itself.
         """
-        sessions = _registry(sessions)
-        options = await self._message_root_options(opener, overrides)
-        message_root = sessions.defaults.mount(component, access=self.access(opener), **options)
+        sessions = _manager(sessions)
+        options = await self._message_root_options(open_context, overrides)
+        message_root = sessions.defaults.mount(component, access=self.access(open_context), **options)
         return await sessions.open(
             message_root,
             destination,
-            key=self.key(opener),
-            policy=self.policy,
-            actor_id=opener.user_id,
+            key=self.key(open_context),
+            admission=self.admission,
+            actor_id=open_context.user_id,
             capacity=self.capacity,
             quota=self.quota,
             domain=self.domain,
@@ -203,26 +205,26 @@ class ScreenSpec:
         component: Component,
         destination: Destination,
         *,
-        sessions: SessionRegistry | HostSource,
-        opener: Opener,
+        sessions: SessionManager | RuntimeSource,
+        open_context: OpenContext,
         parent: MessageRoot,
         **overrides: Unpack[MessageRootOptions],
     ) -> OpenResult:
         """Construct and attach a mount below one known live parent."""
-        sessions = _registry(sessions)
+        sessions = _manager(sessions)
         parent_session = sessions.session_for(parent)
         if parent_session is None:
             return Rejected((), RejectionReason.SESSION_FINISHED)
-        options = await self._message_root_options(opener, overrides)
-        message_root = sessions.defaults.mount(component, access=self.access(opener), **options)
-        return await parent_session.attach(message_root, destination, actor_id=opener.user_id, parent=parent)
+        options = await self._message_root_options(open_context, overrides)
+        message_root = sessions.defaults.mount(component, access=self.access(open_context), **options)
+        return await parent_session.attach(message_root, destination, actor_id=open_context.user_id, parent=parent)
 
     async def respond(
         self,
         component: Component,
         interaction: discord.Interaction[Any],
         *,
-        sessions: SessionRegistry | HostSource | None = None,
+        sessions: SessionManager | RuntimeSource | None = None,
         ephemeral: bool = True,
         wait: bool = False,
         **overrides: Unpack[MessageRootOptions],
@@ -236,7 +238,7 @@ class ScreenSpec:
             component,
             respond_to(interaction, ephemeral=ephemeral, wait=wait),
             sessions=interaction if sessions is None else sessions,
-            opener=Opener.of(interaction),
+            open_context=OpenContext.of(interaction),
             **overrides,
         )
 
@@ -246,7 +248,7 @@ class ScreenSpec:
         interaction: discord.Interaction[Any],
         *,
         parent: MessageRoot,
-        sessions: SessionRegistry | HostSource | None = None,
+        sessions: SessionManager | RuntimeSource | None = None,
         ephemeral: bool = True,
         wait: bool = False,
         **overrides: Unpack[MessageRootOptions],
@@ -256,7 +258,7 @@ class ScreenSpec:
             component,
             respond_to(interaction, ephemeral=ephemeral, wait=wait),
             sessions=interaction if sessions is None else sessions,
-            opener=Opener.of(interaction),
+            open_context=OpenContext.of(interaction),
             parent=parent,
             **overrides,
         )
