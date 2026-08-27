@@ -12,6 +12,10 @@ def _form(title: str = "Value") -> sl.forms.FormSpec:
     return sl.forms.FormSpec(title, (sl.forms.TextField(key="value", label="Value"),))
 
 
+def _assert_routed_render[StateT](machine: sp.StateMachine[StateT]) -> None:
+    assert sp.RouteDriver(lambda request: f"route:{request.action}").render(machine, machine.initial_state)
+
+
 def test_pure_machines_render_through_component_and_route_drivers() -> None:
     decision = sp.Decision("Choose", (sp.DecisionOption("one", "One"),))
     collection = sp.CollectionEditor("Items", create=_form(), label=lambda value: str(value["value"]))
@@ -29,7 +33,15 @@ def test_pure_machines_render_through_component_and_route_drivers() -> None:
     for machine in machines:
         component = machine.build_component()
         assert component.render()
-        assert sp.RouteDriver(lambda request: f"route:{request.action}").render(machine, machine.initial_state)
+
+    _assert_routed_render(decision)
+    _assert_routed_render(collection)
+    _assert_routed_render(editor)
+    _assert_routed_render(menu)
+    _assert_routed_render(tabs)
+    _assert_routed_render(choices)
+    _assert_routed_render(ranked)
+    _assert_routed_render(wizard)
 
     assert sp.confirm("Confirm?", on_confirm=_finished).render()
 
