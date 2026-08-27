@@ -506,11 +506,13 @@ def send_to(
     mentions = no_mentions() if allowed_mentions is None else allowed_mentions
 
     async def send(payload: MessagePayload) -> DeliveryResult:
+        fields: dict[str, Any] = payload._send_fields()
+        if delete_after is not None:
+            fields["delete_after"] = delete_after
         message = await target.send(
             files=_merged_files(files, payload),
             allowed_mentions=mentions,
-            **({"delete_after": delete_after} if delete_after is not None else {}),
-            **payload._send_fields(),
+            **fields,
         )
         return DeliveryResult(message, handle_for(message, mode=payload.mode))
 

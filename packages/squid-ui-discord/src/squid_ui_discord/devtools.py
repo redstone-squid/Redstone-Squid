@@ -87,7 +87,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         if self._owns_action_ledger:
             add_action_result_sink(self._action_ledger)
 
-    def cog_unload(self) -> None:
+    async def cog_unload(self) -> None:
         """Close the DevTools-owned action ledger when Discord unloads this cog."""
         if self._owns_action_ledger:
             self._action_ledger.close()

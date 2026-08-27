@@ -12,7 +12,7 @@ would violate its ownership of the message. Modals keep detection here: they are
 `audit` deliberately walks view structure only.
 """
 
-from typing import Any
+from typing import Any, cast
 
 import discord
 from discord.ui.select import BaseSelect
@@ -204,7 +204,10 @@ def _conform_modal_options(
         if option.description is not None and len(option.description) > limits.option_description:
             _note(notes, f"option description {len(option.description)} > {limits.option_description}")
             option.description = trim(option.description, limits.option_description)
-    component.options = options
+    if isinstance(component, discord.ui.CheckboxGroup):
+        component.options = cast(list[discord.CheckboxGroupOption], options)
+    else:
+        component.options = cast(list[discord.RadioGroupOption], options)
 
 
 def _conform_gallery(gallery: discord.ui.MediaGallery, limits: V2Limits, notes: Notes = None) -> None:
