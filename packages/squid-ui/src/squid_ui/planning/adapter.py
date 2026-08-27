@@ -50,6 +50,7 @@ class AdapterCapability(StrEnum):
 
     RENDER_V2 = "adapter.discord.render.components-v2"
     RENDER_CLASSIC = "adapter.discord.render.classic"
+    RENDER_HTML = "adapter.html.render"
     DISPATCH = "adapter.discord.dispatch"
     INTERACTION_DELIVERY = "adapter.discord.interaction-delivery"
     MODAL_FORMS = "adapter.discord.modal-forms"

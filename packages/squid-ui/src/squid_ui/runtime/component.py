@@ -13,7 +13,7 @@ root component is attached to a MessageRoot; children reach it through their par
 from collections.abc import Callable, Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
-from typing import Any, Generic, Protocol, TypeVar
+from typing import Any, Generic, Protocol, TypeVar, cast
 
 from squid_reactivity.core import (
     _RENDER_OBSERVATION,
@@ -96,16 +96,16 @@ from squid_ui.semantic import (
     Table as SemanticTable,
 )
 from squid_ui.semantic import Toggle as SemanticToggle
-from squid_ui.target_types import DiscordTarget
+from squid_ui.target_types import RenderTarget
 
-type RenderNode[ModeT = DiscordTarget] = LayoutNode[ModeT]
-type RenderResult[ModeT = DiscordTarget] = Document[ModeT] | LayoutNode[ModeT] | Sequence[LayoutNode[ModeT]]
+type RenderNode[ModeT = RenderTarget] = LayoutNode[ModeT]
+type RenderResult[ModeT = RenderTarget] = Document[ModeT] | LayoutNode[ModeT] | Sequence[LayoutNode[ModeT]]
 
 
 type AnyComponent = Component[Any]
 """A mounted component of any target mode.
 
-`Component`'s `ModeT` defaults, so a bare `Component` annotation means `Component[DiscordTarget]`
+`Component`'s `ModeT` defaults, so a bare `Component` annotation means `Component[RenderTarget]`
 and rejects every other mode -- including `Self` inside `Component`'s own methods. The tree
 machinery below holds components of whatever mode the caller mounted, so it says so, in the same
 spirit as `AnyTarget`.
@@ -198,7 +198,7 @@ class _SpliceResult:
     added: tuple[tuple[str, Component], ...]
 
 
-ModeT = TypeVar("ModeT", contravariant=True, default=DiscordTarget)
+ModeT = TypeVar("ModeT", contravariant=True, default=RenderTarget)
 """The dialects a component's rendered nodes can be drawn in.
 
 Declared the old way, and contravariant on purpose, in a file that otherwise uses PEP 695.
@@ -480,12 +480,13 @@ def render_component_tree(
                     raise LayoutInvariantError(message)
                 # Before the defer check: a deferred child still reaches the mount through
                 # its parent when its on_load writes state.
-                item.component._parent = component
-                if defer is not None and defer(item.component):
-                    deferred.append(item.component)
+                child_component = cast(AnyComponent, item.component)
+                child_component._parent = component
+                if defer is not None and defer(child_component):
+                    deferred.append(child_component)
                     return []
                 child_path = item.key if path == "$" else f"{path}.{item.key}"
-                expanded = _namespace(expand(item.component, child_path, context), item.key)
+                expanded = _namespace(expand(child_component, child_path, context), item.key)
                 child_splices[child_path] = _NodeSplice(route, len(expanded), item.key)
                 return expanded
             return [_map_layout_children_routed(item, item_path, inside(route), expand_item)]

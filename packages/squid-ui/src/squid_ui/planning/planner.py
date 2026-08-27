@@ -15,13 +15,14 @@ from squid_ui.planning.target import Target
 from squid_ui.runtime.presentation_state import PresentationState
 from squid_ui.scene.model import PlanResult
 from squid_ui.sources import Position
+from squid_ui.target_types import RenderTarget
 from squid_ui.text import NEUTRAL, Localization
 
 EMPTY_RESERVATION = EMPTY_COST
 
 
 def plan[ModeT, AdapterT, BodyT: scene.Body](
-    rendered: DocumentLike[ModeT],
+    rendered: DocumentLike[ModeT] | DocumentLike[RenderTarget],
     *,
     target: Target[Any, BodyT, ModeT, AdapterT],
     chrome: Chrome = DEFAULT_CHROME,

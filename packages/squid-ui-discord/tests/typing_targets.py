@@ -5,7 +5,7 @@ Renderer protocol conformance moved to `typing_renderers.py`.
 
 from typing import Any, assert_type
 
-from squid_ui import fallback, scene
+from squid_ui import RenderTarget, fallback, html, scene
 from squid_ui.planning import (
     AdapterProfile,
     ClassicTarget,
@@ -13,7 +13,6 @@ from squid_ui.planning import (
     DiscordAdapter,
     DiscordPy27Adapter,
     DiscordPyAdapter,
-    DiscordTarget,
     Renderable,
     Target,
     classic_target,
@@ -23,11 +22,11 @@ from squid_ui.planning import (
 from squid_ui.planning.limits import ClassicLimits, V2Limits
 from squid_ui.primitives import Card, Panel, Text, Variants
 from squid_ui.scene.model import PlanResult
-from squid_ui.semantic import FallbackContent
+from squid_ui.semantic import FallbackContent, Paragraph
 from squid_ui_discord.target import classic, v2
 
 
-class Portable(Renderable[DiscordTarget]):
+class Portable(Renderable[RenderTarget]):
     pass
 
 
@@ -67,6 +66,9 @@ assert_type(
 )
 assert_type(plan(Text("v2"), target=v2()), PlanResult[scene.ComponentsV2])
 assert_type(plan(Text("classic"), target=classic()), PlanResult[scene.ClassicMessage])
+assert_type(plan(Paragraph("portable"), target=v2()), PlanResult[scene.ComponentsV2])
+assert_type(plan(Paragraph("html"), target=html.target()), PlanResult[scene.HtmlBody])
+plan(Text("primitive"), target=html.target())  # pyrefly: ignore[bad-argument-type]
 
 v2_only = Panel((Text("v2"),))
 classic_only = Card(children=(Text("classic"),))
