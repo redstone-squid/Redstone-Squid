@@ -79,6 +79,10 @@ dev = [
     # squid-ui' tests. Arrived transitively via schemathesis before; a
     # cross-language contract should not depend on another tool's dependency tree.
     "jsonschema>=4.23",
+    # The replication package keeps both real adapters optional for users, but its test and
+    # type-check suite exercises them together as the production/conformance pair.
+    "loro==1.13.2",
+    "pycrdt==0.14.2",
     "pip-tools>=7.4.1",
     "pytest-archon>=0.0.6",
     "ruff>=0.5.1",
