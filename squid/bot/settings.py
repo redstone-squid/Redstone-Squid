@@ -11,13 +11,8 @@ import squid_ui_discord as sd
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.operations import managed_result
-from squid.bot.settings_view import FOLLOW_DISCORD, SETTINGS_SESSION_SPEC, SettingsCapabilities, SettingsPanel
-from squid.bot.ui import (
-    error_node,
-    info_node,
-    localization_for,
-    message_destination,
-)
+from squid.bot.settings_view import FOLLOW_DISCORD, SettingsCapabilities, SettingsPanel
+from squid.bot.ui import error_node, info_node
 from squid.bot.utils.permissions import hide_unless, requires, subject_for
 from squid.core.i18n import SUPPORTED_LOCALES, _
 from squid.permissions.domain.catalogue import (
@@ -47,22 +42,16 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         """Open this server's settings panel."""
         assert ctx.guild is not None
         locale = await resolve_locale(ctx, self.settings_service)
-        view = SettingsPanel(
+        # One panel per admin per guild: a second `/settings` replaces the first rather than
+        # leaving two live panels writing the same settings service.
+        await SettingsPanel.show(
+            ctx,
             settings=self.settings_service,
             votes=self.bot.services.votes,
             guild=ctx.guild,
             capabilities=await self._capabilities(ctx),
             locale=locale,
             owner_guild_id=self.bot.owner_server_id,
-        )
-        # One panel per admin per guild: a second `/settings` replaces the first rather than
-        # leaving two live panels writing the same settings service.
-        await SETTINGS_SESSION_SPEC.open(
-            view,
-            message_destination(ctx, visibility="personal", locale=locale),
-            sessions=ctx,
-            open_context=sd.OpenContext.of(ctx),
-            localization=localization_for(locale),
         )
 
     async def _capabilities(self, ctx: Context[BotT]) -> SettingsCapabilities:

@@ -35,7 +35,6 @@ DURATION_PRESETS: tuple[tuple[str, int], ...] = (
     ("7 days", 7 * 86400),
 )
 CUSTOM_DURATION = "custom"
-POLL_SESSION_SPEC = sd.SessionSpec("poll-wizard", scope=sd.ScopeKind.USER_GUILD, options={"timeout": 900})
 
 VISIBILITY_CHOICES: tuple[tuple[VoteVisibility, str, str], ...] = (
     (
@@ -193,29 +192,28 @@ async def present_poll_form(
         except InvalidVoteConfigurationError as error:
             await sd.delivery.respond_text(form_interaction, str(error))
             return
-        component = PollConfirmationComponent(
+        await PollConfirmationComponent.show(
+            form_interaction,
             publisher,
             author_account_id,
             edited,
             options,
             allow_network=allow_network,
-        )
-        scheduler = sd.ClientRuntime.of(form_interaction).scheduler
-        await POLL_SESSION_SPEC.respond(
-            component,
-            form_interaction,
-            sessions=form_interaction.client.sessions,
             wait=True,
-            scheduler=scheduler,
-            expiry=sd.RenewEphemeral() if scheduler is not None else sd.PauseUpdates(),
         )
 
     modal = sd.modal.build_form_modal(poll_form(draft), on_submit=submitted)
     await interaction.response.send_modal(modal)
 
 
-class PollConfirmationComponent(sl.Component[sl.ComponentsV2Target]):
+class PollConfirmationComponent(sd.Screen):
     """A semantic poll preview and publication workspace."""
+
+    session = "poll-wizard"
+    scope = sd.ScopeKind.USER_GUILD
+    timeout = 900
+    expiry = sd.RenewEphemeral()
+    follow_topics = True
 
     published: bool = sl.state(default=False)
     draft: PollDraft = sl.state(persist=False)
@@ -232,7 +230,7 @@ class PollConfirmationComponent(sl.Component[sl.ComponentsV2Target]):
         self.publisher = publisher
         self.author_account_id = author_account_id
         self.draft = draft
-        self.options = options
+        self.vote_options = options
         self.allow_network = allow_network
 
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
@@ -241,7 +239,7 @@ class PollConfirmationComponent(sl.Component[sl.ComponentsV2Target]):
         preview = "\n".join(
             [
                 f"## {self.draft.question}",
-                *(f"{option.emoji} {option.label}" for option in self.options),
+                *(f"{option.emoji} {option.label}" for option in self.vote_options),
             ]
         )
         fields = [
@@ -352,7 +350,7 @@ class PollConfirmationComponent(sl.Component[sl.ComponentsV2Target]):
                 question=self.draft.question,
                 visibility=self.draft.visibility,
                 duration_seconds=self.draft.duration_seconds,
-                options=self.options,
+                options=self.vote_options,
                 scope=self.draft.scope,
             )
         except InvalidVoteConfigurationError as error:
@@ -382,7 +380,7 @@ class PollConfirmationComponent(sl.Component[sl.ComponentsV2Target]):
             await event.notice(str(error))
             return
         self.draft = draft
-        self.options = options
+        self.vote_options = options
 
     async def _cancel(self, event: sl.PressEvent) -> None:
         await event.notice("Poll cancelled.")
