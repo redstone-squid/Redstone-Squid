@@ -13,16 +13,12 @@ from squid.bot.i18n import resolve_locale, t
 from squid.bot.operations import managed_result
 from squid.bot.settings_view import FOLLOW_DISCORD, SETTINGS_SESSION_SPEC, SettingsCapabilities, SettingsPanel
 from squid.bot.ui import (
-    error_layout,
     error_node,
-    info_layout,
     info_node,
     localization_for,
     message_destination,
-    reply_payload,
 )
 from squid.bot.utils.permissions import hide_unless, requires, subject_for
-from squid.bot.utils.visibility import personal
 from squid.core.i18n import SUPPORTED_LOCALES, _
 from squid.permissions.domain.catalogue import (
     SETTINGS_SERVER_EDIT,
@@ -171,7 +167,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         locale = await resolve_locale(ctx, self.settings_service)
         if role.guild != ctx.guild:
             await self._reply(
-                ctx, error_layout(t(locale, _("Error")), t(locale, _("That role is not from this server.")))
+                ctx, error_node(t(locale, _("Error")), t(locale, _("That role is not from this server.")))
             )
             return
         try:
@@ -179,7 +175,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         except InvalidVoteConfigurationError:
             await self._reply(
                 ctx,
-                error_layout(
+                error_node(
                     t(locale, _("Error")),
                     t(locale, _("A vote multiplier must be a positive number, such as 1.5.")),
                 ),
@@ -188,7 +184,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         await self.bot.services.votes.set_role_weight(weight)
         await self._reply(
             ctx,
-            info_layout(
+            info_node(
                 t(locale, _("Voting updated")),
                 t(locale, _("{role} now counts {multiplier}x."), role=role.name, multiplier=f"{multiplier:g}")
                 + self._weight_scope_note(ctx.guild.id, kind, locale),
@@ -203,13 +199,13 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         locale = await resolve_locale(ctx, self.settings_service)
         if role.guild != ctx.guild:
             await self._reply(
-                ctx, error_layout(t(locale, _("Error")), t(locale, _("That role is not from this server.")))
+                ctx, error_node(t(locale, _("Error")), t(locale, _("That role is not from this server.")))
             )
             return
         await self.bot.services.votes.remove_role_weight(ctx.guild.id, kind, role.id)
         await self._reply(
             ctx,
-            info_layout(
+            info_node(
                 t(locale, _("Voting updated")),
                 t(locale, _("{role} no longer carries extra weight."), role=role.name)
                 + self._weight_scope_note(ctx.guild.id, kind, locale),
@@ -225,7 +221,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         await self.bot.services.votes.reset_configuration(ctx.guild.id, kind)
         await self._reply(
             ctx,
-            info_layout(
+            info_node(
                 t(locale, _("Voting reset")),
                 t(locale, _("{kind} voting is back to its defaults."), kind=kind.value)
                 if kind is not None
@@ -233,13 +229,10 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
             ),
         )
 
-    async def _reply(self, ctx: Context[BotT], payload: sd.message_payload.MessagePayload) -> None:
-        """Answer the caller privately through the payload delivery boundary."""
-        await reply_payload(
-            ctx,
-            payload,
-            visibility="personal" if personal(ctx) else "public",
-        )
+    async def _reply(self, ctx: Context[BotT], node: sl.LayoutNode[sl.ComponentsV2Target]) -> None:
+        """Answer the caller privately through the invocation delivery boundary."""
+        invocation = await sd.Invocation.of(ctx)
+        await invocation.reply(node, visibility="personal")
 
     def _weight_scope_note(self, guild_id: int, kind: VoteKind, locale: str | None) -> str:
         """Warn when this server's multipliers bind nothing it can see."""

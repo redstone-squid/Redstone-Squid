@@ -9,7 +9,7 @@ from discord import AllowedMentions
 from discord.ext.commands import Cog
 
 from squid.bot._types import GuildMessageable
-from squid.bot.ui import text_layout
+from squid.bot.ui import render_payload, text_node
 from squid_ui_discord import send_to
 
 if TYPE_CHECKING:
@@ -58,7 +58,7 @@ class WelcomeRelay[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         await send_to(
             general_channel,
             allowed_mentions=AllowedMentions(users=False, roles=False, everyone=False, replied_user=False),
-        )(text_layout(message.system_content.replace(decision.matched_name, member.mention)))
+        )(render_payload([text_node(message.system_content.replace(decision.matched_name, member.mention))]))
 
     @Cog.listener(name="on_member_join")
     async def track_new_member(self, member: discord.Member):

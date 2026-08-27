@@ -24,6 +24,7 @@ from squid.accounts.domain import (
 from squid.bot.account_view import AccountPanel
 from squid.bot.verify import VerifyCog
 from squid_ui_discord.testing import commit_render, fake_interaction
+from tests.helpers.discord import make_layout_bot
 
 ACCOUNT_ID = 42
 AUTHOR_ID = 555
@@ -43,7 +44,7 @@ async def test_someone_with_no_account_is_told_how_to_get_one() -> None:
     cog = VerifyCog.__new__(VerifyCog)
     cog.bot = cast(
         Any,
-        SimpleNamespace(services=SimpleNamespace(settings=SimpleNamespace(get_locale=AsyncMock(return_value=None)))),
+        make_layout_bot(services=SimpleNamespace(settings=SimpleNamespace(get_locale=AsyncMock(return_value=None)))),
     )
     cog.account_service = cast(Any, SimpleNamespace(get_account_by_identity=AsyncMock(return_value=None)))
     ctx = SimpleNamespace(
@@ -51,6 +52,7 @@ async def test_someone_with_no_account_is_told_how_to_get_one() -> None:
         guild=SimpleNamespace(id=5, preferred_locale="en-US"),
         author=SimpleNamespace(id=AUTHOR_ID),
         send=AsyncMock(),
+        bot=cog.bot,
     )
 
     await VerifyCog.account_group.callback(cog, cast(Any, ctx))  # type: ignore[arg-type]
@@ -67,7 +69,7 @@ async def test_somebody_elses_creator_page_is_a_public_read() -> None:
     cog = VerifyCog.__new__(VerifyCog)
     cog.bot = cast(
         Any,
-        SimpleNamespace(services=SimpleNamespace(settings=SimpleNamespace(get_locale=AsyncMock(return_value=None)))),
+        make_layout_bot(services=SimpleNamespace(settings=SimpleNamespace(get_locale=AsyncMock(return_value=None)))),
     )
     cog.account_service = cast(
         Any,
@@ -87,6 +89,7 @@ async def test_somebody_elses_creator_page_is_a_public_read() -> None:
         guild=SimpleNamespace(id=5, preferred_locale="en-US"),
         author=SimpleNamespace(id=AUTHOR_ID),
         send=AsyncMock(),
+        bot=cog.bot,
     )
     other = SimpleNamespace(id=999, display_name="Someone")
 

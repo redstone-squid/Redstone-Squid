@@ -22,7 +22,7 @@ import discord
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.routes import routes
+from squid.bot.routes._root import _feature_group, _feature_route
 from squid.bot.ui import text_node
 from squid.bot.voting.actors import describe_rejection, resolve_actor
 from squid.core.i18n import _
@@ -32,9 +32,9 @@ if TYPE_CHECKING:
     import squid.bot.app
 
 
-polls = routes.group("polls")
-poll_close = polls.define("close", aliases=("poll:close",))
-poll_refresh = polls.define("refresh", aliases=("poll:refresh",))
+polls, _polls_created = _feature_group("polls")
+poll_close = _feature_route(polls, "close", aliases=("poll:close",))
+poll_refresh = _feature_route(polls, "refresh", aliases=("poll:refresh",))
 
 
 def poll_controls() -> sl.semantic.ActionControls:

@@ -11,7 +11,7 @@ from discord import Interaction, TextStyle
 
 import squid_ui_discord as sd
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.routes import routes
+from squid.bot.routes._root import _feature_group, _feature_route
 from squid.bot.submission.parse import get_formatter_and_parser_for_type
 from squid.bot.ui import text_node
 from squid.builds.domain import DOOR_ORIENTATION_NAMES, Build, BuildDraft, DoorBuild
@@ -27,8 +27,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-builds = routes.group("builds")
-build_edit = builds.define("{build_id:int}:edit", aliases=("edit:build:{build_id:int}",))
+builds, _builds_created = _feature_group("builds")
+build_edit = _feature_route(builds, "{build_id:int}:edit", aliases=("edit:build:{build_id:int}",))
 
 
 class DoorTypeSelect(discord.ui.Select):

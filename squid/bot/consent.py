@@ -20,7 +20,7 @@ from squid.accounts.domain import (
     LinkPreview,
 )
 from squid.bot.i18n import t
-from squid.bot.ui import CardField, localization_for, text_layout
+from squid.bot.ui import CardField, localization_for, text_node
 from squid.bot.utils.sentinel import Sentinel
 from squid.core.i18n import _, ntranslate
 from squid_ui_discord import OpenContext, SessionSpec
@@ -172,9 +172,10 @@ def _destination(target: ConsentTarget) -> sd.MessageDestination:
     return sd.deliver_to(target, ephemeral=ephemeral, wait=True)
 
 
-async def _send(target: ConsentTarget, payload: sd.message_payload.MessagePayload) -> None:
-    """Send a plain payload where the prompt itself would have gone."""
-    await _destination(target)(payload)
+async def _send(target: ConsentTarget, node: sl.LayoutNode[sl.ComponentsV2Target]) -> None:
+    """Send a plain node where the prompt itself would have gone."""
+    invocation = await sd.Invocation.of(target)
+    await invocation.reply(node, visibility="personal")
 
 
 def _user_of(target: ConsentTarget) -> discord.User | discord.Member:
@@ -312,9 +313,7 @@ async def _open_prompt(
             **options,
         )
     if isinstance(opened, Rejected):
-        await _send(
-            target, text_layout(t(locale, _("You already have a consent prompt open. Please answer that one.")))
-        )
+        await _send(target, text_node(t(locale, _("You already have a consent prompt open. Please answer that one."))))
         return False
     return isinstance(opened, Opened)
 
@@ -432,7 +431,7 @@ async def ensure_consented_account(
     consent = await prompt_for_consent(target, user_id=user.id, locale=locale, timeout=timeout, parent=parent)
     if consent is NOT_ASKED or consent is None:
         if consent is None:
-            await _send(target, text_layout(t(locale, _("Cancelled. No account information was stored."))))
+            await _send(target, text_node(t(locale, _("Cancelled. No account information was stored."))))
         return None
 
     granted = await accounts.get_or_create_identity(IdentityProvider.DISCORD, str(user.id), consent=consent)

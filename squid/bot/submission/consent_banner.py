@@ -10,7 +10,7 @@ import squid_ui_discord as sd
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.bot.consent import CONSENT_SESSION_SPEC, ConsentPrompt
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.routes import routes
+from squid.bot.routes._root import _feature_group, _feature_route
 from squid.bot.ui import (
     CardField,
     localization_for,
@@ -27,8 +27,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-build_log_consents = routes.group("build-log-consents")
-build_log_consent = build_log_consents.define("new", aliases=("build_log:consent",))
+build_log_consents, _consents_created = _feature_group("build-log-consents")
+build_log_consent = _feature_route(build_log_consents, "new", aliases=("build_log:consent",))
 
 CONSENT_BUTTON_CUSTOM_ID = build_log_consent.id()
 

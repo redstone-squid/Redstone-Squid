@@ -34,7 +34,6 @@ from squid.bot.ui import (
 )
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.permissions import hide_unless, requires
-from squid.bot.utils.visibility import personal
 from squid.builds.domain import Build
 from squid.builds.errors import AliasAlreadyAddedError
 from squid.core.i18n import _
@@ -357,7 +356,7 @@ class SearchCog[
     )
     async def debug_build(self, ctx: Context[BotT], build_id: int):
         """Display internal details for a build."""
-        await ctx.defer(ephemeral=personal(ctx))
+        await ctx.defer(ephemeral=ctx.interaction is not None)
         invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         build = await self.queries.get(build_id)
