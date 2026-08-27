@@ -2,10 +2,11 @@
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import Any
 
 import pytest
 
-from squid_ui import Component, state
+from squid_ui import Component, DiscordTarget, state
 from squid_ui.primitives import Text
 from squid_ui.runtime.reactivity import _Cell, _State
 
@@ -19,14 +20,14 @@ class Service:
     """A collaborator a component holds and never mutates."""
 
 
-def cell_of(component: Component, name: str) -> _Cell:
+def cell_of(component: Component[Any], name: str) -> _Cell:
     descriptor = next(
         vars(klass)[name] for klass in type(component).__mro__ if isinstance(vars(klass).get(name), _State)
     )
     return descriptor.cell(component)
 
 
-class Panel(Component):
+class Panel(Component[DiscordTarget]):
     rows: Sequence[str] = state([])
     channels: Mapping[str, int | None] = state({"log": None})
     filters: Filters = state(Filters())
@@ -73,7 +74,7 @@ class TestMutated:
             panel.mutated(panel.channels)
 
     def test_an_object_held_twice_must_be_named(self):
-        class Twice(Component):
+        class Twice(Component[DiscordTarget]):
             first: Service = state(opaque=True)
             second: Service = state(opaque=True)
 

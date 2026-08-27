@@ -24,7 +24,7 @@ BUILD = Topic("build", "1")
 OTHER = Topic("build", "2")
 
 
-class Watcher(Component):
+class Watcher(Component[sl.ComponentsV2Target]):
     """One resource, one watched topic, chosen by state so a branch can drop it."""
 
     topic: Topic = state(default=BUILD)
@@ -69,7 +69,9 @@ def texts(view: discord.ui.LayoutView) -> str:
     return "\n".join(item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay))
 
 
-async def mounted(panel: Component, bus: LocalTopicBus, scheduler: MessageRootScheduler) -> tuple[MessageRoot, Any]:
+async def mounted(
+    panel: Component[Any], bus: LocalTopicBus, scheduler: MessageRootScheduler
+) -> tuple[MessageRoot, Any]:
     message: Any = fake_message()
     message_root = MessageRoot(panel, access=Everyone(), scheduler=scheduler, timeout=None)
     await message_root.send(delivered_to(message))
@@ -102,7 +104,7 @@ async def test_a_variadic_watch_follows_every_topic_it_names() -> None:
 async def test_a_topic_watched_in_render_is_followed_too() -> None:
     """`watch` is a tracked read, so the render's own consumer collects it directly."""
 
-    class Direct(Component):
+    class Direct(Component[sl.ComponentsV2Target]):
         def render(self):
             sl.runtime.watch(BUILD)
             return Text("x")

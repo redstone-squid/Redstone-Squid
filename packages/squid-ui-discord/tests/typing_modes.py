@@ -12,7 +12,7 @@ unused, propagation has regressed and the guarantee is gone.
 from typing import assert_type
 
 import squid_ui as sl
-from squid_ui.planning import ClassicTarget, ComponentsV2Target, DiscordTarget, plan
+from squid_ui.planning import ClassicTarget, ComponentsV2Target, plan
 from squid_ui.primitives import Card, Panel, Text
 from squid_ui.semantic import Stack
 from squid_ui_discord.target import classic, v2
@@ -20,7 +20,7 @@ from squid_ui_discord.target import classic, v2
 # --- a container takes the meet of its children's modes ----------------------------------
 
 portable = sl.stack(sl.heading("title"), sl.paragraph("body"))
-assert_type(portable, Stack[DiscordTarget])
+assert_type(portable, Stack[sl.RenderTarget])
 
 v2_only = sl.stack(sl.heading("title"), Panel((Text("inner"),)))
 assert_type(v2_only, Stack[ComponentsV2Target])

@@ -23,7 +23,7 @@ from squid_ui_discord.sessions import SessionManager
 from squid_ui_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 
 
-class _Panel(Component):
+class _Panel(Component[sl.ComponentsV2Target]):
     """One guarded action that counts the presses it was actually allowed to run."""
 
     count: int = state(0)
@@ -147,7 +147,7 @@ class TestIssuing:
         async def hook(interaction: discord.Interaction, error: Exception, source: str) -> None:
             recorded.append(str(error))
 
-        class Panel(Component):
+        class Panel(Component[sl.ComponentsV2Target]):
             def render(self):
                 return sl_form(
                     "Rename",
@@ -192,7 +192,7 @@ class TestResuming:
         assert panel.count == 2
 
     async def test_an_approval_for_one_action_does_not_admit_another(self):
-        class TwoButtons(Component):
+        class TwoButtons(Component[sl.ComponentsV2Target]):
             def __init__(self) -> None:
                 self.pressed: list[str] = []
 
@@ -281,7 +281,7 @@ class TestResuming:
         elsewhere.edit_original_response.assert_not_awaited()
 
     async def test_a_resumed_parallel_read_press_keeps_its_own_transaction(self):
-        class Reader(Component):
+        class Reader(Component[sl.ComponentsV2Target]):
             def __init__(self) -> None:
                 # A list, not state: a PARALLEL_READ handler may not write component state.
                 self.reads: list[str] = []

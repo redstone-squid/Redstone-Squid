@@ -2,6 +2,7 @@
 
 import pytest
 
+import squid_ui as sl
 from squid_ui import Component, PressEvent, TextLike
 from squid_ui.forms import FormLike, SubmitHandler
 from squid_ui.interactions import ActionMode, Actor, Visibility
@@ -86,7 +87,7 @@ def test_native_names_the_responder_type_when_context_omits_the_frontend() -> No
 async def test_handlers_reach_the_dispatching_interaction_through_native() -> None:
     seen: list[object] = []
 
-    class Inspect(Component):
+    class Inspect(Component[sl.ComponentsV2Target]):
         def render(self):
             return Row((Button(label="inspect", on_click=self.inspect, key="inspect"),))
 

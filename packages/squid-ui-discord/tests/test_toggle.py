@@ -121,11 +121,11 @@ def test_toggle_lowering_uses_one_toned_button_and_custom_labels() -> None:
 
 
 def test_toggle_key_is_prefixed_through_embed() -> None:
-    class Child(sl.Component):
+    class Child(sl.Component[sl.ComponentsV2Target]):
         def render(self):
             return sl.toggle("Web", key="web")
 
-    class Parent(sl.Component):
+    class Parent(sl.Component[sl.ComponentsV2Target]):
         def __init__(self) -> None:
             self.child = Child()
 

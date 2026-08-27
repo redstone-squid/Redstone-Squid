@@ -767,7 +767,7 @@ async def test_the_adopted_scene_conforms_strictly() -> None:
 
 
 async def test_an_adopted_view_embeds_in_a_larger_squid_screen() -> None:
-    class Screen(sl.Component):
+    class Screen(sl.Component[sl.ComponentsV2Target]):
         def __init__(self, child: sl.Component) -> None:
             self.child = child
 

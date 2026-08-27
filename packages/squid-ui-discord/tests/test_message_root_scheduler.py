@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock
 import anyio
 import pytest
 
+import squid_ui as sl
 from squid_ui import Component
 from squid_ui.profiling import MemoryProfiler, OperationKind, TraceLink
 from squid_ui.runtime import LocalTopicBus, Topic
@@ -17,7 +18,7 @@ from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler, PauseU
 from squid_ui_discord.testing import delivered_to, fake_interaction, fake_message
 
 
-class Empty(Component):
+class Empty(Component[sl.ComponentsV2Target]):
     def render(self):
         return []
 

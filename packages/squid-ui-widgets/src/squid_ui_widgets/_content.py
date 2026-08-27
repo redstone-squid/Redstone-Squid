@@ -2,13 +2,14 @@
 
 import re
 from collections.abc import Iterable, Mapping
+from typing import Any
 
 from squid_ui.factories import is_layout_node, paragraph
 from squid_ui.runtime.component import Component
 from squid_ui.semantic import AnyLayoutNode
 from squid_ui.text import Message, ResolvedText, TextLike
 
-type ContentItem = AnyLayoutNode | Component
+type ContentItem = AnyLayoutNode | Component[Any]
 type ContentLike = ContentItem | TextLike | Iterable[ContentItem | TextLike]
 """Whatever a caller hands a widget's content slot.
 
