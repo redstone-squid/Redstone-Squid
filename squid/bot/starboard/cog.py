@@ -10,13 +10,13 @@ from discord.ext import commands
 from discord.ext.commands import Context, guild_only, hybrid_group
 from whenever import Instant
 
+import squid_ui_discord as sd
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
 from squid.bot.starboard.debounce import EntryDebouncer, EntryKey
-from squid.bot.ui import reply_payload, text_layout
+from squid.bot.ui import text_node
 from squid.bot.utils.autocomplete import autocompletes, guild_context, suggests
 from squid.bot.utils.permissions import hide_unless, requires
-from squid.bot.utils.visibility import personal
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import (
     STARBOARD_BOARD_CREATE,
@@ -335,12 +335,9 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         return config
 
     async def _reply(self, ctx: Context[BotT], message: str, **params: object) -> None:
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        await reply_payload(
-            ctx,
-            text_layout(t(locale, message, **params)),
-            visibility="personal" if personal(ctx) else "public",
-        )
+        await invocation.reply(text_node(t(locale, message, **params)), visibility="personal")
 
     @staticmethod
     def _parse_setting(setting: str, value: str) -> object:

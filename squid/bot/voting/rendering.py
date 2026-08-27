@@ -12,7 +12,7 @@ from textwrap import dedent
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
-from squid.bot.ui import DISCORD_GREEN, DISCORD_RED, DISCORD_YELLOW, CardField, card_layout, render_payload
+from squid.bot.ui import DISCORD_GREEN, DISCORD_RED, DISCORD_YELLOW, CardField, card_node, render_payload
 from squid.bot.voting.controls import poll_controls
 from squid.voting.domain import VoteChoice, VoteSessionResult, VoteSessionSnapshot, VoteStatus
 
@@ -104,15 +104,19 @@ def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> sd.
         **Log content**
         {target_content}
         """).strip()
-    return card_layout(
-        title,
-        description,
-        accent_colour=accent_colour,
-        fields=(
-            CardField("Upvotes", str(snapshot.upvotes)),
-            CardField("Downvotes", str(snapshot.downvotes)),
-            CardField("Net votes", str(snapshot.net_votes)),
-        ),
+    return render_payload(
+        [
+            card_node(
+                title,
+                description,
+                accent_colour=accent_colour,
+                fields=(
+                    CardField("Upvotes", str(snapshot.upvotes)),
+                    CardField("Downvotes", str(snapshot.downvotes)),
+                    CardField("Net votes", str(snapshot.net_votes)),
+                ),
+            )
+        ]
     )
 
 
