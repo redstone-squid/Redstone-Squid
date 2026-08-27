@@ -4,14 +4,22 @@ Optional replicated-state integration for Squid actions. The package keeps backe
 private, exposes immutable Python snapshots, stages mutations as transaction participants, and
 routes decoded remote updates through the same runtime commit gate as local actions.
 
+This is an alpha release. The Python API may change before 1.0.
+
 The deterministic `ReferenceBackend` is a reference/conformance backend for counters and tagged sets.
 It proves operation identity, idempotent delivery, convergence, semantic inverse planning, and mixed
 ordinary/replicated atomicity; it is not a networking or durable-storage product.
 
 The `loro` extra contains the production generalized backend pinned to the version audited in
 `docs/plans/68-replicated-backend-report.md`. It exposes named text, list, movable-list, map, tree,
-exact counter, and tagged-set containers. The older `LoroTextEngine` and pycrdt adapters remain
-conformance spikes and are not production APIs.
+exact counter, and tagged-set containers. The `pycrdt` extra is public but experimental: it is a
+conformance backend for evaluating interoperability and does not carry the production guarantees of
+the Loro adapter.
+
+```console
+pip install 'squid-replication[loro]==0.1.0a1'
+pip install 'squid-replication[pycrdt]==0.1.0a1'
+```
 
 ```python
 from squid_replication import ReferenceBackend, Replica

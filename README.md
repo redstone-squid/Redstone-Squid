@@ -6,6 +6,9 @@ This is a discord bot designed to make the process of submitting, confirming and
 
 Read this in other languages: [🇮🇸](./docs/readme/README-is.md)
 
+The reusable UI, reactivity, storage, and replication layers developed for the bot are published
+as the [Squid UI framework suite](./docs/squid-ui.md). Bot deployment instructions continue below.
+
 ## Getting Started
 
 Setting up your own version of this bot is **NOT RECOMMENDED** as there is already an instance running which you can invite to your discord server. If you create your own instance, it will have a separate database to the already running instance. If you want to utilise this bot, skip to `Discord Set Up`.
