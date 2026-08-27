@@ -20,10 +20,10 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   model is simpler and fits the frontend-neutral tree. Cross-view updates already have a
   path: shared services + `MountScheduler.schedule`/`Mount.refresh`. If a real many-views-one-
   domain need appears, add a host-side event bus, not a store in the package.
-  **Revisited 2026-08-22**: the bus is [26](26-topic-bus.md), moved package-side by the
+  **Revisited 2026-08-22**: the bus is [26](../completed/squid-layouts-redesign/26-topic-bus.md), moved package-side by the
   productization decision; the store half of this rejection stands in full — the bus is
   payload-free precisely so it can never become one.
-  **Revisited again 2026-08-22**: [40](40-shared-state.md) covers one narrow case the bus
+  **Revisited again 2026-08-22**: [40](../completed/squid-layouts-redesign/40-shared-state.md) covers one narrow case the bus
   provably cannot — view state that outlives a mount *and* still rolls back with the action
   that wrote it, which the bus cannot carry (payload-free) and a shared service cannot
   either (outside `transaction()`, so `sl.history()` needs a hand-written inverse for state
@@ -56,7 +56,7 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   *Adoption* — Squid and a live view both claiming lifecycle or edit ownership of one
   message — stays rejected. *Fragment composition* — the host stays the sole owner while
   Squid measures it and contributes a sessionless, fully planned region to what is left —
-  is [35](35-discord-v2-fragments.md), and is the supported incremental boundary.
+  is [35](../completed/squid-layouts-redesign/35-discord-v2-fragments.md), and is the supported incremental boundary.
   `sl.discord.contribute(document, to=view)` is the shipped spelling; `into=` remains
   rejected because it names the wrong relationship.
   **Revisited again 2026-08-23**: [53](../completed/squid-layouts-redesign/53-view-adoption.md) splits the surviving half on one
@@ -70,7 +70,7 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   hand and discord.py never sets, so it is kept only as a secondary signal.
 - **Class-body operational policy** *(still rejected)* — (CascadeUI's `owner_only`, `instance_limit`,
   `instance_scope`, `instance_policy`, `participant_limit` as class attributes) — rejected
-  2026-08-23 by [43](43-mount-defaults.md). Every one of those values is an actor, a scope,
+  2026-08-23 by [43](../completed/squid-layouts-redesign/43-mount-defaults.md). Every one of those values is an actor, a scope,
   or a host decision the same component is opened with differently (`ConsentPrompt` opens as
   a root under `Reject()` and as an attached child two lines apart). A class attribute would
   couple portable components to Discord session vocabulary, and 34 already declines to copy
@@ -78,12 +78,12 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
 - **A separate application-layer package** *(still rejected as a package — a fourth layer above `sl.discord`; individual pieces landed elsewhere, including the reachability half in plan 70, see below)* — (`squid-ui`: a `UIRuntime` composition root, a
   `Screen` recipe, `Projection` objects for cross-screen reactivity, named policy presets
   like `private_panel`) — proposed externally 2026-08-23 and rejected as a *package*, though
-  one of its three ideas survived as [51](51-screens.md). Recorded because the proposal was
+  one of its three ideas survived as [51](../completed/squid-layouts-redesign/51-screens.md). Recorded because the proposal was
   written from the README and re-derived, under new names, three things this series had
   already settled:
-  `UIRuntime` is [43](43-mount-defaults.md)'s `MountDefaults` plus a host facade — 43 quotes
+  `UIRuntime` is [43](../completed/squid-layouts-redesign/43-mount-defaults.md)'s `MountDefaults` plus a host facade — 43 quotes
   the same motivating snippet;
-  `Projection` is [47](47-topic-values.md) phase 2's `sl.watch`, reaching the same conclusion
+  `Projection` is [47](../completed/squid-layouts-redesign/47-topic-values.md) phase 2's `sl.watch`, reaching the same conclusion
   ("give the engine a reactive address, do not cache domain state") by a worse route, since
   tracked reads mean the dependency graph is not maintained by hand at all — and it
   contradicted itself, forbidding a store and then proposing a keyed loader-plus-cache with
@@ -105,7 +105,7 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   rather than addition: 1,414 lines of it already exist inside `discord/durability/` and already
   import nothing from `squid_ui`, so the package boundary is being drawn where the dependency
   graph already put one.
-  **Revisited 2026-08-25**: [70](70-discord-py-interop.md) takes the *reachability* half of the
+  **Revisited 2026-08-25**: [70](../completed/squid-layouts-redesign/70-discord-py-interop.md) takes the *reachability* half of the
   `UIRuntime` idea and this entry does not cover it. The rejection's central claim was that
   `UIRuntime` is "[43](../completed/squid-layouts-redesign/43-mount-defaults.md)'s `MountDefaults`
   plus a host facade", which holds for construction and fails for lookup: a `MountDefaults` is a
@@ -123,8 +123,8 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   purity; the factory layer (plan 03) is the chosen ergonomics fix.
 - **Python 3.10 backport / PyPI packaging** *(still rejected — the 3.10 backport; actual PyPI publication is a separate, still-unmade call, not a rejection)* — irrelevant to this repo (3.14 target).
   Publishing squid-ui is a product decision to make explicitly, not design debt.
-  **2026-08-22**: the productization decision was made — plans [24](24-session-registry-move.md)
-  through [28](28-history.md) build for the library user rather than waiting on bot
+  **2026-08-22**: the productization decision was made — plans [24](../completed/squid-layouts-redesign/24-session-registry-move.md)
+  through [28](../completed/squid-layouts-redesign/28-history.md) build for the library user rather than waiting on bot
   consumers. Actual PyPI publication remains a separate, still-unmade call; the 3.10
   backport stays rejected.
 - **A generic `action.status` (`Idle | Pending | Failed`) in the reactive layer** *(still rejected)* — proposed
@@ -201,7 +201,7 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
 - **Portable permission facts on `ActionEvent`** *(still deferred)* — plan 02 gives the typed Discord
   escape hatch instead. If a second frontend ever dispatches events, design the portable
   capability surface against its actual requirements.
-  **Revisited 2026-08-22**: partially superseded by [31](31-action-ergonomics.md) — the
+  **Revisited 2026-08-22**: partially superseded by [31](../completed/squid-layouts-redesign/31-action-ergonomics.md) — the
   portable admission surface is `Guard`/`GuardDecision`; frontend facts still enter through
   plan 02's native access (`requires_role` lives in `sl.discord.guards`).
 - **Multi-message rendering — the *spanning* half** *(still deferred; the branching half already shipped, see below)* —
@@ -267,7 +267,7 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   inventory. Revisit only when a view actually needs to survive restarts; the
   `LeaseSnapshotStore` boundary is ready when that day comes.
   **Revisited 2026-08-22**: superseded by the productization standard — the consumer is
-  the library user. [27](27-snapshot-stores.md) fills the boundary without moving it;
+  the library user. [27](../completed/squid-layouts-redesign/27-snapshot-stores.md) fills the boundary without moving it;
   the bot itself still, correctly, has no consumer. 27 shipped both `SQLiteSnapshotStore`
   and an optional-extra `PostgresSnapshotStore`, plus the reachability sweep in
   `MountManager.recover` — the storage backends this entry withheld now exist; only a bot
@@ -288,11 +288,11 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   more than 15 minutes with nobody touching it — the render simply waits in `Mount.pending`
   until someone does. Only worth building for a view that must update itself unattended,
   which none does.
-  **Resolved 2026-08-22**: [26](26-topic-bus.md)'s bus creates exactly those views, so
+  **Resolved 2026-08-22**: [26](../completed/squid-layouts-redesign/26-topic-bus.md)'s bus creates exactly those views, so
   this entry's condition is met — and the answer is the paused-chrome banner plus
   click-to-resume, not a handoff control: every control already renews on click, so
   arming a special one adds nothing. The handoff *mechanism* stays rejected.
-  **Reopened 2026-08-22, then closed**: [39](39-ephemeral-handoff.md) identifies the missing UX contract:
+  **Reopened 2026-08-22, then closed**: [39](../completed/squid-layouts-redesign/39-ephemeral-handoff.md) identifies the missing UX contract:
   existing controls mutate application state, while a dedicated renewal action does not.
   The accepted design keeps Cascade's protected pre-expiry screen but renews Squid's same
   mount and message in place instead of reconstructing a view and spawning a successor — shipped.
@@ -301,10 +301,10 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   state) waits for a feature that needs it. No consumer needs even the set form today: the
   one multi-actor site, `BuildEditComponent._may_event`, needs an async permission check with
   its own wording, which a static set cannot express.
-  **Revisited 2026-08-22**: [31](31-action-ergonomics.md)'s `guards.permission` serves the
+  **Revisited 2026-08-22**: [31](../completed/squid-layouts-redesign/31-action-ergonomics.md)'s `guards.permission` serves the
   `_may_event` case named here; per-actor state arrives as [32](32-demand-driven.md)'s
   `Agreement` component state. The participant *lifecycle* model is now
-  [34](34-safe-session-runtime.md) §B's scope, whose worked lobby/game example is this
+  [34](../completed/squid-layouts-redesign/34-safe-session-runtime.md) §B's scope, whose worked lobby/game example is this
   entry's remaining removal condition.
   **Closed 2026-08-24**: [60](../completed/squid-layouts-redesign/60-session-membership.md) shipped `join`/`leave`, per-session
   capacity, durable membership and the cross-session quota 34 §B.4 asked for, with
@@ -318,10 +318,10 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   CascadeUI's pattern modules). Likely valuable — the poll wizard and submission form
   are hand-rolled wizards today — but premature before plans 03/04 settle the authoring
   surface they would be built on. Revisit after the presets migration lands. **Revisited 2026-08-21**: 03/04 landed;
-  plans [18](18-forms.md)/[19](19-patterns.md) now cover Form, Wizard and
+  plans [18](../completed/squid-layouts-redesign/18-forms.md)/[19](../completed/squid-layouts-redesign/19-patterns.md) now cover Form, Wizard and
   MultiChoicePanel; Tabs/Menu/RankedList were also migrated under 19's two-shell rule.
   **Revisited 2026-08-22**: continued by the survey batches
-  [29](29-control-vocabulary.md)–[32](32-demand-driven.md), including the richer
+  [29](../completed/squid-layouts-redesign/29-control-vocabulary.md)–[32](32-demand-driven.md), including the richer
   table/list browser this entry originally named (30's `Browser`). Batch D (roster, tally,
   grid, `Agreement`) shipped under [32](32-demand-driven.md) on 2026-08-24; this entry is closed.
 - **Grid / matrix interaction** *(closed — shipped as batch D of plan 32)* — (added 2026-08-21) — content grids are a `Table`
@@ -332,20 +332,20 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   a real consumer.
   **Revisited 2026-08-22**: promoted by [32](32-demand-driven.md); the recorded three-tier
   shape was adopted and shipped on 2026-08-24 with a variadic cell API; this entry is closed.
-- **`sl.resource` descriptor** *(resolved — shipped as plan 33)* — resolved 2026-08-22 by [33](33-resources.md). Explicit
+- **`sl.resource` descriptor** *(resolved — shipped as plan 33)* — resolved 2026-08-22 by [33](../completed/squid-layouts-redesign/33-resources.md). Explicit
   `depends=(kind,)` state descriptors provide the missing dependency model; render-observed
   resources stay lazy; monotonic tokens reject stale completions; and `replace()` supplies
   the optimistic set the motivating `SettingsPanel` case required. Visible and awaited
   loading share one `Pending | Ready | Failed` state machine and differ only in whether the
   mount commits the pending discovery render before settling it.
 - **Portable form protocol** *(resolved — superseded by plan 18)* — (replacing the Discord-native modal boundary) — long-noted
-  in the architecture doc's gaps; superseded by plan [18](18-forms.md) (2026-08-21).
+  in the architecture doc's gaps; superseded by plan [18](../completed/squid-layouts-redesign/18-forms.md) (2026-08-21).
 - **Cross-page multi-select** *(resolved — shipped as plan 19's `MultiChoicePanel`; one narrow sub-rejection still stands)* — resolved 2026-08-21: the grouping/commit model the
   rejection demanded turned out to be Form's submission model, and plan
-  [19](19-patterns.md)'s `MultiChoicePanel` supplies it (staged vs committed sets,
+  [19](../completed/squid-layouts-redesign/19-patterns.md)'s `MultiChoicePanel` supplies it (staged vs committed sets,
   per-window merge, gated Apply). The rejection of engine-side `Managed` merging
   stands.
-  **Revisited 2026-08-22**: [30](30-structures.md)'s immediate commit changes when the
+  **Revisited 2026-08-22**: [30](../completed/squid-layouts-redesign/30-structures.md)'s immediate commit changes when the
   pattern commits, not who merges; the `Managed`-merging rejection stands.
 - **A `CompensableEffect` saga interface** for external side effects *(overturned — shipped by Plan 68)* — plan 28's History
   already separates a transactional `StateDelta` from an author-supplied external inverse, and

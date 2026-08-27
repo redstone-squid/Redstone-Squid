@@ -159,7 +159,7 @@ this exact word.
   the codec is total.
 - **`watch=` on `sl.resource`.** Rejected above: longer than the statement it sugars, and less
   expressive.
-- **A store, or durable subscriptions.** Untouched; [90](90-deferred.md) and
+- **A store, or durable subscriptions.** Untouched; [90](../../squid-ui-redesign/90-deferred.md) and
   [40](40-shared-state.md) §3 stand.
 - **Renaming `TopicBus` and friends to `Address*`.** Churn; see the wart above.
 

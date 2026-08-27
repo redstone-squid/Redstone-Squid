@@ -109,7 +109,7 @@ That split is deliberate: a deadline is a fact about the world, an elapsed inter
 fact about this process, and only the second may be frozen by a test clock.
 
 `requires_role` is deliberately not portable — roles are a Discord fact, and the portable
-core stays frontend-neutral (the same reasoning as plan [90](90-deferred.md)'s "portable
+core stays frontend-neutral (the same reasoning as plan [90](../../squid-ui-redesign/90-deferred.md)'s "portable
 permission facts" entry, which this partially supersedes: the portable surface is
 `Guard`/`GuardVerdict`, while frontend facts enter through plan 02's native access). It
 ships as `sl.discord.guards.requires_role(role_id, *, reason=None)`, sugar over

@@ -9,7 +9,7 @@ a closed suffix vocabulary where a type's last word says what ends it.
 and `squid_stores` there are **93 distinct class-name suffixes, 60 used exactly once**; only 15
 recur three times or more. A closed table would have to reject `Component`, `Mount`, `Screen`,
 `Destination`, `Composition`, `Target` and `Work`, or grow until it was not a table. Collapsing
-to one word per lifetime class is worse — see [90](../../squid-layouts-redesign/90-deferred.md).
+to one word per lifetime class is worse — see [90](../../squid-ui-redesign/90-deferred.md).
 
 ## Decision
 

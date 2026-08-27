@@ -166,7 +166,7 @@ The repo already has the vocabulary this wants, one layer over, and it has it **
 
 - `packages/squid-layouts/src/squid_layouts/discord/sessions.py:20-54` — `UserScope`, `GuildScope`,
   `UserGuildScope`, `GlobalScope` and `CustomScope`, frozen and hashable, unioned as `SessionScope`.
-  This is the taxonomy CascadeUI is credited for; [90](../../squid-layouts-redesign/90-deferred.md)'s Redux entry is the only
+  This is the taxonomy CascadeUI is credited for; [90](../../squid-ui-redesign/90-deferred.md)'s Redux entry is the only
   in-repo rendering of that finding.
 - `packages/squid-layouts/src/squid_layouts/discord/screens.py:38-44` — `Scope`, a `StrEnum` of the
   same four kinds, used by [51](51-screens.md)'s `Screen`.
@@ -209,7 +209,7 @@ The ergonomics still come from the class statement rather than from lookup metho
 namespace declares `Shared[UserGuildScope]`, the scope kind is fixed, and `pool.user(id)` would be a
 second spelling for it.
 
-This does not reopen [90](../../squid-layouts-redesign/90-deferred.md)'s rejection of class-body operational policy, which killed
+This does not reopen [90](../../squid-ui-redesign/90-deferred.md)'s rejection of class-body operational policy, which killed
 Cascade's `instance_scope`/`instance_policy` because *"a class attribute would couple portable
 components to Discord session vocabulary"*. The coupled class here is a host's own namespace
 subclass, not a portable component, and what it declares is a type parameter the pool keys on, not a
@@ -416,7 +416,7 @@ meaning anything.
   question passing as written. It did not: `ScopeT` now comes from a constructor parameter rather
   than from `SharedT`'s bound, and `at()` would need exactly the bound-directed solving that
   finding 1 rules out. Deferred on a measured basis rather than an assumed one, which is the same
-  footing as [90](../../squid-layouts-redesign/90-deferred.md)'s neighbouring `Unpack`-on-a-TypeVar rejection.
+  footing as [90](../../squid-ui-redesign/90-deferred.md)'s neighbouring `Unpack`-on-a-TypeVar rejection.
 - No automatic pool on a bot, registry, mount, or session.
 - No guarantee that separately constructed handles with equal diagnostic scopes converge.
 
@@ -491,7 +491,7 @@ listener leak on `close()` was not in the design and was fixed because the drop 
 Amended 2026-08-23 with a scope vocabulary, folding in the CascadeUI comparison's "steal the
 scoping/keying ergonomics" finding — a pool without a scope vocabulary and a scope vocabulary
 without a pool being two halves of one unbuilt decision. That comparison is not a document in this
-repo; [90](../../squid-layouts-redesign/90-deferred.md)'s Redux entry is the only in-repo rendering of the finding.
+repo; [90](../../squid-ui-redesign/90-deferred.md)'s Redux entry is the only in-repo rendering of the finding.
 
 Rewritten 2026-08-24, because the plan had gone stale in a way that would have misled an
 implementer. [63](63-stores-package.md) shipped `PersistedPool`
@@ -504,6 +504,6 @@ in the other direction: the proposed `sl.discord.scopes` module was deleted in f
 already existed in `screens.py`. The spike gate moved from `pool.at()` to the inference the plan
 depends on. No longer independent: 63 is a real dependency, and 61 and 62 have shipped.
 
-It reopens nothing in [90](../../squid-layouts-redesign/90-deferred.md) — there is still no store, no keyed global, and no
+It reopens nothing in [90](../../squid-ui-redesign/90-deferred.md) — there is still no store, no keyed global, and no
 singleton; what is keyed is a lifetime owner the host constructs and holds, and the class-body
 rejection stands for the thing it was about.

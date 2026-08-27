@@ -54,7 +54,7 @@ bridge, and the `PersistedPool` below needs the transaction seam. It does **not*
 `docs/squid-layouts-architecture.md:268` draws the line — *"Nothing durable belongs here; anything
 the application would still want with nobody looking at it is a service"* — and this package is
 where such a service's storage lives. A store inside `squid_layouts` would make the UI library the
-durable domain layer, which is what [90](../../squid-layouts-redesign/90-deferred.md)'s Redux rejection exists to prevent.
+durable domain layer, which is what [90](../../squid-ui-redesign/90-deferred.md)'s Redux rejection exists to prevent.
 
 Two units, landable separately.
 
@@ -210,7 +210,7 @@ that stays behind. `squid-slots` was rejected as naming one member for the whole
   Discord adapter as its own package — is the larger question this extraction invites and does not
   answer. It wants its own plan and its own evidence.
 - No reducers, dispatch, middleware, or subscriptions. This is storage, not a state manager;
-  [90](../../squid-layouts-redesign/90-deferred.md)'s Redux rejection is untouched and this plan does not lean on it.
+  [90](../../squid-ui-redesign/90-deferred.md)'s Redux rejection is untouched and this plan does not lean on it.
 - No cross-process invalidation *of slots*. A value changing in another process reaches a live UI
   through `Topic` and the bridge that now lives in this package
   ([45](45-topic-bridge.md)) — payload-free by design.

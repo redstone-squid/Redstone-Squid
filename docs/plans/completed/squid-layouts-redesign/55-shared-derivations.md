@@ -107,7 +107,7 @@ refused for all three. Resources are recorded in `_resources`.
 ## Not doing
 
 - **Persisting a namespace resource.** It is loaded, so rehydration is a reload; there is
-  nothing to write down. [90](90-deferred.md) and [40](40-shared-state.md) §3 stand.
+  nothing to write down. [90](../../squid-ui-redesign/90-deferred.md) and [40](40-shared-state.md) §3 stand.
 - **A `_slots` entry, so `_state_changed` publishes it.** `_state_changed` reports what a
   *commit* changed, and a load is not a commit. The resource publishes for itself.
 - **Renaming `CellAddress`.** It now names a cell or a resource -- a named slot on a namespace.
