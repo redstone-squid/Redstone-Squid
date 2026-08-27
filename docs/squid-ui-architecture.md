@@ -54,11 +54,14 @@ planning, that is a DrawInvariantError, not a second degradation mechanism.
 
 | Need | API | Result |
 |---|---|---|
-| Runtime for one discord.py client | sd.install(client, defaults=..., bus=...) | ClientRuntime: registry, scheduler, challenge runner |
-| That runtime, from an interaction or context | sd.ClientRuntime.of(source) | the installed host, or `ClientRuntimeMissing` |
-| Stateful Discord interaction | sd.MessageRoot(component, access=...) | lifecycle, access, events, paging, edits |
-| Scoped live UI lifetime | sd.SessionManager | root/child cascade, cardinality, replacement |
-| Per-open policy for one screen | sd.SessionSpec(name, scope=..., admission=...) | session key, cardinality, capacity, quota, access |
+| Runtime for one discord.py client | `sd.install(client, defaults=..., bus=..., localization=...)` | `ClientRuntime`: sessions, scheduler, challenges, and the host localization hook |
+| Current command or routed action | `inv = await sd.Invocation.of(source)` | source, runtime, localization, user, guild, and source-aware delivery |
+| Terminal command reply | `await inv.reply(*nodes, visibility=...)` | a localized public, personal, or `sd.Private(reason)` response |
+| Plain live panel | `await inv.mount(component, access=..., visibility=...)` | a delivered `MessageRoot` without session policy |
+| Reusable application screen | `await MyScreen.show(source, ...)` | the prepared screen, or `None` after a policy-authored rejection |
+| Dynamic session composition | `await inv.open(component, spec, visibility=...)` | `Opened` or `Rejected`; destination and open context come from the invocation |
+| Low-level root composition | `runtime.mount(...)`, then `root.send(inv.destination(...))` | explicit message-root and delivery ownership when a higher entry point cannot express it |
+| Low-level Discord destination | `sd.reply_to`, `sd.respond_to`, `sd.send_to` | a `MessageDestination` for framework internals and transport adapters |
 | Static Components V2 message | sd.render_static(document) | MessagePayload |
 | One node as a detached item | sd.render_item(node, reservation=...) | discord.ui.Item for a host-built view |
 | Static classic message | sd.classic.render_static(document) | MessagePayload |
@@ -68,7 +71,7 @@ planning, that is a DrawInvariantError, not a second degradation mechanism.
 | Browser or preview drawing | sl.html.Renderer().draw(scene) | HTML string |
 | Cross-process transport | sl.scene.Codec.dumps and loads | canonical protocol JSON |
 | Resume an opted-in session | sd.durability.DurableSessionRuntime | recovered Session graph |
-| Stateful root on a message the bot owns | sd.edit_to(message) | MessageDestination writing that message |
+| Stateful root on a message the bot owns | `sd.edit_to(message)` | `MessageDestination` writing that message |
 
 sd.render_message is the Components V2 convenience path: plan for `DISCORD_V2_DPY27`, draw with
 `V2Renderer`, then strictly audit the result. `sd.classic.render_message` is its counterpart
@@ -79,17 +82,26 @@ document is preferable because the planner can see every cost. A reservation is 
 planning against a reduced target, so adaptation and measurement agree on the room available. It never adopts an arbitrary existing `discord.py` view: renderers own their
 output object, so unknown pre-existing controls cannot undermine measurement.
 
-`sd.SessionSpec` is the per-open recipe for one logical screen, written once and shared by
-every opening of it: `scope` picks the key an opening collides on, `admission` decides what happens
-when it does, `capacity` caps members per session, `quota` caps how many sessions in `domain` one
-user may be in, and `access` builds the message root's access policy from the open context.
-`SessionSpec.open` and `SessionSpec.respond` construct the message root and hand it to the
-`SessionManager`, which still owns lifetime -- a spec owns the recipe, not the sessions. Either accepts the manager itself or
-anything an installed `ClientRuntime` can be found from, and `SessionSpec.respond` defaults it to the
-interaction's own client, so a caller holding neither does not dispatch over the two invocation
-surfaces to find one. The two are separate values because a
-component is not intrinsically a session policy: the same component can be opened under more than
-one screen, or under none at all.
+`Invocation` is the product entry point for one Discord event. `Invocation.of` resolves the
+installed runtime and host localization hook once inside the ambient dispatch scope; callers then
+reuse its audience policy for static replies, plain mounts, and session opens. Router dispatch and
+message-root action/submit dispatch establish that scope themselves, so a handler does not install
+one. `inv.t(...)` is only for strings leaving the layout system, such as autocomplete or a native
+modal API; layout nodes retain `TextLike` values and resolve them when their message root renders.
+
+`Screen` is the declarative application layer over `Invocation`. A subclass places stable policy in
+class variables: `session`, `scope`, `admission`, `capacity`, `quota`, `domain`, `visibility`,
+`timeout`, `expiry`, `follow_topics`, and root `options`. `show()` constructs the instance, records
+its opening invocation, awaits `prepare()`, and then mounts or opens it. A rejected session returns
+`None` only after its deferred policy notice has already been answered. Override cached `spec()`
+only when the derived `SessionSpec` cannot express the screen.
+
+`SessionSpec` remains the composition recipe for dynamic policy: `scope` picks the collision key,
+`admission` decides what happens on collision, `capacity` and `quota` bound membership, and `access`
+builds the root policy from the open context. `SessionSpec.open`/`respond`, `SessionManager`, raw
+`MessageRoot`, and `reply_to`/`respond_to` remain public lower layers for framework extensions and
+transport adapters. Application handlers normally enter through `Invocation` or `Screen`, which
+derive destination, sessions, open context, and localization from one source.
 
 ## Semantic authoring, adaptation, and exact primitives
 
