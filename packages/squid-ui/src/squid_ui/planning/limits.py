@@ -23,35 +23,12 @@ knows. A shared planning layer takes a `MessageLimits` and may touch only what i
 
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, fields, is_dataclass, replace
-from enum import StrEnum
 from typing import Self
 
+from squid_ui.planning.resources import TEXT_AXES as TEXT_AXES
+from squid_ui.planning.resources import Axis as Axis
+
 ELLIPSIS = "\N{HORIZONTAL ELLIPSIS}"
-
-
-class Axis(StrEnum):
-    """One message-wide budget a document is measured against.
-
-    Only whole-message totals are axes. A local cap describes what a legal component *is*
-    rather than how much room is left, so reducing one would change the document rather
-    than the reservation.
-    """
-
-    DISPLAY_TEXT = "display_text"
-    """Components V2 TextDisplay content, budgeted across the whole message."""
-    CONTENT_TEXT = "content_text"
-    """A classic message's `content` field."""
-    EMBED_TEXT = "embed_text"
-    """Every embed's titles, descriptions, field names and values, footers, and authors."""
-    COMPONENTS = "components"
-    ATTACHMENTS = "attachments"
-    EMBEDS = "embeds"
-    ROWS = "rows"
-    CONTROLS = "controls"
-
-
-TEXT_AXES = frozenset({Axis.DISPLAY_TEXT, Axis.CONTENT_TEXT, Axis.EMBED_TEXT})
-"""Every axis that holds message text, whichever target is in play."""
 
 
 @dataclass(frozen=True, slots=True)

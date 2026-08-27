@@ -16,7 +16,7 @@ from squid_ui.capabilities import Capability
 from squid_ui.chrome import Chrome
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_ui.planning.cursors import CursorCoordinator, MaterializedCursorRequest
-from squid_ui.planning.dialect import SceneBindings
+from squid_ui.planning.discord_dialect import SceneBindings
 from squid_ui.planning.identity import stable_fingerprint
 from squid_ui.planning.layout_measurement.model import (
     MeasuredCard,
@@ -470,6 +470,12 @@ class ClassicDialect:
     default_limits = CLASSIC_LIMITS
     # A classic message has no component that can hold a native discord.py item.
     realizes_extensions = False
+
+    @property
+    def planner(self) -> Any:
+        from squid_ui.planning.discord_planner import DISCORD_PLANNER
+
+        return DISCORD_PLANNER
 
     def normalize(
         self, nodes: Sequence[Node], target: Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, Any]

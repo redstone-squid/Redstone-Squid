@@ -10,7 +10,7 @@ from squid_ui.capabilities import Capability
 from squid_ui.chrome import Chrome
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_ui.planning.cursors import CursorCoordinator, MaterializedCursorRequest
-from squid_ui.planning.dialect import SceneBindings
+from squid_ui.planning.discord_dialect import SceneBindings
 from squid_ui.planning.identity import stable_fingerprint
 from squid_ui.planning.layout_measurement.model import (
     MeasuredPanel,
@@ -473,6 +473,12 @@ class V2Dialect:
     body_type = scene.ComponentsV2
     default_limits = LIMITS
     realizes_extensions = True
+
+    @property
+    def planner(self) -> Any:
+        from squid_ui.planning.discord_planner import DISCORD_PLANNER
+
+        return DISCORD_PLANNER
 
     def normalize(
         self, nodes: Sequence[Node], target: Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, Any]

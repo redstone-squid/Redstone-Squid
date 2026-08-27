@@ -170,6 +170,33 @@ def test_removed_compiler_pass_modules_have_no_compatibility_surface() -> None:
     assert violations == []
 
 
+def test_generic_planning_modules_do_not_depend_on_the_discord_backend() -> None:
+    """The public target seam must not acquire Discord's IR or layout solver types."""
+    generic = tuple(COMPILER_PASS_ROOT / name for name in ("dialect.py", "planner.py", "target.py"))
+    blocked_modules = (
+        "squid_ui.planning.limits",
+        "squid_ui.planning.layout_measurement",
+        "squid_ui.primitives",
+        "squid_ui.target_types",
+    )
+    violations: list[tuple[Path, int, str]] = []
+    for path in generic:
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Import):
+                imported = (alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module is not None:
+                imported = (node.module,)
+            else:
+                continue
+            violations.extend(
+                (path, node.lineno, module)
+                for module in imported
+                if any(module == blocked or module.startswith(f"{blocked}.") for blocked in blocked_modules)
+            )
+
+    assert violations == []
+
+
 def test_layouts_package_stays_standalone() -> None:
     """The UI framework package must remain publishable: no host-project or adapter imports."""
     (
