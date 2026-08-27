@@ -2,11 +2,10 @@
 
 import argparse
 import email
+import re
 import tarfile
 import zipfile
 from pathlib import Path
-
-from packaging.requirements import Requirement
 
 VERSION = "0.1.0a1"
 DISTRIBUTIONS = {
@@ -17,6 +16,14 @@ DISTRIBUTIONS = {
     "squid-ui-discord": "squid_ui_discord",
     "squid-ui-widgets": "squid_ui_widgets",
 }
+
+
+def _requirement_name_and_specifier(raw: str) -> tuple[str, str]:
+    requirement = raw.partition(";")[0].strip()
+    match = re.fullmatch(r"([A-Za-z0-9._-]+)(?:\[[^]]+\])?(.*)", requirement)
+    assert match is not None, f"could not parse requirement {raw!r}"
+    name = re.sub(r"[-_.]+", "-", match.group(1)).lower()
+    return name, match.group(2).strip()
 
 
 def _validate_wheel(path: Path, distribution: str, package: str) -> None:
@@ -33,9 +40,9 @@ def _validate_wheel(path: Path, distribution: str, package: str) -> None:
         assert f"{package}/py.typed" in members
         assert any(name.endswith(".dist-info/licenses/LICENSE") for name in members)
         for raw_requirement in metadata.get_all("Requires-Dist", []):
-            requirement = Requirement(raw_requirement)
-            if requirement.name in DISTRIBUTIONS:
-                assert str(requirement.specifier) == f"=={VERSION}"
+            name, specifier = _requirement_name_and_specifier(raw_requirement)
+            if name in DISTRIBUTIONS:
+                assert specifier == f"=={VERSION}"
 
 
 def _validate_sdist(path: Path, distribution: str, package: str) -> None:
