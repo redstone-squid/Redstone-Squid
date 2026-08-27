@@ -40,7 +40,7 @@ class Catalog(sl.runtime.SharedState[int]):
         return f"{self.key}#{self._loads}"
 
 
-class Reader(sl.Component):
+class Reader(sl.Component[sl.ComponentsV2Target]):
     def __init__(self, catalog: Catalog) -> None:
         self.catalog = catalog
 
@@ -108,7 +108,7 @@ async def test_a_message_root_reading_a_namespace_computed_follows_the_cells_beh
     scheduler = MessageRootScheduler(bus)
     prefs = Prefs(bus, 1)
 
-    class Panel(sl.Component):
+    class Panel(sl.Component[sl.ComponentsV2Target]):
         def render(self):
             return sl.paragraph(prefs.full)
 
@@ -226,7 +226,7 @@ def test_two_namespaces_hold_separate_resources(bus: sl.runtime.LocalTopicBus) -
 def test_a_component_resource_carries_no_address() -> None:
     """Nothing else can be looking at it, so there is nothing to publish."""
 
-    class Panel(sl.Component):
+    class Panel(sl.Component[sl.ComponentsV2Target]):
         @sl.resource
         async def value(self) -> str:
             return "loaded"

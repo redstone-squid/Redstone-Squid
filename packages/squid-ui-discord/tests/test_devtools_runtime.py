@@ -23,7 +23,7 @@ from squid_ui_discord.sessions import Opened
 from squid_ui_discord.testing import delivered_to, fake_message
 
 
-class Panel(sl.Component):
+class Panel(sl.Component[sl.ComponentsV2Target]):
     history: sl.runtime.History = sl.runtime.history(limit=4)
     count: int = sl.state(0)
 

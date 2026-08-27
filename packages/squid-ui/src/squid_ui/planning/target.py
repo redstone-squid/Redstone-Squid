@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
-from typing import Any, Protocol, Self
+from typing import Any, Generic, Protocol, Self, TypeVar, cast
 
 from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError
@@ -43,8 +43,14 @@ class TargetIdentity(Protocol):
     def capabilities(self) -> frozenset[str]: ...
 
 
+LimitsT = TypeVar("LimitsT", bound=TargetLimits)
+BodyT = TypeVar("BodyT", bound=scene.Body)
+ModeT_co = TypeVar("ModeT_co", covariant=True)
+AdapterT_co = TypeVar("AdapterT_co", covariant=True)
+
+
 @dataclass(frozen=True, slots=True)
-class Target[LimitsT: TargetLimits, BodyT: scene.Body, ModeT, AdapterT]:
+class Target(Generic[LimitsT, BodyT, ModeT_co, AdapterT_co]):
     """What a document is compiled to: a protocol dialect and an adapter for it.
 
     Two axes and nothing else, the way a compiler names `x86_64-unknown-linux-gnu` rather
@@ -57,8 +63,8 @@ class Target[LimitsT: TargetLimits, BodyT: scene.Body, ModeT, AdapterT]:
     the dialect's table after any reservation has been withheld from it.
     """
 
-    dialect: TargetDialect[LimitsT, BodyT, ModeT]
-    adapter: AdapterProfile[AdapterT]
+    dialect: TargetDialect[LimitsT, BodyT, Any]
+    adapter: AdapterProfile[AdapterT_co]
     limits: LimitsT
     selected_adapter_capabilities: frozenset[str] | None = None
     """The adapter capabilities planning was frozen to, when a snapshot recorded a subset."""
@@ -91,8 +97,8 @@ class Target[LimitsT: TargetLimits, BodyT: scene.Body, ModeT, AdapterT]:
         return self.dialect.version
 
     @property
-    def mode(self) -> type[ModeT]:
-        return self.dialect.mode
+    def mode(self) -> type[ModeT_co]:
+        return cast(type[ModeT_co], self.dialect.mode)
 
     @property
     def body_type(self) -> type[BodyT]:

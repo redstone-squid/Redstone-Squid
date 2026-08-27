@@ -2,6 +2,7 @@
 
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
+from typing import cast
 
 from squid_ui.factories import action_controls, heading, note, stack
 from squid_ui.primitives import Lines
@@ -138,13 +139,16 @@ class RankedList[EntryT]:
             if pages > 1
             else None
         )
-        return stack(
-            heading(self.heading) if self.heading is not None else None,
-            *(self._hook(self.header, total, controls, name="header") if self.header is not None else ()),
-            *body,
-            note(controls.chrome.page_footer(page + 1, pages)) if pages > 1 else None,
-            pager,
-            *(self._hook(self.footer, total, controls, name="footer") if self.footer is not None else ()),
+        return cast(
+            RenderResult,
+            stack(
+                heading(self.heading) if self.heading is not None else None,
+                *(self._hook(self.header, total, controls, name="header") if self.header is not None else ()),
+                *body,  # type: ignore[arg-type]
+                note(controls.chrome.page_footer(page + 1, pages)) if pages > 1 else None,
+                pager,
+                *(self._hook(self.footer, total, controls, name="footer") if self.footer is not None else ()),
+            ),
         )
 
 

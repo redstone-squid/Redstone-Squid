@@ -18,7 +18,7 @@ from squid_ui_discord.runtime import _INSTALLED, ClientRuntimeMissing
 from squid_ui_discord.testing import delivered_to, fake_interaction, fake_message
 
 
-class Panel(sl.Component):
+class Panel(sl.Component[sl.ComponentsV2Target]):
     def render(self):
         return [Heading("Panel")]
 
