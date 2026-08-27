@@ -24,7 +24,7 @@ Delivery *policy* (ephemeral rules, DM fallback) stays host-side.
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Protocol, cast, overload
+from typing import Any, Literal, Protocol, cast, overload
 
 import discord
 
@@ -78,6 +78,9 @@ class Delivered:
 @dataclass(frozen=True, slots=True)
 class Abandoned:
     """A destination deliberately declined to deliver a mount."""
+
+    def __bool__(self) -> Literal[False]:
+        return False
 
 
 type SendResult = Delivered | Abandoned

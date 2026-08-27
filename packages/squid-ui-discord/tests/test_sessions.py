@@ -11,6 +11,7 @@ import pytest
 import squid_ui as sl
 import squid_ui_discord
 from squid_ui.primitives import Button, Heading, Row
+from squid_ui.text import Message
 from squid_ui_discord import Everyone, MessageRootDefaults, SessionKey, SessionManager
 from squid_ui_discord.delivery import Abandoned
 from squid_ui_discord.sessions import (
@@ -160,6 +161,30 @@ class TestResults:
         assert isinstance(first, Opened)
         assert result == Rejected((first.session.snapshot,), RejectionReason.COLLISION)
         destination.assert_not_awaited()
+
+    async def test_reject_threads_a_deferred_notice_into_the_result(self) -> None:
+        manager = SessionManager()
+        first = await manager.open(a_root(), to_message(), key=KEY)
+        notice = Message("You already have this panel open.")
+
+        result = await manager.open(
+            a_root(),
+            to_message(),
+            key=KEY,
+            admission=AdmissionSpec(collision=Reject(notice=notice)),
+        )
+
+        assert isinstance(first, Opened)
+        assert result == Rejected((first.session.snapshot,), RejectionReason.COLLISION, notice)
+
+    async def test_open_results_have_branch_friendly_truthiness(self) -> None:
+        opened = await SessionManager().open(a_root(), to_message(), key=KEY)
+        rejected = Rejected((), RejectionReason.COLLISION)
+        abandoned = Abandoned()
+
+        assert opened
+        assert not rejected
+        assert not abandoned
 
     async def test_abandoned_is_distinct_from_rejection_and_delivery(self) -> None:
         result = await SessionManager().open(a_root(), abandoning(), key=KEY)
