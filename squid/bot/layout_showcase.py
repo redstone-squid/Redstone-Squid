@@ -4,7 +4,7 @@ import asyncio
 from collections.abc import Awaitable, Callable, Iterable, Sequence
 from datetime import UTC, datetime
 from functools import cache, partial
-from typing import TYPE_CHECKING, Literal, Never
+from typing import TYPE_CHECKING, ClassVar, Literal, Never
 
 from discord import app_commands
 from discord.ext import commands
@@ -20,7 +20,6 @@ from squid.bot.ui import (
     DISCORD_YELLOW,
     L,
     localization_for,
-    send_component,
 )
 from squid.core.i18n import _
 from squid_replication import ReferenceBackend, Replica, ReplicatedDocument
@@ -1202,7 +1201,7 @@ class Lobby(sd.Screen):
     roster of its own -- it reads `session.members` and asks for a redraw after each change.
     """
 
-    session = "showcase-lobby"
+    session: ClassVar[str] = "showcase-lobby"
     scope = sd.ScopeKind.GUILD
     capacity = 4
     quota = 1
@@ -1338,18 +1337,17 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         entries: app_commands.Range[int, 20, 200] = 100,
     ) -> None:
         """Open an interactive showcase of squid-ui."""
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        await send_component(
-            ctx,
+        await invocation.mount(
             LayoutShowcase(section=section, entries=entries, locale=locale),
             access=sd.Everyone(),
-            locale=locale,
         )
 
     @layout_group.command(name="shared")
     async def shared(self, ctx: Context[BotT]) -> None:
         """Open two live panels that share one namespace of view state."""
-        locale = await resolve_locale(ctx, self.bot.services.settings)
+        invocation = await sd.Invocation.of(ctx)
         scope = OpenContext(ctx.author.id, ctx.guild.id if ctx.guild else None).user()
         appearance = self._appearance.get(scope)
         # Co-existence state: only the two panels hold it, so it is collected when the second
@@ -1360,11 +1358,9 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             AppearancePanel(appearance, session),
             PreviewPanel(appearance, session),
         ):
-            await send_component(
-                ctx,
+            await invocation.mount(
                 component,
                 access=sd.Owner(ctx.author.id),
-                locale=locale,
                 scheduler=self.bot.client_runtime.scheduler,
             )
 

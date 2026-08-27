@@ -11,7 +11,7 @@ from squid.accounts.errors import AliasAlreadyClaimedError
 from squid.bot.consent import with_consented_account
 from squid.bot.i18n import t
 from squid.bot.profile_render import present_claimant
-from squid.bot.ui import DISCORD_BLUE, L, create_message_root
+from squid.bot.ui import DISCORD_BLUE, L
 from squid.bot.utils.permissions import enforce
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import ACCOUNT_CLAIM_APPROVE, ACCOUNT_CLAIM_REJECT
@@ -203,15 +203,6 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
     async def _close(self, event: sl.PressEvent) -> None:
         self.closed = True
         await event.finish()
-
-    def mount(self, *, source: sd.runtime.RuntimeSource) -> sd.MessageRoot:
-        return create_message_root(
-            self,
-            source=source,
-            access=sd.Owner(self._author_id),
-            locale=self.locale,
-            timeout=self._timeout,
-        )
 
 
 def _claim_entry(claim: AliasClaim, locale: str | None) -> str:

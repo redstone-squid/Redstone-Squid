@@ -22,7 +22,6 @@ from squid.notifications import (
     TagPredicate,
 )
 from squid.runtime import JobHandle
-from squid_ui_discord import respond_to
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
@@ -53,6 +52,7 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
     @app_commands.command(name="show", description="Open your notification channels and subscriptions")
     async def show(self, interaction: discord.Interaction) -> None:
         """Open the panel that `status`, `channels`, `list` and `unfollow` used to be."""
+        invocation = await sd.Invocation.of(interaction)
         locale = await resolve_locale(interaction, self.bot.services.settings)
         account_id = await self._account_id(interaction)
         if account_id is None:
@@ -63,8 +63,12 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
             author_id=interaction.user.id,
             locale=locale,
         )
-        message_root = component.mount(source=interaction)
-        await message_root.send(respond_to(interaction, ephemeral=True, wait=True))
+        await invocation.mount(
+            component,
+            access=sd.Owner(interaction.user.id),
+            visibility="personal",
+            timeout=300,
+        )
 
     @autocompletes(
         creator="creator_profiles",

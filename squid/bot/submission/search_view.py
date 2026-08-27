@@ -7,10 +7,9 @@ from typing import TYPE_CHECKING
 from discord.utils import escape_markdown
 
 import squid_ui as sl
-import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.bot.i18n import t
-from squid.bot.ui import DISCORD_GREEN, create_message_root
+from squid.bot.ui import DISCORD_GREEN
 from squid.builds.domain import Build
 from squid.core.i18n import _
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchHit, SearchPage, SearchRequest
@@ -247,12 +246,6 @@ class SearchResultsView(sl.Component[sl.ComponentsV2Target]):
     async def _close(self, event: sl.PressEvent) -> None:
         self.closed = True
         await event.finish()
-
-    def mount(self, *, source: sd.runtime.RuntimeSource) -> sd.MessageRoot:
-        """Create the mount used by the command transport."""
-        return create_message_root(
-            self, source=source, access=sd.Owner(self._author_id), locale=self.locale, timeout=180
-        )
 
 
 def _build_id(hit: SearchHit) -> int | None:

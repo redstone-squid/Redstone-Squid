@@ -26,10 +26,8 @@ from squid.bot.submission.search_view import SearchResultsView
 from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.ui import (
     PagedList,
-    create_message_root,
     error_node,
     info_node,
-    message_destination,
     text_node,
 )
 from squid.bot.utils.autocomplete import autocompletes
@@ -195,6 +193,7 @@ class SearchCog[
     ) -> None:
         """Search records, builds, patterns, and restrictions using text and field filters."""
         await ctx.defer()
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         search_scope, targeted_query = _targeted(scope, query)
         request = SearchRequest(
@@ -216,8 +215,7 @@ class SearchCog[
             load_build=load_build,
             render_build=lambda build: self.bot.for_build(build).render_node(),
         )
-        message_root = view.mount(source=ctx)
-        await message_root.send(message_destination(ctx, locale=locale))
+        await invocation.mount(view, access=sd.Owner(ctx.author.id), timeout=180)
 
     @commands.hybrid_group(name="restrictions")
     @requires(RESTRICTION_ALIAS_CREATE)
@@ -294,15 +292,13 @@ class SearchCog[
 
             component = BuildInfoComponent(build, node, refresh=refresh, locale=locale)
             navigator = sd.navigation.StackNavigator(component)
-            message_root = create_message_root(
+            await invocation.mount(
                 navigator,
-                source=interaction,
                 access=sd.Everyone(),
-                locale=locale,
+                visibility="public",
                 timeout=300,
                 scheduler=self.bot.client_runtime.scheduler,
             )
-            await message_root.send(sd.respond_to(interaction, ephemeral=False, wait=True))
             return
 
         await self._view_build_prefix(ctx, build_id)

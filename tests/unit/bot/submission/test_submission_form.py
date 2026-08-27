@@ -5,6 +5,7 @@ from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import squid_ui as sl
+import squid_ui_discord as sd
 from squid.bot.submission.ui.views import SubmissionFormComponent, _submission_basics_form
 from squid.builds.application import BuildService
 from squid.builds.domain import BuildDraft
@@ -37,7 +38,8 @@ def test_basics_form_describes_portable_fields() -> None:
 
 async def test_changing_the_door_type_marks_the_message_root_dirty() -> None:
     component = _component()
-    message_root = component.mount(source=make_layout_bot())
+    bot = make_layout_bot()
+    message_root = bot.client_runtime.mount(component, access=sd.Everyone(), timeout=300)
     commit_render(message_root)
 
     await component._door_changed(cast(sl.ChoiceEvent, SimpleNamespace(selected=("Door",))))

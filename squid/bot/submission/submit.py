@@ -201,8 +201,14 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             locale=locale,
             on_submit=persist_draft,
         )
-        message_root = component.mount(source=interaction)
-        delivered = await message_root.send(sd.respond_to(interaction, ephemeral=True, wait=True))
+        message_root = invocation.runtime.mount(
+            component,
+            access=sd.Owner(interaction.user.id),
+            localization=invocation.localization,
+            timeout=300,
+        )
+        component._root = message_root
+        delivered = await message_root.send(invocation.destination("personal", wait=True))
         # `wait=True` fetches the message back, and a delivery that produced none would have
         # raised. The form edits this message three times below, so it needs the handle.
         assert isinstance(delivered, sd.delivery.Delivered), "the interaction response cannot be abandoned"

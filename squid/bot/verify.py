@@ -26,7 +26,7 @@ from squid.bot.i18n import resolve_locale, t
 from squid.bot.profile_render import (
     public_profile_fields,
 )
-from squid.bot.ui import card_node, create_message_root, message_destination, text_node
+from squid.bot.ui import card_node, text_node
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.permissions import PermissionNodeRequired, requires, subject_for
 from squid.core.i18n import _
@@ -83,15 +83,6 @@ class MergeConfirmation(sl.Component[sl.ComponentsV2Target]):
             await self._done.wait()
         return None if scope.cancel_called else self.value
 
-    def mount(self, *, source: sd.runtime.RuntimeSource) -> sd.MessageRoot:
-        return create_message_root(
-            self,
-            source=source,
-            access=sd.Owner(self.author_id),
-            locale=self.locale,
-            timeout=self._timeout,
-        )
-
 
 class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     def __init__(self, bot: BotT):
@@ -125,8 +116,13 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             author_id=ctx.author.id,
             locale=locale,
         )
-        message_root = component.mount(source=ctx)
-        await message_root.send(message_destination(ctx, visibility="personal", locale=locale))
+        message_root = await invocation.mount(
+            component,
+            access=sd.Owner(ctx.author.id),
+            visibility="personal",
+            timeout=300,
+        )
+        component._root = message_root
 
     async def _show_creator_page(self, ctx: Context[BotT], user: discord.Member | discord.User, locale: str) -> None:
         """Show somebody else's page, which is shared content and answers where the channel sees it."""
@@ -354,7 +350,12 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             author_id=ctx.author.id,
             locale=locale,
         )
-        await confirmation.mount(source=ctx).send(message_destination(ctx, visibility="personal", locale=locale))
+        await invocation.mount(
+            confirmation,
+            access=sd.Owner(ctx.author.id),
+            visibility="personal",
+            timeout=60,
+        )
         await confirmation.wait()
 
         if confirmation.value is None:
@@ -397,6 +398,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     @requires(ACCOUNT_CLAIM_LIST)
     async def pending_claims(self, ctx: Context[BotT]) -> None:
         """Review the creator credit claims awaiting a decision."""
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         claims = await self.account_service.pending_alias_claims(with_claimants=True)
         subject = await subject_for(ctx)
@@ -411,8 +413,12 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             can_approve=approve.allowed,
             can_reject=reject.allowed,
         )
-        message_root = component.mount(source=ctx)
-        await message_root.send(message_destination(ctx, visibility="personal", locale=locale))
+        await invocation.mount(
+            component,
+            access=sd.Owner(ctx.author.id),
+            visibility="personal",
+            timeout=300,
+        )
 
 
 def _link_conflict(preview: LinkPreview, existing_java: AccountIdentity | None) -> UUID | None:

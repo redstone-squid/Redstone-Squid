@@ -18,7 +18,7 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.groups import BuildCommandGroup
-from squid.bot.ui import send_component, text_node
+from squid.bot.ui import text_node
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.permissions import requires
 from squid.builds.application import BuildService
@@ -102,6 +102,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
     ) -> None:
         """Download the build's schematic, converted to another format if asked."""
         await ctx.defer()
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         if file_format not in WRITABLE_EXTENSIONS:
             await _say(
@@ -120,14 +121,12 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
 
         data, _losses = await self.schematics.convert(build_id, ConvertRequest(target_format=file_format))
         name = f"build-{build_id}.{WRITABLE_EXTENSIONS[file_format]}"
-        await send_component(
-            ctx,
+        await invocation.mount(
             _DownloadDocument(
                 t(locale, _("Download schematic")),
                 sl.document.Asset("schematic", name, "application/octet-stream", sl.document.InlineAsset(data)),
             ),
             access=sd.Everyone(),
-            locale=locale,
         )
 
     @autocompletes(build_id="builds")
@@ -185,6 +184,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
     ) -> None:
         """Retarget the schematic at another Minecraft version and report what the change cost."""
         await ctx.defer()
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         if data_version is None and version is None:
             await _say(ctx, t(locale, _("Give either a data version or a Minecraft version to convert to.")))
@@ -199,8 +199,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
             ConvertRequest(target_format=SchematicFormat.LITEMATIC, target_data_version=data_version),
             version_label=version,
         )
-        await send_component(
-            ctx,
+        await invocation.mount(
             _DownloadDocument(
                 t(locale, _("Download converted schematic")),
                 sl.document.Asset(
@@ -212,7 +211,6 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
                 description=f"{t(locale, _('Conversion report:'))} {summarise_losses(losses)}",
             ),
             access=sd.Everyone(),
-            locale=locale,
         )
 
     @autocompletes(build_id="builds")

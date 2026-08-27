@@ -14,7 +14,6 @@ from string.templatelib import Template
 from typing import Any
 
 import discord
-from discord.ext.commands import Context
 
 import squid_ui as ui
 import squid_ui_discord as sd
@@ -25,7 +24,6 @@ DISCORD_YELLOW = 0xFAA61A
 DISCORD_GREEN = 0x43B581
 DISCORD_BLUE = 0x5865F2
 DISCORD_GREY = 0x4F545C
-_DEFAULT_EXPIRY = sd.PauseUpdates()
 
 __all__ = [
     "CHROME",
@@ -41,15 +39,12 @@ __all__ = [
     "L",
     "PagedList",
     "card_node",
-    "create_message_root",
     "error_node",
     "info_node",
     "link_node",
     "localization_for",
-    "message_destination",
     "render_item",
     "render_payload",
-    "send_component",
     "text_node",
     "truncate_display_text",
 ]
@@ -156,29 +151,6 @@ PALETTES = ui.PaletteRegistry(
 )
 
 
-def message_destination(
-    ctx: Context[Any],
-    *,
-    visibility: sd.Visibility = "public",
-    locale: str | None = None,
-    files: Sequence[discord.File] = (),
-) -> sd.MessageDestination:
-    """Where a mount's first message goes, in the same vocabulary `reply` uses.
-
-    The audience rule stays host-side: "public" answers in the channel, "personal" is
-    ephemeral where the transport allows it, and `Private(reason)` must never reach a channel
-    at all. `files` are the host's own attachments; the mount adds its rendered assets.
-
-    A closed DM under `Private` delivers nothing, which is not the same as delivering without
-    a handle, so it is reported as `DeliveryAbandoned` rather than as a `None` message.
-    """
-    del locale
-    if isinstance(visibility, sd.Private):
-        message = "Private delivery requires an Invocation"
-        raise TypeError(message)
-    return sd.reply_to(ctx, ephemeral=visibility == "personal" and ctx.interaction is not None, files=files)
-
-
 def render_item(
     node: ui.LayoutNode[ui.ComponentsV2Target],
     *,
@@ -237,62 +209,6 @@ which needs the session registry and the background runner -- is assembled by
 `sd.install` and reached back through `ClientRuntime.of`, so a panel built from a click
 gets the same wiring as one opened through `bot.mounts`.
 """
-
-
-def create_message_root(
-    component: ui.Component[ui.ComponentsV2Target],
-    *,
-    source: sd.runtime.RuntimeSource,
-    access: sd.AccessPolicy,
-    locale: str | None = None,
-    chrome: ui.chrome.Chrome | None = None,
-    timeout: float | None = 180,
-    scheduler: sd.MessageRootScheduler | None = None,
-    expiry: sd.message_root.ExpiryPolicy | None = _DEFAULT_EXPIRY,
-) -> sd.MessageRoot:
-    """A mount wired to the bot's chrome and shared interaction error handler.
-
-    `source` is whatever names the bot -- the client, the interaction, or the command context
-    the panel is being built for. It is what finds the installed host, and so the challenge
-    presenter a guard needs.
-
-    `scheduler` stays explicit rather than inherited from the host: a panel is refreshed only by
-    its own clicks unless it says it reacts to something else.
-    """
-    defaults = sd.ClientRuntime.of(source).defaults
-    if chrome is not None:
-        defaults = defaults.replace(chrome=chrome)
-    return defaults.mount(
-        component,
-        access=access,
-        localization=localization_for(locale),
-        timeout=timeout,
-        scheduler=scheduler,
-        expiry=expiry,
-    )
-
-
-async def send_component(
-    ctx: Context[Any],
-    component: ui.Component[ui.ComponentsV2Target],
-    *,
-    access: sd.AccessPolicy,
-    locale: str | None = None,
-    timeout: float = 180,
-    visibility: sd.Visibility = "public",
-    scheduler: sd.MessageRootScheduler | None = None,
-) -> sd.MessageRoot:
-    """MessageRoot a component and send it as the reply to a command.
-
-    Pass ``scheduler`` for a panel that must react to something another mount changes -- a
-    shared namespace, or a bot topic. Without one the mount is refreshed only by its own
-    clicks.
-    """
-    message_root = create_message_root(
-        component, source=ctx, access=access, locale=locale, timeout=timeout, scheduler=scheduler
-    )
-    await message_root.send(message_destination(ctx, visibility=visibility, locale=locale))
-    return message_root
 
 
 class PagedList(ui.Component[ui.ComponentsV2Target]):
