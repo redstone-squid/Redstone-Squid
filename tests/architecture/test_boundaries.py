@@ -1,5 +1,7 @@
 import ast
+import re
 import sys
+import tomllib
 from pathlib import Path
 
 from babel.messages.pofile import read_po
@@ -20,9 +22,58 @@ SCAN_ROOTS = (
 
 COMPILER_PASS_ROOT = Path("packages/squid-ui/src/squid_ui/planning")
 
+FRAMEWORK_DISTRIBUTIONS = {
+    "anyio": "anyio",
+    "asyncpg": "asyncpg",
+    "discord": "discord-py",
+    "loro": "loro",
+    "packaging": "packaging",
+    "pycrdt": "pycrdt",
+    "squid_reactivity": "squid-reactivity",
+    "squid_replication": "squid-replication",
+    "squid_storage": "squid-storage",
+    "squid_ui": "squid-ui",
+    "squid_ui_discord": "squid-ui-discord",
+    "squid_ui_widgets": "squid-ui-widgets",
+}
+
 
 def _scanned_files() -> list[Path]:
     return [path for root in SCAN_ROOTS for path in root.rglob("*.py")]
+
+
+def _dependency_name(requirement: str) -> str:
+    return re.split(r"[<>=!~;\[]", requirement, maxsplit=1)[0].strip().lower()
+
+
+def test_framework_runtime_imports_are_declared_in_package_metadata() -> None:
+    """A direct import needs a direct dependency or an explicitly named extra."""
+    violations: list[tuple[str, str]] = []
+    for package in sorted(Path("packages").iterdir()):
+        metadata_path = package / "pyproject.toml"
+        source = package / "src"
+        if not metadata_path.exists() or not source.exists():
+            continue
+        project = tomllib.loads(metadata_path.read_text(encoding="utf-8"))["project"]
+        declared = {_dependency_name(value) for value in project.get("dependencies", ())}
+        declared.update(
+            _dependency_name(value) for values in project.get("optional-dependencies", {}).values() for value in values
+        )
+        own_distribution = project["name"]
+        for path in source.rglob("*.py"):
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if isinstance(node, ast.Import):
+                    modules = (alias.name.partition(".")[0] for alias in node.names)
+                elif isinstance(node, ast.ImportFrom) and node.module is not None:
+                    modules = (node.module.partition(".")[0],)
+                else:
+                    continue
+                for module in modules:
+                    distribution = FRAMEWORK_DISTRIBUTIONS.get(module)
+                    if distribution is not None and distribution not in {own_distribution, *declared}:
+                        violations.append((str(path), distribution))
+
+    assert violations == []
 
 
 def test_compiler_pass_packages_are_not_facades() -> None:
