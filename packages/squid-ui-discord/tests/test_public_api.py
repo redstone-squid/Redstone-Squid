@@ -50,6 +50,7 @@ def test_the_adapter_namespace_exposes_its_surface() -> None:
     assert squid_ui_discord.LocalizationResolver
     assert squid_ui_discord.current_invocation
     assert squid_ui_discord.invocation_scope
+    assert squid_ui_discord.Screen
     assert squid_ui_discord.message_payload.MessagePayload
     assert squid_ui_discord.MessageMode.COMPONENTS_V2
     assert squid_ui_discord.MessageModeError
