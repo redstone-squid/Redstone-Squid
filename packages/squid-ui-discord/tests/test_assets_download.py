@@ -6,7 +6,7 @@ import pytest
 import squid_ui as sl
 import squid_ui_discord
 from squid_ui import scene
-from squid_ui.html import Renderer as HtmlRenderer
+from squid_ui.html import DiscordPreviewRenderer
 from squid_ui.runtime.component import Component, RenderResult
 from squid_ui_discord import DISCORD_V2_DPY27, Everyone, MessageRoot, delivery
 from squid_ui_discord.renderer import V2Renderer
@@ -121,13 +121,15 @@ async def test_message_root_keeps_raising_for_non_url_stored_references() -> Non
 def test_html_renderer_emits_data_links_resolver_links_and_visible_placeholders() -> None:
     result = sl.planning.plan(sl.download("Report", _inline(), key="report-download"), target=DISCORD_V2_DPY27)
 
-    rendered = HtmlRenderer().draw(result.scene, plan=result)
+    rendered = DiscordPreviewRenderer().draw(result.scene, plan=result)
     assert 'href="data:text/plain;base64,ZnVsbCByZXBvcnQ="' in rendered
     assert 'download="report.txt"' in rendered
 
-    resolved = HtmlRenderer(asset_resolver=lambda _asset: "https://example.com/report.txt").draw(result.scene)
+    resolved = DiscordPreviewRenderer(asset_resolver=lambda _asset: "https://example.com/report.txt").draw(
+        result.scene
+    )
     assert 'href="https://example.com/report.txt"' in resolved
 
-    unresolved = HtmlRenderer().draw(result.scene)
+    unresolved = DiscordPreviewRenderer().draw(result.scene)
     assert 'class="squid-button squid-file" aria-disabled="true"' in unresolved
     assert "report.txt" in unresolved

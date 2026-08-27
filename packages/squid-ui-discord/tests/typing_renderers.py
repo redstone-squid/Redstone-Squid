@@ -7,6 +7,7 @@ long as no file said `Renderer` in a parameter position. These assignments are t
 """
 
 from squid_ui import scene
+from squid_ui.html import DiscordPreviewRenderer
 from squid_ui.html import Renderer as HtmlRenderer
 from squid_ui.renderer import Renderer
 from squid_ui_discord.classic_renderer import ClassicRenderer
@@ -22,13 +23,18 @@ def accepts_classic_renderer(value: Renderer[scene.ClassicMessage, MessagePayloa
     del value
 
 
-def accepts_html_renderer(value: Renderer[scene.ComponentsV2, str]) -> None:
+def accepts_html_renderer(value: Renderer[scene.HtmlBody, str]) -> None:
+    del value
+
+
+def accepts_discord_preview_renderer(value: Renderer[scene.ComponentsV2, str]) -> None:
     del value
 
 
 accepts_v2_renderer(V2Renderer())
 accepts_classic_renderer(ClassicRenderer())
 accepts_html_renderer(HtmlRenderer())
+accepts_discord_preview_renderer(DiscordPreviewRenderer())
 
 
 def accepts_mounted_v2(value: MountedRenderer[scene.ComponentsV2]) -> None:
