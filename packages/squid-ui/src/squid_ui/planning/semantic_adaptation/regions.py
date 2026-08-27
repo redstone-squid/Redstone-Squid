@@ -11,6 +11,7 @@ from squid_ui.planning.identity import stable_fingerprint
 from squid_ui.planning.layout_measurement.costing import measure_nodes
 from squid_ui.planning.layout_measurement.text import split_text_node, text_total
 from squid_ui.planning.limits import Axis, MessageLimits
+from squid_ui.planning.resolved import text as resolved_text
 from squid_ui.planning.semantic_adaptation.common import (
     _resolve,
 )
@@ -187,7 +188,7 @@ def _close(card: _Fragment, context: _Context) -> Node:
 
 
 def _slot_text(value: CardText) -> str:
-    return card_text(value).content
+    return resolved_text(card_text(value).content)
 
 
 def _region(card: Card, body: Sequence[Node], context: _Context) -> Node:
