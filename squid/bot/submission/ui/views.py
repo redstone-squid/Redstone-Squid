@@ -725,7 +725,7 @@ class BuildEditComponent(sl.Component[sl.ComponentsV2Target]):
             return latest, await client.for_build(latest).render_node()
 
         self._refresh = refresh
-        message_root = self.mount(interaction.user.id, source=interaction, scheduler=client.layout_scheduler)
+        message_root = self.mount(interaction.user.id, source=interaction, scheduler=client.client_runtime.scheduler)
         message_destination = sd.respond_to(interaction, ephemeral=ephemeral, wait=True)
         parent_session = None if parent is None else interaction.client.sessions.session_for(parent)
         if parent_session is None:

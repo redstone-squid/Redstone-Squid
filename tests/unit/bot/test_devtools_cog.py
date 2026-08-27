@@ -14,7 +14,11 @@ async def test_setup_adds_the_generic_cog_with_the_host_manager() -> None:
     manager = SessionManager()
     profiler = MemoryProfiler()
     scheduler = MessageRootScheduler(profiler=profiler)
-    bot = SimpleNamespace(sessions=manager, layout_scheduler=scheduler, add_cog=AsyncMock())
+    bot = SimpleNamespace(
+        sessions=manager,
+        client_runtime=SimpleNamespace(scheduler=scheduler),
+        add_cog=AsyncMock(),
+    )
 
     await setup(cast(Any, bot))
 

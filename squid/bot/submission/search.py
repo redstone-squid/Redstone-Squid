@@ -302,7 +302,7 @@ class SearchCog[
                 access=sd.Everyone(),
                 locale=locale,
                 timeout=300,
-                scheduler=self.bot.layout_scheduler,
+                scheduler=self.bot.client_runtime.scheduler,
             )
             await message_root.send(sd.respond_to(interaction, ephemeral=False, wait=True))
             return
