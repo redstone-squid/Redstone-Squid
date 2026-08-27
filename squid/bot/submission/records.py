@@ -200,7 +200,6 @@ def _diagnostic_list(
         title,
         entries,
         empty=empty,
-        locale=locale,
         page_size=DIAGNOSTICS_PER_PAGE,
         separator="\n",
         accent_colour=DISCORD_BLUE,

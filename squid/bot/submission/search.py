@@ -256,7 +256,6 @@ class SearchCog[
             t(locale, _("Pending submissions")),
             [_pending_entry(build, locale) for build in pending],
             empty=t(locale, _("Nothing is waiting for review.")),
-            locale=locale,
             page_size=None,
         )
         await invocation.mount(paginator, access=sd.Owner(invocation.user.id))
