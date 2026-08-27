@@ -1,11 +1,25 @@
 [project]
 name = "squid-reactivity"
-version = "0.1.0"
+version = "0.1.0a1"
 description = "Dependency-free transactional reactive state for Python"
 requires-python = ">=3.14"
 readme = "README.md"
 license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Redstone Squid contributors" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
+]
 dependencies = []
+
+[project.urls]
+Documentation = "https://redstone-squid.github.io/Redstone-Squid/squid-ui/"
+Issues = "https://github.com/redstone-squid/Redstone-Squid/issues"
+Repository = "https://github.com/redstone-squid/Redstone-Squid"
 
 [build-system]
 requires = ["uv_build>=0.11,<0.13"]

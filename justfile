@@ -117,6 +117,10 @@ fuzz-api-smoke seed="0":
 test-all:
     uv run --locked pytest tests packages
 
+framework-dist output="dist":
+    uv run --locked python scripts/build_squid_ui_dist.py "{{output}}"
+    uv run --locked python scripts/check_squid_ui_dist.py "{{output}}"
+
 [unix]
 fuzz-target *settings:
     uv run --locked --group fuzz python -m scripts.run_fuzz_target {{settings}}

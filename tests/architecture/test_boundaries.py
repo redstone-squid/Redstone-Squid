@@ -5,6 +5,7 @@ import tomllib
 from pathlib import Path
 
 from babel.messages.pofile import read_po
+from packaging.requirements import Requirement
 from pytest_archon import archrule
 
 from squid.core.extract import deferred_msgid
@@ -18,6 +19,7 @@ SCAN_ROOTS = (
     Path("packages/squid-ui-discord/src"),
     Path("packages/squid-ui-widgets/src"),
     Path("packages/squid-replication/src"),
+    Path("packages/squid-storage/src"),
 )
 
 COMPILER_PASS_ROOT = Path("packages/squid-ui/src/squid_ui/planning")
@@ -35,6 +37,30 @@ FRAMEWORK_DISTRIBUTIONS = {
     "squid_ui": "squid-ui",
     "squid_ui_discord": "squid-ui-discord",
     "squid_ui_widgets": "squid-ui-widgets",
+}
+
+FRAMEWORK_VERSION = "0.1.0a1"
+FRAMEWORK_PACKAGE_NAMES = frozenset(
+    {
+        "squid-reactivity",
+        "squid-replication",
+        "squid-storage",
+        "squid-ui",
+        "squid-ui-discord",
+        "squid-ui-widgets",
+    }
+)
+FRAMEWORK_CLASSIFIERS = [
+    "Development Status :: 3 - Alpha",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
+]
+FRAMEWORK_URLS = {
+    "Documentation": "https://redstone-squid.github.io/Redstone-Squid/squid-ui/",
+    "Issues": "https://github.com/redstone-squid/Redstone-Squid/issues",
+    "Repository": "https://github.com/redstone-squid/Redstone-Squid",
 }
 
 
@@ -74,6 +100,41 @@ def test_framework_runtime_imports_are_declared_in_package_metadata() -> None:
                         violations.append((str(path), distribution))
 
     assert violations == []
+
+
+def test_framework_distributions_share_publishable_alpha_metadata() -> None:
+    """Every independently built member carries the same public release contract."""
+    root_license = Path("LICENSE").read_text(encoding="utf-8")
+    found: set[str] = set()
+    for package in sorted(Path("packages").iterdir()):
+        metadata_path = package / "pyproject.toml"
+        if not metadata_path.exists():
+            continue
+        project = tomllib.loads(metadata_path.read_text(encoding="utf-8"))["project"]
+        name = project["name"]
+        found.add(name)
+        assert project["version"] == FRAMEWORK_VERSION
+        assert project["requires-python"] == ">=3.14"
+        assert project["readme"] == "README.md"
+        assert project["license"] == "MIT"
+        assert project["license-files"] == ["LICENSE"]
+        assert project["authors"] == [{"name": "Redstone Squid contributors"}]
+        assert project["classifiers"] == FRAMEWORK_CLASSIFIERS
+        assert project["urls"] == FRAMEWORK_URLS
+        assert (package / "README.md").is_file()
+        assert (package / "LICENSE").read_text(encoding="utf-8") == root_license
+        assert (package / "src" / name.replace("-", "_") / "py.typed").is_file()
+
+        requirements = list(project.get("dependencies", ()))
+        requirements.extend(
+            requirement for extra in project.get("optional-dependencies", {}).values() for requirement in extra
+        )
+        for raw_requirement in requirements:
+            requirement = Requirement(raw_requirement)
+            if requirement.name in FRAMEWORK_PACKAGE_NAMES:
+                assert str(requirement.specifier) == f"=={FRAMEWORK_VERSION}"
+
+    assert found == FRAMEWORK_PACKAGE_NAMES
 
 
 def test_compiler_pass_packages_are_not_facades() -> None:

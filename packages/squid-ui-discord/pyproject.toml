@@ -1,15 +1,24 @@
 [project]
 name = "squid-ui-discord"
-version = "0.1.0"
+version = "0.1.0a1"
 description = "Discord application runtime for squid-ui: mounts, sessions, routing, and durable panels"
 requires-python = ">=3.14"
 readme = "README.md"
 license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Redstone Squid contributors" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
+]
 dependencies = [
-    "squid-ui",
+    "squid-ui==0.1.0a1",
     # Imported directly by message roots, managed operations, and devtools. Do not rely on
     # squid-ui's transitive dependency to make this available.
-    "squid-reactivity",
+    "squid-reactivity==0.1.0a1",
     "discord-py>=2.7,<3",
     "anyio>=4.14,<5",
     "packaging>=24,<27",
@@ -19,8 +28,13 @@ dependencies = [
 # Durable mounts and sessions. Optional so a bot that never persists a panel installs no store
 # backend; `squid_ui_discord.durability` is imported lazily to keep that promise real, and the
 # modules that name its types do so under TYPE_CHECKING.
-durable = ["squid-storage"]
-postgres = ["squid-storage[postgres]"]
+durable = ["squid-storage==0.1.0a1"]
+postgres = ["squid-storage[postgres]==0.1.0a1"]
+
+[project.urls]
+Documentation = "https://redstone-squid.github.io/Redstone-Squid/squid-ui/"
+Issues = "https://github.com/redstone-squid/Redstone-Squid/issues"
+Repository = "https://github.com/redstone-squid/Redstone-Squid"
 
 [build-system]
 requires = ["uv_build>=0.11,<0.13"]
