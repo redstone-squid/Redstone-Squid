@@ -61,11 +61,12 @@ from squid_ui.planning.navigation import (
     NavFactory,
     NavigationContext,
     NavigationState,
+    NavNode,
     default_nav,
 )
 from squid_ui.planning.planner import plan as plan_document
 from squid_ui.planning.target import AnyTarget
-from squid_ui.primitives.nodes import Button, Node, Row
+from squid_ui.primitives.nodes import Button, Row
 from squid_ui.profiling import (
     ActionStatus,
     DetachedSpanRecorder,
@@ -130,7 +131,7 @@ class _DiscordBinding:
     own job of describing an *observed* message through `message_mode`; it is no longer inferred.
     """
 
-    render_message: Callable[..., RenderedMessage[Any]]
+    render_message: Callable[..., Any]
     mode: MessageMode
     render_capability: str
     renderer: Callable[[MessageRoot[Any, Any], float | None], MountedRenderer[Any]]
@@ -995,7 +996,7 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
         component: Component[ModeT],
         *,
         access: AccessPolicy,
-        target: Target[Any, Any, ModeT, AdapterT] = DISCORD_V2_DPY27,
+        target: Target[Any, Any, ModeT, AdapterT] | None = None,
         chrome: Chrome = DEFAULT_CHROME,
         localization: Localization = NEUTRAL,
         palette: Palette = DEFAULT_PALETTE,
@@ -1027,7 +1028,7 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
         self.chrome = localize_chrome(chrome, localization)
         self.nav = nav if nav is not None else default_nav
 
-        def planned_nav(state: NavigationState) -> Sequence[Node]:
+        def planned_nav(state: NavigationState) -> Sequence[NavNode]:
             async def previous(_event: PressEvent) -> None:
                 await self._move_cursor(state.key, -1)
 
@@ -1059,6 +1060,7 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
         """Where stateful guards keep their counts; it lives and dies with this mount."""
         self.challenge = challenge
         """Who shows a guard's challenge and runs the press the actor approves, if anyone."""
+        target = cast(Target[Any, Any, ModeT, AdapterT], DISCORD_V2_DPY27) if target is None else target
         self.target = target
         """The message mode this mount owns for its whole life.
 
@@ -1412,7 +1414,7 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
         context = profile.span("planner") if profile is not None else nullcontext(None)
         with context as planner_span:
             result = plan_document(
-                self._document_for(tree),
+                cast(Document[ModeT], self._document_for(tree)),
                 target=self.target,
                 chrome=self._chrome,
                 localization=self.localization,
