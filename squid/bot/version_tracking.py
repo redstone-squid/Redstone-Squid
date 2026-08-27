@@ -7,8 +7,9 @@ import discord.ext.commands as commands
 from discord.ext.commands import Cog, Context, hybrid_group
 from discord.ext.commands.bot import app_commands
 
+import squid_ui_discord as sd
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.ui import PagedList, reply_payload, text_layout
+from squid.bot.ui import PagedList, render_payload, text_node
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.permissions import requires
 from squid.core.i18n import _
@@ -55,11 +56,11 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="VersionTrac
     @app_commands.rename(version_string="version")
     async def add_version(self, ctx: commands.Context, edition: Literal["Java", "Bedrock"], version_string: str):
         """Add a Minecraft version to the database."""
+        invocation = await sd.Invocation.of(ctx)
         version = await self.version_service.add(version_string, edition=edition)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        await reply_payload(
-            ctx,
-            text_layout(t(locale, _("Version added successfully: {version}"), version=version)),
+        await invocation.reply(
+            text_node(t(locale, _("Version added successfully: {version}"), version=version)),
         )
 
     @Cog.listener(name="on_message")
@@ -75,7 +76,7 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="VersionTrac
         version = await self.version_service.add(first_line)
         locale = await resolve_locale(message, self.bot.services.settings)
         await send_to(self.bot.get_channel(channel_id))(  # type: ignore
-            text_layout(t(locale, _("Version added successfully: {version}"), version=version))
+            render_payload([text_node(t(locale, _("Version added successfully: {version}"), version=version))])
         )
 
 

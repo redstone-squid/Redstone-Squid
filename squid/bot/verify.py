@@ -26,10 +26,9 @@ from squid.bot.i18n import resolve_locale, t
 from squid.bot.profile_render import (
     public_profile_fields,
 )
-from squid.bot.ui import card_layout, create_message_root, message_destination, reply_payload, text_layout
+from squid.bot.ui import card_node, create_message_root, message_destination, text_node
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.permissions import PermissionNodeRequired, requires, subject_for
-from squid.bot.utils.visibility import deliver_privately, personal
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import (
     ACCOUNT_CLAIM_APPROVE,
@@ -103,6 +102,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     @app_commands.describe(user=app_commands.locale_str(_("Whose creator page to show. Defaults to your own account.")))
     async def account_group(self, ctx: Context[BotT], user: discord.Member | discord.User | None = None) -> None:
         """Show your account, or somebody else's creator page."""
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         if user is not None and user.id != ctx.author.id:
             await self._show_creator_page(ctx, user, locale)
@@ -112,10 +112,9 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         # to be remembered, and there is nothing to show for someone with no account anyway.
         account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(ctx.author.id))
         if account is None or account.id is None:
-            await reply_payload(
-                ctx,
-                text_layout(t(locale, _("You don't have any linked accounts yet. Link one with `/account link`."))),
-                visibility="personal" if personal(ctx) else "public",
+            await invocation.reply(
+                text_node(t(locale, _("You don't have any linked accounts yet. Link one with `/account link`."))),
+                visibility="personal",
             )
             return
 
@@ -131,23 +130,23 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
 
     async def _show_creator_page(self, ctx: Context[BotT], user: discord.Member | discord.User, locale: str) -> None:
         """Show somebody else's page, which is shared content and answers where the channel sees it."""
+        invocation = await sd.Invocation.of(ctx)
         account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(user.id))
         if account is None or account.public_creator_id is None:
-            await reply_payload(
-                ctx,
-                text_layout(t(locale, _("{user} doesn't have a creator page."), user=user.display_name)),
-                visibility="personal" if personal(ctx) else "public",
+            await invocation.reply(
+                text_node(t(locale, _("{user} doesn't have a creator page."), user=user.display_name)),
+                visibility="personal",
             )
             return
-        presentation = await self._public_profile_card(account.public_creator_id, user.display_name, locale)
-        await reply_payload(ctx, presentation)
+        node = await self._public_profile_card(account.public_creator_id, user.display_name, locale)
+        await invocation.reply(node)
 
     @account_group.command(name="link")
     @app_commands.describe(code=app_commands.locale_str(_("The code you received by running /link in the game.")))
     async def link(self, ctx: Context[BotT], code: str):
         """Link your minecraft account."""
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        ephemeral = personal(ctx)
         attempted_by = (IdentityProvider.DISCORD, str(ctx.author.id))
 
         # Read without creating: nobody gets an account row for typing a code that turns out to be
@@ -175,10 +174,9 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
                 # would be reporting something that did not happen.
                 return
             if consent is None:
-                await reply_payload(
-                    ctx,
-                    text_layout(t(locale, _("Account linking cancelled. No user account information was stored."))),
-                    visibility="personal" if ephemeral else "public",
+                await invocation.reply(
+                    text_node(t(locale, _("Account linking cancelled. No user account information was stored."))),
+                    visibility="personal",
                 )
                 return
 
@@ -205,53 +203,47 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             if not committed:
                 await self.account_service.release_minecraft_link(code, reservation)
 
-        await reply_payload(
-            ctx,
-            text_layout(_link_message(refresh, locale)),
-            visibility="personal" if ephemeral else "public",
-        )
+        await invocation.reply(text_node(_link_message(refresh, locale)), visibility="personal")
 
     @account_group.command(name="consent")
     async def consent(self, ctx: Context[BotT]) -> None:
         """Read the privacy notice and accept it."""
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        ephemeral = personal(ctx)
         account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(ctx.author.id))
         if account is not None and account.id is not None and not account.needs_consent_refresh:
-            await reply_payload(
-                ctx,
-                text_layout(
+            await invocation.reply(
+                text_node(
                     t(
                         locale,
                         _("You have already accepted notice `{version}`. Press the button to read it again."),
                         version=CURRENT_CONSENT_VERSION,
                     )
                 ),
-                visibility="personal" if ephemeral else "public",
+                visibility="personal",
             )
             return
 
         account_id = await ensure_consented_account(ctx, self.account_service, locale=locale)
         if account_id is None:
             return
-        await reply_payload(
-            ctx,
-            text_layout(t(locale, _("Thanks. You can use the bot's other commands now."))),
-            visibility="personal" if ephemeral else "public",
+        await invocation.reply(
+            text_node(t(locale, _("Thanks. You can use the bot's other commands now."))),
+            visibility="personal",
         )
 
     async def _public_profile_card(self, public_id: UUID, fallback_name: str, locale: str):
         """Render somebody else's page from the same filtered view the API serves."""
         public = await self.account_service.get_public_profile(public_id)
         if public is None:
-            return text_layout(t(locale, _("That creator page could not be found.")))
+            return text_node(t(locale, _("That creator page could not be found.")))
         if public.hidden:
-            return card_layout(
+            return card_node(
                 t(locale, _("Hidden creator page")),
                 t(locale, _("This creator has hidden their page. Their build credit is still listed.")),
                 fields=public_profile_fields(public, locale),
             )
-        return card_layout(
+        return card_node(
             public.display_name or fallback_name,
             public.bio,
             fields=public_profile_fields(public, locale),
@@ -285,6 +277,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     )
     async def refresh(self, ctx: Context[BotT], user: discord.Member | discord.User | None = None) -> None:
         """Re-read your Minecraft name after a rename and update your creator credit."""
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         target = user or ctx.author
         if target.id != ctx.author.id:
@@ -298,15 +291,12 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             raise AccountNotFoundError(provider=IdentityProvider.DISCORD, subject=str(target.id))
 
         refresh = await self.account_service.refresh_java_identity(account.id)
-        await reply_payload(
-            ctx,
-            text_layout(_refresh_message(refresh, locale)),
-            visibility="personal" if personal(ctx) else "public",
-        )
+        await invocation.reply(text_node(_refresh_message(refresh, locale)), visibility="personal")
 
     @account_group.command(name="merge-code")
     async def merge_code(self, ctx: Context[BotT]) -> None:
         """Offer this account up to be absorbed by another account you hold."""
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         account_id = await ensure_consented_account(ctx, self.account_service, locale=locale)
         if account_id is None:
@@ -315,9 +305,8 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         # The comment here used to say "always ephemeral, even from a prefix invocation", which
         # `Context.send` cannot honour: it drops the flag without an interaction, so `!account
         # merge-code` posted an account-takeover credential into the channel.
-        await deliver_privately(
-            ctx,
-            card_layout(
+        await invocation.reply(
+            card_node(
                 t(locale, _("Merge code")),
                 t(
                     locale,
@@ -333,14 +322,16 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
                     expiry=discord.utils.format_dt(ticket.expires_at.to_stdlib(), style="R"),
                 ),
             ),
-            reason=t(locale, _("A merge code hands this account over, so it is never posted in a channel.")),
-            locale=locale,
+            visibility=sd.Private(
+                t(locale, _("A merge code hands this account over, so it is never posted in a channel."))
+            ),
         )
 
     @account_group.command(name="merge")
     @app_commands.describe(code=app_commands.locale_str(_("A code from `/account merge-code` on your other account.")))
     async def merge(self, ctx: Context[BotT], code: str) -> None:
         """Absorb another account you hold into this one."""
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         account_id = await ensure_consented_account(ctx, self.account_service, locale=locale)
         if account_id is None:
@@ -377,25 +368,21 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
                 _("Merged. `{redirected}` now redirects to your creator page."),
                 redirected=merge.redirected_public_creator_id,
             )
-        await reply_payload(
-            ctx,
-            text_layout(message),
-            visibility="personal" if personal(ctx) else "public",
-        )
+        await invocation.reply(text_node(message), visibility="personal")
 
     @autocompletes(name="creators")
     @account_group.command(name="claim")
     @app_commands.describe(name=app_commands.locale_str(_("A creator name credited on builds you worked on.")))
     async def claim(self, ctx: Context[BotT], *, name: str) -> None:
         """Ask staff to credit you with an older creator name."""
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         account_id = await ensure_consented_account(ctx, self.account_service, locale=locale)
         if account_id is None:
             return
         claim = await self.account_service.request_alias_claim(account_id, name)
-        await reply_payload(
-            ctx,
-            text_layout(
+        await invocation.reply(
+            text_node(
                 t(
                     locale,
                     _("Claim #{id} for **{name}** is awaiting staff approval."),
@@ -403,7 +390,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
                     name=claim.alias_name,
                 )
             ),
-            visibility="personal" if personal(ctx) else "public",
+            visibility="personal",
         )
 
     @account_group.command(name="claims")

@@ -11,7 +11,6 @@ from squid.bot.i18n import resolve_locale, t
 from squid.bot.ui import DISCORD_BLUE, PagedList, info_node
 from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.bot.utils.permissions import hide_unless, requires
-from squid.bot.utils.visibility import personal
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
 from squid.records.application import RecordLookupRequest
@@ -95,7 +94,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         kind: BuildKind | None = None,
     ) -> None:
         """Recompute records from confirmed build facts."""
-        await ctx.defer(ephemeral=personal(ctx))
+        await ctx.defer(ephemeral=ctx.interaction is not None)
         invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         kinds = (kind,) if kind is not None else (BuildKind.DOOR, BuildKind.EXTENDER)

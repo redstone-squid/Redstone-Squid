@@ -12,8 +12,8 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.routes import routes
-from squid.bot.ui import render_payload, reply_payload, respond_payload, text_layout
+from squid.bot.routes._root import _feature_group, _feature_route
+from squid.bot.ui import render_payload, text_node
 from squid.bot.utils.permissions import check_is_home_server, hide_unless, requires
 from squid.community.domain import RedstonerDecisionKind
 from squid.core.i18n import _
@@ -43,9 +43,10 @@ class OwnerGuildOnly[BotT: discord.Client](sd.routing.Middleware[BotT]):
         await proceed()
 
 
-redstoner_roles = routes.group("redstoner-roles")
-redstoner_roles.add_middleware(OwnerGuildOnly())
-remove_redstoner_role = redstoner_roles.define("self:remove", aliases=("remove:role:redstoner",))
+redstoner_roles, _new_redstoner_roles = _feature_group("redstoner-roles")
+if _new_redstoner_roles:
+    redstoner_roles.add_middleware(OwnerGuildOnly())
+remove_redstoner_role = _feature_route(redstoner_roles, "self:remove", aliases=("remove:role:redstoner",))
 
 
 @redstoner_roles.route(remove_redstoner_role)
@@ -59,6 +60,7 @@ async def remove_own_redstoner_role(interaction: Interaction[squid.bot.app.Redst
         return
 
     locale = await resolve_locale(interaction, interaction.client.services.settings)
+    invocation = await sd.Invocation.of(interaction)
     await member.remove_roles(redstoner_role)
     owner = interaction.client.get_user(interaction.client.owner_id)
     assert owner is not None
@@ -73,21 +75,25 @@ async def remove_own_redstoner_role(interaction: Interaction[squid.bot.app.Redst
             replied_user=False,
         ),
     )(
-        text_layout(
-            t(
-                locale,
-                _("{owner}, {member} has removed their own redstoner role."),
-                owner=owner.mention,
-                member=member.mention,
-            )
+        render_payload(
+            [
+                text_node(
+                    t(
+                        locale,
+                        _("{owner}, {member} has removed their own redstoner role."),
+                        owner=owner.mention,
+                        member=member.mention,
+                    )
+                )
+            ]
         )
     )
     await asyncio.sleep(10)
 
     await member.add_roles(redstoner_role)
-    await respond_payload(
-        interaction,
-        text_layout(t(locale, _("{member} — just kidding, here is your role back."), member=member.mention)),
+    await invocation.reply(
+        text_node(t(locale, _("{member} — just kidding, here is your role back."), member=member.mention)),
+        visibility="personal",
     )
 
 
@@ -113,25 +119,22 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     @requires(REDSTONER_PANEL_MANAGE)
     async def abc(self, ctx: Context[BotT]):
         """Post the Redstoner role controls."""
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        presentation = render_payload(
-            [
-                sl.primitives.Text(t(locale, _("Redstoner role controls"))),
-                # Not translated: one panel is read by everyone in the channel, so the
-                # guild's locale would still be the wrong language for most of them.
-                sl.action_controls(
-                    sl.routed_action_control(
-                        "I'm not a redstoner",
-                        remove_redstoner_role.id(),
-                        key="remove-redstoner",
-                        tone=sl.Tone.DANGER,
-                    ),
-                    key="redstoner-actions",
+        await invocation.reply(
+            sl.primitives.Text(t(locale, _("Redstoner role controls"))),
+            # Not translated: one panel is read by everyone in the channel, so the
+            # guild's locale would still be the wrong language for most of them.
+            sl.action_controls(
+                sl.routed_action_control(
+                    "I'm not a redstoner",
+                    remove_redstoner_role.id(),
+                    key="remove-redstoner",
+                    tone=sl.Tone.DANGER,
                 ),
-            ],
-            locale=locale,
+                key="redstoner-actions",
+            ),
         )
-        await reply_payload(ctx, presentation)
 
     @redstoner_group.command(name="resync")
     @check_is_home_server()
@@ -154,7 +157,9 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         locale = await resolve_locale(message, self.bot.services.settings)
         if decision.kind is RedstonerDecisionKind.MALFORMED:
             await send_to(message.channel)(
-                text_layout(t(locale, _("{reason} in {url}"), reason=decision.reason, url=message.jump_url))
+                render_payload(
+                    [text_node(t(locale, _("{reason} in {url}"), reason=decision.reason, url=message.jump_url))]
+                )
             )
             return
 
@@ -164,11 +169,13 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         assert message.guild is not None
         redstoner_role = message.guild.get_role(self.bot.community_config.redstoner_role_id)
         if redstoner_role is None:
-            await send_to(message.channel)(text_layout(t(locale, _("Could not find the redstoner role."))))
+            await send_to(message.channel)(
+                render_payload([text_node(t(locale, _("Could not find the redstoner role.")))])
+            )
             return
         await member.add_roles(redstoner_role)
         await send_to(message.channel)(
-            text_layout(t(locale, _("Gave {member} the redstoner role."), member=member.mention))
+            render_payload([text_node(t(locale, _("Gave {member} the redstoner role."), member=member.mention))])
         )
 
         presentation = render_payload(
