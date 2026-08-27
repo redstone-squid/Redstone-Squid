@@ -114,7 +114,6 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             accounts=self.account_service,
             account_id=account.id,
             author_id=ctx.author.id,
-            locale=locale,
         )
         message_root = await invocation.mount(
             component,

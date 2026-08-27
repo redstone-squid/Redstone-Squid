@@ -23,6 +23,7 @@ from squid.accounts.domain import (
 )
 from squid.bot.account_view import AccountPanel
 from squid.bot.verify import VerifyCog
+from squid_ui.text import NEUTRAL, resolve_text
 from squid_ui_discord.testing import commit_render, fake_interaction
 from tests.helpers.discord import make_layout_bot
 
@@ -103,7 +104,6 @@ def _account_panel(profile: AccountProfile) -> AccountPanel:
         accounts=cast(Any, SimpleNamespace(update_profile=AsyncMock())),
         account_id=ACCOUNT_ID,
         author_id=AUTHOR_ID,
-        locale="en",
     )
     panel._profile = profile
     return panel
@@ -177,7 +177,6 @@ def _gated_panel(monkeypatch: pytest.MonkeyPatch) -> tuple[AccountPanel, dict[st
         ),
         account_id=ACCOUNT_ID,
         author_id=AUTHOR_ID,
-        locale="en",
     )
     panel._profile = AccountProfile.empty(ACCOUNT_ID)
     panel._needs_consent = True
@@ -212,7 +211,7 @@ async def test_a_press_needing_consent_ends_instead_of_holding_the_panel(
     panel, opened = _gated_panel(monkeypatch)
     monkeypatch.setattr("squid_ui_discord.native", lambda event: event.responder.interaction)
     monkeypatch.setattr("squid_ui_discord.responder", lambda event: event.responder)
-    message_root = SimpleNamespace(schedule=AsyncMock())
+    message_root = SimpleNamespace(schedule=AsyncMock(), localization=NEUTRAL)
 
     await panel._edit_page(cast(Any, _press(message_root)))
 
@@ -232,7 +231,7 @@ async def test_declining_leaves_the_panel_exactly_as_it_was(monkeypatch: pytest.
     panel, opened = _gated_panel(monkeypatch)
     monkeypatch.setattr("squid_ui_discord.native", lambda event: event.responder.interaction)
     monkeypatch.setattr("squid_ui_discord.responder", lambda event: event.responder)
-    message_root = SimpleNamespace(schedule=AsyncMock())
+    message_root = SimpleNamespace(schedule=AsyncMock(), localization=NEUTRAL)
 
     await panel._edit_page(cast(Any, _press(message_root)))
     await opened["on_answer"](cast(Any, None), None)
@@ -256,7 +255,7 @@ async def test_a_toggle_needing_consent_still_applies_once_the_reader_agrees(
     monkeypatch.setattr("squid_ui_discord.responder", lambda event: event.responder)
     panel._identities = (DISCORD,)
     panel.selected_id = DISCORD.id
-    message_root = SimpleNamespace(schedule=AsyncMock())
+    message_root = SimpleNamespace(schedule=AsyncMock(), localization=NEUTRAL)
 
     await panel._toggle_identity(cast(Any, _press(message_root)))
 
@@ -286,7 +285,6 @@ def _linked_panel() -> tuple[AccountPanel, _Recorder, AsyncMock, sd.MessageRoot]
         accounts=cast(Any, SimpleNamespace(unlink_identity=unlink)),
         account_id=ACCOUNT_ID,
         author_id=AUTHOR_ID,
-        locale="en",
     )
     panel._profile = AccountProfile.empty(ACCOUNT_ID)
     panel._identities = (DISCORD, JAVA)
@@ -335,4 +333,4 @@ def test_unlinking_your_own_discord_account_says_what_that_costs() -> None:
     panel, _, _, _ = _linked_panel()
     panel.selected_id = DISCORD.id
 
-    assert "stop recognising you here" in panel._unlink_warning()
+    assert "stop recognising you here" in resolve_text(panel._unlink_warning(), NEUTRAL).content
