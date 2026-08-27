@@ -115,7 +115,6 @@ RETIRED_CLASS_NAMES = frozenset(
         "Opener",
         "OpeningRequest",
         "Scope",
-        "Screen",
         "ScreenOptionsResolver",
         "ScreenSpec",
         "SessionPolicy",
