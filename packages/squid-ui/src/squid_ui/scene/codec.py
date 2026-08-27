@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import math
 from collections.abc import Mapping
 from copy import deepcopy
 from typing import Any, cast
@@ -28,6 +29,20 @@ from squid_ui.scene.model import (
     File,
     Gallery,
     GalleryItem,
+    HtmlActionRef,
+    HtmlAssetRef,
+    HtmlAttribute,
+    HtmlAttributeName,
+    HtmlBody,
+    HtmlColourRef,
+    HtmlElement,
+    HtmlFormRef,
+    HtmlNode,
+    HtmlRouteRef,
+    HtmlTag,
+    HtmlText,
+    HtmlTimeRef,
+    HtmlUrlRef,
     Link,
     Node,
     Option,
@@ -161,6 +176,12 @@ def _body_to_dict(body: Body) -> dict[str, Any]:
                 "embeds": [_embed_to_dict(embed) for embed in embeds],
                 "rows": [{"controls": [_node_to_dict(control) for control in row.controls]} for row in rows],
             }
+        case HtmlBody(children=children, locale=locale):
+            return {
+                "kind": HtmlBody.KIND,
+                "children": [_html_node_to_dict(child) for child in children],
+                "locale": locale,
+            }
 
 
 def _body_from_dict(raw: Mapping[str, Any]) -> Body:
@@ -183,9 +204,118 @@ def _body_from_dict(raw: Mapping[str, Any]) -> Body:
                 embeds=tuple(_embed_from_dict(_object(embed)) for embed in embeds),
                 rows=tuple(_row_from_dict(_object(row)) for row in rows),
             )
+        case HtmlBody.KIND:
+            children = raw.get("children")
+            if not isinstance(children, list):
+                msg = "HTML body children must be an array"
+                raise CodecError(msg)
+            return HtmlBody(
+                tuple(_html_node_from_dict(_object(child)) for child in children),
+                locale=_optional_string(raw, "locale"),
+            )
         case _:
             msg = f"unknown scene body kind {kind!r}"
             raise CodecError(msg)
+
+
+def _html_node_to_dict(node: HtmlNode) -> dict[str, Any]:
+    match node:
+        case HtmlText(content=content, markup=markup):
+            return {"kind": HtmlText.KIND, "content": content, "markup": markup.value}
+        case HtmlElement(
+            tag=tag,
+            children=children,
+            attributes=attributes,
+            action=action,
+            route=route,
+            form=form,
+            url=url,
+            time=time,
+            colour=colour,
+            asset=asset,
+        ):
+            return {
+                "kind": HtmlElement.KIND,
+                "tag": tag.value,
+                "children": [_html_node_to_dict(child) for child in children],
+                "attributes": [{"name": attribute.name.value, "value": attribute.value} for attribute in attributes],
+                "action": None if action is None else {"action": action.action, "mode": action.mode.value},
+                "route": None if route is None else {"route_id": route.route_id},
+                "form": None if form is None else {"key": form.key, "field_name": form.field_name},
+                "url": None if url is None else {"url": url.url},
+                "time": (
+                    None if time is None else {"instant": time.instant, "timezone": time.timezone, "style": time.style}
+                ),
+                "colour": None if colour is None else {"value": colour.value},
+                "asset": (
+                    None if asset is None else {"key": asset.key, "name": asset.name, "media_type": asset.media_type}
+                ),
+            }
+
+
+def _html_node_from_dict(raw: Mapping[str, Any]) -> HtmlNode:
+    kind = _string(raw, "kind")
+    if kind == HtmlText.KIND:
+        return HtmlText(_string(raw, "content"), Markup(_string(raw, "markup")))
+    if kind != HtmlElement.KIND:
+        msg = f"unknown HTML scene node kind {kind!r}"
+        raise CodecError(msg)
+    children = raw.get("children")
+    attributes = raw.get("attributes")
+    if not isinstance(children, list) or not isinstance(attributes, list):
+        msg = "HTML element children and attributes must be arrays"
+        raise CodecError(msg)
+
+    def optional_ref(key: str) -> Mapping[str, Any] | None:
+        value = raw.get(key)
+        return None if value is None else _object(value)
+
+    action = optional_ref("action")
+    route = optional_ref("route")
+    form = optional_ref("form")
+    url = optional_ref("url")
+    time = optional_ref("time")
+    colour = optional_ref("colour")
+    asset = optional_ref("asset")
+    return HtmlElement(
+        tag=HtmlTag(_string(raw, "tag")),
+        children=tuple(_html_node_from_dict(_object(child)) for child in children),
+        attributes=tuple(
+            HtmlAttribute(
+                HtmlAttributeName(_string(_object(attribute), "name")),
+                _html_attribute_value(_object(attribute).get("value")),
+            )
+            for attribute in attributes
+        ),
+        action=(
+            None if action is None else HtmlActionRef(_string(action, "action"), ActionMode(_string(action, "mode")))
+        ),
+        route=None if route is None else HtmlRouteRef(_string(route, "route_id")),
+        form=None if form is None else HtmlFormRef(_string(form, "key"), _optional_string(form, "field_name")),
+        url=None if url is None else HtmlUrlRef(_string(url, "url")),
+        time=(
+            None
+            if time is None
+            else HtmlTimeRef(
+                _string(time, "instant"),
+                timezone=_optional_string(time, "timezone"),
+                style=_optional_string(time, "style"),
+            )
+        ),
+        colour=None if colour is None else HtmlColourRef(_integer(colour, "value")),
+        asset=(
+            None
+            if asset is None
+            else HtmlAssetRef(_string(asset, "key"), _string(asset, "name"), _string(asset, "media_type"))
+        ),
+    )
+
+
+def _html_attribute_value(value: object) -> str | int | float | bool:
+    if not isinstance(value, str | int | float | bool) or (isinstance(value, float) and not math.isfinite(value)):
+        msg = "HTML attribute value must be a finite string, number, or boolean"
+        raise CodecError(msg)
+    return value
 
 
 def _row_from_dict(raw: Mapping[str, Any]) -> ClassicRow:

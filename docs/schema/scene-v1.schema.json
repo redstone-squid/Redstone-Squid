@@ -7,6 +7,9 @@
         },
         {
           "$ref": "#/$defs/classic_message"
+        },
+        {
+          "$ref": "#/$defs/html"
         }
       ]
     },
@@ -546,6 +549,388 @@
       "required": [
         "url",
         "description"
+      ],
+      "type": "object"
+    },
+    "html": {
+      "additionalProperties": false,
+      "properties": {
+        "children": {
+          "items": {
+            "$ref": "#/$defs/html_node"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "const": "html"
+        },
+        "locale": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "children",
+        "locale"
+      ],
+      "type": "object"
+    },
+    "html_attribute": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "enum": [
+            "class",
+            "id",
+            "role",
+            "aria-label",
+            "aria-describedby",
+            "aria-current",
+            "aria-disabled",
+            "alt",
+            "title",
+            "type",
+            "name",
+            "value",
+            "placeholder",
+            "min",
+            "max",
+            "minlength",
+            "maxlength",
+            "step",
+            "scope",
+            "lang",
+            "open",
+            "disabled",
+            "required",
+            "multiple",
+            "selected",
+            "checked",
+            "download",
+            "rel",
+            "tone",
+            "emphasis",
+            "display",
+            "selection-min",
+            "selection-max",
+            "timezone",
+            "time-style",
+            "entity-type",
+            "channel-types"
+          ]
+        },
+        "value": {
+          "type": [
+            "string",
+            "integer",
+            "number",
+            "boolean"
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "value"
+      ],
+      "type": "object"
+    },
+    "html_element": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "type": "string"
+                },
+                "mode": {
+                  "enum": [
+                    "exclusive",
+                    "rebase",
+                    "parallel_read",
+                    "immediate"
+                  ]
+                }
+              },
+              "required": [
+                "action",
+                "mode"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "asset": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "media_type": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "name",
+                "media_type"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "attributes": {
+          "items": {
+            "$ref": "#/$defs/html_attribute"
+          },
+          "type": "array"
+        },
+        "children": {
+          "items": {
+            "$ref": "#/$defs/html_node"
+          },
+          "type": "array"
+        },
+        "colour": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "value": {
+                  "maximum": 16777215,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "value"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "form": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "field_name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "key": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "field_name"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "kind": {
+          "const": "html_element"
+        },
+        "route": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "route_id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "route_id"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "tag": {
+          "enum": [
+            "main",
+            "section",
+            "article",
+            "aside",
+            "header",
+            "footer",
+            "nav",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "p",
+            "small",
+            "strong",
+            "em",
+            "span",
+            "div",
+            "ul",
+            "ol",
+            "li",
+            "dl",
+            "dt",
+            "dd",
+            "table",
+            "caption",
+            "thead",
+            "tbody",
+            "tr",
+            "th",
+            "td",
+            "blockquote",
+            "pre",
+            "code",
+            "figure",
+            "figcaption",
+            "details",
+            "summary",
+            "progress",
+            "a",
+            "img",
+            "form",
+            "fieldset",
+            "legend",
+            "label",
+            "input",
+            "textarea",
+            "select",
+            "option",
+            "button",
+            "time",
+            "hr"
+          ]
+        },
+        "time": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "instant": {
+                  "type": "string"
+                },
+                "style": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "timezone": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "instant",
+                "timezone",
+                "style"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "url": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "url"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "tag",
+        "children",
+        "attributes",
+        "action",
+        "route",
+        "form",
+        "url",
+        "time",
+        "colour",
+        "asset"
+      ],
+      "type": "object"
+    },
+    "html_node": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/html_text"
+        },
+        {
+          "$ref": "#/$defs/html_element"
+        }
+      ]
+    },
+    "html_text": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "html_text"
+        },
+        "markup": {
+          "enum": [
+            "plain",
+            "discord-markdown"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "content",
+        "markup"
       ],
       "type": "object"
     },
