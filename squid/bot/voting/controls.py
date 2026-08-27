@@ -21,7 +21,7 @@ import discord
 
 import squid_ui as sl
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.routes.polls import poll_close, poll_refresh, polls
+from squid.bot.routes import routes
 from squid.bot.ui import respond_payload, text_layout
 from squid.bot.voting.actors import describe_rejection, resolve_actor
 from squid.core.i18n import _
@@ -29,6 +29,11 @@ from squid.voting.domain import VoteActor, VoteRejection, VoteSessionSnapshot
 
 if TYPE_CHECKING:
     import squid.bot.app
+
+
+polls = routes.group("polls")
+poll_close = polls.define("close", aliases=("poll:close",))
+poll_refresh = polls.define("refresh", aliases=("poll:refresh",))
 
 
 def poll_controls() -> sl.semantic.ActionControls:
