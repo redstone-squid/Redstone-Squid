@@ -809,7 +809,8 @@ def _loads_snapshot(payload: str, *, local: bool) -> SessionSnapshot:
 
 def _finite_timestamp(value: object) -> float:
     if not isinstance(value, int | float | str):
-        raise ValueError
+        message = f"timestamp must be a number, got {type(value).__name__}"
+        raise TypeError(message)
     timestamp = float(value)
     if not math.isfinite(timestamp):
         raise ValueError
