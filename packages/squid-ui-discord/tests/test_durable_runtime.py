@@ -37,6 +37,7 @@ from squid_ui_discord.sessions import (
     Opened,
     Rejected,
     RejectionReason,
+    Session,
     Unprotected,
 )
 from squid_ui_discord.testing import delivered_to, fake_message
@@ -728,4 +729,28 @@ async def test_a_durable_quota_survives_recovery() -> None:
         )
         assert isinstance(blocked, Rejected)
         assert blocked.reason is RejectionReason.QUOTA_REACHED
+        tasks.cancel_scope.cancel()
+
+
+async def test_attaching_a_durable_session_without_a_recipe_is_refused_not_raised() -> None:
+    """`SessionManager.session_for` hands back a plain `Session`.
+
+    Every caller that reaches a session that way -- `SessionSpec.attach` among them -- calls
+    `attach` with the base class's arguments, which for a durable session used to be a missing
+    required keyword and a `TypeError` at runtime.
+    """
+    store = MemorySessionStore()
+    durable = runtime(store, FakeFrontend())
+
+    async with anyio.create_task_group() as tasks:
+        await tasks.start(durable.run)
+        _, opened = await open_counter(durable, message_id=1)
+        assert isinstance(opened, Opened)
+        session: Session = opened.session
+        child = squid_ui_discord.MessageRoot(Counter(), access=Everyone(), timeout=None)
+
+        refused = await session.attach(child, delivered_to(fake_message(message_id=2)), actor_id=8)
+
+        assert isinstance(refused, Rejected)
+        assert refused.reason is RejectionReason.RECIPE_REQUIRED
         tasks.cancel_scope.cancel()

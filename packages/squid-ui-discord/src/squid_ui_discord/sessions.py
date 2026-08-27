@@ -90,6 +90,10 @@ class RejectionReason(Enum):
     SESSION_FINISHED = "session_finished"
     ADMISSION_BUSY = "admission_busy"
     QUOTA_REACHED = "quota_reached"
+    RECIPE_REQUIRED = "recipe_required"
+    """A durable session was attached to without the recipe its recovery would need."""
+    NOT_DURABLE = "not_durable"
+    """A delivery succeeded but could not be made recoverable, so it was not kept."""
 
 
 @dataclass(frozen=True, slots=True)
