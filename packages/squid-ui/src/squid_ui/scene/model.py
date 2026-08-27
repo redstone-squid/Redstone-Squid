@@ -312,6 +312,7 @@ class HtmlAttributeName(StrEnum):
     ARIA_DISABLED = "aria-disabled"
     ALT = "alt"
     TITLE = "title"
+    FOR = "for"
     TYPE = "type"
     NAME = "name"
     VALUE = "value"
