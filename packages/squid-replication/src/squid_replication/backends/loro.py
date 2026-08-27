@@ -8,15 +8,21 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from importlib.metadata import version as distribution_version
 from types import MappingProxyType
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from squid_reactivity import ConflictDetail
+
+if TYPE_CHECKING:
+    # `loro` is an optional backend imported lazily inside the engines, so its types are
+    # only available to the checker.
+    from loro import DiffBatch, LoroValue
 from squid_replication.document import ReplicationBackendIntegrityError, ReplicationCorruptUpdateError
 from squid_replication.model import (
     ReplicatedItem,
     ReplicatedSnapshot,
     ReplicatedTreeNode,
     ReplicatedTreeSnapshot,
+    ReplicatedValue,
     freeze_value,
     thaw_value,
 )
@@ -161,11 +167,16 @@ class LoroTextEngine:
 
     def export_since(self, version: object | None = None) -> bytes:
         if version is None:
-            mode = self.module.ExportMode.Snapshot()
-        else:
-            frontiers = self.module.Frontiers.decode(version)
-            mode = self.module.ExportMode.Updates(self.doc.frontiers_to_vv(frontiers))
-        return self.doc.export(mode)
+            return self.doc.export(self.module.ExportMode.Snapshot())
+        if not isinstance(version, bytes):
+            message = "Loro version must be encoded frontiers"
+            raise TypeError(message)
+        frontiers = self.module.Frontiers.decode(version)
+        vv = self.doc.frontiers_to_vv(frontiers)
+        if vv is None:
+            message = "Loro version is unavailable"
+            raise ValueError(message)
+        return self.doc.export(self.module.ExportMode.Updates(vv))
 
     def plan_inverse(self, token: LoroChangeToken) -> LoroPrepared:
         before = self.module.Frontiers.decode(token.before)
@@ -212,7 +223,7 @@ class LoroDocumentPrepared:
 @dataclass(frozen=True, slots=True)
 class LoroDocumentInverse:
     operations: tuple[LoroOperation, ...]
-    safe_diff: object
+    safe_diff: DiffBatch
     safe_containers: tuple[tuple[str, str], ...]
 
 
@@ -359,11 +370,37 @@ def _lineage_from_frontier(frontier: bytes) -> int:
     return int.from_bytes(frontier[:16], "big")
 
 
-def _freeze_map_value(value: object) -> object:
-    return thaw_value(freeze_value(value))
+def _authority_of(values: Mapping[str, LoroValue], key: str) -> str | None:
+    """The identity that claims `key`, if one is recorded as a string.
+
+    An authority map holds identity strings, but it is read back through the `LoroValue` union
+    like any other container, and a non-string entry means the claim is unreadable rather than
+    absent-or-valid.
+    """
+    value = values.get(key)
+    return value if isinstance(value, str) else None
 
 
-def _register_value(operation: LoroOperation, value: object, *, present: bool) -> dict[str, object]:
+def _map_contents(value: LoroValue) -> dict[str, LoroValue]:
+    """The entries of a Loro map container.
+
+    `get_value()` is typed as the whole `LoroValue` union because any container answers it. A map
+    container always yields a dict, but nothing in the signature says so, and every caller here
+    immediately treats the result as one.
+    """
+    if not isinstance(value, dict):
+        message = f"expected a Loro map, got {type(value).__name__}"
+        raise TypeError(message)
+    return value
+
+
+def _freeze_map_value(value: object) -> LoroValue:
+    # `thaw_value` is documented to return the mutable shape Loro accepts; it is declared
+    # `object` only because `model` is backend-neutral and cannot name Loro's union.
+    return cast("LoroValue", thaw_value(freeze_value(value)))
+
+
+def _register_value(operation: LoroOperation, value: object, *, present: bool) -> dict[str, LoroValue]:
     return {
         "$squid": 1,
         "authority": operation.identity,
@@ -382,7 +419,7 @@ def _decode_register(value: object) -> tuple[str, bool, object] | None:
     return authority, present, value.get("value")
 
 
-def _item_value(operation: LoroOperation, item_id: str, value: object) -> dict[str, object]:
+def _item_value(operation: LoroOperation, item_id: str, value: object) -> dict[str, LoroValue]:
     return {
         "$squid": 1,
         "authority": operation.identity,
@@ -458,7 +495,7 @@ def _tree_lookup(tree: Any, logical_id: str) -> Any | None:
     for node_id in tree.nodes():
         if tree.is_node_deleted(node_id):
             continue
-        if tree.get_meta(node_id).get_value().get("$id") == logical_id:
+        if _map_contents(tree.get_meta(node_id).get_value()).get("$id") == logical_id:
             return node_id
     return None
 
@@ -466,7 +503,7 @@ def _tree_lookup(tree: Any, logical_id: str) -> Any | None:
 def _tree_logical_id(tree: Any, node_id: Any | None) -> str | None:
     if node_id is None:
         return None
-    value = tree.get_meta(node_id).get_value().get("$id")
+    value = _map_contents(tree.get_meta(node_id).get_value()).get("$id")
     return value if isinstance(value, str) else None
 
 
@@ -541,7 +578,7 @@ class LoroDocumentBranch:
         if operation.kind == "increment":
             container = self.doc.get_map(_root_name("counter", operation.path))
             peer = str(self._engine.peer_id)
-            current = container.get_value().get(peer, "0")
+            current = _map_contents(container.get_value()).get(peer, "0")
             if not isinstance(current, str):
                 message = f"counter {operation.path!r} contains a malformed peer total"
                 raise TypeError(message)
@@ -565,7 +602,7 @@ class LoroDocumentBranch:
         elif operation.kind == "list_insert":
             container = self.doc.get_list(_root_name("list", operation.path))
             authority = self.doc.get_map(_authority_root("list", operation.path))
-            visible = _visible_items(container, authority.get_value())
+            visible = _visible_items(container, _map_contents(authority.get_value()))
             requested = data["index"]
             index = len(container) if requested == len(visible) else visible[requested][0]
             item_id = str(data.get("item_id") or uuid.uuid7())
@@ -575,7 +612,7 @@ class LoroDocumentBranch:
         elif operation.kind == "list_delete":
             container = self.doc.get_list(_root_name("list", operation.path))
             authority = self.doc.get_map(_authority_root("list", operation.path))
-            visible = _visible_items(container, authority.get_value())
+            visible = _visible_items(container, _map_contents(authority.get_value()))
             start = data["index"]
             selected = visible[start : start + data["count"]]
             decoded = [item for _, item in selected]
@@ -590,7 +627,7 @@ class LoroDocumentBranch:
         elif operation.kind == "list_delete_ids":
             container = self.doc.get_list(_root_name("list", operation.path))
             deleted: list[tuple[str, str, object]] = []
-            authority_values = self.doc.get_map(_authority_root("list", operation.path)).get_value()
+            authority_values = _map_contents(self.doc.get_map(_authority_root("list", operation.path)).get_value())
             positions = sorted(
                 (
                     found
@@ -599,7 +636,7 @@ class LoroDocumentBranch:
                         found := _find_item(
                             container,
                             item_id,
-                            authority_values.get(item_id),
+                            _authority_of(authority_values, item_id),
                         )
                     )
                     is not None
@@ -627,9 +664,9 @@ class LoroDocumentBranch:
             data["item_ids"] = [item[0] for item in data["items"]]
         elif operation.kind in {"list_replace", "list_replace_by_id"}:
             container = self.doc.get_list(_root_name("list", operation.path))
-            authority_values = self.doc.get_map(_authority_root("list", operation.path)).get_value()
+            authority_values = _map_contents(self.doc.get_map(_authority_root("list", operation.path)).get_value())
             found = (
-                _find_item(container, data["item_id"], authority_values.get(data["item_id"]))
+                _find_item(container, data["item_id"], _authority_of(authority_values, data["item_id"]))
                 if operation.kind == "list_replace_by_id"
                 else _visible_items(container, authority_values)[data["index"]]
             )
@@ -711,7 +748,7 @@ class LoroDocumentBranch:
         elif operation.kind in {"map_set", "map_delete", "map_restore"}:
             container = self.doc.get_map(_root_name("map", operation.path))
             key = data["key"]
-            current = _decode_register(container.get_value().get(key))
+            current = _decode_register(_map_contents(container.get_value()).get(key))
             if "previous_present" not in data:
                 data["previous_present"] = current is not None and current[1]
                 data["previous_value"] = None if current is None else current[2]
@@ -759,7 +796,7 @@ class LoroDocumentBranch:
                 message = f"tree node {node_id!r} is unavailable"
                 raise ValueError(message)
             metadata = tree.get_meta(target)
-            current = _decode_register(metadata.get_value().get(data["key"]))
+            current = _decode_register(_map_contents(metadata.get_value()).get(data["key"]))
             data.update(
                 previous_present=current is not None and current[1],
                 previous_value=None if current is None else current[2],
@@ -771,7 +808,7 @@ class LoroDocumentBranch:
                 message = f"tree node {node_id!r} is unavailable"
                 raise ValueError(message)
             metadata = tree.get_meta(target)
-            current = _decode_register(metadata.get_value().get(data["key"]))
+            current = _decode_register(_map_contents(metadata.get_value()).get(data["key"]))
             data.update(
                 previous_present=current is not None and current[1],
                 previous_value=None if current is None else current[2],
@@ -944,7 +981,7 @@ def _snapshot(document: Any) -> ReplicatedSnapshot:
             if not isinstance(logical_id, str):
                 message = f"tree {path!r} contains a node without a logical identity"
                 raise TypeError(message)
-            entries: dict[str, Any] = {}
+            node_metadata: dict[str, ReplicatedValue] = {}
             for key, encoded in metadata.items():
                 if key == "$id":
                     continue
@@ -953,7 +990,7 @@ def _snapshot(document: Any) -> ReplicatedSnapshot:
                     message = f"tree {path!r} contains malformed metadata"
                     raise TypeError(message)
                 if register[1]:
-                    entries[key] = freeze_value(register[2])
+                    node_metadata[key] = freeze_value(register[2])
             children = tuple(
                 uuid.UUID(child_id)
                 for child in (tree.children(item.id) or [])
@@ -964,7 +1001,7 @@ def _snapshot(document: Any) -> ReplicatedSnapshot:
                     uuid.UUID(logical_id),
                     None if item.parent is None else uuid.UUID(_tree_logical_id(tree, item.parent)),
                     children,
-                    freeze_value(entries),
+                    MappingProxyType(node_metadata),
                 )
             )
         roots = tuple(
@@ -984,7 +1021,7 @@ def _snapshot(document: Any) -> ReplicatedSnapshot:
     )
 
 
-def _set_snapshot(entries: dict[str, object]) -> frozenset[str]:
+def _set_snapshot(entries: Mapping[str, LoroValue]) -> frozenset[str]:
     adds = {key[2:]: value for key, value in entries.items() if key.startswith("a:") and isinstance(value, str)}
     removals: dict[str, set[str]] = {}
     cancelled: set[str] = set()
@@ -1060,7 +1097,7 @@ class LoroEngine:
         value: str,
         additions: tuple[LoroOperation, ...] = (),
     ) -> tuple[str, ...]:
-        entries = dict(self.doc.get_map(_root_name("set", path)).get_value())
+        entries = dict(_map_contents(self.doc.get_map(_root_name("set", path)).get_value()))
         for operation in additions:
             if operation.path != path:
                 continue
@@ -1117,26 +1154,33 @@ class LoroEngine:
             raise
         return LoroDocumentPrepared(None, update, before, branch.oplog_frontiers.encode(), ())
 
+    def _version_vector(self, version: bytes) -> Any:
+        """The version vector encoded frontiers refer to.
+
+        Split out from `export_since` so the unavailable-version failure is raised outside that
+        method's `try`, which exists to translate the backend's own corruption errors.
+        """
+        vv = self.doc.frontiers_to_vv(self.module.Frontiers.decode(version))
+        if vv is None:
+            message = "Loro version is unavailable"
+            raise ValueError(message)
+        return vv
+
     def export_since(self, version: object | None = None) -> bytes:
         if version is not None and not isinstance(version, bytes):
             message = "Loro version must be encoded frontiers"
             raise TypeError(message)
         try:
-            if version is None:
-                mode = self.module.ExportMode.Snapshot()
-            else:
-                frontiers = self.module.Frontiers.decode(version)
-                vv = self.doc.frontiers_to_vv(frontiers)
+            mode = (
+                self.module.ExportMode.Snapshot()
+                if version is None
+                else self.module.ExportMode.Updates(self._version_vector(version))
+            )
         except BaseException as error:
             if type(error) is BaseException:
                 message = "Loro version is corrupt"
                 raise ReplicationCorruptUpdateError(message) from error
             raise
-        if version is not None and vv is None:
-            message = "Loro version is unavailable"
-            raise ValueError(message)
-        if version is not None:
-            mode = self.module.ExportMode.Updates(vv)
         try:
             return self.doc.export(mode)
         except BaseException as error:
@@ -1375,7 +1419,7 @@ class LoroEngine:
                 )
             elif operation.kind in {"map_set", "map_delete", "map_restore"}:
                 container = self.doc.get_map(_root_name("map", operation.path))
-                current = _decode_register(container.get_value().get(data["key"]))
+                current = _decode_register(_map_contents(container.get_value()).get(data["key"]))
                 actual = None if current is None else current[0]
                 if actual != operation.identity:
                     return ConflictDetail(
@@ -1414,7 +1458,9 @@ class LoroEngine:
                 tree = self.doc.get_tree(_root_name("tree", operation.path))
                 target = _tree_lookup(tree, data["node_id"])
                 current = (
-                    None if target is None else _decode_register(tree.get_meta(target).get_value().get(data["key"]))
+                    None
+                    if target is None
+                    else _decode_register(_map_contents(tree.get_meta(target).get_value()).get(data["key"]))
                 )
                 actual = None if current is None else current[0]
                 if actual != operation.identity:
@@ -1477,7 +1523,7 @@ class LoroEngine:
         present: bool,
         match_value_authority: bool = True,
     ) -> ConflictDetail | None:
-        authority = self.doc.get_map(_authority_root(kind, operation.path)).get_value()
+        authority = _map_contents(self.doc.get_map(_authority_root(kind, operation.path)).get_value())
         container = (
             self.doc.get_list(_root_name(kind, operation.path))
             if kind == "list"
@@ -1502,7 +1548,7 @@ class LoroEngine:
         present: bool,
     ) -> ConflictDetail | None:
         node_id = operation.data["node_id"]
-        actual = self.doc.get_map(_authority_root("tree", operation.path)).get_value().get(node_id)
+        actual = _map_contents(self.doc.get_map(_authority_root("tree", operation.path)).get_value()).get(node_id)
         exists = _tree_lookup(self.doc.get_tree(_root_name("tree", operation.path)), node_id) is not None
         if actual == operation.identity and exists == present:
             return None
