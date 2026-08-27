@@ -47,7 +47,7 @@ alternatives lose:
 The component callback is named `on_commit` and fires only when `committed` changed; routing
 immediate commit through that field is precisely what makes the same handler correct under
 both policies. The pre-0.1 `on_apply` spelling is removed rather than aliased. Plan
-[90](90-deferred.md)'s rejection of engine-side `Managed` merging stands: this changes when
+[90](../../squid-ui-redesign/90-deferred.md)'s rejection of engine-side `Managed` merging stands: this changes when
 the pattern commits, not who merges.
 
 Consumers: `NotificationPanel` subscription kinds (`squid/bot/notifications_view.py`,

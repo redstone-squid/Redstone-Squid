@@ -759,7 +759,7 @@ is the single framework boundary outside the whole user onion.
 ## Library binding: discord.py, not Discord alone
 
 For an ownership-first path from existing views and persistent controls into these adapter
-boundaries, see [Migrating an existing discord.py bot](../packages/squid-ui-discord/docs/migrating.md).
+boundaries, see the [Discord migration guide](https://github.com/redstone-squid/Redstone-Squid/blob/master/packages/squid-ui-discord/docs/migrating.md).
 
 The portable seam is the scene. Everything above it — semantic vocabulary, planner,
 `measure()`, `CursorCoordinator`, components — binds to Discord's *shape* (budgets, option windows,
