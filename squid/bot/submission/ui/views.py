@@ -10,15 +10,13 @@ from whenever import Instant
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.components import BuildField, get_text_input
-from squid.bot.ui import DISCORD_YELLOW, error_node
+from squid.bot.ui import DISCORD_YELLOW, L, error_node
 from squid.bot.utils.permissions import allows
 from squid.bot.utils.sentinel import DEFAULT, DefaultType
 from squid.builds.application import BuildEditPatch, BuildService
 from squid.builds.domain import DOOR_ORIENTATION_NAMES, Build, BuildCategory, BuildDraft, Status
-from squid.core.i18n import _
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 from squid.topics import resource_topic
 from squid_ui_discord import SessionKey
@@ -78,45 +76,45 @@ def _format_dimensions(value: tuple[int | None, ...]) -> str:
     return " x ".join("?" if item is None else str(item) for item in value)
 
 
-def _submission_basics_form(build: BuildDraft, locale: str | None) -> sl.forms.FormSpec:
+def _submission_basics_form(build: BuildDraft, invocation: sd.Invocation) -> sl.forms.FormSpec:
     return sl.forms.FormSpec(
-        t(locale, _("Build basics")),
+        invocation.t(L("Build basics")),
         (
             sl.forms.TextField(
                 key="door_size",
-                label=t(locale, _("Door opening size")),
-                placeholder=t(locale, _("For example: 2x2")),
+                label=invocation.t(L("Door opening size")),
+                placeholder=invocation.t(L("For example: 2x2")),
                 default=_format_dimensions(build.door_dimensions),
                 maximum=100,
             ),
             sl.forms.TextField(
                 key="pattern",
-                label=t(locale, _("Pattern")),
-                placeholder=t(locale, _("For example: regular, full lamp")),
+                label=invocation.t(L("Pattern")),
+                placeholder=invocation.t(L("For example: regular, full lamp")),
                 default=", ".join(build.patterns),
                 required=False,
                 maximum=500,
             ),
             sl.forms.TextField(
                 key="dimensions",
-                label=t(locale, _("Overall build size")),
-                placeholder=t(locale, _("Width x Height x Depth")),
+                label=invocation.t(L("Overall build size")),
+                placeholder=invocation.t(L("Width x Height x Depth")),
                 default=_format_dimensions(build.dimensions),
                 required=False,
                 maximum=100,
             ),
             sl.forms.TextField(
                 key="versions",
-                label=t(locale, _("Supported versions")),
-                placeholder=t(locale, _("For example: 1.20.4+")),
+                label=invocation.t(L("Supported versions")),
+                placeholder=invocation.t(L("For example: 1.20.4+")),
                 default=build.version_spec or "",
                 required=False,
                 maximum=200,
             ),
             sl.forms.TextField(
                 key="creators",
-                label=t(locale, _("Creators")),
-                placeholder=t(locale, _("Minecraft names, comma separated")),
+                label=invocation.t(L("Creators")),
+                placeholder=invocation.t(L("Minecraft names, comma separated")),
                 default=", ".join(build.creators_ign),
                 required=False,
                 maximum=500,
@@ -125,7 +123,7 @@ def _submission_basics_form(build: BuildDraft, locale: str | None) -> sl.forms.F
     )
 
 
-def _submission_details_form(build: BuildDraft, locale: str | None) -> sl.forms.FormSpec:
+def _submission_details_form(build: BuildDraft, invocation: sd.Invocation) -> sl.forms.FormSpec:
     restrictions = (
         build.wiring_placement_restrictions
         + build.animated_restrictions
@@ -133,44 +131,44 @@ def _submission_details_form(build: BuildDraft, locale: str | None) -> sl.forms.
         + build.miscellaneous_restrictions
     )
     return sl.forms.FormSpec(
-        t(locale, _("Links and optional details")),
+        invocation.t(L("Links and optional details")),
         (
             sl.forms.TextField(
                 key="restrictions",
-                label=t(locale, _("Restrictions")),
-                placeholder=t(locale, _("For example: Seamless, Observerless")),
+                label=invocation.t(L("Restrictions")),
+                placeholder=invocation.t(L("For example: Seamless, Observerless")),
                 default=", ".join(restrictions),
                 required=False,
                 maximum=1000,
             ),
             sl.forms.TextField(
                 key="image_urls",
-                label=t(locale, _("Images")),
-                placeholder=t(locale, _("Image links, comma separated")),
+                label=invocation.t(L("Images")),
+                placeholder=invocation.t(L("Image links, comma separated")),
                 default=", ".join(build.image_urls),
                 required=False,
                 maximum=4000,
             ),
             sl.forms.TextField(
                 key="video_urls",
-                label=t(locale, _("Videos")),
-                placeholder=t(locale, _("Video links, comma separated")),
+                label=invocation.t(L("Videos")),
+                placeholder=invocation.t(L("Video links, comma separated")),
                 default=", ".join(build.video_urls),
                 required=False,
                 maximum=4000,
             ),
             sl.forms.TextField(
                 key="world_urls",
-                label=t(locale, _("World downloads")),
-                placeholder=t(locale, _("World download links, comma separated")),
+                label=invocation.t(L("World downloads")),
+                placeholder=invocation.t(L("World download links, comma separated")),
                 default=", ".join(build.world_download_urls),
                 required=False,
                 maximum=4000,
             ),
             sl.forms.TextAreaField(
                 key="notes",
-                label=t(locale, _("Notes")),
-                placeholder=t(locale, _("Anything staff should know")),
+                label=invocation.t(L("Notes")),
+                placeholder=invocation.t(L("Anything staff should know")),
                 default=build.extra_info.get("user") or "",
                 required=False,
                 maximum=4000,
@@ -183,7 +181,7 @@ class SubmissionFormComponent(sl.Component[sl.ComponentsV2Target]):
     """A semantic, resumable submission workspace."""
 
     value: bool | None = sl.state(None)
-    validation_error: str | None = sl.state(None)
+    validation_error: sl.TextLike | None = sl.state(None)
     submitting: bool = sl.state(default=False)
     closed: bool = sl.state(default=False)
     build: BuildDraft = sl.state(opaque=True)
@@ -194,7 +192,6 @@ class SubmissionFormComponent(sl.Component[sl.ComponentsV2Target]):
         builds: BuildService,
         *,
         author_id: int | None = None,
-        locale: str | None = None,
         timeout: float = 300,
         on_submit: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
@@ -204,7 +201,6 @@ class SubmissionFormComponent(sl.Component[sl.ComponentsV2Target]):
         self.build = build
         self.builds = builds
         self.author_id = author_id
-        self.locale = locale
         self._timeout = timeout
         self.on_submit = on_submit
         self._done = anyio.Event()
@@ -217,35 +213,36 @@ class SubmissionFormComponent(sl.Component[sl.ComponentsV2Target]):
 
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self.closed:
-            return (sl.section(sl.heading(t(self.locale, _("Submission closed")))),)
-        missing = []
-        if self.build.door_orientation is None:
-            missing.append(t(self.locale, _("door type")))
-        if not self.build.door_width or not self.build.door_height:
-            missing.append(t(self.locale, _("door opening size")))
+            return (sl.section(sl.heading(L("Submission closed"))),)
+        missing_door_type = self.build.door_orientation is None
+        missing_opening_size = not self.build.door_width or not self.build.door_height
         guidance = self.validation_error
-        if guidance is None and missing:
-            guidance = t(self.locale, _("Required before review: {fields}."), fields=", ".join(missing))
+        if guidance is None and missing_door_type and missing_opening_size:
+            guidance = L("Required before review: door type and door opening size.")
+        elif guidance is None and missing_door_type:
+            guidance = L("Required before review: {fields}.", fields=L("door type"))
+        elif guidance is None and missing_opening_size:
+            guidance = L("Required before review: {fields}.", fields=L("door opening size"))
         if guidance is None:
-            guidance = t(self.locale, _("Ready to submit. Optional details can be added later."))
+            guidance = L("Ready to submit. Optional details can be added later.")
         fields = (
-            sl.field(t(self.locale, _("Door type")), self.build.door_orientation or "—"),
-            sl.field(t(self.locale, _("Opening size")), _format_dimensions(self.build.door_dimensions) or "—"),
-            sl.field(t(self.locale, _("Pattern")), ", ".join(self.build.patterns)),
-            sl.field(t(self.locale, _("Build size")), _format_dimensions(self.build.dimensions) or "—"),
-            sl.field(t(self.locale, _("Versions")), self.build.version_spec or "—"),
-            sl.field(t(self.locale, _("Creators")), ", ".join(self.build.creators_ign) or "—"),
+            sl.field(L("Door type"), self.build.door_orientation or "—"),
+            sl.field(L("Opening size"), _format_dimensions(self.build.door_dimensions) or "—"),
+            sl.field(L("Pattern"), ", ".join(self.build.patterns)),
+            sl.field(L("Build size"), _format_dimensions(self.build.dimensions) or "—"),
+            sl.field(L("Versions"), self.build.version_spec or "—"),
+            sl.field(L("Creators"), ", ".join(self.build.creators_ign) or "—"),
         )
         return (
             sl.section(
-                sl.heading(t(self.locale, _("Submit a build"))),
+                sl.heading(L("Submit a build")),
                 sl.truncate(sl.paragraph(guidance)),
                 sl.fields(*fields),
-                sl.note(t(self.locale, _("Only the door type and opening size are required."))),
+                sl.note(L("Only the door type and opening size are required.")),
                 accent=sl.palette.INHERIT if self.is_ready else DISCORD_YELLOW,
             ),
             sl.choices(
-                *(sl.choice(t(self.locale, _(value)), key=value) for value in DOOR_ORIENTATION_NAMES),
+                *(sl.choice(L(value), key=value) for value in DOOR_ORIENTATION_NAMES),
                 key="door_type",
                 selection=sl.controlled(
                     (self.build.door_orientation,) if self.build.door_orientation is not None else (),
@@ -254,14 +251,14 @@ class SubmissionFormComponent(sl.Component[sl.ComponentsV2Target]):
             ),
             sl.choices(
                 sl.choice(
-                    t(self.locale, _("Directional")),
+                    L("Directional"),
                     key="Directional",
-                    description=t(self.locale, _("May depend on the direction it faces")),
+                    description=L("May depend on the direction it faces"),
                 ),
                 sl.choice(
-                    t(self.locale, _("Locational")),
+                    L("Locational"),
                     key="Locational",
-                    description=t(self.locale, _("May depend on its position in the world")),
+                    description=L("May depend on its position in the world"),
                 ),
                 key="location",
                 selection=sl.controlled(
@@ -277,24 +274,24 @@ class SubmissionFormComponent(sl.Component[sl.ComponentsV2Target]):
             ),
             sl.action_controls(
                 sl.action_control(
-                    t(self.locale, _("Edit basics")),
+                    L("Edit basics"),
                     self._edit_basics,
                     key="edit_basics",
                     emphasis=sl.semantic.Emphasis.STRONG,
                 ),
                 sl.action_control(
-                    t(self.locale, _("Add links & details")),
+                    L("Add links & details"),
                     self._edit_details,
                     key="edit_details",
                 ),
                 sl.action_control(
-                    t(self.locale, _("Submit for review")),
+                    L("Submit for review"),
                     self._submit,
                     key="submit",
                     tone=sl.Tone.SUCCESS,
                     available=not self.submitting,
                 ),
-                sl.action_control(t(self.locale, _("Cancel")), self._cancel, key="cancel"),
+                sl.action_control(L("Cancel"), self._cancel, key="cancel"),
                 key="submission-actions",
             ),
         )
@@ -309,8 +306,9 @@ class SubmissionFormComponent(sl.Component[sl.ComponentsV2Target]):
         self.mutated(self.build)
 
     async def _edit_basics(self, event: sl.PressEvent) -> None:
+        invocation = await sd.Invocation.of(sd.native(event))
         await event.present_form(
-            _submission_basics_form(self.build, self.locale),
+            _submission_basics_form(self.build, invocation),
             key="submission-basics",
             on_submit=self._basics_submitted,
         )
@@ -322,10 +320,10 @@ class SubmissionFormComponent(sl.Component[sl.ComponentsV2Target]):
             dimensions_text = cast(str, values["dimensions"])
             dimensions = parse_dimensions(dimensions_text) if dimensions_text.strip() else (None, None, None)
         except ValueError as error:
-            await event.notice(t(self.locale, _("Check the dimensions: {error}"), error=str(error)))
+            await event.notice(L("Check the dimensions: {error}", error=str(error)))
             return
         if door_dimensions[0] is None or door_dimensions[1] is None:
-            await event.notice(t(self.locale, _("Enter at least a door width and height, such as `2x2`.")))
+            await event.notice(L("Enter at least a door width and height, such as `2x2`."))
             return
         self.build.door_dimensions = door_dimensions
         self.build.patterns = _split_values(cast(str, values["pattern"])) or ["Regular"]
@@ -336,8 +334,9 @@ class SubmissionFormComponent(sl.Component[sl.ComponentsV2Target]):
         self.mutated(self.build)
 
     async def _edit_details(self, event: sl.PressEvent) -> None:
+        invocation = await sd.Invocation.of(sd.native(event))
         await event.present_form(
-            _submission_details_form(self.build, self.locale),
+            _submission_details_form(self.build, invocation),
             key="submission-details",
             on_submit=self._details_submitted,
         )
@@ -351,7 +350,7 @@ class SubmissionFormComponent(sl.Component[sl.ComponentsV2Target]):
             url for url in (*image_urls, *video_urls, *world_urls) if not url.startswith(("https://", "http://"))
         ]
         if invalid_urls:
-            await event.notice(t(self.locale, _("Every link must start with `https://` or `http://`.")))
+            await event.notice(L("Every link must start with `https://` or `http://`."))
             return
         await self.builds.classify_restrictions(self.build, _split_values(cast(str, values["restrictions"])))
         self.build.replace_links("image", image_urls)
@@ -367,14 +366,11 @@ class SubmissionFormComponent(sl.Component[sl.ComponentsV2Target]):
 
     async def _submit(self, event: sl.PressEvent) -> None:
         if not self.is_ready:
-            self.validation_error = t(
-                self.locale,
-                _("Choose a door type and add an opening size such as `2x2` before submitting."),
-            )
+            self.validation_error = L("Choose a door type and add an opening size such as `2x2` before submitting.")
             self.invalidate()
             return
         if self.submitting:
-            await event.notice(t(self.locale, _("This build is still being submitted. Give it a moment.")))
+            await event.notice(L("This build is still being submitted. Give it a moment."))
             return
         self.submitting = True
         await event.acknowledge()
@@ -383,9 +379,8 @@ class SubmissionFormComponent(sl.Component[sl.ComponentsV2Target]):
                 await self.on_submit()
         except Exception:
             self.submitting = False
-            self.validation_error = t(
-                self.locale,
-                _("Submitting failed and nothing was saved. Press **Submit for review** to try again."),
+            self.validation_error = L(
+                "Submitting failed and nothing was saved. Press **Submit for review** to try again."
             )
             self.invalidate()
             raise
@@ -414,21 +409,21 @@ class SubmissionFormComponent(sl.Component[sl.ComponentsV2Target]):
         return None if scope.cancel_called else self.value
 
 
-def _edit_form(items: Sequence[BuildField[Any]], page: int, locale: str | None) -> sl.forms.FormSpec:
+def _edit_form(items: Sequence[BuildField[Any]], page: int, invocation: sd.Invocation) -> sl.forms.FormSpec:
     fields: list[sl.forms.FormField[Any]] = []
     for item in items[5 * (page - 1) : 5 * page]:
         field_type = sl.forms.TextAreaField if item.style is discord.TextStyle.paragraph else sl.forms.TextField
         fields.append(
             field_type(
                 key=item.attribute,
-                label=t(locale, _(item.display_label)),
+                label=invocation.t(L(item.display_label)),
                 placeholder=item.placeholder,
                 default=item.current_string_value,
                 required=item.required,
                 maximum=item.max_length,
             )
         )
-    return sl.forms.FormSpec(t(locale, _("Edit build, section {page}"), page=page), tuple(fields))
+    return sl.forms.FormSpec(invocation.t(L("Edit build, section {page}", page=page)), tuple(fields))
 
 
 class BuildEditComponent(sl.Component[sl.ComponentsV2Target]):
@@ -437,8 +432,7 @@ class BuildEditComponent(sl.Component[sl.ComponentsV2Target]):
     page: int = sl.state(1)
     confirming: bool = sl.state(default=False)
     saved: bool = sl.state(default=False)
-    validation_error: str | None = sl.state(None)
-    locale: str | None = sl.state(None, persist=False)
+    validation_error: sl.TextLike | None = sl.state(None)
 
     def __init__(
         self,
@@ -446,7 +440,6 @@ class BuildEditComponent(sl.Component[sl.ComponentsV2Target]):
         builds: BuildService,
         items: Sequence[BuildField[Any]] | DefaultType = DEFAULT,
         *,
-        locale: str | None = None,
         timeout: float = 300,
         node: sl.LayoutNode[sl.ComponentsV2Target] | None = None,
     ) -> None:
@@ -456,7 +449,6 @@ class BuildEditComponent(sl.Component[sl.ComponentsV2Target]):
             None
         )
         self.builds = builds
-        self.locale = locale
         self._timeout = timeout
         self.expiry_time = Instant.now().add(seconds=timeout)
         if items is DEFAULT:
@@ -514,9 +506,8 @@ class BuildEditComponent(sl.Component[sl.ComponentsV2Target]):
         for item in self.items:
             if item.attribute == attribute:
                 item.stage(text)
-                self.validation_error = (
-                    "\n".join(error for error in (self.validation_error, item.validation_error) if error) or None
-                )
+                previous = self.validation_error if isinstance(self.validation_error, str) else None
+                self.validation_error = "\n".join(error for error in (previous, item.validation_error) if error) or None
                 return True
         return False
 
@@ -537,55 +528,54 @@ class BuildEditComponent(sl.Component[sl.ComponentsV2Target]):
         if self.saved:
             return (
                 sl.section(
-                    sl.heading(t(self.locale, _("Changes saved"))),
-                    sl.paragraph(t(self.locale, _("The build card has been refreshed."))),
+                    sl.heading(L("Changes saved")),
+                    sl.paragraph(L("The build card has been refreshed.")),
                 ),
             )
         state = self.projection.status
         if self._seed is None and not isinstance(state, sl.resources.Ready) and state.previous is None:
-            return (sl.status(t(self.locale, _("Loading build."))),)
+            return (sl.status(L("Loading build.")),)
         description = (
-            t(
-                self.locale,
-                _("Section {page} of {pages}. Filled dots have unsaved changes."),
+            L(
+                "Section {page} of {pages}. Filled dots have unsaved changes.",
                 page=self.page,
                 pages=self.max_pages,
             )
             if not self.validation_error
-            else t(self.locale, _("Fix these values before review:\n{errors}"), errors=self.validation_error)
+            else L("Fix these values before review:\n{errors}", errors=self.validation_error)
         )
         controls: list[sl.semantic.ActionControl] = [
-            sl.action_control(t(self.locale, _("Edit this section")), self._open, key="open"),
-            sl.action_control(t(self.locale, _("Previous")), self._previous, key="previous", available=self.page != 1),
-            sl.action_control(t(self.locale, _("Next")), self._next, key="next", available=self.page != self.max_pages),
+            sl.action_control(L("Edit this section"), self._open, key="open"),
+            sl.action_control(L("Previous"), self._previous, key="previous", available=self.page != 1),
+            sl.action_control(L("Next"), self._next, key="next", available=self.page != self.max_pages),
         ]
         if self.confirming:
             controls.extend(
                 (
                     sl.action_control(
-                        t(self.locale, _("Apply changes")),
+                        L("Apply changes"),
                         self._apply,
                         key="apply",
                         tone=sl.Tone.SUCCESS,
                     ),
-                    sl.action_control(t(self.locale, _("Back")), self._unconfirm, key="unconfirm"),
+                    sl.action_control(L("Back"), self._unconfirm, key="unconfirm"),
                 )
             )
         else:
             controls.append(
                 sl.action_control(
-                    t(self.locale, _("Review changes")),
+                    L("Review changes"),
                     self._review,
                     key="review",
                     tone=sl.Tone.SUCCESS,
                 )
             )
-        controls.append(sl.action_control(t(self.locale, _("Close")), self._close, key="close"))
+        controls.append(sl.action_control(L("Close"), self._close, key="close"))
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
             sl.section(
-                sl.heading(t(self.locale, _("Edit build"))),
+                sl.heading(L("Edit build")),
                 sl.truncate(sl.paragraph(description)),
-                sl.fields(sl.field(t(self.locale, _("Fields in this section")), self.summary_text())),
+                sl.fields(sl.field(L("Fields in this section"), self.summary_text())),
                 accent=DISCORD_YELLOW if self.validation_error else sl.palette.INHERIT,
             )
         ]
@@ -602,7 +592,8 @@ class BuildEditComponent(sl.Component[sl.ComponentsV2Target]):
 
     async def _open(self, event: sl.PressEvent) -> None:
         if await self._may_event(event):
-            await event.present_form(_edit_form(self.items, self.page, self.locale), key="edit", on_submit=self._edited)
+            invocation = await sd.Invocation.of(sd.native(event))
+            await event.present_form(_edit_form(self.items, self.page, invocation), key="edit", on_submit=self._edited)
 
     async def _edited(self, event: sl.SubmitEvent) -> None:
         errors: list[str] = []
@@ -612,7 +603,7 @@ class BuildEditComponent(sl.Component[sl.ComponentsV2Target]):
                 errors.append(f"**{item.display_label}:** {item.validation_error}")
         self.validation_error = "\n".join(errors) or None
         if errors:
-            await event.notice(t(self.locale, _("Fix these values before review:\n{errors}"), errors="\n".join(errors)))
+            await event.notice(L("Fix these values before review:\n{errors}", errors="\n".join(errors)))
         self.invalidate()
 
     async def _previous(self, event: sl.PressEvent) -> None:
@@ -629,7 +620,7 @@ class BuildEditComponent(sl.Component[sl.ComponentsV2Target]):
         if self.validation_error:
             return
         if not any(item.modified for item in self.items):
-            self.validation_error = t(self.locale, _("No changes to review yet."))
+            self.validation_error = L("No changes to review yet.")
             return
         self.confirming = True
 
@@ -666,12 +657,10 @@ class BuildEditComponent(sl.Component[sl.ComponentsV2Target]):
     async def _may_event(self, event: sl.ActionEvent) -> bool:
         interaction = sd.native(event)
         if Instant.now() > self.expiry_time:
-            await event.notice(t(self.locale, _("This edit session expired. Reopen the build to start again.")))
+            await event.notice(L("This edit session expired. Reopen the build to start again."))
             return False
         if not await self.can_edit(interaction):
-            await event.notice(
-                t(self.locale, _("Only the pending build's submitter or a trusted staff member can edit it."))
-            )
+            await event.notice(L("Only the pending build's submitter or a trusted staff member can edit it."))
             return False
         return True
 
@@ -691,28 +680,21 @@ class BuildEditComponent(sl.Component[sl.ComponentsV2Target]):
         parent: sd.MessageRoot | None = None,
     ) -> None:
         """Open an editor for this build, replacing this user's previous one."""
-        self.locale = await resolve_locale(interaction, interaction.client.services.settings)
+        invocation = await sd.Invocation.of(interaction)
         if not await self.can_edit(interaction):
-            message = t(
-                self.locale,
-                _("Only the pending build's submitter or a trusted staff member can edit it."),
-            )
-            invocation = await sd.Invocation.of(interaction)
             await invocation.reply(
-                error_node(t(self.locale, _("Cannot edit this build")), message),
+                error_node(
+                    L("Cannot edit this build"),
+                    L("Only the pending build's submitter or a trusted staff member can edit it."),
+                ),
                 visibility="personal",
             )
             return
-        invocation = await sd.Invocation.of(interaction)
         client = interaction.client
         build, node = self._current()
         if node is None:
             render_node = getattr(client.for_build(build), "render_node", None)
-            node = (
-                await render_node()
-                if render_node is not None
-                else sl.status(t(self.locale, _("Build preview unavailable.")))
-            )
+            node = await render_node() if render_node is not None else sl.status(L("Build preview unavailable."))
             self._seed = (build, node)
 
         async def refresh(build_id: int) -> tuple[Build, sl.LayoutNode[sl.ComponentsV2Target]] | None:

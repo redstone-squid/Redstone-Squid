@@ -198,7 +198,6 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             draft,
             self.builds,
             author_id=interaction.user.id,
-            locale=locale,
             on_submit=persist_draft,
         )
         message_root = invocation.runtime.mount(
