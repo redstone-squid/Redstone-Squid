@@ -103,6 +103,47 @@ class Counter(Component):
         self.count += 1
 
 
+async def test_dispatch_and_submit_establish_invocation_scope_inside_the_handler_task() -> None:
+    class FakeClient:
+        pass
+
+    client = FakeClient()
+    runtime = squid_ui_discord.install(cast(discord.Client, client))
+    interaction = fake_interaction()
+    interaction.client = client
+    seen: list[squid_ui_discord.Invocation] = []
+
+    class Inspect(Component[sl.ComponentsV2Target]):
+        def render(self):
+            return Row((Button(label="Inspect", on_click=self.inspect, key="inspect"),))
+
+        async def inspect(self, event: PressEvent) -> None:
+            del event
+            invocation = await squid_ui_discord.Invocation.of(interaction)
+            assert squid_ui_discord.current_invocation() is invocation
+            seen.append(invocation)
+
+    message_root = MessageRoot(Inspect(), access=Everyone(), timeout=None)
+    commit_render(message_root)
+    await message_root.dispatch("inspect", interaction)
+
+    submitted = fake_interaction()
+    submitted.client = client
+    spec = FormSpec("Rename", (TextField(key="name", label="Name"),))
+
+    async def submit(event: sl.SubmitEvent) -> None:
+        del event
+        invocation = await squid_ui_discord.Invocation.of(submitted)
+        assert squid_ui_discord.current_invocation() is invocation
+        seen.append(invocation)
+
+    await message_root.dispatch_submit("rename", submitted, spec, {"name": "Ada"}, submit)
+    await runtime.close()
+
+    assert len(seen) == 2
+    assert squid_ui_discord.current_invocation() is None
+
+
 @pytest.mark.parametrize("warning", [0, -1, math.inf, -math.inf, math.nan])
 def test_expiry_policies_require_a_finite_positive_warning(warning: float) -> None:
     with pytest.raises(ValueError, match="finite positive"):

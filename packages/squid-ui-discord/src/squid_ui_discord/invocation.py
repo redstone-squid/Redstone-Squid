@@ -1,9 +1,7 @@
 """One localized Discord invocation and its complete UI delivery policy."""
 
-import asyncio
 from collections.abc import Hashable, Iterator, Sequence
 from contextlib import contextmanager
-from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any, Literal, Unpack, cast
 
@@ -12,6 +10,8 @@ import discord
 from squid_ui import ComponentsV2Target, LayoutNode, paragraph
 from squid_ui.runtime.component import Component
 from squid_ui.text import Localization, TextLike, resolve_text
+from squid_ui_discord._invocation_context import current_cell
+from squid_ui_discord._invocation_context import invocation_scope as _invocation_scope
 from squid_ui_discord.access import AccessPolicy
 from squid_ui_discord.delivery import (
     DeliveryAbandoned,
@@ -82,11 +82,14 @@ class Invocation:
     @classmethod
     async def of(cls, source: InvocationSource) -> Invocation:
         """Resolve an invocation, reusing the ambient handler's lazy memo when present."""
-        cell = _CURRENT_INVOCATION.get()
+        cell = current_cell()
         if cell is not None and cell.source is source:
             if cell.value is not None:
-                return cell.value
-            return await cell.resolve()
+                return cast(Invocation, cell.value)
+            async with cell.lock:
+                if cell.value is None:
+                    cell.value = await cls._resolve(source)
+            return cast(Invocation, cell.value)
         return await cls._resolve(source)
 
     @classmethod
@@ -284,40 +287,17 @@ class Invocation:
         return deliver
 
 
-class _InvocationCell:
-    """A lazy invocation shared by one ambient handler scope."""
-
-    def __init__(self, source: InvocationSource) -> None:
-        self.source = source
-        self.value: Invocation | None = None
-        self._lock = asyncio.Lock()
-
-    async def resolve(self) -> Invocation:
-        if self.value is not None:
-            return self.value
-        async with self._lock:
-            if self.value is None:
-                self.value = await Invocation._resolve(self.source)
-        return self.value
-
-
-_CURRENT_INVOCATION = ContextVar[_InvocationCell | None]("squid_ui_discord_invocation", default=None)
-
-
 def current_invocation() -> Invocation | None:
     """Return the resolved ambient invocation, or `None` before its first use or outside a scope."""
-    cell = _CURRENT_INVOCATION.get()
-    return None if cell is None else cell.value
+    cell = current_cell()
+    return None if cell is None else cast(Invocation | None, cell.value)
 
 
 @contextmanager
 def invocation_scope(source: InvocationSource) -> Iterator[None]:
     """Establish a lazy invocation memo for the duration of one handler dispatch."""
-    token = _CURRENT_INVOCATION.set(_InvocationCell(source))
-    try:
+    with _invocation_scope(source):
         yield
-    finally:
-        _CURRENT_INVOCATION.reset(token)
 
 
 __all__ = ["Invocation", "Private", "Visibility", "current_invocation", "invocation_scope"]

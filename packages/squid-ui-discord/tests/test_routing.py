@@ -105,6 +105,29 @@ class TestRouteFormats:
 
 
 class TestRouter:
+    async def test_dispatch_establishes_invocation_scope_inside_the_handler_task(self) -> None:
+        class FakeClient:
+            pass
+
+        client = FakeClient()
+        runtime = squid_ui_discord.install(cast(discord.Client, client))
+        interaction = fake_interaction()
+        interaction.client = client
+        seen: list[squid_ui_discord.Invocation] = []
+        router = Router()
+
+        @router.route(POLL_CLOSE)
+        async def close(source) -> None:
+            invocation = await squid_ui_discord.Invocation.of(source)
+            assert squid_ui_discord.current_invocation() is invocation
+            seen.append(invocation)
+
+        await router.dispatch(interaction, POLL_CLOSE.id())
+        await runtime.close()
+
+        assert len(seen) == 1
+        assert squid_ui_discord.current_invocation() is None
+
     async def test_a_handler_takes_its_route_parameters_by_name(self) -> None:
         seen: list[int] = []
         router = Router()

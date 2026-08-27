@@ -103,6 +103,7 @@ from squid_ui.target_types import ComponentsV2Target, DiscordPy27Adapter, Discor
 from squid_ui.text import NEUTRAL, Localization, TextLike, resolve_text
 from squid_ui_discord import delivery as deliver
 from squid_ui_discord import live
+from squid_ui_discord._invocation_context import invocation_scope
 from squid_ui_discord.access import AccessPolicy, Allowed, Denied, Owner
 from squid_ui_discord.actions import ActionResponder
 from squid_ui_discord.adapter import require_discord_py_target
@@ -2333,16 +2334,19 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
         against current truth.
         """
         kind = InteractionKind.PRESS if values is None else InteractionKind.SELECTION
-        with self.profiler.operation(
-            OperationKind.DISPATCH,
-            name=key,
-            attributes={
-                "kind": kind.value,
-                "message_root_id": self.id,
-                "resumed": resumed,
-                "actor": interaction.user.id,
-            },
-        ) as operation:
+        with (
+            invocation_scope(interaction),
+            self.profiler.operation(
+                OperationKind.DISPATCH,
+                name=key,
+                attributes={
+                    "kind": kind.value,
+                    "message_root_id": self.id,
+                    "resumed": resumed,
+                    "actor": interaction.user.id,
+                },
+            ) as operation,
+        ):
             profile = _DispatchProfile(
                 operation,
                 interaction,
@@ -2489,15 +2493,18 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
         render dropped has no newer one; both run what the reader submitted, because
         discarding a filled-in form is the worse of the two surprises.
         """
-        with self.profiler.operation(
-            OperationKind.DISPATCH,
-            name=key,
-            attributes={
-                "kind": InteractionKind.SUBMIT.value,
-                "message_root_id": self.id,
-                "actor": interaction.user.id,
-            },
-        ) as operation:
+        with (
+            invocation_scope(interaction),
+            self.profiler.operation(
+                OperationKind.DISPATCH,
+                name=key,
+                attributes={
+                    "kind": InteractionKind.SUBMIT.value,
+                    "message_root_id": self.id,
+                    "actor": interaction.user.id,
+                },
+            ) as operation,
+        ):
             profile = _DispatchProfile(
                 operation,
                 interaction,
