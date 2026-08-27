@@ -163,7 +163,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
                     subject=str(ctx.author.id),
                 )
 
-            consent = await prompt_for_consent(ctx, user_id=ctx.author.id, locale=locale, preview=reservation.preview)
+            consent = await prompt_for_consent(ctx, user_id=ctx.author.id, preview=reservation.preview)
             if consent is NOT_ASKED:
                 # The user was never asked and already knows why; a cancellation notice here
                 # would be reporting something that did not happen.
@@ -219,7 +219,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             )
             return
 
-        account_id = await ensure_consented_account(ctx, self.account_service, locale=locale)
+        account_id = await ensure_consented_account(ctx, self.account_service)
         if account_id is None:
             return
         await invocation.reply(
@@ -293,7 +293,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         """Offer this account up to be absorbed by another account you hold."""
         invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        account_id = await ensure_consented_account(ctx, self.account_service, locale=locale)
+        account_id = await ensure_consented_account(ctx, self.account_service)
         if account_id is None:
             return
         code, ticket = await self.account_service.create_merge_code(account_id)
@@ -328,7 +328,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         """Absorb another account you hold into this one."""
         invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        account_id = await ensure_consented_account(ctx, self.account_service, locale=locale)
+        account_id = await ensure_consented_account(ctx, self.account_service)
         if account_id is None:
             return
         preview = await self.account_service.preview_merge(account_id, code)
@@ -377,7 +377,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         """Ask staff to credit you with an older creator name."""
         invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        account_id = await ensure_consented_account(ctx, self.account_service, locale=locale)
+        account_id = await ensure_consented_account(ctx, self.account_service)
         if account_id is None:
             return
         claim = await self.account_service.request_alias_claim(account_id, name)

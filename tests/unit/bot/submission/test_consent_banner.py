@@ -128,7 +128,7 @@ def _make_interaction(accounts: Any) -> Any:
         locale="en-US",
         client=make_layout_bot(
             services=SimpleNamespace(
-                settings=SimpleNamespace(),
+                settings=SimpleNamespace(get_locale=AsyncMock(return_value=None)),
                 accounts=accounts,
             ),
         ),

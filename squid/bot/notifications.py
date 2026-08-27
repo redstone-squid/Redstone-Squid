@@ -177,8 +177,7 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
 
     async def _account_id(self, interaction: discord.Interaction) -> int | None:
         """The caller's consented account, or `None` once they have been told why not."""
-        locale = await resolve_locale(interaction, self.bot.services.settings)
-        return await ensure_consented_account(interaction, self.bot.services.accounts, locale=locale)
+        return await ensure_consented_account(interaction, self.bot.services.accounts)
 
 
 def render_delivery(delivery: PendingNotificationDelivery, site_url: str | None) -> str:

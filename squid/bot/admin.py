@@ -67,7 +67,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         """Propose a build tag for staff review."""
         invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        account_id = await ensure_consented_account(ctx, self.bot.services.accounts, locale=locale)
+        account_id = await ensure_consented_account(ctx, self.bot.services.accounts)
         if account_id is None:
             return
         definition = await self.tags.propose_showcase(
@@ -101,7 +101,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         """Apply an approved tag to one of your builds."""
         invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        account_id = await ensure_consented_account(ctx, self.bot.services.accounts, locale=locale)
+        account_id = await ensure_consented_account(ctx, self.bot.services.accounts)
         if account_id is None:
             return
         tag = await self.tags.assign_showcase(

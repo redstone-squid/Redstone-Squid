@@ -415,7 +415,6 @@ class AccountPanel(sl.Component[sl.ComponentsV2Target]):
             sd.native(event),
             user_id=self._author_id,
             on_answer=answered,
-            locale=message_root.localization.locale,
             parent=message_root,
         )
 
