@@ -52,6 +52,7 @@ __all__ = [
     "info_layout",
     "info_node",
     "link_layout",
+    "link_node",
     "localization_for",
     "message_destination",
     "render_item",
@@ -60,6 +61,7 @@ __all__ = [
     "respond_payload",
     "send_component",
     "text_layout",
+    "text_node",
     "truncate_display_text",
     "warning_layout",
 ]
@@ -118,6 +120,11 @@ CHROME = ui.chrome.Chrome(
     updates_paused=L(t"Live updates paused — press any control to resume."),
     session_expiring=L(t"This session is about to expire."),
     continue_session=L(t"Continue Session"),
+    sent_privately=L(t"Sent by direct message."),
+    dm_unavailable=L(
+        t"""This reply is too private for a channel, and your direct messages are closed. \
+Run the command in a direct message, or allow direct messages and retry."""
+    ),
     previous=L(t"Previous"),
     next=L(t"Next"),
     back=L(t"Back"),
@@ -535,12 +542,17 @@ def text_layout(
     content: ui.TextLike, *, accent_colour: int | None = None, locale: str | None = None
 ) -> sd.message_payload.MessagePayload:
     """Create a simple V2 text response."""
+    return render_payload([text_node(content, accent_colour=accent_colour)], locale=locale)
+
+
+def text_node(content: ui.TextLike, *, accent_colour: int | None = None) -> ui.LayoutNode[ui.ComponentsV2Target]:
+    """Build a truncating text response for composition inside a component render."""
     # Truncate-wrapped rather than bare: a plain paragraph lowers to Never, which *raises*
     # on an overlong message. This is the bot's most-used reply path, so it clips.
     node: ui.LayoutNode[ui.ComponentsV2Target] = ui.truncate(ui.paragraph(content))
     if accent_colour is not None:
         node = ui.block(node, accent=accent_colour)
-    return render_payload([node], locale=locale)
+    return node
 
 
 def _prefixed(prefix: str, value: ui.TextLike) -> ui.TextLike:
@@ -615,10 +627,20 @@ def link_layout(
     locale: str | None = None,
 ) -> sd.message_payload.MessagePayload:
     """Create a card whose primary action opens a URL."""
-    node = ui.section(
+    return render_payload([link_node(title, url, description=description, label=label)], locale=locale)
+
+
+def link_node(
+    title: ui.TextLike,
+    url: str,
+    *,
+    description: ui.TextLike | None = None,
+    label: ui.TextLike = _OPEN_LINK,
+) -> ui.LayoutNode[ui.ComponentsV2Target]:
+    """Build a link card for composition inside a component render."""
+    return ui.section(
         ui.heading(title),
         description and ui.truncate(ui.paragraph(description)),
         ui.action_controls(ui.link(label, url, key="open-link"), key="link"),
         accent=DISCORD_GREEN,
     )
-    return render_payload([node], locale=locale)
