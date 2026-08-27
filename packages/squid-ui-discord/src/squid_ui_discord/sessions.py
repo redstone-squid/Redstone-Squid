@@ -7,9 +7,10 @@ from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontext
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum, StrEnum
-from typing import Protocol
+from typing import Literal, Protocol
 from uuid import uuid4
 
+from squid_ui.text import TextLike
 from squid_ui_discord.delivery import Abandoned, Delivered, MessageDestination
 from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_options import MessageRootDefaults
@@ -148,6 +149,9 @@ class Opened[SessionT]:
 
     session: SessionT
 
+    def __bool__(self) -> Literal[True]:
+        return True
+
 
 @dataclass(frozen=True, slots=True)
 class Rejected:
@@ -155,6 +159,10 @@ class Rejected:
 
     occupants: tuple[SessionSnapshot, ...]
     reason: RejectionReason
+    notice: TextLike | None = None
+
+    def __bool__(self) -> Literal[False]:
+        return False
 
 
 type OpenResult = Opened | Rejected | Abandoned
@@ -183,6 +191,7 @@ class Refuse:
     """Keep every occupant and decline the open."""
 
     reason: RejectionReason = RejectionReason.COLLISION
+    notice: TextLike | None = None
 
 
 type CollisionDecision = Replace | Refuse
@@ -198,8 +207,10 @@ class CollisionPolicy(Protocol):
 class Reject:
     """Reject any open that would exceed the key's limit."""
 
+    notice: TextLike | None = None
+
     async def select(self, request: AdmissionRequest, occupants: tuple[SessionSnapshot, ...]) -> CollisionDecision:
-        return Refuse()
+        return Refuse(notice=self.notice)
 
 
 @dataclass(frozen=True, slots=True)
@@ -882,7 +893,7 @@ class SessionManager:
             request = AdmissionRequest(key, newcomer.snapshot, actor_id, required)
             decision = await admission.collision.select(request, snapshots)
             if isinstance(decision, Refuse):
-                return Rejected(snapshots, decision.reason)
+                return Rejected(snapshots, decision.reason, decision.notice)
             selected = decision.victims
             victims = _resolve_victims(selected, occupants)
             snapshot_ids = {occupant.id for occupant in snapshots}
