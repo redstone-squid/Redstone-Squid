@@ -8,10 +8,11 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+import squid_ui_discord as sd
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.notifications_view import NotificationPanel
-from squid.bot.ui import error_layout, info_layout, respond_payload
+from squid.bot.ui import error_node, info_node
 from squid.bot.utils.autocomplete import autocompletes
 from squid.core.i18n import _
 from squid.notifications import (
@@ -100,6 +101,7 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
         verb, told apart only by which argument you had. Which argument you have still tells
         them apart; it just no longer costs a picker entry each.
         """
+        invocation = await sd.Invocation.of(interaction)
         locale = await resolve_locale(interaction, self.bot.services.settings)
         account_id = await self._account_id(interaction)
         if account_id is None:
@@ -108,12 +110,12 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
         filters = (build_kind, record_class, version_scope, tag)
         chosen = [bool(creator), bool(competition), any(value is not None for value in filters)]
         if sum(chosen) != 1:
-            await respond_payload(
-                interaction,
-                error_layout(
+            await invocation.reply(
+                error_node(
                     t(locale, _("Nothing to follow")),
                     t(locale, _("Give exactly one of a creator, a record, or a record filter.")),
                 ),
+                visibility="personal",
             )
             return
 
@@ -141,9 +143,9 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
             )
             followed = t(locale, _("Following records matching that filter."))
         del subscription  # Nothing user-facing needs its id: `/notifications` lists and removes it.
-        await respond_payload(
-            interaction,
-            info_layout(followed, t(locale, _("Open `/notifications` to see or undo everything you follow."))),
+        await invocation.reply(
+            info_node(followed, t(locale, _("Open `/notifications` to see or undo everything you follow."))),
+            visibility="personal",
         )
 
     async def process_deliveries(self) -> None:

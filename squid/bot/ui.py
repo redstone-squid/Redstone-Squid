@@ -11,7 +11,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from math import ceil
 from string.templatelib import Template
-from typing import Any, Literal
+from typing import Any
 
 import discord
 from discord.ext.commands import Context
@@ -40,30 +40,18 @@ __all__ = [
     "CardSection",
     "L",
     "PagedList",
-    "Private",
-    "Visibility",
-    "card_layout",
     "card_node",
-    "contribute",
     "create_message_root",
-    "error_layout",
     "error_node",
-    "help_layout",
-    "info_layout",
     "info_node",
-    "link_layout",
     "link_node",
     "localization_for",
     "message_destination",
     "render_item",
     "render_payload",
-    "reply_payload",
-    "respond_payload",
     "send_component",
-    "text_layout",
     "text_node",
     "truncate_display_text",
-    "warning_layout",
 ]
 
 
@@ -168,72 +156,10 @@ PALETTES = ui.PaletteRegistry(
 )
 
 
-@dataclass(frozen=True, slots=True)
-class Private:
-    """Deliver where a channel can never see it: ephemeral or DM, with `reason` explaining why."""
-
-    reason: str
-
-
-type Visibility = Private | Literal["public", "personal"]
-
-
-async def reply_payload(
-    ctx: Context[Any],
-    payload: sd.message_payload.MessagePayload,
-    *,
-    visibility: Visibility = "public",
-    allowed_mentions: discord.AllowedMentions | None = None,
-    files: Sequence[discord.File] = (),
-) -> sd.delivery.DeliveryResult:
-    """Deliver a complete Squid payload through the selected command audience."""
-    from squid.bot.utils.visibility import personal
-
-    if isinstance(visibility, Private):
-        from squid.bot.utils.visibility import deliver_privately
-
-        message = await deliver_privately(
-            ctx,
-            payload,
-            reason=visibility.reason,
-            allowed_mentions=allowed_mentions,
-            files=files,
-        )
-        if message is None:
-            raise sd.delivery.DeliveryAbandoned
-        handle = sd.delivery.handle_for(message, mode=payload.mode)
-        return sd.delivery.DeliveryResult(message, handle)
-
-    message_destination = sd.reply_to(
-        ctx,
-        ephemeral=visibility == "personal" and personal(ctx),
-        files=files,
-        allowed_mentions=allowed_mentions,
-    )
-    return await message_destination(payload)
-
-
-async def respond_payload(
-    interaction: discord.Interaction[Any],
-    payload: sd.MessagePayload,
-    *,
-    ephemeral: bool = True,
-    wait: bool = False,
-    allowed_mentions: discord.AllowedMentions | None = None,
-) -> sd.delivery.DeliveryResult:
-    """Deliver a complete payload as an interaction response or follow-up."""
-    return await sd.respond_to(
-        interaction,
-        ephemeral=ephemeral,
-        wait=wait,
-        allowed_mentions=allowed_mentions,
-    )(payload)
-
-
 def message_destination(
     ctx: Context[Any],
     *,
-    visibility: Visibility = "public",
+    visibility: sd.Visibility = "public",
     locale: str | None = None,
     files: Sequence[discord.File] = (),
 ) -> sd.MessageDestination:
@@ -246,56 +172,11 @@ def message_destination(
     A closed DM under `Private` delivers nothing, which is not the same as delivering without
     a handle, so it is reported as `DeliveryAbandoned` rather than as a `None` message.
     """
-    # Imported lazily to keep the command UI helpers independent from audience policy.
-    from squid.bot.utils.visibility import deliver_privately, personal
-
-    if isinstance(visibility, Private):
-        if ctx.interaction is not None:
-            return sd.reply_to(ctx, ephemeral=True, files=files)
-
-        async def privately(
-            payload: sd.message_payload.MessagePayload,
-        ) -> sd.delivery.DeliveryResult:
-            message = await deliver_privately(
-                ctx,
-                payload,
-                reason=visibility.reason,
-                locale=locale,
-                files=files,
-            )
-            if message is None:
-                raise sd.delivery.DeliveryAbandoned
-            handle = sd.delivery.handle_for(message, mode=payload.mode)
-            return sd.delivery.DeliveryResult(message, handle)
-
-        return privately
-
-    ephemeral = visibility == "personal" and personal(ctx)
-    return sd.reply_to(ctx, ephemeral=ephemeral, files=files)
-
-
-def contribute(
-    nodes: ui.DocumentLike[ui.ComponentsV2Target],
-    *,
-    to: discord.ui.LayoutView,
-    followed_by: Sequence[discord.ui.Item[Any]] = (),
-    locale: str | None = None,
-    strict: bool = False,
-) -> sd.fragments.AttachedFragment:
-    """Contribute a Squid region to a hand-assembled view, through the bot's chrome.
-
-    `followed_by` carries the rows the host adds after the Squid region: they are costed
-    into the plan and placed here, so the view proven legal is the view that gets sent.
-    """
-    return sd.contribute(
-        nodes,
-        to=to,
-        followed_by=followed_by,
-        chrome=CHROME,
-        localization=localization_for(locale),
-        palette=PALETTES.resolve(),
-        strict=strict,
-    )
+    del locale
+    if isinstance(visibility, sd.Private):
+        message = "Private delivery requires an Invocation"
+        raise TypeError(message)
+    return sd.reply_to(ctx, ephemeral=visibility == "personal" and ctx.interaction is not None, files=files)
 
 
 def render_item(
@@ -398,7 +279,7 @@ async def send_component(
     access: sd.AccessPolicy,
     locale: str | None = None,
     timeout: float = 180,
-    visibility: Visibility = "public",
+    visibility: sd.Visibility = "public",
     scheduler: sd.MessageRootScheduler | None = None,
 ) -> sd.MessageRoot:
     """MessageRoot a component and send it as the reply to a command.
@@ -461,7 +342,7 @@ class PagedList(ui.Component[ui.ComponentsV2Target]):
         total = len(self.entries)
         return L(t"Page {page} of {pages} · {total} in total")
 
-    async def send(self, ctx: Context[Any], *, visibility: Visibility = "public") -> sd.MessageRoot:
+    async def send(self, ctx: Context[Any], *, visibility: sd.Visibility = "public") -> sd.MessageRoot:
         """Send the first page bound to a mount that owns paging, access, and expiry."""
         return await send_component(
             ctx,
@@ -510,41 +391,6 @@ def card_node(
     )
 
 
-def card_layout(
-    title: ui.TextLike,
-    description: ui.TextLike | None = None,
-    *,
-    accent_colour: int = DISCORD_GREEN,
-    fields: Sequence[CardField] = (),
-    sections: Sequence[CardSection] = (),
-    footer: ui.TextLike | None = None,
-    media: Sequence[str] = (),
-    locale: str | None = None,
-) -> sd.message_payload.MessagePayload:
-    """Create a standalone V2 card."""
-    return render_payload(
-        [
-            card_node(
-                title,
-                description,
-                accent_colour=accent_colour,
-                fields=fields,
-                sections=sections,
-                footer=footer,
-                media=media,
-            )
-        ],
-        locale=locale,
-    )
-
-
-def text_layout(
-    content: ui.TextLike, *, accent_colour: int | None = None, locale: str | None = None
-) -> sd.message_payload.MessagePayload:
-    """Create a simple V2 text response."""
-    return render_payload([text_node(content, accent_colour=accent_colour)], locale=locale)
-
-
 def text_node(content: ui.TextLike, *, accent_colour: int | None = None) -> ui.LayoutNode[ui.ComponentsV2Target]:
     """Build a truncating text response for composition inside a component render."""
     # Truncate-wrapped rather than bare: a plain paragraph lowers to Never, which *raises*
@@ -564,12 +410,6 @@ def _prefixed(prefix: str, value: ui.TextLike) -> ui.TextLike:
     return prefix + value
 
 
-def error_layout(
-    title: ui.TextLike, description: ui.TextLike | None, *, locale: str | None = None
-) -> sd.message_payload.MessagePayload:
-    return render_payload([error_node(title, description)], locale=locale)
-
-
 def error_node(title: ui.TextLike, description: ui.TextLike | None) -> ui.LayoutNode[ui.ComponentsV2Target]:
     """Build an error card for composition inside a component render."""
     return card_node(
@@ -579,55 +419,9 @@ def error_node(title: ui.TextLike, description: ui.TextLike | None) -> ui.Layout
     )
 
 
-def warning_layout(
-    title: ui.TextLike, description: ui.TextLike | None, *, locale: str | None = None
-) -> sd.message_payload.MessagePayload:
-    return card_layout(
-        _prefixed(":warning: ", title),
-        description,
-        accent_colour=DISCORD_YELLOW,
-        locale=locale,
-    )
-
-
-def info_layout(
-    title: ui.TextLike, description: ui.TextLike | None, *, locale: str | None = None
-) -> sd.message_payload.MessagePayload:
-    return render_payload([info_node(title, description)], locale=locale)
-
-
 def info_node(title: ui.TextLike, description: ui.TextLike | None) -> ui.LayoutNode[ui.ComponentsV2Target]:
     """Build an informational card for composition inside a component render."""
     return card_node(title, description, accent_colour=DISCORD_GREEN)
-
-
-def help_layout(
-    title: ui.TextLike,
-    description: ui.TextLike | None,
-    *,
-    sections: Sequence[CardSection] = (),
-    footer: ui.TextLike | None = None,
-    locale: str | None = None,
-) -> sd.message_payload.MessagePayload:
-    return card_layout(
-        title,
-        description,
-        sections=sections,
-        footer=footer,
-        locale=locale,
-    )
-
-
-def link_layout(
-    title: ui.TextLike,
-    url: str,
-    *,
-    description: ui.TextLike | None = None,
-    label: ui.TextLike = _OPEN_LINK,
-    locale: str | None = None,
-) -> sd.message_payload.MessagePayload:
-    """Create a card whose primary action opens a URL."""
-    return render_payload([link_node(title, url, description=description, label=label)], locale=locale)
 
 
 def link_node(

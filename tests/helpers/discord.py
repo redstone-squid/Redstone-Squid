@@ -31,19 +31,19 @@ def make_interaction(
 ) -> InteractionHarness:
     """Create the minimal interaction contract used by shared error handling.
 
-    The client is present but carries no services by default: a real interaction always has one,
-    and the error handler reads the error report store off it. Pass `error_reports` to assert
-    that a failure was captured.
+    The client carries the installed layout host a real interaction always names. It has no
+    services by default; pass `error_reports` to assert that a failure was captured.
     """
     send_initial = AsyncMock(return_value=SimpleNamespace(resource=None, message_id=None, is_ephemeral=lambda: True))
     send_followup = AsyncMock(return_value=SimpleNamespace(id=99))
     services = SimpleNamespace(error_reports=error_reports) if error_reports is not None else None
+    client = make_layout_bot(services=services)
     interaction = cast(
         discord.Interaction[discord.Client],
         SimpleNamespace(
             response=SimpleNamespace(is_done=lambda: response_done, send_message=send_initial),
             followup=SimpleNamespace(send=send_followup, delete_message=AsyncMock()),
-            client=SimpleNamespace(services=services),
+            client=client,
             command=None,
             user=SimpleNamespace(id=user_id),
             guild_id=guild_id,
