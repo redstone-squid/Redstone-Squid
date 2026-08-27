@@ -9,7 +9,10 @@ from squid.bot.ui import (
     L,
     card_layout,
     link_layout,
+    link_node,
+    render_payload,
     text_layout,
+    text_node,
     truncate_display_text,
 )
 from tests.helpers.discord import make_message
@@ -41,6 +44,14 @@ def test_link_layout_uses_a_link_button() -> None:
 
     assert "https://example.com" in str(payload)
     assert "'style': 5" in str(payload)
+
+
+def test_node_factories_compose_under_one_render() -> None:
+    payload = render_payload([text_node("Status"), link_node("Documentation", "https://example.com")])
+
+    components = payload.layout.to_components()
+    assert "Status" in str(components)
+    assert "https://example.com" in str(components)
 
 
 def test_deferred_template_marker_preserves_msgid_and_values() -> None:
