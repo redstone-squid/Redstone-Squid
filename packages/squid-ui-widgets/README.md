@@ -6,6 +6,8 @@ state machines behind a wizard, a browser, an editor, a lookup, a ranked list, a
 `squid-ui` gives you the words and the compiler. This package is a set of useful
 applications already written in that language.
 
+This is an alpha release. The Python API may change before 1.0.
+
 ```python
 import squid_ui as sl
 import squid_ui_widgets as sp

@@ -65,9 +65,11 @@ class Codec:
         return deepcopy(SCHEMA)
 
     @classmethod
-    def schema_json(cls) -> str:
+    def schema_json(cls, *, indent: int | None = None) -> str:
         """Return the scene schema in deterministic JSON form."""
-        return json.dumps(cls.schema(), sort_keys=True, separators=(",", ":"))
+        if indent is None:
+            return json.dumps(cls.schema(), sort_keys=True, separators=(",", ":"))
+        return json.dumps(cls.schema(), indent=indent, sort_keys=True)
 
     @classmethod
     def dumps(cls, scene: Scene[Any]) -> str:
