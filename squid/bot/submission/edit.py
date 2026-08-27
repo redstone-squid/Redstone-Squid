@@ -5,10 +5,11 @@ from typing import TYPE_CHECKING
 import discord
 from discord import app_commands
 
+import squid_ui_discord as sd
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.ui.views import BuildEditComponent
-from squid.bot.ui import error_layout, respond_payload, text_layout
+from squid.bot.ui import error_node, text_node
 from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.builds.application import BuildService
 from squid.builds.domain import DoorOrientationLiteral
@@ -76,12 +77,13 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
     ) -> None:
         """Edit a build. Whatever you fill in is staged; the workspace opens for the rest."""
         await interaction.response.defer(ephemeral=True)
+        invocation = await sd.Invocation.of(interaction)
         locale = await resolve_locale(interaction, self.bot.services.settings)
         build = await self.builds.get(build_id)
         if build is None:
-            await respond_payload(
-                interaction,
-                error_layout(t(locale, _("Error")), t(locale, _("No build with that ID."))),
+            await invocation.reply(
+                error_node(t(locale, _("Error")), t(locale, _("No build with that ID."))),
+                visibility="personal",
             )
             return
 
@@ -113,9 +115,8 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
         if inapplicable:
             # Dropping a typed option silently is the failure mode this command was merged to
             # end, so a door option on a build with no door is a refusal rather than a no-op.
-            await respond_payload(
-                interaction,
-                error_layout(
+            await invocation.reply(
+                error_node(
                     t(locale, _("Not a field of this build")),
                     t(
                         locale,
@@ -123,6 +124,7 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
                         fields=", ".join(sorted(inapplicable)),
                     ),
                 ),
+                visibility="personal",
             )
             return
 
@@ -131,20 +133,21 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
     async def edit_context_menu(self, interaction: discord.Interaction[BotT], message: discord.Message) -> None:
         """A context menu command to edit a build."""
         await interaction.response.defer(ephemeral=True)
+        invocation = await sd.Invocation.of(interaction)
         locale = await resolve_locale(interaction, self.bot.services.settings)
         if message.author.id != self.bot.user.id:  # type: ignore
-            await respond_payload(interaction, text_layout(t(locale, _("This does not look like a build."))))
+            await invocation.reply(text_node(t(locale, _("This does not look like a build."))), visibility="personal")
             return
 
         # Which build a card shows is a property of the post, not of the message: the
         # same message row is just a fact about a Discord message.
         post = await self.bot.services.posts.resolve(message.id)
         if post is None or post.resource_kind != "build":
-            await respond_payload(interaction, text_layout(t(locale, _("This does not look like a build."))))
+            await invocation.reply(text_node(t(locale, _("This does not look like a build."))), visibility="personal")
             return
 
         build = await self.builds.get(int(post.resource_key))
         if build is None:
-            await respond_payload(interaction, text_layout(t(locale, _("This does not look like a build."))))
+            await invocation.reply(text_node(t(locale, _("This does not look like a build."))), visibility="personal")
             return
         await BuildEditComponent(build, self.builds, locale=locale).send(interaction, ephemeral=True)

@@ -13,7 +13,7 @@ import squid_ui_discord as sd
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.components import BuildField, get_text_input
-from squid.bot.ui import DISCORD_YELLOW, create_message_root, error_layout, respond_payload
+from squid.bot.ui import DISCORD_YELLOW, create_message_root, error_node
 from squid.bot.utils.permissions import allows
 from squid.bot.utils.sentinel import DEFAULT, DefaultType
 from squid.builds.application import BuildEditPatch, BuildService
@@ -705,7 +705,11 @@ class BuildEditComponent(sl.Component[sl.ComponentsV2Target]):
                 self.locale,
                 _("Only the pending build's submitter or a trusted staff member can edit it."),
             )
-            await respond_payload(interaction, error_layout(t(self.locale, _("Cannot edit this build")), message))
+            invocation = await sd.Invocation.of(interaction)
+            await invocation.reply(
+                error_node(t(self.locale, _("Cannot edit this build")), message),
+                visibility="personal",
+            )
             return
         client = interaction.client
         build, node = self._current()
