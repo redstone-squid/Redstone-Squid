@@ -3,7 +3,7 @@
 import asyncio
 from collections.abc import Awaitable, Callable, Iterable, Sequence
 from datetime import UTC, datetime
-from functools import partial
+from functools import cache, partial
 from typing import TYPE_CHECKING, Literal, Never
 
 from discord import app_commands
@@ -19,9 +19,7 @@ from squid.bot.ui import (
     DISCORD_GREEN,
     DISCORD_YELLOW,
     L,
-    create_message_root,
     localization_for,
-    message_destination,
     send_component,
 )
 from squid.core.i18n import _
@@ -1196,7 +1194,7 @@ class PreviewPanel(sl.Component[sl.ComponentsV2Target]):
         )
 
 
-class Lobby(sl.Component[sl.ComponentsV2Target]):
+class Lobby(sd.Screen):
     """A guild lobby whose roster is session membership, not view state.
 
     Membership belongs to the logical session: it survives a redraw, it is what replacement
@@ -1204,32 +1202,49 @@ class Lobby(sl.Component[sl.ComponentsV2Target]):
     roster of its own -- it reads `session.members` and asks for a redraw after each change.
     """
 
+    session = "showcase-lobby"
+    scope = sd.ScopeKind.GUILD
+    capacity = 4
+    quota = 1
+    visibility = "public"
+    timeout = None
+
+    @classmethod
+    @cache
+    def spec(cls) -> sd.SessionSpec:
+        """Open the shared roster to everyone while retaining Screen's session policy."""
+        return sd.SessionSpec(
+            cls.session,
+            scope=cls.scope,
+            admission=cls.admission,
+            capacity=cls.capacity,
+            quota=cls.quota,
+            domain=cls.domain,
+            access=lambda _context: sd.Everyone(),
+            options={"timeout": cls.timeout},
+        )
+
     started_with: int | None = sl.state(None)
     """How many players the game began with. The only fact here that *is* view state."""
 
-    def __init__(self, sessions: sd.SessionManager, host_id: int) -> None:
-        self.sessions = sessions
+    def __init__(self, host_id: int) -> None:
         self.host_id = host_id
-        self._root: sd.MessageRoot | None = None
-
-    def mount(self, *, source: sd.runtime.RuntimeSource, locale: str | None = None) -> sd.MessageRoot:
-        # Kept so the panel can find its own session; the mount cannot be handed to the
-        # component that renders it any other way.
-        self._root = create_message_root(self, source=source, access=sd.Everyone(), locale=locale, timeout=None)
-        return self._root
 
     def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
         session = self._session()
-        if session is None:
-            return sl.section(sl.heading(L(t"Lobby")), sl.paragraph(L(t"This lobby has closed.")))
+        members = frozenset({self.host_id}) if session is None else session.members
+        capacity = self.capacity if session is None else session.capacity
         placement = sp.place_roster(
-            tuple(sp.RosterEntry(str(user_id), f"<@{user_id}>", "players") for user_id in sorted(session.members)),
-            (sp.RosterSlot("players", L(t"Players"), session.capacity),),
+            tuple(sp.RosterEntry(str(user_id), f"<@{user_id}>", "players") for user_id in sorted(members)),
+            (sp.RosterSlot("players", L(t"Players"), capacity),),
         )
         status = (
             L("Started with {count} players.", count=self.started_with)
             if self.started_with is not None
-            else L("{remaining} seats left.", remaining=session.remaining_capacity)
+            else L(
+                "{remaining} seats left.",
+                remaining=max(0, capacity - len(members)) if capacity is not None else "∞",
+            )
         )
         return sl.section(
             sl.heading(L(t"Lobby")),
@@ -1271,7 +1286,11 @@ class Lobby(sl.Component[sl.ComponentsV2Target]):
         self.started_with = len(session.members)
 
     def _session(self) -> sd.sessions.Session | None:
-        return None if self._root is None else self.sessions.session_for(self._root)
+        guild = self.opening.guild
+        if guild is None:
+            return None
+        sessions = self.opening.runtime.sessions.get(SessionKey.guild(self.session, guild.id))
+        return sessions[0] if sessions else None
 
 
 _JOIN_NOTICES = {
@@ -1354,18 +1373,7 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def lobby(self, ctx: Context[BotT]) -> None:
         """Open a four-seat lobby whose roster lives in the session, not the panel."""
         assert ctx.guild is not None
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        panel = Lobby(self.bot.sessions, ctx.author.id)
-        await self.bot.sessions.open(
-            panel.mount(source=ctx, locale=locale),
-            message_destination(ctx, locale=locale),
-            key=SessionKey.guild("showcase-lobby", ctx.guild.id),
-            actor_id=ctx.author.id,
-            capacity=4,
-            # The dual of `capacity`: four players per lobby, and one lobby per player, so a
-            # reader cannot hold a seat in two servers at once.
-            quota=1,
-        )
+        await Lobby.show(ctx, ctx.author.id)
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
