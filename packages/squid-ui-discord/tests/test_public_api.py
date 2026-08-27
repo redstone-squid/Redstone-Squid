@@ -9,6 +9,8 @@ from types import ModuleType
 import pytest
 
 import squid_ui_discord
+from squid_ui.text import Message
+from squid_ui_discord.sessions import Reject
 
 RENAMED_SUBMODULES = (
     "squid_ui_discord.rendering",
@@ -57,6 +59,12 @@ def test_the_adapter_namespace_exposes_its_surface() -> None:
     assert squid_ui_discord.MessageRootScheduler.follow
     for removed in ("AdmissionSpec", "Router", "V2Renderer", "ClassicRenderer", "AuditReport"):
         assert removed not in squid_ui_discord.__all__ and not hasattr(squid_ui_discord, removed)
+
+
+def test_rejection_notices_accept_public_deferred_text() -> None:
+    notice = Message("This screen is already open.")
+
+    assert Reject(notice=notice).notice is notice
 
 
 def test_testing_helpers_are_a_declared_namespace_not_an_accident() -> None:
