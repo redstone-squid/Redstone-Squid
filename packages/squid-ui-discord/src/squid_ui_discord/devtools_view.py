@@ -278,6 +278,7 @@ class OperationalInspector(sl.Component):
                             f"**Observed**\n{_dump(detail.observed)}",
                             f"**Followed**\n{_dump(detail.followed)}",
                             f"**History**\n{histories}",
+                            key="root_detail",
                         ),
                     ),
                     self._controls(back=True),
@@ -338,6 +339,7 @@ class OperationalInspector(sl.Component):
                             f"**Actor**\n{session.actor_id if session.actor_id is not None else 'none'}",
                             f"**Members**\n{_members(session)}",
                             f"**Mounts**\n{_dump(session.message_roots)}",
+                            key="session_detail",
                         ),
                     ),
                     confirmation,
@@ -389,10 +391,10 @@ class OperationalInspector(sl.Component):
         lines = [
             f"process  {snapshot.profiler.process_id}",
             f"active   {health.active}",
-            f"recent   {health.recent}",
-            f"slow     {health.slow}",
-            f"failed   {health.failed}",
-            f"deadline {health.deadline_misses}",
+            f"recent   {health.retained_recent}",
+            f"slow     {health.retained_slow}",
+            f"failed   {health.retained_failed}",
+            f"deadline {health.retained_deadline_misses}",
         ]
         return [sl.section(sl.heading("Profiler"), sl.code("\n".join(lines))), self._controls(back=True)]
 
