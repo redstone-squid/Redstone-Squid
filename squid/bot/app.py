@@ -17,7 +17,7 @@ from squid.bootstrap import create_bot_runtime
 # will create an import cycle from the view of a static type checker, which slows down type checking significantly.
 from squid.bot._types import MessageableChannel
 from squid.bot.errors import SquidCommandTree
-from squid.bot.i18n import SquidAppCommandTranslator
+from squid.bot.i18n import SquidAppCommandTranslator, localization_resolver
 from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRenderer, VoteSessionRenderer
 from squid.bot.reactions import ReactionRouter
 from squid.bot.routes import router as control_router
@@ -52,7 +52,7 @@ from squid.topics import TopicPublisher, open_topic_bridge, resource_topic
 from squid_reactivity import LocalTopicBus
 from squid_storage import PostgresTopicBridge
 from squid_ui.profiling import MemoryProfiler
-from squid_ui_discord import install
+from squid_ui_discord import install, invocation_scope
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -167,7 +167,13 @@ class RedstoneSquid(Bot):
         # One assembly for the whole process, reachable from any interaction as
         # `ClientRuntime.of(...)`: the session registry, the scheduler, and the challenge runner
         # a guard's dialog resumes an approved press through.
-        self.client_runtime = install(self, defaults=HOST_DEFAULTS, bus=self.topic_bus, profiler=self.layout_profiler)
+        self.client_runtime = install(
+            self,
+            defaults=HOST_DEFAULTS,
+            bus=self.topic_bus,
+            profiler=self.layout_profiler,
+            localization=localization_resolver,
+        )
         assert self.client_runtime.scheduler is not None, "a topic bus was given, so there is a scheduler"
         self.layout_scheduler = self.client_runtime.scheduler
         self.layout_challenges = self.client_runtime.challenges
@@ -188,7 +194,7 @@ class RedstoneSquid(Bot):
         and mint a second ID unrelated to the log lines the command produced. A hybrid command
         reaching here from the application command tree keeps the ID that tree already bound.
         """
-        with correlation_scope():
+        with correlation_scope(), invocation_scope(ctx):
             await super().invoke(ctx)
 
     @override
