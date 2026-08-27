@@ -37,7 +37,7 @@ def _node(kind: str, properties: dict[str, Any], *required: str) -> dict[str, An
 
 SCHEMA: dict[str, Any] = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://schem-at.github.io/squid-ui/scene-v1.schema.json",
+    "$id": "https://redstone-squid.github.io/Redstone-Squid/schema/scene-v1.schema.json",
     "title": "squid-ui resolved scene protocol 1",
     "type": "object",
     "additionalProperties": False,

@@ -1,0 +1,1150 @@
+{
+  "$defs": {
+    "body": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/components_v2"
+        },
+        {
+          "$ref": "#/$defs/classic_message"
+        }
+      ]
+    },
+    "button": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "disabled": {
+          "type": "boolean"
+        },
+        "emoji": {
+          "$ref": "#/$defs/emoji"
+        },
+        "kind": {
+          "const": "button"
+        },
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mode": {
+          "enum": [
+            "exclusive",
+            "rebase",
+            "parallel_read",
+            "immediate"
+          ]
+        },
+        "style": {
+          "enum": [
+            "primary",
+            "secondary",
+            "success",
+            "danger"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "label",
+        "action",
+        "style",
+        "emoji",
+        "disabled",
+        "mode"
+      ],
+      "type": "object"
+    },
+    "classic_message": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "embeds": {
+          "items": {
+            "$ref": "#/$defs/embed"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "const": "classic_message"
+        },
+        "rows": {
+          "items": {
+            "$ref": "#/$defs/classic_row"
+          },
+          "maxItems": 5,
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "content",
+        "embeds",
+        "rows"
+      ],
+      "type": "object"
+    },
+    "classic_row": {
+      "additionalProperties": false,
+      "properties": {
+        "controls": {
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/link"
+              },
+              {
+                "$ref": "#/$defs/premium_button"
+              },
+              {
+                "$ref": "#/$defs/button"
+              },
+              {
+                "$ref": "#/$defs/routed_button"
+              },
+              {
+                "$ref": "#/$defs/select"
+              },
+              {
+                "$ref": "#/$defs/routed_select"
+              },
+              {
+                "$ref": "#/$defs/entity_select"
+              },
+              {
+                "$ref": "#/$defs/extension"
+              }
+            ]
+          },
+          "maxItems": 5,
+          "type": "array"
+        }
+      },
+      "required": [
+        "controls"
+      ],
+      "type": "object"
+    },
+    "components_v2": {
+      "additionalProperties": false,
+      "properties": {
+        "children": {
+          "items": {
+            "$ref": "#/$defs/node"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "const": "components_v2"
+        }
+      },
+      "required": [
+        "kind",
+        "children"
+      ],
+      "type": "object"
+    },
+    "embed": {
+      "additionalProperties": false,
+      "properties": {
+        "author": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "icon_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "name": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "name",
+                "url",
+                "icon_url"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "colour": {
+          "maximum": 16777215,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fields": {
+          "items": {
+            "$ref": "#/$defs/embed_field"
+          },
+          "maxItems": 25,
+          "type": "array"
+        },
+        "footer": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "icon_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "text",
+                "icon_url"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "image": {
+          "$ref": "#/$defs/embed_media"
+        },
+        "thumbnail": {
+          "$ref": "#/$defs/embed_media"
+        },
+        "timestamp": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "title",
+        "url",
+        "description",
+        "fields",
+        "footer",
+        "author",
+        "colour",
+        "image",
+        "thumbnail",
+        "timestamp"
+      ],
+      "type": "object"
+    },
+    "embed_field": {
+      "additionalProperties": false,
+      "properties": {
+        "inline": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "value",
+        "inline"
+      ],
+      "type": "object"
+    },
+    "embed_media": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "description": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "url",
+            "description"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "emoji": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "animated": {
+              "type": "boolean"
+            },
+            "id": {
+              "minimum": 1,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "name": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "name",
+            "id",
+            "animated"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "entity_select": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "channel_types": {
+          "items": {
+            "enum": [
+              "text",
+              "voice",
+              "category",
+              "announcement",
+              "announcement_thread",
+              "public_thread",
+              "private_thread",
+              "stage_voice",
+              "forum",
+              "media"
+            ]
+          },
+          "type": "array"
+        },
+        "default_values": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "kind": {
+                "enum": [
+                  "user",
+                  "role",
+                  "channel"
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "id"
+            ],
+            "type": "object"
+          },
+          "maxItems": 25,
+          "type": "array"
+        },
+        "disabled": {
+          "type": "boolean"
+        },
+        "entity_type": {
+          "enum": [
+            "user",
+            "role",
+            "channel",
+            "mentionable"
+          ]
+        },
+        "kind": {
+          "const": "entity_select"
+        },
+        "max_values": {
+          "maximum": 25,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "min_values": {
+          "maximum": 25,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mode": {
+          "enum": [
+            "exclusive",
+            "rebase",
+            "parallel_read",
+            "immediate"
+          ]
+        },
+        "placeholder": {
+          "maxLength": 150,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "entity_type",
+        "action",
+        "placeholder",
+        "default_values",
+        "channel_types",
+        "min_values",
+        "max_values",
+        "disabled",
+        "mode"
+      ],
+      "type": "object"
+    },
+    "extension": {
+      "additionalProperties": false,
+      "properties": {
+        "extension": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "extension"
+        },
+        "payload": {},
+        "version": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "extension",
+        "version",
+        "payload"
+      ],
+      "type": "object"
+    },
+    "file": {
+      "additionalProperties": false,
+      "properties": {
+        "asset_key": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "file"
+        },
+        "media_type": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "spoiler": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "asset_key",
+        "name",
+        "media_type"
+      ],
+      "type": "object"
+    },
+    "gallery": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/gallery_item"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "const": "gallery"
+        }
+      },
+      "required": [
+        "kind",
+        "items"
+      ],
+      "type": "object"
+    },
+    "gallery_item": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "spoiler": {
+          "type": "boolean"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "description"
+      ],
+      "type": "object"
+    },
+    "link": {
+      "additionalProperties": false,
+      "properties": {
+        "disabled": {
+          "type": "boolean"
+        },
+        "emoji": {
+          "$ref": "#/$defs/emoji"
+        },
+        "kind": {
+          "const": "link"
+        },
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url": {
+          "maxLength": 512,
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "label",
+        "url"
+      ],
+      "type": "object"
+    },
+    "node": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/text"
+        },
+        {
+          "$ref": "#/$defs/time"
+        },
+        {
+          "$ref": "#/$defs/zoned_time"
+        },
+        {
+          "$ref": "#/$defs/file"
+        },
+        {
+          "$ref": "#/$defs/separator"
+        },
+        {
+          "$ref": "#/$defs/link"
+        },
+        {
+          "$ref": "#/$defs/button"
+        },
+        {
+          "$ref": "#/$defs/routed_button"
+        },
+        {
+          "$ref": "#/$defs/premium_button"
+        },
+        {
+          "$ref": "#/$defs/select"
+        },
+        {
+          "$ref": "#/$defs/routed_select"
+        },
+        {
+          "$ref": "#/$defs/entity_select"
+        },
+        {
+          "$ref": "#/$defs/row"
+        },
+        {
+          "$ref": "#/$defs/thumbnail"
+        },
+        {
+          "$ref": "#/$defs/gallery"
+        },
+        {
+          "$ref": "#/$defs/section"
+        },
+        {
+          "$ref": "#/$defs/panel"
+        },
+        {
+          "$ref": "#/$defs/extension"
+        }
+      ]
+    },
+    "option": {
+      "additionalProperties": false,
+      "properties": {
+        "default": {
+          "type": "boolean"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "emoji": {
+          "$ref": "#/$defs/emoji"
+        },
+        "label": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "value",
+        "description",
+        "default"
+      ],
+      "type": "object"
+    },
+    "panel": {
+      "additionalProperties": false,
+      "properties": {
+        "accent": {
+          "maximum": 16777215,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "children": {
+          "items": {
+            "$ref": "#/$defs/node"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "const": "panel"
+        },
+        "spoiler": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "children",
+        "accent"
+      ],
+      "type": "object"
+    },
+    "premium_button": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "premium_button"
+        },
+        "sku_id": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "sku_id"
+      ],
+      "type": "object"
+    },
+    "routed_button": {
+      "additionalProperties": false,
+      "properties": {
+        "disabled": {
+          "type": "boolean"
+        },
+        "emoji": {
+          "$ref": "#/$defs/emoji"
+        },
+        "kind": {
+          "const": "routed_button"
+        },
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "route_id": {
+          "maxLength": 100,
+          "type": "string"
+        },
+        "style": {
+          "enum": [
+            "primary",
+            "secondary",
+            "success",
+            "danger"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "label",
+        "route_id",
+        "style",
+        "emoji",
+        "disabled"
+      ],
+      "type": "object"
+    },
+    "routed_select": {
+      "additionalProperties": false,
+      "properties": {
+        "disabled": {
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "routed_select"
+        },
+        "max_values": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "min_values": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/option"
+          },
+          "maxItems": 25,
+          "type": "array"
+        },
+        "placeholder": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "route_id": {
+          "maxLength": 100,
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "options",
+        "route_id",
+        "placeholder",
+        "min_values",
+        "max_values",
+        "disabled"
+      ],
+      "type": "object"
+    },
+    "row": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/link"
+              },
+              {
+                "$ref": "#/$defs/premium_button"
+              },
+              {
+                "$ref": "#/$defs/button"
+              },
+              {
+                "$ref": "#/$defs/routed_button"
+              },
+              {
+                "$ref": "#/$defs/extension"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "kind": {
+          "const": "row"
+        }
+      },
+      "required": [
+        "kind",
+        "items"
+      ],
+      "type": "object"
+    },
+    "section": {
+      "additionalProperties": false,
+      "properties": {
+        "accessory": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/thumbnail"
+            },
+            {
+              "$ref": "#/$defs/link"
+            },
+            {
+              "$ref": "#/$defs/premium_button"
+            },
+            {
+              "$ref": "#/$defs/button"
+            },
+            {
+              "$ref": "#/$defs/routed_button"
+            },
+            {
+              "$ref": "#/$defs/extension"
+            }
+          ]
+        },
+        "kind": {
+          "const": "section"
+        },
+        "texts": {
+          "items": {
+            "$ref": "#/$defs/text"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "texts",
+        "accessory"
+      ],
+      "type": "object"
+    },
+    "select": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "disabled": {
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "select"
+        },
+        "max_values": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "min_values": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mode": {
+          "enum": [
+            "exclusive",
+            "rebase",
+            "parallel_read",
+            "immediate"
+          ]
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/option"
+          },
+          "type": "array"
+        },
+        "placeholder": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "options",
+        "action",
+        "placeholder",
+        "min_values",
+        "max_values",
+        "disabled",
+        "mode"
+      ],
+      "type": "object"
+    },
+    "separator": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "separator"
+        },
+        "large": {
+          "type": "boolean"
+        },
+        "visible": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "large",
+        "visible"
+      ],
+      "type": "object"
+    },
+    "text": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "text"
+        },
+        "markup": {
+          "enum": [
+            "plain",
+            "discord-markdown"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "content",
+        "markup"
+      ],
+      "type": "object"
+    },
+    "thumbnail": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "const": "thumbnail"
+        },
+        "spoiler": {
+          "type": "boolean"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "url",
+        "description"
+      ],
+      "type": "object"
+    },
+    "time": {
+      "additionalProperties": false,
+      "properties": {
+        "instant": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "kind": {
+          "const": "time"
+        },
+        "prefix": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "style": {
+          "enum": [
+            "t",
+            "T",
+            "d",
+            "D",
+            "f",
+            "F",
+            "R"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "instant",
+        "style",
+        "prefix"
+      ],
+      "type": "object"
+    },
+    "zoned_time": {
+      "additionalProperties": false,
+      "properties": {
+        "instant": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "kind": {
+          "const": "zoned_time"
+        },
+        "prefix": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "timezone": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "instant",
+        "timezone",
+        "prefix"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://redstone-squid.github.io/Redstone-Squid/schema/scene-v1.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "assets": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "media_type": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "media_type"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "body": {
+      "$ref": "#/$defs/body"
+    },
+    "pagers": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "content_fingerprint": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "page": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "pages": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "page",
+          "pages",
+          "content_fingerprint"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "protocol": {
+      "const": 1
+    },
+    "target": {
+      "type": "string"
+    },
+    "target_version": {
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "protocol",
+    "target",
+    "target_version",
+    "body",
+    "assets",
+    "pagers"
+  ],
+  "title": "squid-ui resolved scene protocol 1",
+  "type": "object"
+}
