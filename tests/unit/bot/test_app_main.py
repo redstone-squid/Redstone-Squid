@@ -94,3 +94,30 @@ async def test_prefix_invoke_establishes_invocation_scope(mocker: MockerFixture)
 
     assert len(seen) == 1
     assert sd.current_invocation() is None
+
+
+async def test_setup_hook_supervises_the_layout_runtime_as_one_job(mocker: MockerFixture) -> None:
+    bot = bot_app.RedstoneSquid.__new__(bot_app.RedstoneSquid)
+    bot.background_tasks = mocker.Mock()
+    bot.__dict__["services"] = SimpleNamespace(error_reports=object(), permission_epoch=object())
+    bot.__dict__["_BotBase__tree"] = SimpleNamespace(set_translator=AsyncMock())
+    bot.database_config = None
+    bot.topic_bridge = None
+    bot.development_mode = False
+    bot.__dict__["layout_profiler"] = object()
+    bot.load_extension = AsyncMock()
+    run = AsyncMock()
+    layout_job = run()
+    bot.__dict__["client_runtime"] = SimpleNamespace(run=mocker.Mock(return_value=layout_job))
+    router = mocker.Mock()
+    mocker.patch.object(bot_app, "EXTENSIONS", ())
+    mocker.patch.object(bot_app, "control_router", router)
+    mocker.patch.object(bot_app, "start_permission_epoch_watch")
+
+    try:
+        await bot_app.RedstoneSquid.setup_hook(bot)
+
+        bot.background_tasks.start.assert_called_once_with(layout_job, name="layout-runtime")
+        router.register.assert_called_once_with(bot)
+    finally:
+        layout_job.close()

@@ -200,7 +200,7 @@ async def present_poll_form(
             options,
             allow_network=allow_network,
         )
-        scheduler = getattr(form_interaction.client, "layout_scheduler", None)
+        scheduler = sd.ClientRuntime.of(form_interaction).scheduler
         await POLL_SESSION_SPEC.respond(
             component,
             form_interaction,
