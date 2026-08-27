@@ -21,7 +21,6 @@ from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.ui import send_component, text_node
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.permissions import requires
-from squid.bot.utils.visibility import personal
 from squid.builds.application import BuildService
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import BUILD_SCHEMATIC_DETECT_LATTICE, BUILD_SCHEMATIC_MEASURE_TIMING
@@ -230,9 +229,10 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
         input_position: str | None = None,
     ) -> None:
         """Measure moderator-facing piston timing without changing the submitted value."""
-        await ctx.defer(ephemeral=personal(ctx))
+        ephemeral = ctx.interaction is not None
+        await ctx.defer(ephemeral=ephemeral)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        stored = await self._primary_or_explain(ctx, build_id, locale=locale, ephemeral=personal(ctx))
+        stored = await self._primary_or_explain(ctx, build_id, locale=locale, ephemeral=ephemeral)
         if stored is None:
             return
         position = _parse_position(input_position)
@@ -240,7 +240,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
             await _say(
                 ctx,
                 t(locale, _("Input position must contain three integers, for example `12 5 -3`.")),
-                ephemeral=personal(ctx),
+                ephemeral=ephemeral,
             )
             return
         try:
@@ -248,9 +248,9 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
         except AmbiguousSimulationInputError as error:
             # The generic error handler would show the refusal without ever naming what to
             # choose between, leaving the moderator to guess coordinates out of a binary file.
-            await _say(ctx, _describe_input_refusal(error, locale=locale), ephemeral=personal(ctx))
+            await _say(ctx, _describe_input_refusal(error, locale=locale), ephemeral=ephemeral)
             return
-        await _say(ctx, _describe_timing(result, locale=locale), ephemeral=personal(ctx))
+        await _say(ctx, _describe_timing(result, locale=locale), ephemeral=ephemeral)
 
     @autocompletes(build_id="builds")
     @schematic_group.command(name="detect-lattice")  # type: ignore
@@ -258,18 +258,17 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
     @app_commands.describe(build_id=app_commands.locale_str(_("The submission ID to inspect for repetition.")))
     async def detect_lattice(self, ctx: Context[BotT], build_id: int) -> None:
         """Show the repeating unit detected during schematic analysis."""
-        await ctx.defer(ephemeral=personal(ctx))
+        ephemeral = ctx.interaction is not None
+        await ctx.defer(ephemeral=ephemeral)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        stored = await self._primary_or_explain(ctx, build_id, locale=locale, ephemeral=personal(ctx))
+        stored = await self._primary_or_explain(ctx, build_id, locale=locale, ephemeral=ephemeral)
         if stored is None:
             return
         lattice = await self.schematics.detect_lattice(build_id)
         if lattice is None:
-            await _say(
-                ctx, t(locale, _("No repeating lattice was detected in this schematic.")), ephemeral=personal(ctx)
-            )
+            await _say(ctx, t(locale, _("No repeating lattice was detected in this schematic.")), ephemeral=ephemeral)
             return
-        await _say(ctx, _describe_lattice(lattice, locale=locale), ephemeral=personal(ctx))
+        await _say(ctx, _describe_lattice(lattice, locale=locale), ephemeral=ephemeral)
 
     async def _primary_or_explain(
         self,
