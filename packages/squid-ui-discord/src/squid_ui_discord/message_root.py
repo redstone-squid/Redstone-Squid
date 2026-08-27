@@ -24,6 +24,10 @@ from typing import Any, Protocol, TypedDict, cast, runtime_checkable
 import anyio
 import discord
 
+# `discord.ui.select` names the decorator, so the submodule holding `BaseSelect` is only
+# reachable by importing from it directly.
+from discord.ui.select import BaseSelect
+
 from squid_reactivity.actions import ActionContext, ActorRef
 from squid_ui import scene
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME, LOCALIZATION_CONTEXT, Chrome, localize_chrome
@@ -614,9 +618,26 @@ class _WiredMentionableSelect(_EntityDispatch, discord.ui.MentionableSelect[AnyM
         await self._dispatch(interaction, self.values)
 
 
+def _wall_clock_now(scheduler: object) -> datetime:
+    """The scheduler's own clock if it carries one, otherwise the real one.
+
+    A test scheduler exposes `clock` so expiry can be driven deterministically; the production
+    one does not. The result is checked rather than trusted, because `getattr` on an arbitrary
+    scheduler says nothing about what it returns.
+    """
+    clock = getattr(scheduler, "clock", None)
+    if not callable(clock):
+        return datetime.now(UTC)
+    value = clock()
+    if not isinstance(value, datetime):
+        message = "scheduler clock did not return a datetime"
+        raise TypeError(message)
+    return value
+
+
 def _wired_entity_select(
     node: scene.EntitySelect, message_root: AnyMessageRoot, key: str, generation: int
-) -> discord.ui.BaseSelect[Any]:
+) -> BaseSelect[Any]:
     kwargs = _entity_kwargs(node, message_root, key, generation)
     if node.entity_type is EntityType.USER:
         item = _WiredUserSelect(**kwargs)
@@ -751,7 +772,7 @@ class _LifecycleCandidate:
 
     view: AnyMountedView
     rendered: RenderedMessage[Any]
-    handlers: dict[str, _RenewalBinding]
+    handlers: dict[str, ActionBinding]
     generation: int
 
     @property
@@ -1093,7 +1114,7 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
         self._lifecycle = MessageRootStatus.ACTIVE
         self._unwatch_expiry: Callable[[], None] | None = None
         self._expiry_arm_requested: deliver.EditHandle | None = None
-        self._view: MountedView | None = None
+        self._view: AnyMountedView | None = None
         self._handlers: dict[str, ActionBinding] = {}
         # What each render-declared form key presents right now. Separate from `_handlers`,
         # which holds the button that *opens* the form under the very same key.
@@ -1232,8 +1253,7 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
         component = type(self.component)
         handle_expires_in = None
         if self._handle is not None and not self._handle.permanent and self._handle.expires_at is not None:
-            wall_clock = getattr(self.scheduler, "clock", None)
-            current = wall_clock() if callable(wall_clock) else datetime.now(UTC)
+            current = _wall_clock_now(self.scheduler)
             handle_expires_in = max(0.0, (self._handle.expires_at - current).total_seconds())
         return MessageRootSnapshot(
             id=self.id,
@@ -1290,8 +1310,7 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
         if requested is None:
             return None
         policy = self.expiry
-        wall_clock = getattr(self.scheduler, "clock", None)
-        now = wall_clock() if callable(wall_clock) else datetime.now(UTC)
+        now = _wall_clock_now(self.scheduler)
         if not self._should_arm_expiry(requested, now) or requested.expired():
             return None
         assert policy is not None
@@ -1333,7 +1352,7 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
 
     # --- Rendering ---------------------------------------------------------------------
 
-    def _stage_view(self, *, disabled: bool = False) -> MountedView:
+    def _stage_view(self, *, disabled: bool = False) -> AnyMountedView:
         """Stage a render of the component's current state into a fresh view, committing none of it.
 
         Private, because a staged generation is not the mount's state: nothing here moves
@@ -1458,7 +1477,7 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
         generation = self._issued
         handlers: dict[str, ActionBinding] = {}
 
-        def draw() -> tuple[MountedView, RenderedMessage]:
+        def draw() -> tuple[AnyMountedView, RenderedMessage[Any, Any]]:
             handlers.clear()
 
             def wire(
@@ -1562,7 +1581,10 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
             raise TypeError(message)
         self._issued += 1
         generation = self._issued
-        handlers: dict[str, _RenewalBinding] = {}
+        # Declared as the base binding because that is what `_LifecycleCandidate` carries and
+        # what `_handlers` is; `dict` is invariant, so the narrower element type would not
+        # assign even though every value written here is a `_RenewalBinding`.
+        handlers: dict[str, ActionBinding] = {}
 
         async def renew_marker(event: PressEvent) -> None:
             # Dispatch recognizes the binding type and never invokes this marker.
@@ -1655,7 +1677,7 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
         """Which plan-and-render entry point this message root's target uses."""
         return self._binding.render_message
 
-    def _renderer(self, timeout: float | None) -> V2Renderer | ClassicRenderer:
+    def _renderer(self, timeout: float | None) -> MountedRenderer[Any]:
         return self._binding.renderer(self, timeout)
 
     def _chrome_text(self, text: TextLike) -> str:

@@ -13,7 +13,7 @@ from squid_ui_discord.modal import ModalSpec, build_form_modal, build_modal
 
 if TYPE_CHECKING:
     from squid_ui.runtime.histories import History
-    from squid_ui_discord.message_root import MessageRoot
+    from squid_ui_discord.message_root import AnyMessageRoot
 
 
 class ActionResponder:
@@ -22,7 +22,7 @@ class ActionResponder:
     def __init__(
         self,
         interaction: discord.Interaction,
-        message_root: MessageRoot,
+        message_root: AnyMessageRoot,
         selected_entities: tuple[object, ...] = (),
     ) -> None:
         self.interaction = interaction
