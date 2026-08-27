@@ -36,6 +36,7 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="VersionTrac
     @version_group.command(name="list")
     async def versions(self, ctx: Context[BotT]):
         """List the Minecraft versions the bot recognizes."""
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         versions_human_readable = await self.version_service.list_display("Java")
         paginator = PagedList(
@@ -48,7 +49,7 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="VersionTrac
             page_size=VERSIONS_PER_PAGE,
             separator=", ",
         )
-        await paginator.send(ctx)
+        await invocation.mount(paginator, access=sd.Owner(invocation.user.id))
 
     @autocompletes(version_string="approved_source_versions")
     @version_group.command(name="add")
