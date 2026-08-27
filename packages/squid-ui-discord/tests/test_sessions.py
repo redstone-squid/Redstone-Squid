@@ -31,7 +31,7 @@ from squid_ui_discord.sessions import (
 from squid_ui_discord.testing import fake_message
 
 
-class Panel(sl.Component):
+class Panel(sl.Component[sl.ComponentsV2Target]):
     def render(self):
         return [Heading("Panel"), Row((Button(label="Go", on_click=self._noop, key="go"),))]
 
@@ -424,7 +424,7 @@ class TestMembership:
         manager = SessionManager()
         seen: list[frozenset[int] | None] = []
 
-        class Roster(sl.Component):
+        class Roster(sl.Component[sl.ComponentsV2Target]):
             def render(self):
                 session = manager.session_for(message_root)
                 seen.append(None if session is None else session.members)

@@ -76,11 +76,11 @@ def test_discord_renderer_draws_an_attachment_file_or_url_link() -> None:
     assert link.url == "https://example.com/report.txt"
 
 
-class _DownloadComponent(Component):
+class _DownloadComponent(Component[sl.ComponentsV2Target]):
     def __init__(self, asset: sl.document.Asset) -> None:
         self.asset = asset
 
-    def render(self) -> RenderResult:
+    def render(self) -> RenderResult[sl.ComponentsV2Target]:
         return sl.download("Report", self.asset, key="report-download")
 
 

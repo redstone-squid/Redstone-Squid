@@ -230,7 +230,7 @@ def test_file_field_rejects_more_than_ten_uploads() -> None:
         )
 
 
-class DurationPanel(sl.Component):
+class DurationPanel(sl.Component[sl.ComponentsV2Target]):
     seconds: int = sl.state(0)
 
     def __init__(self, *, validation: sl.forms.FormValidationMode = sl.forms.FormValidationMode.RETRY) -> None:

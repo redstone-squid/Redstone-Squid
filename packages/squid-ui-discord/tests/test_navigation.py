@@ -2,6 +2,7 @@
 
 import discord
 
+import squid_ui as sl
 from squid_ui import Component
 from squid_ui.primitives import Heading, Text
 from squid_ui_discord import Everyone, MessageRoot
@@ -9,7 +10,7 @@ from squid_ui_discord.navigation import StackNavigator
 from squid_ui_discord.testing import commit_render, fake_interaction
 
 
-class Screen(Component):
+class Screen(Component[sl.ComponentsV2Target]):
     def __init__(self, name: str) -> None:
         self.name = name
 
@@ -57,7 +58,7 @@ async def test_home_appears_only_when_deep():
 async def test_child_state_changes_rerender_through_the_shared_root():
     from squid_ui import state
 
-    class Counting(Component):
+    class Counting(Component[sl.ComponentsV2Target]):
         count: int = state(0)
 
         def render(self):

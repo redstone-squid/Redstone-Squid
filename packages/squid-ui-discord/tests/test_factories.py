@@ -80,7 +80,7 @@ class TestRefusals:
             sl.section(sl.heading("H"), {"a": sl.paragraph("a")})  # type: ignore[arg-type]
 
     def test_a_component_is_pointed_at_a_boundary(self) -> None:
-        class Child(sl.Component):
+        class Child(sl.Component[sl.ComponentsV2Target]):
             def render(self):
                 return sl.paragraph("child")
 

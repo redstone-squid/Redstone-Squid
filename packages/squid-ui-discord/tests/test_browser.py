@@ -45,7 +45,7 @@ async def test_browser_opens_and_retains_one_detail_component_per_open() -> None
     source, loaded = await _loaded((Entry("a", "A"), Entry("b", "B")))
     built: list[str] = []
 
-    class Detail(sl.Component):
+    class Detail(sl.Component[sl.ComponentsV2Target]):
         def __init__(self, entry: Entry) -> None:
             self.entry = entry
 

@@ -3,7 +3,7 @@
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, Protocol, Self
+from typing import Protocol, Self
 
 from squid_ui.errors import LayoutInvariantError
 
@@ -29,7 +29,7 @@ TEXT_AXES = frozenset({Axis.DISPLAY_TEXT, Axis.CONTENT_TEXT, Axis.EMBED_TEXT})
 class ResourceCost:
     """Named resource consumption measured against target-wide budgets."""
 
-    values: Mapping[Any, int] = field(default_factory=dict)
+    values: Mapping[Axis, int] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         negative = sorted(name for name, value in self.values.items() if value < 0)
@@ -38,11 +38,11 @@ class ResourceCost:
             raise LayoutInvariantError(message)
         object.__setattr__(self, "values", dict(sorted((name, value) for name, value in self.values.items() if value)))
 
-    def get(self, name: str) -> int:
+    def get(self, name: Axis) -> int:
         return self.values.get(name, 0)
 
     @property
-    def axes(self) -> tuple[str, ...]:
+    def axes(self) -> tuple[Axis, ...]:
         return tuple(self.values)
 
     def __add__(self, other: ResourceCost) -> ResourceCost:
@@ -53,10 +53,10 @@ class ResourceCost:
             merged[name] = merged.get(name, 0) + value
         return ResourceCost(merged)
 
-    def within[AxisT: str](self, capacities: Mapping[AxisT, int]) -> bool:
+    def within(self, capacities: Mapping[Axis, int]) -> bool:
         return not any(self.over(capacities))
 
-    def over[AxisT: str](self, capacities: Mapping[AxisT, int]) -> Iterator[tuple[AxisT, int, int]]:
+    def over(self, capacities: Mapping[Axis, int]) -> Iterator[tuple[Axis, int, int]]:
         for name, capacity in sorted(capacities.items()):
             spent = self.get(name)
             if spent > capacity:

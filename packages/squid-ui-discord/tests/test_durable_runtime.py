@@ -43,14 +43,14 @@ from squid_ui_discord.sessions import (
 from squid_ui_discord.testing import delivered_to, fake_message
 
 
-class Counter(sl.Component):
+class Counter(sl.Component[sl.ComponentsV2Target]):
     count: int = sl.state(0)
 
     def render(self):
         return Text(f"count {self.count}")
 
 
-class HiddenDraft(sl.Component):
+class HiddenDraft(sl.Component[sl.ComponentsV2Target]):
     advanced: bool = sl.state(default=False)
 
     def render(self):

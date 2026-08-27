@@ -23,6 +23,7 @@ from squid_ui.primitives.nodes import (
 from squid_ui.routing import Route
 from squid_ui.runtime.component import Component
 from squid_ui.semantic import LayoutNode
+from squid_ui.target_types import DiscordTarget
 from squid_ui.text import TextLike
 from squid_ui_discord.routing import RouteComponent, RouteGroup
 
@@ -353,7 +354,7 @@ async def _send_default_notice(interaction: discord.Interaction[Any], result: Ro
         await interaction.response.send_message(content, ephemeral=True, allowed_mentions=allowed_mentions)
 
 
-class RolePanel(Component):
+class RolePanel(Component[DiscordTarget]):
     """A stateless, persistent panel for managing member self-roles."""
 
     def __init__(
@@ -436,9 +437,9 @@ class RolePanel(Component):
             raise
         return toggle_route, set_route
 
-    def render(self) -> Sequence[LayoutNode]:
+    def render(self) -> Sequence[LayoutNode[DiscordTarget]]:
         """Render stateless buttons with a planner-owned select fallback."""
-        nodes: list[LayoutNode] = [Heading(self.title)]
+        nodes: list[LayoutNode[DiscordTarget]] = [Heading(self.title)]
         for category in self.categories:
             nodes.append(Heading(category.label, level=3))
             if category.description is not None:

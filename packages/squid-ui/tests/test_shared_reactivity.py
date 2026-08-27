@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from squid_ui import Component, computed, state
+from squid_ui import Component, DiscordTarget, computed, state
 from squid_ui.primitives import Boundary, Text
 from squid_ui.runtime import CellAddress, ReactiveWriteError, SharedState, addresses, transaction
 from squid_ui.runtime.component import render_component_tree
@@ -39,7 +39,7 @@ def address(preferences: Preferences, name: str) -> CellAddress:
 # --- Render observation -------------------------------------------------------------------
 
 
-class Panel(Component):
+class Panel(Component[DiscordTarget]):
     show_locale: bool = state(default=False)
 
     def __init__(self, preferences: Preferences) -> None:
@@ -68,7 +68,7 @@ def test_a_dropped_conditional_read_stops_being_observed(preferences: Preference
 
 
 def test_repeated_reads_are_one_observation(preferences: Preferences) -> None:
-    class Repeats(Component):
+    class Repeats(Component[DiscordTarget]):
         def render(self) -> Text:
             return Text(f"{preferences.theme}{preferences.theme}{preferences.theme}")
 
@@ -76,7 +76,7 @@ def test_repeated_reads_are_one_observation(preferences: Preferences) -> None:
 
 
 def test_a_render_observes_component_state_as_nothing(preferences: Preferences) -> None:
-    class Local(Component):
+    class Local(Component[DiscordTarget]):
         count: int = state(0)
 
         def render(self) -> Text:
@@ -88,7 +88,7 @@ def test_a_render_observes_component_state_as_nothing(preferences: Preferences) 
 def test_a_cached_computed_still_reports_its_shared_sources(preferences: Preferences) -> None:
     runs: list[int] = []
 
-    class Derived(Component):
+    class Derived(Component[DiscordTarget]):
         @computed
         def label(self) -> str:
             runs.append(1)
@@ -111,7 +111,7 @@ def test_a_read_outside_a_render_records_no_dependency(preferences: Preferences)
 
 
 def test_a_write_during_a_render_raises(preferences: Preferences) -> None:
-    class Writes(Component):
+    class Writes(Component[DiscordTarget]):
         def render(self) -> Text:
             preferences.theme = "dark"
             return Text("never")
@@ -124,7 +124,7 @@ def test_a_write_during_a_render_raises(preferences: Preferences) -> None:
 def test_an_unaddressed_write_during_a_render_raises_and_tears_no_further() -> None:
     """Component state has no address, but the same render still may not write it back."""
 
-    class Torn(Component):
+    class Torn(Component[DiscordTarget]):
         n: int = state(0)
 
         def render(self) -> Text:
@@ -142,7 +142,7 @@ def test_an_unaddressed_write_during_a_render_raises_and_tears_no_further() -> N
 def test_a_component_built_inside_a_parent_render_may_assign_its_own_state() -> None:
     """Construction is not mutation: a child's __init__ runs while the parent is rendering."""
 
-    class Child(Component):
+    class Child(Component[DiscordTarget]):
         label: str = state("")
 
         def __init__(self, label: str) -> None:
@@ -151,7 +151,7 @@ def test_a_component_built_inside_a_parent_render_may_assign_its_own_state() -> 
         def render(self) -> Text:
             return Text(self.label)
 
-    class Parent(Component):
+    class Parent(Component[DiscordTarget]):
         def render(self) -> Boundary:
             return self.boundary(Child("hi"), key="child")
 
@@ -164,14 +164,14 @@ def test_a_component_built_inside_a_parent_render_may_assign_its_own_state() -> 
 def test_a_component_born_this_render_still_raises_once_its_own_render_runs() -> None:
     """The exemption ends at construction: a child tearing its own tree is not excused."""
 
-    class TornChild(Component):
+    class TornChild(Component[DiscordTarget]):
         n: int = state(0)
 
         def render(self) -> Text:
             self.n = 1
             return Text(str(self.n))
 
-    class Parent(Component):
+    class Parent(Component[DiscordTarget]):
         def render(self) -> Boundary:
             return self.boundary(TornChild(), key="child")
 
@@ -192,7 +192,7 @@ def test_addresses_collects_every_cell_the_thunk_reads(preferences: Preferences)
 
 
 def test_addresses_sees_through_a_computed(preferences: Preferences) -> None:
-    class Derived(Component):
+    class Derived(Component[DiscordTarget]):
         @computed
         def label(self) -> str:
             return preferences.locale.upper()
@@ -202,7 +202,7 @@ def test_addresses_sees_through_a_computed(preferences: Preferences) -> None:
 
 
 def test_addresses_refuses_a_thunk_that_reaches_no_shared_cell() -> None:
-    class Local(Component):
+    class Local(Component[DiscordTarget]):
         count: int = state(0)
 
     local = Local()

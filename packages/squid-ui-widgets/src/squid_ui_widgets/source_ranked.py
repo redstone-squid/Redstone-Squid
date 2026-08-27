@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.errors import LayoutInvariantError
@@ -41,7 +41,7 @@ class _WindowRequest:
     position: Position | None = None
 
 
-class SourceRankedList[EntryT](Component):
+class SourceRankedList[EntryT](Component[Any]):
     """Render a ranking whose visible async resource is backed by a window source."""
 
     _request: _WindowRequest = state(default=_WindowRequest(), persist=False, opaque=True)
@@ -121,7 +121,7 @@ class SourceRankedList[EntryT](Component):
         value = hook(total) if callable(hook) else hook
         return render_content(self, normalize_content(value, name=name), prefix=name)
 
-    def render(self) -> RenderResult:
+    def render(self) -> RenderResult[Any]:
         # One arm per member of `Ready | Pending | Failed`, with the `previous` case inside it.
         # Splitting on `previous` in the pattern left the match unprovably exhaustive, so the
         # checker saw a path with no return on a shape that cannot occur.
@@ -137,7 +137,7 @@ class SourceRankedList[EntryT](Component):
                     return self._status(self.load_failed, retry=True)
                 return self._render_loaded(previous.value, status=self.load_failed, retry=True)
 
-    def _status(self, message: TextLike, *, retry: bool = False) -> RenderResult:
+    def _status(self, message: TextLike, *, retry: bool = False) -> RenderResult[Any]:
         return stack(
             heading(self.heading) if self.heading is not None else None,
             note(message),
@@ -155,7 +155,7 @@ class SourceRankedList[EntryT](Component):
         *,
         status: TextLike | None = None,
         retry: bool = False,
-    ) -> RenderResult:
+    ) -> RenderResult[Any]:
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         nav = self.inject(NAV_FACTORY_CONTEXT, default_nav)
         window = loaded.window
