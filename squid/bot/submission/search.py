@@ -288,7 +288,7 @@ class SearchCog[
                     return None
                 return latest, await self.bot.for_build(latest).render_node()
 
-            component = BuildInfoComponent(build, node, refresh=refresh, locale=locale)
+            component = BuildInfoComponent(build, node, refresh=refresh)
             navigator = sd.navigation.StackNavigator(component)
             await invocation.mount(
                 navigator,

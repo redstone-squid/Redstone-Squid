@@ -5,9 +5,8 @@ from typing import TYPE_CHECKING
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.i18n import t
 from squid.bot.submission.ui.components import build_edit
-from squid.core.i18n import _
+from squid.bot.ui import L
 from squid.topics import resource_topic
 
 if TYPE_CHECKING:
@@ -31,7 +30,6 @@ class BuildInfoComponent(sl.Component[sl.ComponentsV2Target]):
         node: sl.LayoutNode[sl.ComponentsV2Target],
         *,
         refresh: Refresh | None = None,
-        locale: str | None = None,
         ephemeral: bool = False,
         timeout: float = 300,
         access: sd.AccessPolicy | None = None,
@@ -39,7 +37,6 @@ class BuildInfoComponent(sl.Component[sl.ComponentsV2Target]):
         self._seed: Projection | None = (build, node)
         self._refresh = refresh
         self._build_id = build.id
-        self.locale = locale
         self._ephemeral = ephemeral
         self._timeout = timeout
         self._access = access if access is not None else sd.Everyone()
@@ -86,17 +83,15 @@ class BuildInfoComponent(sl.Component[sl.ComponentsV2Target]):
 
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if not isinstance(self.projection.status, sl.resources.Ready) and self.projection.status.previous is None:
-            return (sl.status(t(self.locale, _("Loading build."))),)
+            return (sl.status(L("Loading build.")),)
         build, node = self._current()
         if build.id is None:
             # Nothing stored to point a route at yet, so the control lives in this session.
-            edit = sl.action_controls(
-                sl.action_control(t(self.locale, _("Edit")), self._edit, key="edit"), key="build-actions"
-            )
+            edit = sl.action_controls(sl.action_control(L("Edit"), self._edit, key="edit"), key="build-actions")
         else:
             edit = sl.primitives.Section(
-                (sl.primitives.Text(t(self.locale, _("Edit this build.")), priority=-10),),
-                sl.primitives.RoutedButton(t(self.locale, _("Edit")), build_edit.id(build_id=build.id)),
+                (sl.primitives.Text(L("Edit this build."), priority=-10),),
+                sl.primitives.RoutedButton(L("Edit"), build_edit.id(build_id=build.id)),
             )
         return (node, edit)
 
