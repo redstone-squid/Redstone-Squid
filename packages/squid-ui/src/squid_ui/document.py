@@ -20,6 +20,7 @@ class Document[ModeT = RenderTarget]:
 
 
 type DocumentLike[ModeT = RenderTarget] = Document[ModeT] | LayoutNode[ModeT] | Sequence[LayoutNode[ModeT]]
+type PortableDocumentLike = DocumentLike[RenderTarget]
 
 
 def as_document[ModeT](rendered: DocumentLike[ModeT]) -> Document[ModeT]:
