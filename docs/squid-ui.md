@@ -2,7 +2,8 @@
 
 Squid UI is a six-package framework for declarative, stateful interfaces. Application code writes
 semantic components; the planner produces an immutable, limits-checked scene; adapters draw and
-deliver that scene. Discord is the first complete transport, while HTML provides portable previews.
+deliver that scene. Discord is the first complete transport, while HTML is a first-class planning
+target that produces native accessible markup without prescribing browser transport.
 
 The suite is currently a public alpha. Install the adapter for a Discord application:
 
@@ -27,6 +28,7 @@ use that exact version, so one environment cannot silently mix incompatible alph
 ## Where to start
 
 - Follow the [Discord quickstart](squid-ui-quickstart.md) for a first live screen.
+- Plan with `squid_ui.html.target()` and draw with `squid_ui.html.Renderer` for native HTML.
 - Use the [API map](squid-ui-api.md) to find the supported entry point for each job.
 - Read [architecture and API interactions](squid-ui-architecture.md) for planning, ownership,
   cancellation, durability, and extension boundaries.
