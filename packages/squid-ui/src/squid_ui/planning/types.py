@@ -7,7 +7,10 @@ from squid_ui.target_types import (
     DiscordPy27Adapter,
     DiscordPyAdapter,
     DiscordTarget,
+    HtmlAdapter,
+    HtmlTarget,
     Renderable,
+    RenderTarget,
 )
 
 __all__ = [
@@ -17,5 +20,8 @@ __all__ = [
     "DiscordPy27Adapter",
     "DiscordPyAdapter",
     "DiscordTarget",
+    "HtmlAdapter",
+    "HtmlTarget",
+    "RenderTarget",
     "Renderable",
 ]

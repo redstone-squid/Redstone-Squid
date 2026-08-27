@@ -114,7 +114,7 @@ from squid_ui.semantic import (
     ZonedTimestamp,
 )
 from squid_ui.tallies import TallyOption
-from squid_ui.target_types import DiscordTarget
+from squid_ui.target_types import RenderTarget
 from squid_ui.temporal import ZonedDateTime
 from squid_ui.text import Message, ResolvedText, TextLike, md
 
@@ -133,7 +133,7 @@ deliberately *not* accepted: ``x and y`` evaluates to ``y`` or to the falsy ``x`
 would render a literal ``0`` in looser designs — a type error rather than a surprise.
 """
 
-type ChildLike[ModeT = DiscordTarget] = Conditional[LayoutNode[ModeT] | TextLike | Template]
+type ChildLike[ModeT = RenderTarget] = Conditional[LayoutNode[ModeT] | TextLike | Template]
 """Anything acceptable in a container's child position; text is promoted to `Paragraph`.
 
 `ModeT` is what makes a nested dialect mistake a type error. A container factory solves it
@@ -249,32 +249,32 @@ def _collect[ItemT](values: Iterable[Conditional[ItemT]], kinds: tuple[type, ...
 # --- containers ---------------------------------------------------------------------------
 
 
-def group[ModeT = DiscordTarget](*children: ChildLike[ModeT]) -> Group[ModeT]:
+def group[ModeT = RenderTarget](*children: ChildLike[ModeT]) -> Group[ModeT]:
     """Related content with no layout opinion; lowers to its children in place."""
     return Group(_children(children, "sl.group()"))
 
 
-def stack[ModeT = DiscordTarget](*children: ChildLike[ModeT]) -> Stack[ModeT]:
+def stack[ModeT = RenderTarget](*children: ChildLike[ModeT]) -> Stack[ModeT]:
     """Content read top to bottom."""
     return Stack(_children(children, "sl.stack()"))
 
 
-def cluster[ModeT = DiscordTarget](*children: ChildLike[ModeT]) -> Cluster[ModeT]:
+def cluster[ModeT = RenderTarget](*children: ChildLike[ModeT]) -> Cluster[ModeT]:
     """Content read as a set rather than a sequence."""
     return Cluster(_children(children, "sl.cluster()"))
 
 
-def themed[ModeT = DiscordTarget](palette: Palette, *children: ChildLike[ModeT]) -> Themed[ModeT]:
+def themed[ModeT = RenderTarget](palette: Palette, *children: ChildLike[ModeT]) -> Themed[ModeT]:
     """Apply a presentation palette to one semantic subtree."""
     return Themed(_children(children, "sl.themed()"), palette)
 
 
-def block[ModeT = DiscordTarget](*children: ChildLike[ModeT], accent: Accent = INHERIT) -> Block[ModeT]:
+def block[ModeT = RenderTarget](*children: ChildLike[ModeT], accent: Accent = INHERIT) -> Block[ModeT]:
     """An untitled region; ``accent`` is a house-colour override."""
     return Block(_children(children, "sl.block()"), accent)
 
 
-def section[ModeT = DiscordTarget](
+def section[ModeT = RenderTarget](
     heading: Heading,
     *children: ChildLike[ModeT],
     accent: Accent = INHERIT,
@@ -284,7 +284,7 @@ def section[ModeT = DiscordTarget](
     return Section(heading, _children(children, "sl.section()"), accent, thumbnail)
 
 
-def article[ModeT = DiscordTarget](
+def article[ModeT = RenderTarget](
     heading: Heading,
     *children: ChildLike[ModeT],
     accent: Accent = INHERIT,
@@ -294,7 +294,7 @@ def article[ModeT = DiscordTarget](
     return Article(heading, _children(children, "sl.article()"), accent, thumbnail)
 
 
-def aside[ModeT = DiscordTarget](*children: ChildLike[ModeT], tone: Tone = Tone.NEUTRAL) -> Aside[ModeT]:
+def aside[ModeT = RenderTarget](*children: ChildLike[ModeT], tone: Tone = Tone.NEUTRAL) -> Aside[ModeT]:
     """Tangential or advisory content, coloured by tone."""
     return Aside(_children(children, "sl.aside()"), tone)
 
@@ -312,7 +312,7 @@ def uncontrolled[ValueT](initial: ValueT) -> Uncontrolled[ValueT]:
     return Uncontrolled(initial)
 
 
-def details[ModeT = DiscordTarget](
+def details[ModeT = RenderTarget](
     summary: Summary,
     *children: ChildLike[ModeT],
     key: str,
@@ -352,7 +352,7 @@ def form(
     return FormTrigger(key, _text(label), resolved, handler, selected_mode, tone, emphasis, guard, record)
 
 
-def item[ModeT = DiscordTarget](
+def item[ModeT = RenderTarget](
     label: ItemLabel, *children: ChildLike[ModeT], key: str, summary: TextValue | None = None
 ) -> Item[ModeT]:
     """One entry of an `items` collection."""
@@ -364,7 +364,7 @@ def item_label(content: TextValue) -> ItemLabel:
     return ItemLabel(_text(content))
 
 
-def items[ModeT = DiscordTarget](
+def items[ModeT = RenderTarget](
     *entries: Conditional[Item[ModeT]],
     key: str,
     opened: ItemOwnership = UNOPENED,
