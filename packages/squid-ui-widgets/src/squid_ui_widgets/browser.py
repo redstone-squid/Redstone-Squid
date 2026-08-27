@@ -19,11 +19,17 @@ from squid_ui.factories import (
     stack,
 )
 from squid_ui.interactions import ActionEvent
-from squid_ui.planning.navigation import NAV_FACTORY_CONTEXT, NavigationContext, NavigationState, default_nav
+from squid_ui.planning.navigation import (
+    NAV_FACTORY_CONTEXT,
+    NavigationContext,
+    NavigationState,
+    NavNode,
+    default_nav,
+)
 from squid_ui.runtime.component import Component, RenderResult
 from squid_ui.runtime.reactivity import state
 from squid_ui.runtime.resources import Failed, Pending, Ready, resource
-from squid_ui.semantic import ActionControl, ChoiceEvent, ControlDisplay, LayoutNode, Link
+from squid_ui.semantic import ActionControl, ChoiceEvent, ControlDisplay, Link
 from squid_ui.sources import (
     ORIGIN,
     CountPrecision,
@@ -176,17 +182,20 @@ class Browser[ItemT](Component):
         await self._adjacent(event, 1)
 
     def render(self) -> RenderResult:
+        # One arm per member of `Ready | Pending | Failed`, with the `previous` case inside it.
+        # Splitting on `previous` in the pattern left the match unprovably exhaustive, so the
+        # checker saw a path with no return on a shape that cannot occur.
         match self.window.status:
-            case Pending(previous=None):
-                return self._status(self.loading)
-            case Failed(previous=None):
-                return self._status(self.load_failed, retry=True)
-            case Pending(previous=Ready(value=loaded)):
-                return self._render_loaded(loaded, status_text=self.loading)
-            case Failed(previous=Ready(value=loaded)):
-                return self._render_loaded(loaded, status_text=self.load_failed, retry=True)
             case Ready(value=loaded):
                 return self._render_loaded(loaded)
+            case Pending(previous=previous):
+                if previous is None:
+                    return self._status(self.loading)
+                return self._render_loaded(previous.value, status_text=self.loading)
+            case Failed(previous=previous):
+                if previous is None:
+                    return self._status(self.load_failed, retry=True)
+                return self._render_loaded(previous.value, status_text=self.load_failed, retry=True)
 
     def _status(self, message: TextLike, *, retry: bool = False) -> RenderResult:
         return stack(
@@ -262,7 +271,7 @@ class Browser[ItemT](Component):
             note(footer) if (footer := window_footer(chrome, self.source, loaded, self.page_size)) else None,
         )
 
-    def _navigation(self, loaded: LoadedWindow[ItemT]) -> tuple[LayoutNode, ...]:
+    def _navigation(self, loaded: LoadedWindow[ItemT]) -> tuple[NavNode, ...]:
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         nav = self.inject(NAV_FACTORY_CONTEXT, default_nav)
         window = loaded.window
@@ -281,30 +290,32 @@ class Browser[ItemT](Component):
             if capabilities.offsets and window.items
             else None
         )
-        return nav(
-            NavigationContext(
-                NavigationState(
-                    key=self.key,
-                    position=window.position,
-                    has_previous=window.has_previous,
-                    has_next=window.has_next,
-                    backward=capabilities.backward,
-                    previous_label=chrome.older,
-                    next_label=chrome.newer,
-                    previous_key=f"{self.key}.previous",
-                    next_key=f"{self.key}.next",
-                    extent=extent,
-                    page=window.position.offset // self.page_size if capabilities.offsets else None,
-                    visible_range=visible_range,
-                    total=total,
-                    count=capabilities.count,
-                    seek_key=f"{self.key}.seek",
-                    seek_label=chrome.jump_to_page,
-                    page_option=chrome.page_option,
-                ),
-                self._previous,
-                self._next,
-                self._seek if extent is not None else None,
+        return tuple(
+            nav(
+                NavigationContext(
+                    NavigationState(
+                        key=self.key,
+                        position=window.position,
+                        has_previous=window.has_previous,
+                        has_next=window.has_next,
+                        backward=capabilities.backward,
+                        previous_label=chrome.older,
+                        next_label=chrome.newer,
+                        previous_key=f"{self.key}.previous",
+                        next_key=f"{self.key}.next",
+                        extent=extent,
+                        page=window.position.offset // self.page_size if capabilities.offsets else None,
+                        visible_range=visible_range,
+                        total=total,
+                        count=capabilities.count,
+                        seek_key=f"{self.key}.seek",
+                        seek_label=chrome.jump_to_page,
+                        page_option=chrome.page_option,
+                    ),
+                    self._previous,
+                    self._next,
+                    self._seek if extent is not None else None,
+                )
             )
         )
 
