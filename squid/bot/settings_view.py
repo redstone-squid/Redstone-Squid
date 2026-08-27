@@ -23,7 +23,6 @@ if TYPE_CHECKING:
     from squid.voting.application import VoteService
 
 SESSION_SECONDS = 300
-SETTINGS_SESSION_SPEC = sd.SessionSpec("settings", scope=sd.ScopeKind.USER_GUILD, options={"timeout": SESSION_SECONDS})
 
 FOLLOW_DISCORD = "-"
 """The locale select's "no override" value; an empty select value is not sendable."""
@@ -71,8 +70,12 @@ class SettingsCapabilities:
     edit_voting: bool
 
 
-class SettingsPanel(sl.Component[sl.ComponentsV2Target]):
+class SettingsPanel(sd.Screen):
     """A semantic, mount-owned settings workspace."""
+
+    session = "settings"
+    scope = sd.ScopeKind.USER_GUILD
+    timeout = SESSION_SECONDS
 
     history: sl.runtime.History = sl.runtime.history(limit=10)
     """Undo for the server page's writes; see `docs/plans/squid-ui-redesign/28-history.md`."""
