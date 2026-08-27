@@ -10,6 +10,7 @@ from discord.ext import commands
 
 from squid.bot.submission.search import SearchCog, _debug_dump
 from squid.builds.domain import DoorBuild, Status
+from tests.helpers.discord import make_layout_bot
 
 
 class StubQueries:
@@ -22,12 +23,12 @@ class StubQueries:
 
 def _cog(build: Any) -> SearchCog[Any]:
     cog = SearchCog.__new__(SearchCog)
-    cog.bot = cast(Any, SimpleNamespace(services=SimpleNamespace(settings=SimpleNamespace())))
+    cog.bot = cast(Any, make_layout_bot(services=SimpleNamespace(settings=SimpleNamespace())))
     cog.queries = cast(Any, StubQueries(build))
     return cog
 
 
-def _context() -> commands.Context[Any]:
+def _context(bot: Any) -> commands.Context[Any]:
     return cast(
         commands.Context[Any],
         cast(
@@ -38,6 +39,7 @@ def _context() -> commands.Context[Any]:
                 guild=None,
                 interaction=None,
                 author=SimpleNamespace(id=7),
+                bot=bot,
             ),
         ),
     )
@@ -67,9 +69,10 @@ def test_the_embedding_is_summarized_rather_than_dumped() -> None:
 
 async def test_the_state_is_attached_instead_of_pasted() -> None:
     build = DoorBuild(id=42, submission_status=Status.PENDING)
-    ctx = _context()
+    cog = _cog(build)
+    ctx = _context(cog.bot)
 
-    await SearchCog.debug_build.callback(_cog(build), ctx, build_id=42)  # type: ignore[arg-type]
+    await SearchCog.debug_build.callback(cog, ctx, build_id=42)  # type: ignore[arg-type]
 
     kwargs = cast(Any, ctx).send.call_args.kwargs
     attachment = kwargs["files"][0]
@@ -79,9 +82,10 @@ async def test_the_state_is_attached_instead_of_pasted() -> None:
 
 
 async def test_a_missing_build_is_an_error_card_not_an_empty_file() -> None:
-    ctx = _context()
+    cog = _cog(None)
+    ctx = _context(cog.bot)
 
-    await SearchCog.debug_build.callback(_cog(None), ctx, build_id=42)  # type: ignore[arg-type]
+    await SearchCog.debug_build.callback(cog, ctx, build_id=42)  # type: ignore[arg-type]
 
     kwargs = cast(Any, ctx).send.call_args.kwargs
     assert "file" not in kwargs

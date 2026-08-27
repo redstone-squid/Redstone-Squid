@@ -22,7 +22,7 @@ from squid.bot.submission.media import CatboxMirror
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.components import EphemeralBuildEditButton
 from squid.bot.submission.ui.views import SubmissionFormComponent
-from squid.bot.ui import error_layout, render_payload, respond_payload, text_layout
+from squid.bot.ui import error_node, text_node
 from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.bot.utils.permissions import enforce
 from squid.bot.utils.sticky_message import StickyMessage
@@ -103,6 +103,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
     ):
         """Submit a build. Every field is optional; a guided form picks up whatever you skip."""
         await interaction.response.defer(ephemeral=True)
+        invocation = await sd.Invocation.of(interaction)
         locale = await resolve_locale(interaction, self.bot.services.settings)
         # Before the uploads, not after: declining should not cost the user an attachment round
         # trip, and the notice describes exactly what submitting a build publishes.
@@ -117,9 +118,9 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             if build_size is not None:
                 draft.dimensions = parse_dimensions(build_size)
         except ValueError as error:
-            await respond_payload(
-                interaction,
-                error_layout(t(locale, _("Check the dimensions")), str(error)),
+            await invocation.reply(
+                error_node(t(locale, _("Check the dimensions")), str(error)),
+                visibility="personal",
             )
             return
         if door_type is not None:
@@ -209,11 +210,11 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         assert workspace_message is not None, "a waited response always hands back its message"
         await component.wait()
         if component.value is None:
-            expired = text_layout(t(locale, _("Submission expired. Nothing was saved.")))
+            expired = invocation.render(text_node(t(locale, _("Submission expired. Nothing was saved."))))
             await sd.delivery.handle_for(workspace_message, mode=expired.mode).write(expired)
             return
         if component.value is False:
-            cancelled = text_layout(t(locale, _("Submission cancelled. Nothing was saved.")))
+            cancelled = invocation.render(text_node(t(locale, _("Submission cancelled. Nothing was saved."))))
             await sd.delivery.handle_for(workspace_message, mode=cancelled.mode).write(cancelled)
             return
 
@@ -225,21 +226,18 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             _("## Submitted for review\nSubmission ID: `{id}`\nStaff can now review and vote on this build."),
             id=build.id,
         )
-        preview = render_payload(
-            [
-                sl.primitives.Text(heading),
-                await self.bot.for_build(build).render_node(),
-                sl.primitives.Row(
-                    (
-                        sl.primitives.RawItem(
-                            lambda: EphemeralBuildEditButton(build),
-                            kind="discord.item",
-                            version=1,
-                        ),
-                    )
+        preview = invocation.render(
+            sl.primitives.Text(heading),
+            await self.bot.for_build(build).render_node(),
+            sl.primitives.Row(
+                (
+                    sl.primitives.RawItem(
+                        lambda: EphemeralBuildEditButton(build),
+                        kind="discord.item",
+                        version=1,
+                    ),
                 ),
-            ],
-            locale=locale,
+            ),
         )
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(
@@ -400,16 +398,17 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         specific message, which is what a message context menu is.
         """
         await interaction.response.defer(ephemeral=True)
+        invocation = await sd.Invocation.of(interaction)
         locale = await resolve_locale(interaction, self.bot.services.settings)
         # A context menu cannot carry `requires(...)`, so the same denial is raised by hand.
         await enforce(interaction, BUILD_SUBMISSION_RECALC)
         if not self._is_build_log_message(message):
-            await respond_payload(
-                interaction,
-                error_layout(
+            await invocation.reply(
+                error_node(
                     t(locale, _("Nothing to recalculate")),
                     t(locale, _("Builds are only read out of messages posted in a build log channel.")),
                 ),
+                visibility="personal",
             )
             return
 
@@ -417,9 +416,8 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             IdentityProvider.DISCORD, str(message.author.id)
         )
         if account is None or account.id is None or account.needs_consent_refresh:
-            await respond_payload(
-                interaction,
-                error_layout(
+            await invocation.reply(
+                error_node(
                     t(locale, _("Author has not consented")),
                     t(
                         locale,
@@ -430,10 +428,11 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
                         user_id=message.author.id,
                     ),
                 ),
+                visibility="personal",
             )
             if CONSENT_STICKY_ENABLED and isinstance(message.channel, discord.TextChannel):
                 await self.consent_sticky.trigger(message.channel)
             return
 
         await self.infer_build_from_message(message)
-        await respond_payload(interaction, text_layout(t(locale, _("Build recalculated."))))
+        await invocation.reply(text_node(t(locale, _("Build recalculated."))), visibility="personal")

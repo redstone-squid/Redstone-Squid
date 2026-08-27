@@ -27,12 +27,10 @@ from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.ui import (
     PagedList,
     create_message_root,
-    error_layout,
     error_node,
     info_node,
     message_destination,
-    reply_payload,
-    text_layout,
+    text_node,
 )
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.permissions import hide_unless, requires
@@ -274,14 +272,14 @@ class SearchCog[
     async def view_build(self, ctx: Context[BotT], build_id: int):
         """Displays a submission."""
         if ctx.interaction:
+            invocation = await sd.Invocation.of(ctx)
             locale = await resolve_locale(ctx, self.bot.services.settings)
             interaction = ctx.interaction
             await interaction.response.defer()
             build = await self.queries.get(build_id)
             if build is None:
-                await reply_payload(
-                    ctx,
-                    error_layout(t(locale, _("Error")), t(locale, _("No build with that ID."))),
+                await invocation.reply(
+                    error_node(t(locale, _("Error")), t(locale, _("No build with that ID."))),
                     visibility="personal",
                 )
                 return
@@ -360,22 +358,21 @@ class SearchCog[
     async def debug_build(self, ctx: Context[BotT], build_id: int):
         """Display internal details for a build."""
         await ctx.defer(ephemeral=personal(ctx))
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         build = await self.queries.get(build_id)
         if build is None:
-            await reply_payload(
-                ctx,
-                error_layout(t(locale, _("Error")), t(locale, _("No build with that ID."))),
-                visibility="personal" if personal(ctx) else "public",
+            await invocation.reply(
+                error_node(t(locale, _("Error")), t(locale, _("No build with that ID."))),
+                visibility="personal",
             )
             return
 
         # One message carrying the file, rather than a running message that would then have to
         # be edited into holding an attachment it was not sent with.
-        await reply_payload(
-            ctx,
-            text_layout(t(locale, _("Internal state for build #{id} is attached."), id=build_id)),
-            visibility="personal" if personal(ctx) else "public",
+        await invocation.reply(
+            text_node(t(locale, _("Internal state for build #{id} is attached."), id=build_id)),
+            visibility="personal",
             files=[discord.File(io.BytesIO(_debug_dump(build).encode()), filename=f"build-{build_id}-debug.json")],
         )
 

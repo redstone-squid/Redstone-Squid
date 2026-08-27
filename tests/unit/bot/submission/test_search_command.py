@@ -140,25 +140,27 @@ async def test_a_plain_target_leaves_the_query_untouched() -> None:
 
 async def test_public_build_panel_recovers_background_refresh_after_its_followup_token_stales(monkeypatch) -> None:
     interaction = fake_interaction()
+    interaction.guild_locale = None
+    interaction.locale = "en-US"
     public_message = fake_message(message_id=42, ephemeral=False)
     interaction.followup.send.return_value = public_message
     build = OtherBuild(id=42)
     renderer = SimpleNamespace(render_node=AsyncMock(side_effect=[sl.paragraph("Build 42"), sl.paragraph("Build 43")]))
     topic_bus = sl.runtime.LocalTopicBus()
     layout_scheduler = sd.MessageRootScheduler(topic_bus)
-    bot = SimpleNamespace(
+    bot = make_layout_bot(
         services=SimpleNamespace(settings=SimpleNamespace()),
         for_build=lambda current: renderer,
         topic_bus=topic_bus,
-        client_runtime=SimpleNamespace(scheduler=layout_scheduler),
     )
+    bot.client_runtime.scheduler = layout_scheduler
     cog = SearchCog.__new__(SearchCog)
     cog.bot = cast(Any, bot)
     queries = SimpleNamespace(get=AsyncMock(return_value=build))
     cog.queries = cast(Any, queries)
-    message_roots: list[sd.MessageRoot] = []
+    message_roots: list[sd.MessageRoot[Any]] = []
 
-    def capture_root(component: sl.Component, **kwargs: Any) -> sd.MessageRoot:
+    def capture_root(component: sl.Component, **kwargs: Any) -> sd.MessageRoot[Any]:
         message_root = sd.MessageRoot(component, access=Everyone(), timeout=None, scheduler=kwargs.get("scheduler"))
         message_roots.append(message_root)
         return message_root
@@ -167,7 +169,7 @@ async def test_public_build_panel_recovers_background_refresh_after_its_followup
     monkeypatch.setattr(search_module, "resolve_locale", AsyncMock(return_value=None))
     ctx = cast(
         commands.Context[Any],
-        cast(Any, SimpleNamespace(interaction=interaction, author=SimpleNamespace(id=7))),
+        cast(Any, SimpleNamespace(interaction=interaction, author=SimpleNamespace(id=7), bot=bot, guild=None)),
     )
 
     await SearchCog.view_build.callback(cog, ctx, build_id=42)  # type: ignore[arg-type]
