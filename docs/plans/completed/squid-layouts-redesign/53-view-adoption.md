@@ -27,7 +27,7 @@ so it ships against synthetic fixtures and the live gate is its only real-world 
 
 ## Relation to the standing rejection
 
-[90](../../squid-layouts-redesign/90-deferred.md) rejects `compose(into=view)` / adopting existing discord.py views, and the
+[90](../../squid-ui-redesign/90-deferred.md) rejects `compose(into=view)` / adopting existing discord.py views, and the
 2026-08-22 revisit refined it:
 
 > *Adoption* — Squid and a live view both claiming lifecycle or edit ownership of one

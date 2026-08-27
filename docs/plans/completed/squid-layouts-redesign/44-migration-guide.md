@@ -5,7 +5,7 @@
 CascadeUI's clearest advantage is adoption friction: it subclasses ordinary `View`/
 `LayoutView`, so one stateful view can land inside an otherwise untouched bot. Squid
 deliberately does not adopt a live view — renderer ownership is what keeps budget
-measurement sound ([90](90-deferred.md)) — but it *does* ship every boundary an incremental
+measurement sound ([90](../../squid-ui-redesign/90-deferred.md)) — but it *does* ship every boundary an incremental
 migration needs: measured fragments inside a host-owned `LayoutView`
 ([35](35-discord-v2-fragments.md)), classic messages ([36](36-classic-discord-target.md)),
 routed controls that keep existing custom ids ([14](14-routed-actions.md),

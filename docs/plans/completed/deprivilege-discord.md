@@ -14,7 +14,7 @@
 > adapter class, three flat config fields, one `PROVIDER_FACTORIES` entry, and one
 > `OAuthConfig._GROUPS` entry.
 
-> **Amended for [PR #183 review plan 11](pr-183-review/11-api-auth-records-sync.md), which landed
+> **Amended for [PR #183 review plan 11](../pr-183-review/11-api-auth-records-sync.md), which landed
 > between this document being written and being started.** Nothing here changed in substance; the
 > ground under it moved in three ways.
 >

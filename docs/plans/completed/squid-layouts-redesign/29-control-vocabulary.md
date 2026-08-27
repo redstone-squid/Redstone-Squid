@@ -6,7 +6,7 @@ Add the first vocabulary batch that applications currently spell with raw Discor
 or ad-hoc patterns: boolean toggles, modal multi-choice, portable upload values and visible
 downloads, decisions, editable collections, and typed instants. The batch follows plan 10's
 ownership names, plan 19's two-shell rule, and the existing semantic → primitive → scene
-pipeline. `sl.resource` from [90](90-deferred.md) is an async loading descriptor; it is
+pipeline. `sl.resource` from [90](../../squid-ui-redesign/90-deferred.md) is an async loading descriptor; it is
 unrelated to `PlanResult.resources["asset:…"]` and does not participate in this design.
 
 ## 1. Toggle

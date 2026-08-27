@@ -29,7 +29,7 @@ ergonomics gap, not the vocabulary.
 expressible; the existing abstractions stay exactly where [34](34-safe-session-runtime.md)
 put them.
 
-Class-body policy is rejected and recorded in [90](90-deferred.md): every Cascade attribute is
+Class-body policy is rejected and recorded in [90](../../squid-ui-redesign/90-deferred.md): every Cascade attribute is
 either an actor (`Owner(user_id)`), a scope (`SessionKey.user_guild(..., guild_id)`) or a host
 decision the *same* component is opened with differently — `ConsentPrompt` opens as a root
 under `Reject()` and as an attached child of a parent session two lines apart
