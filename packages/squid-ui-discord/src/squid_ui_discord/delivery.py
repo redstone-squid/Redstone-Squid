@@ -522,6 +522,7 @@ def respond_to(
     *,
     ephemeral: bool = True,
     wait: bool = False,
+    files: Sequence[discord.File] = (),
     allowed_mentions: discord.AllowedMentions | None = None,
     adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
 ) -> MessageDestination:
@@ -535,11 +536,11 @@ def respond_to(
     mentions = no_mentions() if allowed_mentions is None else allowed_mentions
 
     async def send(payload: MessagePayload) -> DeliveryResult:
-        files = _merged_files((), payload)
+        merged_files = _merged_files(files, payload)
         mode = payload.mode
         if interaction.response.is_done():
             message = await interaction.followup.send(
-                files=files,
+                files=merged_files,
                 ephemeral=ephemeral,
                 wait=wait,
                 allowed_mentions=mentions,
@@ -549,7 +550,7 @@ def respond_to(
                 return DeliveryResult(None, None)
             return DeliveryResult(message, _WebhookMessageHandle(interaction, message.id, message, mode=mode))
         response = await interaction.response.send_message(  # pyrefly: ignore[no-matching-overload]
-            files=files, ephemeral=ephemeral, allowed_mentions=mentions, **payload._send_fields()
+            files=merged_files, ephemeral=ephemeral, allowed_mentions=mentions, **payload._send_fields()
         )
         callback_message = response.resource if isinstance(response.resource, discord.Message) else None
         message = await interaction.original_response() if wait and callback_message is None else callback_message

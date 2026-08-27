@@ -32,6 +32,7 @@ from squid_ui_discord import (
     grids,
     guards,
     inspection,
+    invocation,
     live,
     message_payload,
     message_root,
@@ -76,6 +77,7 @@ from squid_ui_discord.delivery import (
 )
 from squid_ui_discord.fragments import contribute
 from squid_ui_discord.grids import button_grid
+from squid_ui_discord.invocation import Invocation, Private, Visibility, current_invocation, invocation_scope
 from squid_ui_discord.live import message_roots
 from squid_ui_discord.managed import (
     ErrorObserver,
@@ -138,6 +140,8 @@ from squid_ui_discord.roles import (
 from squid_ui_discord.runtime import (
     ClientRuntime,
     ClientRuntimeMissing,
+    InvocationSource,
+    LocalizationResolver,
     install,
 )
 from squid_ui_discord.session_specs import MessageRootOptionsResolver, OpenContext, ScopeKind, SessionSpec
@@ -198,7 +202,10 @@ __all__ = [
     "ErrorRenderer",
     "Everyone",
     "ExistingLayoutError",
+    "Invocation",
+    "InvocationSource",
     "LimitViolationError",
+    "LocalizationResolver",
     "ManagedDelivery",
     "ManagedError",
     "MessageDestination",
@@ -215,6 +222,7 @@ __all__ = [
     "OpenContext",
     "Owner",
     "PauseUpdates",
+    "Private",
     "RenderedMessage",
     "RenewEphemeral",
     "ResourceCost",
@@ -236,6 +244,7 @@ __all__ = [
     "StackNavigator",
     "SuccessRenderer",
     "Users",
+    "Visibility",
     "Work",
     "access",
     "actions",
@@ -248,6 +257,7 @@ __all__ = [
     "conform",
     "conformance",
     "contribute",
+    "current_invocation",
     "current_message_root",
     "deliver_to",
     "delivery",
@@ -260,6 +270,8 @@ __all__ = [
     "guards",
     "inspection",
     "install",
+    "invocation",
+    "invocation_scope",
     "limits",
     "live",
     "message_mode",

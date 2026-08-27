@@ -80,6 +80,16 @@ def test_install_keeps_host_defaults_and_adds_to_them() -> None:
     assert runtime.defaults.strict is True
 
 
+def test_install_keeps_the_optional_localization_resolver() -> None:
+    async def resolve(source: sd.InvocationSource) -> sl.text.Localization:
+        del source
+        return sl.text.Localization(locale="en-GB")
+
+    runtime = install(cast(discord.Client, fake_client()), localization=resolve)
+
+    assert runtime.localization is resolve
+
+
 def test_of_resolves_from_a_client_an_interaction_and_a_command_context() -> None:
     client = fake_client()
     runtime = install(cast(discord.Client, client))
