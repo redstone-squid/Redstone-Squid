@@ -18,7 +18,7 @@ from discord.ext.commands import Context
 
 import squid_ui as ui
 import squid_ui_discord as sd
-from squid.core.i18n import catalog_for, negotiate_locale
+from squid.bot.i18n import localization_for
 
 DISCORD_RED = 0xF04747
 DISCORD_YELLOW = 0xFAA61A
@@ -100,13 +100,6 @@ def L(message: str | Template, /, **params: object) -> ui.text.Message:
         values[name] = interpolation.value
     parts.append(message.strings[-1])
     return ui.text.Message("".join(parts), values)
-
-
-def localization_for(locale: str | None) -> ui.text.Localization:
-    """Build the framework localization backed by the bot's negotiated catalogue."""
-    resolved = negotiate_locale(locale)
-    catalog = catalog_for(resolved)
-    return ui.text.Localization(locale=resolved, gettext=catalog.gettext, ngettext=catalog.ngettext)
 
 
 def _try_again_in(seconds: float) -> ui.text.Message:

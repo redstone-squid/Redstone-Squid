@@ -211,12 +211,19 @@ def make_layout_bot(**attributes: Any) -> Any:
     bare `SessionManager`. The installation is weakly keyed, so it leaves with the double.
     """
     import squid_ui_discord as sd
+    from squid.bot.i18n import localization_resolver
     from squid.bot.ui import HOST_DEFAULTS
     from squid_reactivity import LocalTopicBus
+    from squid_ui.text import NEUTRAL, Localization
 
     bus = attributes.get("topic_bus") or LocalTopicBus()
     client = FakeClient(topic_bus=bus, **{k: v for k, v in attributes.items() if k != "topic_bus"})
-    runtime = sd.install(cast(discord.Client, client), defaults=HOST_DEFAULTS, bus=bus)
+
+    async def resolve(source: sd.InvocationSource) -> Localization:
+        settings = getattr(getattr(client, "services", None), "settings", None)
+        return NEUTRAL if settings is None else await localization_resolver(source)
+
+    runtime = sd.install(cast(discord.Client, client), defaults=HOST_DEFAULTS, bus=bus, localization=resolve)
     # Written through `__dict__` because these are the bot attributes the code under test
     # reads, and the double is a bag of them rather than a class declaring any.
     client.__dict__.update(
