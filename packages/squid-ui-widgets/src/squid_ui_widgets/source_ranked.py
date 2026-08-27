@@ -122,17 +122,20 @@ class SourceRankedList[EntryT](Component):
         return render_content(self, normalize_content(value, name=name), prefix=name)
 
     def render(self) -> RenderResult:
+        # One arm per member of `Ready | Pending | Failed`, with the `previous` case inside it.
+        # Splitting on `previous` in the pattern left the match unprovably exhaustive, so the
+        # checker saw a path with no return on a shape that cannot occur.
         match self.loaded.status:
-            case Pending(previous=None):
-                return self._status(self.loading)
-            case Failed(previous=None):
-                return self._status(self.load_failed, retry=True)
-            case Pending(previous=Ready(value=loaded)):
-                return self._render_loaded(loaded, status=self.loading)
-            case Failed(previous=Ready(value=loaded)):
-                return self._render_loaded(loaded, status=self.load_failed, retry=True)
             case Ready(value=loaded):
                 return self._render_loaded(loaded)
+            case Pending(previous=previous):
+                if previous is None:
+                    return self._status(self.loading)
+                return self._render_loaded(previous.value, status=self.loading)
+            case Failed(previous=previous):
+                if previous is None:
+                    return self._status(self.load_failed, retry=True)
+                return self._render_loaded(previous.value, status=self.load_failed, retry=True)
 
     def _status(self, message: TextLike, *, retry: bool = False) -> RenderResult:
         return stack(
