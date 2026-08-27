@@ -8,7 +8,8 @@ import discord
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.ui import CardField, L, localization_for
+from squid.bot.i18n import localization_for
+from squid.bot.ui import CardField, L
 from squid.bot.utils.permissions import allows
 from squid.core.i18n import SUPPORTED_LOCALES, _
 from squid.permissions.domain import PermissionNode

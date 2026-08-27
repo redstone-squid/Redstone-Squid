@@ -43,7 +43,6 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="VersionTrac
             t(locale, _("Recognized Java versions")),
             versions_human_readable,
             empty=t(locale, _("No Java versions are recognized yet.")),
-            locale=locale,
             # A version is one short token, so a page is a comma-separated run of them rather
             # than fifty paragraphs; the list used to stop at 20 with a TODO in its place.
             page_size=VERSIONS_PER_PAGE,
