@@ -29,7 +29,23 @@ class Counter(sl.Component):
 ```
 
 The base package contains semantic nodes, planning, exact primitives, the component runtime,
-the resolved-scene codec, and an HTML renderer. It has no Discord client dependency.
+the resolved-scene codec, and a first-class HTML target. It has no Discord client dependency;
+`markdown-it-py` is its direct Markdown parser dependency.
+
+Plan a portable document directly to native HTML:
+
+```python
+document = sl.section(
+    sl.heading("Build details"),
+    sl.paragraph("**Compact**, semantic, and accessible."),
+)
+planned = sl.planning.plan(document, target=sl.html.target())
+fragment = sl.html.Renderer().draw(planned.scene, plan=planned)
+```
+
+`Renderer(standalone=True)` adds the document shell and neutral responsive CSS. It accepts only
+HTML scenes; `DiscordPreviewRenderer` remains available when a tool specifically needs to inspect
+a planned Discord Components V2 scene in a browser.
 
 Install the package directly when you are writing a renderer or portable component library:
 
@@ -51,7 +67,7 @@ and provides the `Invocation` and `Screen` entry points.
 The suite is deliberately split so portable code does not acquire transport or storage imports:
 
 - `squid-reactivity`: transactional state and topic primitives
-- `squid-ui`: semantic UI, planner, runtime, scenes, and HTML
+- `squid-ui`: semantic UI, target planners, runtime, scenes, and native HTML
 - `squid-ui-widgets`: reusable frontend-neutral application machines
 - `squid-ui-discord`: discord.py rendering, delivery, sessions, and routing
 - `squid-storage`: portable persistence contracts and backends
