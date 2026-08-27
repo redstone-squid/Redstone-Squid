@@ -1,6 +1,6 @@
 """Reusable recipes for opening logical Discord sessions."""
 
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Hashable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from types import MappingProxyType
@@ -40,7 +40,7 @@ class OpenContext:
     guild_id: int | None = None
 
     @classmethod
-    def of(cls, source: discord.Interaction[Any] | Replyable) -> OpenContext:
+    def of(cls, source: discord.Interaction[Any] | Replyable | discord.Message) -> OpenContext:
         """Build an open context from an interaction or command context.
 
         Read duck-typed, the way `reply_to` peeks at `ctx.interaction`: an interaction names
@@ -181,6 +181,7 @@ class SessionSpec:
         *,
         sessions: SessionManager | RuntimeSource,
         open_context: OpenContext,
+        key: Hashable | None = None,
         **overrides: Unpack[MessageRootOptions],
     ) -> OpenResult:
         """Construct and open a root mount using this screen's policy.
@@ -195,7 +196,7 @@ class SessionSpec:
         return await sessions.open(
             message_root,
             message_destination,
-            key=self.key(open_context),
+            key=self.key(open_context) if key is None else key,
             admission=self.admission,
             actor_id=open_context.user_id,
             capacity=self.capacity,
