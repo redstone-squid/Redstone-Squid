@@ -7,19 +7,16 @@ from typing import Any, Protocol, Self
 from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.adapter import (
-    EMPTY_COST as EMPTY_COST,
-)
-from squid_ui.planning.adapter import (
     AdapterProfile,
     ExtensionAdapter,
-    ResourceCost,
     extension_capability,
 )
 from squid_ui.planning.adapter import (
     PreparedExtension as PreparedExtension,
 )
 from squid_ui.planning.dialect import TargetDialect
-from squid_ui.planning.limits import Axis, MessageLimits
+from squid_ui.planning.resources import EMPTY_COST as EMPTY_COST
+from squid_ui.planning.resources import Axis, ResourceCost, TargetLimits
 
 
 class TargetIdentity(Protocol):
@@ -47,7 +44,7 @@ class TargetIdentity(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
-class Target[LimitsT: MessageLimits, BodyT: scene.Body, ModeT, AdapterT]:
+class Target[LimitsT: TargetLimits, BodyT: scene.Body, ModeT, AdapterT]:
     """What a document is compiled to: a protocol dialect and an adapter for it.
 
     Two axes and nothing else, the way a compiler names `x86_64-unknown-linux-gnu` rather
