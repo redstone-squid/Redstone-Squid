@@ -36,6 +36,10 @@ from squid_ui.text import NEUTRAL, Message
 _TEXT_FIELDS = ("content", "label", "description", "placeholder")
 
 
+async def _ignore_selection(_event: object) -> None:
+    return None
+
+
 def _deferred_text_in(node: object) -> list[str]:
     name = type(node).__name__
     found = [f"{name}.{field}" for field in _TEXT_FIELDS if isinstance(getattr(node, field, None), Message)]
@@ -71,7 +75,7 @@ def test_lowering_leaves_no_deferred_text_behind() -> None:
         LinkButton(label=deferred, url="https://example.invalid"),
         SelectMenu(
             options=(Option(label=deferred, value="v", description=deferred),),
-            on_select=lambda _event: None,
+            on_select=_ignore_selection,
             key="s",
             placeholder=deferred,
         ),
