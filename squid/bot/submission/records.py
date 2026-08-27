@@ -6,8 +6,9 @@ from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Context, hybrid_group
 
+import squid_ui_discord as sd
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.ui import DISCORD_BLUE, PagedList, info_layout, reply_payload
+from squid.bot.ui import DISCORD_BLUE, PagedList, info_node
 from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.bot.utils.permissions import hide_unless, requires
 from squid.bot.utils.visibility import personal
@@ -95,12 +96,12 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     ) -> None:
         """Recompute records from confirmed build facts."""
         await ctx.defer(ephemeral=personal(ctx))
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         kinds = (kind,) if kind is not None else (BuildKind.DOOR, BuildKind.EXTENDER)
         summary = await self.computation.rebuild(current_version_id=current_version_id, kinds=kinds)
-        await reply_payload(
-            ctx,
-            info_layout(
+        await invocation.reply(
+            info_node(
                 t(locale, _("Records rebuilt")),
                 t(
                     locale,
@@ -110,7 +111,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                     unresolved=summary.unresolved,
                 ),
             ),
-            visibility="personal" if personal(ctx) else "public",
+            visibility="personal",
         )
 
     @autocompletes(
@@ -139,6 +140,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     ) -> None:
         """Materialize and compute an arbitrary exact restriction category."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
+        invocation = await sd.Invocation.of(ctx)
         try:
             restriction_ids = frozenset(int(value.strip()) for value in restrictions.split(",") if value.strip())
         except ValueError as error:
@@ -162,9 +164,8 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                     version_id=version_id,
                 )
             )
-        await reply_payload(
-            ctx,
-            info_layout(
+        await invocation.reply(
+            info_node(
                 t(locale, _("Record category materialized")),
                 t(
                     locale,
@@ -175,7 +176,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             ),
             # Staff maintenance, like `records rebuild` beside it: the two answered differently
             # for no reason anybody recorded, which is the pair audit C2 pointed at.
-            visibility="personal" if personal(ctx) else "public",
+            visibility="personal",
         )
 
 

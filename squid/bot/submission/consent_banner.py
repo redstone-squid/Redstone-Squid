@@ -15,8 +15,7 @@ from squid.bot.ui import (
     CardField,
     localization_for,
     render_payload,
-    respond_payload,
-    text_layout,
+    text_node,
 )
 from squid.bot.utils.sticky_message import StickyMessage
 from squid.core.i18n import _
@@ -37,14 +36,14 @@ CONSENT_BUTTON_CUSTOM_ID = build_log_consent.id()
 @build_log_consents.route(build_log_consent)
 async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
     """Open the ephemeral consent prompt behind the public banner button."""
+    invocation = await sd.Invocation.of(interaction)
     locale = await resolve_locale(interaction, interaction.client.services.settings)
     accounts = interaction.client.services.accounts
 
     account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(interaction.user.id))
     if account is not None and account.id is not None and not account.needs_consent_refresh:
-        await respond_payload(
-            interaction,
-            text_layout(
+        await invocation.reply(
+            text_node(
                 t(
                     locale,
                     _(
@@ -56,7 +55,7 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
                     ),
                 )
             ),
-            ephemeral=True,
+            visibility="personal",
         )
         return
 
@@ -93,9 +92,9 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
         localization=localization_for(locale),
     )
     if isinstance(opened, Rejected):
-        await respond_payload(
-            interaction,
-            text_layout(t(locale, _("You already have a consent prompt open. Please answer that one."))),
+        await invocation.reply(
+            text_node(t(locale, _("You already have a consent prompt open. Please answer that one."))),
+            visibility="personal",
         )
         return
     if not isinstance(opened, Opened):
@@ -106,9 +105,8 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
         await accounts.get_or_create_identity(
             IdentityProvider.DISCORD, str(interaction.user.id), consent=component.consent
         )
-        await respond_payload(
-            interaction,
-            text_layout(
+        await invocation.reply(
+            text_node(
                 t(
                     locale,
                     _(
@@ -121,6 +119,7 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
                     version=CURRENT_CONSENT_VERSION,
                 )
             ),
+            visibility="personal",
         )
 
 

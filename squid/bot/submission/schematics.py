@@ -18,7 +18,7 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.groups import BuildCommandGroup
-from squid.bot.ui import render_payload, reply_payload, send_component, text_layout
+from squid.bot.ui import send_component, text_node
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.permissions import requires
 from squid.bot.utils.visibility import personal
@@ -81,19 +81,14 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
     async def schematic_info(self, ctx: Context[BotT], build_id: int) -> None:
         """Show what the engine read out of the build's schematic."""
         await ctx.defer()
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         stored = await self._primary_or_explain(ctx, build_id, locale=locale)
         if stored is None:
             return
-        await reply_payload(
-            ctx,
-            render_payload(
-                [
-                    sl.primitives.Text(
-                        _describe(stored, locale=locale, render_skip=self.schematics.explain_render_skip(stored))
-                    )
-                ],
-                locale=locale,
+        await invocation.reply(
+            sl.primitives.Text(
+                _describe(stored, locale=locale, render_skip=self.schematics.explain_render_skip(stored))
             ),
         )
 
@@ -154,6 +149,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
     ) -> None:
         """Render the build's schematic and post the image."""
         await ctx.defer()
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         stored = await self._primary_or_explain(ctx, build_id, locale=locale)
         if stored is None:
@@ -169,9 +165,8 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
             # sentence rather than an error card telling them to report it.
             await _say(ctx, error.localized_public_detail(locale))
             return
-        await reply_payload(
-            ctx,
-            text_layout(t(locale, _("Rendered schematic for build {id}."), id=build_id)),
+        await invocation.reply(
+            text_node(t(locale, _("Rendered schematic for build {id}."), id=build_id)),
             files=[discord.File(io.BytesIO(rendered.png), filename=f"build-{build_id}-render.png")],
         )
 
@@ -301,7 +296,8 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
 
 
 async def _say(ctx: Context[squid.bot.app.RedstoneSquid], message: str, *, ephemeral: bool = False) -> None:
-    await reply_payload(ctx, text_layout(message), visibility="personal" if ephemeral else "public")
+    invocation = await sd.Invocation.of(ctx)
+    await invocation.reply(text_node(message), visibility="personal" if ephemeral else "public")
 
 
 def _describe(stored: StoredSchematic, *, locale: str | None, render_skip: RenderSkipReason | None = None) -> str:
