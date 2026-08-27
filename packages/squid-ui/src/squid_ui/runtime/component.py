@@ -91,6 +91,7 @@ from squid_ui.semantic import (
 )
 from squid_ui.semantic import Paged as SemanticPaged
 from squid_ui.semantic import Roster as SemanticRoster
+from squid_ui.semantic import RoutedActionControl as SemanticRoutedActionControl
 from squid_ui.semantic import (
     Table as SemanticTable,
 )
@@ -743,16 +744,21 @@ def _namespace(nodes: list[AnyLayoutNode], prefix: str) -> list[AnyLayoutNode]:
     def rewrite_item[T](item: T) -> T:
         return replace(item, key=key_for(item)) if isinstance(item, Button) else item  # pyrefly: ignore
 
+    def rewrite_semantic_control(
+        item: SemanticActionControl | SemanticLink | SemanticRoutedActionControl,
+    ) -> SemanticActionControl | SemanticLink | SemanticRoutedActionControl:
+        return replace(item, key=f"{prefix}.{item.key}")
+
     def rewrite_semantic_action(
-        item: SemanticActionControl | SemanticLink | SemanticControlGroup,
-    ) -> SemanticActionControl | SemanticLink | SemanticControlGroup:
+        item: SemanticActionControl | SemanticLink | SemanticRoutedActionControl | SemanticControlGroup,
+    ) -> SemanticActionControl | SemanticLink | SemanticRoutedActionControl | SemanticControlGroup:
         if isinstance(item, SemanticControlGroup):
             return replace(
                 item,
                 key=f"{prefix}.{item.key}",
-                controls=tuple(rewrite_semantic_action(control) for control in item.controls),
+                controls=tuple(rewrite_semantic_control(control) for control in item.controls),
             )
-        return replace(item, key=f"{prefix}.{item.key}")
+        return rewrite_semantic_control(item)
 
     def rewrite(node: AnyLayoutNode) -> AnyLayoutNode:
         match node:

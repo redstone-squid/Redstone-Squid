@@ -185,7 +185,11 @@ def _template(value: object, dynamic: tuple[object, ...]) -> object:
     if isinstance(value, GeneratedHandler):
         return _GeneratedHandlerTemplate(
             type(value),
-            tuple((item.name, _template(getattr(value, item.name), dynamic)) for item in fields(value) if item.init),
+            tuple(
+                (item.name, _template(getattr(value, item.name), dynamic))
+                for item in fields(cast(Any, value))
+                if item.init
+            ),
         )
     if callable(value) or (
         not isinstance(value, Enum | str | bytes | int | float | bool | Mapping | Sequence)
@@ -756,9 +760,9 @@ def plan[ModeT, AdapterT, BodyT: scene.Body](
     if memo is not None:
         exact = memo.get(rendered, exact_key, presentation, presentation.revision)
         if isinstance(exact, PlanResult):
-            return replace(
-                exact,
-                metrics=replace(exact.metrics, cache_hit=True, reuse=PlanReuse.EXACT),
+            return cast(
+                PlanResult[BodyT],
+                replace(exact, metrics=replace(exact.metrics, cache_hit=True, reuse=PlanReuse.EXACT)),
             )
     document = as_document(rendered)
     # Every axis is withheld the same way: by planning against a smaller target.
@@ -846,7 +850,7 @@ def plan[ModeT, AdapterT, BodyT: scene.Body](
         lowered = dialect.normalize(semantic.nodes, target)
         assets = _merge_assets(document.assets, semantic.assets)
         dialect.validate(lowered, limits)
-        selected_nodes = resolve_variants(lowered, dict(cached.variant_positions))
+        selected_nodes = tuple(resolve_variants(lowered, dict(cached.variant_positions)))
         collected = _collect_cached_bindings(selected_nodes, cached.scene, nav, chrome)
         resources = {f"asset:{asset.key}": asset for asset in assets}
         result = PlanResult(
