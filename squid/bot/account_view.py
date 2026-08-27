@@ -33,16 +33,42 @@ from squid.accounts.domain import (
 )
 from squid.accounts.errors import AccountNotFoundError
 from squid.bot.consent import request_consent
-from squid.bot.i18n import t
-from squid.bot.profile_render import identity_label, own_profile_avatar, own_profile_fields
-from squid.bot.ui import CardField
+from squid.bot.profile_render import own_profile_avatar
+from squid.bot.ui import CardField, L
 from squid.core.errors import ValidationError
-from squid.core.i18n import _
 
 SESSION_SECONDS = 300
 
 MAX_LISTED = 25
 """A select holds 25 options, and only a long merge history reaches even a handful."""
+
+
+def _provider_label(provider: IdentityProvider) -> sl.TextLike:
+    match provider:
+        case IdentityProvider.DISCORD:
+            return L("Discord")
+        case IdentityProvider.JAVA:
+            return L("Minecraft (Java)")
+        case IdentityProvider.BEDROCK:
+            return L("Minecraft (Bedrock)")
+
+
+def _identity_label(identity: AccountIdentity) -> sl.TextLike:
+    provider = _provider_label(identity.provider)
+    if identity.provider is IdentityProvider.DISCORD and identity.discord_id is not None:
+        return L("{provider} — <@{subject}>", provider=provider, subject=identity.discord_id)
+    return L(
+        "{provider} — {name}",
+        provider=provider,
+        name=identity.display_name or identity.subject,
+    )
+
+
+def _error_detail(error: ValidationError) -> sl.TextLike:
+    message = L(error.message, **error.message_params)
+    if error.end_user_action is None:
+        return message
+    return L("{message} {action}", message=message, action=L(error.end_user_action))
 
 
 class AccountPanel(sl.Component[sl.ComponentsV2Target]):
@@ -63,13 +89,11 @@ class AccountPanel(sl.Component[sl.ComponentsV2Target]):
         accounts: AccountService,
         account_id: int,
         author_id: int,
-        locale: str | None = None,
         timeout: float = SESSION_SECONDS,
     ) -> None:
         self._accounts = accounts
         self._account_id = account_id
         self._author_id = author_id
-        self.locale = locale
         self._timeout = timeout
         self._profile = AccountProfile.empty(account_id)
         self._profile_editor = None
@@ -103,13 +127,13 @@ class AccountPanel(sl.Component[sl.ComponentsV2Target]):
 
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self.closed:
-            return (sl.section(sl.heading(t(self.locale, _("Account controls closed")))),)
+            return (sl.section(sl.heading(L("Account controls closed"))),)
         if self._profile_editor is not None:
             return (
                 self.boundary(self._profile_editor, key="profile-editor"),
                 sl.action_controls(
                     sl.action_control(
-                        t(self.locale, _("Cancel")),
+                        L("Cancel"),
                         self._cancel_profile_edit,
                         key="cancel-profile-edit",
                     ),
@@ -122,7 +146,7 @@ class AccountPanel(sl.Component[sl.ComponentsV2Target]):
         extra_media = media[1:]
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
             sl.section(
-                sl.heading(self._profile.display_name or t(self.locale, _("Your account"))),
+                sl.heading(self._profile.display_name or L("Your account")),
                 # The bio is the card's shock absorber: truncate lets it give up characters
                 # under pressure before the fields or footer lose any.
                 self._profile.bio and sl.truncate(sl.paragraph(self._profile.bio)),
@@ -137,7 +161,7 @@ class AccountPanel(sl.Component[sl.ComponentsV2Target]):
                 sl.choices(
                     *(
                         sl.choice(
-                            identity_label(identity, self.locale),
+                            _identity_label(identity),
                             key=str(identity.id),
                             description=self.identity_detail(identity),
                         )
@@ -154,26 +178,26 @@ class AccountPanel(sl.Component[sl.ComponentsV2Target]):
         nodes.extend(
             (
                 sl.toggle(
-                    t(self.locale, _("Selected identity")),
+                    L("Selected identity"),
                     key="identity_visibility",
                     on=sl.controlled(identity is not None and identity.is_public, self._toggle_identity),
-                    on_label=t(self.locale, _("Shown on page")),
-                    off_label=t(self.locale, _("Hidden from page")),
+                    on_label=L("Shown on page"),
+                    off_label=L("Hidden from page"),
                     available=identity is not None,
                 ),
                 sl.toggle(
-                    t(self.locale, _("Creator page")),
+                    L("Creator page"),
                     key="page_visibility",
                     on=sl.controlled(not self.page_hidden, self._toggle_page),
-                    on_label=t(self.locale, _("Shown")),
-                    off_label=t(self.locale, _("Hidden")),
+                    on_label=L("Shown"),
+                    off_label=L("Hidden"),
                 ),
             )
         )
         nodes.append(
             sl.action_controls(
                 sl.action_control(
-                    t(self.locale, _("Unlink")),
+                    L("Unlink"),
                     self._unlink,
                     key="unlink",
                     tone=sl.Tone.DANGER,
@@ -181,12 +205,12 @@ class AccountPanel(sl.Component[sl.ComponentsV2Target]):
                     guard=sp.guards.confirm(self._unlink_warning()),
                 ),
                 sl.action_control(
-                    t(self.locale, _("Edit page")),
+                    L("Edit page"),
                     self._edit_page,
                     key="edit_page",
                     emphasis=sl.semantic.Emphasis.STRONG,
                 ),
-                sl.action_control(t(self.locale, _("Close")), self._close, key="close"),
+                sl.action_control(L("Close"), self._close, key="close"),
                 key="account-actions",
             )
         )
@@ -225,10 +249,9 @@ class AccountPanel(sl.Component[sl.ComponentsV2Target]):
         removed = await self._accounts.unlink_identity(self._account_id, identity.id)
         await self._reload()
         await event.notice(
-            t(
-                self.locale,
-                _("Unlinked {identity}. Any build credit you hold is unaffected."),
-                identity=identity_label(removed, self.locale),
+            L(
+                "Unlinked {identity}. Any build credit you hold is unaffected.",
+                identity=_identity_label(removed),
             )
         )
 
@@ -241,25 +264,25 @@ class AccountPanel(sl.Component[sl.ComponentsV2Target]):
     def _build_profile_editor(self) -> sp.ComponentDriver[sp.EditorState]:
         profile_section = sp.EditorSection.from_form(
             "profile",
-            t(self.locale, _("Profile")),
+            L("Profile"),
             sl.forms.FormSpec(
-                t(self.locale, _("Edit profile")),
+                L("Edit profile"),
                 (
                     sl.forms.TextField(
                         key="display_name",
-                        label=t(self.locale, _("Display name")),
+                        label=L("Display name"),
                         required=False,
                         maximum=MAX_DISPLAY_NAME_LENGTH,
                     ),
                     sl.forms.TextField(
                         key="pronouns",
-                        label=t(self.locale, _("Pronouns")),
+                        label=L("Pronouns"),
                         required=False,
                         maximum=MAX_PRONOUNS_LENGTH,
                     ),
                     sl.forms.TextAreaField(
                         key="bio",
-                        label=t(self.locale, _("Bio")),
+                        label=L("Bio"),
                         required=False,
                         maximum=MAX_BIO_LENGTH,
                     ),
@@ -267,18 +290,18 @@ class AccountPanel(sl.Component[sl.ComponentsV2Target]):
             ),
         )
         links = sp.CollectionEditor(
-            t(self.locale, _("Links")),
+            L("Links"),
             create=sl.forms.FormSpec(
-                t(self.locale, _("Profile link")),
+                L("Profile link"),
                 (
                     sl.forms.TextField(
                         key="label",
-                        label=t(self.locale, _("Label")),
+                        label=L("Label"),
                         maximum=MAX_LINK_LABEL_LENGTH,
                     ),
                     sl.forms.TextField(
                         key="url",
-                        label=t(self.locale, _("HTTPS URL")),
+                        label=L("HTTPS URL"),
                         maximum=MAX_LINK_URL_LENGTH,
                     ),
                 ),
@@ -290,18 +313,18 @@ class AccountPanel(sl.Component[sl.ComponentsV2Target]):
         )
         links_section = sp.EditorSection.from_pattern(
             "links",
-            t(self.locale, _("Links")),
+            L("Links"),
             links,
             load=lambda value: links.initial_from(cast(Iterable[Mapping[str, object]], value)),
             dump=links.values,
-            summary=lambda value: t(self.locale, _("{count} links"), count=len(value)),
+            summary=lambda value: L("{count} links", count=len(value)),
             issues=lambda state: (sl.forms.FormError(message) for message in links.errors(state)),
         )
         editor = sp.Editor(
-            t(self.locale, _("Edit your creator page")),
+            L("Edit your creator page"),
             (profile_section, links_section),
             preview=self._profile_preview,
-            commit_label=t(self.locale, _("Save profile")),
+            commit_label=L("Save profile"),
             validate=self._validate_profile_editor,
         )
         initial: sp.EditorValues = {
@@ -318,7 +341,7 @@ class AccountPanel(sl.Component[sl.ComponentsV2Target]):
         try:
             ProfileLink.parse(str(values["label"]), str(values["url"]))
         except ValidationError as error:
-            return (sl.forms.FormError(error.localized_public_detail(self.locale)),)
+            return (sl.forms.FormError(_error_detail(error)),)
         return ()
 
     def _raw_profile_update(self, values: sp.EditorValues) -> ProfileUpdate:
@@ -338,14 +361,14 @@ class AccountPanel(sl.Component[sl.ComponentsV2Target]):
         try:
             self._profile_update(values)
         except ValidationError as error:
-            return (sl.forms.FormError(error.localized_public_detail(self.locale)),)
+            return (sl.forms.FormError(_error_detail(error)),)
         return ()
 
     def _profile_preview(self, values: sp.EditorValues) -> sl.LayoutNode[sl.ComponentsV2Target]:
         draft = self._raw_profile_update(values).apply(self._profile)
-        fields = tuple(sl.field(field.name, field.value) for field in own_profile_fields(draft, self.locale))
+        fields = tuple(sl.field(field.name, field.value) for field in self._profile_fields(draft))
         return sl.section(
-            sl.heading(draft.display_name or t(self.locale, _("Your account"))),
+            sl.heading(draft.display_name or L("Your account")),
             draft.bio and sl.truncate(sl.paragraph(draft.bio)),
             sl.fields(*fields) if fields else None,
         )
@@ -359,7 +382,7 @@ class AccountPanel(sl.Component[sl.ComponentsV2Target]):
         await self._accounts.update_profile(self._account_id, self._profile_update(values))
         await self._refresh()
         self._profile_editor = None
-        await event.source.notice(t(self.locale, _("Profile saved.")))
+        await event.source.notice(L("Profile saved."))
 
     async def _cancel_profile_edit(self, _event: sl.PressEvent) -> None:
         self._profile_editor = None
@@ -392,7 +415,7 @@ class AccountPanel(sl.Component[sl.ComponentsV2Target]):
             sd.native(event),
             user_id=self._author_id,
             on_answer=answered,
-            locale=self.locale,
+            locale=message_root.localization.locale,
             parent=message_root,
         )
 
@@ -405,54 +428,59 @@ class AccountPanel(sl.Component[sl.ComponentsV2Target]):
         await event.finish()
 
     def _fields(self) -> list[CardField]:
-        fields = own_profile_fields(self._profile, self.locale)
-        fields += [
-            CardField(identity_label(identity, self.locale), self.identity_detail(identity))
-            for identity in self.identities
-        ]
+        fields = self._profile_fields(self._profile)
+        fields += [CardField(_identity_label(identity), self.identity_detail(identity)) for identity in self.identities]
         if not fields:
-            fields.append(CardField(t(self.locale, _("Linked accounts")), t(self.locale, _("_None yet._"))))
+            fields.append(CardField(L("Linked accounts"), L("_None yet._")))
         fields.append(
             CardField(
-                t(self.locale, _("Creator page")),
-                t(self.locale, _("Hidden")) if self.page_hidden else t(self.locale, _("Public")),
+                L("Creator page"),
+                L("Hidden") if self.page_hidden else L("Public"),
             )
         )
         return fields
 
-    def identity_detail(self, identity: AccountIdentity) -> str:
-        return t(
-            self.locale,
-            _("{visibility} · verified {age}"),
-            visibility=(t(self.locale, _("shown publicly")) if identity.is_public else t(self.locale, _("hidden"))),
+    @staticmethod
+    def _profile_fields(profile: AccountProfile) -> list[CardField]:
+        fields: list[CardField] = []
+        if profile.pronouns:
+            fields.append(CardField(L("Pronouns"), profile.pronouns))
+        if profile.links:
+            links = "\n".join(f"[{link.label}]({link.url})" for link in profile.links)
+            fields.append(CardField(L("Links"), links))
+        return fields
+
+    def identity_detail(self, identity: AccountIdentity) -> sl.TextLike:
+        return L(
+            "{visibility} · verified {age}",
+            visibility=L("shown publicly") if identity.is_public else L("hidden"),
             age=(
-                discord.utils.format_dt(identity.verified_at.to_stdlib(), style="R")
+                sl.md(discord.utils.format_dt(identity.verified_at.to_stdlib(), style="R"))
                 if identity.verified_at is not None
-                else t(self.locale, _("unknown"))
+                else L("unknown")
             ),
         )
 
-    def _unlink_warning(self) -> str:
+    def _unlink_warning(self) -> sl.TextLike:
         """What the reader is agreeing to, asked before the press rather than after it."""
         identity = self.selected
         if identity is None:
-            return t(self.locale, _("Remove this linked account?"))
-        warning = t(
-            self.locale,
-            _("Remove {identity}? Any build credit you hold is unaffected."),
-            identity=identity_label(identity, self.locale),
+            return L("Remove this linked account?")
+        warning = L(
+            "Remove {identity}? Any build credit you hold is unaffected.",
+            identity=_identity_label(identity),
         )
         if identity.provider is IdentityProvider.DISCORD and identity.discord_id == self._author_id:
-            warning += " " + t(
-                self.locale,
-                _("This is the Discord account you are using now. The bot will stop recognising you here."),
+            return L(
+                "{warning} {consequence}",
+                warning=warning,
+                consequence=L("This is the Discord account you are using now. The bot will stop recognising you here."),
             )
         return warning
 
-    def _footer(self) -> str | None:
+    def _footer(self) -> sl.TextLike | None:
         if self.page_hidden:
-            return t(
-                self.locale,
+            return L(
                 "A hidden page still lists the creator names you hold, because that credit is what attributes your builds.",
             )
         return None
