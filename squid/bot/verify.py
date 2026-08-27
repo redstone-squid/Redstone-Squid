@@ -26,7 +26,7 @@ from squid.bot.i18n import resolve_locale, t
 from squid.bot.profile_render import (
     public_profile_fields,
 )
-from squid.bot.ui import card_node, text_node
+from squid.bot.ui import L, card_node, text_node
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.permissions import PermissionNodeRequired, requires, subject_for
 from squid.core.i18n import _
@@ -46,24 +46,23 @@ class MergeConfirmation(sl.Component[sl.ComponentsV2Target]):
 
     value: bool | None = sl.state(None)
 
-    def __init__(self, prompt: str, *, author_id: int, locale: str, timeout: float = 60) -> None:
+    def __init__(self, prompt: sl.TextLike, *, author_id: int, timeout: float = 60) -> None:
         self.prompt = prompt
         self.author_id = author_id
-        self.locale = locale
         self._timeout = timeout
         self._done = anyio.Event()
 
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         return (
-            sl.section(sl.heading(t(self.locale, _("Confirm account merge"))), sl.paragraph(self.prompt)),
+            sl.section(sl.heading(L("Confirm account merge")), sl.paragraph(self.prompt)),
             sl.action_controls(
                 sl.action_control(
-                    t(self.locale, _("Confirm")),
+                    L("Confirm"),
                     self._confirm,
                     key="confirm",
                     tone=sl.Tone.SUCCESS,
                 ),
-                sl.action_control(t(self.locale, _("Cancel")), self._cancel, key="cancel"),
+                sl.action_control(L("Cancel"), self._cancel, key="cancel"),
                 key="merge-actions",
             ),
         )
@@ -334,20 +333,16 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         preview = await self.account_service.preview_merge(account_id, code)
 
         confirmation = MergeConfirmation(
-            t(
-                locale,
-                _(
-                    "Merging will move {aliases} creator name(s) and {identities} linked account(s) "
-                    "onto this account, along with {builds} build credit(s).\n\n"
-                    "This cannot be undone: the other account's creator page will permanently "
-                    "redirect here."
-                ),
+            L(
+                "Merging will move {aliases} creator name(s) and {identities} linked account(s) "
+                "onto this account, along with {builds} build credit(s).\n\n"
+                "This cannot be undone: the other account's creator page will permanently "
+                "redirect here.",
                 aliases=len(preview.alias_names),
                 identities=preview.identity_count,
                 builds=preview.build_count,
             ),
             author_id=ctx.author.id,
-            locale=locale,
         )
         await invocation.mount(
             confirmation,
