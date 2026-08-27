@@ -43,6 +43,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     @app_commands.describe(kind=app_commands.locale_str(_("Optionally limit gaps to one build kind.")))
     async def gaps(self, ctx: Context[BotT], kind: BuildKind | None = None) -> None:
         """List categories whose winner needs more factual evidence."""
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         gaps = await self.records.gaps(kind=kind)
         paginator = _diagnostic_list(
@@ -56,13 +57,14 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             empty=t(locale, _("No unresolved active record categories.")),
             locale=locale,
         )
-        await paginator.send(ctx, visibility="personal")
+        await invocation.mount(paginator, access=sd.Owner(invocation.user.id), visibility="personal")
 
     @records_group.command(name="title-issues")
     @requires(RECORD_ENTRY_INSPECT)
     @app_commands.describe(kind=app_commands.locale_str(_("Optionally limit title diagnostics to one build kind.")))
     async def title_gaps(self, ctx: Context[BotT], kind: BuildKind | None = None) -> None:
         """List canonical titles containing unknown or contradictory taxonomy."""
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         gaps = await self.records.title_gaps(kind=kind)
         paginator = _diagnostic_list(
@@ -76,7 +78,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             empty=t(locale, _("No active record titles require taxonomy review.")),
             locale=locale,
         )
-        await paginator.send(ctx, visibility="personal")
+        await invocation.mount(paginator, access=sd.Owner(invocation.user.id), visibility="personal")
 
     @autocompletes(current_version_id="version_ids")
     @records_group.command(name="rebuild")

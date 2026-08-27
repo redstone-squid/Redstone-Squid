@@ -253,6 +253,7 @@ class SearchCog[
     async def get_pending_submissions(self, ctx: Context[BotT]):
         """Shows an overview of all submitted builds pending review."""
         await ctx.defer()
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         pending = await self.queries.pending()
         paginator = PagedList(
@@ -262,7 +263,7 @@ class SearchCog[
             locale=locale,
             page_size=None,
         )
-        await paginator.send(ctx)
+        await invocation.mount(paginator, access=sd.Owner(invocation.user.id))
 
     @autocompletes(build_id="builds")
     @BuildCommandGroup.build_hybrid_group.command(name="view")  # type: ignore
