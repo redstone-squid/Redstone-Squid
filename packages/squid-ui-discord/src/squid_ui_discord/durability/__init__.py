@@ -16,7 +16,7 @@ from squid_storage import (
     SQLiteSessionStore,
     TopicBridgeSnapshot,
 )
-from squid_ui.runtime.component import Component, render_component_tree
+from squid_ui.runtime.component import AnyComponent, Component, render_component_tree
 from squid_ui.runtime.presentation_state import (
     CursorState,
     DisclosureState,
@@ -26,7 +26,7 @@ from squid_ui.runtime.presentation_state import (
 )
 from squid_ui.runtime.reactivity import export_state, restore_state
 from squid_ui.sources import Direction, Position
-from squid_ui_discord.message_root import MessageRoot
+from squid_ui_discord.message_root import AnyMessageRoot, MessageRoot
 from squid_ui_discord.sessions import SessionKey
 from squid_ui_discord.target import DISCORD_V2_DPY27
 from squid_ui_discord.targets import DEFAULT_TARGETS, TargetRegistry
@@ -171,10 +171,12 @@ class DurableMessageRootCodec:
             message = f"unsupported durable mount record protocol {protocol}"
             raise MessageRootStateError(message)
         address = _object(item.get("address"))
-        values = _object(address.get("values"))
-        if not all(isinstance(key, str) and isinstance(value, str | int) for key, value in values.items()):
-            message = "mount address values must contain string keys and string or integer values"
-            raise MessageRootStateError(message)
+        values: dict[str, str | int] = {}
+        for key, value in _object(address.get("values")).items():
+            if not isinstance(key, str) or not isinstance(value, str | int):
+                message = "mount address values must contain string keys and string or integer values"
+                raise MessageRootStateError(message)
+            values[key] = value
         expires_at = item.get("expires_at")
         if expires_at is not None and not isinstance(expires_at, int | float):
             message = "mount record expires_at must be a number or null"
@@ -476,7 +478,7 @@ class ComponentRegistry:
         *,
         targets: TargetRegistry = DEFAULT_TARGETS,
         **message_root_options: Any,
-    ) -> MessageRoot:
+    ) -> AnyMessageRoot:
         """Rebuild a mount from a state, against the exact target it was planned for.
 
         The target is resolved *before* anything is built, so an unavailable or changed
@@ -560,7 +562,7 @@ class ComponentRegistry:
         return current
 
 
-def _restore_component(component: Component, state: ComponentState) -> None:
+def _restore_component(component: AnyComponent, state: ComponentState) -> None:
     expected = _type_id(component)
     if state.type_id != expected:
         message = f"component at {state.path!r} changed type from {state.type_id!r} to {expected!r}"
