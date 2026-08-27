@@ -18,7 +18,7 @@ from squid_reactivity import (
     on_action_commit,
 )
 from squid_reactivity.operations import OperationContext
-from squid_ui import Component, state
+from squid_ui import Component, DiscordTarget, state
 from squid_ui.primitives import Text
 from squid_ui.runtime import (
     CompensationClaim,
@@ -49,7 +49,7 @@ class Workspace(SharedState[str]):
     filters: tuple[str, ...] = state(())
 
 
-class Panel(Component):
+class Panel(Component[DiscordTarget]):
     history: History = history(limit=3)
     page: int = state(1)
     open: bool = state(default=False)
@@ -61,7 +61,7 @@ class Panel(Component):
         return Text(str(self.page))
 
 
-class UnassignedPanel(Component):
+class UnassignedPanel(Component[DiscordTarget]):
     """A slot that holds no value of its own until an action puts one there.
 
     How an absent slot actually arises: `__init__` leaves the field alone, so the cell exists

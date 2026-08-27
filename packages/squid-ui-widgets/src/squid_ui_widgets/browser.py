@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.errors import LayoutInvariantError
@@ -42,7 +42,7 @@ from squid_ui.sources import (
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, render_content, require_key
 
-type BrowserDetail[ItemT] = Callable[[ItemT], ContentLike | Component]
+type BrowserDetail[ItemT] = Callable[[ItemT], ContentLike | Component[Any]]
 type BrowserOpenHandler[ItemT] = Callable[[ActionEvent, ItemT], Awaitable[None]]
 type BrowserOverview[ItemT] = Callable[[LoadedWindow[ItemT]], ContentLike]
 
@@ -53,7 +53,7 @@ class _WindowRequest:
     position: Position | None = None
 
 
-class Browser[ItemT](Component):
+class Browser[ItemT](Component[Any]):
     """Browse a remote window, open one item, and act within its detail."""
 
     _request: _WindowRequest = state(default=_WindowRequest(), persist=False, opaque=True)
@@ -181,7 +181,7 @@ class Browser[ItemT](Component):
     async def _next_item(self, event: ActionEvent) -> None:
         await self._adjacent(event, 1)
 
-    def render(self) -> RenderResult:
+    def render(self) -> RenderResult[Any]:
         # One arm per member of `Ready | Pending | Failed`, with the `previous` case inside it.
         # Splitting on `previous` in the pattern left the match unprovably exhaustive, so the
         # checker saw a path with no return on a shape that cannot occur.
@@ -197,7 +197,7 @@ class Browser[ItemT](Component):
                     return self._status(self.load_failed, retry=True)
                 return self._render_loaded(previous.value, status_text=self.load_failed, retry=True)
 
-    def _status(self, message: TextLike, *, retry: bool = False) -> RenderResult:
+    def _status(self, message: TextLike, *, retry: bool = False) -> RenderResult[Any]:
         return stack(
             heading(self.title) if self.title is not None else None,
             note(message),
@@ -214,7 +214,7 @@ class Browser[ItemT](Component):
         *,
         status_text: TextLike | None = None,
         retry: bool = False,
-    ) -> RenderResult:
+    ) -> RenderResult[Any]:
         opened = None
         if self.opened is not None:
             opened = next(
@@ -231,7 +231,7 @@ class Browser[ItemT](Component):
         *,
         status_text: TextLike | None,
         retry: bool,
-    ) -> RenderResult:
+    ) -> RenderResult[Any]:
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         items = loaded.window.items
         extra = (
@@ -326,7 +326,7 @@ class Browser[ItemT](Component):
         *,
         status_text: TextLike | None,
         retry: bool,
-    ) -> RenderResult:
+    ) -> RenderResult[Any]:
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         items = loaded.window.items
         index = next(index for index, candidate in enumerate(items) if self.identity(candidate) == self.identity(item))

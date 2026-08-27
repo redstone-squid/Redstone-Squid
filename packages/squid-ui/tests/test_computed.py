@@ -5,12 +5,12 @@ import weakref
 
 import pytest
 
-from squid_ui import Component, computed, state
+from squid_ui import Component, DiscordTarget, computed, state
 from squid_ui.primitives import Text
 from squid_ui.runtime import ReactiveCycleError, untracked
 
 
-class Counter(Component):
+class Counter(Component[DiscordTarget]):
     """A component whose computed bodies count their own runs."""
 
     first: int = state(0)
@@ -242,13 +242,13 @@ class TestReferences:
     def test_a_dropped_reader_is_collected_while_its_source_lives(self):
         """Why pull rather than a dependent list: components here are per-message."""
 
-        class Source(Component):
+        class Source(Component[DiscordTarget]):
             count: int = state(0)
 
             def render(self):
                 return Text("")
 
-        class Reader(Component):
+        class Reader(Component[DiscordTarget]):
             def __init__(self, source: Source) -> None:
                 self.source = source
 
@@ -272,13 +272,13 @@ class TestReferences:
         assert source.count == 1
 
     def test_a_reader_recomputes_when_the_source_it_kept_moves(self):
-        class Source(Component):
+        class Source(Component[DiscordTarget]):
             count: int = state(0)
 
             def render(self):
                 return Text("")
 
-        class Reader(Component):
+        class Reader(Component[DiscordTarget]):
             def __init__(self, source: Source) -> None:
                 self.source = source
                 self.runs = 0

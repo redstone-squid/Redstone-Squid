@@ -29,7 +29,7 @@ class Workspace(SharedState[Member]):
     detail: str = state("")
 
 
-class Panel(Component):
+class Panel(Component[sl.ComponentsV2Target]):
     show_detail: bool = state(default=False)
 
     def __init__(self, workspace: Workspace) -> None:
@@ -45,7 +45,7 @@ class Panel(Component):
         self.workspace.selected = 7
 
 
-class Writer(Component):
+class Writer(Component[sl.ComponentsV2Target]):
     """A panel that writes the cell it renders, which is the case the bus alone handles badly."""
 
     def __init__(self, workspace: Workspace, *, busy: sl.interactions.BusySpec | None = None, run=None) -> None:
@@ -79,7 +79,7 @@ class Writer(Component):
         raise RuntimeError(message)
 
 
-class Swapper(Component):
+class Swapper(Component[sl.ComponentsV2Target]):
     """A panel that reads one cell or the other, never both.
 
     `Panel` only ever adds a read, so it cannot express the case where a staged render stops
@@ -157,7 +157,7 @@ async def test_backdated_scheduled_refresh_skips_render_planning_and_drawing(mon
     scheduler = MessageRootScheduler(bus)
     workspace = Workspace(bus, Member(1))
 
-    class Parity(Component):
+    class Parity(Component[sl.ComponentsV2Target]):
         def __init__(self) -> None:
             self.renders = 0
 
@@ -202,7 +202,7 @@ async def test_equal_computed_value_switches_the_mounts_followed_branch() -> Non
     scheduler = MessageRootScheduler(bus)
     values = Values(bus, Member(1))
 
-    class Panel(Component):
+    class Panel(Component[sl.ComponentsV2Target]):
         def __init__(self) -> None:
             self.renders = 0
 
@@ -245,7 +245,7 @@ async def test_explicit_scheduler_request_resamples_opaque_component_inputs() ->
     bus = LocalTopicBus()
     scheduler = MessageRootScheduler(bus)
 
-    class Opaque(Component):
+    class Opaque(Component[sl.ComponentsV2Target]):
         def __init__(self) -> None:
             self.value = "first"
             self.renders = 0

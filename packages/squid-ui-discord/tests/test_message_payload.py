@@ -29,7 +29,7 @@ CLASSIC = MessageMode.CLASSIC
 V2 = MessageMode.COMPONENTS_V2
 
 
-class Panel(sl.Component):
+class Panel(sl.Component[sl.ComponentsV2Target]):
     count: int = sl.state(0)
 
     def render(self):

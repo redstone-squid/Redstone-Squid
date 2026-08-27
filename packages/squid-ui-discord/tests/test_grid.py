@@ -175,11 +175,11 @@ def test_grid_authoring_rejects_empty_duplicate_and_nonpositive_shapes() -> None
 
 
 def test_semantic_grid_namespaces_its_key_inside_a_component_boundary() -> None:
-    class Child(sl.Component):
+    class Child(sl.Component[sl.ComponentsV2Target]):
         def render(self):
             return sl.grid(*_cells(2), key="board", columns=2, on_pick=_pick)
 
-    class Parent(sl.Component):
+    class Parent(sl.Component[sl.ComponentsV2Target]):
         def __init__(self) -> None:
             self.child = Child()
 

@@ -187,7 +187,7 @@ def _monotonic() -> float:
     return time.monotonic()
 
 
-def _needs_load(component: Component) -> bool:
+def _needs_load(component: Component[Any]) -> bool:
     """Whether this instance still owes an `on_load` before it may render.
 
     A component that does not override the hook is never deferred, so a tree declaring no
@@ -993,7 +993,7 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
 
     def __init__(
         self,
-        component: Component[ModeT],
+        component: Component[Any],
         *,
         access: AccessPolicy,
         target: Target[Any, Any, ModeT, AdapterT] | None = None,
@@ -2168,7 +2168,7 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
                 for component in components:
                     tasks.start_soon(self._load_one, component)
 
-    async def _load_one(self, component: Component) -> None:
+    async def _load_one(self, component: Component[Any]) -> None:
         await component.on_load()
         component._loaded = True
 
@@ -3495,6 +3495,6 @@ def _disable_all(view: discord.ui.LayoutView | discord.ui.View) -> None:
             target.disabled = True  # pyrefly: ignore  # guarded by hasattr
 
 
-def current_message_root(component: Component, user_id: int, **options: Any) -> MessageRoot:
+def current_message_root(component: Component[Any], user_id: int, **options: Any) -> MessageRoot:
     """Construct a mount whose controls belong to one Discord user."""
     return MessageRoot(component, access=Owner(user_id), **options)

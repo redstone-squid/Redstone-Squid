@@ -25,7 +25,7 @@ from squid_ui_discord.sessions import AdmissionSpec, Opened, Reject, Rejected, R
 from squid_ui_discord.testing import fake_interaction, fake_message
 
 
-class Panel(sl.Component):
+class Panel(sl.Component[sl.ComponentsV2Target]):
     def render(self):
         return [Heading("Panel")]
 

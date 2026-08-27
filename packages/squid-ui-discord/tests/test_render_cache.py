@@ -3,6 +3,7 @@ import weakref
 
 import discord
 
+import squid_ui as sl
 import squid_ui_discord.classic_renderer as classic_renderer_module
 import squid_ui_discord.renderer as renderer_module
 from squid_ui import Component, state
@@ -152,7 +153,7 @@ def test_classic_program_hits_return_fresh_objects_and_skip_certified_audit(monk
 
 
 async def test_message_root_reuses_a_revisited_scene_program() -> None:
-    class Switching(Component):
+    class Switching(Component[sl.ComponentsV2Target]):
         value: str = state("first")
 
         def render(self) -> Text:
@@ -174,7 +175,7 @@ async def test_message_root_reuses_a_revisited_scene_program() -> None:
 
 
 async def test_explicit_render_cache_shares_programs_without_sharing_frontend_objects() -> None:
-    class Static(Component):
+    class Static(Component[sl.ComponentsV2Target]):
         def render(self) -> Text:
             return Text("shared")
 

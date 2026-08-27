@@ -395,7 +395,7 @@ type MessageRootStateMigration = Callable[[MessageRootState], MessageRootState]
 @dataclass(frozen=True, slots=True)
 class _Registration:
     version: int
-    factory: Callable[[], Component] | None
+    factory: Callable[[], Component[Any]] | None
     restore: Callable[[RestoreContext], MessageRoot] | None
     migrations: Mapping[int, MessageRootStateMigration]
 
@@ -417,7 +417,7 @@ class ComponentRegistry:
         version: int,
         restore: Callable[[RestoreContext], MessageRoot] | None = None,
         migrations: Mapping[int, MessageRootStateMigration] | None = None,
-        factory: Callable[[], Component] | None = None,
+        factory: Callable[[], Component[Any]] | None = None,
     ) -> None:
         """Register one known root and every sequential migration to its current version.
 
@@ -440,7 +440,7 @@ class ComponentRegistry:
             raise ValueError(message)
         self._registrations[key] = _Registration(version, factory, restore, migration_map)
 
-    def capture(self, message_root: MessageRoot, component_key: str) -> MessageRootState:
+    def capture(self, message_root: AnyMessageRoot, component_key: str) -> MessageRootState:
         registration = self._registrations.get(component_key)
         if registration is None:
             message = f"durable component {component_key!r} is not registered"
@@ -573,7 +573,7 @@ def _restore_component(component: AnyComponent, state: ComponentState) -> None:
         raise MessageRootStateError(str(error)) from error
 
 
-def _type_id(component: Component) -> str:
+def _type_id(component: Component[Any]) -> str:
     cls = type(component)
     return f"{cls.__module__}:{cls.__qualname__}"
 

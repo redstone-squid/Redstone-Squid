@@ -130,11 +130,11 @@ def test_roster_validates_dispatch_modes_and_namespaces_its_controls() -> None:
     with pytest.raises(ValueError, match="exactly one route"):
         sl.roster(placement, key="raid", routes={"tank": "raid:tank"})
 
-    class Child(sl.Component):
+    class Child(sl.Component[sl.ComponentsV2Target]):
         def render(self):
             return sl.roster(placement, key="raid", on_join=join)
 
-    class Parent(sl.Component):
+    class Parent(sl.Component[sl.ComponentsV2Target]):
         def __init__(self) -> None:
             self.child = Child()
 

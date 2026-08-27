@@ -8,6 +8,7 @@ from typing import cast
 import anyio
 import pytest
 
+import squid_ui as sl
 from squid_ui import Component, state
 from squid_ui.primitives import Lines, Paginate, Text
 from squid_ui.sources import Position
@@ -26,14 +27,14 @@ from squid_ui_discord.durability import (
 from squid_ui_discord.testing import commit_render
 
 
-class DurableChild(Component):
+class DurableChild(Component[sl.ComponentsV2Target]):
     entries: tuple[str, ...] = state(factory=lambda: tuple(f"entry {index}" for index in range(6)))
 
     def render(self):
         return Lines(self.entries, overflow=Paginate(key="items", per=2))
 
 
-class DurableRoot(Component):
+class DurableRoot(Component[sl.ComponentsV2Target]):
     count: int = state(0)
     transient: object = state(factory=object, persist=False)
 
@@ -188,7 +189,7 @@ def test_component_tree_state_and_page_cursors_round_trip_as_canonical_json() ->
 
 
 def test_non_json_persistent_state_fails_at_capture_boundary() -> None:
-    class Invalid(Component):
+    class Invalid(Component[sl.ComponentsV2Target]):
         value: object = state(factory=object)
 
         def render(self):

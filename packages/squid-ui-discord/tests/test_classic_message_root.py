@@ -28,7 +28,7 @@ from squid_ui_discord.testing import (
 TARGETS = [pytest.param(DISCORD_V2_DPY27, id="v2"), pytest.param(DISCORD_V1_DPY27, id="classic")]
 
 
-class Screen(Component):
+class Screen(Component[sl.ClassicTarget]):
     presses: int = sl.state(0)
 
     def render(self):

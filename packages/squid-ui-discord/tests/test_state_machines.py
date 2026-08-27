@@ -25,7 +25,7 @@ def _labels(view: discord.ui.LayoutView) -> list[str | None]:
     return [item.label for item in view.walk_children() if isinstance(item, discord.ui.Button)]
 
 
-class Screen(sl.Component):
+class Screen(sl.Component[sl.ComponentsV2Target]):
     def __init__(self, name: str) -> None:
         self.name = name
 

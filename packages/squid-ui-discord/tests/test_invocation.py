@@ -21,7 +21,7 @@ class FakeClient:
     """A weak-referenceable installed client double."""
 
 
-class Panel(sl.Component):
+class Panel(sl.Component[sl.ComponentsV2Target]):
     def render(self):
         return [sl.heading("Panel")]
 

@@ -155,7 +155,7 @@ async def test_the_gate_stays_silent_when_the_user_was_never_asked(monkeypatch: 
     ctx.send.assert_not_awaited()
 
 
-class _Blank(sl.Component):
+class _Blank(sl.Component[sl.ComponentsV2Target]):
     def render(self):
         return [sl.primitives.Text("parent")]
 

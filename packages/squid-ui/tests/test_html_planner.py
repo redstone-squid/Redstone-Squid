@@ -28,6 +28,7 @@ from squid_ui.forms import (
 )
 from squid_ui.interactions import ActionEvent, SelectionEvent, SubmitEvent
 from squid_ui.planning import PlanCache, PlanMemo, ResourceCost
+from squid_ui.planning.limits import Axis
 from squid_ui.rosters import RosterEntry, RosterSlot, place_roster
 from squid_ui.sources import Position
 from squid_ui.temporal import ZonedDateTime
@@ -65,7 +66,7 @@ def test_html_target_has_an_unbounded_semantic_identity() -> None:
     assert sl.planning.plan(sl.paragraph("portable"), target=target).scene.target == "html.semantic"
 
     with pytest.raises(LayoutInvariantError, match="no reservable"):
-        sl.planning.plan(sl.paragraph("x"), target=target, reservation=ResourceCost({"components": 1}))
+        sl.planning.plan(sl.paragraph("x"), target=target, reservation=ResourceCost({Axis.COMPONENTS: 1}))
 
 
 def test_discord_primitives_are_rejected_by_html_planning() -> None:
