@@ -3,6 +3,8 @@
 Transactional reactive state for synchronous projections, with no hard dependencies and no
 background tasks.
 
+This is an alpha release. The Python API may change before 1.0.
+
 ```python
 from squid_reactivity import StateOwner, computed, observe_reads, state, transaction
 
