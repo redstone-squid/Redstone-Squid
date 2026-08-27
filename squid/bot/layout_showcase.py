@@ -13,14 +13,8 @@ from discord.ext.commands import Cog, Context, guild_only
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
-from squid.bot.i18n import resolve_locale
-from squid.bot.ui import (
-    DISCORD_BLUE,
-    DISCORD_GREEN,
-    DISCORD_YELLOW,
-    L,
-    localization_for,
-)
+from squid.bot.i18n import localization_for, resolve_locale
+from squid.bot.ui import DISCORD_BLUE, DISCORD_GREEN, DISCORD_YELLOW, L
 from squid.core.i18n import _
 from squid_replication import ReferenceBackend, Replica, ReplicatedDocument
 from squid_ui_discord import SessionKey
