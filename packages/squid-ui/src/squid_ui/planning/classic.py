@@ -31,6 +31,9 @@ from squid_ui.planning.layout_measurement.solver import (
 )
 from squid_ui.planning.limits import CLASSIC_LIMITS, Axis, ClassicLimits
 from squid_ui.planning.navigation import PlannedNav, materialized_navigation_state
+from squid_ui.planning.resolved import emoji as resolved_emoji
+from squid_ui.planning.resolved import optional_text as resolved_optional_text
+from squid_ui.planning.resolved import text as resolved_text
 from squid_ui.planning.target import Target
 from squid_ui.primitives.constraints import Never, Paginate
 from squid_ui.primitives.nodes import (
@@ -122,7 +125,7 @@ def _validate(nodes: Sequence[Node], limits: ClassicLimits) -> None:
         if value is None:
             return
         node = card_text(value)
-        length = len(node.content.strip())
+        length = len(resolved_text(node.content).strip())
         if length > cap and isinstance(node.overflow, Never):
             fail(path, f"{what} is {length} characters; the cap is {cap}. Give it an explicit overflow policy")
 
@@ -130,11 +133,13 @@ def _validate(nodes: Sequence[Node], limits: ClassicLimits) -> None:
         nonlocal contents
         overflow = getattr(node, "overflow", None)
         if isinstance(overflow, Paginate):
-            if overflow.key is None:
+            key = overflow.key
+            if key is None:
                 fail(path, "Paginate requires an explicit key")
-            if overflow.key in pager_keys:
-                fail(path, f"duplicate pager key {overflow.key!r}")
-            pager_keys.add(overflow.key)
+                return
+            if key in pager_keys:
+                fail(path, f"duplicate pager key {key!r}")
+            pager_keys.add(key)
         match node:
             case Boundary():
                 fail(path, "Boundary must be expanded by a component mount before planning")
@@ -162,11 +167,13 @@ def _validate(nodes: Sequence[Node], limits: ClassicLimits) -> None:
                 for index, child in enumerate(children):
                     walk(child, f"{path}.{index}")
             case Button(label=label) | RoutedButton(label=label):
+                label = resolved_optional_text(label)
                 if label is None and node.emoji is None:
                     fail(path, "interactive button needs a label or emoji")
                 if label is not None and len(label) > limits.components.button_label:
                     fail(path, f"button label exceeds {limits.components.button_label}")
             case LinkButton(label=label, url=url):
+                label = resolved_optional_text(label)
                 if label is None and node.emoji is None:
                     fail(path, "link button needs a label or emoji")
                 if label is not None and len(label) > limits.components.button_label:
@@ -182,6 +189,7 @@ def _validate(nodes: Sequence[Node], limits: ClassicLimits) -> None:
             case SelectMenu(options=options, placeholder=placeholder, min_values=minimum, max_values=maximum) | (
                 RoutedSelect(options=options, placeholder=placeholder, min_values=minimum, max_values=maximum)
             ):
+                placeholder = resolved_optional_text(placeholder)
                 if not options:
                     fail(path, "select needs at least one option")
                 if len(options) > limits.components.select_options:
@@ -191,14 +199,13 @@ def _validate(nodes: Sequence[Node], limits: ClassicLimits) -> None:
                 if minimum < 0 or maximum < minimum or maximum > max(1, len(options)):
                     fail(path, "select value bounds are invalid")
                 for index, option in enumerate(options):
-                    if len(option.label) > limits.components.option_label:
+                    label = resolved_text(option.label)
+                    description = resolved_optional_text(option.description)
+                    if len(label) > limits.components.option_label:
                         fail(f"{path}.option.{index}", f"label exceeds {limits.components.option_label}")
                     if len(option.value) > limits.components.option_value:
                         fail(f"{path}.option.{index}", f"value exceeds {limits.components.option_value}")
-                    if (
-                        option.description is not None
-                        and len(option.description) > limits.components.option_description
-                    ):
+                    if description is not None and len(description) > limits.components.option_description:
                         fail(f"{path}.option.{index}", f"description exceeds {limits.components.option_description}")
             case EntitySelect(
                 placeholder=placeholder,
@@ -206,6 +213,7 @@ def _validate(nodes: Sequence[Node], limits: ClassicLimits) -> None:
                 min_values=minimum,
                 max_values=maximum,
             ):
+                placeholder = resolved_optional_text(placeholder)
                 if placeholder is not None and len(placeholder) > limits.components.select_placeholder:
                     fail(path, f"select placeholder exceeds {limits.components.select_placeholder}")
                 if minimum < 0 or maximum < minimum or maximum > limits.components.select_options:
@@ -317,7 +325,7 @@ class _ClassicConverter:
                                 scene.Select(
                                     options=tuple(_options(options)),
                                     action=self.bindings.action(child),
-                                    placeholder=child.placeholder,
+                                    placeholder=resolved_optional_text(child.placeholder),
                                     min_values=child.min_values,
                                     max_values=child.max_values,
                                     disabled=child.disabled,
@@ -333,7 +341,7 @@ class _ClassicConverter:
                                 scene.EntitySelect(
                                     entity_type=child.entity_type,
                                     action=self.bindings.action(child),
-                                    placeholder=child.placeholder,
+                                    placeholder=resolved_optional_text(child.placeholder),
                                     default_values=child.default_values,
                                     channel_types=child.channel_types,
                                     min_values=child.min_values,
@@ -351,7 +359,7 @@ class _ClassicConverter:
                                 scene.RoutedSelect(
                                     options=tuple(_options(options)),
                                     route_id=child.route_id,
-                                    placeholder=child.placeholder,
+                                    placeholder=resolved_optional_text(child.placeholder),
                                     min_values=child.min_values,
                                     max_values=child.max_values,
                                     disabled=child.disabled,
@@ -408,7 +416,7 @@ def _text(slot: MeasuredText | None) -> str | None:
 
 
 def _media(media: CardMedia | None) -> scene.EmbedMedia | None:
-    return None if media is None else scene.EmbedMedia(media.url, media.description)
+    return None if media is None else scene.EmbedMedia(media.url, resolved_optional_text(media.description))
 
 
 def _timestamp(value: ZonedDateTime | datetime | None) -> str | None:
@@ -421,7 +429,14 @@ def _timestamp(value: ZonedDateTime | datetime | None) -> str | None:
 
 def _options(options: Sequence[Option]) -> list[scene.Option]:
     return [
-        scene.Option(option.label, option.value, option.description, option.default, option.emoji) for option in options
+        scene.Option(
+            resolved_text(option.label),
+            option.value,
+            resolved_optional_text(option.description),
+            option.default,
+            resolved_emoji(option.emoji),
+        )
+        for option in options
     ]
 
 

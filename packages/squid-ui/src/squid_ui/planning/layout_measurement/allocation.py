@@ -13,6 +13,7 @@ from squid_ui.planning.layout_measurement.diagnostics import (
     note,
 )
 from squid_ui.planning.layout_measurement.text import BudgetRegion, TextUnit, split_pages, trim_keep
+from squid_ui.planning.resolved import text as resolved_text
 from squid_ui.primitives.constraints import Alts, Condense, Drop, Never, Paginate, Spill, Truncate
 
 
@@ -191,7 +192,7 @@ def _apply_spill(
     entry_lengths = [len(entry(index)) for index in range(total)]
     remaining_chars = sum(entry_lengths)
     for dropped in range(total + 1):
-        marker = chrome.and_n_more(dropped) if dropped else ""
+        marker = resolved_text(chrome.and_n_more(dropped)) if dropped else ""
         shown_entries = total - dropped
         output_items = shown_entries + int(bool(marker))
         body_length = remaining_chars + len(marker) + max(0, output_items - 1) * len(unit.join)
@@ -317,11 +318,11 @@ def allocate_budgeted(
         need = sum(unit.need for unit in region_units)
         ceiling = region.preferred + region.stretch
         demand = need if need <= ceiling else min(need, region.preferred)
-        if len(region_units) == 1 and need > ceiling and isinstance(region_units[0].overflow, Paginate):
+        policy = region_units[0].overflow if len(region_units) == 1 else None
+        if need > ceiling and isinstance(policy, Paginate):
             unit = region_units[0]
             usable = ceiling - unit.chrome_len
             if usable >= 1:
-                policy = unit.overflow
                 unit.fragments = split_pages(
                     unit.content,
                     usable,

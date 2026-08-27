@@ -633,6 +633,8 @@ type Node = (
     | Sep
     | Row
     | ControlGroup
+    | Button
+    | LinkButton
     | SelectMenu
     | EntitySelect
     | RoutedSelect

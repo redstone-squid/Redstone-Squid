@@ -51,6 +51,7 @@ from squid_ui.planning.navigation import (
     PlannedNav,
     materialized_navigation_state,
 )
+from squid_ui.planning.resolved import text as resolved_text
 from squid_ui.primitives.constraints import Paginate
 from squid_ui.primitives.nodes import (
     Lines,
@@ -219,7 +220,8 @@ def _configure_paginators(
             raise ValueError(message)
         used.add(key)
         keys[unit.index] = key
-        footers[unit.index] = policy.footer if policy.footer is not None else chrome.page_footer
+        footer = policy.footer if policy.footer is not None else chrome.page_footer
+        footers[unit.index] = lambda page, pages, footer=footer: resolved_text(footer(page, pages))
         if policy.per is not None:
             if isinstance(unit.node, Lines):
                 unit.count_pages = _count_pages(unit, policy.per)
