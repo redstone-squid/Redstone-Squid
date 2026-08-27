@@ -150,7 +150,7 @@ async def test_public_build_panel_recovers_background_refresh_after_its_followup
         services=SimpleNamespace(settings=SimpleNamespace()),
         for_build=lambda current: renderer,
         topic_bus=topic_bus,
-        layout_scheduler=layout_scheduler,
+        client_runtime=SimpleNamespace(scheduler=layout_scheduler),
     )
     cog = SearchCog.__new__(SearchCog)
     cog.bot = cast(Any, bot)

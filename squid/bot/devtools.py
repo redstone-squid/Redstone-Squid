@@ -17,6 +17,6 @@ async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
         sd.devtools.DevTools(
             check=_authorized,
             manager=bot.sessions,
-            scheduler=getattr(bot, "layout_scheduler", None),
+            scheduler=bot.client_runtime.scheduler,
         )
     )
