@@ -87,7 +87,7 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
             )
             return
 
-        component = BuildEditComponent(build, self.builds, locale=locale)
+        component = BuildEditComponent(build, self.builds)
         staged: dict[str, str] = {
             attribute: value
             for attribute, value in (
@@ -150,4 +150,4 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
         if build is None:
             await invocation.reply(text_node(t(locale, _("This does not look like a build."))), visibility="personal")
             return
-        await BuildEditComponent(build, self.builds, locale=locale).send(interaction, ephemeral=True)
+        await BuildEditComponent(build, self.builds).send(interaction, ephemeral=True)

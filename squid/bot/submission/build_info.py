@@ -107,5 +107,4 @@ class BuildInfoComponent(sl.Component[sl.ComponentsV2Target]):
         await BuildEditComponent(
             self.build,
             interaction.client.services.builds,
-            locale=self.locale,
         ).send(interaction, ephemeral=self._ephemeral, parent=sd.responder(event).message_root)
