@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Protocol
 import discord
 
 from squid.bot._types import GuildMessageable
-from squid.bot.ui import text_layout
+from squid.bot.ui import render_payload, text_node
 from squid.bot.utils.permissions import build_subject
 from squid.permissions.domain.catalogue import VOTE_POLL_NETWORK_CREATE
 from squid.voting.domain import PollScope, VoteKind, VoteOption, VoteVisibility
@@ -104,7 +104,7 @@ class DiscordPollPublisher:
 
     async def attach(self, vote_session_id: int, channel: GuildMessageable) -> discord.Message:
         """Post one card for an existing poll and let the reconcile loop own it."""
-        result = await send_to(channel)(text_layout("Publishing poll…"))
+        result = await send_to(channel)(render_payload([text_node("Publishing poll…")]))
         message = result.message
         if message is None:
             detail = "poll placeholder delivery returned no message"

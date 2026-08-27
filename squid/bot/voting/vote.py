@@ -8,12 +8,13 @@ import discord
 from discord import app_commands
 from discord.ext.commands import Cog
 
+import squid_ui_discord as sd
 from squid.accounts.domain import IdentityProvider
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.operations import run_command_operation
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
-from squid.bot.ui import error_layout, info_node, respond_payload, text_layout
+from squid.bot.ui import error_node, info_node, render_payload, text_node
 from squid.bot.voting.actors import describe_rejection, resolve_actor
 from squid.bot.voting.poll_wizard import present_poll_form
 from squid.bot.voting.publisher import DiscordPollPublisher
@@ -186,7 +187,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             return
         locale = await resolve_locale(message, self.bot.services.settings)
         with contextlib.suppress(discord.Forbidden, discord.NotFound):
-            await send_to(message.channel)(text_layout(describe_rejection(locale, rejection)))
+            await send_to(message.channel)(render_payload([text_node(describe_rejection(locale, rejection))]))
 
     @app_commands.command(name="poll")
     @app_commands.guild_only()
@@ -201,8 +202,10 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         if account is None or account.id is None or account.needs_consent_refresh:
             if await ensure_consented_account(interaction, self.bot.services.accounts, locale=locale) is None:
                 return
-            await respond_payload(
-                interaction, text_layout(t(locale, _("Thanks. Run `/poll` again to open the editor.")))
+            invocation = await sd.Invocation.of(interaction)
+            await invocation.reply(
+                text_node(t(locale, _("Thanks. Run `/poll` again to open the editor."))),
+                visibility="personal",
             )
             return
         allow_network = isinstance(interaction.user, discord.Member) and await self.publisher.may_create_network(
@@ -217,14 +220,15 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         message you were already looking at (audit C4).
         """
         await interaction.response.defer(ephemeral=True)
+        invocation = await sd.Invocation.of(interaction)
         locale = await resolve_locale(interaction, self.bot.services.settings)
         if interaction.guild is None or message.guild != interaction.guild:
-            await respond_payload(
-                interaction,
-                error_layout(
+            await invocation.reply(
+                error_node(
                     t(locale, _("Cannot vote on this message")),
                     t(locale, _("The message is not from this guild.")),
                 ),
+                visibility="personal",
             )
             return
 
@@ -257,7 +261,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             locale=locale,
             reports=self.bot.services.error_reports,
         )
-        await respond_payload(interaction, text_layout(t(locale, _("Deletion vote opened."))))
+        await invocation.reply(text_node(t(locale, _("Deletion vote opened."))), visibility="personal")
 
     async def _consented_account_id(self, discord_id: int) -> int | None:
         """Resolve a voter's account without creating one.
@@ -287,12 +291,16 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         locale = await resolve_locale(message, self.bot.services.settings)
         with contextlib.suppress(discord.HTTPException):
             await send_to(message.channel, delete_after=30)(
-                text_layout(
-                    t(
-                        locale,
-                        _("{user}, voting stores your Discord user ID. Run `/account consent` first."),
-                        user=user.mention,
-                    )
+                render_payload(
+                    [
+                        text_node(
+                            t(
+                                locale,
+                                _("{user}, voting stores your Discord user ID. Run `/account consent` first."),
+                                user=user.mention,
+                            )
+                        )
+                    ]
                 )
             )
 
