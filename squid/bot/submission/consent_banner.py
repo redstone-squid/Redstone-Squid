@@ -11,15 +11,9 @@ from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.bot.consent import CONSENT_SESSION_SPEC, ConsentPrompt
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.routes._root import _feature_group, _feature_route
-from squid.bot.ui import (
-    CardField,
-    localization_for,
-    render_payload,
-    text_node,
-)
+from squid.bot.ui import CardField, render_payload, text_node
 from squid.bot.utils.sticky_message import StickyMessage
 from squid.core.i18n import _
-from squid_ui_discord.sessions import Opened, Rejected
 
 if TYPE_CHECKING:
     # importing this causes a circular import at runtime
@@ -85,19 +79,14 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
         locale=locale,
         timeout=120,
     )
-    opened = await CONSENT_SESSION_SPEC.respond(
+    opened = await invocation.open(
         component,
-        interaction,
+        CONSENT_SESSION_SPEC,
+        visibility="personal",
         wait=True,
-        localization=localization_for(locale),
+        timeout=120,
     )
-    if isinstance(opened, Rejected):
-        await invocation.reply(
-            text_node(t(locale, _("You already have a consent prompt open. Please answer that one."))),
-            visibility="personal",
-        )
-        return
-    if not isinstance(opened, Opened):
+    if not opened:
         return
     await component.wait()
 

@@ -20,15 +20,17 @@ from squid.accounts.domain import (
     LinkPreview,
 )
 from squid.bot.i18n import t
-from squid.bot.ui import CardField, localization_for, text_node
+from squid.bot.ui import CardField, L, text_node
 from squid.bot.utils.sentinel import Sentinel
 from squid.core.i18n import _, ntranslate
-from squid_ui_discord import OpenContext, SessionSpec
-from squid_ui_discord.sessions import AdmissionSpec, Opened, Reject, Rejected
+from squid_ui_discord import SessionSpec
+from squid_ui_discord.sessions import AdmissionSpec, Reject
 
 CONSENT_SESSION_SPEC = SessionSpec(
     "consent",
-    admission=AdmissionSpec(collision=Reject()),
+    admission=AdmissionSpec(
+        collision=Reject(notice=L("You already have a consent prompt open. Please answer that one."))
+    ),
     options={"timeout": 120},
 )
 
@@ -162,16 +164,6 @@ def _is_context(target: ConsentTarget) -> bool:
     return callable(getattr(target, "send", None))
 
 
-def _destination(target: ConsentTarget) -> sd.MessageDestination:
-    """Choose the reply transport for a consent prompt.
-
-    Ephemeral wherever the surface allows it: a consent notice names what the bot would store
-    about one reader, and a channel is not the audience for that.
-    """
-    ephemeral = not _is_context(target) or cast(commands.Context[Any], target).interaction is not None
-    return sd.deliver_to(target, ephemeral=ephemeral, wait=True)
-
-
 async def _send(target: ConsentTarget, node: sl.LayoutNode[sl.ComponentsV2Target]) -> None:
     """Send a plain node where the prompt itself would have gone."""
     invocation = await sd.Invocation.of(target)
@@ -288,34 +280,20 @@ async def _open_prompt(
     target: ConsentTarget,
     component: ConsentPrompt,
     *,
-    user_id: int,
-    locale: str | None,
     timeout: float,
     parent: sd.MessageRoot | None,
 ) -> bool:
-    """Put the prompt on screen, telling the reader why not when it could not be opened."""
-    options: sd.MessageRootOptions = {"localization": localization_for(locale), "timeout": timeout}
-    if parent is None:
-        opened = await CONSENT_SESSION_SPEC.open(
-            component,
-            _destination(target),
-            sessions=target,
-            open_context=OpenContext(user_id),
-            **options,
-        )
-    else:
-        opened = await CONSENT_SESSION_SPEC.attach(
-            component,
-            _destination(target),
-            sessions=target,
-            open_context=OpenContext(user_id),
-            parent=parent,
-            **options,
-        )
-    if isinstance(opened, Rejected):
-        await _send(target, text_node(t(locale, _("You already have a consent prompt open. Please answer that one."))))
-        return False
-    return isinstance(opened, Opened)
+    """Put the prompt on screen; Invocation presents a policy-authored rejection."""
+    invocation = await sd.Invocation.of(target)
+    opened = await invocation.open(
+        component,
+        CONSENT_SESSION_SPEC,
+        visibility="personal",
+        parent=parent,
+        wait=True,
+        timeout=timeout,
+    )
+    return bool(opened)
 
 
 async def prompt_for_consent(
@@ -334,7 +312,7 @@ async def prompt_for_consent(
     would do here happens inside the mount's transaction and dispatch lock.
     """
     component = _build_prompt(user_id=user_id, locale=locale, preview=preview, timeout=timeout, on_answer=None)
-    if not await _open_prompt(target, component, user_id=user_id, locale=locale, timeout=timeout, parent=parent):
+    if not await _open_prompt(target, component, timeout=timeout, parent=parent):
         return NOT_ASKED
     return await component.wait()
 
@@ -357,7 +335,7 @@ async def request_consent(
     stored, and nothing the reader did not ask for happens later.
     """
     component = _build_prompt(user_id=user_id, locale=locale, preview=preview, timeout=timeout, on_answer=on_answer)
-    return await _open_prompt(target, component, user_id=user_id, locale=locale, timeout=timeout, parent=parent)
+    return await _open_prompt(target, component, timeout=timeout, parent=parent)
 
 
 type ConsentedAccountWork = Callable[[sl.ActionEvent, int], Awaitable[None]]
