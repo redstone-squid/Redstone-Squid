@@ -19,7 +19,7 @@ from squid.bot.layout_showcase import (
     PreviewPanel,
     Session,
 )
-from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler, Owner, SessionKey, SessionManager
+from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler, Owner
 from squid_ui_discord.sessions import UserScope
 from squid_ui_discord.testing import (
     assert_within_limits,
@@ -406,8 +406,7 @@ class TestSharedAppearance:
 
 
 def _lobby_root(panel: Lobby) -> MessageRoot:
-    assert panel._root is not None
-    return panel._root
+    return _lobby_session(panel).root
 
 
 def _lobby_session(panel: Lobby) -> sd.sessions.Session:
@@ -422,50 +421,47 @@ class TestLobby:
     async def opened(
         self,
         *,
-        capacity: int = 4,
-        registry: SessionManager | None = None,
+        bot: Any | None = None,
         guild_id: int = 5,
         host_id: int = 7,
-    ) -> tuple[SessionManager, Lobby]:
-        bot = make_layout_bot()
-        registry = bot.sessions if registry is None else registry
-        panel = Lobby(registry, host_id=host_id)
-        result = await registry.open(
-            panel.mount(source=bot),
-            delivered_to(fake_message(message_id=1)),
-            key=SessionKey.guild("showcase-lobby", guild_id),
-            actor_id=host_id,
-            capacity=capacity,
-            quota=1,
+    ) -> tuple[Any, Lobby]:
+        bot = make_layout_bot() if bot is None else bot
+        context = SimpleNamespace(
+            bot=bot,
+            author=SimpleNamespace(id=host_id),
+            guild=SimpleNamespace(id=guild_id),
+            interaction=None,
+            send=AsyncMock(return_value=fake_message(message_id=guild_id)),
         )
-        assert isinstance(result, sd.sessions.Opened)
-        return registry, panel
+        panel = await Lobby.show(context, host_id)
+        assert panel is not None
+        return bot, panel
 
     async def test_the_host_opens_as_the_only_member(self) -> None:
-        registry, panel = await self.opened()
+        bot, panel = await self.opened()
 
-        assert next(iter(registry.active())).members == frozenset({7})
+        assert next(iter(bot.sessions.active())).members == frozenset({7})
         assert "### Players — 1/4" in _texts(commit_render(_lobby_root(panel)))
 
     async def test_a_press_from_anyone_joins_and_the_roster_redraws(self) -> None:
-        registry, panel = await self.opened()
+        bot, panel = await self.opened()
 
         await _lobby_root(panel).dispatch("lobby-roster.players", fake_interaction(user_id=8))
 
-        assert next(iter(registry.active())).members == frozenset({7, 8})
+        assert next(iter(bot.sessions.active())).members == frozenset({7, 8})
         assert "### Players — 2/4" in _texts(commit_render(_lobby_root(panel)))
 
     async def test_the_lobby_fills_and_then_refuses(self) -> None:
-        registry, panel = await self.opened(capacity=2)
+        bot, panel = await self.opened()
 
-        await _lobby_root(panel).dispatch("lobby-roster.players", fake_interaction(user_id=8))
-        await _lobby_root(panel).dispatch("lobby-roster.players", fake_interaction(user_id=9))
+        for user_id in (8, 9, 10, 11, 12):
+            await _lobby_root(panel).dispatch("lobby-roster.players", fake_interaction(user_id=user_id))
 
-        assert next(iter(registry.active())).members == frozenset({7, 8})
+        assert next(iter(bot.sessions.active())).members == frozenset({7, 8, 9, 10})
 
     async def test_a_roster_dependent_rule_closes_the_lobby_when_the_host_leaves(self) -> None:
-        registry, panel = await self.opened()
-        session = next(iter(registry.active()))
+        bot, panel = await self.opened()
+        session = next(iter(bot.sessions.active()))
 
         await _lobby_root(panel).dispatch("leave", fake_interaction(user_id=7))
         await _lobby_root(panel).dispatch("lobby-roster.players", fake_interaction(user_id=8))
@@ -488,12 +484,12 @@ class TestLobby:
 
     async def test_a_reader_cannot_hold_a_seat_in_two_servers(self) -> None:
         """Two lobbies, two hosts, one reader: the quota is what stops the second seat."""
-        registry, here = await self.opened()
-        _, elsewhere = await self.opened(registry=registry, guild_id=6, host_id=9)
+        bot, here = await self.opened()
+        _, elsewhere = await self.opened(bot=bot, guild_id=6, host_id=9)
 
         await _lobby_root(elsewhere).dispatch("lobby-roster.players", fake_interaction(user_id=8))
         await _lobby_root(here).dispatch("lobby-roster.players", fake_interaction(user_id=8))
 
-        assert registry.sessions_for_member(8) == (registry.sessions_for_member(8)[0],)
+        assert bot.sessions.sessions_for_member(8) == (bot.sessions.sessions_for_member(8)[0],)
         assert 8 in _lobby_session(elsewhere).members
         assert 8 not in _lobby_session(here).members
