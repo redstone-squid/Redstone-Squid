@@ -197,7 +197,7 @@ _STRONG_READS: ContextVar[int] = ContextVar("squid_reactivity_strong_reads", def
 _INTERLEAVER: ContextVar[Callable[[str], None] | None] = ContextVar(
     "squid_reactivity_deterministic_interleaver", default=None
 )
-_INTERLEAVER_USERS = 0
+_INTERLEAVER_USERS: int = 0
 
 
 def _checkpoint(name: str) -> None:
