@@ -1,14 +1,29 @@
 [project]
 name = "squid-replication"
-version = "0.1.0"
+version = "0.1.0a1"
 description = "Optional replicated-state adapters for Squid"
 requires-python = ">=3.14"
+readme = "README.md"
 license = "MIT"
-dependencies = ["squid-reactivity"]
+license-files = ["LICENSE"]
+authors = [{ name = "Redstone Squid contributors" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
+]
+dependencies = ["squid-reactivity==0.1.0a1"]
 
 [project.optional-dependencies]
 loro = ["loro==1.13.2"]
 pycrdt = ["pycrdt==0.14.2"]
+
+[project.urls]
+Documentation = "https://redstone-squid.github.io/Redstone-Squid/squid-ui/"
+Issues = "https://github.com/redstone-squid/Redstone-Squid/issues"
+Repository = "https://github.com/redstone-squid/Redstone-Squid"
 
 [build-system]
 requires = ["uv_build>=0.11,<0.13"]
