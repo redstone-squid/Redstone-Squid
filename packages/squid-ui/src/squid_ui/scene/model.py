@@ -262,6 +262,7 @@ class HtmlTag(StrEnum):
     SMALL = "small"
     STRONG = "strong"
     EM = "em"
+    S = "s"
     SPAN = "span"
     DIV = "div"
     UL = "ul"
@@ -297,6 +298,7 @@ class HtmlTag(StrEnum):
     OPTION = "option"
     BUTTON = "button"
     TIME = "time"
+    BR = "br"
     HR = "hr"
 
 

@@ -289,7 +289,7 @@ def test_package_metadata_names_only_the_reactive_kernel() -> None:
     metadata = tomllib.loads((Path(__file__).parents[1] / "pyproject.toml").read_text())
     project = metadata["project"]
     assert project["version"] == "0.1.0a1"
-    assert project["dependencies"] == ["squid-reactivity==0.1.0a1"]
+    assert project["dependencies"] == ["markdown-it-py>=4.0,<5", "squid-reactivity==0.1.0a1"]
     # Both extras left with the adapter: `discord` carried discord.py/anyio/packaging, and
     # `postgres` only ever forwarded to squid-storage for Discord durability.
     assert "optional-dependencies" not in project

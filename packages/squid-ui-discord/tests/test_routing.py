@@ -1004,7 +1004,9 @@ class TestDrawing:
     def test_the_html_preview_emits_the_route(self) -> None:
         document = sl.action_controls(sl.routed_action_control("Close", POLL_CLOSE.id(), key="close"), key="c")
 
-        html = sl.html.Renderer().draw(sl.planning.plan(document, target=squid_ui_discord.DISCORD_V2_DPY27).scene)
+        html = sl.html.DiscordPreviewRenderer().draw(
+            sl.planning.plan(document, target=squid_ui_discord.DISCORD_V2_DPY27).scene
+        )
 
         assert 'data-route-id="poll:close"' in html
 
@@ -1035,7 +1037,7 @@ class TestDrawing:
         assert [option.value for option in select.options] == ["one", "two"]
         assert not select.is_dispatchable()
 
-        html = sl.html.Renderer().draw(planned)
+        html = sl.html.DiscordPreviewRenderer().draw(planned)
         assert 'data-route-id="pick:build:3"' in html
 
     def test_a_primitive_routed_select_draws_without_a_binding(self) -> None:
