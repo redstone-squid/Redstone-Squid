@@ -6,14 +6,11 @@ from typing import cast
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.accounts.application import AccountService
-from squid.accounts.domain import AliasClaim
+from squid.accounts.domain import AliasClaim, IdentityProvider
 from squid.accounts.errors import AliasAlreadyClaimedError
 from squid.bot.consent import with_consented_account
-from squid.bot.i18n import t
-from squid.bot.profile_render import present_claimant
 from squid.bot.ui import DISCORD_BLUE, L
 from squid.bot.utils.permissions import enforce
-from squid.core.i18n import _
 from squid.permissions.domain.catalogue import ACCOUNT_CLAIM_APPROVE, ACCOUNT_CLAIM_REJECT
 
 REVIEW_SECONDS = 300
@@ -33,7 +30,6 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
         claims: Sequence[AliasClaim],
         *,
         author_id: int,
-        locale: str | None = None,
         can_approve: bool,
         can_reject: bool,
         timeout: float = REVIEW_SECONDS,
@@ -41,7 +37,6 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
         self._accounts = accounts
         self._claims = tuple(claims)
         self._author_id = author_id
-        self.locale = locale
         self._can_approve = can_approve
         self._can_reject = can_reject
         self._timeout = timeout
@@ -62,7 +57,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
                     sl.paragraph(L(t"This review queue is closed.")),
                 ),
             )
-        entries = tuple(_claim_entry(claim, self.locale) for claim in self._claims)
+        entries = tuple(_claim_entry(claim) for claim in self._claims)
         body: sl.primitives.Node = (
             sl.primitives.Lines(
                 entries,
@@ -81,10 +76,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
                         sl.choice(
                             L("Claim #{id} — {name}", id=claim.id, name=claim.alias_name),
                             key=str(claim.id),
-                            description=sl.md(
-                                "{claimant}",
-                                claimant=sl.raw_md(present_claimant(claim, self.locale, mention=False)),
-                            ),
+                            description=_claimant(claim, mention=False),
                         )
                         for claim in self._claims
                     ),
@@ -175,22 +167,20 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
                 resolved = await self._accounts.reject_alias_claim(claim.id, staff_account_id=staff_account_id)
         except AliasAlreadyClaimedError as conflict:
             self.reassign_armed = claim.id
-            await event.notice(_conflict_text(conflict, self.locale), visibility=sl.interactions.Visibility.PUBLIC)
+            await event.notice(_conflict_text(conflict), visibility=sl.interactions.Visibility.PUBLIC)
             return
         await self._reload()
         message = (
-            t(
-                self.locale,
-                _("Credited **{name}** to {claimant}."),
+            L(
+                "Credited **{name}** to {claimant}.",
                 name=resolved.alias_name,
-                claimant=present_claimant(resolved, self.locale),
+                claimant=_claimant(resolved),
             )
             if approve
-            else t(
-                self.locale,
-                _("Closed {claimant}'s claim on **{name}** without crediting it."),
+            else L(
+                "Closed {claimant}'s claim on **{name}** without crediting it.",
                 name=resolved.alias_name,
-                claimant=present_claimant(resolved, self.locale),
+                claimant=_claimant(resolved),
             )
         )
         await event.notice(message, visibility=sl.interactions.Visibility.PUBLIC)
@@ -205,18 +195,33 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
         await event.finish()
 
 
-def _claim_entry(claim: AliasClaim, locale: str | None) -> str:
-    heading = t(locale, _("Claim #{id} — {name}"), id=claim.id, name=claim.alias_name)
-    detail = t(
-        locale,
-        _("{claimant} — opened {age}"),
-        claimant=present_claimant(claim, locale),
-        age=sl.md(t"{sl.timestamp(claim.created_at.to_stdlib(), style=sl.semantic.TimeStyle.RELATIVE)}").content,
+def _claimant(claim: AliasClaim, *, mention: bool = True) -> sl.TextLike:
+    claimant = claim.claimant
+    if claimant is not None:
+        discord = claimant.identity(IdentityProvider.DISCORD)
+        if mention and discord is not None and discord.discord_id is not None:
+            return sl.md(t"<@{discord.discord_id}>")
+        java = claimant.identity(IdentityProvider.JAVA)
+        if java is not None and java.display_name is not None:
+            return java.display_name
+        if claimant.public_creator_id is not None:
+            return L("creator `{creator_id}`", creator_id=claimant.public_creator_id)
+        if discord is not None and discord.discord_id is not None:
+            return L("Discord user `{discord_id}`", discord_id=discord.discord_id)
+    return L("unidentified account (internal ID `{account_id}`)", account_id=claim.account_id)
+
+
+def _claim_entry(claim: AliasClaim) -> sl.TextLike:
+    heading = L("Claim #{id} — {name}", id=claim.id, name=claim.alias_name)
+    detail = L(
+        "{claimant} — opened {age}",
+        claimant=_claimant(claim),
+        age=sl.md(t"{sl.timestamp(claim.created_at.to_stdlib(), style=sl.semantic.TimeStyle.RELATIVE)}"),
     )
-    return f"**{heading}**\n{detail}"
+    return L("**{heading}**\n{detail}", heading=heading, detail=detail)
 
 
-def _conflict_text(conflict: AliasAlreadyClaimedError, locale: str | None) -> str:
+def _conflict_text(conflict: AliasAlreadyClaimedError) -> sl.TextLike:
     """Explain the second deliberate approval click."""
-    held = t(locale, conflict.message, **conflict.message_params)
-    return f"{held} {t(locale, _('Approving again takes the name from them.'))}"
+    held = L(conflict.message, **conflict.message_params)
+    return L("{held} {action}", held=held, action=L("Approving again takes the name from them."))

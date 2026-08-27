@@ -398,7 +398,6 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     async def pending_claims(self, ctx: Context[BotT]) -> None:
         """Review the creator credit claims awaiting a decision."""
         invocation = await sd.Invocation.of(ctx)
-        locale = await resolve_locale(ctx, self.bot.services.settings)
         claims = await self.account_service.pending_alias_claims(with_claimants=True)
         subject = await subject_for(ctx)
         approve, reject = await self.bot.services.permissions.decisions(
@@ -408,7 +407,6 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             self.account_service,
             claims,
             author_id=ctx.author.id,
-            locale=locale,
             can_approve=approve.allowed,
             can_reject=reject.allowed,
         )
