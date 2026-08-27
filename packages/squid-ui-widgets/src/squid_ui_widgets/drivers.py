@@ -1,6 +1,6 @@
 """The two shells shared by every interactive machine."""
 
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol, runtime_checkable
 
@@ -143,7 +143,7 @@ class ComponentDriver[StateT](Component):
         initial: StateT | None = None,
         on_change: TransitionHandler[StateT] | None = None,
         handlers: Mapping[str, TransitionHandler[StateT]] | None = None,
-        finish_actions: Sequence[str] = (),
+        finish_actions: Collection[str] = (),
     ) -> None:
         self.machine = machine
         self.machine_state = machine.initial_state if initial is None else initial

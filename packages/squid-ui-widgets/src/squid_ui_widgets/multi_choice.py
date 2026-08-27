@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from squid_ui.factories import action_controls, heading, paragraph, stack, status
 from squid_ui.forms import ChoiceOption, FormSpec, MultiChoiceField
 from squid_ui.runtime.component import RenderResult
-from squid_ui.semantic import Choice, ControlDisplay, Tone, fallback
+from squid_ui.semantic import Choice, ControlDisplay, FormTrigger, Tone, fallback
 from squid_ui.sources import Position
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import display_text, require_key
@@ -193,7 +193,13 @@ class MultiChoice:
             return state if self.errors(state) else MultiChoiceState(state.staged, state.staged, state.pages)
         if action == "modal" and submitted is not None:
             raw = submitted.get("selection", ())
-            values = tuple(raw) if isinstance(raw, list | tuple) else (() if raw is None else (raw,))
+            # Modal submissions arrive untyped; option keys are strings, and this mirrors how
+            # `MultiChoiceField.parse` coerces the same payload.
+            values = (
+                tuple(str(item) for item in raw)
+                if isinstance(raw, list | tuple)
+                else (() if raw is None else (str(raw),))
+            )
             selected = tuple(key for key in self._choice_order if key in values)
             return self._commit_valid(MultiChoiceState(selected, state.committed, state.pages))
         if action.startswith("page:"):
@@ -311,15 +317,17 @@ class MultiChoice:
         if len(self._choice_order) <= 25:
             modal = self.form_for(state, "modal")
             assert modal is not None
-            selection = fallback(
-                direct,
-                controls.form(
-                    modal,
-                    "modal",
-                    key=f"{self.key}.modal",
-                    label="Select options",
-                ),
+            # `controls.form` answers either a `FormTrigger`, which is a layout node, or a
+            # `RoutedActionControl`, which is a control and only legal inside a control
+            # container. `fallback` takes layout nodes, so the routed half needs wrapping --
+            # the same narrowing `collection.py` does with the same union.
+            trigger = controls.form(modal, "modal", key=f"{self.key}.modal", label="Select options")
+            alternate = (
+                trigger
+                if isinstance(trigger, FormTrigger)
+                else action_controls(trigger, key=f"{self.key}.modal-action")
             )
+            selection = fallback(direct, alternate)
         else:
             selection = direct
         errors = self.errors(state)

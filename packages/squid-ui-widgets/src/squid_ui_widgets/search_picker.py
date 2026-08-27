@@ -7,6 +7,7 @@ from typing import Literal
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.factories import (
+    ChildLike,
     action_control,
     action_controls,
     choice,
@@ -221,17 +222,24 @@ class SearchPicker[ItemT](Component):
         if self.query is None:
             return stack(heading(chrome.search), *self._picked_nodes(), search_control)
 
+        # One arm per member of `Ready | Pending | Failed`, with the `previous` case inside it.
+        # Splitting on `previous` in the pattern instead left the match unprovably exhaustive,
+        # so `body` read as possibly unbound on a path that cannot happen.
         match self.results.status:
-            case Pending(previous=None):
-                body = (note(self.loading),)
-            case Failed(previous=None):
-                body = self._failure()
-            case Pending(previous=Ready(value=current)):
-                body = self._loaded_nodes(current, status_text=self.loading)
-            case Failed(previous=Ready(value=current)):
-                body = self._loaded_nodes(current, status_text=self.load_failed, retry=True)
             case Ready(value=current):
                 body = self._loaded_nodes(current)
+            case Pending(previous=previous):
+                body = (
+                    (note(self.loading),)
+                    if previous is None
+                    else self._loaded_nodes(previous.value, status_text=self.loading)
+                )
+            case Failed(previous=previous):
+                body = (
+                    self._failure()
+                    if previous is None
+                    else self._loaded_nodes(previous.value, status_text=self.load_failed, retry=True)
+                )
         return stack(heading(chrome.search), *self._picked_nodes(), search_control, *body)
 
     def _failure(self) -> tuple[LayoutNode, ...]:
@@ -248,7 +256,7 @@ class SearchPicker[ItemT](Component):
         *,
         status_text: TextLike | None = None,
         retry: bool = False,
-    ) -> tuple[LayoutNode, ...]:
+    ) -> tuple[ChildLike, ...]:
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         window = current.loaded.window
         entries = tuple(
