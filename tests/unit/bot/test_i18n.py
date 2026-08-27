@@ -6,8 +6,10 @@ from typing import Unpack, cast
 
 import discord
 import pytest
+from pytest_mock import MockerFixture
 
-from squid.bot.i18n import resolve_locale, t
+import squid_ui_discord as sd
+from squid.bot.i18n import localization_for, localization_resolver, resolve_locale, t
 from squid.settings.application import SettingsService
 from squid.settings.domain import Setting, SettingOptions
 
@@ -66,6 +68,44 @@ def _make_interaction(
 
 def test_t_is_a_thin_pass_through() -> None:
     assert t("en", "Try again in {seconds:.1f} seconds.", seconds=1.0) == "Try again in 1.0 seconds."
+
+
+def test_localization_for_builds_the_negotiated_catalogue(mocker: MockerFixture) -> None:
+    catalog = mocker.Mock()
+    catalog.gettext.return_value = "translated"
+    mocker.patch("squid.bot.i18n.catalog_for", return_value=catalog)
+
+    localization = localization_for("zh-CN")
+
+    assert localization.locale == "zh-CN"
+    assert localization.gettext("Cancel") == "translated"
+    catalog.gettext.assert_called_once_with("Cancel")
+
+
+@pytest.mark.asyncio
+async def test_localization_resolver_uses_the_installed_bot_settings() -> None:
+    class FakeClient:
+        def __init__(self, services: object) -> None:
+            self.services = services
+
+    service = SettingsService(FakeSettingsRepository(locale="zh-CN"))
+    client = FakeClient(SimpleNamespace(settings=service))
+    runtime = sd.install(cast(discord.Client, client), localization=localization_resolver)
+    context = cast(
+        "object",
+        SimpleNamespace(
+            bot=client,
+            author=SimpleNamespace(id=7),
+            guild=_make_guild(1),
+            interaction=None,
+            send=lambda **kwargs: None,
+        ),
+    )
+
+    localization = await localization_resolver(context)  # type: ignore[arg-type]
+    await runtime.close()
+
+    assert localization.locale == "zh-CN"
 
 
 @pytest.mark.asyncio

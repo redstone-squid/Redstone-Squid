@@ -426,7 +426,11 @@ class SquidCommandTree[ClientT: discord.Client](app_commands.CommandTree[ClientT
         # The correlation scope opens inside the span so it adopts the trace id when one exists.
         # Binding here rather than at notice time is what lets an error report carry the log
         # lines the command produced before it failed.
-        with trace_span(f"discord.command {command_name}", attributes) as span, correlation_scope():
+        with (
+            trace_span(f"discord.command {command_name}", attributes) as span,
+            correlation_scope(),
+            sd.invocation_scope(interaction),
+        ):
             await super()._call(interaction)  # pyright: ignore[reportPrivateUsage]
             if interaction.command_failed:
                 span.set_error()
