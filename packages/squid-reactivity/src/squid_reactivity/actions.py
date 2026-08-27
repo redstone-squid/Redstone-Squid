@@ -13,7 +13,11 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 from types import MappingProxyType
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
+
+if TYPE_CHECKING:
+    # `core` imports this module at runtime, so the edge back has to stay type-only.
+    from squid_reactivity.core import CellPatchSet
 
 _log = logging.getLogger(__name__)
 
@@ -186,7 +190,7 @@ class ActionCommit:
     committed_at: datetime
     duration: timedelta
     reads: tuple[ObservedRead, ...]
-    patches: Any
+    patches: CellPatchSet
     participant_changes: tuple[TransactionContribution, ...] = ()
     tags: frozenset[str] = frozenset()
 

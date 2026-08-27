@@ -50,7 +50,10 @@ class OpenContext:
         """
         user = getattr(source, "user", None)
         if user is None:
-            user = cast(Any, source).author
+            user = getattr(source, "author", None)
+        if user is None:
+            message = "open context source names neither a user nor an author"
+            raise TypeError(message)
         guild_id = getattr(source, "guild_id", None)
         if guild_id is None:
             guild = getattr(source, "guild", None)
