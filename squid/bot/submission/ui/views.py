@@ -63,6 +63,8 @@ EDIT_FIELDS: tuple[EditFieldSpec, ...] = (
 )
 """Every entry must name a BuildEditPatch field; a test pins that."""
 
+BUILD_EDIT_SESSION_SPEC = sd.SessionSpec("build-edit")
+
 
 def _split_values(value: str) -> list[str]:
     """Split a user-facing comma-separated list while ignoring empty values."""
@@ -711,6 +713,7 @@ class BuildEditComponent(sl.Component[sl.ComponentsV2Target]):
                 visibility="personal",
             )
             return
+        invocation = await sd.Invocation.of(interaction)
         client = interaction.client
         build, node = self._current()
         if node is None:
@@ -729,28 +732,17 @@ class BuildEditComponent(sl.Component[sl.ComponentsV2Target]):
             return latest, await client.for_build(latest).render_node()
 
         self._refresh = refresh
-        message_root = self.mount(interaction.user.id, source=interaction, scheduler=client.client_runtime.scheduler)
-        message_destination = sd.respond_to(interaction, ephemeral=ephemeral, wait=True)
-        parent_session = None if parent is None else interaction.client.sessions.session_for(parent)
-        if parent_session is None:
-            await interaction.client.sessions.open(
-                message_root,
-                message_destination,
-                key=SessionKey.custom("build-edit", (interaction.user.id, self.build.id)),
-                actor_id=interaction.user.id,
-            )
-        else:
-            await parent_session.attach(message_root, message_destination, actor_id=interaction.user.id, parent=parent)
-
-    def mount(
-        self, user_id: int, *, source: sd.runtime.RuntimeSource, scheduler: sd.MessageRootScheduler | None = None
-    ) -> sd.MessageRoot:
-        self._root = create_message_root(
+        opened = await invocation.open(
             self,
-            source=source,
-            access=sd.Owner(user_id),
-            locale=self.locale,
+            BUILD_EDIT_SESSION_SPEC,
+            visibility="personal" if ephemeral else "public",
+            parent=parent,
+            wait=True,
+            key=SessionKey.custom("build-edit", (interaction.user.id, self.build.id)),
             timeout=self._timeout,
-            scheduler=scheduler,
+            scheduler=invocation.runtime.scheduler,
         )
-        return self._root
+        if isinstance(opened, sd.sessions.Opened):
+            self._root = next(
+                message_root for message_root in opened.session.message_roots if message_root.component is self
+            )
