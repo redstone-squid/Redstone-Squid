@@ -53,7 +53,6 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
     async def show(self, interaction: discord.Interaction) -> None:
         """Open the panel that `status`, `channels`, `list` and `unfollow` used to be."""
         invocation = await sd.Invocation.of(interaction)
-        locale = await resolve_locale(interaction, self.bot.services.settings)
         account_id = await self._account_id(interaction)
         if account_id is None:
             return
@@ -61,7 +60,6 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
             notifications=self.bot.services.notifications,
             account_id=account_id,
             author_id=interaction.user.id,
-            locale=locale,
         )
         await invocation.mount(
             component,
