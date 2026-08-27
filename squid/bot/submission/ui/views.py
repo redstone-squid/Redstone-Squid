@@ -13,7 +13,7 @@ import squid_ui_discord as sd
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.components import BuildField, get_text_input
-from squid.bot.ui import DISCORD_YELLOW, create_message_root, error_node
+from squid.bot.ui import DISCORD_YELLOW, error_node
 from squid.bot.utils.permissions import allows
 from squid.bot.utils.sentinel import DEFAULT, DefaultType
 from squid.builds.application import BuildEditPatch, BuildService
@@ -412,16 +412,6 @@ class SubmissionFormComponent(sl.Component[sl.ComponentsV2Target]):
         with anyio.move_on_after(self._timeout) as scope:
             await self._done.wait()
         return None if scope.cancel_called else self.value
-
-    def mount(self, *, source: sd.runtime.RuntimeSource) -> sd.MessageRoot:
-        self._root = create_message_root(
-            self,
-            source=source,
-            access=(sd.Owner(self.author_id) if self.author_id is not None else sd.Everyone()),
-            locale=self.locale,
-            timeout=self._timeout,
-        )
-        return self._root
 
 
 def _edit_form(items: Sequence[BuildField[Any]], page: int, locale: str | None) -> sl.forms.FormSpec:

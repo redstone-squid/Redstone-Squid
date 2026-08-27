@@ -9,9 +9,7 @@ looking at it and removing it belong to the same message (audit C5's retyping ha
 from typing import TYPE_CHECKING
 
 import squid_ui as sl
-import squid_ui_discord as sd
 from squid.bot.i18n import t
-from squid.bot.ui import create_message_root
 from squid.core.i18n import _
 from squid.notifications import (
     NotificationPreferences,
@@ -204,15 +202,6 @@ class NotificationPanel(sl.Component[sl.ComponentsV2Target]):
         if self._preferences is None or self._preferences.dm_suspended_at is None:
             return None
         return t(self.locale, _("Discord rejected a DM, so DMs are suspended until you re-enable them."))
-
-    def mount(self, *, source: sd.runtime.RuntimeSource) -> sd.MessageRoot:
-        return create_message_root(
-            self,
-            source=source,
-            access=sd.Owner(self._author_id),
-            locale=self.locale,
-            timeout=SESSION_SECONDS,
-        )
 
 
 def _filter_text(record_filter: RecordSubscriptionFilter) -> str:

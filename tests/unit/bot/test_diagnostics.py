@@ -13,7 +13,6 @@ from whenever import Instant
 import squid.bot.app
 from squid.bot.diagnostics import Diagnostics
 from squid.bot.diagnostics_view import ErrorReportBrowser, report_attachment
-from squid.bot.ui import create_message_root
 from squid.diagnostics.domain import ErrorReport
 from squid_ui.sources import Position
 from squid_ui_discord import (
@@ -85,7 +84,8 @@ def make_cog(*, report: ErrorReport | None = None, reports: tuple[ErrorReport, .
 
 
 def message_root_browser(browser: ErrorReportBrowser) -> tuple[MessageRoot, discord.ui.LayoutView]:
-    message_root = create_message_root(browser, source=make_layout_bot(), access=Owner(1), chrome=browser.chrome())
+    bot = make_layout_bot()
+    message_root = bot.client_runtime.mount(browser, access=Owner(1), chrome=browser.chrome())
     return message_root, commit_render(message_root)
 
 

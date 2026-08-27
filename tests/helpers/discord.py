@@ -231,8 +231,6 @@ def make_layout_bot(**attributes: Any) -> Any:
     client.__dict__.update(
         client_runtime=runtime,
         sessions=runtime.sessions,
-        layout_scheduler=runtime.scheduler,
-        layout_challenges=runtime.challenges,
     )
     return client
 

@@ -165,11 +165,20 @@ async def test_public_build_panel_recovers_background_refresh_after_its_followup
         message_roots.append(message_root)
         return message_root
 
-    monkeypatch.setattr(search_module, "create_message_root", capture_root)
+    monkeypatch.setattr(bot.client_runtime, "mount", capture_root)
     monkeypatch.setattr(search_module, "resolve_locale", AsyncMock(return_value=None))
     ctx = cast(
         commands.Context[Any],
-        cast(Any, SimpleNamespace(interaction=interaction, author=SimpleNamespace(id=7), bot=bot, guild=None)),
+        cast(
+            Any,
+            SimpleNamespace(
+                interaction=interaction,
+                author=SimpleNamespace(id=7),
+                bot=bot,
+                guild=None,
+                send=AsyncMock(),
+            ),
+        ),
     )
 
     await SearchCog.view_build.callback(cog, ctx, build_id=42)  # type: ignore[arg-type]
