@@ -17,7 +17,6 @@ import discord
 
 import squid_ui as ui
 import squid_ui_discord as sd
-from squid.bot.i18n import localization_for
 
 DISCORD_RED = 0xF04747
 DISCORD_YELLOW = 0xFAA61A
@@ -42,7 +41,6 @@ __all__ = [
     "error_node",
     "info_node",
     "link_node",
-    "localization_for",
     "render_item",
     "render_payload",
     "text_node",
@@ -154,14 +152,14 @@ PALETTES = ui.PaletteRegistry(
 def render_item(
     node: ui.LayoutNode[ui.ComponentsV2Target],
     *,
-    locale: str | None = None,
+    localization: ui.text.Localization = ui.text.NEUTRAL,
     reservation: sd.ResourceCost = sd.EMPTY_RESERVATION,
 ) -> discord.ui.Item[Any]:
     """Render one node to a detached item through the bot's chrome and catalogue."""
     return sd.render_item(
         node,
         chrome=CHROME,
-        localization=localization_for(locale),
+        localization=localization,
         palette=PALETTES.resolve(),
         reservation=reservation,
     )
@@ -170,7 +168,7 @@ def render_item(
 def render_payload(
     nodes: ui.DocumentLike[ui.ComponentsV2Target],
     *,
-    locale: str | None = None,
+    localization: ui.text.Localization = ui.text.NEUTRAL,
     strict: bool = False,
     reservation: sd.ResourceCost = sd.EMPTY_RESERVATION,
 ) -> sd.message_payload.MessagePayload:
@@ -178,7 +176,7 @@ def render_payload(
     return sd.render_static(
         nodes,
         chrome=CHROME,
-        localization=localization_for(locale),
+        localization=localization,
         palette=PALETTES.resolve(),
         strict=strict,
         reservation=reservation,
@@ -227,7 +225,6 @@ class PagedList(ui.Component[ui.ComponentsV2Target]):
         entries: Sequence[str],
         *,
         empty: str,
-        locale: str | None = None,
         page_size: int | None = 10,
         separator: str = "\n\n",
         accent_colour: int = DISCORD_GREEN,
@@ -235,7 +232,6 @@ class PagedList(ui.Component[ui.ComponentsV2Target]):
         self.title = title
         self.entries = tuple(entries)
         self.empty = empty
-        self.locale = locale
         self.page_size = None if page_size is None else max(1, page_size)
         self.separator = separator
         self.accent_colour = accent_colour
