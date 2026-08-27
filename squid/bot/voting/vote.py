@@ -200,7 +200,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             IdentityProvider.DISCORD, str(interaction.user.id)
         )
         if account is None or account.id is None or account.needs_consent_refresh:
-            if await ensure_consented_account(interaction, self.bot.services.accounts, locale=locale) is None:
+            if await ensure_consented_account(interaction, self.bot.services.accounts) is None:
                 return
             invocation = await sd.Invocation.of(interaction)
             await invocation.reply(
@@ -232,7 +232,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             )
             return
 
-        author_account_id = await ensure_consented_account(interaction, self.bot.services.accounts, locale=locale)
+        author_account_id = await ensure_consented_account(interaction, self.bot.services.accounts)
         if author_account_id is None:
             return
 

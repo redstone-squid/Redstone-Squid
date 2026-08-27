@@ -107,7 +107,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         locale = await resolve_locale(interaction, self.bot.services.settings)
         # Before the uploads, not after: declining should not cost the user an attachment round
         # trip, and the notice describes exactly what submitting a build publishes.
-        uploader_account_id = await ensure_consented_account(interaction, self.bot.services.accounts, locale=locale)
+        uploader_account_id = await ensure_consented_account(interaction, self.bot.services.accounts)
         if uploader_account_id is None:
             return
 

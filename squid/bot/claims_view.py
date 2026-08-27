@@ -154,7 +154,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
         async def resolve(live: sl.ActionEvent, staff_account_id: int) -> None:
             await self._resolve(live, claim, staff_account_id, approve=approve)
 
-        await with_consented_account(event, self._accounts, resolve, locale=self.locale)
+        await with_consented_account(event, self._accounts, resolve)
 
     async def _resolve(
         self,
