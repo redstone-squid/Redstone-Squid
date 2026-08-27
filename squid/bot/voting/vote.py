@@ -255,11 +255,9 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             return info_node(t(locale, _("Working")), t(locale, _("Getting information...")))
 
         await run_command_operation(
-            message.channel,
+            invocation,
             publish,
-            source=self.bot,
-            locale=locale,
-            reports=self.bot.services.error_reports,
+            destination=sd.send_to(message.channel),
         )
         await invocation.reply(text_node(t(locale, _("Deletion vote opened."))), visibility="personal")
 
