@@ -14,12 +14,12 @@ import weakref
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from squid_ui_discord.message_root import MessageRoot
+    from squid_ui_discord.message_root import AnyMessageRoot, MessageRoot
 
-_LIVE: weakref.WeakValueDictionary[str, MessageRoot] = weakref.WeakValueDictionary()
+_LIVE: weakref.WeakValueDictionary[str, AnyMessageRoot] = weakref.WeakValueDictionary()
 
 
-def track(message_root: MessageRoot) -> None:
+def track(message_root: AnyMessageRoot) -> None:
     """Record `message root` as live until it finishes.
 
     Idempotent, and meant to be called on every commit: the first call registers the
@@ -33,12 +33,12 @@ def track(message_root: MessageRoot) -> None:
     message_root.on_finish(_forget)
 
 
-async def _forget(message_root: MessageRoot) -> None:
+async def _forget(message_root: AnyMessageRoot) -> None:
     if _LIVE.get(message_root.id) is message_root:
         del _LIVE[message_root.id]
 
 
-def message_roots() -> tuple[MessageRoot, ...]:
+def message_roots() -> tuple[AnyMessageRoot, ...]:
     """Every message root live in this process, in the order they first rendered."""
     return tuple(_LIVE.values())
 
