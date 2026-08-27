@@ -1,5 +1,7 @@
 """Small typed harnesses for Discord boundary tests."""
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
@@ -233,3 +235,12 @@ def make_layout_bot(**attributes: Any) -> Any:
         layout_challenges=runtime.challenges,
     )
     return client
+
+
+@asynccontextmanager
+async def invocation_scope(source: Any) -> AsyncIterator[Any]:
+    """Resolve one invocation inside the ambient scope production dispatch establishes."""
+    import squid_ui_discord as sd
+
+    with sd.invocation_scope(source):
+        yield await sd.Invocation.of(source)
