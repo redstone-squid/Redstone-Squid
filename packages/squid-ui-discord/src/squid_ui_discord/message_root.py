@@ -268,6 +268,14 @@ class Scheduler(Protocol):
 
 
 @runtime_checkable
+class ProfiledScheduler(Protocol):
+    """A scheduler that carries the profiler its mounts should inherit."""
+
+    @property
+    def profiler(self) -> Profiler: ...
+
+
+@runtime_checkable
 class ReactiveScheduler(Protocol):
     """A scheduler that can preserve the component attribution of a bus change."""
 
@@ -1068,14 +1076,12 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
         self.access = access
         self.on_error = on_error
         self._middleware = _unique_by_identity(middleware)
-        inherited_profiler = None if scheduler is None else getattr(scheduler, "profiler", None)
-        self.profiler = (
-            profiler
-            if profiler is not None
-            else cast(Profiler, inherited_profiler)
-            if inherited_profiler is not None
-            else _NOOP_PROFILER
-        )
+        if profiler is not None:
+            self.profiler = profiler
+        elif isinstance(scheduler, ProfiledScheduler):
+            self.profiler = scheduler.profiler
+        else:
+            self.profiler = _NOOP_PROFILER
         self._owns_render_cache = render_cache is None
         self.render_cache = render_cache if render_cache is not None else RenderProgramCache()
         self.scheduler = scheduler
