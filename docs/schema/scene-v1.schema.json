@@ -796,6 +796,7 @@
             "small",
             "strong",
             "em",
+            "s",
             "span",
             "div",
             "ul",
@@ -831,6 +832,7 @@
             "option",
             "button",
             "time",
+            "br",
             "hr"
           ]
         },
