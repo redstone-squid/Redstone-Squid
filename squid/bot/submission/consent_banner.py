@@ -10,7 +10,7 @@ import squid_ui_discord as sd
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.bot.consent import CONSENT_SESSION_SPEC, ConsentPrompt
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.routes.build_log_consents import build_log_consent, build_log_consents
+from squid.bot.routes import routes
 from squid.bot.ui import (
     CardField,
     localization_for,
@@ -27,6 +27,9 @@ if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
 
 logger = logging.getLogger(__name__)
+
+build_log_consents = routes.group("build-log-consents")
+build_log_consent = build_log_consents.define("new", aliases=("build_log:consent",))
 
 CONSENT_BUTTON_CUSTOM_ID = build_log_consent.id()
 
