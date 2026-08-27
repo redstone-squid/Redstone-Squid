@@ -627,10 +627,14 @@ def _audit_embed(embed: discord.Embed, index: int, limits: ClassicLimits) -> lis
         if isinstance(value, str) and len(value) > cap:
             problems.append(f"embed {index} {what} is {len(value)} characters; the limit is {cap}")
 
+    def nested(key: str, field: str) -> object:
+        value = payload.get(key)
+        return value.get(field) if isinstance(value, dict) else None
+
     check(payload.get("title"), limits.embeds.title, "title")
     check(payload.get("description"), limits.embeds.description, "description")
-    check((payload.get("footer") or {}).get("text"), limits.embeds.footer, "footer")
-    check((payload.get("author") or {}).get("name"), limits.embeds.author, "author")
+    check(nested("footer", "text"), limits.embeds.footer, "footer")
+    check(nested("author", "name"), limits.embeds.author, "author")
 
     fields = payload.get("fields") or []
     if len(fields) > limits.embeds.fields:
@@ -645,7 +649,7 @@ def _audit_embed(embed: discord.Embed, index: int, limits: ClassicLimits) -> lis
 
     for key in ("url", "image", "thumbnail", "footer", "author"):
         raw = payload.get(key)
-        candidate = raw if isinstance(raw, str) else (raw or {}).get("url") or (raw or {}).get("icon_url")
+        candidate = raw if isinstance(raw, str) else nested(key, "url") or nested(key, "icon_url")
         if isinstance(candidate, str) and candidate:
             scheme = urlsplit(candidate).scheme
             if scheme not in ALLOWED_SCHEMES:

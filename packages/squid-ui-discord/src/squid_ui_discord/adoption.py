@@ -120,7 +120,7 @@ def adopt(
     keys: KeyFactory | None = None,
     assets: Sequence[Asset] = (),
     discard_timeout: bool = False,
-) -> Component:
+) -> Component[Any]:
     """Draw an unsent discord.py view as a Squid component, keeping its callbacks.
 
     The view becomes a model: Squid builds its own controls from `view.children` on every
@@ -200,7 +200,7 @@ def _validate_adoptable(view: discord.ui.View | discord.ui.LayoutView, *, discar
         raise AdoptionError(message)
 
 
-class _AdoptedView(Component):
+class _AdoptedView(Component[Any]):
     """A component whose whole model is one legacy view."""
 
     _view: discord.ui.View | discord.ui.LayoutView = state(persist=False, opaque=True)
