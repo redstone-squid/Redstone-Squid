@@ -8,7 +8,6 @@ import discord
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.i18n import t
 from squid.bot.ui import CardField, L, localization_for
 from squid.bot.utils.permissions import allows
 from squid.core.i18n import SUPPORTED_LOCALES, _
@@ -83,7 +82,6 @@ class SettingsPanel(sd.Screen):
     page: str = sl.state("server")
     kind: VoteKind = sl.state(VoteKind.BUILD)
     confirming_reset: bool = sl.state(default=False)
-    locale: str | None = sl.state(None, persist=False)
     # Refreshed from the services by open_server/open_voting, so a snapshot would only restore
     # them stale.
     _channels: Mapping[ScalarChannelSetting, int | None] = sl.state(dict.fromkeys(CHANNEL_SETTINGS), persist=False)
@@ -98,14 +96,12 @@ class SettingsPanel(sd.Screen):
         votes: VoteService,
         guild: discord.Guild,
         capabilities: SettingsCapabilities,
-        locale: str | None = None,
         owner_guild_id: int | None = None,
     ) -> None:
         self._settings = settings
         self._votes = votes
         self._guild = guild
         self._capabilities = capabilities
-        self.locale = locale
         self._owner_guild_id = owner_guild_id
 
     @property
@@ -308,13 +304,14 @@ class SettingsPanel(sd.Screen):
         if role is None:
             await event.notice(L(t"That role has been deleted."))
             return
+        invocation = await sd.Invocation.of(sd.native(event))
         await event.present_form(
             sl.forms.FormSpec(
-                t(self.locale, _("Vote weight for {role}"), role=role.name),
+                invocation.t(L("Vote weight for {role}", role=role.name)),
                 (
                     sl.forms.TextField(
                         key="multiplier",
-                        label=t(self.locale, _("Multiplier; leave empty to remove this role's weight")),
+                        label=invocation.t(L("Multiplier; leave empty to remove this role's weight")),
                         placeholder="1.5",
                         default=(f"{current:g}" if (current := self.weight_for(role.id)) is not None else ""),
                         required=False,
@@ -328,13 +325,14 @@ class SettingsPanel(sd.Screen):
 
     async def _edit_emojis(self, event: sl.PressEvent) -> None:
         if await self._may_event(event, SETTINGS_VOTING_EDIT):
+            invocation = await sd.Invocation.of(sd.native(event))
             await event.present_form(
                 sl.forms.FormSpec(
-                    t(self.locale, _("{kind} vote emojis"), kind=self.kind.value),
+                    invocation.t(L("{kind} vote emojis", kind=self.kind.value)),
                     (
                         sl.forms.TextAreaField(
                             key="aliases",
-                            label=t(self.locale, _("One `choice | emoji` per line")),
+                            label=invocation.t(L("One `choice | emoji` per line")),
                             placeholder="approve | ✅\ndeny | ❌",
                             default=self.emoji_preset_text(),
                             minimum=1,
@@ -351,31 +349,30 @@ class SettingsPanel(sd.Screen):
         try:
             await self.set_weight(role_id, float(text) if text else None)
         except InvalidVoteConfigurationError, ValueError:
-            await event.notice(t(self.locale, _("A vote multiplier must be a positive number, such as 1.5.")))
+            await event.notice(L("A vote multiplier must be a positive number, such as 1.5."))
 
     async def _emoji_form_submitted(self, event: sl.SubmitEvent) -> None:
         interaction = sd.native(event)
         if interaction.guild is None:
             return
         text = cast(str, event.values["aliases"])
-        locale = self.locale
         options: list[VoteOption] = []
         for position, line in enumerate(filter(None, (line.strip() for line in text.splitlines()))):
             parts = [part.strip() for part in line.split("|", 1)]
             if len(parts) != 2:
-                await event.notice(t(locale, _("Each line must read `choice | emoji`.")))
+                await event.notice(L("Each line must read `choice | emoji`."))
                 return
             choice_text, emoji = parts
             try:
                 choice = VoteChoice.GENERIC if self.kind is VoteKind.GENERIC else VoteChoice(choice_text)
             except ValueError:
-                await event.notice(t(locale, _("`{choice}` is not a vote choice."), choice=choice_text))
+                await event.notice(L("`{choice}` is not a vote choice.", choice=choice_text))
                 return
             parsed = discord.PartialEmoji.from_str(emoji)
             if parsed.is_custom_emoji():
                 custom = interaction.guild.get_emoji(parsed.id or 0)
                 if custom is None or not custom.is_usable():
-                    await event.notice(t(locale, _("The custom emoji {emoji} is inaccessible."), emoji=emoji))
+                    await event.notice(L("The custom emoji {emoji} is inaccessible.", emoji=emoji))
                     return
             options.append(
                 VoteOption(
@@ -390,7 +387,8 @@ class SettingsPanel(sd.Screen):
         try:
             await self.set_emojis(options)
         except InvalidVoteConfigurationError as error:
-            await event.notice(str(error))
+            invocation = await sd.Invocation.of(interaction)
+            await event.notice(invocation.t(L(str(error))))
 
     async def _reset(self, event: sl.PressEvent) -> None:
         if not await self._may_event(event, SETTINGS_VOTING_EDIT):
@@ -455,10 +453,10 @@ class SettingsPanel(sd.Screen):
             await self._settings.set_channel(self._guild.id, setting, channel_id)
 
     async def set_locale(self, locale: str | None, *, message_root: sd.MessageRoot) -> None:
-        previous_override, previous_locale = self._locale_override, self.locale
+        previous_override = self._locale_override
+        previous_locale = message_root.localization.locale
         await self._write_locale(locale, locale or previous_locale, message_root)
         self._locale_override = locale
-        self.locale = locale or self.locale
         self.history.record(
             L(t"Changed the bot language"),
             compensate=sl.runtime.CompensationSpec(
@@ -522,18 +520,22 @@ class SettingsPanel(sd.Screen):
             if preset is not None and preset.options
             else L(t"_None_")
         )
-        weights = "\n".join(
-            f"{self._role_display(weight.role_id)} — {weight.multiplier:g}x" for weight in self._weights
-        ) or L(t"_None_")
+        weight_params: dict[str, object] = {}
+        weight_lines: list[str] = []
+        for index, weight in enumerate(self._weights):
+            key = f"role_{index}"
+            weight_params[key] = self._role_display(weight.role_id)
+            weight_lines.append(f"{{{key}}} — {weight.multiplier:g}x")
+        weights = L("\n".join(weight_lines), **weight_params) if weight_lines else L(t"_None_")
         return [
             CardField(L(t"Emojis"), emojis),
             CardField(L(t"Role multipliers"), weights),
         ]
 
-    def _role_display(self, role_id: int) -> str:
+    def _role_display(self, role_id: int) -> sl.TextLike:
         role = self._guild.get_role(role_id)
         if role is None:
-            return t(self.locale, _("_Deleted role_ ({id})"), id=role_id)
+            return L("_Deleted role_ ({id})", id=role_id)
         return role.name
 
     def _scope_note(self) -> sl.TextLike | None:
