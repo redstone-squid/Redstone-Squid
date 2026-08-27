@@ -9,10 +9,11 @@ import discord
 from beartype.door import is_bearable
 from discord import Interaction, TextStyle
 
+import squid_ui_discord as sd
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.routes import routes
 from squid.bot.submission.parse import get_formatter_and_parser_for_type
-from squid.bot.ui import respond_payload, text_layout
+from squid.bot.ui import text_node
 from squid.builds.domain import DOOR_ORIENTATION_NAMES, Build, BuildDraft, DoorBuild
 from squid.core.i18n import _
 
@@ -280,7 +281,8 @@ async def edit_build(interaction: Interaction[RedstoneSquid], build_id: int) -> 
     if build is None:
         # The card outlived its build; say so rather than failing the interaction silently.
         locale = await resolve_locale(interaction, interaction.client.services.settings)
-        await respond_payload(interaction, text_layout(t(locale, _("That build no longer exists."))))
+        invocation = await sd.Invocation.of(interaction)
+        await invocation.reply(text_node(t(locale, _("That build no longer exists."))), visibility="personal")
         return
     await BuildEditComponent(build, interaction.client.services.builds).send(interaction)
 
