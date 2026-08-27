@@ -10,7 +10,14 @@ import squid_ui as sl
 import squid_ui_discord
 from squid_ui.primitives import Button, Heading, Row, Text
 from squid_ui_discord import Everyone, MessageRoot, Owner, live
-from squid_ui_discord.devtools_view import MessageRootInspector, metrics_text, plan_text, scene_attachment
+from squid_ui_discord.devtools_runtime import DevToolsRuntime
+from squid_ui_discord.devtools_view import (
+    MessageRootInspector,
+    OperationalInspector,
+    metrics_text,
+    plan_text,
+    scene_attachment,
+)
 from squid_ui_discord.testing import assert_within_limits, commit_render, delivered_to, fake_interaction
 
 
@@ -232,3 +239,36 @@ class TestPlanDiagnostics:
 
         assert "no plan report" in plan_text(snapshot)
         assert "no planner metrics" in metrics_text(snapshot)
+
+
+class TestOperationalInspectorSections:
+    """Every section renders.
+
+    These panels only run when a developer opens that tab, so a name that does not exist or a
+    required argument that is not passed sits undetected until someone reaches for it mid-debug.
+    """
+
+    @pytest.mark.parametrize(
+        "section",
+        ["overview", "roots", "sessions", "queues", "profile", "persistence"],
+    )
+    async def test_each_dashboard_section_renders(self, section: str) -> None:
+        inspector = OperationalInspector(DevToolsRuntime())
+        inspector.section = section
+
+        assert list(inspector.render())
+
+    async def test_root_and_session_detail_panels_render(self) -> None:
+        subject = await live_subject()
+        runtime = DevToolsRuntime()
+        inspector = OperationalInspector(runtime)
+
+        inspector.section = "roots"
+        inspector.message_root_id = subject.id
+        assert list(inspector.render())
+
+        snapshot = runtime.snapshot()
+        if snapshot.sessions:
+            inspector.section = "sessions"
+            inspector.session_id = snapshot.sessions[0].id
+            assert list(inspector.render())
