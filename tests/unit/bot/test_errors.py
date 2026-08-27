@@ -182,6 +182,36 @@ async def test_application_command_binds_one_correlation_id_for_the_whole_invoca
     assert seen[0] != outside, "the binding must not leak past the invocation"
 
 
+async def test_application_command_establishes_invocation_scope(mocker: MockerFixture) -> None:
+    client = discord.Client(intents=discord.Intents.none())
+    runtime = sd.install(client)
+    tree = SquidCommandTree(client)
+    interaction = mocker.Mock(
+        type=discord.InteractionType.application_command,
+        data={"name": "settings"},
+        guild_id=None,
+        channel_id=None,
+        command_failed=False,
+        client=client,
+        user=mocker.Mock(id=7),
+        guild=None,
+    )
+    seen: list[sd.Invocation] = []
+
+    async def record_bound(_tree: object, source: discord.Interaction) -> None:
+        invocation = await sd.Invocation.of(source)
+        assert sd.current_invocation() is invocation
+        seen.append(invocation)
+
+    mocker.patch.object(app_commands.CommandTree, "_call", new=record_bound)
+
+    await tree._call(interaction)  # pyright: ignore[reportPrivateUsage]
+    await runtime.close()
+
+    assert len(seen) == 1
+    assert sd.current_invocation() is None
+
+
 async def test_application_command_failure_marks_span(mocker: MockerFixture) -> None:
     client = discord.Client(intents=discord.Intents.none())
     tree = SquidCommandTree(client)
