@@ -341,7 +341,7 @@ def _walk_ids(item: object) -> list[str]:
     return found
 
 
-def _reject_dispatchable(view: discord.ui.LayoutView) -> None:
+def _reject_dispatchable(view: discord.ui.view.BaseView) -> None:
     """Refuse any control the host would have to dispatch for us.
 
     Component-local callbacks are already refused during sessionless planning. This closes

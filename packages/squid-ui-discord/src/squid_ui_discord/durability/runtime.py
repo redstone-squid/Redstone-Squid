@@ -23,6 +23,7 @@ from squid_ui_discord.sessions import (
     AdmissionSpec,
     MembershipResult,
     Opened,
+    OpenResult,
     Rejected,
     RejectionReason,
     Session,
@@ -163,17 +164,34 @@ class DurableSession(Session):
         message_root: MessageRoot,
         message_destination: MessageDestination,
         *,
-        recipe: str,
+        recipe: str | None = None,
         actor_id: int | None = None,
         parent: MessageRoot | None = None,
-    ) -> Opened[DurableSession] | Rejected | Abandoned | NotDurable:
-        """Deliver and durably attach one child mount to this session graph."""
+    ) -> OpenResult:
+        """Deliver and durably attach one child mount to this session graph.
+
+        `recipe` names the registered component the mount is rebuilt from after a restart, and
+        has no counterpart on `Session.attach`. It defaults so that this stays a valid override:
+        a caller holding a plain `Session` that happens to be durable -- which is every caller
+        going through `SessionManager.session_for` -- would otherwise raise `TypeError`. Attaching
+        without one is refused rather than served, because a mount this session cannot rebuild
+        would disappear from the graph at the next recovery.
+
+        A promotion that fails after delivery is reported as a refusal for the same reason the
+        base class only promises `OpenResult`: an override may not hand back an outcome its
+        callers have no way to know about.
+        """
         runtime = self._durable_runtime
         if runtime is None:
             return Rejected((self.snapshot,), RejectionReason.SESSION_FINISHED)
-        return await runtime._attach(
+        if recipe is None:
+            return Rejected((self.snapshot,), RejectionReason.RECIPE_REQUIRED)
+        result = await runtime._attach(
             self, message_root, message_destination, recipe=recipe, actor_id=actor_id, parent=parent
         )
+        if isinstance(result, NotDurable):
+            return Rejected((self.snapshot,), RejectionReason.NOT_DURABLE)
+        return result
 
     async def join(
         self,
@@ -670,6 +688,11 @@ class DurableSessionRuntime:
 
     def _capture(self, active: _ActiveSession) -> DurableSessionRecord:
         session = active.session
+        # `Session.key` is `Hashable | None` because an ad-hoc session need not be keyed. A
+        # durable one always is: the key is how recovery finds the record again.
+        if not isinstance(session.key, SessionKey):
+            message = f"durable session {session.id} has no session key to checkpoint against"
+            raise MessageRootStateError(message)
         message_roots = tuple(
             SessionRootRecord(
                 active.message_root_ids[message_root],
@@ -785,6 +808,8 @@ def _loads_snapshot(payload: str, *, local: bool) -> SessionSnapshot:
 
 
 def _finite_timestamp(value: object) -> float:
+    if not isinstance(value, int | float | str):
+        raise ValueError
     timestamp = float(value)
     if not math.isfinite(timestamp):
         raise ValueError
