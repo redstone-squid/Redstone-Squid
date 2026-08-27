@@ -223,6 +223,8 @@ type Node = (
     | ZonedTime
     | File
     | Separator
+    | Link
+    | Button
     | Row
     | Select
     | RoutedSelect

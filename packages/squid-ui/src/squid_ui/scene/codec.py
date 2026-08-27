@@ -564,7 +564,7 @@ def _node_from_dict(
             if not all(isinstance(item, Link | PremiumButton | Button | RoutedButton | Extension) for item in decoded):
                 msg = "row contains an unsupported child"
                 raise CodecError(msg)
-            return Row(decoded)
+            return Row(cast(tuple[Link | PremiumButton | Button | RoutedButton | Extension, ...], decoded))
         case Thumbnail.KIND:
             return Thumbnail(
                 url=_string(raw, "url"),
@@ -602,7 +602,7 @@ def _node_from_dict(
             ):
                 msg = "section has an unsupported accessory"
                 raise CodecError(msg)
-            return Section(decoded_texts, accessory)
+            return Section(cast(tuple[Text, ...], decoded_texts), accessory)
         case Panel.KIND:
             children = raw.get("children")
             accent = raw.get("accent")
