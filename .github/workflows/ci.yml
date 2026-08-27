@@ -62,6 +62,7 @@ jobs:
               - 'app.py'
               - 'babel.cfg'
               - 'alembic.ini'
+              - 'justfile'
               - 'prek.toml'
               - 'pyproject.toml'
               - 'uv.lock'
@@ -153,6 +154,9 @@ jobs:
 
       - name: Check types with BasedPyright
         run: uvx --from basedpyright==1.39.9 basedpyright --level=warning
+
+      - name: Check types with Pyrefly
+        run: uv run --locked pyrefly check --config pyproject.toml --baseline pyrefly-baseline.json
 
       - name: Minimize uv cache
         if: always()
@@ -489,7 +493,7 @@ jobs:
       - name: Run unit and architecture tests
         env:
           HYPOTHESIS_PROFILE: ci
-        run: uv run --locked pytest tests/unit tests/architecture packages/squid-reactive/tests packages/squid-stores/tests packages/squid-replicated/tests packages/squid-layouts/tests packages/squid-discord/tests packages/squid-patterns/tests --cov=squid --cov=squid_layouts --cov=squid_discord --cov=squid_patterns --cov=squid_reactive --cov=squid_stores --cov-report=term-missing --cov-report=html
+        run: uv run --locked pytest --cov-report=term-missing --cov-report=html
 
       - name: Upload coverage report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
