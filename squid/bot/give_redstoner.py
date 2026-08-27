@@ -2,16 +2,17 @@
 """Magical stuff, don't worry about it."""
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol, cast
 
 import discord
 from discord import Interaction
 from discord.ext.commands import Cog, Context, hybrid_group
 
 import squid_ui as sl
+import squid_ui_discord as sd
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.routes.redstoner_roles import redstoner_roles, remove_redstoner_role
+from squid.bot.routes import routes
 from squid.bot.ui import render_payload, reply_payload, respond_payload, text_layout
 from squid.bot.utils.permissions import check_is_home_server, hide_unless, requires
 from squid.community.domain import RedstonerDecisionKind
@@ -21,6 +22,30 @@ from squid_ui_discord import send_to
 
 if TYPE_CHECKING:
     import squid.bot.app
+
+
+class _OwnerGuildClient(Protocol):
+    owner_server_id: int
+
+
+class OwnerGuildOnly[BotT: discord.Client](sd.routing.Middleware[BotT]):
+    """Silently ignore durable role controls outside the configured owner guild."""
+
+    async def dispatch(
+        self,
+        request: sd.routing.RouteRequest[BotT],
+        proceed: sd.routing.RouteProceed,
+    ) -> None:
+        interaction = request.interaction
+        client = cast(_OwnerGuildClient, interaction.client)
+        if interaction.guild is None or interaction.guild.id != client.owner_server_id:
+            return
+        await proceed()
+
+
+redstoner_roles = routes.group("redstoner-roles")
+redstoner_roles.add_middleware(OwnerGuildOnly())
+remove_redstoner_role = redstoner_roles.define("self:remove", aliases=("remove:role:redstoner",))
 
 
 @redstoner_roles.route(remove_redstoner_role)
