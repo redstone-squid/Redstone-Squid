@@ -194,7 +194,6 @@ class SearchCog[
         """Search records, builds, patterns, and restrictions using text and field filters."""
         await ctx.defer()
         invocation = await sd.Invocation.of(ctx)
-        locale = await resolve_locale(ctx, self.bot.services.settings)
         search_scope, targeted_query = _targeted(scope, query)
         request = SearchRequest(
             targeted_query,
@@ -211,7 +210,6 @@ class SearchCog[
             request,
             page,
             author_id=ctx.author.id,
-            locale=locale,
             load_build=load_build,
             render_build=lambda build: self.bot.for_build(build).render_node(),
         )

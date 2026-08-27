@@ -8,10 +8,8 @@ from discord.utils import escape_markdown
 
 import squid_ui as sl
 import squid_ui_widgets as sp
-from squid.bot.i18n import t
-from squid.bot.ui import DISCORD_GREEN
+from squid.bot.ui import DISCORD_GREEN, L
 from squid.builds.domain import Build
-from squid.core.i18n import _
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchHit, SearchPage, SearchRequest
 from squid_ui.sources import window_fingerprint
 
@@ -82,19 +80,17 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target]):
         self,
         hit: SearchHit,
         *,
-        locale: str | None,
         load_build: BuildLoader | None,
         render_build: BuildRenderer | None,
     ) -> None:
         self.hit = hit
-        self.locale = locale
         self._load_build = load_build
         self._render_build = render_build
 
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         detail = self._build_node or sl.section(
             sl.heading(_detail_title(self.hit)),
-            sl.truncate(sl.paragraph(_detail_text(self.hit, self.locale))),
+            sl.truncate(sl.paragraph(_detail_text(self.hit))),
             accent=DISCORD_GREEN,
         )
         build_id = _build_id(self.hit)
@@ -103,7 +99,7 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target]):
             *(
                 (
                     sl.action_controls(
-                        sl.action_control(t(self.locale, _("View build")), self._open_build, key="open-build"),
+                        sl.action_control(L("View build"), self._open_build, key="open-build"),
                         key="build-actions",
                     ),
                 )
@@ -115,11 +111,11 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target]):
     async def _open_build(self, event: sl.ActionEvent) -> None:
         build_id = _build_id(self.hit)
         if build_id is None or self._load_build is None or self._render_build is None:
-            await event.notice(t(self.locale, _("That build is no longer available.")))
+            await event.notice(L("That build is no longer available."))
             return
         build = await self._load_build(build_id)
         if build is None:
-            await event.notice(t(self.locale, _("That build is no longer available.")))
+            await event.notice(L("That build is no longer available."))
             return
         self._build_node = await self._render_build(build)
 
@@ -136,13 +132,11 @@ class SearchResultsView(sl.Component[sl.ComponentsV2Target]):
         page: SearchPage,
         *,
         author_id: int,
-        locale: str | None = None,
         load_build: BuildLoader | None = None,
         render_build: BuildRenderer | None = None,
     ) -> None:
         self._source = _SearchSource(service, request, page)
         self._author_id = author_id
-        self.locale = locale
         self._load_build = load_build
         self._render_build = render_build
         self._browser = sp.Browser(
@@ -150,15 +144,15 @@ class SearchResultsView(sl.Component[sl.ComponentsV2Target]):
             key="search",
             identity=_hit_identity,
             label=lambda hit: hit.title,
-            summary=lambda hit: _result_description(hit, self.locale),
+            summary=_result_description,
             detail=self._detail,
             overview=self._overview,
             page_size=request.page_size,
-            title=t(self.locale, _("Search results")),
-            empty=t(self.locale, _("No results match this query.")),
-            loading=t(self.locale, _("Loading search results…")),
-            load_failed=t(self.locale, _("Could not load search results.")),
-            retry=t(self.locale, _("Retry")),
+            title=L("Search results"),
+            empty=L("No results match this query."),
+            loading=L("Loading search results…"),
+            load_failed=L("Could not load search results."),
+            retry=L("Retry"),
         )
         self._browser.window.replace(self._source.initial_loaded())
 
@@ -217,7 +211,6 @@ class SearchResultsView(sl.Component[sl.ComponentsV2Target]):
     def _detail(self, hit: SearchHit) -> _SearchDetail:
         return _SearchDetail(
             hit,
-            locale=self.locale,
             load_build=self._load_build,
             render_build=self._render_build,
         )
@@ -232,15 +225,13 @@ class SearchResultsView(sl.Component[sl.ComponentsV2Target]):
         if self.closed:
             return (
                 sl.section(
-                    sl.heading(t(self.locale, _("Search closed"))),
-                    sl.truncate(sl.paragraph(t(self.locale, _("This search is closed.")))),
+                    sl.heading(L("Search closed")),
+                    sl.truncate(sl.paragraph(L("This search is closed."))),
                 ),
             )
         return (
             self.boundary(self._browser, key="results"),
-            sl.action_controls(
-                sl.action_control(t(self.locale, _("Close")), self._close, key="close"), key="search-actions"
-            ),
+            sl.action_controls(sl.action_control(L("Close"), self._close, key="close"), key="search-actions"),
         )
 
     async def _close(self, event: sl.PressEvent) -> None:
@@ -260,54 +251,56 @@ def _detail_title(hit: SearchHit) -> str:
     return hit.title
 
 
-_METADATA_LABELS = {
-    "restriction": _("Restriction"),
-    "pattern": _("Pattern"),
-    "showcase": _("Showcase tag"),
-    "creator": _("Creator"),
-    "version": _("Version"),
-    "tag": _("Tag"),
-}
+def _metadata_label(kind: str) -> sl.TextLike:
+    match kind:
+        case "restriction":
+            return L("Restriction")
+        case "pattern":
+            return L("Pattern")
+        case "showcase":
+            return L("Showcase tag")
+        case "creator":
+            return L("Creator")
+        case "version":
+            return L("Version")
+        case "tag":
+            return L("Tag")
+        case _:
+            return kind
 
 
-def _metadata_label(kind: str, locale: str | None) -> str:
-    label = _METADATA_LABELS.get(kind)
-    return t(locale, label) if label is not None else kind
-
-
-def _result_description(hit: SearchHit, locale: str | None) -> str:
+def _result_description(hit: SearchHit) -> sl.TextLike:
     if isinstance(hit, RecordSearchHit):
-        return f"Record · {hit.record_class} · {hit.build_title}"
+        return L("Record · {record_class} · {build_title}", record_class=hit.record_class, build_title=hit.build_title)
     if isinstance(hit, BuildSearchHit):
-        return f"Build · {hit.status}"
-    return _metadata_label(hit.metadata_kind, locale)
+        return L("Build · {status}", status=hit.status)
+    return _metadata_label(hit.metadata_kind)
 
 
-def _detail_text(hit: SearchHit, locale: str | None) -> str:
+def _detail_text(hit: SearchHit) -> sl.TextLike:
     if isinstance(hit, RecordSearchHit):
         tags = ", ".join(escape_markdown(tag) for tag in hit.tags)
-        fields = t(
-            locale,
-            _("**Build**\n{build_title} ({build_id})\n**Class**\n{record_class} · {version_scope}"),
-            build_title=escape_markdown(hit.build_title),
+        fields = L(
+            "**Build**\n{build_title} ({build_id})\n**Class**\n{record_class} · {version_scope}",
+            build_title=hit.build_title,
             build_id=hit.build_id,
-            record_class=escape_markdown(hit.record_class),
-            version_scope=escape_markdown(hit.version_scope),
+            record_class=hit.record_class,
+            version_scope=hit.version_scope,
         )
         if hit.metrics:
             metrics = ", ".join(
                 f"{escape_markdown(key)}: {escape_markdown(str(value))}" for key, value in hit.metrics.items()
             )
-            fields += t(locale, _("\n**Metrics**\n{metrics}"), metrics=metrics)
+            fields = L("{fields}\n**Metrics**\n{metrics}", fields=fields, metrics=sl.md(metrics))
         description = hit.subtitle or ""
     elif isinstance(hit, BuildSearchHit):
         tags = ", ".join(escape_markdown(tag) for tag in hit.tags)
-        fields = t(locale, _("**Status**\n{status}"), status=escape_markdown(hit.status))
+        fields = L("**Status**\n{status}", status=hit.status)
         description = hit.description or ""
     else:
         tags = ", ".join(escape_markdown(alias) for alias in hit.aliases)
-        fields = t(locale, _("**Kind**\n{kind}"), kind=escape_markdown(_metadata_label(hit.metadata_kind, locale)))
+        fields = L("**Kind**\n{kind}", kind=_metadata_label(hit.metadata_kind))
         description = hit.description or ""
     if tags:
-        fields += t(locale, _("\n**Tags**\n{tags}"), tags=tags)
-    return f"{escape_markdown(description)}\n{fields}"
+        fields = L("{fields}\n**Tags**\n{tags}", fields=fields, tags=sl.md(tags))
+    return L("{description}\n{fields}", description=description, fields=fields)
