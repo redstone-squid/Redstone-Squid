@@ -35,7 +35,7 @@ from squid.accounts.errors import AccountNotFoundError
 from squid.bot.consent import request_consent
 from squid.bot.i18n import t
 from squid.bot.profile_render import identity_label, own_profile_avatar, own_profile_fields
-from squid.bot.ui import CardField, create_message_root
+from squid.bot.ui import CardField
 from squid.core.errors import ValidationError
 from squid.core.i18n import _
 
@@ -456,13 +456,3 @@ class AccountPanel(sl.Component[sl.ComponentsV2Target]):
                 "A hidden page still lists the creator names you hold, because that credit is what attributes your builds.",
             )
         return None
-
-    def mount(self, *, source: sd.runtime.RuntimeSource) -> sd.MessageRoot:
-        self._root = create_message_root(
-            self,
-            source=source,
-            access=sd.Owner(self._author_id),
-            locale=self.locale,
-            timeout=self._timeout,
-        )
-        return self._root

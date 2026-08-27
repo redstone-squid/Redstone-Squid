@@ -7,7 +7,6 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.i18n import t
 from squid.bot.submission.ui.components import build_edit
-from squid.bot.ui import create_message_root
 from squid.core.i18n import _
 from squid.topics import resource_topic
 
@@ -110,15 +109,3 @@ class BuildInfoComponent(sl.Component[sl.ComponentsV2Target]):
             interaction.client.services.builds,
             locale=self.locale,
         ).send(interaction, ephemeral=self._ephemeral, parent=sd.responder(event).message_root)
-
-    def mount(
-        self, *, source: sd.runtime.RuntimeSource, scheduler: sd.MessageRootScheduler | None = None
-    ) -> sd.MessageRoot:
-        return create_message_root(
-            self,
-            source=source,
-            access=self._access,
-            locale=self.locale,
-            timeout=self._timeout,
-            scheduler=scheduler,
-        )

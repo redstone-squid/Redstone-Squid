@@ -433,7 +433,7 @@ class TestLobby:
             interaction=None,
             send=AsyncMock(return_value=fake_message(message_id=guild_id)),
         )
-        panel = await Lobby.show(context, host_id)
+        panel = await Lobby.show(cast(sd.InvocationSource, context), host_id)
         assert panel is not None
         return bot, panel
 
