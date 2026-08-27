@@ -41,7 +41,6 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
     async def settings_hybrid_group(self, ctx: Context[BotT]) -> None:
         """Open this server's settings panel."""
         assert ctx.guild is not None
-        locale = await resolve_locale(ctx, self.settings_service)
         # One panel per admin per guild: a second `/settings` replaces the first rather than
         # leaving two live panels writing the same settings service.
         await SettingsPanel.show(
@@ -50,7 +49,6 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
             votes=self.bot.services.votes,
             guild=ctx.guild,
             capabilities=await self._capabilities(ctx),
-            locale=locale,
             owner_guild_id=self.bot.owner_server_id,
         )
 
