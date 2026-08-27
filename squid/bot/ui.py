@@ -342,16 +342,6 @@ class PagedList(ui.Component[ui.ComponentsV2Target]):
         total = len(self.entries)
         return L(t"Page {page} of {pages} · {total} in total")
 
-    async def send(self, ctx: Context[Any], *, visibility: sd.Visibility = "public") -> sd.MessageRoot:
-        """Send the first page bound to a mount that owns paging, access, and expiry."""
-        return await send_component(
-            ctx,
-            self,
-            access=sd.Owner(ctx.author.id) if ctx.author else sd.Everyone(),
-            locale=self.locale,
-            visibility=visibility,
-        )
-
 
 def _fields(fields: Sequence[CardField]) -> tuple[ui.semantic.Field, ...]:
     return tuple(ui.field(field.name, field.value) for field in fields)
