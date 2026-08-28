@@ -12,7 +12,7 @@ from squid_ui.sources import Position
 from squid_ui_widgets import testing as wt
 
 
-def _listing(harness: wt.MachineHarness) -> list[str]:
+def _listing(harness: wt.MachineHarness[Any, sl.DiscordTarget]) -> list[str]:
     return [str(line) for line in engine.find(harness.nodes, Lines).lines]
 
 

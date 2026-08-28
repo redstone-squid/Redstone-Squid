@@ -30,46 +30,46 @@ def _form() -> sl.forms.FormSpec:
     return sl.forms.FormSpec("Value", (sl.forms.TextField(key="value", label="Value"),))
 
 
-def _decision() -> sl.Component:
+def _decision() -> sl.Component[sl.DiscordTarget]:
     return sp.Decision("Choose", (sp.DecisionOption("one", "One"), sp.DecisionOption("two", "Two"))).build_component()
 
 
-def _collection() -> sl.Component:
+def _collection() -> sl.Component[sl.DiscordTarget]:
     return sp.CollectionEditor("Items", create=_form(), label=lambda value: str(value["value"])).build_component()
 
 
-def _editor() -> sl.Component:
+def _editor() -> sl.Component[sl.DiscordTarget]:
     return sp.Editor("Edit", (sp.EditorSection.from_form("value", "Value", _form()),)).build_component()
 
 
-def _menu() -> sl.Component:
+def _menu() -> sl.Component[sl.DiscordTarget]:
     return sp.Menu("Menu", (sp.MenuEntry("entry", "Entry", "Body"),)).build_component()
 
 
-def _tabs() -> sl.Component:
+def _tabs() -> sl.Component[sl.DiscordTarget]:
     return sp.Tabs((sp.Tab("one", "One", "Body"), sp.Tab("two", "Two", "Other")), key="tabs").build_component()
 
 
-def _multi_choice() -> sl.Component:
+def _multi_choice() -> sl.Component[sl.DiscordTarget]:
     return sp.MultiChoice(
         "Choices",
         (sp.MultiChoiceGroup("group", "Group", (sl.semantic.Choice("one", "One"), sl.semantic.Choice("two", "Two"))),),
     ).build_component()
 
 
-def _ranked() -> sl.Component:
+def _ranked() -> sl.Component[sl.DiscordTarget]:
     return sp.RankedList(("A", "B", "C"), key="ranked", label=str, value=len, page_size=2).build_component()
 
 
-def _wizard() -> sl.Component:
+def _wizard() -> sl.Component[sl.DiscordTarget]:
     return sp.Wizard("Wizard", (sp.WizardStep("value", "Value", _form()),), review=True).build_component()
 
 
-def _agreement() -> sl.Component:
+def _agreement() -> sl.Component[sl.DiscordTarget]:
     return sp.Agreement("Approve?", (sp.AgreementParticipant("1", "One"),))
 
 
-WIDGETS: tuple[tuple[str, Callable[[], sl.Component]], ...] = (
+WIDGETS: tuple[tuple[str, Callable[[], sl.Component[sl.DiscordTarget]]], ...] = (
     ("decision", _decision),
     ("collection", _collection),
     ("editor", _editor),
@@ -85,14 +85,14 @@ widget = pytest.mark.parametrize("build", [build for _name, build in WIDGETS], i
 
 
 @widget
-def test_it_draws_a_discord_view_at_all(build: Callable[[], sl.Component]) -> None:
+def test_it_draws_a_discord_view_at_all(build: Callable[[], sl.Component[sl.DiscordTarget]]) -> None:
     message_root = MessageRoot(build(), access=Everyone(), timeout=None)
 
     assert commit_render(message_root).to_components()
 
 
 @widget
-def test_what_it_draws_is_a_legal_discord_payload(build: Callable[[], sl.Component]) -> None:
+def test_what_it_draws_is_a_legal_discord_payload(build: Callable[[], sl.Component[sl.DiscordTarget]]) -> None:
     """The one claim the widgets package genuinely cannot make: it has no limits to check."""
     message_root = MessageRoot(build(), access=Everyone(), timeout=None)
 
@@ -101,7 +101,7 @@ def test_what_it_draws_is_a_legal_discord_payload(build: Callable[[], sl.Compone
 
 @widget
 def test_the_keys_the_machine_chose_are_the_handlers_the_mount_answers_to(
-    build: Callable[[], sl.Component],
+    build: Callable[[], sl.Component[sl.DiscordTarget]],
 ) -> None:
     """The identity every widget test relies on. `harness.press("settings.privacy")` in the
     widgets package means what a click means only because this holds.
@@ -124,7 +124,7 @@ def test_the_keys_the_machine_chose_are_the_handlers_the_mount_answers_to(
 
 @widget
 async def test_one_interaction_through_the_real_funnel_reaches_a_handler(
-    build: Callable[[], sl.Component],
+    build: Callable[[], sl.Component[sl.DiscordTarget]],
 ) -> None:
     """End to end: a custom id off the wire reaches the handler that render registered.
 
