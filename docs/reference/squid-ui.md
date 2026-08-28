@@ -307,4 +307,5 @@ adapter contracts; import from them when the root vocabulary is not enough.
 | `squid_ui.semantic` | Frontend-neutral semantic layout vocabulary. |
 | `squid_ui.sources` | Position tokens and asynchronous window loading. |
 | `squid_ui.temporal` | Portable exact-time values and local-time resolution. |
+| `squid_ui.testing` | Tree queries, frontend doubles, and determinism controls for tests. |
 | `squid_ui.text` | Resolved text values and safe Discord Markdown interpolation. |
