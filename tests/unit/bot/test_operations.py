@@ -92,7 +92,10 @@ async def test_managed_result_keeps_the_command_signature_and_renders_its_return
             seen.append((context, value))
             return info_node("Done", "Complete")
 
-    assert str(inspect.signature(Handler.command)) == "(self, context: object, value: int) -> RenderResult[squid_ui.target_types.ComponentsV2Target]"
+    assert (
+        str(inspect.signature(Handler.command))
+        == "(self, context: object, value: int) -> RenderResult[squid_ui.target_types.ComponentsV2Target]"
+    )
 
     async with invocation_scope(ctx):
         await Handler().command(ctx, 42)

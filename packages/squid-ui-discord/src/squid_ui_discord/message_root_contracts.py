@@ -24,6 +24,7 @@ from squid_ui_discord.render_cache import RenderProgramCacheSnapshot
 if TYPE_CHECKING:
     from squid_ui_discord.message_root import AnyMessageRoot
 
+
 class ErrorHook(Protocol):
     """Host-provided handler for exceptions escaping a component callback."""
 
