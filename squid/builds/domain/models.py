@@ -22,7 +22,6 @@ from typing import (
     Final,
     Literal,
     Self,
-    TypeAlias,
     TypedDict,
     cast,
     get_args,
@@ -37,13 +36,13 @@ from squid.core.i18n import _
 from squid.sponsors import PublicSponsor
 from squid.tags.domain import TagAssignment
 
-RecordCategoryLiteral: TypeAlias = Literal["Smallest", "Fastest", "First"]
+RecordCategoryLiteral = Literal["Smallest", "Fastest", "First"]
 RECORD_CATEGORIES: Sequence[RecordCategoryLiteral] = cast(
     Sequence[RecordCategoryLiteral], get_args(RecordCategoryLiteral)
 )
-BuildCategoryLiteral: TypeAlias = Literal["Door", "Extender", "Utility", "Entrance", "Other"]
+BuildCategoryLiteral = Literal["Door", "Extender", "Utility", "Entrance", "Other"]
 BUILD_TYPES: Sequence[BuildCategoryLiteral] = cast(Sequence[BuildCategoryLiteral], get_args(BuildCategoryLiteral))
-DoorOrientationLiteral: TypeAlias = Literal["Door", "Skydoor", "Trapdoor"]
+DoorOrientationLiteral = Literal["Door", "Skydoor", "Trapdoor"]
 DOOR_ORIENTATION_NAMES = cast(Sequence[DoorOrientationLiteral], get_args(DoorOrientationLiteral))
 RestrictionTypeLiteral = Literal["wiring-placement", "animated", "component", "miscellaneous"]
 RESTRICTIONS = cast(Sequence[RestrictionTypeLiteral], get_args(RestrictionTypeLiteral))
