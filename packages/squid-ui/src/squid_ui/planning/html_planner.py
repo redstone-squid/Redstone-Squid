@@ -3,7 +3,7 @@
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, time
-from typing import Any, cast
+from typing import Any, assert_never, cast
 
 from squid_ui import forms as form_types
 from squid_ui import scene
@@ -12,6 +12,7 @@ from squid_ui.assets import Asset
 from squid_ui.chrome import Chrome
 from squid_ui.document import DocumentLike, as_document
 from squid_ui.errors import LayoutDegradedError, LayoutInvariantError
+from squid_ui.factories import is_layout_node, is_portable_node
 from squid_ui.forms import FormBinding
 from squid_ui.interactions import ActionBinding, ActionMode
 from squid_ui.palette import Palette
@@ -55,6 +56,53 @@ from squid_ui.target_types import HtmlTarget
 from squid_ui.text import Localization, TextLike, resolve_text
 
 type HtmlTargetT = Target[Any, scene.HtmlBody, HtmlTarget, Any]
+
+# The compiler's partition of the portable union, grouped by what compiling a member needs.
+# Private to this backend: the grouping is HTML's, not the vocabulary's. `compile` checks the
+# partition in both directions -- a member missing from its grouping arm fails `assert_never`,
+# and a member routed to a stage whose sub-union omits it fails at the call.
+type _Container = (
+    sem.Group[Any]
+    | sem.Stack[Any]
+    | sem.Cluster[Any]
+    | sem.Themed[Any]
+    | sem.Block[Any]
+    | sem.Section[Any]
+    | sem.Article[Any]
+    | sem.Aside[Any]
+)
+type _Display = (
+    sem.Heading
+    | sem.Paragraph
+    | sem.Note
+    | sem.List
+    | sem.Fields
+    | sem.Table
+    | sem.Quote
+    | sem.Code
+    | sem.Figure
+    | sem.Media
+    | sem.Status
+    | sem.ProgressBar
+    | sem.Roster
+    | sem.Grid
+    | sem.Metric
+    | sem.Timestamp
+    | sem.ZonedTimestamp
+)
+type _Interactive = (
+    sem.Details[Any]
+    | sem.Toggle
+    | sem.Download
+    | sem.FormTrigger
+    | sem.ActionControls
+    | sem.Choices
+    | sem.Entities
+    | sem.RoutedChoices
+    | sem.Items[Any]
+    | sem.Navigation
+)
+type _Adapted = sem.Adaptation[Any] | sem.FallbackContent[Any]
 
 
 def _attribute(name: scene.HtmlAttributeName, value: scene.HtmlAttributeValue) -> scene.HtmlAttribute:
@@ -209,28 +257,82 @@ class _Compiler:
     def compile(self, node: sem.AnyLayoutNode, path: str) -> tuple[scene.HtmlNode, ...]:
         """Resolve one semantic node into the HTML nodes that stand for it.
 
-        The stages partition the semantic union by what compiling a member actually needs:
-        a wrapper around compiled children, a self-contained display element, a binding into
-        session state, or an adaptation to unwrap. Each returns `None` for a node it does not
-        claim — not an empty tuple, which is a legitimate result — so a union member added
-        without an arm still reaches the same rejection one long `match` gave it.
+        The stages partition the portable union by what compiling a member actually needs: a
+        wrapper around compiled children, a self-contained display element, a binding into
+        session state, or an adaptation to unwrap. The open `Renderable` escape is rejected
+        before the match, so the match is over the closed union and provably exhaustive.
         """
-        compiled = self._container(node, path)
-        if compiled is not None:
-            return compiled
-        compiled = self._display(node)
-        if compiled is not None:
-            return compiled
-        compiled = self._interactive(node, path)
-        if compiled is not None:
-            return compiled
-        compiled = self._adapted(node, path)
-        if compiled is not None:
-            return compiled
-        message = f"HTML planning accepts semantic nodes, not Discord-shaped primitive {type(node).__name__}"
-        raise LayoutInvariantError(message)
+        if not is_portable_node(node):
+            if is_layout_node(node):
+                message = (
+                    f"{path}: HTML planning accepts semantic nodes, not Discord-shaped primitive "
+                    f"{type(node).__name__}; author the portable vocabulary, or give the primitive "
+                    "a portable branch with fallback()"
+                )
+            else:
+                message = f"{path}: {type(node).__name__} is not a semantic layout node"
+            raise LayoutInvariantError(message)
+        match node:
+            case (
+                sem.Group()
+                | sem.Stack()
+                | sem.Cluster()
+                | sem.Themed()
+                | sem.Block()
+                | sem.Section()
+                | sem.Article()
+                | sem.Aside()
+            ):
+                return self._container(node, path)
+            case (
+                sem.Heading()
+                | sem.Paragraph()
+                | sem.Note()
+                | sem.List()
+                | sem.Fields()
+                | sem.Table()
+                | sem.Quote()
+                | sem.Code()
+                | sem.Figure()
+                | sem.Media()
+                | sem.Status()
+                | sem.ProgressBar()
+                | sem.Roster()
+                | sem.Grid()
+                | sem.Metric()
+                | sem.Timestamp()
+                | sem.ZonedTimestamp()
+            ):
+                return self._display(node)
+            case (
+                sem.Details()
+                | sem.Toggle()
+                | sem.Download()
+                | sem.FormTrigger()
+                | sem.ActionControls()
+                | sem.Choices()
+                | sem.Entities()
+                | sem.RoutedChoices()
+                | sem.Items()
+                | sem.Navigation()
+            ):
+                return self._interactive(node, path)
+            case (
+                sem.Truncated()
+                | sem.Spilled()
+                | sem.OptionalContent()
+                | sem.BestEffort()
+                | sem.Budgeted()
+                | sem.Unbreakable()
+                | sem.KeepWithNext()
+                | sem.Paged()
+                | sem.FallbackContent()
+            ):
+                return self._adapted(node, path)
+            case _ as unreachable:
+                assert_never(unreachable)
 
-    def _container(self, node: sem.AnyLayoutNode, path: str) -> tuple[scene.HtmlNode, ...] | None:
+    def _container(self, node: _Container, path: str) -> tuple[scene.HtmlNode, ...]:
         """Wrap compiled children in the element carrying the node's grouping semantics."""
         match node:
             case sem.Group(children=children):
@@ -329,10 +431,10 @@ class _Compiler:
                         colour=self.palette.tone(tone),
                     ),
                 )
-            case _:
-                return None
+            case _ as unreachable:
+                assert_never(unreachable)
 
-    def _display(self, node: sem.AnyLayoutNode) -> tuple[scene.HtmlNode, ...] | None:
+    def _display(self, node: _Display) -> tuple[scene.HtmlNode, ...]:
         """Resolve a node that draws itself: no children to compile, no state to bind."""
         match node:
             case sem.Heading():
@@ -471,10 +573,10 @@ class _Compiler:
                     time_ref=scene.HtmlTimeRef(value.instant.isoformat(), timezone=value.timezone),
                 )
                 return self._labelled_time(label, time_node)
-            case _:
-                return None
+            case _ as unreachable:
+                assert_never(unreachable)
 
-    def _interactive(self, node: sem.AnyLayoutNode, path: str) -> tuple[scene.HtmlNode, ...] | None:
+    def _interactive(self, node: _Interactive, path: str) -> tuple[scene.HtmlNode, ...]:
         """Resolve a node whose HTML depends on session state, a binding, or a route."""
         match node:
             case sem.Details(key=key, summary=summary, children=children):
@@ -546,10 +648,10 @@ class _Compiler:
                 return (self._items(node, path),)
             case sem.Navigation():
                 return (self._navigation(node),)
-            case _:
-                return None
+            case _ as unreachable:
+                assert_never(unreachable)
 
-    def _adapted(self, node: sem.AnyLayoutNode, path: str) -> tuple[scene.HtmlNode, ...] | None:
+    def _adapted(self, node: _Adapted, path: str) -> tuple[scene.HtmlNode, ...]:
         """Unwrap a planner adaptation.
 
         HTML has no message budget to overflow, so most of these compile straight through to
@@ -573,8 +675,8 @@ class _Compiler:
                 return self._paged(node, path)
             case sem.Unbreakable(node=child) | sem.KeepWithNext(node=child):
                 return self.compile(child, path)
-            case _:
-                return None
+            case _ as unreachable:
+                assert_never(unreachable)
 
     def _resolved(self, value: TextLike) -> str:
         return resolve_text(value, self.localization).content
