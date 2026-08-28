@@ -1,6 +1,5 @@
 """Host-owned roster allocation and semantic rendering."""
 
-from dataclasses import fields, is_dataclass
 from datetime import UTC, datetime, timedelta
 from typing import cast
 
@@ -9,7 +8,7 @@ import pytest
 import squid_ui as sl
 import squid_ui_discord
 import squid_ui_widgets as sp
-from squid_ui import scene
+from squid_ui import scene, testing
 from squid_ui.chrome import Chrome
 from squid_ui.runtime.component import render_component_tree
 
@@ -22,16 +21,6 @@ SLOTS = (
 def _entry(actor: str, slot: str, minute: int | None) -> sp.RosterEntry:
     joined_at = None if minute is None else datetime(2026, 1, 1, tzinfo=UTC) + timedelta(minutes=minute)
     return sp.RosterEntry(actor, actor.title(), slot, joined_at)
-
-
-def _walk(value: object):
-    yield value
-    if isinstance(value, tuple):
-        for item in value:
-            yield from _walk(item)
-    elif is_dataclass(value):
-        for item in fields(value):
-            yield from _walk(getattr(value, item.name))
 
 
 def test_allocation_is_fifo_and_promotion_follows_from_reallocation() -> None:
@@ -94,8 +83,8 @@ def test_roster_uses_active_chrome_and_renders_routed_slots() -> None:
             waitlist="Queue", full="No seats", slot_count=lambda count, capacity: f"Seats {count}/{capacity}"
         ),
     )
-    text = [item.content for item in _walk(result.scene.body) if isinstance(item, scene.Text)]
-    buttons = [item for item in _walk(result.scene.body) if isinstance(item, scene.RoutedButton)]
+    text = [item.content for item in testing.walk(result.scene.body) if isinstance(item, scene.Text)]
+    buttons = [item for item in testing.walk(result.scene.body) if isinstance(item, scene.RoutedButton)]
 
     assert "### Tank — Seats 1/1" in text
     assert "No seats" in text
@@ -112,7 +101,7 @@ async def test_mounted_roster_delivers_one_portable_slot_key() -> None:
         sl.roster(sp.place_roster((), SLOTS), key="raid", on_join=join),
         target=squid_ui_discord.DISCORD_V2_DPY27,
     )
-    button = next(item for item in _walk(result.scene.body) if isinstance(item, scene.Button))
+    button = next(item for item in testing.walk(result.scene.body) if isinstance(item, scene.Button))
     await result.bindings[button.action].handler(
         sl.PressEvent(sl.interactions.Actor("7"), cast(sl.interactions.ActionResponder, object()))
     )
