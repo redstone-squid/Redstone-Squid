@@ -148,12 +148,17 @@ ROOT_API = frozenset(
 )
 
 ROOT_NAMESPACES = (
+    "chrome",
+    "document",
+    "emoji",
+    "entity",
     "errors",
     "forms",
     "guards",
     "html",
     "interactions",
     "operations",
+    "palette",
     "planning",
     "primitives",
     "profiling",
