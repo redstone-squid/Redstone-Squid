@@ -63,6 +63,7 @@ from squid_ui.runtime.presentation_state import PresentationState
 from squid_ui.semantic import (
     ActionControl,
     ActionControls,
+    AnyLayoutNode,
     Article,
     Aside,
     BestEffort,
@@ -87,7 +88,6 @@ from squid_ui.semantic import (
     ItemDisplay,
     Items,
     KeepWithNext,
-    LayoutNode,
     List,
     Media,
     Metric,
@@ -130,7 +130,7 @@ GRID_ADAPTER_VERSION = 1
 
 
 def nominate_decisions(
-    nodes: Sequence[LayoutNode],
+    nodes: Sequence[AnyLayoutNode],
     *,
     limits: MessageLimits,
     session: PresentationState,
@@ -141,11 +141,11 @@ def nominate_decisions(
     occurrences: list[FallbackAxis] = []
     selected_rungs = {} if fallbacks is None else fallbacks
 
-    def walk_children(children: Sequence[LayoutNode], path: str) -> None:
+    def walk_children(children: Sequence[AnyLayoutNode], path: str) -> None:
         for child, child_path in indexed_children(children, path):
             walk(child, child_path)
 
-    def walk(node: LayoutNode, path: str) -> None:
+    def walk(node: AnyLayoutNode, path: str) -> None:
         if not is_layout_node(node):
             message = f"{path}: {type(node).__name__} is neither a semantic node nor a Discord primitive"
             raise LayoutInvariantError(message)

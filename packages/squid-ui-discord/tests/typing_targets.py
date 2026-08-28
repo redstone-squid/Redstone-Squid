@@ -13,6 +13,8 @@ from squid_ui.planning import (
     DiscordAdapter,
     DiscordPy27Adapter,
     DiscordPyAdapter,
+    PlanCache,
+    PlanMemo,
     Renderable,
     Target,
     classic_target,
@@ -69,6 +71,12 @@ assert_type(plan(Text("classic"), target=classic()), PlanResult[scene.ClassicMes
 assert_type(plan(Paragraph("portable"), target=v2()), PlanResult[scene.ComponentsV2])
 assert_type(plan(Paragraph("html"), target=html.target()), PlanResult[scene.HtmlBody])
 plan(Text("primitive"), target=html.target())  # pyrefly: ignore[bad-argument-type]
+
+html_cache = PlanCache[scene.HtmlBody]()
+html_memo = PlanMemo[scene.HtmlBody]()
+plan(Paragraph("html"), target=html.target(), cache=html_cache, memo=html_memo)
+plan(Paragraph("discord"), target=v2(), cache=html_cache)  # pyrefly: ignore[bad-argument-type]
+plan(Paragraph("discord"), target=v2(), memo=html_memo)  # pyrefly: ignore[bad-argument-type]
 
 v2_only = Panel((Text("v2"),))
 classic_only = Card(children=(Text("classic"),))
