@@ -1,5 +1,7 @@
 """RankedList: global ranks over an in-memory sequence, paged or capped."""
 
+from typing import Any
+
 import pytest
 
 import squid_ui as sl
@@ -10,8 +12,8 @@ from squid_ui.sources import Position
 from squid_ui_widgets import testing as wt
 
 
-def _listing(harness: wt.MachineHarness) -> tuple[str, ...]:
-    return engine.find(harness.nodes, Lines).lines
+def _listing(harness: wt.MachineHarness) -> list[str]:
+    return [str(line) for line in engine.find(harness.nodes, Lines).lines]
 
 
 def test_it_projects_entries_and_renders_only_the_first_page() -> None:
@@ -26,7 +28,7 @@ def test_it_projects_entries_and_renders_only_the_first_page() -> None:
         ).build_component()
     )
 
-    assert _listing(harness) == ("1. **Ada** — 30", "2. **Grace** — 20")
+    assert _listing(harness) == ["1. **Ada** — 30", "2. **Grace** — 20"]
     assert "Showing 3 entries" in harness.texts()
     assert "Page 1 of 2" in "\n".join(harness.texts())
 
@@ -46,7 +48,7 @@ def test_a_label_and_value_may_be_read_off_an_arbitrary_entry() -> None:
         ).build_component()
     )
 
-    assert _listing(harness) == ("1. **Ada** — 30", "2. **Grace** — 20")
+    assert _listing(harness) == ["1. **Ada** — 30", "2. **Grace** — 20"]
 
 
 async def test_ranks_stay_global_on_a_later_page() -> None:
@@ -74,10 +76,10 @@ def test_top_n_caps_the_listing_and_explicit_entries_keep_their_keys() -> None:
         ).build_component()
     )
 
-    assert _listing(harness) == ("1. **Ada** — 30", "2. **Grace** — 20")
+    assert _listing(harness) == ["1. **Ada** — 30", "2. **Grace** — 20"]
 
 
 @pytest.mark.parametrize("kwargs", [{"top_n": 0}, {"limit": 0}, {"page_size": 0}])
-def test_it_rejects_a_non_positive_limit(kwargs: dict[str, int]) -> None:
+def test_it_rejects_a_non_positive_limit(kwargs: Any) -> None:
     with pytest.raises(ValueError):
         sp.RankedList([], key="ranked", **kwargs)

@@ -1,39 +1,14 @@
-"""Staged cross-page selection and explicit commit behavior."""
-
-from collections.abc import Iterable
-
-import discord
+"""Staged cross-page selection and explicit commit behaviour."""
 
 import squid_ui as sl
 import squid_ui_widgets as sp
-from squid_ui.semantic import (
-    ActionControls,
-    Choices,
-    FallbackContent,
-    FormTrigger,
-    RoutedActionControl,
-    RoutedChoices,
-    Stack,
-)
-from squid_ui_discord import Everyone, MessageRoot
-from squid_ui_discord.testing import commit_render, fake_interaction
+from squid_ui import testing as engine
+from squid_ui.semantic import ActionControl, Choices, FormTrigger, RoutedActionControl, RoutedChoices
+from squid_ui_widgets import testing as wt
 
 
 def _options(prefix: str, count: int) -> tuple[sl.semantic.Choice, ...]:
     return tuple(sl.choice(f"{prefix} {index}", key=f"{prefix}-{index}") for index in range(count))
-
-
-def _walk(node: object) -> Iterable[object]:
-    yield node
-    if isinstance(node, Stack):
-        for child in node.children:
-            yield from _walk(child)
-    elif isinstance(node, FallbackContent):
-        yield from _walk(node.primary)
-        for alternate in node.alternates:
-            yield from _walk(alternate)
-    elif isinstance(node, ActionControls):
-        yield from node.items
 
 
 async def test_window_merge_preserves_staging_from_other_pages() -> None:
@@ -43,15 +18,13 @@ async def test_window_merge_preserves_staging_from_other_pages() -> None:
         key="roles",
         maximum=10,
     ).build_component()
-    message_root = MessageRoot(panel, access=Everyone(), timeout=None)
-    commit_render(message_root)
+    harness = wt.driving(panel)
 
-    await message_root.dispatch("roles.members.select", fake_interaction(), ["member-0", "member-1"])
-    await message_root.dispatch("roles.members.next", fake_interaction())
-    commit_render(message_root)
-    await message_root.dispatch("roles.members.select", fake_interaction(), ["member-25", "member-26"])
+    await harness.choose("roles.members.select", "member-0", "member-1")
+    await harness.press("roles.members.next")
+    await harness.choose("roles.members.select", "member-25", "member-26")
 
-    assert panel.machine_state.staged == ("member-0", "member-1", "member-25", "member-26")
+    assert harness.state.staged == ("member-0", "member-1", "member-25", "member-26")
 
 
 def test_exclusive_group_pick_clears_its_rivals_symmetrically() -> None:
@@ -83,14 +56,18 @@ def test_cardinality_violation_blocks_apply_and_reduces_other_window_capacity() 
     component = pattern.build_component(initial=invalid)
     rendered = component.render()
     apply = next(
-        node for node in _walk(rendered) if isinstance(node, sl.semantic.ActionControl) and node.key == "choices.apply"
+        node
+        for node in engine.walk(rendered)
+        if isinstance(node, sl.semantic.ActionControl) and node.key == "choices.apply"
     )
     assert not apply.available
     assert pattern.errors(invalid) == ("Select no more than 3 options.",)
 
     staged_elsewhere = sp.MultiChoiceState(("right-0", "right-1"))
     rendered = pattern.build_component(initial=staged_elsewhere).render()
-    left = next(node for node in _walk(rendered) if isinstance(node, Choices) and node.key == "choices.left.select")
+    left = next(
+        node for node in engine.walk(rendered) if isinstance(node, Choices) and node.key == "choices.left.select"
+    )
     assert left.maximum == 1
 
 
@@ -105,18 +82,14 @@ async def test_apply_commits_and_dispatches_exactly_once() -> None:
         (sp.MultiChoiceGroup("roles", "Roles", _options("role", 3)),),
         minimum=1,
     ).build_component(on_commit=applied)
-    message_root = MessageRoot(panel, access=Everyone(), timeout=None)
-    commit_render(message_root)
-    await message_root.dispatch("choices.roles.select", fake_interaction(), ["role-1"])
-    commit_render(message_root)
-    await message_root.dispatch("choices.apply", fake_interaction())
+    harness = wt.driving(panel)
 
-    assert panel.machine_state.committed == ("role-1",)
-    assert commits == [("role-1",)]
-    view = commit_render(message_root)
-    apply = next(item for item in view.walk_children() if getattr(item, "label", None) == "Apply")
-    assert isinstance(apply, discord.ui.Button)
-    assert apply.disabled
+    await harness.choose("choices.roles.select", "role-1")
+    await harness.press("choices.apply")
+
+    assert harness.state.committed == ("role-1",)
+    assert commits == [("role-1",)], "applying twice would append a second entry"
+    assert not harness.control("choices.apply").available, "nothing left to apply"
 
 
 def test_small_panel_offers_a_modal_alternate_with_staged_prefill() -> None:
@@ -125,7 +98,7 @@ def test_small_panel_offers_a_modal_alternate_with_staged_prefill() -> None:
         (sp.MultiChoiceGroup("roles", "Roles", _options("role", 3)),),
     )
     rendered = pattern.build_component(initial=sp.MultiChoiceState(("role-1",))).render()
-    alternate = next(node for node in _walk(rendered) if isinstance(node, FormTrigger))
+    alternate = next(node for node in engine.walk(rendered) if isinstance(node, FormTrigger))
     assert alternate.spec.prefill == {"selection": ("role-1",)}
     field = alternate.spec.items[0]
     assert isinstance(field, sl.forms.MultiChoiceField)
@@ -139,7 +112,7 @@ def test_panel_modal_alternate_scales_to_twenty_five_options() -> None:
 
     rendered = pattern.build_component().render()
 
-    assert any(isinstance(node, FormTrigger) for node in _walk(rendered))
+    assert any(isinstance(node, FormTrigger) for node in engine.walk(rendered))
 
 
 def test_router_shell_encodes_page_and_apply_state_and_uses_input_for_selection() -> None:
@@ -155,7 +128,7 @@ def test_router_shell_encodes_page_and_apply_state_and_uses_input_for_selection(
         return f"pick:{len(routes)}"
 
     rendered = sp.RouteDriver(route).render(pattern, pattern.initial_state)
-    assert any(isinstance(node, RoutedChoices) for node in _walk(rendered))
+    assert any(isinstance(node, RoutedChoices) for node in engine.walk(rendered))
     selection = next(request for request in routes if request.action == "select:roles")
     assert selection.phase == "input"
 
@@ -164,7 +137,7 @@ def test_router_shell_encodes_page_and_apply_state_and_uses_input_for_selection(
     staged = sp.MultiChoiceState(("role-0",), (), ())
     routes.clear()
     rendered = sp.RouteDriver(route).render(pattern, staged)
-    assert any(isinstance(node, RoutedActionControl) and node.key == "choices.apply" for node in _walk(rendered))
+    assert any(isinstance(node, RoutedActionControl) and node.key == "choices.apply" for node in engine.walk(rendered))
     apply = next(request for request in routes if request.action == "apply")
     assert apply == sp.TransitionRoute("apply", sp.MultiChoiceState(("role-0",), ("role-0",), ()), "next")
 
@@ -181,16 +154,13 @@ async def test_immediate_policy_commits_valid_changes_without_apply() -> None:
         minimum=1,
         commit=sp.CommitMode.IMMEDIATE,
     ).build_component(on_commit=committed)
-    message_root = MessageRoot(panel, access=Everyone(), timeout=None)
-    commit_render(message_root)
+    harness = wt.driving(panel)
 
-    await message_root.dispatch("choices.roles.select", fake_interaction(), ["role-1"])
+    await harness.choose("choices.roles.select", "role-1")
 
-    assert panel.machine_state == sp.MultiChoiceState(("role-1",), ("role-1",))
+    assert harness.state == sp.MultiChoiceState(("role-1",), ("role-1",))
     assert commits == [("role-1",)]
-    assert not any(
-        isinstance(node, sl.semantic.ActionControl) and node.key == "choices.apply" for node in _walk(panel.render())
-    )
+    assert engine.find_all(harness.nodes, ActionControl, key="choices.apply") == (), "no Apply under IMMEDIATE"
 
 
 def test_immediate_policy_retains_invalid_staging_until_next_valid_change() -> None:
