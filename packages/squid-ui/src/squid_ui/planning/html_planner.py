@@ -17,6 +17,7 @@ from squid_ui.forms import FormBinding
 from squid_ui.interactions import ActionBinding, ActionMode
 from squid_ui.palette import Palette
 from squid_ui.planning.cache import CachedPlan, PlanCache, PlanMemo
+from squid_ui.planning.cursors import CursorCoordinator, MaterializedCursorRequest
 from squid_ui.planning.identity import stable_fingerprint
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.semantic_adaptation.handlers import (
@@ -52,7 +53,7 @@ from squid_ui.runtime.presentation_state import (
     SessionUpdate,
 )
 from squid_ui.scene.model import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity
-from squid_ui.sources import POSITION_RESOLVER, Direction, Position
+from squid_ui.sources import Direction, Position
 from squid_ui.target_types import HtmlTarget
 from squid_ui.text import Localization, TextLike, resolve_text
 
@@ -1266,14 +1267,12 @@ class _Compiler:
         )
         fingerprint = stable_fingerprint((compiled,))
         extent = len(pages)
-        cursor = self.presentation.cursor(node.key)
-        position = POSITION_RESOLVER.resolve(
-            override=None if self.positions is None else self.positions.get(node.key),
-            stale=bool(cursor.fingerprint and cursor.fingerprint != fingerprint),
-            stored=cursor.position if node.key in self.presentation.cursors else None,
-            initial=Position(offset=extent - 1 if node.initial == "end" else 0),
-            upper_bound=extent - 1,
-        )
+        # Resolution goes through the shared coordinator so both targets obey one precedence
+        # policy; staging stays on the compiler's forked lists because a speculative branch
+        # that is discarded must leave no cursor behind, which a stateful coordinator shared
+        # across forks cannot promise.
+        request = MaterializedCursorRequest(node.key, extent, fingerprint, initial=node.initial)
+        position = CursorCoordinator(self.presentation, self.chrome, overrides=self.positions).grant(request).position
         if extent > 1:
             resolved = Position(offset=position.offset, direction=Direction.AROUND)
             self.pagers.append(scene.Pager(node.key, position.offset, extent, fingerprint))
