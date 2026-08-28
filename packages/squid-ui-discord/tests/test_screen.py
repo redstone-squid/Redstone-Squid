@@ -11,7 +11,6 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid_reactivity import LocalTopicBus
 from squid_ui.text import Message
-from squid_ui_discord.runtime import _INSTALLED
 from squid_ui_discord.sessions import AdmissionSpec, Opened, Reject
 from squid_ui_discord.testing import fake_interaction, fake_message
 
@@ -28,12 +27,6 @@ def _context(client: FakeClient) -> Any:
         interaction=None,
         send=AsyncMock(return_value=fake_message()),
     )
-
-
-@pytest.fixture(autouse=True)
-def _forget_installations():
-    yield
-    _INSTALLED.clear()
 
 
 class BasicScreen(sd.Screen):

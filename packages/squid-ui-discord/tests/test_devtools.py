@@ -45,13 +45,6 @@ class FakeBot:
         self.items.extend(items)
 
 
-@pytest.fixture(autouse=True)
-def _isolated_manager():
-    live._LIVE.clear()
-    yield
-    live._LIVE.clear()
-
-
 def make_context(*, bot: FakeBot | None = None) -> Any:
     return SimpleNamespace(
         interaction=None,
