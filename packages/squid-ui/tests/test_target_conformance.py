@@ -126,16 +126,10 @@ _MINIMAL: dict[type, Callable[[], semantic.AnyLayoutNode]] = {
     semantic.FallbackContent: lambda: sl.fallback(sl.paragraph("primary"), sl.paragraph("alternate")),
 }
 
-# Capabilities on the adapter axis that some members need on Discord: the native entity
-# picker and the modal that a form trigger presents.
-_CAPS = frozenset({Capability.ACTIONS_DISCORD_ENTITY, Capability.FORMS_MODAL})
-
 _TARGETS: dict[str, Callable[[], Any]] = {
     "html": lambda: sl.html.target(),
-    "discord-v2": lambda: components_v2_target(
-        AdapterProfile(DiscordAdapter, "conformance", ">=1", capabilities=_CAPS)
-    ),
-    "discord-classic": lambda: classic_target(AdapterProfile(DiscordAdapter, "conformance", ">=1", capabilities=_CAPS)),
+    "discord-v2": lambda: components_v2_target(AdapterProfile(DiscordAdapter, "conformance", ">=1")),
+    "discord-classic": lambda: classic_target(AdapterProfile(DiscordAdapter, "conformance", ">=1")),
 }
 
 # A pair a target refuses documents its refusal here, message and all; a pair with no

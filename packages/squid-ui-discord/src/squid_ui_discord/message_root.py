@@ -167,7 +167,7 @@ class _DiscordBinding:
 
     render_message: Callable[..., Any]
     mode: MessageMode
-    render_capability: str
+    render_capability: AdapterCapability
     renderer: Callable[[MessageRoot[Any, Any], float | None], MountedRenderer[Any]]
 
 
