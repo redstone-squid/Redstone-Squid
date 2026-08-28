@@ -92,7 +92,12 @@ def mounted[StateT](
     handlers: Mapping[str, TransitionHandler[StateT]] | None = None,
     finish_actions: Collection[str] = (),
 ) -> MachineHarness[StateT]:
-    """A `machine` in its component shell, ready to be driven by key."""
+    """A `machine` in a bare component shell, ready to be driven by key.
+
+    Builds the driver directly, so a machine's *own* wiring is not applied -- `Menu` finishes
+    the shell on close, `Decision` can finish on a chosen option, and both do that inside
+    `build_component`. A test about any of it wants `driving(machine.build_component(...))`.
+    """
     driver: ComponentDriver[StateT] = ComponentDriver(
         machine,
         initial=initial,
