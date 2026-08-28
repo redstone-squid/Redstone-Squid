@@ -755,3 +755,40 @@ def test_the_engine_needs_no_transport_install() -> None:
                 violations.append(f"{path}:{node.lineno}: {sorted(found)}")
 
     assert violations == []
+
+
+def _irrefutable(pattern: ast.pattern) -> bool:
+    return isinstance(pattern, ast.MatchAs) and (pattern.pattern is None or _irrefutable(pattern.pattern))
+
+
+def test_planner_traversals_keep_their_exhaustiveness_proof() -> None:
+    """A traversal's terminal catch-all must be assert_never or a raise, never a quiet default.
+
+    The planner dispatches are proven exhaustive by `assert_never` final arms (ADR 0075);
+    the proof dies silently if someone reintroduces `case _: return ...`. Scoped to the
+    three traversal files on purpose -- `case _:` is legitimate everywhere else.
+    """
+    traversals = (
+        COMPILER_PASS_ROOT / "html_planner.py",
+        COMPILER_PASS_ROOT / "semantic_adaptation" / "lowering.py",
+        COMPILER_PASS_ROOT / "semantic_adaptation" / "decisions.py",
+    )
+    violations: list[tuple[Path, int]] = []
+    for path in traversals:
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if not isinstance(node, ast.Match):
+                continue
+            last = node.cases[-1]
+            if not _irrefutable(last.pattern):
+                continue
+            statement = last.body[0] if len(last.body) == 1 else None
+            proves = isinstance(statement, ast.Raise) or (
+                isinstance(statement, ast.Expr)
+                and isinstance(statement.value, ast.Call)
+                and isinstance(statement.value.func, ast.Name)
+                and statement.value.func.id == "assert_never"
+            )
+            if not proves:
+                violations.append((path, node.lineno))
+
+    assert violations == []

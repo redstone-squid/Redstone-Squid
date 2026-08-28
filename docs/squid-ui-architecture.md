@@ -723,7 +723,8 @@ It is useful for Discord tooling but is not an HTML planning target and cannot d
 
 Every node representation here — semantic, primitive, scene, and each renderer's private draw
 program — is a closed PEP 695 union of behaviour-free frozen dataclasses, and every pass over one is
-a `match` closing with a structured raise. Nodes carry no `accept` method and there is no
+a `match` proven exhaustive by an `assert_never` terminal arm where the walked union is closed, or
+closing with a structured raise where it is not. Nodes carry no `accept` method and there is no
 type-to-handler registry; a pass that needs a different shape lowers to a new union instead. Extend
 the open node set through `target.extensions`, and attach per-case behaviour through
 `GeneratedHandler`. See [ADR 0075](decisions/0075-planner-dispatch-style.md) for why, and for what
