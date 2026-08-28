@@ -42,6 +42,7 @@ from squid_ui.planning.semantic_adaptation.handlers import (
 from squid_ui.planning.semantic_adaptation.model import (
     LoweringContext as _Context,
 )
+from squid_ui.planning.structure import disclosure_state, toggle_action_key, toggle_state
 from squid_ui.primitives.constraints import (
     Never,
     Overflow,
@@ -373,11 +374,7 @@ def _details(
     context: _Context,
     lower_children: Callable[[Sequence[LayoutNode], str, _Context], list[Node]],
 ) -> list[Node]:
-    match node.open:
-        case Controlled(value=value):
-            open_ = value
-        case Uncontrolled(initial=initial):
-            open_ = context.session.disclosure(node.key, initial=initial).open
+    open_ = disclosure_state(node, context.session)
 
     result: list[Node] = [
         Row(
@@ -385,7 +382,7 @@ def _details(
                 Button(
                     _resolve(node.summary.content, context),
                     ToggleDetails(node, open_, context.session),
-                    f"{node.key}.toggle",
+                    toggle_action_key(node.key),
                 ),
             )
         )
@@ -396,11 +393,7 @@ def _details(
 
 
 def _toggle(node: Toggle, context: _Context) -> list[Node]:
-    match node.on:
-        case Controlled(value=value):
-            on = value
-        case Uncontrolled(initial=initial):
-            on = context.session.toggle(node.key, initial=initial).on
+    on = toggle_state(node, context.session)
 
     state_label = node.on_label if on else node.off_label
     if state_label is None:
