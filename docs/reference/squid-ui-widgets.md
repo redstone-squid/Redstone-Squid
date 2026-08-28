@@ -75,6 +75,10 @@ import squid_ui_widgets as sw
 
 ::: squid_ui_widgets.SearchPickHandler
 
+::: squid_ui_widgets.LoadingCopy
+
+::: squid_ui_widgets.DEFAULT_LOADING_COPY
+
 ## Decisions and votes
 
 ::: squid_ui_widgets.Decision
