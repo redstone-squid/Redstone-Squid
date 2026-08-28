@@ -455,7 +455,7 @@ def action_axis(node: ActionControls, path: str, limits: MessageLimits, session:
     )
 
 
-def contained_actions(item: ActionControl | object) -> Sequence[ActionControl]:
+def contained_actions(item: object) -> Sequence[ActionControl]:
     if isinstance(item, ActionControl):
         return (item,)
     if isinstance(item, ControlGroup):

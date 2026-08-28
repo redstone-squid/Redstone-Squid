@@ -85,11 +85,11 @@ class Invocation:
         cell = current_cell()
         if cell is not None and cell.source is source:
             if cell.value is not None:
-                return cast(Invocation, cell.value)
+                return cell.value
             async with cell.lock:
                 if cell.value is None:
                     cell.value = await cls._resolve(source)
-            return cast(Invocation, cell.value)
+            return cell.value
         return await cls._resolve(source)
 
     @classmethod
@@ -290,7 +290,7 @@ class Invocation:
 def current_invocation() -> Invocation | None:
     """Return the resolved ambient invocation, or `None` before its first use or outside a scope."""
     cell = current_cell()
-    return None if cell is None else cast(Invocation | None, cell.value)
+    return None if cell is None else cell.value
 
 
 @contextmanager

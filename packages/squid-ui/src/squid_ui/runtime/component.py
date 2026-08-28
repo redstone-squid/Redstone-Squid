@@ -13,7 +13,7 @@ root component is attached to a MessageRoot; children reach it through their par
 from collections.abc import Callable, Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
-from typing import Any, Generic, Protocol, TypeVar, cast
+from typing import Any, Generic, Protocol, TypeVar, cast, overload
 
 from squid_reactivity.core import (
     Observation,
@@ -121,7 +121,13 @@ class RuntimeOwner(Protocol):
 _CURRENT_CONTEXT: ContextVar[dict[ContextKey[Any], object] | None] = ContextVar(
     "squid_ui_component_context", default=None
 )
-_MISSING = object()
+
+
+class _Missing:
+    __slots__ = ()
+
+
+_MISSING = _Missing()
 
 
 @dataclass(frozen=True, slots=True)
@@ -303,13 +309,19 @@ class Component(StateOwner, Generic[RenderTargetT]):
             raise RuntimeError(message)
         context[key] = value
 
-    def inject[ValueT](self, key: ContextKey[ValueT], default: ValueT | object = _MISSING) -> ValueT:
+    @overload
+    def inject[ValueT](self, key: ContextKey[ValueT]) -> ValueT: ...
+
+    @overload
+    def inject[ValueT](self, key: ContextKey[ValueT], default: ValueT) -> ValueT: ...
+
+    def inject[ValueT](self, key: ContextKey[ValueT], default: ValueT | _Missing = _MISSING) -> ValueT:
         """Read the nearest provided value while rendering."""
         context = _CURRENT_CONTEXT.get()
         if context is not None and key in context:
-            return context[key]  # pyrefly: ignore[bad-return]
-        if default is not _MISSING:
-            return default  # pyrefly: ignore[bad-return]
+            return cast(ValueT, context[key])
+        if not isinstance(default, _Missing):
+            return default
         message = f"no value was provided for context key {key.name!r}"
         raise LookupError(message)
 
