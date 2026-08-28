@@ -38,6 +38,8 @@ from squid_ui.planning.structure import (
     branch_paths,
     disclosure_state,
     indexed_children,
+    item_state,
+    navigation_current,
     resolve_accent,
     scoped_palette,
     toggle_action_key,
@@ -1184,12 +1186,7 @@ class _Compiler:
         )
 
     def _items(self, node: sem.Items, path: str) -> scene.HtmlElement:
-        match node.opened:
-            case sem.Controlled(value=value):
-                opened = value
-            case sem.Uncontrolled(initial=initial):
-                selected = self.presentation.selection(node.key, initial=() if initial is None else (initial,)).selected
-                opened = selected[0] if selected else None
+        opened, _fixed = item_state(node, self.presentation)
         commit = ItemCommit(node.opened, node.key, self.presentation)
         rendered: list[scene.HtmlNode] = []
         for index, item in enumerate(node.items):
@@ -1221,16 +1218,7 @@ class _Compiler:
 
     def _navigation(self, node: sem.Navigation) -> scene.HtmlElement:
         available = tuple(option for option in node.options if option.available)
-        match node.current:
-            case sem.Controlled(value=value):
-                current = value
-            case sem.Uncontrolled(initial=initial):
-                remembered = self.presentation.selection(
-                    node.key, initial=() if initial is None else (initial,)
-                ).selected
-                current = remembered[0] if remembered else None
-        if current is None and available:
-            current = available[0].key
+        current = navigation_current(node, self.presentation)
         commit = NavigationCommit(node.current, node.key, self.presentation)
         return self.element(
             scene.HtmlTag.NAV,
