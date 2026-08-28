@@ -951,6 +951,7 @@ class TestRenderItem:
         assert len(host.children) == 1
         assert host.children[0]._view is host
 
-    def test_a_node_that_draws_nothing_is_refused_rather_than_indexed(self) -> None:
-        with pytest.raises(sd.MessageModeError, match="produced no item"):
-            sd.render_item(sl.group())
+    @pytest.mark.parametrize("node", [sl.group(), sl.group(sl.heading("First"), sl.heading("Second"))])
+    def test_a_node_that_does_not_draw_exactly_one_item_is_refused(self, node: Node) -> None:
+        with pytest.raises(sd.MessageModeError, match="exactly one Discord item"):
+            sd.render_item(node)
