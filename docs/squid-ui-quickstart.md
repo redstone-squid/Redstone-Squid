@@ -45,10 +45,10 @@ class Counter(sd.Screen):
 
 @bot.tree.command()
 async def counter(interaction: discord.Interaction) -> None:
-    await Counter.show(interaction)
+    await Counter().show(interaction)
 ```
 
-`Screen.show()` resolves the installed runtime, localization, user, destination, and access policy.
+`screen.show()` resolves the installed runtime, localization, user, destination, and access policy.
 For one-off output, resolve an invocation directly:
 
 ```python

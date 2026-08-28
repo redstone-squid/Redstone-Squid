@@ -62,7 +62,7 @@ planning, that is a DrawInvariantError, not a second degradation mechanism.
 | Current command or routed action | `inv = await sd.Invocation.of(source)` | source, runtime, localization, user, guild, and source-aware delivery |
 | Terminal command reply | `await inv.reply(*nodes, visibility=...)` | a localized public, personal, or `sd.Private(reason)` response |
 | Plain live panel | `await inv.mount(component, access=..., visibility=...)` | a delivered `MessageRoot` without session policy |
-| Reusable application screen | `await MyScreen.show(source, ...)` | the prepared screen, or `None` after a policy-authored rejection |
+| Reusable application screen | `await MyScreen(...).show(source)` | the prepared screen, or `None` after a policy-authored rejection |
 | Dynamic session composition | `await inv.open(component, spec, visibility=...)` | `Opened` or `Rejected`; destination and open context come from the invocation |
 | Low-level root composition | `runtime.mount(...)`, then `root.send(inv.destination(...))` | explicit message-root and delivery ownership when a higher entry point cannot express it |
 | Low-level Discord destination | `sd.reply_to`, `sd.respond_to`, `sd.send_to` | a `MessageDestination` for framework internals and transport adapters |

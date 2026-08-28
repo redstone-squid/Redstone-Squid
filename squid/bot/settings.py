@@ -43,14 +43,13 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         assert ctx.guild is not None
         # One panel per admin per guild: a second `/settings` replaces the first rather than
         # leaving two live panels writing the same settings service.
-        await SettingsPanel.show(
-            ctx,
+        await SettingsPanel(
             settings=self.settings_service,
             votes=self.bot.services.votes,
             guild=ctx.guild,
             capabilities=await self._capabilities(ctx),
             owner_guild_id=self.bot.owner_server_id,
-        )
+        ).show(ctx)
 
     async def _capabilities(self, ctx: Context[BotT]) -> SettingsCapabilities:
         """What this caller may do, asked once so the panel can render only that.

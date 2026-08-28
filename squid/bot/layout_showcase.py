@@ -1413,7 +1413,7 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def lobby(self, ctx: Context[BotT]) -> None:
         """Open a four-seat lobby anyone can join, with the roster held by the session."""
         assert ctx.guild is not None
-        await Lobby.show(ctx, ctx.author.id)
+        await Lobby(ctx.author.id).show(ctx)
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:

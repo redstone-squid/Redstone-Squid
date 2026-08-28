@@ -14,11 +14,11 @@ from squid_ui.text import Message
 from squid_ui_discord import (
     Everyone,
     MessageRootDefaults,
-    MessageRootOptionsResolver,
     OpenContext,
     Owner,
     ScopeKind,
     SessionManager,
+    SessionOptionsResolver,
     SessionSpec,
 )
 from squid_ui_discord.sessions import AdmissionSpec, Opened, Reject, Rejected, RejectionReason
@@ -111,7 +111,7 @@ def test_open_context_reads_discord_identity() -> None:
 
 
 def test_session_spec_options_are_defensively_copied_and_read_only() -> None:
-    source: dict[str, object] = {"timeout": 20}
+    source: squid_ui_discord.SessionOptions = {"timeout": 20}
     spec = SessionSpec("panel", options=source)
     source["timeout"] = None
 
@@ -302,7 +302,7 @@ async def test_session_spec_rejects_a_detached_parent_without_delivery() -> None
 def test_session_spec_ergonomics_are_promoted_from_the_public_bundle() -> None:
     assert squid_ui_discord.OpenContext is OpenContext
     assert squid_ui_discord.ScopeKind is ScopeKind
-    assert squid_ui_discord.MessageRootOptionsResolver is MessageRootOptionsResolver
+    assert squid_ui_discord.SessionOptionsResolver is SessionOptionsResolver
     assert squid_ui_discord.StackNavigator is squid_ui_discord.navigation.StackNavigator
 
 
