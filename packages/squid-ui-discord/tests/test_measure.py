@@ -12,6 +12,7 @@ from squid_ui.planning import (
     measure,
 )
 from squid_ui.primitives import (
+    Budget,
     Code,
     Drop,
     Footer,
@@ -160,6 +161,18 @@ class TestFitting:
         raw = RawItem(factory=lambda: discord.ui.TextDisplay("r" * 100), text_cost=100)
         solved = measure([Text("x" * 4000), raw])
         assert len(solved.children[0].content) <= LIMITS.total_text - 100  # pyrefly: ignore
+
+    def test_a_budget_region_leaves_its_unbudgeted_siblings_alone(self):
+        """A capped region is a sibling, not a claim on everything the document has."""
+        heading = Heading("Kept")
+        capped = Budget((Text("x" * 2000, overflow=Truncate()),), 120, 320)
+        footer = Footer("also kept")
+        solved = measure([heading, capped, footer])
+        contents = [child.content for child in solved.children]  # pyrefly: ignore
+
+        assert contents[0] == "## Kept"
+        assert len(contents[1]) <= 320, "the region is still held to its own ceiling"
+        assert contents[2] == "-# also kept"
 
 
 class TestStructure:
