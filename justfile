@@ -47,7 +47,7 @@ lint:
     {{python}} -m ruff format --target-version py314
 
 typecheck:
-    uv run --locked pyrefly check --config pyproject.toml --baseline pyrefly-baseline.json
+    uv run --locked pyrefly check --config pyproject.toml
 
 build:
     docker build --build-arg GIT_COMMIT_HASH=$(git rev-parse HEAD) --build-arg GIT_COMMIT_MESSAGE="$(git log -1 --pretty=%s)" -t rssquid .

@@ -87,7 +87,9 @@ def _discard(document: ReplicatedDocument, value: str) -> ReplicationChangeToken
     with transaction():
         on_action_commit(lambda commit, continuation: commits.append(commit))
         document.set("tags").discard(value)
-    return commits[0].participant_changes[0].token
+    token = commits[0].participant_changes[0].token
+    assert isinstance(token, ReplicationChangeToken)
+    return token
 
 
 @settings(max_examples=30, deadline=None)

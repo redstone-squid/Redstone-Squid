@@ -5,6 +5,7 @@ import pytest
 
 import squid_ui as sl
 import squid_ui_discord
+from squid_ui.planning.limits import Axis
 from squid_ui_discord import (
     V2_LIMITS as LIMITS,
 )
@@ -57,7 +58,7 @@ class TestContribute:
 
     def test_reserve_covers_resources_no_item_describes(self):
         host = _host()
-        contribute(_text("x" * 5000), to=host, reserve=ResourceCost({"display_text": 3000}))
+        contribute(_text("x" * 5000), to=host, reserve=ResourceCost({Axis.DISPLAY_TEXT: 3000}))
         assert host.content_length() <= LIMITS.total_text - 3000
 
     def test_host_items_are_never_touched(self):

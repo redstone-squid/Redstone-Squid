@@ -1,6 +1,7 @@
 """Read-only measurement and audit of a host-owned Discord layout."""
 
 from dataclasses import replace
+from typing import cast
 
 import discord
 import pytest
@@ -10,6 +11,7 @@ from hypothesis import strategies as st
 import squid_ui as sl
 import squid_ui_discord
 import squid_ui_discord.target
+from squid_ui.planning.limits import Axis
 from squid_ui_discord import V2_LIMITS as LIMITS
 from squid_ui_discord import ExistingLayoutError, LimitViolationError, conform
 from squid_ui_discord.inspection import ViolationCode, audit, cost, measure
@@ -51,22 +53,22 @@ class TestAgreesWithDiscordPy:
 
     def test_component_count_matches_the_library_walk(self):
         view = _rich_view()
-        assert measure(view).cost.get("components") == len(list(view.walk_children()))
+        assert measure(view).cost.get(Axis.COMPONENTS) == len(list(view.walk_children()))
 
     def test_component_count_matches_the_enforced_counter(self):
         view = _rich_view()
         # `_total_children` is what discord.py itself rejects at 40.
-        assert measure(view).cost.get("components") == view._total_children
+        assert measure(view).cost.get(Axis.COMPONENTS) == view._total_children
 
     def test_text_matches_content_length(self):
         view = _rich_view()
-        assert measure(view).cost.get("display_text") == view.content_length()
+        assert measure(view).cost.get(Axis.DISPLAY_TEXT) == view.content_length()
 
     def test_section_accessory_is_counted(self):
         section = discord.ui.Section(accessory=discord.ui.Button(label="go"))
         section.add_item(discord.ui.TextDisplay("text"))
         # The section, its text, and its accessory.
-        assert measure(_view(section)).cost.get("components") == 3
+        assert measure(_view(section)).cost.get(Axis.COMPONENTS) == 3
 
 
 class TestMeasure:
@@ -84,7 +86,7 @@ class TestMeasure:
         assert sites["go"] == (1, 1, 1)  # container -> section -> accessory
 
     def test_external_attachments_enter_the_reservation(self):
-        assert measure(_view(), attachments=3).cost.get("attachments") == 3
+        assert measure(_view(), attachments=3).cost.get(Axis.ATTACHMENTS) == 3
 
     def test_fingerprint_tracks_content(self):
         view = _rich_view()
@@ -100,7 +102,7 @@ class TestMeasure:
 
         reservation = measure(view)
 
-        assert reservation.reserved.values == {"controls": 1, "rows": 1}
+        assert reservation.reserved.values == {Axis.CONTROLS: 1, Axis.ROWS: 1}
         assert reservation.components_v2 is False
 
     def test_something_that_is_neither_is_refused_by_name(self):
@@ -116,26 +118,26 @@ class TestMeasure:
 class TestCost:
     def test_costs_an_unattached_item(self):
         row = _row(discord.ui.Button(label="a"), discord.ui.Button(label="b"))
-        assert cost(row).get("components") == 3
-        assert cost(row).get("display_text") == 0
+        assert cost(row).get(Axis.COMPONENTS) == 3
+        assert cost(row).get(Axis.DISPLAY_TEXT) == 0
 
     def test_costs_text_it_carries(self):
         container = discord.ui.Container()
         container.add_item(discord.ui.TextDisplay("abcd"))
-        assert cost(container) == sl.planning.ResourceCost({"components": 2, "display_text": 4})
+        assert cost(container) == sl.planning.ResourceCost({Axis.COMPONENTS: 2, Axis.DISPLAY_TEXT: 4})
 
     def test_several_items_sum(self):
         one = discord.ui.TextDisplay("ab")
         two = discord.ui.TextDisplay("cde")
-        assert cost(one, two).get("display_text") == 5
-        assert cost(one, two).get("components") == 2
+        assert cost(one, two).get(Axis.DISPLAY_TEXT) == 5
+        assert cost(one, two).get(Axis.COMPONENTS) == 2
 
     def test_matches_measure_after_attachment(self):
         row = _row(discord.ui.Button(label="a"))
         view = _view(discord.ui.TextDisplay("hello"))
         before = measure(view).cost
         view.add_item(row)
-        assert measure(view).cost.get("components") == (before + cost(row)).get("components")
+        assert measure(view).cost.get(Axis.COMPONENTS) == (before + cost(row)).get(Axis.COMPONENTS)
 
 
 class TestAudit:
@@ -215,26 +217,26 @@ def _views(draw) -> discord.ui.LayoutView:
 @given(_views())
 def test_measurement_always_agrees_with_discordpy(view: discord.ui.LayoutView):
     reservation = measure(view)
-    assert reservation.cost.get("components") == view._total_children
-    assert reservation.cost.get("display_text") == view.content_length()
+    assert reservation.cost.get(Axis.COMPONENTS) == view._total_children
+    assert reservation.cost.get(Axis.DISPLAY_TEXT) == view.content_length()
 
 
 class TestReservationAxes:
     """A reservation is a smaller target, so every axis behaves the same way."""
 
     def test_text_reservation_shrinks_the_text_budget(self):
-        target = squid_ui_discord.target.v2().reserve(squid_ui_discord.ResourceCost({"display_text": 1000}))
+        target = squid_ui_discord.target.v2().reserve(squid_ui_discord.ResourceCost({Axis.DISPLAY_TEXT: 1000}))
         assert isinstance(target.limits, type(LIMITS))
         assert target.limits.total_text == LIMITS.total_text - 1000
 
     def test_component_reservation_shrinks_the_component_budget(self):
-        target = squid_ui_discord.target.v2().reserve(squid_ui_discord.ResourceCost({"components": 6}))
+        target = squid_ui_discord.target.v2().reserve(squid_ui_discord.ResourceCost({Axis.COMPONENTS: 6}))
         assert isinstance(target.limits, type(LIMITS))
         assert target.limits.total_components == LIMITS.total_components - 6
 
     def test_local_caps_are_untouched(self):
         reserved = squid_ui_discord.target.v2().reserve(
-            squid_ui_discord.ResourceCost({"display_text": 500, "components": 5, "attachments": 2})
+            squid_ui_discord.ResourceCost({Axis.DISPLAY_TEXT: 500, Axis.COMPONENTS: 5, Axis.ATTACHMENTS: 2})
         )
         assert isinstance(reserved.limits, type(LIMITS))
         assert reserved.limits.components.row_buttons == LIMITS.components.row_buttons
@@ -243,17 +245,18 @@ class TestReservationAxes:
 
     def test_unknown_resources_are_rejected(self):
         with pytest.raises(sl.errors.LayoutInvariantError, match="no reservable resource"):
-            squid_ui_discord.target.v2().reserve(squid_ui_discord.ResourceCost({"pixels": 1}))
+            # An axis the type system cannot name; the runtime rejection is the behaviour under test.
+            squid_ui_discord.target.v2().reserve(squid_ui_discord.ResourceCost({cast(Axis, "pixels"): 1}))
 
     def test_reservation_never_goes_negative(self):
         reserved = squid_ui_discord.target.v2().reserve(
-            squid_ui_discord.ResourceCost({"display_text": LIMITS.total_text * 2})
+            squid_ui_discord.ResourceCost({Axis.DISPLAY_TEXT: LIMITS.total_text * 2})
         )
         assert isinstance(reserved.limits, type(LIMITS))
         assert reserved.limits.total_text == 0
 
     def test_identity_is_preserved(self):
-        reserved = squid_ui_discord.target.v2().reserve(squid_ui_discord.ResourceCost({"components": 1}))
+        reserved = squid_ui_discord.target.v2().reserve(squid_ui_discord.ResourceCost({Axis.COMPONENTS: 1}))
         assert reserved.id == "discord.components-v2"
         assert reserved.capabilities == squid_ui_discord.target.v2().capabilities
         assert "discord.item" in reserved.extensions
@@ -265,7 +268,7 @@ class TestReservedPlanning:
     def test_text_reservation_shrinks_the_composed_view(self):
         body = sl.primitives.Text("x" * 5000)
         reserved = squid_ui_discord.render_message(
-            [body], reservation=squid_ui_discord.ResourceCost({"display_text": 1500})
+            [body], reservation=squid_ui_discord.ResourceCost({Axis.DISPLAY_TEXT: 1500})
         ).view
         assert reserved.content_length() <= LIMITS.total_text - 1500
 
@@ -275,7 +278,7 @@ class TestReservedPlanning:
         document = [sl.primitives.Text(f"line {index}") for index in range(12)]
         assert len(list(squid_ui_discord.render_message(document).view.walk_children())) == 12
         with pytest.raises(sl.errors.UnsolvableLayoutError):
-            squid_ui_discord.render_message(document, reservation=squid_ui_discord.ResourceCost({"components": 35}))
+            squid_ui_discord.render_message(document, reservation=squid_ui_discord.ResourceCost({Axis.COMPONENTS: 35}))
 
     def test_a_reserved_plan_plus_the_host_fits_the_real_budget(self):
         host = _view(discord.ui.TextDisplay("h" * 2000))
