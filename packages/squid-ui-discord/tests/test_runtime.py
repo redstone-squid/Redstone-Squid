@@ -31,13 +31,6 @@ def fake_client() -> Any:
     return FakeClient()
 
 
-@pytest.fixture(autouse=True)
-def _forget_installations():
-    """Installations are process-wide, so a leaked one would reach the next test."""
-    yield
-    _INSTALLED.clear()
-
-
 def test_install_wires_the_presenter_the_registry_could_not_build_for_itself() -> None:
     client = fake_client()
 
