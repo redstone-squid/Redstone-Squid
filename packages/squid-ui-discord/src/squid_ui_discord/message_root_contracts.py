@@ -9,7 +9,7 @@ import time
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
 from enum import StrEnum
-from typing import TYPE_CHECKING, Protocol, Self, TypedDict, Unpack, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, Self, TypedDict, Unpack, cast, runtime_checkable
 
 import discord
 
@@ -22,6 +22,12 @@ from squid_ui.planning.navigation import NavFactory
 from squid_ui.profiling import Profiler
 from squid_ui.runtime.topics import Address, TopicBus
 from squid_ui.scene.model import PlanMetrics, PlanReport
+from squid_ui.target_types import (
+    ComponentsV2Target,
+    DiscordPy27Adapter,
+    DiscordPyAdapter,
+    DiscordTarget,
+)
 from squid_ui.text import NEUTRAL, Localization, TextLike
 from squid_ui_discord.access import AccessPolicy
 from squid_ui_discord.render_cache import RenderProgramCache, RenderProgramCacheSnapshot
@@ -199,16 +205,9 @@ def monotonic() -> float:
     return time.monotonic()
 
 
-class MessageRootOptions(TypedDict, total=False):
-    """The keywords that configure a message root, as a forwardable bundle.
+class MessageRootBehaviorOptions(TypedDict, total=False):
+    """Target-independent keywords that configure a message root."""
 
-    Paired with :class:`MessageRootConfig`, which holds the same set with its defaults. Two
-    declarations is the floor: a TypedDict cannot be derived from a dataclass at type-check
-    time. `tests/test_sessions.py` pins them against each other, and `access` is in neither
-    -- it identifies who may use one specific mount, so it is never a default.
-    """
-
-    target: Target
     chrome: Chrome
     localization: Localization
     palette: Palette
@@ -227,8 +226,26 @@ class MessageRootOptions(TypedDict, total=False):
     clock: Callable[[], float]
 
 
+class MessageRootOptions[
+    RenderTargetT: DiscordTarget = ComponentsV2Target,
+    AdapterT: DiscordPyAdapter = DiscordPy27Adapter,
+](MessageRootBehaviorOptions, total=False):
+    """Every keyword that configures a message root, as a forwardable bundle.
+
+    Paired with :class:`MessageRootConfig`, which holds the same set with its defaults. Two
+    declarations is the floor: a TypedDict cannot be derived from a dataclass at type-check
+    time. `tests/test_sessions.py` pins them against each other, and `access` is in neither
+    -- it identifies who may use one specific mount, so it is never a default.
+    """
+
+    target: Target[Any, Any, RenderTargetT, AdapterT]
+
+
 @dataclass(frozen=True, slots=True)
-class MessageRootConfig:
+class MessageRootConfig[
+    RenderTargetT: DiscordTarget = ComponentsV2Target,
+    AdapterT: DiscordPyAdapter = DiscordPy27Adapter,
+]:
     """Everything a message root is configured with, and what each value defaults to.
 
     The single home for those defaults: `MessageRoot.__init__` reads them from here rather
@@ -236,7 +253,9 @@ class MessageRootConfig:
     repeating keywords at every construction site.
     """
 
-    target: Target = DISCORD_V2_DPY27
+    target: Target[Any, Any, RenderTargetT, AdapterT] = cast(
+        Target[Any, Any, RenderTargetT, AdapterT], DISCORD_V2_DPY27
+    )
     chrome: Chrome = DEFAULT_CHROME
     localization: Localization = NEUTRAL
     palette: Palette = DEFAULT_PALETTE
@@ -254,7 +273,7 @@ class MessageRootConfig:
     pending_after: float = 1.0
     clock: Callable[[], float] = monotonic
 
-    def replace(self, **changes: Unpack[MessageRootOptions]) -> Self:
+    def replace(self, **changes: Unpack[MessageRootOptions[RenderTargetT, AdapterT]]) -> Self:
         """Return a copy with selected values replaced."""
         return replace(self, **changes)
 

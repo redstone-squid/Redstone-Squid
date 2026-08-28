@@ -6,8 +6,8 @@ surface by hand, because a TypedDict cannot be derived from a dataclass at type-
 A keyword added to one but not the other would be silently unreachable for every host that
 mounts through ``ClientRuntime.mount`` or a ``SessionSpec``.
 
-``MessageRoot.__init__`` is no longer a third copy: it takes a config plus overrides, so it
-cannot fall out of step with either.
+``MessageRoot.__init__`` is no longer a third copy: it takes a config, the target discriminator,
+and target-independent overrides, so it cannot fall out of step with either.
 """
 
 import inspect
@@ -36,10 +36,10 @@ def test_defaults_inherit_the_config_surface_and_add_only_mounting() -> None:
     assert MessageRootDefaults.mount
 
 
-def test_the_constructor_takes_a_config_and_overrides_rather_than_the_surface() -> None:
+def test_the_constructor_names_only_the_config_and_target_discriminator() -> None:
     keywords = {
         name
         for name, parameter in inspect.signature(MessageRoot.__init__).parameters.items()
         if parameter.kind is inspect.Parameter.KEYWORD_ONLY
     }
-    assert keywords == PER_MOUNT_ONLY | {"config"}
+    assert keywords == PER_MOUNT_ONLY | {"config", "target"}

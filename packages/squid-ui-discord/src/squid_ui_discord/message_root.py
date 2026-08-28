@@ -17,7 +17,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, replace
 from dataclasses import field as dataclass_field
 from datetime import UTC, datetime
-from typing import Any, Unpack, cast
+from typing import Any, Unpack, cast, overload
 
 import anyio
 import discord
@@ -91,7 +91,7 @@ from squid_ui.runtime.topics import Address, SubscriptionReconciler
 from squid_ui.scene.model import PlanResult
 from squid_ui.semantic import Status
 from squid_ui.sources import Position
-from squid_ui.target_types import ComponentsV2Target, DiscordPy27Adapter, DiscordPyAdapter
+from squid_ui.target_types import ComponentsV2Target, DiscordPy27Adapter, DiscordPyAdapter, DiscordTarget
 from squid_ui.text import Localization, TextLike, resolve_text
 from squid_ui_discord import delivery as deliver
 from squid_ui_discord import live
@@ -126,8 +126,8 @@ from squid_ui_discord.message_root_contracts import (
     ExpirySupervisor,
     FinishHook,
     MessageAddress,
+    MessageRootBehaviorOptions,
     MessageRootConfig,
-    MessageRootOptions,
     MessageRootSnapshot,
     MessageRootStatus,
     PresentedHook,
@@ -342,16 +342,53 @@ class _LifecycleHooks:
                 logger.exception("finish hook failed for mount %s", message_root.id)
 
 
-class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter = DiscordPy27Adapter]:
+class MessageRoot[
+    RenderTargetT: DiscordTarget = ComponentsV2Target,
+    AdapterT: DiscordPyAdapter = DiscordPy27Adapter,
+]:
     """Binds a component to a message and owns its whole interaction lifecycle."""
+
+    @overload
+    def __init__(
+        self: MessageRoot[ComponentsV2Target, DiscordPy27Adapter],
+        component: Component[ComponentsV2Target],
+        *,
+        access: AccessPolicy,
+        config: None = None,
+        target: None = None,
+        **overrides: Unpack[MessageRootBehaviorOptions],
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        component: Component[RenderTargetT],
+        *,
+        access: AccessPolicy,
+        target: Target[Any, Any, RenderTargetT, AdapterT],
+        config: MessageRootConfig[Any, Any] | None = None,
+        **overrides: Unpack[MessageRootBehaviorOptions],
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        component: Component[RenderTargetT],
+        *,
+        access: AccessPolicy,
+        config: MessageRootConfig[RenderTargetT, AdapterT],
+        target: None = None,
+        **overrides: Unpack[MessageRootBehaviorOptions],
+    ) -> None: ...
 
     def __init__(
         self,
         component: Component[Any],
         *,
         access: AccessPolicy,
-        config: MessageRootConfig = DEFAULT_MESSAGE_ROOT_CONFIG,
-        **overrides: Unpack[MessageRootOptions],
+        config: MessageRootConfig[Any, Any] | None = None,
+        target: AnyTarget | None = None,
+        **overrides: Unpack[MessageRootBehaviorOptions],
     ) -> None:
         """Bind a component to a message.
 
@@ -359,7 +396,13 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
         way builds one and reuses it -- and keywords override it for this mount. `access` is
         neither, because it names who may use this specific mount.
         """
-        config = config.replace(**overrides) if overrides else config
+        resolved_config = cast(
+            MessageRootConfig[RenderTargetT, AdapterT],
+            DEFAULT_MESSAGE_ROOT_CONFIG if config is None else config,
+        )
+        if target is not None:
+            resolved_config = resolved_config.replace(target=cast(Target[Any, Any, RenderTargetT, AdapterT], target))
+        config = resolved_config.replace(**overrides) if overrides else resolved_config
         chrome = config.chrome
         localization = config.localization
         nav = config.nav
@@ -367,11 +410,11 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
         expiry = config.expiry
         clock = config.clock
         acknowledgement_timeout = config.acknowledgement_timeout
-        target = cast(Target[Any, Any, RenderTargetT, AdapterT], config.target)
+        target = config.target
         self.config = config
         """What this mount was configured with, for a replacement that should match it."""
         self.id = secrets.token_urlsafe(6)
-        self.component = component
+        self.component = cast(Component[RenderTargetT], component)
         self.clock = clock
         # Diagnostics only. `_active` is what the idle timeout counts from: the initial send
         # and each accepted click move it, while unattended refreshes deliberately do not.
@@ -491,7 +534,7 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
         # Generations handed to staged renders: a candidate whose delivery failed must not
         # hand its control ids to the next one.
         self._issued = 0
-        self._pending: _Candidate | None = None
+        self._pending: _Candidate[RenderTargetT] | None = None
         self._dirty = False
         self._settlement_wake: asyncio.Event | None = None
         # Renders committed without a Discord edit because the reader already had them.
@@ -500,11 +543,11 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
         self._hooks = _LifecycleHooks()
         self._assets: tuple[Asset, ...] = ()
         self._plan: PlanResult | None = None
-        self._planned_tree: ComponentTree | None = None
+        self._planned_tree: ComponentTree[RenderTargetT] | None = None
         self._planned_environment: _PlanEnvironment | None = None
-        self._document_tree: ComponentTree | None = None
+        self._document_tree: ComponentTree[RenderTargetT] | None = None
         self._document_status: TextLike | None = None
-        self._document: Document | None = None
+        self._document: Document[RenderTargetT] | None = None
         # What the committed generation read, what its single staged successor read, and what
         # this mount managed to subscribe to are three different things. A mount with no bus
         # still knows what it is looking at, which lets its own writes repaint it. A follow is
@@ -544,9 +587,9 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
             if handle.permanent:
                 self._ephemeral = False
             if self._lifecycle is MessageRootStatus.RENEWAL_ARMED:
-                candidate: _Candidate | None = None
+                candidate: _Candidate[RenderTargetT] | None = None
                 try:
-                    candidate = cast(_Candidate, await self._stage_loaded())
+                    candidate = cast(_Candidate[RenderTargetT], await self._stage_loaded())
                     wrote = await self._deliver(candidate, through=handle)
                 except Exception:
                     if candidate is not None:
@@ -730,7 +773,7 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
         self._pending = candidate
         return candidate.view
 
-    def _stage(self, *, disabled: bool = False) -> _Candidate:
+    def _stage(self, *, disabled: bool = False) -> _Candidate[RenderTargetT]:
         """Render and draw one candidate generation, publishing none of it.
 
         Runs no `on_load`, because it cannot: the paths that can await one stage through
@@ -738,7 +781,7 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
         """
         return self._draw(self.runtime.render(), disabled=disabled)
 
-    def _document_for(self, tree: ComponentTree) -> Document:
+    def _document_for(self, tree: ComponentTree[RenderTargetT]) -> Document[RenderTargetT]:
         """Build the authored document once for an identical runtime tree and status."""
         if tree is self._document_tree and self.status == self._document_status and self._document is not None:
             return self._document
@@ -761,7 +804,9 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
             self.presentation.revision,
         )
 
-    def _plan_tree(self, tree: ComponentTree, profile: OperationRecorder | None) -> _PlannedCandidate:
+    def _plan_tree(
+        self, tree: ComponentTree[RenderTargetT], profile: OperationRecorder | None
+    ) -> _PlannedCandidate[RenderTargetT]:
         """Plan one complete component tree without constructing Discord objects."""
         context = profile.span("planner") if profile is not None else nullcontext(None)
         with context as planner_span:
@@ -806,7 +851,7 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
             result.session_updates,
         )
 
-    def _stage_observations(self, tree: ComponentTree) -> None:
+    def _stage_observations(self, tree: ComponentTree[RenderTargetT]) -> None:
         observed = tree.observations
         if observed and self._subscriptions.bus is None and not self._follow_warned:
             self._follow_warned = True
@@ -819,13 +864,13 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
 
     def _draw(
         self,
-        tree: ComponentTree,
+        tree: ComponentTree[RenderTargetT],
         *,
         disabled: bool = False,
         profile: OperationRecorder | None = None,
-        planned: _PlannedCandidate | None = None,
+        planned: _PlannedCandidate[RenderTargetT] | None = None,
         subscriptions_staged: bool = False,
-    ) -> _Candidate:
+    ) -> _Candidate[RenderTargetT]:
         """Plan and draw one rendered tree into a candidate generation."""
         if not subscriptions_staged:
             self._stage_observations(tree)
@@ -902,10 +947,10 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
 
     def _preflight(
         self,
-        tree: ComponentTree,
+        tree: ComponentTree[RenderTargetT],
         *,
         profile: OperationRecorder | None = None,
-    ) -> _ApplicationCandidate:
+    ) -> _ApplicationCandidate[RenderTargetT]:
         """Plan first, returning an undrawn candidate only when the live scene already matches."""
         self._stage_observations(tree)
         if (
@@ -1094,12 +1139,12 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
                 _disable_all(presentation.view)
             return await self._write(presentation, keep_attachments=True, through=through)
 
-    def _commit(self, candidate: _Candidate) -> None:
+    def _commit(self, candidate: _Candidate[RenderTargetT]) -> None:
         """Publish a delivered candidate — the one place a render becomes the mount's state."""
         self._commit_render(candidate)
         self._commit_delivery(candidate)
 
-    def _settle(self, candidate: _ApplicationCandidate, ending: str) -> None:
+    def _settle(self, candidate: _ApplicationCandidate[RenderTargetT], ending: str) -> None:
         """Record that `candidate` has reached its one ending, refusing a second.
 
         The discipline `_Subscriptions.commit`/`discard` already keeps for the reactive
@@ -1111,7 +1156,7 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
             raise LayoutInvariantError(message)
         candidate.settled = True
 
-    def _commit_render(self, candidate: _ApplicationCandidate) -> None:
+    def _commit_render(self, candidate: _ApplicationCandidate[RenderTargetT]) -> None:
         """Commit the candidate's application runtime; what the reader sees is untouched.
 
         `session_updates` apply here too: planning's clamps describe the scene that is on
@@ -1130,7 +1175,7 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
         self._dirty = self.runtime.dirty
         self._pending = None
 
-    def _commit_delivery(self, candidate: _Candidate) -> None:
+    def _commit_delivery(self, candidate: _Candidate[RenderTargetT]) -> None:
         """Make the candidate's generation the live one: its control ids now answer clicks."""
         self._generation = candidate.generation
         self._assets = candidate.assets
@@ -1141,7 +1186,7 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
         # so the first moment it is worth listing as live. Idempotent after the first.
         live.track(self)
 
-    def _same_as_live(self, candidate: _ApplicationCandidate) -> bool:
+    def _same_as_live(self, candidate: _ApplicationCandidate[RenderTargetT]) -> bool:
         """Whether delivering `candidate` would show the reader exactly what is already there.
 
         Decided at the scene, which is generation-free; control ids are minted at draw time,
@@ -1159,7 +1204,11 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
             return False
         return candidate.handlers.keys() == self._handlers.keys()
 
-    def _suppress(self, candidate: _ApplicationCandidate, profile: OperationRecorder | None) -> None:
+    def _suppress(
+        self,
+        candidate: _ApplicationCandidate[RenderTargetT],
+        profile: OperationRecorder | None,
+    ) -> None:
         """Commit a render the reader already has, without an edit and without a new generation.
 
         The live generation keeps its control ids, so a click already in flight still lands.
@@ -1175,7 +1224,7 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
             profile.increment("mount.suppressed", 1)
         logger.debug("mount %s: render identical to the live generation, edit suppressed", self.id)
 
-    def _commit_presented(self, candidate: _Candidate) -> None:
+    def _commit_presented(self, candidate: _Candidate[RenderTargetT]) -> None:
         """Commit one successfully delivered candidate and notify both observer boundaries."""
         self._commit(candidate)
         self._hooks.notify_committed(self)
@@ -1193,7 +1242,7 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
         live.track(self)
         self._hooks.notify_presented(self)
 
-    def _rollback(self, candidate: _Candidate) -> None:
+    def _rollback(self, candidate: _Candidate[RenderTargetT]) -> None:
         """Discard an undelivered candidate; the message still shows the live generation.
 
         Nothing to unwind: planning only read the session, so dropping the candidate drops
@@ -1276,7 +1325,7 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
         profile: OperationRecorder | None = None,
         preflight: bool = False,
         reuse_committed: bool = False,
-    ) -> _ApplicationCandidate:
+    ) -> _ApplicationCandidate[RenderTargetT]:
         """Stage a candidate whose components and atomic resources are settled.
 
         One pass per embedding tier: the root is known without rendering anything, and each
@@ -1359,7 +1408,7 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
         raise LayoutInvariantError(message)
 
     @staticmethod
-    def _pending_resources(tree: ComponentTree, pending: PendingMode) -> tuple[AsyncBinding, ...]:
+    def _pending_resources(tree: ComponentTree[RenderTargetT], pending: PendingMode) -> tuple[AsyncBinding, ...]:
         return tuple(binding for binding in tree.async_bindings if binding.pending_mode is pending and binding.pending)
 
     async def _settle_resources(self, resources: Sequence[AsyncBinding]) -> None:
@@ -1381,7 +1430,7 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
 
     async def _settle_visible(
         self,
-        committed: _ApplicationCandidate,
+        committed: _ApplicationCandidate[RenderTargetT],
         *,
         through: deliver.EditHandle | None = None,
         profile: OperationRecorder | None = None,
@@ -1462,13 +1511,13 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
 
     async def _present_async_update(
         self,
-        committed: _ApplicationCandidate,
+        committed: _ApplicationCandidate[RenderTargetT],
         *,
         through: deliver.EditHandle | None,
         profile: OperationRecorder | None,
-    ) -> _ApplicationCandidate | None:
+    ) -> _ApplicationCandidate[RenderTargetT] | None:
         """Present the latest coalesced status of async bindings, if it changed the scene."""
-        candidate: _ApplicationCandidate | None = None
+        candidate: _ApplicationCandidate[RenderTargetT] | None = None
         try:
             candidate = await self._stage_loaded(profile=profile, preflight=True)
             if self._same_as_live(candidate):
@@ -1493,7 +1542,7 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
                 self._commit_presented(candidate)
         return candidate
 
-    async def _load_all(self, components: Sequence[Component]) -> None:
+    async def _load_all(self, components: Sequence[Component[RenderTargetT]]) -> None:
         """Load one tier concurrently. A failure cancels its siblings; the render is doomed."""
         if len(components) == 1:
             # The overwhelmingly common case, and no group to unwrap.
@@ -1539,7 +1588,7 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
                         self._subscriptions.discard()
                 # Component on_load and atomic resources settle first. Visible resources
                 # deliberately make this the pending paint and settle after it commits.
-                candidate = cast(_Candidate, await self._stage_loaded(profile=profile))
+                candidate = cast(_Candidate[RenderTargetT], await self._stage_loaded(profile=profile))
                 try:
                     destination_type = (
                         f"{type(message_destination).__module__}.{type(message_destination).__qualname__}"
@@ -1580,7 +1629,7 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
 
     async def _deliver(
         self,
-        candidate: _Candidate | _LifecycleCandidate,
+        candidate: _Candidate[RenderTargetT] | _LifecycleCandidate,
         *,
         through: deliver.EditHandle | None = None,
         files: bool = True,
@@ -1774,9 +1823,9 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
                 # Adopt before staging or responding. A failed restore remains armed but now
                 # has the authority needed for another attempt.
                 self._handle = source
-                candidate: _Candidate | None = None
+                candidate: _Candidate[RenderTargetT] | None = None
                 try:
-                    candidate = cast(_Candidate, await self._stage_loaded(profile=profile.operation))
+                    candidate = cast(_Candidate[RenderTargetT], await self._stage_loaded(profile=profile.operation))
                     wrote = await self._deliver(candidate, through=source, profile=profile.operation)
                 except Exception as error:
                     if candidate is not None:
