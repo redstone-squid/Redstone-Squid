@@ -6,11 +6,16 @@ it. A spelling corrected in one walk stayed wrong in the others, and the planner
 path-keyed state only holds together while every walk agrees on the spelling.
 
 What belongs here is target-neutral by definition: how a child's path is derived from its
-parent's, and how a fallback branch is named and selected. How a target reacts to the node
-at that path does not.
+parent's, how a fallback branch is named and selected, how a stateful node's current state
+is read from author control or session memory, and how a control's action key is spelled.
+How a target reacts to what it finds there does not.
 """
 
 from collections.abc import Iterator, Mapping, Sequence
+from typing import Any
+
+from squid_ui.runtime.presentation_state import PresentationState
+from squid_ui.semantic import Controlled, Details, Toggle, Uncontrolled
 
 
 def indexed_children[T](children: Sequence[T], path: str) -> Iterator[tuple[T, str]]:
@@ -33,4 +38,38 @@ def fallback_rung(path: str, branches: int, selected: Mapping[str, int]) -> int:
     return rung
 
 
-__all__ = ["branch_paths", "fallback_rung", "indexed_children"]
+def disclosure_state(node: Details[Any], session: PresentationState) -> bool:
+    """Whether a disclosure is open: the author's word when controlled, session memory otherwise."""
+    match node.open:
+        case Controlled(value=value):
+            return value
+        case Uncontrolled(initial=initial):
+            return session.disclosure(node.key, initial=initial).open
+
+
+def toggle_state(node: Toggle, session: PresentationState) -> bool:
+    """Whether a toggle is on: the author's word when controlled, session memory otherwise."""
+    match node.on:
+        case Controlled(value=value):
+            return value
+        case Uncontrolled(initial=initial):
+            return session.toggle(node.key, initial=initial).on
+
+
+def toggle_action_key(key: str) -> str:
+    """Spell the action key for a disclosure's toggle control.
+
+    Both planners bind the control under this key, and rebinding after a replan only finds
+    the handler again because every target agrees on the spelling.
+    """
+    return f"{key}.toggle"
+
+
+__all__ = [
+    "branch_paths",
+    "disclosure_state",
+    "fallback_rung",
+    "indexed_children",
+    "toggle_action_key",
+    "toggle_state",
+]
