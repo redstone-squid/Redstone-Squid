@@ -78,6 +78,7 @@ from squid_ui_discord import (
     Users,
     delivery,
 )
+from squid_ui_discord import testing as sd
 from squid_ui_discord.access import Allowed, Check, Denied
 from squid_ui_discord.message_root_candidates import _BusyPaint
 from squid_ui_discord.message_root_contracts import MessageRootStatus
@@ -434,18 +435,8 @@ class Panel(Component[sl.ComponentsV2Target]):
         self.show_child = True
 
 
-def _http_error() -> discord.HTTPException:
-    response = cast(Any, SimpleNamespace(status=500, reason="Internal Server Error"))
-    return discord.HTTPException(response, "edit refused")
-
-
-def _stale_http_error() -> discord.HTTPException:
-    response = cast(Any, SimpleNamespace(status=404, reason="Not Found"))
-    return discord.HTTPException(response, {"code": 10015, "message": "Unknown Webhook"})
-
-
 async def _refuse_edit(*args: Any, **kwargs: Any) -> None:
-    raise _http_error()
+    raise sd.http_error(message="edit refused")
 
 
 class _RefusingHandle:
@@ -459,7 +450,7 @@ class _RefusingHandle:
         return False
 
     async def write(self, *args: Any, **kwargs: Any) -> None:
-        raise _http_error()
+        raise sd.http_error(message="edit refused")
 
 
 def _refuse_handle(*args: Any, **kwargs: Any) -> _RefusingHandle:
@@ -1928,7 +1919,7 @@ class TestDeliveryAtomicity:
         component = Counter()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
         message: Any = fake_message()
-        message.edit = AsyncMock(side_effect=_http_error())
+        message.edit = AsyncMock(side_effect=sd.http_error(message="edit refused"))
         await message_root.send(delivered_to(message))
         component.count = 7
         live_generation = message_root._generation
@@ -2277,7 +2268,7 @@ class TestSend:
         panel.show_child = True
 
         with pytest.raises(discord.HTTPException):
-            await message_root.send(_Destination(raises=_http_error()))
+            await message_root.send(_Destination(raises=sd.http_error(message="edit refused")))
 
         assert message_root._generation == 0
         assert message_root._handlers == {}
@@ -2924,7 +2915,7 @@ class TestDestinations:
     async def test_stale_public_response_drops_then_renews_for_the_pending_render(self):
         interaction = fake_interaction()
         interaction.original_response.return_value = fake_message(ephemeral=False)
-        interaction.edit_original_response.side_effect = _stale_http_error()
+        interaction.edit_original_response.side_effect = sd.stale_http_error()
         component = Counter()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
         await message_root.send(delivery.respond_to(interaction, ephemeral=False, wait=True))
@@ -3446,7 +3437,7 @@ class TestResourceLoading:
 
         panel = VisibleResourcePanel(load)
         message: Any = fake_message()
-        message.edit.side_effect = _http_error()
+        message.edit.side_effect = sd.http_error(message="edit refused")
         message_root = MessageRoot(panel, access=Everyone(), timeout=None)
 
         await message_root.send(_Destination(message))
@@ -3763,7 +3754,7 @@ class TestLoading:
         log: list[str] = []
         component = Leaf(log, "panel")
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
-        destination = _Destination(fake_message(), raises=_http_error())
+        destination = _Destination(fake_message(), raises=sd.http_error(message="edit refused"))
 
         with pytest.raises(discord.HTTPException):
             await message_root.send(destination)

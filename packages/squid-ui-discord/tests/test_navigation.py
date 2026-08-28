@@ -1,11 +1,10 @@
 """StackNavigator: stack navigation by composition."""
 
-import discord
-
 import squid_ui as sl
 from squid_ui import Component
 from squid_ui.primitives import Heading, Text
 from squid_ui_discord import Everyone, MessageRoot
+from squid_ui_discord import testing as sd
 from squid_ui_discord.navigation import StackNavigator
 from squid_ui_discord.testing import commit_render, fake_interaction
 
@@ -18,26 +17,18 @@ class Screen(Component[sl.ComponentsV2Target]):
         return [Heading(self.name), Text(f"content of {self.name}")]
 
 
-def _texts(view: discord.ui.LayoutView) -> list[str]:
-    return [c.content for c in view.walk_children() if isinstance(c, discord.ui.TextDisplay)]
-
-
-def _labels(view: discord.ui.LayoutView) -> list[str | None]:
-    return [b.label for b in view.walk_children() if isinstance(b, discord.ui.Button)]
-
-
 async def test_push_pop_and_controls_render_last():
     navigator = StackNavigator(Screen("root"))
     message_root = MessageRoot(navigator, access=Everyone(), timeout=None)
     view = commit_render(message_root)
-    assert "## root" in _texts(view)
-    assert _labels(view) == ["Back", "Close"]
+    assert "## root" in sd.payload_texts(view)
+    assert sd.payload_labels(view) == ["Back", "Close"]
 
     navigator.push(Screen("child"))
     interaction = fake_interaction()
     await message_root.refresh(interaction)
     pushed = interaction.response.edit_message.await_args.kwargs["view"]
-    assert "## child" in _texts(pushed)
+    assert "## child" in sd.payload_texts(pushed)
 
     await message_root.dispatch("__nav_back", fake_interaction())
     assert navigator.current.name == "root"  # pyrefly: ignore
@@ -49,7 +40,7 @@ async def test_home_appears_only_when_deep():
     navigator.push(Screen("a"))
     navigator.push(Screen("b"))
     view = commit_render(message_root)
-    assert "Home" in _labels(view)
+    assert "Home" in sd.payload_labels(view)
 
     await message_root.dispatch("__nav_home", fake_interaction())
     assert navigator.depth == 1
@@ -74,7 +65,7 @@ async def test_child_state_changes_rerender_through_the_shared_root():
     child.count = 5
 
     assert message_root._dirty
-    assert "count 5" in _texts(commit_render(message_root))
+    assert "count 5" in sd.payload_texts(commit_render(message_root))
 
 
 async def test_close_finishes_the_root():

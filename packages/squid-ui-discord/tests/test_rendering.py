@@ -36,7 +36,7 @@ from squid_ui.runtime.shared import SharedState
 from squid_ui.runtime.topics import CellAddress, LocalTopicBus
 from squid_ui.semantic import ActionControl, ActionControls, Choice, Choices, Controlled, Group, List, ListItem
 from squid_ui_discord import Everyone, MessageRoot
-from squid_ui_discord.testing import commit_render, fake_interaction
+from squid_ui_discord.testing import commit_render, fake_interaction, payload_texts
 
 
 class Counter(Component[sl.ComponentsV2Target]):
@@ -77,10 +77,6 @@ def _custom_ids(view: discord.ui.LayoutView) -> list[str]:
     return [item.custom_id or "" for item in view.walk_children() if isinstance(item, discord.ui.Button)]
 
 
-def _texts(view: discord.ui.LayoutView) -> list[str]:
-    return [item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)]
-
-
 class TestBoundaries:
     async def test_each_instance_answers_only_its_own_control(self):
         pair = Pair()
@@ -108,7 +104,7 @@ class TestBoundaries:
         pair.right.count = 3
 
         assert message_root._dirty
-        assert "right: 3" in _texts(commit_render(message_root))
+        assert "right: 3" in payload_texts(commit_render(message_root))
 
     def test_components_do_not_expose_the_frontend_root(self):
         pair = Pair()
@@ -875,7 +871,7 @@ def test_typed_context_flows_to_descendants_without_entering_component_state() -
 
     view = commit_render(MessageRoot(Parent(), access=Everyone(), timeout=None))
 
-    assert "hello from context" in _texts(view)
+    assert "hello from context" in payload_texts(view)
 
 
 def test_semantic_actions_are_namespaced_across_embedded_instances() -> None:

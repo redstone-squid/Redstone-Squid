@@ -14,21 +14,8 @@ import squid_ui_discord.target
 from squid_ui.planning.limits import Axis
 from squid_ui_discord import V2_LIMITS as LIMITS
 from squid_ui_discord import ExistingLayoutError, LimitViolationError, conform
+from squid_ui_discord import testing as sd
 from squid_ui_discord.inspection import ViolationCode, audit, cost, measure
-
-
-def _view(*items: discord.ui.Item) -> discord.ui.LayoutView:
-    view = discord.ui.LayoutView()
-    for item in items:
-        view.add_item(item)
-    return view
-
-
-def _row(*items) -> discord.ui.ActionRow:
-    row = discord.ui.ActionRow()
-    for item in items:
-        row.add_item(item)
-    return row
 
 
 def _rich_view() -> discord.ui.LayoutView:
@@ -40,11 +27,11 @@ def _rich_view() -> discord.ui.LayoutView:
     container.add_item(section)
     gallery = discord.ui.MediaGallery()
     gallery.add_item(media="https://example.invalid/a.png", description="a")
-    return _view(
+    return sd.layout_view(
         discord.ui.TextDisplay("top"),
         container,
         gallery,
-        _row(discord.ui.Button(label="one", custom_id="one"), discord.ui.Button(label="two", custom_id="two")),
+        sd.action_row(discord.ui.Button(label="one", custom_id="one"), discord.ui.Button(label="two", custom_id="two")),
     )
 
 
@@ -68,14 +55,14 @@ class TestAgreesWithDiscordPy:
         section = discord.ui.Section(accessory=discord.ui.Button(label="go"))
         section.add_item(discord.ui.TextDisplay("text"))
         # The section, its text, and its accessory.
-        assert measure(_view(section)).cost.get(Axis.COMPONENTS) == 3
+        assert measure(sd.layout_view(section)).cost.get(Axis.COMPONENTS) == 3
 
 
 class TestMeasure:
     def test_does_not_mutate_the_view(self):
         long_text = "x" * (LIMITS.total_text + 100)
         display = discord.ui.TextDisplay(long_text)
-        view = _view(display)
+        view = sd.layout_view(display)
         measure(view)
         assert display.content == long_text
 
@@ -86,7 +73,7 @@ class TestMeasure:
         assert sites["go"] == (1, 1, 1)  # container -> section -> accessory
 
     def test_external_attachments_enter_the_reservation(self):
-        assert measure(_view(), attachments=3).cost.get(Axis.ATTACHMENTS) == 3
+        assert measure(sd.layout_view(), attachments=3).cost.get(Axis.ATTACHMENTS) == 3
 
     def test_fingerprint_tracks_content(self):
         view = _rich_view()
@@ -110,14 +97,14 @@ class TestMeasure:
             measure("a message")  # pyrefly: ignore[bad-argument-type]
 
     def test_invalid_host_raises_on_request(self):
-        view = _view(discord.ui.TextDisplay("x" * (LIMITS.total_text + 1)))
+        view = sd.layout_view(discord.ui.TextDisplay("x" * (LIMITS.total_text + 1)))
         with pytest.raises(ExistingLayoutError):
             measure(view).raise_if_invalid()
 
 
 class TestCost:
     def test_costs_an_unattached_item(self):
-        row = _row(discord.ui.Button(label="a"), discord.ui.Button(label="b"))
+        row = sd.action_row(discord.ui.Button(label="a"), discord.ui.Button(label="b"))
         assert cost(row).get(Axis.COMPONENTS) == 3
         assert cost(row).get(Axis.DISPLAY_TEXT) == 0
 
@@ -133,8 +120,8 @@ class TestCost:
         assert cost(one, two).get(Axis.COMPONENTS) == 2
 
     def test_matches_measure_after_attachment(self):
-        row = _row(discord.ui.Button(label="a"))
-        view = _view(discord.ui.TextDisplay("hello"))
+        row = sd.action_row(discord.ui.Button(label="a"))
+        view = sd.layout_view(discord.ui.TextDisplay("hello"))
         before = measure(view).cost
         view.add_item(row)
         assert measure(view).cost.get(Axis.COMPONENTS) == (before + cost(row)).get(Axis.COMPONENTS)
@@ -148,25 +135,27 @@ class TestAudit:
 
     def test_repairs_nothing(self):
         display = discord.ui.TextDisplay("x" * (LIMITS.total_text + 5))
-        audit(_view(display))
+        audit(sd.layout_view(display))
         assert len(display.content) == LIMITS.total_text + 5
 
     def test_duplicate_custom_ids_are_a_hard_failure(self):
-        view = _view(
-            _row(discord.ui.Button(label="a", custom_id="same"), discord.ui.Button(label="b", custom_id="same"))
+        view = sd.layout_view(
+            sd.action_row(
+                discord.ui.Button(label="a", custom_id="same"), discord.ui.Button(label="b", custom_id="same")
+            )
         )
         codes = [violation.code for violation in audit(view).violations]
         assert ViolationCode.CUSTOM_ID_DUPLICATE in codes
         assert all(not violation.repairable for violation in audit(view).violations)
 
     def test_attachment_overflow_is_reported(self):
-        report = audit(_view(), attachments=LIMITS.attachments + 1)
+        report = audit(sd.layout_view(), attachments=LIMITS.attachments + 1)
         assert [v.code for v in report.violations] == [ViolationCode.ATTACHMENTS]
 
     def test_raise_if_invalid_names_every_violation(self):
-        view = _view(
+        view = sd.layout_view(
             discord.ui.TextDisplay("x" * (LIMITS.total_text + 1)),
-            _row(discord.ui.Button(label="y" * (LIMITS.components.button_label + 1))),
+            sd.action_row(discord.ui.Button(label="y" * (LIMITS.components.button_label + 1))),
         )
         with pytest.raises(LimitViolationError) as excinfo:
             audit(view).raise_if_invalid()
@@ -175,7 +164,7 @@ class TestAudit:
     def test_component_overflow_is_reported_first(self):
         # discord.py refuses a 41st child, so overflow is provoked with a tighter table.
         limits = replace(LIMITS, total_components=2)
-        view = _view(discord.ui.TextDisplay("a"), discord.ui.TextDisplay("b"), discord.ui.TextDisplay("c"))
+        view = sd.layout_view(discord.ui.TextDisplay("a"), discord.ui.TextDisplay("b"), discord.ui.TextDisplay("c"))
         assert audit(view, limits=limits).violations[0].code is ViolationCode.TOTAL_COMPONENTS
 
 
@@ -186,10 +175,10 @@ class TestConformProjectsTheSameFindings:
     def _broken() -> discord.ui.LayoutView:
         select = discord.ui.Select(placeholder="p" * (LIMITS.components.select_placeholder + 1))
         select.options = [discord.SelectOption(label="l" * (LIMITS.components.option_label + 1), value="v")]
-        return _view(
+        return sd.layout_view(
             discord.ui.TextDisplay("x" * (LIMITS.total_text + 1)),
-            _row(discord.ui.Button(label="b" * (LIMITS.components.button_label + 1))),
-            _row(select),
+            sd.action_row(discord.ui.Button(label="b" * (LIMITS.components.button_label + 1))),
+            sd.action_row(select),
         )
 
     def test_interventions_are_the_audit_messages(self):
@@ -210,7 +199,7 @@ def _views(draw) -> discord.ui.LayoutView:
         view.add_item(discord.ui.TextDisplay(content))
     labels = draw(st.lists(st.text(max_size=200), max_size=4))
     if labels:
-        view.add_item(_row(*(discord.ui.Button(label=label or None) for label in labels)))
+        view.add_item(sd.action_row(*(discord.ui.Button(label=label or None) for label in labels)))
     return view
 
 
@@ -281,7 +270,7 @@ class TestReservedPlanning:
             squid_ui_discord.render_message(document, reservation=squid_ui_discord.ResourceCost({Axis.COMPONENTS: 35}))
 
     def test_a_reserved_plan_plus_the_host_fits_the_real_budget(self):
-        host = _view(discord.ui.TextDisplay("h" * 2000))
+        host = sd.layout_view(discord.ui.TextDisplay("h" * 2000))
         fragment_view = squid_ui_discord.render_message(
             [sl.primitives.Text("f" * 5000)], reservation=measure(host).cost
         ).view

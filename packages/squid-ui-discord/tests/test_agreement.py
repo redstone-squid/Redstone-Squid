@@ -8,6 +8,7 @@ import pytest
 import squid_ui as sl
 import squid_ui_discord
 import squid_ui_widgets as sp
+from squid_ui_discord import testing as sd
 from squid_ui_discord.testing import commit_render, fake_interaction
 
 
@@ -23,7 +24,8 @@ def _agreement(**overrides: Any) -> sp.Agreement:
 
 
 def _text(view: discord.ui.LayoutView) -> str:
-    return "\n".join(item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay))
+    """This file reads the whole render as one blob; the walk itself is `sd.payload_texts`."""
+    return "\n".join(sd.payload_texts(view))
 
 
 def _buttons(view: discord.ui.LayoutView) -> list[discord.ui.Button[Any]]:
