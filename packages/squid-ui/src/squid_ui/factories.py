@@ -20,7 +20,7 @@ from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Se
 from datetime import datetime
 from string.templatelib import Template
 from types import UnionType
-from typing import TYPE_CHECKING, Literal, NoReturn, TypeAliasType, TypeIs, get_args, get_origin
+from typing import TYPE_CHECKING, Any, Literal, NoReturn, TypeAliasType, TypeIs, get_args, get_origin
 
 from squid_ui.assets import Asset
 from squid_ui.entity import ChannelType, EntityRef, EntityType
@@ -90,6 +90,7 @@ from squid_ui.semantic import (
     NavOwnership,
     Note,
     Paragraph,
+    PortableNode,
     ProgressBar,
     Quote,
     Roster,
@@ -161,11 +162,16 @@ def _node_types(annotation: object) -> Iterator[type]:
         yield annotation
     elif isinstance(origin := get_origin(annotation), type):
         yield origin
+    elif isinstance(origin, TypeAliasType):
+        # A subscripted alias like `SemanticNode[RenderTargetT]`: its origin is the alias
+        # itself, so recurse into it the same way an unsubscripted alias is flattened.
+        yield from _node_types(origin)
 
 
 # Derived from the union rather than hand-listed, so a new node type is accepted the moment
 # it joins `LayoutNode`.
 _NODE_TYPES: tuple[type, ...] = tuple(_node_types(ConcreteLayoutNode))
+_PORTABLE_TYPES: tuple[type, ...] = tuple(_node_types(PortableNode))
 
 
 def is_layout_node(value: object) -> TypeIs[ConcreteLayoutNode]:
@@ -176,6 +182,15 @@ def is_layout_node(value: object) -> TypeIs[ConcreteLayoutNode]:
     a predicate keeps the union's membership an implementation detail.
     """
     return isinstance(value, _NODE_TYPES)
+
+
+def is_portable_node(value: object) -> TypeIs[PortableNode[Any]]:
+    """True when `value` belongs to the closed portable vocabulary every planner answers for.
+
+    Distinguishes the portable union from the `Renderable` escape hatch: a Discord primitive
+    is a layout node but not a portable one.
+    """
+    return isinstance(value, _PORTABLE_TYPES)
 
 
 def _text(value: TextValue) -> TextLike:
