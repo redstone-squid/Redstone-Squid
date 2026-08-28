@@ -11,11 +11,12 @@ from squid_ui import semantic as sem
 from squid_ui.assets import Asset
 from squid_ui.chrome import Chrome
 from squid_ui.document import DocumentLike, as_document
-from squid_ui.errors import LayoutDegradedError, LayoutInvariantError
+from squid_ui.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
 from squid_ui.factories import is_layout_node, is_portable_node
 from squid_ui.forms import FormBinding
 from squid_ui.interactions import ActionBinding, ActionMode
 from squid_ui.palette import Palette
+from squid_ui.planning.breaking import BreakItem, balanced_breaks
 from squid_ui.planning.cache import CachedPlan, PlanCache, PlanMemo
 from squid_ui.planning.cursors import CursorCoordinator, MaterializedCursorRequest
 from squid_ui.planning.identity import stable_fingerprint
@@ -46,7 +47,7 @@ from squid_ui.planning.structure import (
     toggle_state,
 )
 from squid_ui.planning.target import Target
-from squid_ui.planning.text_allocation import allocate_pages, truncate_text
+from squid_ui.planning.text_allocation import truncate_text
 from squid_ui.runtime.presentation_state import (
     ActivePagers,
     CursorState,
@@ -1247,12 +1248,23 @@ class _Compiler:
     def _paged(self, node: sem.Paged, path: str) -> tuple[scene.HtmlNode, ...]:
         children = getattr(node.node, "children", (node.node,))
         compiled = tuple(self.compile(child, f"{path}.page.{index}") for index, child in enumerate(children))
-        pages = allocate_pages(
-            compiled,
-            size=lambda group: sum(_html_size(item) for item in group),
-            capacity=node.chars,
-            widows=node.widows,
-        )
+        sizes = [sum(_html_size(item) for item in group) for group in compiled]
+        if compiled:
+            try:
+                cuts = balanced_breaks(
+                    [BreakItem(size) for size in sizes],
+                    max_chars=node.chars,
+                    min_fill=node.min_fill,
+                    widows=node.widows,
+                    ideal_total=sum(sizes),
+                )
+            except ValueError as error:
+                message = f"{path}: region has no feasible break set within its {node.chars}-character page budget"
+                raise UnsolvableLayoutError(message) from error
+            bounds = (0, *cuts)
+            pages = tuple(compiled[start:end] for start, end in zip(bounds, cuts, strict=False))
+        else:
+            pages = ((),)
         fingerprint = stable_fingerprint((compiled,))
         extent = len(pages)
         # Resolution goes through the shared coordinator so both targets obey one precedence
