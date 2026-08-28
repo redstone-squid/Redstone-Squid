@@ -25,6 +25,7 @@ from squid_reactivity.core import (
     _CONSUMER,
     ReactiveCycleError,
     ReactiveOwner,
+    ReactivityError,
     TransactionView,
     _bump_epoch,
     _Cell,
@@ -177,7 +178,7 @@ class PendingMode(StrEnum):
     ATOMIC = "atomic"
 
 
-class ResourceNotReadyError(LookupError):
+class ResourceNotReadyError(ReactivityError, LookupError):
     """A resource value was read while its state was not ready."""
 
 

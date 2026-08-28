@@ -4,6 +4,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum, StrEnum
 
+from squid_ui.errors import LayoutError
+
 
 class SolveNoteCode(StrEnum):
     """Stable identities for diagnostics emitted by the measured solver."""
@@ -82,7 +84,7 @@ def note(
     return SolveNote(code, message, severity)
 
 
-class LayoutOverflowError(Exception):
+class LayoutOverflowError(LayoutError):
     """The document cannot fit its hard constraints into Discord's budgets."""
 
     def __init__(self, notes: list[SolveNote]) -> None:

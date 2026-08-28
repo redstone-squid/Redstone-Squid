@@ -22,6 +22,7 @@ from typing import Any, Unpack
 import anyio
 import discord
 
+from squid_ui.errors import SquidUiError
 from squid_ui.profiling import Profiler
 from squid_ui.runtime.component import Component
 from squid_ui.runtime.topics import TopicBus
@@ -47,7 +48,7 @@ _INSTALLED: weakref.WeakKeyDictionary[Any, ClientRuntime[Any]] = weakref.WeakKey
 """Hosts installed per client, so a second `install` on one client can be refused."""
 
 
-class ClientRuntimeMissing(LookupError):
+class ClientRuntimeMissing(SquidUiError, LookupError):
     """Nothing was installed on the client this source names.
 
     A wiring bug rather than a runtime condition: every reachable path from a click runs
