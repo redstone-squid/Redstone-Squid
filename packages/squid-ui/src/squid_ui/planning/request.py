@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, TypedDict
 
 from squid_ui import scene
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
@@ -27,6 +27,34 @@ class Identity:
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, Identity) and self.value is other.value
+
+
+class StaticPlanOptions(TypedDict, total=False):
+    """The planner inputs a sessionless render accepts.
+
+    Split from :class:`PlanOptions` so that an entry point which plans no session cannot be
+    handed one: `render_static` takes this, and rejecting `session` there is the point of it.
+    """
+
+    chrome: Chrome
+    localization: Localization
+    palette: Palette
+    strict: bool
+    reservation: ResourceCost
+
+
+class PlanOptions(StaticPlanOptions, total=False):
+    """Every planner input except the target, which each entry point defaults differently.
+
+    Spelled as a TypedDict so that a function forwarding planner inputs declares them once
+    rather than restating ten parameters and ten forwardings. :class:`PlanRequest` remains the
+    value the planner sees; this is only how a caller's keywords reach it.
+    """
+
+    positions: Mapping[str, Position] | None
+    nav: PlannedNav | None
+    session: PresentationState | None
+    search_budget: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,4 +150,4 @@ class PlanRequest[BodyT: scene.Body, RenderTargetT, AdapterT]:
         }
 
 
-__all__ = ["Identity", "PlanRequest"]
+__all__ = ["Identity", "PlanOptions", "PlanRequest", "StaticPlanOptions"]
