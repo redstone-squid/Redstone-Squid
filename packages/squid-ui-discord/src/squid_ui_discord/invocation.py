@@ -24,6 +24,7 @@ from squid_ui_discord.delivery import (
 )
 from squid_ui_discord.message_payload import MessagePayload
 from squid_ui_discord.message_root import MessageRoot
+from squid_ui_discord.message_root_contracts import MessageRootBehaviorOptions
 from squid_ui_discord.message_root_options import MessageRootOptions
 from squid_ui_discord.rendering import render_static
 from squid_ui_discord.runtime import ClientRuntime, InvocationSource
@@ -162,16 +163,16 @@ class Invocation:
             allowed_mentions=allowed_mentions,
         )(self.render(*nodes))
 
-    async def mount[RenderTargetT](
+    async def mount(
         self,
-        component: Component[RenderTargetT],
+        component: Component[ComponentsV2Target],
         *,
         access: AccessPolicy,
         visibility: Visibility = "public",
-        **options: Unpack[MessageRootOptions],
-    ) -> MessageRoot[RenderTargetT]:
+        **options: Unpack[MessageRootBehaviorOptions],
+    ) -> MessageRoot:
         """Construct and deliver a plain message root through this invocation."""
-        configured = cast(MessageRootOptions, {**options, "localization": self.localization})
+        configured = cast(MessageRootBehaviorOptions, {**options, "localization": self.localization})
         message_root = self.runtime.mount(component, access=access, **configured)
         await message_root.send(self.destination(visibility))
         return message_root

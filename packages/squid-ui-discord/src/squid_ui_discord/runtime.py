@@ -26,12 +26,14 @@ from squid_ui.errors import SquidUiError
 from squid_ui.profiling import Profiler
 from squid_ui.runtime.component import Component
 from squid_ui.runtime.topics import TopicBus
+from squid_ui.target_types import ComponentsV2Target
 from squid_ui.text import Localization
 from squid_ui_discord.access import AccessPolicy
 from squid_ui_discord.challenges import ChallengeRunner, DialogPresenter
 from squid_ui_discord.delivery import Replyable
 from squid_ui_discord.message_root import MessageRoot
-from squid_ui_discord.message_root_options import MessageRootDefaults, MessageRootOptions
+from squid_ui_discord.message_root_contracts import MessageRootBehaviorOptions
+from squid_ui_discord.message_root_options import MessageRootDefaults
 from squid_ui_discord.message_root_scheduler import MessageRootScheduler
 from squid_ui_discord.sessions import SessionManager
 
@@ -112,9 +114,13 @@ class ClientRuntime[ClientT: discord.Client]:
     def defaults(self, defaults: MessageRootDefaults) -> None:
         self.sessions.defaults = defaults
 
-    def mount[RenderTargetT](
-        self, component: Component[RenderTargetT], *, access: AccessPolicy, **overrides: Unpack[MessageRootOptions]
-    ) -> MessageRoot[RenderTargetT]:
+    def mount(
+        self,
+        component: Component[ComponentsV2Target],
+        *,
+        access: AccessPolicy,
+        **overrides: Unpack[MessageRootBehaviorOptions],
+    ) -> MessageRoot:
         """Construct a mount from this host's defaults, applying per-call overrides.
 
         The reason a panel needs no object but the host: chrome, localization, the error
