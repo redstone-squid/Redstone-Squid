@@ -5,21 +5,27 @@ or consumes; the behaviour they describe lives in :mod:`squid_ui_discord.message
 """
 
 import math
-from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+import time
+from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import dataclass, replace
 from enum import StrEnum
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, Self, TypedDict, Unpack, runtime_checkable
 
 import discord
 
 from squid_ui import scene
+from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.guards import Challenge
+from squid_ui.interactions import ActionMiddleware
+from squid_ui.palette import DEFAULT_PALETTE, Palette
+from squid_ui.planning.navigation import NavFactory
 from squid_ui.profiling import Profiler
 from squid_ui.runtime.topics import Address, TopicBus
 from squid_ui.scene.model import PlanMetrics, PlanReport
-from squid_ui.text import TextLike
+from squid_ui.text import NEUTRAL, Localization, TextLike
 from squid_ui_discord.access import AccessPolicy
-from squid_ui_discord.render_cache import RenderProgramCacheSnapshot
+from squid_ui_discord.render_cache import RenderProgramCache, RenderProgramCacheSnapshot
+from squid_ui_discord.target import DISCORD_V2_DPY27, Target
 
 if TYPE_CHECKING:
     from squid_ui_discord.message_root import AnyMessageRoot
@@ -186,6 +192,74 @@ type ExpiryPolicy = PauseUpdates | RenewEphemeral
 
 
 DEFAULT_EXPIRY = PauseUpdates()
+
+
+def monotonic() -> float:
+    """The default clock a message root ages against."""
+    return time.monotonic()
+
+
+class MessageRootOptions(TypedDict, total=False):
+    """The keywords that configure a message root, as a forwardable bundle.
+
+    Paired with :class:`MessageRootConfig`, which holds the same set with its defaults. Two
+    declarations is the floor: a TypedDict cannot be derived from a dataclass at type-check
+    time. `tests/test_sessions.py` pins them against each other, and `access` is in neither
+    -- it identifies who may use one specific mount, so it is never a default.
+    """
+
+    target: Target
+    chrome: Chrome
+    localization: Localization
+    palette: Palette
+    strict: bool
+    timeout: float | None
+    on_error: ErrorHook | None
+    middleware: Sequence[ActionMiddleware]
+    profiler: Profiler | None
+    render_cache: RenderProgramCache | None
+    scheduler: Scheduler | None
+    expiry: ExpiryPolicy | None
+    nav: NavFactory | None
+    challenge: ChallengePresenter | None
+    acknowledgement_timeout: float
+    pending_after: float
+    clock: Callable[[], float]
+
+
+@dataclass(frozen=True, slots=True)
+class MessageRootConfig:
+    """Everything a message root is configured with, and what each value defaults to.
+
+    The single home for those defaults: `MessageRoot.__init__` reads them from here rather
+    than restating them, and a host that wants different ones builds one of these instead of
+    repeating keywords at every construction site.
+    """
+
+    target: Target = DISCORD_V2_DPY27
+    chrome: Chrome = DEFAULT_CHROME
+    localization: Localization = NEUTRAL
+    palette: Palette = DEFAULT_PALETTE
+    strict: bool = False
+    timeout: float | None = 900
+    on_error: ErrorHook | None = None
+    middleware: Sequence[ActionMiddleware] = ()
+    profiler: Profiler | None = None
+    render_cache: RenderProgramCache | None = None
+    scheduler: Scheduler | None = None
+    expiry: ExpiryPolicy | None = DEFAULT_EXPIRY
+    nav: NavFactory | None = None
+    challenge: ChallengePresenter | None = None
+    acknowledgement_timeout: float = 2.5
+    pending_after: float = 1.0
+    clock: Callable[[], float] = monotonic
+
+    def replace(self, **changes: Unpack[MessageRootOptions]) -> Self:
+        """Return a copy with selected values replaced."""
+        return replace(self, **changes)
+
+
+DEFAULT_MESSAGE_ROOT_CONFIG = MessageRootConfig()
 
 
 class MessageRootStatus(StrEnum):

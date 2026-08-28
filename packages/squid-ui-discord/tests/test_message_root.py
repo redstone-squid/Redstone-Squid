@@ -210,7 +210,7 @@ async def _armed_root(
     component: Component[Any] | None = None,
     *,
     access: squid_ui_discord.AccessPolicy | None = None,
-    on_error: squid_ui_discord.message_root.ErrorHook | None = None,
+    on_error: squid_ui_discord.message_root_contracts.ErrorHook | None = None,
 ) -> tuple[MessageRoot, Any, MessageRootScheduler]:
     now = datetime.now(UTC)
     scheduler = MessageRootScheduler(clock=lambda: now)
