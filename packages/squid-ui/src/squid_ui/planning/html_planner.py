@@ -1297,8 +1297,8 @@ class HtmlPlanner:
         rendered: DocumentLike[HtmlTarget],
         request: PlanRequest[scene.HtmlBody, HtmlTarget, Any],
         *,
-        cache: PlanCache | None = None,
-        memo: PlanMemo | None = None,
+        cache: PlanCache[scene.HtmlBody] | None = None,
+        memo: PlanMemo[scene.HtmlBody] | None = None,
     ) -> PlanResult[scene.HtmlBody]:
         # HTML has neither a bounded document nor a global resource budget, so the two request
         # fields that exist to bound one are refused rather than quietly ignored.
@@ -1323,7 +1323,7 @@ class HtmlPlanner:
             )
         )
         if memo is not None and (exact := memo.replay(rendered, key, presentation)) is not None:
-            return cast(PlanResult[scene.HtmlBody], exact)
+            return exact
         document = as_document(rendered)
         compiler = _Compiler(target, request.chrome, localization, palette, presentation, positions, strict)
         for asset in document.assets:
@@ -1348,7 +1348,7 @@ class HtmlPlanner:
         )
         cached = cache.get(key) if cache is not None else None
         if cached is not None:
-            planned = cast(scene.Scene[scene.HtmlBody], cached.scene)
+            planned = cached.scene
             report = cached.report
         actions, forms = _action_keys(planned.body.children)
         result = PlanResult(

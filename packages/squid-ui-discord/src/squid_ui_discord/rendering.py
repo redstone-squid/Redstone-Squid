@@ -73,8 +73,8 @@ def render_message(
     wire: Wire | None = None,
     renderer: V2Renderer | None = None,
     target: Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, DiscordPyAdapter] = DISCORD_V2_DPY27,
-    cache: PlanCache | None = None,
-    memo: PlanMemo | None = None,
+    cache: PlanCache[scene.ComponentsV2] | None = None,
+    memo: PlanMemo[scene.ComponentsV2] | None = None,
     profile: OperationRecorder | None = None,
     **options: Unpack[PlanOptions],
 ) -> RenderedMessage[discord.ui.LayoutView, scene.ComponentsV2]:

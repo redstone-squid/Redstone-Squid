@@ -21,8 +21,8 @@ class TargetPlanner[LimitsT: TargetLimits, BodyT: scene.Body, RenderTargetT, Ada
         rendered: DocumentLike[RenderTargetT],
         request: PlanRequest[BodyT, RenderTargetT, AdapterT],
         *,
-        cache: PlanCache | None,
-        memo: PlanMemo | None,
+        cache: PlanCache[BodyT] | None,
+        memo: PlanMemo[BodyT] | None,
     ) -> PlanResult[BodyT]: ...
 
 
