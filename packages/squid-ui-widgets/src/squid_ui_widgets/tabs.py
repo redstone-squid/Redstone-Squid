@@ -43,7 +43,7 @@ class Tabs[RenderTargetT: RenderTarget = RenderTarget]:
         *,
         key: str,
         initial: str | None = None,
-        heading: TextLike | None = None,
+        title: TextLike | None = None,
     ) -> None:
         self.key = require_key(key, name="Tabs.key")
         self.tabs = tuple(tabs)
@@ -57,7 +57,7 @@ class Tabs[RenderTargetT: RenderTarget = RenderTarget]:
         if initial is not None and initial not in keys:
             message = f"Tabs.initial {initial!r} is not one of the tab keys"
             raise ValueError(message)
-        self.heading = heading
+        self.title = title
         self._initial_state = TabsState(initial or self.tabs[0].key)
 
     @property
@@ -120,7 +120,7 @@ class Tabs[RenderTargetT: RenderTarget = RenderTarget]:
                 placeholder=current.label,
             )
         return stack(
-            heading(self.heading) if self.heading is not None else None,
+            heading(self.title) if self.title is not None else None,
             selector,
             *controls.content(current.content, prefix=f"tab-{current.key}"),
         )
