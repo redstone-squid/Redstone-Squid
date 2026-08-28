@@ -8,7 +8,6 @@ import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui import testing as engine
 from squid_ui.primitives import Lines
-from squid_ui.sources import Position
 from squid_ui_widgets import testing as wt
 
 
@@ -21,7 +20,7 @@ def test_it_projects_entries_and_renders_only_the_first_page() -> None:
         sp.RankedList(
             [("Ada", 30), ("Grace", 20), ("Edsger", 10)],
             key="leaderboard",
-            heading="Leaderboard",
+            title="Leaderboard",
             header=lambda total: sl.paragraph(f"Showing {total} entries"),
             footer=lambda total: sl.note(f"Total: {total}"),
             page_size=2,
@@ -59,7 +58,7 @@ async def test_ranks_stay_global_on_a_later_page() -> None:
 
     await harness.press("leaderboard.next")
 
-    assert harness.state == sp.RankedListState(Position(offset=1))
+    assert harness.state == sp.RankedListState(sp.PagePosition(1))
     assert "3. **Edsger** — 10" in _listing(harness)
 
 
@@ -79,7 +78,12 @@ def test_top_n_caps_the_listing_and_explicit_entries_keep_their_keys() -> None:
     assert _listing(harness) == ["1. **Ada** — 30", "2. **Grace** — 20"]
 
 
-@pytest.mark.parametrize("kwargs", [{"top_n": 0}, {"limit": 0}, {"page_size": 0}])
+@pytest.mark.parametrize("kwargs", [{"top_n": 0}, {"page_size": 0}])
 def test_it_rejects_a_non_positive_limit(kwargs: Any) -> None:
     with pytest.raises(ValueError):
         sp.RankedList([], key="ranked", **kwargs)
+
+
+def test_page_position_rejects_an_item_offset_disguised_as_a_negative_page() -> None:
+    with pytest.raises(ValueError, match=r"PagePosition.index must not be negative"):
+        sp.PagePosition(-1)
