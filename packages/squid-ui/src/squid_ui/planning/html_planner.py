@@ -14,7 +14,7 @@ from squid_ui.document import DocumentLike, as_document
 from squid_ui.errors import LayoutDegradedError, LayoutInvariantError
 from squid_ui.forms import FormBinding
 from squid_ui.interactions import ActionBinding, ActionMode
-from squid_ui.palette import AccentDefault, Palette
+from squid_ui.palette import Palette
 from squid_ui.planning.cache import CachedPlan, PlanCache, PlanMemo
 from squid_ui.planning.identity import stable_fingerprint
 from squid_ui.planning.request import PlanRequest
@@ -32,7 +32,14 @@ from squid_ui.planning.semantic_adaptation.handlers import (
     SelectEntities,
     ToggleDetails,
 )
-from squid_ui.planning.structure import disclosure_state, indexed_children, toggle_action_key, toggle_state
+from squid_ui.planning.structure import (
+    disclosure_state,
+    indexed_children,
+    resolve_accent,
+    scoped_palette,
+    toggle_action_key,
+    toggle_state,
+)
 from squid_ui.planning.target import Target
 from squid_ui.planning.text_allocation import allocate_pages, truncate_text
 from squid_ui.runtime.presentation_state import (
@@ -251,12 +258,8 @@ class _Compiler:
                     ),
                 )
             case sem.Themed(children=children, palette=palette):
-                previous = self.palette
-                self.palette = palette
-                try:
+                with scoped_palette(self, palette):
                     compiled = self.compile_children(children, path)
-                finally:
-                    self.palette = previous
                 return (
                     self.element(
                         scene.HtmlTag.DIV,
@@ -265,7 +268,7 @@ class _Compiler:
                     ),
                 )
             case sem.Block(children=children, accent=accent):
-                colour = self.palette.brand if accent is AccentDefault.INHERIT else accent
+                colour = resolve_accent(accent, self.palette)
                 return (
                     self.element(
                         scene.HtmlTag.SECTION,
@@ -275,7 +278,7 @@ class _Compiler:
                     ),
                 )
             case sem.Section(heading=heading, children=children, accent=accent, thumbnail=thumbnail):
-                colour = self.palette.brand if accent is AccentDefault.INHERIT else accent
+                colour = resolve_accent(accent, self.palette)
                 content = [self._heading(heading), *self.compile_children(children, path)]
                 if thumbnail is not None:
                     content.insert(
@@ -295,7 +298,7 @@ class _Compiler:
                     ),
                 )
             case sem.Article(heading=heading, children=children, accent=accent, thumbnail=thumbnail):
-                colour = self.palette.brand if accent is AccentDefault.INHERIT else accent
+                colour = resolve_accent(accent, self.palette)
                 content = [self._heading(heading), *self.compile_children(children, path)]
                 if thumbnail is not None:
                     content.insert(
