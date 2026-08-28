@@ -2,8 +2,6 @@
 
 import gc
 
-import pytest
-
 import squid_ui as sl
 from squid_ui import Component, PressEvent, state
 from squid_ui.primitives import Button, Heading, Row, Text
@@ -24,14 +22,6 @@ class Panel(Component[sl.ComponentsV2Target]):
 
     async def bump(self, event: PressEvent) -> None:
         self.count += 1
-
-
-@pytest.fixture(autouse=True)
-def _isolated_registry():
-    """Every test starts from an empty process registry and leaves one behind."""
-    live._LIVE.clear()
-    yield
-    live._LIVE.clear()
 
 
 class TestLiveRegistry:
