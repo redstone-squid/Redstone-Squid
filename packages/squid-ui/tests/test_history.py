@@ -4,6 +4,7 @@ import gc
 import uuid
 import weakref
 from datetime import UTC, datetime
+from typing import cast
 
 import anyio
 import pytest
@@ -17,6 +18,7 @@ from squid_reactivity import (
     enlist,
     on_action_commit,
 )
+from squid_reactivity.actions import ChangeToken
 from squid_reactivity.operations import OperationContext
 from squid_ui import Component, DiscordTarget, state
 from squid_ui.primitives import Text
@@ -358,7 +360,8 @@ async def test_participant_planning_failure_returns_failed_without_partial_inver
             return None
 
         def describe_change(self, prepared: None) -> TransactionContribution:
-            return TransactionContribution("bad", BadToken(), ChangeReport(participants=1))
+            # Deliberately not a ChangeToken; the runtime refusal is the behaviour under test.
+            return TransactionContribution("bad", cast(ChangeToken, BadToken()), ChangeReport(participants=1))
 
         def apply(self, prepared: None) -> None:
             pass

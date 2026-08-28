@@ -52,11 +52,10 @@ This is a Discord bot for managing Minecraft redstone build submissions, built w
   already enforce formatting or linting, let the hooks perform those checks; do not assume hooks
   exist without confirming it.
 - Type-check with `just typecheck`. Pyrefly is configured project-wide in `[tool.pyrefly]`, so it
-  has no changed-file mode: run it once and read the whole result. Known pre-existing errors live in
-  `pyrefly-baseline.json`, so a clean tree reports zero and **any error it prints is yours** — there
-  is no longer a pre-change run to diff against. Regenerate the baseline with
-  `uv run --locked pyrefly check --config pyproject.toml --baseline pyrefly-baseline.json
-  --update-baseline` only to *shrink* it after fixing errors; never to absorb new ones.
+  has no changed-file mode: run it once and read the whole result. The tree carries no baseline and
+  reports zero errors, so **any error it prints is yours** — there is no pre-change run to diff
+  against. Do not reintroduce a baseline file to absorb new errors; fix or suppress them at the
+  line, with a reason.
 - `[tool.pyrefly] search-path` must list every `[tool.uv.workspace]` member's `src` directory. uv
   installs the workspace packages as editable `.pth` files pointing at those directories, which puts
   them on Pyrefly's site-package path where they count as third-party and are skipped entirely.
