@@ -1,6 +1,7 @@
 """Native semantic planning for the first-class HTML target."""
 
 from datetime import UTC, date, datetime, time
+from typing import Any, cast
 
 import pytest
 
@@ -31,6 +32,7 @@ from squid_ui.planning import PlanCache, PlanMemo, ResourceCost
 from squid_ui.planning.limits import Axis
 from squid_ui.rosters import RosterEntry, RosterSlot, place_roster
 from squid_ui.sources import Position
+from squid_ui.target_types import HtmlTarget, Renderable
 from squid_ui.temporal import ZonedDateTime
 
 
@@ -63,8 +65,18 @@ def test_html_target_has_an_unbounded_semantic_identity() -> None:
 
 
 def test_discord_primitives_are_rejected_by_html_planning() -> None:
-    with pytest.raises(LayoutInvariantError, match="Discord-shaped primitive Text"):
+    with pytest.raises(LayoutInvariantError, match=r"Discord-shaped primitive Text.*fallback\(\)"):
         sl.planning.plan(sl.primitives.Text("exact"), target=sl.html.target())  # type: ignore[arg-type]
+
+
+def test_unknown_renderables_are_rejected_by_html_planning() -> None:
+    class Unregistered(Renderable[HtmlTarget]):
+        pass
+
+    # A Renderable subclass nobody taught the vocabulary about is refused by name, not
+    # misdescribed as a Discord primitive.
+    with pytest.raises(LayoutInvariantError, match="Unregistered is not a semantic layout node"):
+        sl.planning.plan(cast(Any, Unregistered()), target=sl.html.target())
 
 
 def test_html_planner_preserves_semantic_structures_and_metadata() -> None:
