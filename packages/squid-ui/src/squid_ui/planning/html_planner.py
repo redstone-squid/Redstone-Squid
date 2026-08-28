@@ -198,6 +198,31 @@ class _Compiler:
         )
 
     def compile(self, node: sem.AnyLayoutNode, path: str) -> tuple[scene.HtmlNode, ...]:
+        """Resolve one semantic node into the HTML nodes that stand for it.
+
+        The stages partition the semantic union by what compiling a member actually needs:
+        a wrapper around compiled children, a self-contained display element, a binding into
+        session state, or an adaptation to unwrap. Each returns `None` for a node it does not
+        claim — not an empty tuple, which is a legitimate result — so a union member added
+        without an arm still reaches the same rejection one long `match` gave it.
+        """
+        compiled = self._container(node, path)
+        if compiled is not None:
+            return compiled
+        compiled = self._display(node)
+        if compiled is not None:
+            return compiled
+        compiled = self._interactive(node, path)
+        if compiled is not None:
+            return compiled
+        compiled = self._adapted(node, path)
+        if compiled is not None:
+            return compiled
+        message = f"HTML planning accepts semantic nodes, not Discord-shaped primitive {type(node).__name__}"
+        raise LayoutInvariantError(message)
+
+    def _container(self, node: sem.AnyLayoutNode, path: str) -> tuple[scene.HtmlNode, ...] | None:
+        """Wrap compiled children in the element carrying the node's grouping semantics."""
         match node:
             case sem.Group(children=children):
                 return (
@@ -299,6 +324,12 @@ class _Compiler:
                         colour=self.palette.tone(tone),
                     ),
                 )
+            case _:
+                return None
+
+    def _display(self, node: sem.AnyLayoutNode) -> tuple[scene.HtmlNode, ...] | None:
+        """Resolve a node that draws itself: no children to compile, no state to bind."""
+        match node:
             case sem.Heading():
                 return (self._heading(node),)
             case sem.Paragraph(content=content):
@@ -383,51 +414,6 @@ class _Compiler:
                         ),
                     ),
                 )
-            case sem.Details(key=key, summary=summary, children=children):
-                open_ = self._disclosure(node)
-                action = self.bind(f"{key}.toggle", ToggleDetails(node, open_, self.presentation))
-                return (
-                    self.element(
-                        scene.HtmlTag.DETAILS,
-                        self.element(scene.HtmlTag.SUMMARY, self.text(summary.content)),
-                        *self.compile_children(children, path),
-                        attributes=_attributes((scene.HtmlAttributeName.OPEN, open_ if open_ else None)),
-                        action=action,
-                    ),
-                )
-            case sem.Toggle(key=key, label=label, available=available):
-                on = self._toggle_state(node)
-                action = self.bind(key, FlipToggle(node, on, self.presentation), label=label)
-                checkbox = self.element(
-                    scene.HtmlTag.INPUT,
-                    attributes=_attributes(
-                        (scene.HtmlAttributeName.TYPE, "checkbox"),
-                        (scene.HtmlAttributeName.NAME, key),
-                        (scene.HtmlAttributeName.CHECKED, on if on else None),
-                        (scene.HtmlAttributeName.DISABLED, True if not available else None),
-                    ),
-                    action=action,
-                    form=scene.HtmlFormRef(key, key),
-                )
-                return (self.element(scene.HtmlTag.LABEL, checkbox, self.text(label)),)
-            case sem.Download(key=key, label=label, asset=asset, description=description, spoiler=spoiler):
-                self._asset(asset)
-                title = self.text(self.chrome.download if label is None else label)
-                link = self.element(
-                    scene.HtmlTag.A,
-                    title,
-                    attributes=_attributes(
-                        (
-                            scene.HtmlAttributeName.CLASS,
-                            "squid-download squid-spoiler" if spoiler else "squid-download",
-                        ),
-                        (scene.HtmlAttributeName.DOWNLOAD, asset.name),
-                    ),
-                    asset=scene.HtmlAssetRef(asset.key, asset.name, asset.media_type),
-                )
-                if description is None:
-                    return (link,)
-                return (self.element(scene.HtmlTag.DIV, link, self.element(scene.HtmlTag.P, self.text(description))),)
             case sem.Status(content=content, tone=tone, emphasis=emphasis):
                 return (
                     self.element(
@@ -480,6 +466,57 @@ class _Compiler:
                     time_ref=scene.HtmlTimeRef(value.instant.isoformat(), timezone=value.timezone),
                 )
                 return self._labelled_time(label, time_node)
+            case _:
+                return None
+
+    def _interactive(self, node: sem.AnyLayoutNode, path: str) -> tuple[scene.HtmlNode, ...] | None:
+        """Resolve a node whose HTML depends on session state, a binding, or a route."""
+        match node:
+            case sem.Details(key=key, summary=summary, children=children):
+                open_ = self._disclosure(node)
+                action = self.bind(f"{key}.toggle", ToggleDetails(node, open_, self.presentation))
+                return (
+                    self.element(
+                        scene.HtmlTag.DETAILS,
+                        self.element(scene.HtmlTag.SUMMARY, self.text(summary.content)),
+                        *self.compile_children(children, path),
+                        attributes=_attributes((scene.HtmlAttributeName.OPEN, open_ if open_ else None)),
+                        action=action,
+                    ),
+                )
+            case sem.Toggle(key=key, label=label, available=available):
+                on = self._toggle_state(node)
+                action = self.bind(key, FlipToggle(node, on, self.presentation), label=label)
+                checkbox = self.element(
+                    scene.HtmlTag.INPUT,
+                    attributes=_attributes(
+                        (scene.HtmlAttributeName.TYPE, "checkbox"),
+                        (scene.HtmlAttributeName.NAME, key),
+                        (scene.HtmlAttributeName.CHECKED, on if on else None),
+                        (scene.HtmlAttributeName.DISABLED, True if not available else None),
+                    ),
+                    action=action,
+                    form=scene.HtmlFormRef(key, key),
+                )
+                return (self.element(scene.HtmlTag.LABEL, checkbox, self.text(label)),)
+            case sem.Download(key=key, label=label, asset=asset, description=description, spoiler=spoiler):
+                self._asset(asset)
+                title = self.text(self.chrome.download if label is None else label)
+                link = self.element(
+                    scene.HtmlTag.A,
+                    title,
+                    attributes=_attributes(
+                        (
+                            scene.HtmlAttributeName.CLASS,
+                            "squid-download squid-spoiler" if spoiler else "squid-download",
+                        ),
+                        (scene.HtmlAttributeName.DOWNLOAD, asset.name),
+                    ),
+                    asset=scene.HtmlAssetRef(asset.key, asset.name, asset.media_type),
+                )
+                if description is None:
+                    return (link,)
+                return (self.element(scene.HtmlTag.DIV, link, self.element(scene.HtmlTag.P, self.text(description))),)
             case sem.FormTrigger():
                 return (self._form(node),)
             case sem.ActionControls(items=items, display=display):
@@ -504,6 +541,16 @@ class _Compiler:
                 return (self._items(node, path),)
             case sem.Navigation():
                 return (self._navigation(node),)
+            case _:
+                return None
+
+    def _adapted(self, node: sem.AnyLayoutNode, path: str) -> tuple[scene.HtmlNode, ...] | None:
+        """Unwrap a planner adaptation.
+
+        HTML has no message budget to overflow, so most of these compile straight through to
+        the node they wrap; only paging and an explicit budget change what is emitted.
+        """
+        match node:
             case sem.Truncated(node=child) | sem.Spilled(node=child) | sem.BestEffort(node=child):
                 return self.compile(child, path)
             case sem.OptionalContent(node=child):
@@ -522,8 +569,7 @@ class _Compiler:
             case sem.Unbreakable(node=child) | sem.KeepWithNext(node=child):
                 return self.compile(child, path)
             case _:
-                message = f"HTML planning accepts semantic nodes, not Discord-shaped primitive {type(node).__name__}"
-                raise LayoutInvariantError(message)
+                return None
 
     def _resolved(self, value: TextLike) -> str:
         return resolve_text(value, self.localization).content
