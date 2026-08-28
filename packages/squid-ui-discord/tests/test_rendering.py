@@ -34,7 +34,17 @@ from squid_ui.runtime.component import render_component_tree
 from squid_ui.runtime.owner import ComponentRuntime
 from squid_ui.runtime.shared import SharedState
 from squid_ui.runtime.topics import CellAddress, LocalTopicBus
-from squid_ui.semantic import ActionControl, ActionControls, Choice, Choices, Controlled, Group, List, ListItem
+from squid_ui.semantic import (
+    ActionControl,
+    ActionControls,
+    Choice,
+    Choices,
+    Controlled,
+    Group,
+    LayoutNode,
+    List,
+    ListItem,
+)
 from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord.testing import commit_render, fake_interaction, payload_texts
 
@@ -952,6 +962,8 @@ class TestRenderItem:
         assert host.children[0]._view is host
 
     @pytest.mark.parametrize("node", [sl.group(), sl.group(sl.heading("First"), sl.heading("Second"))])
-    def test_a_node_that_does_not_draw_exactly_one_item_is_refused(self, node: Node) -> None:
+    def test_a_node_that_does_not_draw_exactly_one_item_is_refused(
+        self, node: LayoutNode[sl.ComponentsV2Target]
+    ) -> None:
         with pytest.raises(sd.MessageModeError, match="exactly one Discord item"):
             sd.render_item(node)
