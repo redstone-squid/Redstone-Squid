@@ -1227,13 +1227,8 @@ class HtmlPlanner:
                 strict,
             )
         )
-        if memo is not None:
-            exact = memo.get(rendered, key, presentation, presentation.revision)
-            if isinstance(exact, PlanResult):
-                return cast(
-                    PlanResult[scene.HtmlBody],
-                    replace(exact, metrics=replace(exact.metrics, cache_hit=True, reuse=PlanReuse.EXACT)),
-                )
+        if memo is not None and (exact := memo.replay(rendered, key, presentation)) is not None:
+            return cast(PlanResult[scene.HtmlBody], exact)
         document = as_document(rendered)
         compiler = _Compiler(target, request.chrome, localization, palette, presentation, positions, strict)
         for asset in document.assets:
@@ -1280,7 +1275,7 @@ class HtmlPlanner:
                 CachedPlan(planned, report, tuple(compiler.updates), states_explored=compiler.states_explored),
             )
         if memo is not None:
-            memo.put(rendered, key, presentation, presentation.revision, result)
+            memo.store(rendered, key, presentation, result)
         return result
 
 
