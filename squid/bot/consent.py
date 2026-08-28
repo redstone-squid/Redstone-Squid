@@ -203,8 +203,7 @@ async def _show_prompt(
 ) -> ConsentPrompt | None:
     """The notice this reader is owed, worded for what agreeing would actually store."""
     if preview is None:
-        return await ConsentPrompt.show(
-            target,
+        return await ConsentPrompt(
             user_id=user_id,
             title=L("Before Redstone Squid stores anything about you"),
             summary=L(
@@ -224,11 +223,8 @@ async def _show_prompt(
             accept_label=L("Agree"),
             wait_timeout=timeout,
             on_answer=on_answer,
-            parent=parent,
-            wait=True,
-        )
-    return await ConsentPrompt.show(
-        target,
+        ).show(target, parent=parent, wait=True)
+    return await ConsentPrompt(
         user_id=user_id,
         title=L("Link {username} to your Discord account", username=preview.username),
         summary=L(
@@ -253,9 +249,7 @@ async def _show_prompt(
         accept_label=L("Agree and link"),
         wait_timeout=timeout,
         on_answer=on_answer,
-        parent=parent,
-        wait=True,
-    )
+    ).show(target, parent=parent, wait=True)
 
 
 async def prompt_for_consent(

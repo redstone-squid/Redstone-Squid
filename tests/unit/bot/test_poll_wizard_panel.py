@@ -33,15 +33,13 @@ async def open_wizard(
     interaction.locale = "en-US"
     if message is not None:
         interaction.original_response.return_value = message
-    shown = await PollConfirmationComponent.show(
-        interaction,
+    shown = await PollConfirmationComponent(
         wizard.publisher,
         wizard.author_account_id,
         wizard.draft,
         wizard.vote_options,
         allow_network=wizard.allow_network,
-        wait=True,
-    )
+    ).show(interaction, wait=True)
     assert shown is not None
     sessions = bot.sessions.get(sd.SessionKey.user_guild("poll-wizard", OWNER_ID, 7))
     assert len(sessions) == 1

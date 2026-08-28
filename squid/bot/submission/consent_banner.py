@@ -47,8 +47,7 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
         )
         return
 
-    component = await ConsentPrompt.show(
-        invocation,
+    component = await ConsentPrompt(
         user_id=interaction.user.id,
         title=L("Enable Automatic Build Ingestion"),
         summary=L(
@@ -69,8 +68,7 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
         ),
         accept_label=L("Agree & Enable Ingestion"),
         wait_timeout=120,
-        wait=True,
-    )
+    ).show(invocation, wait=True)
     if component is None:
         return
     await component.wait()

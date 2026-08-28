@@ -1,18 +1,19 @@
 """Reusable recipes for opening logical Discord sessions."""
 
-from collections.abc import Awaitable, Callable, Hashable, Mapping
+from collections.abc import Awaitable, Callable, Hashable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Unpack, cast
+from typing import TYPE_CHECKING, Any, Unpack
 
 import discord
 
 from squid_ui.runtime.component import Component
+from squid_ui.target_types import ComponentsV2Target
 from squid_ui_discord.access import AccessPolicy, Owner
 from squid_ui_discord.delivery import MessageDestination, Replyable, respond_to
 from squid_ui_discord.message_root import MessageRoot
-from squid_ui_discord.message_root_options import MessageRootOptions
+from squid_ui_discord.message_root_contracts import MessageRootBehaviorOptions
 from squid_ui_discord.sessions import (
     DEFAULT_ADMISSION,
     AdmissionSpec,
@@ -128,7 +129,15 @@ def _manager(source: SessionManager | RuntimeSource) -> SessionManager:
     return ClientRuntime.of(source).sessions
 
 
-type MessageRootOptionsResolver = Callable[[OpenContext], Awaitable[MessageRootOptions]]
+type SessionOptions = MessageRootBehaviorOptions
+"""Target-independent mount options allowed on a V2 session screen."""
+
+
+type SessionOptionsResolver = Callable[[OpenContext], Awaitable[SessionOptions]]
+
+
+def _empty_options() -> SessionOptions:
+    return {}
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,8 +166,8 @@ class SessionSpec:
     "game" for the purpose of "one game at a time".
     """
     access: Callable[[OpenContext], AccessPolicy] = _owner
-    options: Mapping[str, object] = field(default_factory=dict)
-    resolve_options: MessageRootOptionsResolver | None = None
+    options: SessionOptions = field(default_factory=_empty_options)
+    resolve_options: SessionOptionsResolver | None = None
 
     def __post_init__(self) -> None:
         """Snapshot mount options into a read-only mapping."""
@@ -168,21 +177,23 @@ class SessionSpec:
         """Derive this screen's session key from an opener."""
         return SessionKey(self.name, self.scope.resolve(open_context))
 
-    async def _message_root_options(
-        self, open_context: OpenContext, overrides: MessageRootOptions
-    ) -> MessageRootOptions:
-        resolved = {} if self.resolve_options is None else await self.resolve_options(open_context)
-        return cast(MessageRootOptions, {**self.options, **resolved, **overrides})
+    async def _message_root_options(self, open_context: OpenContext, overrides: SessionOptions) -> SessionOptions:
+        merged: SessionOptions = {}
+        merged.update(self.options)
+        if self.resolve_options is not None:
+            merged.update(await self.resolve_options(open_context))
+        merged.update(overrides)
+        return merged
 
     async def open(
         self,
-        component: Component[Any],  # the dialect ends here: `OpenResult` exposes no typed mount
+        component: Component[ComponentsV2Target],
         message_destination: MessageDestination,
         *,
         sessions: SessionManager | RuntimeSource,
         open_context: OpenContext,
         key: Hashable | None = None,
-        **overrides: Unpack[MessageRootOptions],
+        **overrides: Unpack[SessionOptions],
     ) -> OpenResult:
         """Construct and open a root mount using this screen's policy.
 
@@ -206,13 +217,13 @@ class SessionSpec:
 
     async def attach(
         self,
-        component: Component[Any],  # the dialect ends here: `OpenResult` exposes no typed mount
+        component: Component[ComponentsV2Target],
         message_destination: MessageDestination,
         *,
         sessions: SessionManager | RuntimeSource,
         open_context: OpenContext,
         parent: MessageRoot,
-        **overrides: Unpack[MessageRootOptions],
+        **overrides: Unpack[SessionOptions],
     ) -> OpenResult:
         """Construct and attach a mount below one known live parent."""
         sessions = _manager(sessions)
@@ -227,13 +238,13 @@ class SessionSpec:
 
     async def respond(
         self,
-        component: Component[Any],  # the dialect ends here: `OpenResult` exposes no typed mount
+        component: Component[ComponentsV2Target],
         interaction: discord.Interaction[Any],
         *,
         sessions: SessionManager | RuntimeSource | None = None,
         ephemeral: bool = True,
         wait: bool = False,
-        **overrides: Unpack[MessageRootOptions],
+        **overrides: Unpack[SessionOptions],
     ) -> OpenResult:
         """Open this screen as an interaction response.
 
@@ -250,14 +261,14 @@ class SessionSpec:
 
     async def respond_attached(
         self,
-        component: Component[Any],  # the dialect ends here: `OpenResult` exposes no typed mount
+        component: Component[ComponentsV2Target],
         interaction: discord.Interaction[Any],
         *,
         parent: MessageRoot,
         sessions: SessionManager | RuntimeSource | None = None,
         ephemeral: bool = True,
         wait: bool = False,
-        **overrides: Unpack[MessageRootOptions],
+        **overrides: Unpack[SessionOptions],
     ) -> OpenResult:
         """Attach this screen as an interaction response below a live parent."""
         return await self.attach(

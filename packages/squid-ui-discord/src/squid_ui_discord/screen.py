@@ -1,9 +1,8 @@
 """Declarative component opening policy built on :class:`Invocation`."""
 
-from collections.abc import Hashable, Mapping
+from collections.abc import Hashable
 from functools import cache
-from types import MappingProxyType
-from typing import Any, ClassVar, Self, cast
+from typing import ClassVar, Self
 
 from squid_ui.runtime.component import Component
 from squid_ui.target_types import ComponentsV2Target
@@ -11,9 +10,8 @@ from squid_ui_discord.access import Owner
 from squid_ui_discord.invocation import Invocation, Visibility
 from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_contracts import ExpiryPolicy, PauseUpdates, RenewEphemeral
-from squid_ui_discord.message_root_options import MessageRootOptions
 from squid_ui_discord.runtime import InvocationSource
-from squid_ui_discord.session_specs import ScopeKind, SessionSpec
+from squid_ui_discord.session_specs import ScopeKind, SessionOptions, SessionSpec
 from squid_ui_discord.sessions import DEFAULT_ADMISSION, AdmissionSpec
 
 
@@ -30,10 +28,10 @@ class Screen(Component[ComponentsV2Target]):
     timeout: ClassVar[float | None] = 180
     expiry: ClassVar[ExpiryPolicy | None] = None
     follow_topics: ClassVar[bool] = False
-    options: ClassVar[Mapping[str, object]] = MappingProxyType({})
+    options: ClassVar[SessionOptions] = {}
 
     opening: Invocation
-    """The invocation that constructed and prepared this shown instance."""
+    """The invocation that prepared and showed this instance."""
 
     async def prepare(self) -> None:
         """Load invocation-specific state before this screen is opened or rendered."""
@@ -45,7 +43,8 @@ class Screen(Component[ComponentsV2Target]):
         if cls.session is None:
             message = f"{cls.__name__} declares no session; show() mounts it directly"
             raise TypeError(message)
-        options = dict(cls.options)
+        options: SessionOptions = {}
+        options.update(cls.options)
         options["timeout"] = cls.timeout
         if cls.expiry is not None:
             options["expiry"] = cls.expiry
@@ -59,50 +58,49 @@ class Screen(Component[ComponentsV2Target]):
             options=options,
         )
 
-    @classmethod
     async def show(
-        cls,
+        self,
         source_or_invocation: InvocationSource | Invocation,
         /,
-        *args: Any,
         parent: MessageRoot | None = None,
         wait: bool = False,
         key: Hashable | None = None,
-        **kwargs: Any,
     ) -> Self | None:
-        """Construct, prepare, and show one instance under this class's policy."""
+        """Prepare and show this instance under its class's policy."""
+        if hasattr(self, "opening"):
+            message = f"{type(self).__name__} has already been shown"
+            raise RuntimeError(message)
         invocation = (
             source_or_invocation
             if isinstance(source_or_invocation, Invocation)
             else await Invocation.of(source_or_invocation)
         )
-        screen = cls(*args, **kwargs)
-        screen.opening = invocation
-        await screen.prepare()
-        options = screen._opening_options(invocation)
-        if cls.session is None:
+        self.opening = invocation
+        await self.prepare()
+        options = self._opening_options(invocation)
+        if self.session is None:
             await invocation.mount(
-                screen,
+                self,
                 access=Owner(invocation.user.id),
-                visibility=cls.visibility,
+                visibility=self.visibility,
                 **options,
             )
-            return screen
+            return self
         result = await invocation.open(
-            screen,
-            cls.spec(),
-            visibility=cls.visibility,
+            self,
+            self.spec(),
+            visibility=self.visibility,
             parent=parent,
             wait=wait,
             key=key,
             **options,
         )
-        return screen if result else None
+        return self if result else None
 
     @classmethod
-    def _opening_options(cls, invocation: Invocation) -> MessageRootOptions:
+    def _opening_options(cls, invocation: Invocation) -> SessionOptions:
         scheduler = invocation.runtime.scheduler if cls.follow_topics else None
-        options: dict[str, object] = {"scheduler": scheduler}
+        options: SessionOptions = {"scheduler": scheduler}
         if cls.session is None:
             options.update(cls.options)
             options["timeout"] = cls.timeout
@@ -111,7 +109,7 @@ class Screen(Component[ComponentsV2Target]):
             if isinstance(expiry, RenewEphemeral) and scheduler is None:
                 expiry = PauseUpdates(expiry.warning)
             options["expiry"] = expiry
-        return cast(MessageRootOptions, options)
+        return options
 
 
 __all__ = ["Screen"]

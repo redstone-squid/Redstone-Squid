@@ -68,7 +68,9 @@ through `ClientRuntime.mount` or a session spec rather than directly.
 
 ::: squid_ui_discord.MessageRootOptions
 
-::: squid_ui_discord.MessageRootOptionsResolver
+::: squid_ui_discord.SessionOptions
+
+::: squid_ui_discord.SessionOptionsResolver
 
 ::: squid_ui_discord.MessageRootFactory
 

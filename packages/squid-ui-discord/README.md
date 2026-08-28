@@ -42,7 +42,7 @@ class Counter(sd.Screen):
 
 @bot.tree.command()
 async def counter(interaction) -> None:
-    await Counter.show(interaction)
+    await Counter().show(interaction)
 ```
 
 `sd.install()` starts no tasks. The host owns `runtime.run()` when it enables scheduled refreshes

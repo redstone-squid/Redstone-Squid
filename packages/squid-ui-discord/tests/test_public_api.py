@@ -43,7 +43,7 @@ def test_the_adapter_namespace_exposes_its_surface() -> None:
     assert squid_ui_discord.StackNavigator
     assert squid_ui_discord.OpenContext
     assert squid_ui_discord.ScopeKind
-    assert squid_ui_discord.MessageRootOptionsResolver
+    assert squid_ui_discord.SessionOptionsResolver
     assert squid_ui_discord.Invocation
     assert squid_ui_discord.Private
     assert squid_ui_discord.Visibility
