@@ -178,6 +178,7 @@ AGENT_NOUNS = {
     "Converter": "convert",
     "Driver": "drive",
     "Editor": "edit",
+    "Holder": "hold",
     "Inspector": "inspect",
     "Loader": "load",
     "Manager": "manage",
