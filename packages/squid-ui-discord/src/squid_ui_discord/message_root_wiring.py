@@ -22,6 +22,7 @@ from squid_ui_discord.emoji import discord_emoji
 if TYPE_CHECKING:
     from squid_ui_discord.message_root import AnyMessageRoot
 
+
 class _MountedBehaviour:
     """What a mounted view does, independently of which components it holds.
 
