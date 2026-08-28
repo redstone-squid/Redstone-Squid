@@ -49,7 +49,7 @@ class HtmlDialect:
             Capability.LAYOUT_SEMANTIC,
         }
     )
-    mode = HtmlTarget
+    render_target = HtmlTarget
     body_type = scene.HtmlBody
     default_limits = HTML_LIMITS
     realizes_extensions = False

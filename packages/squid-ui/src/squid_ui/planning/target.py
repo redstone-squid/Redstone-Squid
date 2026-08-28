@@ -97,8 +97,8 @@ class Target(Generic[LimitsT, BodyT, RenderTargetT_co, AdapterT_co]):
         return self.dialect.version
 
     @property
-    def mode(self) -> type[RenderTargetT_co]:
-        return cast(type[RenderTargetT_co], self.dialect.mode)
+    def render_target(self) -> type[RenderTargetT_co]:
+        return cast(type[RenderTargetT_co], self.dialect.render_target)
 
     @property
     def body_type(self) -> type[BodyT]:

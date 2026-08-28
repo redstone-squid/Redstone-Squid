@@ -389,7 +389,7 @@ class ClassicDialect:
             Capability.MESSAGE_CONTENT,
         }
     )
-    mode = ClassicTarget
+    render_target = ClassicTarget
     body_type = scene.ClassicMessage
     default_limits = CLASSIC_LIMITS
     # A classic message has no component that can hold a native discord.py item.
