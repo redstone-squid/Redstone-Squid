@@ -314,21 +314,26 @@ def text_component(*lines: Line, **declared: object) -> AnyComponent:
 # --- Import isolation ---------------------------------------------------------------------
 
 
-def assert_imports_without(package: str, *blocked: str) -> None:
-    """Assert `package` imports in a fresh interpreter where `blocked` cannot be imported.
+def assert_imports_without(imports: str | Sequence[str], *blocked: str) -> None:
+    """Assert every name in `imports` imports where `blocked` cannot be imported at all.
 
     A subprocess rather than an in-process `sys.meta_path` finder, because by the time a test
-    runs, the blocked packages are already in `sys.modules` and an import of `package` would
-    find them there whether it declared them or not. The child runs `_isolated_import` below,
-    so the blocker is real source this repo lints and type-checks rather than a string literal.
+    runs the blocked packages are already in `sys.modules`, and an import would find them there
+    whether it declared them or not. `sys.executable` rather than a bare `python`: the
+    interpreter on PATH is not this venv when pytest is driven from Git Bash, and the
+    assertions only mean anything in the interpreter that installed the package under test.
+
+    The child runs `_isolated_import` below, so the blocker is real source this repo lints and
+    type-checks rather than a string literal nothing can see into.
     """
-    argument = ", ".join(repr(name) for name in (package, *blocked))
+    names = (imports,) if isinstance(imports, str) else tuple(imports)
+    argument = ", ".join(repr(name) for name in (names, *blocked))
     code = f"from squid_ui.testing import _isolated_import; _isolated_import({argument})"
     subprocess.run([sys.executable, "-c", code], check=True)
 
 
-def _isolated_import(package: str, *blocked: str) -> None:
-    """Import `package` with `blocked` unimportable, and prove none of them arrived anyway.
+def _isolated_import(imports: Sequence[str], *blocked: str) -> None:
+    """Import each of `imports` with `blocked` unimportable, and prove none of them arrived.
 
     The child-process half of `assert_imports_without`. Both halves are needed: refusing the
     import proves nothing reached for the module directly, and the `sys.modules` check catches
@@ -349,9 +354,10 @@ def _isolated_import(package: str, *blocked: str) -> None:
             return None
 
     sys.meta_path.insert(0, BlockImports())
-    importlib.import_module(package)
+    for name in imports:
+        importlib.import_module(name)
     leaked = roots & set(sys.modules)
-    assert not leaked, f"{package} pulled in {sorted(leaked)}"
+    assert not leaked, f"{list(imports)} pulled in {sorted(leaked)}"
 
 
 __all__ = [

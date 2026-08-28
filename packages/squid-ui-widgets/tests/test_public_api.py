@@ -1,11 +1,10 @@
 """Public namespace and packaging contracts for the machine library."""
 
-import subprocess
-import sys
 import tomllib
 from pathlib import Path
 
 import squid_ui_widgets as sp
+from squid_ui import testing as engine
 
 SPECIALIST_SAMPLES = (
     "Agreement",
@@ -60,23 +59,9 @@ def test_the_confirm_guard_lives_here_rather_than_in_the_vocabulary() -> None:
 
 def test_patterns_import_without_a_transport_installed() -> None:
     """Frontend-neutral in fact, not just in intent."""
-    code = """
-import importlib.abc
-import sys
-
-class BlockTransport(importlib.abc.MetaPathFinder):
-    def find_spec(self, fullname, path=None, target=None):
-        if fullname.split(".", 1)[0] in {"discord", "anyio", "squid_storage", "squid_ui_discord"}:
-            raise ModuleNotFoundError(fullname)
-        return None
-
-sys.meta_path.insert(0, BlockTransport())
-import squid_ui_widgets
-assert squid_ui_widgets.Wizard
-assert squid_ui_widgets.guards.confirm
-assert not {"discord", "anyio", "squid_storage", "squid_ui_discord"} & set(sys.modules)
-"""
-    subprocess.run([sys.executable, "-c", code], check=True)
+    engine.assert_imports_without(
+        ["squid_ui_widgets", "squid_ui_widgets.guards"], "discord", "anyio", "squid_storage", "squid_ui_discord"
+    )
 
 
 def test_package_metadata_names_only_the_engine() -> None:
