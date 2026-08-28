@@ -30,6 +30,7 @@ from squid_ui_discord import (
     render_message,
     render_static,
 )
+from squid_ui_discord import testing as sd
 from squid_ui_discord.rendering import RenderedMessage
 
 _policies = st.sampled_from([Truncate(), Truncate(keep="tail"), Spill(), Drop(), Never()])
@@ -49,10 +50,6 @@ def documents(draw) -> list:
         st.builds(lambda content: Panel(children=(Text(content), Sep())), _content),
     )
     return draw(st.lists(node, max_size=6))
-
-
-def _display_text(view: discord.ui.LayoutView) -> int:
-    return sum(len(item.content) for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay))
 
 
 class TestRenderMessage:
@@ -77,7 +74,7 @@ class TestRenderMessage:
 @given(documents(), st.integers(min_value=0, max_value=3900))
 def test_reserved_text_is_held_back_from_the_budget(nodes, reserved):
     view = render_message(nodes, reservation=ResourceCost({Axis.DISPLAY_TEXT: reserved})).view
-    assert _display_text(view) <= LIMITS.total_text - reserved
+    assert sum(len(text) for text in sd.payload_texts(view)) <= LIMITS.total_text - reserved
 
 
 @given(documents())
@@ -89,6 +86,11 @@ def test_a_reserved_budget_survives_nesting():
     # The host case: one card composed into a message whose other half the solver never sees.
     body = Panel(children=(Text("x" * 5000),))
     assert (
-        _display_text(render_message([body], reservation=ResourceCost({Axis.DISPLAY_TEXT: 1000})).view)
+        sum(
+            len(text)
+            for text in sd.payload_texts(
+                render_message([body], reservation=ResourceCost({Axis.DISPLAY_TEXT: 1000})).view
+            )
+        )
         <= LIMITS.total_text - 1000
     )

@@ -5,25 +5,12 @@ import pytest
 from squid_ui import scene
 from squid_ui.errors import LayoutDegradedError
 from squid_ui.planning import plan
-from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.degradation import DegradationEffect, DegradationProfile
-from squid_ui.planning.discord import components_v2_target
-from squid_ui.planning.limits import V2Limits
-from squid_ui.planning.types import DiscordAdapter
 from squid_ui.primitives import Fidelity, Panel, Text, Variant, Variants
 from squid_ui_discord import V2_LIMITS as LIMITS
+from squid_ui_discord import testing as sd
 
-
-def _target(name: str, *, capabilities: frozenset[str] = frozenset(), limits: V2Limits = LIMITS):
-    """A V2 target whose adapter supplies exactly `capabilities` and no extensions.
-
-    Capabilities that are not Discord protocol facts belong to the adapter axis, which is
-    what lets a test vary them without inventing a dialect.
-    """
-    return components_v2_target(AdapterProfile(DiscordAdapter, name, ">=1", capabilities=capabilities), limits=limits)
-
-
-TARGET = _target("test")
+TARGET = sd.target_profile("test")
 
 
 def oversized() -> Panel:

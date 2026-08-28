@@ -9,22 +9,9 @@ from squid_ui_discord import (
     V2_LIMITS as LIMITS,
 )
 from squid_ui_discord import LimitViolationError, conform
+from squid_ui_discord import testing as sd
 from squid_ui_discord.conformance import ELLIPSIS, conform_modal, trim
 from squid_ui_discord.testing import assert_within_limits, payload_problems
-
-
-def _view(*items: discord.ui.Item) -> discord.ui.LayoutView:
-    view = discord.ui.LayoutView()
-    for item in items:
-        view.add_item(item)
-    return view
-
-
-def _row(*items) -> discord.ui.ActionRow:
-    row = discord.ui.ActionRow()
-    for item in items:
-        row.add_item(item)
-    return row
 
 
 class TestTrim:
@@ -46,19 +33,19 @@ class TestTrim:
 
 class TestConformView:
     def test_clean_view_returns_no_interventions(self):
-        view = _view(discord.ui.TextDisplay("hello"), _row(discord.ui.Button(label="ok")))
+        view = sd.layout_view(discord.ui.TextDisplay("hello"), sd.action_row(discord.ui.Button(label="ok")))
         assert conform(view) == []
         assert_within_limits(view)
 
     def test_strict_raises_on_violation(self):
-        view = _view(discord.ui.TextDisplay("x" * (LIMITS.total_text + 1)))
+        view = sd.layout_view(discord.ui.TextDisplay("x" * (LIMITS.total_text + 1)))
         with pytest.raises(LimitViolationError):
             conform(view, strict=True)
 
     def test_total_text_budget_trims_later_nodes_first(self):
         first = discord.ui.TextDisplay("a" * 3000)
         second = discord.ui.TextDisplay("b" * 3000)
-        view = _view(first, second)
+        view = sd.layout_view(first, second)
         assert conform(view)
         assert first.content == "a" * 3000
         assert len(first.content) + len(second.content) <= LIMITS.total_text
@@ -66,14 +53,14 @@ class TestConformView:
 
     def test_no_text_display_is_emptied(self):
         displays = [discord.ui.TextDisplay("x" * 2000) for _ in range(4)]
-        view = _view(*displays)
+        view = sd.layout_view(*displays)
         conform(view)
         assert all(len(td.content) >= 1 for td in displays)
         assert_within_limits(view)
 
     def test_button_label_clamped(self):
         button = discord.ui.Button(label="b" * 200)
-        view = _view(_row(button))
+        view = sd.layout_view(sd.action_row(button))
         assert conform(view)
         assert button.label is not None and len(button.label) <= LIMITS.components.button_label
         assert_within_limits(view)
@@ -85,7 +72,7 @@ class TestConformView:
             discord.SelectOption(label="l" * 150, value=f"{index}" + "v" * 150, description="d" * 150)
             for index in range(30)
         ]
-        view = _view(_row(select))
+        view = sd.layout_view(sd.action_row(select))
         assert conform(view)
         assert len(select.options) <= LIMITS.components.select_options
         assert all(len(o.label) <= LIMITS.components.option_label for o in select.options)
@@ -96,7 +83,7 @@ class TestConformView:
         # Values are cut without a marker; the index prefix keeps them distinct after the cut.
         select = discord.ui.Select()
         select.options = [discord.SelectOption(label="x", value=f"{index}:" + "v" * 150) for index in range(5)]
-        view = _view(_row(select))
+        view = sd.layout_view(sd.action_row(select))
         conform(view)
         values = [o.value for o in select.options]
         assert len(set(values)) == len(values)
@@ -108,7 +95,7 @@ class TestConformView:
         gallery._underlying.items = [
             discord.MediaGalleryItem("https://example.invalid/a.png", description="d" * 300) for _ in range(15)
         ]
-        view = _view(gallery)
+        view = sd.layout_view(gallery)
         assert conform(view)
         assert len(gallery.items) <= LIMITS.gallery_items
         assert_within_limits(view)
@@ -162,7 +149,9 @@ def views(draw) -> discord.ui.LayoutView:
     button_labels = draw(_labels)
     if button_labels:
         view.add_item(
-            _row(*(discord.ui.Button(label=label or None, emoji=None if label else "x") for label in button_labels))
+            sd.action_row(
+                *(discord.ui.Button(label=label or None, emoji=None if label else "x") for label in button_labels)
+            )
         )
     option_specs = draw(_options)
     if option_specs:
@@ -171,7 +160,7 @@ def views(draw) -> discord.ui.LayoutView:
             discord.SelectOption(label=label, value=f"{index}:{label}"[:150], description=description or None)
             for index, (label, description) in enumerate(option_specs)
         ]
-        view.add_item(_row(select))
+        view.add_item(sd.action_row(select))
     return view
 
 
