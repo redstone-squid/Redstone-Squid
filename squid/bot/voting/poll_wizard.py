@@ -200,15 +200,13 @@ async def present_poll_form(
         except InvalidVoteConfigurationError as error:
             await sd.delivery.respond_text(form_interaction, invocation.t(L(error.message, **error.message_params)))
             return
-        await PollConfirmationComponent.show(
-            form_interaction,
+        await PollConfirmationComponent(
             publisher,
             author_account_id,
             edited,
             options,
             allow_network=allow_network,
-            wait=True,
-        )
+        ).show(form_interaction, wait=True)
 
     invocation = await sd.Invocation.of(interaction)
     modal = sd.modal.build_form_modal(
