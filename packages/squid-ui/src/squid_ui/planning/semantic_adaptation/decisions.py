@@ -7,6 +7,7 @@ from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.limits import MessageLimits
 from squid_ui.planning.search import StrategyAxis, StrategyCandidate
 from squid_ui.planning.semantic_adaptation.model import FallbackAxis, SemanticDecisions
+from squid_ui.planning.structure import branch_paths, fallback_rung, indexed_children
 from squid_ui.primitives.nodes import Panel
 from squid_ui.runtime.presentation_state import PresentationState
 from squid_ui.semantic import (
@@ -73,8 +74,8 @@ def nominate_decisions(
     selected_rungs = {} if fallbacks is None else fallbacks
 
     def walk_children(children: Sequence[LayoutNode], path: str) -> None:
-        for index, child in enumerate(children):
-            walk(child, f"{path}.{index}")
+        for child, child_path in indexed_children(children, path):
+            walk(child, child_path)
 
     def walk(node: LayoutNode, path: str) -> None:
         match node:
@@ -145,20 +146,6 @@ def nominate_decisions(
         message = "semantic strategy paths must be unique"
         raise LayoutInvariantError(message)
     return SemanticDecisions(tuple(axes), tuple(occurrences))
-
-
-def branch_paths(path: str, branches: int) -> tuple[str, ...]:
-    """Give each semantic fallback branch a stable path."""
-    return (f"{path}.primary", *(f"{path}.alternate.{index}" for index in range(branches - 1)))
-
-
-def fallback_rung(path: str, branches: int, selected: Mapping[str, int]) -> int:
-    """Return one validated selected fallback rung."""
-    rung = selected.get(path, 0)
-    if not 0 <= rung < branches:
-        message = f"{path}: planner selected unavailable fallback branch {rung}"
-        raise ValueError(message)
-    return rung
 
 
 def strategy_axis(
