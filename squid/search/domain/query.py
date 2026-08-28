@@ -3,7 +3,6 @@
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
-from typing import TypeAlias
 
 from squid.core.errors import ValidationError
 from squid.core.i18n import _
@@ -26,7 +25,7 @@ class ComparisonOperator(StrEnum):
     GREATER_THAN_OR_EQUAL = "gte"
 
 
-ScalarValue: TypeAlias = str | int | float | Decimal | bool
+type ScalarValue = str | int | float | Decimal | bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,7 +76,7 @@ class BooleanExpression:
             raise ValidationError(msg)
 
 
-QueryExpression: TypeAlias = TextExpression | FieldExpression | NotExpression | BooleanExpression
+type QueryExpression = TextExpression | FieldExpression | NotExpression | BooleanExpression
 
 
 @dataclass(frozen=True, slots=True)
