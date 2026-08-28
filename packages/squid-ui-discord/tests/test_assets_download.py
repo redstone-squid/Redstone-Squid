@@ -125,9 +125,7 @@ def test_html_renderer_emits_data_links_resolver_links_and_visible_placeholders(
     assert 'href="data:text/plain;base64,ZnVsbCByZXBvcnQ="' in rendered
     assert 'download="report.txt"' in rendered
 
-    resolved = DiscordPreviewRenderer(asset_resolver=lambda _asset: "https://example.com/report.txt").draw(
-        result.scene
-    )
+    resolved = DiscordPreviewRenderer(asset_resolver=lambda _asset: "https://example.com/report.txt").draw(result.scene)
     assert 'href="https://example.com/report.txt"' in resolved
 
     unresolved = DiscordPreviewRenderer().draw(result.scene)
