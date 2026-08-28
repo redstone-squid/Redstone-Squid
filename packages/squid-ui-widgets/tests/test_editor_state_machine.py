@@ -3,6 +3,8 @@
 from collections.abc import Iterable, Mapping
 from typing import Any, cast
 
+import pytest
+
 import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui.semantic import ActionControls, FormTrigger, RoutedActionControl, Stack
@@ -29,6 +31,22 @@ def _profile_section() -> sp.EditorSection[tuple[tuple[str, object], ...], Mappi
             ),
         ),
     )
+
+
+def test_section_keys_are_validated_as_action_segments() -> None:
+    with pytest.raises(ValueError, match=r"EditorSection.key must not contain ':'"):
+        sp.EditorSection.from_form(
+            "bad:key",
+            "Bad",
+            sl.forms.FormSpec("Bad", (sl.forms.TextField(key="value", label="Value"),)),
+        )
+
+
+def test_direct_section_actions_reject_extra_segments() -> None:
+    editor = sp.Editor("Account", (_profile_section(),))
+
+    assert editor.transition(editor.initial_state, "edit:profile:extra") == editor.initial_state
+    assert editor.form_for(editor.initial_state, "submit:profile:extra") is None
 
 
 def test_form_section_prefills_stages_and_explicitly_commits() -> None:
