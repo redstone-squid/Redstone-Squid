@@ -158,3 +158,4 @@ The machinery beneath the widgets, for building your own.
 | Module | Purpose |
 |---|---|
 | `squid_ui_widgets.guards` | The one guard whose refusal is a rendered question. |
+| `squid_ui_widgets.testing` | Drive a machine's two shells with no frontend attached. |
