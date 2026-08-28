@@ -6,12 +6,8 @@ from time import perf_counter
 from squid_ui import Palette, fallback, form, scene
 from squid_ui.forms import FormSpec, TextField
 from squid_ui.planning import PlanCache, PlanMemo, plan
-from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.cache import CachedPlan
-from squid_ui.planning.discord import components_v2_target
-from squid_ui.planning.limits import LIMITS, V2Limits
 from squid_ui.planning.semantic_adaptation.handlers import ChooseChoice
-from squid_ui.planning.types import DiscordAdapter
 from squid_ui.primitives import (
     Button,
     Code,
@@ -39,15 +35,7 @@ from squid_ui.semantic import (
 )
 from squid_ui.text import Localization, Message
 from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, render_message
-
-
-def _target(name: str, *, capabilities: frozenset[str] = frozenset(), limits: V2Limits = LIMITS):
-    """A V2 target whose adapter supplies exactly `capabilities` and no extensions.
-
-    Capabilities that are not Discord protocol facts belong to the adapter axis, which is
-    what lets a test vary them without inventing a dialect.
-    """
-    return components_v2_target(AdapterProfile(DiscordAdapter, name, ">=1", capabilities=capabilities), limits=limits)
+from squid_ui_discord import testing as sd
 
 
 async def _first(_event) -> None: ...
@@ -92,8 +80,8 @@ def test_plan_cache_separates_targets_with_different_capabilities() -> None:
             Variant((Text("plain"),)),
         )
     )
-    basic = _target("test")
-    rich = _target("rich", capabilities=frozenset({"rich-text"}))
+    basic = sd.target_profile("test")
+    rich = sd.target_profile("rich", capabilities=frozenset({"rich-text"}))
 
     first = plan(document, target=basic, cache=cache)
     second = plan(document, target=rich, cache=cache)

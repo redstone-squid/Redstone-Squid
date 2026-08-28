@@ -16,6 +16,7 @@ from squid_ui.primitives import Button, Row, Text
 from squid_ui.profiling import PresentationStatus
 from squid_ui.runtime import CellAddress, LocalTopicBus, SharedState, transaction
 from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler
+from squid_ui_discord import testing as sd
 from squid_ui_discord.testing import delivered_to, fake_interaction, fake_message
 
 
@@ -111,19 +112,12 @@ class Swapper(Component[sl.ComponentsV2Target]):
 
 
 def _texts(view: discord.ui.LayoutView) -> str:
-    return "\n".join(item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay))
+    """This file reads the whole render as one blob; the walk itself is `sd.payload_texts`."""
+    return "\n".join(sd.payload_texts(view))
 
 
 def address(workspace: Workspace, name: str) -> CellAddress:
     return CellAddress(workspace, name)
-
-
-async def drain(scheduler: MessageRootScheduler, bus: LocalTopicBus) -> None:
-    del bus
-    async with anyio.create_task_group() as tasks:
-        tasks.start_soon(scheduler.run)
-        await asyncio.wait_for(scheduler._queue.join(), timeout=1)
-        tasks.cancel_scope.cancel()
 
 
 async def test_two_mounts_react_once_each_to_one_commit() -> None:
@@ -147,7 +141,7 @@ async def test_two_mounts_react_once_each_to_one_commit() -> None:
     with transaction():
         workspace.selected = 3
         workspace.selected = 4
-    await drain(scheduler, bus)
+    await sd.drain(scheduler)
 
     assert refreshes == {message_roots[0].id: 1, message_roots[1].id: 1}
 
@@ -184,7 +178,7 @@ async def test_backdated_scheduled_refresh_skips_render_planning_and_drawing(mon
 
     with transaction():
         workspace.selected = 2
-    await drain(scheduler, bus)
+    await sd.drain(scheduler)
 
     assert component.renders == 1
     assert message_root._issued == issued
@@ -225,7 +219,7 @@ async def test_equal_computed_value_switches_the_mounts_followed_branch() -> Non
 
     with transaction():
         values.use_b = True
-    await drain(scheduler, bus)
+    await sd.drain(scheduler)
 
     assert component.renders == 1
     assert message.edit.await_count == 0
@@ -234,7 +228,7 @@ async def test_equal_computed_value_switches_the_mounts_followed_branch() -> Non
 
     with transaction():
         values.b = 2
-    await drain(scheduler, bus)
+    await sd.drain(scheduler)
 
     assert component.renders == 2
     assert message.edit.await_count == 1
@@ -261,7 +255,7 @@ async def test_explicit_scheduler_request_resamples_opaque_component_inputs() ->
     component.value = "second"
 
     scheduler.schedule(message_root)
-    await drain(scheduler, bus)
+    await sd.drain(scheduler)
 
     assert component.renders == 2
     assert "second" in str(message.edit.await_args.kwargs["view"].to_components())
@@ -331,7 +325,7 @@ async def test_a_discarded_staged_render_keeps_the_visible_generations_follow() 
     message_root.refresh = refresh  # pyrefly: ignore
     with transaction():
         workspace.selected = 3
-    await drain(scheduler, bus)
+    await sd.drain(scheduler)
     assert refreshes == 1
 
 
@@ -418,7 +412,7 @@ class TestSelfWrites:
         interaction = fake_interaction()
 
         await message_root.dispatch("pick", interaction)
-        await drain(scheduler, bus)
+        await sd.drain(scheduler)
 
         interaction.response.edit_message.assert_awaited_once()
         message.edit.assert_not_awaited()
