@@ -198,6 +198,19 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
 
 ## Still deferred (waiting on a real consumer)
 
+- **Extension nodes on the HTML target** *(still deferred, 2026-08-28)* — the HTML planner
+  rejects every `Extension` (with a placed message since the exhaustive-dispatch work);
+  Discord falls back to `Extension.fallback` when no adapter is registered. HTML cannot
+  simply "honor the fallback": `Extension.fallback` is typed as the Discord-shaped
+  primitive `Node` (`primitives/nodes.py`) despite the "portable fallback" docstring, so
+  there is nothing portable to honor. The open choices: (a) require a portable fallback
+  shape on `Extension`, (b) an `extensions` registry on `HtmlTarget` mirroring
+  `planning/v2.py`'s adapter lookup, (c) status quo. Upstream of all three sits an
+  unresolved design doubt whether a *mandatory* fallback is right at all — its product is
+  consumed only on Discord, and only when no adapter is registered, which in practice is
+  never; nothing shipped forecloses making it optional. Reopen when a real document needs
+  an extension to plan on HTML.
+
 - **Portable permission facts on `ActionEvent`** *(still deferred)* — plan 02 gives the typed Discord
   escape hatch instead. If a second frontend ever dispatches events, design the portable
   capability surface against its actual requirements.
