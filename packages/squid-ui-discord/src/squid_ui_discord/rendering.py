@@ -121,15 +121,18 @@ def render_item(
     that object, and it is discarded on the way out, so nothing half-built survives the call.
 
     Raises:
-        MessageModeError: The node rendered to no item at all.
+        MessageModeError: The node did not render to exactly one item.
     """
     payload = render_static(
         [node], target=target, chrome=chrome, localization=localization, palette=palette, reservation=reservation
     )
     layout = payload.layout
     children = layout.children
-    if not children:
-        message = "render_item needs a node that draws something; this one produced no item"
+    if len(children) != 1:
+        message = (
+            "render_item() requires a node that resolves to exactly one Discord item; "
+            "use contribute() for a multi-item region"
+        )
         raise MessageModeError(message)
     item = children[0]
     layout.remove_item(item)
