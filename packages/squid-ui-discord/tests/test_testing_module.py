@@ -22,9 +22,7 @@ class TestPayloadQueries:
         assert sd.payload_texts(view) == ["## Title", "one", "inner", "two"]
 
     def test_labels_and_custom_ids_come_back_in_render_order(self) -> None:
-        view = sd.static_view(
-            [Row((RoutedButton("First", "a"), RoutedButton("Second", "b")))]
-        )
+        view = sd.static_view([Row((RoutedButton("First", "a"), RoutedButton("Second", "b")))])
 
         assert sd.payload_labels(view) == ["First", "Second"]
         assert sd.payload_custom_ids(view) == ["a", "b"]

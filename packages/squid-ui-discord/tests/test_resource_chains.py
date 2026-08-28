@@ -12,6 +12,7 @@ import discord
 import squid_ui as sl
 import squid_ui_discord
 from squid_ui_discord import Everyone, MessageRoot
+from squid_ui_discord import testing as sd
 from squid_ui_discord.testing import delivered_to, fake_message
 
 TOPIC = sl.runtime.Topic("build", "1")
@@ -48,7 +49,8 @@ class Chain(sl.Component[sl.ComponentsV2Target]):
 
 
 def texts(view: discord.ui.LayoutView) -> str:
-    return "\n".join(item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay))
+    """This file reads the whole render as one blob; the walk itself is `sd.payload_texts`."""
+    return "\n".join(sd.payload_texts(view))
 
 
 # --- Tracking -------------------------------------------------------------------------

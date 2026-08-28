@@ -15,19 +15,13 @@ from squid_ui import Component
 from squid_ui.profiling import MemoryProfiler, OperationKind, TraceLink
 from squid_ui.runtime import LocalTopicBus, Topic
 from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler, PauseUpdates, RenewEphemeral, delivery
+from squid_ui_discord import testing as sd
 from squid_ui_discord.testing import delivered_to, fake_interaction, fake_message
 
 
 class Empty(Component[sl.ComponentsV2Target]):
     def render(self):
         return []
-
-
-async def _drain_scheduler(scheduler: MessageRootScheduler) -> None:
-    async with anyio.create_task_group() as tasks:
-        tasks.start_soon(scheduler.run)
-        await asyncio.wait_for(scheduler._queue.join(), timeout=1)
-        tasks.cancel_scope.cancel()
 
 
 async def test_reactor_refreshes_different_mounts_concurrently() -> None:
@@ -120,7 +114,7 @@ async def test_reactor_profile_includes_coalesced_wait_and_links_refresh() -> No
         scheduler.schedule(message_root)
     monotonic += 2.0
 
-    await _drain_scheduler(scheduler)
+    await sd.drain(scheduler)
 
     snapshot = profiler.snapshot()
     producer = next(trace for trace in snapshot.recent if trace.name == "save")
@@ -173,7 +167,7 @@ async def test_expiry_sweep_flushes_pause_chrome_once_and_renewal_rearms_it() ->
     assert message_root in scheduler._watched
 
     scheduler._sweep_once()
-    await _drain_scheduler(scheduler)
+    await sd.drain(scheduler)
 
     written = interaction.response.edit_message.await_args.kwargs["view"]
     assert "Live updates paused" in str(written.to_components())

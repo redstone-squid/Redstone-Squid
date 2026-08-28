@@ -20,6 +20,7 @@ from squid_ui.errors import LimitViolationError
 from squid_ui.planning.limits import LIMITS
 from squid_ui.primitives import Text
 from squid_ui_discord import delivery
+from squid_ui_discord import testing as sd
 from squid_ui_discord.durability import FrontendAddress
 from squid_ui_discord.durability.frontend import DiscordFrontend, Promoted, Reconnected, RecoveredBinding
 from squid_ui_discord.message_payload import MessageMode, MessageModeError, MessagePayload, message_mode
@@ -236,23 +237,12 @@ class TestTransitions:
     async def test_a_refused_write_leaves_the_recorded_mode_alone(self) -> None:
         message = fake_message(components_v2=False)
         handle = delivery.handle_for(message)
-        message.edit.side_effect = _http_error()
+        message.edit.side_effect = sd.http_error()
 
         with pytest.raises(discord.HTTPException):
             await handle.write(v2())
 
         assert handle.mode is CLASSIC
-
-
-def _http_error() -> discord.HTTPException:
-    response = SimpleNamespace(status=500, reason="server error")
-    return discord.HTTPException(response, {"code": 0, "message": "nope"})  # type: ignore[arg-type]
-
-
-def _stale_error() -> discord.HTTPException:
-    """Discord's way of saying the credentials behind a write are gone."""
-    response = SimpleNamespace(status=404, reason="not found")
-    return discord.HTTPException(response, {"code": 10015, "message": "Unknown Webhook"})  # type: ignore[arg-type]
 
 
 class _Replyable:
@@ -360,7 +350,7 @@ class TestDestinations:
 
     async def test_edit_to_translates_expired_authority(self) -> None:
         message = fake_message()
-        message.edit.side_effect = _stale_error()
+        message.edit.side_effect = sd.stale_http_error()
 
         with pytest.raises(delivery.StaleHandleError):
             await delivery.edit_to(message)(v2())

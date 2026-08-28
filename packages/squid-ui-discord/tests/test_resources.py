@@ -4,26 +4,15 @@ import pytest
 
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_ui.planning import measure, plan
-from squid_ui.planning.adapter import AdapterProfile
-from squid_ui.planning.discord import components_v2_target
 from squid_ui.planning.layout_measurement.costing import measure_nodes
 from squid_ui.planning.layout_measurement.model import MeasuredText
 from squid_ui.planning.layout_measurement.text import BudgetRegion, make_unit, text_total
-from squid_ui.planning.limits import Axis, V2Limits
+from squid_ui.planning.limits import Axis
 from squid_ui.planning.target import ResourceCost
-from squid_ui.planning.types import DiscordAdapter
 from squid_ui.primitives import Never, Panel, Text, Variants
 from squid_ui_discord import DISCORD_V2_DPY27
 from squid_ui_discord import V2_LIMITS as LIMITS
-
-
-def _target(name: str, *, capabilities: frozenset[str] = frozenset(), limits: V2Limits = LIMITS):
-    """A V2 target whose adapter supplies exactly `capabilities` and no extensions.
-
-    Capabilities that are not Discord protocol facts belong to the adapter axis, which is
-    what lets a test vary them without inventing a dialect.
-    """
-    return components_v2_target(AdapterProfile(DiscordAdapter, name, ">=1", capabilities=capabilities), limits=limits)
+from squid_ui_discord import testing as sd
 
 
 class TestResourceCost:
@@ -154,7 +143,7 @@ class TestParetoSearch:
         long = Variants.of(Text("x" * 3990, overflow=Never()), Text("x"))
         filler = [Text(f"f{index}") for index in range(19)]
 
-        result = plan([wide, long, *filler], target=_target("test"))
+        result = plan([wide, long, *filler], target=sd.target_profile("test"))
         rendered = repr(result.scene.components_v2.children)
 
         assert "w0" not in rendered  # the component-heavy ladder gave way
