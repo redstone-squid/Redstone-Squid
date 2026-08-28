@@ -58,6 +58,7 @@ FRAMEWORK_CLASSIFIERS = [
     "Typing :: Typed",
 ]
 FRAMEWORK_URLS = {
+    "Changelog": "https://github.com/redstone-squid/Redstone-Squid/blob/master/CHANGELOG.md",
     "Documentation": "https://redstone-squid.github.io/Redstone-Squid/squid-ui/",
     "Issues": "https://github.com/redstone-squid/Redstone-Squid/issues",
     "Repository": "https://github.com/redstone-squid/Redstone-Squid",
