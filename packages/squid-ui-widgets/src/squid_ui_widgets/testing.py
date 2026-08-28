@@ -21,15 +21,7 @@ from typing import Any
 
 from squid_ui import testing as engine
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
-from squid_ui.semantic import (
-    ActionControl,
-    AnyLayoutNode,
-    Choices,
-    Controlled,
-    FormTrigger,
-    RoutedActionControl,
-    RoutedChoices,
-)
+from squid_ui.semantic import ActionControl, AnyLayoutNode, RoutedActionControl, RoutedChoices
 from squid_ui_widgets.drivers import (
     ComponentDriver,
     RouteDriver,
@@ -69,23 +61,19 @@ class MachineHarness[StateT]:
 
     def control(self, key: str) -> ActionControl:
         """The single control keyed `key` in the current render."""
-        return engine.find(self.nodes, ActionControl, key=key)
+        return engine.control(self.nodes, key)
 
-    async def press(self, key: str) -> None:
+    async def press(self, key: str, *, actor: str = "1") -> None:
         """Press the control keyed `key`, the way a frontend's dispatch would."""
-        await self.control(key).on_trigger(engine.press_event(responder=self.responder))
+        await engine.press(self.driver, key, actor=actor, responder=self.responder)
 
-    async def choose(self, key: str, *values: str) -> None:
+    async def choose(self, key: str, *values: str, actor: str = "1") -> None:
         """Settle the picker keyed `key` on `values`."""
-        picker = engine.find(self.nodes, Choices, key=key)
-        selection = picker.selection
-        assert isinstance(selection, Controlled), f"the picker keyed {key!r} does not own its selection"
-        await selection.on_change(engine.choice_event(*values, responder=self.responder))
+        await engine.choose(self.driver, key, *values, actor=actor, responder=self.responder)
 
-    async def submit(self, key: str, values: Mapping[str, object]) -> None:
+    async def submit(self, key: str, values: Mapping[str, object], *, actor: str = "1") -> None:
         """Submit `values` to the form the trigger keyed `key` opens."""
-        trigger = engine.find(self.nodes, FormTrigger, key=key)
-        await trigger.on_submit(engine.submit_event(values, responder=self.responder))
+        await engine.submit(self.driver, key, values, actor=actor, responder=self.responder)
 
     @property
     def notices(self) -> tuple[str, ...]:
@@ -112,6 +100,16 @@ def mounted[StateT](
         handlers=handlers,
         finish_actions=finish_actions,
     )
+    return MachineHarness(driver, engine.RecordingResponder())
+
+
+def driving[StateT](driver: ComponentDriver[StateT]) -> MachineHarness[StateT]:
+    """A harness around a component a machine built for itself.
+
+    `mounted` constructs the driver directly, which cannot reach a machine's own builder
+    arguments -- `Decision.build_component(on_decide=..., finish_on=...)` and its siblings. A
+    test about those wires the component the way an application does, then drives it here.
+    """
     return MachineHarness(driver, engine.RecordingResponder())
 
 
@@ -181,6 +179,7 @@ def _as_nodes(result: Any) -> tuple[AnyLayoutNode, ...]:
 __all__ = [
     "MachineHarness",
     "RoutedRender",
+    "driving",
     "mounted",
     "routed",
 ]
