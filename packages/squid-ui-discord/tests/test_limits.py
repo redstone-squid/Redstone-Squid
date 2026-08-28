@@ -5,7 +5,7 @@ from squid_ui_discord import V2_LIMITS as LIMITS
 
 def test_limits_are_positive():
     for name, value in LIMITS.digest():
-        assert value is None or isinstance(value, int) and value > 0, name
+        assert value is None or (isinstance(value, int) and value > 0), name
 
 
 def test_headline_budgets():
