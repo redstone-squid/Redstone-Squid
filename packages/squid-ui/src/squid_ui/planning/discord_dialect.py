@@ -133,7 +133,7 @@ class SceneBindings:
                 return scene.Extension(kind, version, encoded)
 
 
-class DiscordDialect[LimitsT: MessageLimits, BodyT: scene.Body, ModeT](Protocol):
+class DiscordDialect[LimitsT: MessageLimits, BodyT: scene.Body, RenderTargetT](Protocol):
     """One Discord protocol mode: what a legal message of it is, and how to build one.
 
     The first axis of a target. Bound to its own limits and body types, so each dialect's
@@ -146,7 +146,7 @@ class DiscordDialect[LimitsT: MessageLimits, BodyT: scene.Body, ModeT](Protocol)
     version: int
     capabilities: frozenset[Capability]
     """What the *protocol* can draw. Never an adapter behavior or an extension string."""
-    mode: type[ModeT]
+    mode: type[RenderTargetT]
     """The marker type that decides which nodes a document for this dialect may hold."""
     body_type: type[BodyT]
     default_limits: LimitsT
@@ -157,7 +157,7 @@ class DiscordDialect[LimitsT: MessageLimits, BodyT: scene.Body, ModeT](Protocol)
     omitting a keyword argument.
     """
 
-    def normalize(self, nodes: Sequence[Node], target: Target[LimitsT, BodyT, ModeT, Any]) -> tuple[Node, ...]:
+    def normalize(self, nodes: Sequence[Node], target: Target[LimitsT, BodyT, RenderTargetT, Any]) -> tuple[Node, ...]:
         """Rewrite semantically lowered nodes into this target's own primitive shape."""
         ...
 

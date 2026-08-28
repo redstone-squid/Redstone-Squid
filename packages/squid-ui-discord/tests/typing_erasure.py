@@ -1,10 +1,10 @@
 """Pins for the erased aliases and the finished `Axis` keying. Nothing here runs.
 
-`Component[ModeT]` and `MessageRoot[ModeT, AdapterT]` default every type parameter, so a bare
+`Component[RenderTargetT]` and `MessageRoot[RenderTargetT, AdapterT]` default every type parameter, so a bare
 annotation silently means one specific instantiation and rejects every other -- including `Self`
 inside each class's own methods. That is what `AnyComponent` and `AnyMessageRoot` exist to say,
 and these pins are what keeps them saying it: if a bare name ever becomes assignable from a
-non-default mode, the alias has stopped being load-bearing and the defaults have changed
+non-default render target, the alias has stopped being load-bearing and the defaults have changed
 meaning underneath it.
 
 Every `pyrefly: ignore` below is an assertion that the line *is* an error. If one goes unused,
@@ -36,7 +36,7 @@ class V2Panel(sl.Component[ComponentsV2Target]):
         return sl.stack(sl.heading("title"))
 
 
-# --- the erased aliases hold a mount or component of any mode -----------------------------
+# --- the erased aliases hold a mount or component for any render target -----------------------------
 
 classic_mount = MessageRoot(ClassicPanel(), access=Everyone(), target=classic())
 v2_mount = MessageRoot(V2Panel(), access=Everyone())

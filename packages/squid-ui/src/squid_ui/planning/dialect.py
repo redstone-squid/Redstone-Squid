@@ -21,14 +21,14 @@ if TYPE_CHECKING:
     from squid_ui.text import Localization
 
 
-class TargetPlanner[LimitsT: TargetLimits, BodyT: scene.Body, ModeT, AdapterT](Protocol):
+class TargetPlanner[LimitsT: TargetLimits, BodyT: scene.Body, RenderTargetT, AdapterT](Protocol):
     """A complete compiler backend for one family of target dialects."""
 
     def plan(
         self,
-        rendered: DocumentLike[ModeT],
+        rendered: DocumentLike[RenderTargetT],
         *,
-        target: Target[LimitsT, BodyT, ModeT, AdapterT],
+        target: Target[LimitsT, BodyT, RenderTargetT, AdapterT],
         chrome: Chrome,
         localization: Localization,
         palette: Palette,
@@ -43,19 +43,19 @@ class TargetPlanner[LimitsT: TargetLimits, BodyT: scene.Body, ModeT, AdapterT](P
     ) -> PlanResult[BodyT]: ...
 
 
-class TargetDialect[LimitsT: TargetLimits, BodyT: scene.Body, ModeT](Protocol):
+class TargetDialect[LimitsT: TargetLimits, BodyT: scene.Body, RenderTargetT](Protocol):
     """A target's identity, capabilities, limits, and complete planner backend."""
 
     id: str
     version: int
     capabilities: frozenset[Capability]
-    mode: type[ModeT]
+    mode: type[RenderTargetT]
     body_type: type[BodyT]
     default_limits: LimitsT
     realizes_extensions: bool
 
     @property
-    def planner(self) -> TargetPlanner[LimitsT, BodyT, ModeT, Any]: ...
+    def planner(self) -> TargetPlanner[LimitsT, BodyT, RenderTargetT, Any]: ...
 
 
 __all__ = ["TargetDialect", "TargetPlanner"]

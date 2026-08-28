@@ -267,7 +267,7 @@ def _unwrapped() -> Iterator[None]:
 
 
 type AnyMessageRoot = MessageRoot[Any, Any]
-"""A mount of any target mode and adapter.
+"""A mount for any render target and adapter.
 
 `MessageRoot`'s type parameters both default, so a bare `MessageRoot` annotation silently means
 `MessageRoot[ComponentsV2Target, DiscordPy27Adapter]` and rejects every other instantiation —
@@ -346,7 +346,7 @@ class _LifecycleHooks:
                 logger.exception("finish hook failed for mount %s", message_root.id)
 
 
-class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = DiscordPy27Adapter]:
+class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter = DiscordPy27Adapter]:
     """Binds a component to a message and owns its whole interaction lifecycle."""
 
     def __init__(
@@ -354,7 +354,7 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
         component: Component[Any],
         *,
         access: AccessPolicy,
-        target: Target[Any, Any, ModeT, AdapterT] | None = None,
+        target: Target[Any, Any, RenderTargetT, AdapterT] | None = None,
         chrome: Chrome = DEFAULT_CHROME,
         localization: Localization = NEUTRAL,
         palette: Palette = DEFAULT_PALETTE,
@@ -418,7 +418,7 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
         """Where stateful guards keep their counts; it lives and dies with this mount."""
         self.challenge = challenge
         """Who shows a guard's challenge and runs the press the actor approves, if anyone."""
-        target = cast(Target[Any, Any, ModeT, AdapterT], DISCORD_V2_DPY27) if target is None else target
+        target = cast(Target[Any, Any, RenderTargetT, AdapterT], DISCORD_V2_DPY27) if target is None else target
         self.target = target
         """The message mode this mount owns for its whole life.
 
@@ -769,7 +769,7 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
         context = profile.span("planner") if profile is not None else nullcontext(None)
         with context as planner_span:
             result = plan_document(
-                cast(Document[ModeT], self._document_for(tree)),
+                cast(Document[RenderTargetT], self._document_for(tree)),
                 target=self.target,
                 chrome=self._chrome,
                 localization=self.localization,

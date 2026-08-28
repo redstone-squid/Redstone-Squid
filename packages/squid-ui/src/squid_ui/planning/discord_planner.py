@@ -721,10 +721,10 @@ def _search(search: _Search, *, search_budget: int) -> _Candidate:
     )
 
 
-def plan[ModeT, AdapterT, BodyT: scene.Body](
-    rendered: DocumentLike[ModeT],
+def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
+    rendered: DocumentLike[RenderTargetT],
     *,
-    target: Target[Any, BodyT, ModeT, AdapterT],
+    target: Target[Any, BodyT, RenderTargetT, AdapterT],
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,
@@ -767,7 +767,7 @@ def plan[ModeT, AdapterT, BodyT: scene.Body](
     document = as_document(rendered)
     # Every axis is withheld the same way: by planning against a smaller target.
     target = target.reserve(reservation)
-    dialect = cast(DiscordDialect[Any, BodyT, ModeT], target.dialect)
+    dialect = cast(DiscordDialect[Any, BodyT, RenderTargetT], target.dialect)
     limits = target.limits
     chrome = localize_chrome(chrome, localization)
     cache_context = _plan_cache_context(
