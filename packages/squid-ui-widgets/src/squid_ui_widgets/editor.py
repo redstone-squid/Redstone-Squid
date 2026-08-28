@@ -23,6 +23,7 @@ from squid_ui.semantic import (
 )
 from squid_ui.target_types import RenderTarget
 from squid_ui.text import TextLike
+from squid_ui_widgets._actions import MachineKeySegment, NestedAction, keyed_action, match_keyed_action
 from squid_ui_widgets._content import ContentItem, ContentLike, display_text, normalize_content, require_key
 from squid_ui_widgets.commit import CommitMode
 from squid_ui_widgets.drivers import (
@@ -45,7 +46,7 @@ RenderTargetT = TypeVar("RenderTargetT", bound=RenderTarget, contravariant=True,
 class EditorSectionState:
     """One section's interaction state and last committed projected value."""
 
-    key: str
+    key: MachineKeySegment
     state: object
     committed: object
 
@@ -55,7 +56,7 @@ class EditorState:
     """Every section state plus the nested workspace currently open."""
 
     sections: tuple[EditorSectionState, ...]
-    editing: str | None = None
+    editing: MachineKeySegment | None = None
 
 
 def _formatted(value: object) -> str:
@@ -80,7 +81,7 @@ class EditorSection(Generic[StateT, ValueT, RenderTargetT]):
         form: FormSpec | None = None,
         issues: Callable[[StateT], Iterable[FormIssue]] | None = None,
     ) -> None:
-        self.key = require_key(key, name="EditorSection.key")
+        self.key = MachineKeySegment(key, name="EditorSection.key")
         self.label = label
         self.initial = initial
         self.load = load
@@ -256,7 +257,7 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget]:
 
         return ComponentDriver(self, initial=state, on_change=changed)
 
-    def _slot(self, state: EditorState, key: str) -> EditorSectionState | None:
+    def _slot(self, state: EditorState, key: MachineKeySegment) -> EditorSectionState | None:
         return next((slot for slot in state.sections if slot.key == key), None)
 
     def values(self, state: EditorState) -> EditorValues:
@@ -305,14 +306,11 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget]:
         )
 
     def _nested_action(self, action: str) -> tuple[EditorSection[Any, Any, RenderTargetT], str] | None:
-        if not action.startswith("section:"):
+        nested = NestedAction.parse(action)
+        if nested is None:
             return None
-        remainder = action.removeprefix("section:")
-        for section in self.sections:
-            prefix = f"{section.key}:"
-            if remainder.startswith(prefix) and section.machine is not None:
-                return section, remainder.removeprefix(prefix)
-        return None
+        section = self._sections.get(nested.key)
+        return (section, nested.action) if section is not None and section.machine is not None else None
 
     def transition(
         self,
@@ -337,12 +335,10 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget]:
                     for slot in state.sections
                 ),
             )
-        if action.startswith("edit:"):
-            key = action.removeprefix("edit:")
+        if (key := match_keyed_action(action, "edit")) is not None:
             section = self._sections.get(key)
             return replace(state, editing=key) if section is not None and section.machine is not None else state
-        if action.startswith("submit:") and submitted is not None:
-            key = action.removeprefix("submit:")
+        if (key := match_keyed_action(action, "submit")) is not None and submitted is not None:
             section = self._sections.get(key)
             slot = self._slot(state, key)
             if section is None or section.form is None or slot is None:
@@ -366,8 +362,7 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget]:
 
     def form_for(self, state: EditorState, action: str) -> FormSpec | None:
         """Resolve direct and nested routed form actions."""
-        if action.startswith("submit:"):
-            key = action.removeprefix("submit:")
+        if (key := match_keyed_action(action, "submit")) is not None:
             section = self._sections.get(key)
             slot = self._slot(state, key)
             if section is None or section.form is None or slot is None:
@@ -438,14 +433,14 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget]:
             if section.form is not None:
                 edit = controls.form(
                     section.form.with_prefill(section.form_prefill(slot.state)),
-                    f"submit:{section.key}",
+                    keyed_action("submit", section.key),
                     key=f"{self.key}.{section.key}",
                     label=controls.chrome.edit,
                 )
             else:
                 edit = controls.action_control(
                     controls.chrome.edit,
-                    f"edit:{section.key}",
+                    keyed_action("edit", section.key),
                     key=f"{self.key}.{section.key}",
                 )
             section_nodes.append(
@@ -491,7 +486,7 @@ class _NestedControls[ParentStateT, ChildStateT, RenderTargetT: RenderTarget]:
         self,
         parent: MachineControls[ParentStateT, RenderTargetT],
         editor_key: str,
-        section_key: str,
+        section_key: MachineKeySegment,
         pattern_key: str | None,
     ) -> None:
         self.parent = parent
@@ -501,7 +496,7 @@ class _NestedControls[ParentStateT, ChildStateT, RenderTargetT: RenderTarget]:
         self.chrome = parent.chrome
 
     def _action(self, action: str) -> str:
-        return f"section:{self.section_key}:{action}"
+        return NestedAction(self.section_key, action).encode()
 
     def _key(self, key: str) -> str:
         if self.pattern_key is not None:

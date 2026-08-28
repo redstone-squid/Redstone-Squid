@@ -1,5 +1,7 @@
 """Staged cross-page selection and explicit commit behaviour."""
 
+import pytest
+
 import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui import testing as engine
@@ -9,6 +11,33 @@ from squid_ui_widgets import testing as wt
 
 def _options(prefix: str, count: int) -> tuple[sl.semantic.Choice, ...]:
     return tuple(sl.choice(f"{prefix} {index}", key=f"{prefix}-{index}") for index in range(count))
+
+
+def test_group_keys_are_validated_as_action_segments() -> None:
+    with pytest.raises(ValueError, match=r"MultiChoiceGroup.key must not contain ':'"):
+        sp.MultiChoiceGroup("bad:key", "Bad", _options("bad", 1))
+
+    with pytest.raises(ValueError, match=r"MultiChoiceGroup.exclusive_with must not contain ':'"):
+        sp.MultiChoiceGroup("good", "Good", _options("good", 1), exclusive_with=("bad:key",))
+
+
+def test_machine_key_segment_is_a_string_value_with_one_delimiter_rule() -> None:
+    segment = sp.MachineKeySegment("profile.links")
+
+    assert isinstance(segment, str)
+    assert segment == "profile.links"
+    with pytest.raises(ValueError, match="must not be empty"):
+        sp.MachineKeySegment("")
+
+
+def test_page_actions_reject_unknown_directions_and_extra_segments() -> None:
+    pattern = sp.MultiChoice(
+        "Roles",
+        (sp.MultiChoiceGroup("roles", "Roles", _options("role", 30)),),
+    )
+
+    assert pattern.transition(pattern.initial_state, "page:roles:sideways") == pattern.initial_state
+    assert pattern.transition(pattern.initial_state, "page:roles:next:extra") == pattern.initial_state
 
 
 async def test_window_merge_preserves_staging_from_other_pages() -> None:
