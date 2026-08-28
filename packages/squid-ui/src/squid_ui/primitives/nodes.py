@@ -25,7 +25,7 @@ from squid_ui.interactions import (
 )
 from squid_ui.primitives.constraints import Alt, Never, Overflow, Spill, Truncate
 from squid_ui.primitives.styles import ActionStyle, Color
-from squid_ui.target_types import ClassicTarget, ComponentsV2Target, DiscordTarget, Renderable
+from squid_ui.target_types import ClassicTarget, ComponentsV2Target, DiscordTarget, Renderable, RenderTarget
 from squid_ui.temporal import ZonedDateTime
 from squid_ui.text import TextLike
 
@@ -267,12 +267,13 @@ class RawItem(Renderable[DiscordTarget]):
 
 
 @dataclass(frozen=True, slots=True)
-class Boundary(Renderable[DiscordTarget]):
+class Boundary(Renderable[RenderTarget]):
     """A keyed component boundary expanded before portable planning.
 
-    Named for what it is rather than what it draws to. It has never had anything to do with
-    a Discord embed, and a node called ``Embed`` in the same union as real embed rendering
-    is a trap for every future reader.
+    Named for what it is rather than what it draws to. The runtime removes it before planning,
+    so it is portable even when the child it protects is target-specific. The child component's
+    target parameter carries that restriction; assigning one to this transient marker as well
+    would erase it when the marker stores the component as an opaque object.
     """
 
     component: object

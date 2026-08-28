@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from squid_ui.factories import action_controls, stack, status
 from squid_ui.runtime.component import RenderResult
 from squid_ui.semantic import ControlDisplay, Emphasis, Tone
+from squid_ui.target_types import RenderTarget
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 from squid_ui_widgets.drivers import ComponentDriver, MachineControls, TransitionEvent
@@ -27,12 +28,12 @@ class DecisionState:
 type DecisionHandler = Callable[[TransitionEvent[DecisionState], str], Awaitable[None]]
 
 
-class Decision:
+class Decision[RenderTargetT: RenderTarget = RenderTarget]:
     """A pending prompt that becomes immutable after one valid choice."""
 
     def __init__(
         self,
-        prompt: ContentLike,
+        prompt: ContentLike[RenderTargetT],
         options: Iterable[DecisionOption],
         *,
         key: str = "decision",
@@ -60,7 +61,7 @@ class Decision:
         *,
         on_decide: DecisionHandler | None = None,
         finish_on: Collection[str] = (),
-    ) -> ComponentDriver[DecisionState]:
+    ) -> ComponentDriver[DecisionState, RenderTargetT]:
         handlers = {}
         if on_decide is not None:
             handlers = {f"choose:{option.key}": self._handler(on_decide, option.key) for option in self.options}
@@ -89,7 +90,9 @@ class Decision:
         key = action.removeprefix("choose:")
         return DecisionState(key) if key in {option.key for option in self.options} else state
 
-    def render(self, state: DecisionState, controls: MachineControls[DecisionState]) -> RenderResult:
+    def render(
+        self, state: DecisionState, controls: MachineControls[DecisionState, RenderTargetT]
+    ) -> RenderResult[RenderTargetT]:
         options = self._options(controls)
         selected = next((option for option in options if option.key == state.decided), None)
         return stack(
@@ -112,15 +115,15 @@ class Decision:
             status(controls.chrome.decided(selected.label), tone=selected.tone) if selected is not None else None,
         )
 
-    def _options(self, controls: MachineControls[DecisionState]) -> tuple[DecisionOption, ...]:
+    def _options(self, controls: MachineControls[DecisionState, RenderTargetT]) -> tuple[DecisionOption, ...]:
         del controls
         return self.options
 
 
-class _Confirmation(Decision):
+class _Confirmation[RenderTargetT: RenderTarget = RenderTarget](Decision[RenderTargetT]):
     def __init__(
         self,
-        prompt: ContentLike,
+        prompt: ContentLike[RenderTargetT],
         *,
         key: str,
         confirm_label: TextLike | None,
@@ -138,7 +141,7 @@ class _Confirmation(Decision):
         self.confirm_label = confirm_label
         self.cancel_label = cancel_label
 
-    def _options(self, controls: MachineControls[DecisionState]) -> tuple[DecisionOption, ...]:
+    def _options(self, controls: MachineControls[DecisionState, RenderTargetT]) -> tuple[DecisionOption, ...]:
         return (
             DecisionOption(
                 "confirm",
@@ -150,8 +153,8 @@ class _Confirmation(Decision):
         )
 
 
-def confirm(
-    prompt: ContentLike,
+def confirm[RenderTargetT: RenderTarget](
+    prompt: ContentLike[RenderTargetT],
     *,
     key: str = "confirm",
     on_confirm: Callable[[TransitionEvent[DecisionState]], Awaitable[None]],
@@ -159,7 +162,7 @@ def confirm(
     confirm_label: TextLike | None = None,
     cancel_label: TextLike | None = None,
     tone: Tone = Tone.DANGER,
-) -> ComponentDriver[DecisionState]:
+) -> ComponentDriver[DecisionState, RenderTargetT]:
     """Build a ready two-option decision shell."""
     machine = _Confirmation(
         prompt,

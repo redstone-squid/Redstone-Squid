@@ -10,6 +10,7 @@ from squid_ui.interactions import ActionEvent, ActionMode, PressEvent
 from squid_ui.runtime.component import Component, RenderResult
 from squid_ui.runtime.reactivity import state
 from squid_ui.semantic import ControlDisplay, Emphasis, Tone
+from squid_ui.target_types import RenderTarget
 from squid_ui.text import Message, TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, render_content, require_key
 
@@ -30,7 +31,7 @@ class AgreementParticipant:
 type AgreementResolveHandler = Callable[[PressEvent, tuple[str, ...]], Awaitable[None]]
 
 
-class Agreement(Component):
+class Agreement[RenderTargetT: RenderTarget = RenderTarget](Component[RenderTargetT]):
     """Collect actor-keyed approvals to a declared threshold."""
 
     approved: tuple[str, ...] = state((), persist=False)
@@ -38,7 +39,7 @@ class Agreement(Component):
 
     def __init__(
         self,
-        prompt: ContentLike,
+        prompt: ContentLike[RenderTargetT],
         participants: Sequence[AgreementParticipant],
         *,
         key: str = "agreement",
@@ -66,7 +67,7 @@ class Agreement(Component):
         self.allow_withdraw = allow_withdraw
         self.on_resolve = on_resolve
 
-    def render(self) -> RenderResult:
+    def render(self) -> RenderResult[RenderTargetT]:
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         approved = frozenset(self.approved)
         participant_rows = tuple(

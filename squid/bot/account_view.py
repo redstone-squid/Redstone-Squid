@@ -81,7 +81,9 @@ class AccountPanel(sl.Component[sl.ComponentsV2Target]):
     _needs_consent: bool = sl.state(default=False, persist=False)
     # No default: the empty profile needs this instance's account id.
     _profile: AccountProfile = sl.state(persist=False)
-    _profile_editor: sp.ComponentDriver[sp.EditorState] | None = sl.state(None, persist=False, opaque=True)
+    _profile_editor: sp.ComponentDriver[sp.EditorState, sl.ComponentsV2Target] | None = sl.state(
+        None, persist=False, opaque=True
+    )
 
     def __init__(
         self,
@@ -261,7 +263,7 @@ class AccountPanel(sl.Component[sl.ComponentsV2Target]):
 
         await self._with_consent(event, apply)
 
-    def _build_profile_editor(self) -> sp.ComponentDriver[sp.EditorState]:
+    def _build_profile_editor(self) -> sp.ComponentDriver[sp.EditorState, sl.ComponentsV2Target]:
         profile_section = sp.EditorSection.from_form(
             "profile",
             L("Profile"),
@@ -320,7 +322,7 @@ class AccountPanel(sl.Component[sl.ComponentsV2Target]):
             summary=lambda value: L("{count} links", count=len(value)),
             issues=lambda state: (sl.forms.FormError(message) for message in links.errors(state)),
         )
-        editor = sp.Editor(
+        editor = sp.Editor[sl.ComponentsV2Target](
             L("Edit your creator page"),
             (profile_section, links_section),
             preview=self._profile_preview,

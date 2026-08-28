@@ -21,7 +21,10 @@ from typing import Any
 
 from squid_ui import testing as engine
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
-from squid_ui.semantic import ActionControl, AnyLayoutNode, RoutedActionControl, RoutedChoices
+from squid_ui.document import as_document
+from squid_ui.runtime.component import RenderResult
+from squid_ui.semantic import ActionControl, AnyLayoutNode, LayoutNode, RoutedActionControl, RoutedChoices
+from squid_ui.target_types import RenderTarget
 from squid_ui_widgets.drivers import (
     ComponentDriver,
     RouteDriver,
@@ -32,14 +35,14 @@ from squid_ui_widgets.drivers import (
 
 
 @dataclass
-class MachineHarness[StateT]:
+class MachineHarness[StateT, RenderTargetT: RenderTarget = RenderTarget]:
     """One machine's component shell, rendered and driven through its own semantic tree.
 
     `nodes` re-renders on every read, so a test reads the tree after a press the way a frontend
     would rather than holding a stale one.
     """
 
-    driver: ComponentDriver[StateT]
+    driver: ComponentDriver[StateT, RenderTargetT]
     responder: engine.RecordingResponder
 
     @property
@@ -85,20 +88,20 @@ class MachineHarness[StateT]:
 
 
 def mounted[StateT](
-    machine: StateMachine[StateT],
+    machine: StateMachine[StateT, Any],
     *,
     initial: StateT | None = None,
     on_change: TransitionHandler[StateT] | None = None,
     handlers: Mapping[str, TransitionHandler[StateT]] | None = None,
     finish_actions: Collection[str] = (),
-) -> MachineHarness[StateT]:
+) -> MachineHarness[StateT, Any]:
     """A `machine` in a bare component shell, ready to be driven by key.
 
     Builds the driver directly, so a machine's *own* wiring is not applied -- `Menu` finishes
     the shell on close, `Decision` can finish on a chosen option, and both do that inside
     `build_component`. A test about any of it wants `driving(machine.build_component(...))`.
     """
-    driver: ComponentDriver[StateT] = ComponentDriver(
+    driver: ComponentDriver[StateT, Any] = ComponentDriver(
         machine,
         initial=initial,
         on_change=on_change,
@@ -108,7 +111,9 @@ def mounted[StateT](
     return MachineHarness(driver, engine.RecordingResponder())
 
 
-def driving[StateT](driver: ComponentDriver[StateT]) -> MachineHarness[StateT]:
+def driving[StateT, RenderTargetT: RenderTarget](
+    driver: ComponentDriver[StateT, RenderTargetT],
+) -> MachineHarness[StateT, RenderTargetT]:
     """A harness around a component a machine built for itself.
 
     `mounted` constructs the driver directly, which cannot reach a machine's own builder
@@ -119,10 +124,10 @@ def driving[StateT](driver: ComponentDriver[StateT]) -> MachineHarness[StateT]:
 
 
 @dataclass(frozen=True, slots=True)
-class RoutedRender[StateT]:
+class RoutedRender[StateT, RenderTargetT: RenderTarget = RenderTarget]:
     """One stateless render and every route it asked the host to encode."""
 
-    nodes: tuple[AnyLayoutNode, ...]
+    nodes: tuple[LayoutNode[RenderTargetT], ...]
     routes: tuple[TransitionRoute[StateT], ...]
 
     def texts(self) -> list[str]:
@@ -157,28 +162,27 @@ class _RouteRecorder[StateT]:
 
 
 def routed[StateT](
-    machine: StateMachine[StateT],
+    machine: StateMachine[StateT, Any],
     state: StateT | None = None,
     *,
     chrome: Chrome = DEFAULT_CHROME,
-) -> RoutedRender[StateT]:
+) -> RoutedRender[StateT, Any]:
     """Render `machine` in its stateless shell and report the routes it asked for.
 
     The encoder is supplied rather than taken, because what a test wants to see is *which*
     routes a render requested and in what order -- not what a particular host spells them.
     """
     recorder: _RouteRecorder[StateT] = _RouteRecorder()
-    driver: RouteDriver[StateT] = RouteDriver(recorder, chrome)
+    driver: RouteDriver[StateT, Any] = RouteDriver(recorder, chrome)
     result = driver.render(machine, machine.initial_state if state is None else state)
     return RoutedRender(_as_nodes(result), tuple(recorder.routes))
 
 
-def _as_nodes(result: Any) -> tuple[AnyLayoutNode, ...]:
+def _as_nodes[RenderTargetT: RenderTarget](
+    result: RenderResult[RenderTargetT],
+) -> tuple[LayoutNode[RenderTargetT], ...]:
     """A `RenderResult` is one node, a sequence of them, or a document; queries want a tuple."""
-    if isinstance(result, tuple | list):
-        return tuple(result)
-    nodes = getattr(result, "nodes", None)
-    return tuple(nodes) if nodes is not None else (result,)
+    return as_document(result).children
 
 
 __all__ = [

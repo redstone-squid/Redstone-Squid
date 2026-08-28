@@ -6,32 +6,38 @@ from dataclasses import dataclass
 from squid_ui.factories import action_controls, choice, heading, stack
 from squid_ui.runtime.component import RenderResult
 from squid_ui.semantic import ControlDisplay
+from squid_ui.target_types import RenderTarget
 from squid_ui.text import Message, ResolvedText, TextLike
 from squid_ui_widgets._content import ContentItem, ContentLike, normalize_content, require_key, slug
 from squid_ui_widgets.drivers import ComponentDriver, MachineControls
 
-_MISSING = object()
+
+class _Missing:
+    __slots__ = ()
+
+
+_MISSING = _Missing()
 
 
 @dataclass(frozen=True, slots=True, init=False)
-class MenuEntry:
+class MenuEntry[RenderTargetT: RenderTarget = RenderTarget]:
     """One menu destination, optionally containing a nested submenu."""
 
     key: str
     label: TextLike
-    content: tuple[ContentItem, ...]
-    entries: tuple[MenuEntry, ...]
+    content: tuple[ContentItem[RenderTargetT], ...]
+    entries: tuple[MenuEntry[RenderTargetT], ...]
 
     def __init__(
         self,
         key_or_label: str,
-        label_or_content: TextLike | ContentLike,
-        content: ContentLike | object = _MISSING,
+        label_or_content: ContentLike[RenderTargetT],
+        content: ContentLike[RenderTargetT] | _Missing = _MISSING,
         *,
         key: str | None = None,
-        entries: Iterable[MenuEntry] = (),
+        entries: Iterable[MenuEntry[RenderTargetT]] = (),
     ) -> None:
-        if content is _MISSING:
+        if isinstance(content, _Missing):
             resolved_key = slug(key_or_label) if key is None else key
             label = key_or_label
             raw_content = label_or_content
@@ -63,13 +69,13 @@ class MenuState:
     path: tuple[str, ...] = ()
 
 
-class Menu:
+class Menu[RenderTargetT: RenderTarget = RenderTarget]:
     """A pure keyed drill-down menu."""
 
     def __init__(
         self,
         title: TextLike,
-        entries: Iterable[MenuEntry],
+        entries: Iterable[MenuEntry[RenderTargetT]],
         *,
         key: str = "menu",
         initial: Iterable[str] = (),
@@ -86,12 +92,12 @@ class Menu:
     def initial_state(self) -> MenuState:
         return self._initial_state
 
-    def build_component(self, *, initial: MenuState | None = None) -> ComponentDriver[MenuState]:
+    def build_component(self, *, initial: MenuState | None = None) -> ComponentDriver[MenuState, RenderTargetT]:
         """Build the in-memory shell, with Close ending its mount."""
         return ComponentDriver(self, initial=initial, finish_actions=("close",))
 
     @staticmethod
-    def _validate_entries(entries: tuple[MenuEntry, ...], *, where: str) -> None:
+    def _validate_entries(entries: tuple[MenuEntry[RenderTargetT], ...], *, where: str) -> None:
         keys = [entry.key for entry in entries]
         if len(set(keys)) != len(keys):
             message = f"{where} keys must be unique: {keys!r}"
@@ -99,9 +105,11 @@ class Menu:
         for entry in entries:
             Menu._validate_entries(entry.entries, where=f"{where}.{entry.key}")
 
-    def _resolve_path(self, path: tuple[str, ...]) -> tuple[MenuEntry | None, tuple[MenuEntry, ...]]:
+    def _resolve_path(
+        self, path: tuple[str, ...]
+    ) -> tuple[MenuEntry[RenderTargetT] | None, tuple[MenuEntry[RenderTargetT], ...]]:
         entries = self.entries
-        current: MenuEntry | None = None
+        current: MenuEntry[RenderTargetT] | None = None
         for key in path:
             current = next((entry for entry in entries if entry.key == key), None)
             if current is None:
@@ -133,7 +141,9 @@ class Menu:
             return state
         return MenuState((*state.path, destination))
 
-    def render(self, state: MenuState, controls: MachineControls[MenuState]) -> RenderResult:
+    def render(
+        self, state: MenuState, controls: MachineControls[MenuState, RenderTargetT]
+    ) -> RenderResult[RenderTargetT]:
         current, entries = self._resolve_path(state.path)
         if len(entries) <= 5:
             destinations = (

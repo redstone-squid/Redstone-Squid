@@ -1,7 +1,6 @@
 """An explicitly asynchronous ranking component backed by a window source."""
 
 from collections.abc import Callable
-from typing import Any
 
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.factories import action_control, action_controls, heading, note, stack
@@ -16,7 +15,7 @@ from squid_ui.primitives import Lines
 from squid_ui.runtime.component import Component, RenderResult
 from squid_ui.runtime.reactivity import state
 from squid_ui.runtime.resources import Failed, Pending, Ready, resource
-from squid_ui.semantic import AnyLayoutNode
+from squid_ui.semantic import LayoutNode
 from squid_ui.sources import (
     ORIGIN,
     CountPrecision,
@@ -26,6 +25,7 @@ from squid_ui.sources import (
     WindowSource,
     window_footer,
 )
+from squid_ui.target_types import DiscordTarget
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, render_content, require_key
 from squid_ui_widgets._ranked import Projector, RankedEntry, RankedRows
@@ -37,10 +37,12 @@ from squid_ui_widgets._window import (
     load_window,
 )
 
-type SourceContentHook = ContentLike | Callable[[int | None], ContentLike]
+type SourceContentHook[RenderTargetT: DiscordTarget = DiscordTarget] = (
+    ContentLike[RenderTargetT] | Callable[[int | None], ContentLike[RenderTargetT]]
+)
 
 
-class SourceRankedList[EntryT](Component[Any]):
+class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget](Component[RenderTargetT]):
     """Render a ranking whose visible async resource is backed by a window source."""
 
     _request: WindowRequest = state(default=WindowRequest(), persist=False, opaque=True)
@@ -55,9 +57,9 @@ class SourceRankedList[EntryT](Component[Any]):
         label: Projector[EntryT] | None = None,
         value: Projector[EntryT] | None = None,
         heading: TextLike | None = None,
-        header: SourceContentHook | None = None,
-        footer: SourceContentHook | None = None,
-        empty: ContentLike = "No entries",
+        header: SourceContentHook[RenderTargetT] | None = None,
+        footer: SourceContentHook[RenderTargetT] | None = None,
+        empty: ContentLike[RenderTargetT] = "No entries",
         initial_position: Position = ORIGIN,
         copy: LoadingCopy = DEFAULT_LOADING_COPY,
     ) -> None:
@@ -103,11 +105,13 @@ class SourceRankedList[EntryT](Component[Any]):
     async def _retry(self, _event: ActionEvent) -> None:
         self._request = WindowRequest(self._request.operation, self._request.position)
 
-    def _hook(self, hook: SourceContentHook, total: int | None, *, name: str) -> tuple[AnyLayoutNode, ...]:
+    def _hook(
+        self, hook: SourceContentHook[RenderTargetT], total: int | None, *, name: str
+    ) -> tuple[LayoutNode[RenderTargetT], ...]:
         value = hook(total) if callable(hook) else hook
         return render_content(self, normalize_content(value, name=name), prefix=name)
 
-    def render(self) -> RenderResult[Any]:
+    def render(self) -> RenderResult[RenderTargetT]:
         # One arm per member of `Ready | Pending | Failed`, with the `previous` case inside it.
         # Splitting on `previous` in the pattern left the match unprovably exhaustive, so the
         # checker saw a path with no return on a shape that cannot occur.
@@ -123,7 +127,7 @@ class SourceRankedList[EntryT](Component[Any]):
                     return self._status(self.copy.failed, retry=True)
                 return self._render_loaded(previous.value, status=self.copy.failed, retry=True)
 
-    def _status(self, message: TextLike, *, retry: bool = False) -> RenderResult[Any]:
+    def _status(self, message: TextLike, *, retry: bool = False) -> RenderResult[RenderTargetT]:
         return stack(
             heading(self.heading) if self.heading is not None else None,
             note(message),
@@ -141,7 +145,7 @@ class SourceRankedList[EntryT](Component[Any]):
         *,
         status: TextLike | None = None,
         retry: bool = False,
-    ) -> RenderResult[Any]:
+    ) -> RenderResult[RenderTargetT]:
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         nav = self.inject(NAV_FACTORY_CONTEXT, default_nav)
         window = loaded.window
