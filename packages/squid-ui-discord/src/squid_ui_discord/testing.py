@@ -25,7 +25,7 @@ import anyio
 import discord
 
 from squid_ui import scene
-from squid_ui.planning.adapter import AdapterProfile
+from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.discord import components_v2_target
 from squid_ui.planning.limits import COMPONENT_LIMITS, LIMITS, ComponentLimits, MessageLimits, V2Limits
 from squid_ui.planning.target import Target
@@ -316,7 +316,9 @@ def payload_custom_ids(built: BuiltView) -> list[str]:
 # --- Target and view construction -----------------------------------------------------------
 
 
-def target_profile(name: str = "test", *, capabilities: frozenset[str] = frozenset(), limits: V2Limits = LIMITS) -> Any:
+def target_profile(
+    name: str = "test", *, capabilities: frozenset[AdapterCapability] = frozenset(), limits: V2Limits = LIMITS
+) -> Any:
     """A V2 target whose adapter supplies exactly `capabilities` and no extensions.
 
     Capabilities that are not Discord protocol facts belong to the adapter axis, which is what

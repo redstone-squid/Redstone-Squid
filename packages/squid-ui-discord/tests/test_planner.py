@@ -9,6 +9,7 @@ from squid_ui import Document, scene, zoned_timestamp
 from squid_ui.document import Asset, InlineAsset
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_ui.planning import plan
+from squid_ui.planning.adapter import AdapterCapability
 from squid_ui.primitives import (
     Button,
     Code,
@@ -220,12 +221,12 @@ def test_scene_reports_every_independent_pager() -> None:
 def test_a_ladder_selects_by_capability_before_budget_degradation() -> None:
     ladder = Variants(
         (
-            Variant((Text("rich"),), requires=frozenset({"rich-text"})),
+            Variant((Text("rich"),), requires=frozenset({AdapterCapability.RENDER_HTML})),
             Variant((Text("plain"),)),
         )
     )
     basic = sd.target_profile("test")
-    rich = sd.target_profile("rich", capabilities=frozenset({"rich-text"}))
+    rich = sd.target_profile("rich", capabilities=frozenset({AdapterCapability.RENDER_HTML}))
 
     basic_scene = plan(ladder, target=basic).scene
     rich_scene = plan(ladder, target=rich).scene

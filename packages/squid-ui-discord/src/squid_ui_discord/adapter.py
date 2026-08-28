@@ -62,7 +62,7 @@ def discord_py_adapter_profile(
     name: str,
     version_expression: str,
     *,
-    capabilities: frozenset[str] = DISCORD_PY_BEHAVIOR_CAPABILITIES,
+    capabilities: frozenset[AdapterCapability] = DISCORD_PY_BEHAVIOR_CAPABILITIES,
     extensions: Mapping[str, ExtensionAdapter[Any]] | None = None,
 ) -> AdapterProfile[DiscordPyAdapter]:
     """Declare an application-verified discord.py adapter profile."""
@@ -75,7 +75,9 @@ def discord_py_adapter_profile(
     )
 
 
-def require_discord_py_capability(profile: AdapterProfile[DiscordPyAdapter], capability: str, operation: str) -> None:
+def require_discord_py_capability(
+    profile: AdapterProfile[DiscordPyAdapter], capability: AdapterCapability, operation: str
+) -> None:
     """Verify the selected profile and installed discord.py at an adapter boundary."""
     if capability not in profile.capabilities:
         message = f"adapter profile {profile.name!r} cannot {operation}; it lacks {capability!r}"
@@ -94,7 +96,9 @@ def require_discord_py_capability(profile: AdapterProfile[DiscordPyAdapter], cap
         raise LayoutInvariantError(message)
 
 
-def require_discord_py_target(target: AnyTarget, capability: str, operation: str) -> AdapterProfile[DiscordPyAdapter]:
+def require_discord_py_target(
+    target: AnyTarget, capability: AdapterCapability, operation: str
+) -> AdapterProfile[DiscordPyAdapter]:
     """Extract and verify the discord.py profile bound to a target."""
     profile = target.adapter
     if profile is None or not issubclass(profile.family, DiscordPyAdapter):
