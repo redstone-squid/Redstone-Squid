@@ -7,7 +7,7 @@ from typing import Literal, cast
 from squid_ui.capabilities import Capability
 from squid_ui.chrome import Chrome
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.palette import DEFAULT_PALETTE, AccentDefault, Palette
+from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.cursors import CursorCoordinator
 from squid_ui.planning.limits import MessageLimits
 from squid_ui.planning.search import DEFAULT_SEARCH_BUDGET
@@ -55,6 +55,12 @@ from squid_ui.planning.structure import (
 )
 from squid_ui.planning.structure import (
     indexed_children as _indexed_children,
+)
+from squid_ui.planning.structure import (
+    resolve_accent as _resolve_accent,
+)
+from squid_ui.planning.structure import (
+    scoped_palette as _scoped_palette,
 )
 from squid_ui.primitives.constraints import (
     Alt,
@@ -278,16 +284,12 @@ def _node(node: AnyLayoutNode, path: str, context: _Context) -> list[Node]:
         case ActionControls():
             return _actions(node, path, context)
         case Themed(children=children, palette=palette):
-            previous = context.palette
-            context.palette = palette
-            try:
+            with _scoped_palette(context, palette):
                 return _children(children, path, context)
-            finally:
-                context.palette = previous
         case Group(children=children) | Stack(children=children) | Cluster(children=children):
             return _children(children, path, context)
         case Block(children=children, accent=accent):
-            resolved_accent = context.palette.brand if accent is AccentDefault.INHERIT else accent
+            resolved_accent = _resolve_accent(accent, context.palette)
             if _cards(context):
                 return [_region(Card(accent=resolved_accent), _children(children, path, context), context)]
             nested = context.panel_depth > 0
@@ -298,7 +300,7 @@ def _node(node: AnyLayoutNode, path: str, context: _Context) -> list[Node]:
             | Article(children=children, heading=heading, accent=accent, thumbnail=thumbnail)
         ):
             resolved_heading = _resolve(heading.content, context)
-            resolved_accent = context.palette.brand if accent is AccentDefault.INHERIT else accent
+            resolved_accent = _resolve_accent(accent, context.palette)
             if _cards(context):
                 # One semantic region, one card: its heading is the embed title, its accent is
                 # the embed colour, and its lead image is the thumbnail. Nothing has to be
