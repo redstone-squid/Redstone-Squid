@@ -16,9 +16,7 @@ from squid_ui.planning.limits import LIMITS, V2Limits
 from squid_ui.planning.types import DiscordAdapter
 
 
-def _target(
-    name: str, *, capabilities: frozenset[AdapterCapability] = frozenset(), limits: V2Limits = LIMITS
-):
+def _target(name: str, *, capabilities: frozenset[AdapterCapability] = frozenset(), limits: V2Limits = LIMITS):
     """A V2 target whose adapter supplies exactly `capabilities` and no extensions.
 
     Capabilities that are not Discord protocol facts belong to the adapter axis, which is
