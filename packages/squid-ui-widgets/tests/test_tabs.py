@@ -22,7 +22,7 @@ def _settings() -> sp.Tabs:
             sp.Tab("privacy", "Privacy", sl.paragraph("privacy body")),
         ],
         key="settings",
-        heading="Settings",
+        title="Settings",
     )
 
 
