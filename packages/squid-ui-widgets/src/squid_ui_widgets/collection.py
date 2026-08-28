@@ -113,6 +113,8 @@ class CollectionEditor:
                 return
             await on_change(event, tuple(self._mapping(entry) for entry in event.state.entries))
 
+        if initial is None:
+            return ComponentDriver(self, on_change=changed)
         return ComponentDriver(self, initial=initial, on_change=changed)
 
     def values(self, state: CollectionState) -> tuple[Mapping[str, object], ...]:

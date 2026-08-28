@@ -94,6 +94,8 @@ class Menu[RenderTargetT: RenderTarget = RenderTarget]:
 
     def build_component(self, *, initial: MenuState | None = None) -> ComponentDriver[MenuState, RenderTargetT]:
         """Build the in-memory shell, with Close ending its mount."""
+        if initial is None:
+            return ComponentDriver(self, finish_actions=("close",))
         return ComponentDriver(self, initial=initial, finish_actions=("close",))
 
     @staticmethod

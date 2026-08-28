@@ -121,6 +121,8 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
             if on_finish is not None and event.state.complete and not event.previous.complete:
                 await on_finish(event, self.live_answers(event.state))
 
+        if initial is None:
+            return ComponentDriver(self, on_change=changed)
         return ComponentDriver(self, initial=initial, on_change=changed)
 
     @staticmethod

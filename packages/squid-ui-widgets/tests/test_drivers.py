@@ -82,6 +82,31 @@ class Probe:
         return state
 
 
+class OptionalProbe:
+    @property
+    def initial_state(self) -> str | None:
+        return "machine default"
+
+    def render(
+        self,
+        state: str | None,
+        controls: sp.MachineControls[str | None, sl.ComponentsV2Target],
+    ) -> sl.runtime.component.RenderResult[sl.ComponentsV2Target]:
+        del controls
+        return sl.paragraph(repr(state))
+
+    def transition(
+        self,
+        state: str | None,
+        action: str,
+        *,
+        values: tuple[str, ...] = (),
+        submitted: Mapping[str, object] | None = None,
+    ) -> str | None:
+        del action, values, submitted
+        return state
+
+
 class TestWhatEachShellInjects:
     def test_the_component_shell_injects_handler_backed_controls(self) -> None:
         nodes = wt.mounted(Probe()).nodes
@@ -219,6 +244,14 @@ class TestComponentDriverWiring:
 
     def test_an_explicit_initial_state_replaces_the_machines_own(self) -> None:
         assert wt.mounted(Probe(), initial=sp.TabsState("elsewhere")).state == sp.TabsState("elsewhere")
+
+    def test_explicit_none_is_a_real_initial_state(self) -> None:
+        machine = OptionalProbe()
+
+        assert sp.ComponentDriver(machine).machine_state == "machine default"
+        assert sp.ComponentDriver(machine, initial=None).machine_state is None
+        assert wt.mounted(machine, initial=None).state is None
+        assert "None" in wt.routed(machine, None).texts()
 
 
 class TestRouteDriverTransition:
