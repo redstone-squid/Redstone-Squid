@@ -255,6 +255,8 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget]:
             if changed_keys:
                 await on_commit(event, self.committed_values(event.state), changed_keys)
 
+        if state is None:
+            return ComponentDriver(self, on_change=changed)
         return ComponentDriver(self, initial=state, on_change=changed)
 
     def _slot(self, state: EditorState, key: MachineKeySegment) -> EditorSectionState | None:

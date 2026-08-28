@@ -71,6 +71,8 @@ class Tabs[RenderTargetT: RenderTarget = RenderTarget]:
         on_change: TransitionHandler[TabsState] | None = None,
     ) -> ComponentDriver[TabsState, RenderTargetT]:
         """Build the in-memory shell for this tab set."""
+        if initial is None:
+            return ComponentDriver(self, on_change=on_change)
         return ComponentDriver(self, initial=initial, on_change=on_change)
 
     def transition(
