@@ -7,32 +7,27 @@ stopped after a successful edit so dispatch tables do not accumulate.
 """
 
 import asyncio
-import hashlib
 import logging
-import math
 import secrets
 import time
 import weakref
 from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
-from dataclasses import dataclass, fields, is_dataclass, replace
+from dataclasses import dataclass, replace
+from dataclasses import field as dataclass_field
 from datetime import UTC, datetime
-from enum import StrEnum
-from typing import Any, Protocol, TypedDict, cast, runtime_checkable
+from typing import Any, cast
 
 import anyio
 import discord
 
 # `discord.ui.select` names the decorator, so the submodule holding `BaseSelect` is only
 # reachable by importing from it directly.
-from discord.ui.select import BaseSelect
-
 from squid_reactivity.actions import ActionContext, ActorRef
 from squid_ui import scene
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME, LOCALIZATION_CONTEXT, Chrome, localize_chrome
 from squid_ui.document import Asset, Document
-from squid_ui.entity import ChannelType, EntityKind, EntityRef, EntityType
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.forms import FormBinding, FormSpec, FormValidationMode, SubmitHandler
 from squid_ui.guards import Challenge, GuardLedger, approvals
@@ -44,7 +39,6 @@ from squid_ui.interactions import (
     ActionProceed,
     ActionRequest,
     Actor,
-    BusySpec,
     EntitySelectionEvent,
     InteractionKind,
     PressEvent,
@@ -69,7 +63,6 @@ from squid_ui.planning.target import AnyTarget
 from squid_ui.primitives.nodes import Button, Row
 from squid_ui.profiling import (
     ActionStatus,
-    DetachedSpanRecorder,
     DispatchDisposition,
     DispatchResult,
     GenerationDecision,
@@ -87,7 +80,7 @@ from squid_ui.profiling import (
 from squid_ui.runtime.component import Component, ComponentTree
 from squid_ui.runtime.histories import History
 from squid_ui.runtime.owner import ComponentRuntime
-from squid_ui.runtime.presentation_state import PresentationState, SessionUpdate, apply_updates
+from squid_ui.runtime.presentation_state import PresentationState, apply_updates
 from squid_ui.runtime.reactivity import (
     ActionCommit,
     ActionContinuation,
@@ -96,8 +89,8 @@ from squid_ui.runtime.reactivity import (
     transaction,
 )
 from squid_ui.runtime.resources import AsyncBinding, PendingMode, abandon_superseded_loads
-from squid_ui.runtime.topics import Address, SubscriptionReconciler, TopicBus
-from squid_ui.scene.model import PlanMetrics, PlanReport, PlanResult
+from squid_ui.runtime.topics import Address, SubscriptionReconciler
+from squid_ui.scene.model import PlanResult
 from squid_ui.semantic import Status
 from squid_ui.sources import Position
 from squid_ui.target_types import ComponentsV2Target, DiscordPy27Adapter, DiscordPyAdapter
@@ -111,9 +104,54 @@ from squid_ui_discord.adapter import require_discord_py_target
 from squid_ui_discord.attachments import attachment_assets, files_for
 from squid_ui_discord.classic import render_message as render_classic_message
 from squid_ui_discord.classic_renderer import ClassicRenderer
-from squid_ui_discord.emoji import discord_emoji
 from squid_ui_discord.message_payload import MessageMode, MessagePayload
-from squid_ui_discord.render_cache import RenderProgramCache, RenderProgramCacheSnapshot
+from squid_ui_discord.message_root_candidates import (
+    _ADMITTED,
+    _REFUSED,
+    _Admission,
+    _ApplicationCandidate,
+    _BusyPaint,
+    _Candidate,
+    _DispatchProfile,
+    _drawn,
+    _LifecycleCandidate,
+    _PlanEnvironment,
+    _PlannedCandidate,
+    _RenewalBinding,
+    _scene_action_keys,
+    _SubmitBinding,
+)
+from squid_ui_discord.message_root_contracts import (
+    DEFAULT_EXPIRY,
+    ChallengePresenter,
+    ChallengeRequest,
+    CommittedHook,
+    ErrorHook,
+    ExpiryPolicy,
+    ExpirySupervisor,
+    FinishHook,
+    MessageAddress,
+    MessageRootSnapshot,
+    MessageRootStatus,
+    PresentedHook,
+    ProfiledScheduler,
+    ReactiveScheduler,
+    RenewEphemeral,
+    Scheduler,
+    TopicScheduler,
+)
+from squid_ui_discord.message_root_wiring import (
+    AnyMountedView,
+    ClassicMountedView,
+    MountedView,
+    _disable_all,
+    _EntityValues,
+    _SelectionValues,
+    _wired_entity_select,
+    _WiredButton,
+    _WiredSelect,
+)
+from squid_ui_discord.render_cache import RenderProgramCache
 from squid_ui_discord.renderer import MountedRenderer, V2Renderer
 from squid_ui_discord.rendering import RenderedMessage, render_message
 from squid_ui_discord.target import DISCORD_V2_DPY27, Target
@@ -228,62 +266,6 @@ def _unwrapped() -> Iterator[None]:
         raise
 
 
-class ErrorHook(Protocol):
-    """Host-provided handler for exceptions escaping a component callback."""
-
-    def __call__(self, interaction: discord.Interaction, error: Exception, source: str) -> Awaitable[None]: ...
-
-
-class FinishHook(Protocol):
-    """Observer told that a mount has finished, after its teardown."""
-
-    # Positional-only, as `MessageDestination` is: a named parameter would make the protocol demand
-    # that every observer spell the argument `mount`.
-    def __call__(self, message_root: AnyMessageRoot, /) -> Awaitable[None]: ...
-
-
-class PresentedHook(Protocol):
-    """Observer told that Discord accepted and the mount committed a generation.
-
-    Synchronous on purpose: it runs at the commit point, under the lock every operation
-    that can replace the visible message shares, so a hook that could await would be able
-    to wait on the mount that is calling it.
-    """
-
-    def __call__(self, message_root: AnyMessageRoot, /) -> None: ...
-
-
-class CommittedHook(Protocol):
-    """Observer told that an application render committed its runtime state.
-
-    Synchronous for the same reason as `PresentedHook`: commits run under the shared
-    render lock, where awaiting or re-entering the mount would deadlock.
-    """
-
-    def __call__(self, message_root: AnyMessageRoot, /) -> None: ...
-
-
-class Scheduler(Protocol):
-    """Anything that can absorb out-of-band refresh requests (see `MessageRootScheduler`)."""
-
-    def schedule(self, message_root: AnyMessageRoot) -> None: ...
-
-
-@runtime_checkable
-class ProfiledScheduler(Protocol):
-    """A scheduler that carries the profiler its mounts should inherit."""
-
-    @property
-    def profiler(self) -> Profiler: ...
-
-
-@runtime_checkable
-class ReactiveScheduler(Protocol):
-    """A scheduler that can preserve the component attribution of a bus change."""
-
-    def schedule_reactive(self, message_root: AnyMessageRoot, address: Address) -> None: ...
-
-
 type AnyMessageRoot = MessageRoot[Any, Any]
 """A mount of any target mode and adapter.
 
@@ -294,80 +276,6 @@ takes this instead; public signatures keep the precise generic.
 """
 
 
-type ResumedPress = Callable[[], Awaitable[None]]
-
-
-class ChallengeSupervisor(Protocol):
-    """Somewhere to run an approved press that is not the press that approved it.
-
-    The requirement this exists for: `transaction()` flattens rather than nests, so running
-    the challenged press from inside the approving handler would run it in the *dialog's*
-    transaction -- staging the panel's writes in the dialog's overlay, committing with it,
-    and unwinding through its error hook. A `PARALLEL_READ` press would not even misbehave,
-    it would raise, because `readonly_transaction()` refuses to nest.
-
-    Spawning a task from the approving handler does not escape it either: the transaction is
-    held in a `ContextVar` and a task started there inherits the context. So `resume` must
-    hand the work to a task whose own context predates the press -- in practice a queue
-    drained by something started at host startup. It is deliberately synchronous: an
-    implementation that could await would be tempted to await the press itself.
-    """
-
-    def resume(self, press: ResumedPress) -> None: ...
-
-
-@dataclass(frozen=True, slots=True)
-class ChallengeRequest:
-    """One press that stopped to ask its actor a question, and the two answers it takes.
-
-    `approve` *is* the resumed press: it re-enters `MessageRoot.dispatch` from the top and runs
-    the whole action. It must therefore be handed to a `ChallengeSupervisor` rather than
-    awaited from the dialog's own handler. `decline` only records the refusal and delivers
-    the challenge's wording, so it is safe to await anywhere.
-    """
-
-    message_root: AnyMessageRoot
-    interaction: discord.Interaction
-    """The interaction that asked. Its response has been spent on the question, so it is an
-    actor identity and a private answering channel -- never a handle to this mount's message."""
-    challenge: Challenge
-    key: str
-    """The routed binding key the approval resumes, which is what carries a grouped select's route."""
-    approve: ResumedPress
-    decline: ResumedPress
-
-
-class ChallengePresenter(Protocol):
-    """Shows a challenge and arranges for the answer to run outside the answering press.
-
-    Host-supplied, because a mount cannot open a dialog by itself: it holds no session
-    registry -- the lookup runs the other way -- and no supervisor. A mount whose guard
-    challenges without one configured treats that as a programmer error.
-    """
-
-    async def present(self, request: ChallengeRequest) -> None: ...
-
-
-@runtime_checkable
-class ExpirySupervisor(Protocol):
-    """A scheduler that observes mount edit-authority deadlines."""
-
-    def watch(self, message_root: AnyMessageRoot) -> Callable[[], None]: ...
-
-
-@runtime_checkable
-class TopicScheduler(Protocol):
-    """A scheduler backed by a topic bus (see `MessageRootScheduler`).
-
-    Separate from `Scheduler` because following is optional: a mount with no scheduler, or
-    one whose scheduler only absorbs refreshes, is simply not live-updated.
-    """
-
-    bus: TopicBus
-
-    def schedule(self, message_root: AnyMessageRoot) -> None: ...
-
-
 def _unique_by_identity(middleware: Sequence[ActionMiddleware]) -> tuple[ActionMiddleware, ...]:
     """Freeze middleware while treating the same installed instance as idempotent."""
     unique: list[ActionMiddleware] = []
@@ -375,257 +283,6 @@ def _unique_by_identity(middleware: Sequence[ActionMiddleware]) -> tuple[ActionM
         if not any(existing is candidate for existing in unique):
             unique.append(candidate)
     return tuple(unique)
-
-
-def _validate_warning(warning: float) -> None:
-    if not math.isfinite(warning) or warning <= 0:
-        message = "an expiry warning must be a finite positive number of seconds"
-        raise ValueError(message)
-
-
-@dataclass(frozen=True, slots=True)
-class PauseUpdates:
-    """Show status chrome before temporary edit authority expires."""
-
-    warning: float = 60.0
-
-    def __post_init__(self) -> None:
-        _validate_warning(self.warning)
-
-
-@dataclass(frozen=True, slots=True)
-class RenewEphemeral:
-    """Replace an expiring ephemeral panel with an explicit renewal screen."""
-
-    warning: float = 90.0
-    label: TextLike | None = None
-
-    def __post_init__(self) -> None:
-        _validate_warning(self.warning)
-
-
-type ExpiryPolicy = PauseUpdates | RenewEphemeral
-DEFAULT_EXPIRY = PauseUpdates()
-
-
-class MessageRootStatus(StrEnum):
-    """Which mount-owned generation the reader can currently see."""
-
-    ACTIVE = "active"
-    RENEWAL_ARMED = "renewal_armed"
-
-
-class _MountedBehaviour:
-    """What a mounted view does, independently of which components it holds.
-
-    A mixin over discord.py's `BaseView`, which both `View` and `LayoutView` derive from, so
-    the two mounted views differ in exactly one thing: their component vocabulary. Timeout,
-    dispatchability, the error hook, and the mount back-reference are the same behaviour in
-    both message modes, and a second copy of them would be a second thing to keep in step.
-    """
-
-    _root: AnyMessageRoot
-
-    def __init__(self, message_root: AnyMessageRoot, timeout: float | None) -> None:
-        super().__init__(timeout=timeout)  # type: ignore[call-arg]
-        self._root = message_root
-
-    async def on_timeout(self) -> None:
-        await self._root.handle_timeout()
-
-    def is_dispatchable(self) -> bool:
-        # A mount wants storing even when it draws nothing dispatchable, because
-        # `store_view` is gated on this and `add_view` is what starts the timeout task.
-        # A document of nothing but routed controls would otherwise never time out.
-        return True
-
-    async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item[Any]) -> None:
-        await self._root.handle_error(interaction, error, f"item:{type(item).__name__}")
-
-
-class MountedView(_MountedBehaviour, discord.ui.LayoutView):
-    """One render generation of a mounted component, as a Components V2 message."""
-
-
-class ClassicMountedView(_MountedBehaviour, discord.ui.View):
-    """One render generation of a mounted component, as a classic message's controls."""
-
-
-type AnyMountedView = MountedView | ClassicMountedView
-
-
-def _custom_id(message_root_id: str, generation: int, key: str) -> str:
-    """A per-render-unique control id for ``key``, within Discord's 100-char limit.
-
-    Nested components produce long dotted keys, and truncating those makes two controls
-    collide — Discord rejects the message and, worse, a click could route to the wrong
-    handler. Digest the key instead; dispatch itself goes by the in-process key.
-
-    The generation is part of the id because discord.py registers a replacement view before
-    the mount stops its predecessor. Reusing ids lets the predecessor unregister the new
-    view's controls when it stops, leaving visible buttons with no callback.
-    """
-    prefix = f"ctl:{message_root_id}:{generation}:"
-    custom_id = f"{prefix}{key}"
-    if len(custom_id) <= 100:
-        return custom_id
-    return f"{prefix}#{hashlib.blake2s(key.encode()).hexdigest()[:12]}"
-
-
-class _WiredButton(discord.ui.Button[AnyMountedView]):
-    def __init__(self, node: scene.Button, message_root: AnyMessageRoot, key: str, generation: int) -> None:
-        super().__init__(
-            style=getattr(discord.ButtonStyle, node.style.value),
-            label=node.label,
-            emoji=discord_emoji(node.emoji),
-            disabled=node.disabled,
-            custom_id=_custom_id(message_root.id, generation, key),
-        )
-        self._root = message_root
-        self._key = key
-        self._generation = generation
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        await self._root.dispatch(self._key, interaction, generation=self._generation)
-
-
-class _WiredSelect(discord.ui.Select[AnyMountedView]):
-    def __init__(self, node: scene.Select, message_root: AnyMessageRoot, key: str, generation: int) -> None:
-        super().__init__(
-            placeholder=node.placeholder,
-            min_values=node.min_values,
-            max_values=node.max_values,
-            disabled=node.disabled,
-            custom_id=_custom_id(message_root.id, generation, key),
-            options=[
-                discord.SelectOption(
-                    label=option.label,
-                    value=option.value,
-                    description=option.description,
-                    default=option.default,
-                    emoji=discord_emoji(option.emoji),
-                )
-                for option in node.options
-            ],
-        )
-        self._root = message_root
-        self._key = key
-        self._generation = generation
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        await self._root.dispatch(self._key, interaction, self.values, generation=self._generation)
-
-
-_CHANNEL_TYPES = {
-    ChannelType.TEXT: discord.ChannelType.text,
-    ChannelType.VOICE: discord.ChannelType.voice,
-    ChannelType.CATEGORY: discord.ChannelType.category,
-    ChannelType.ANNOUNCEMENT: discord.ChannelType.news,
-    ChannelType.ANNOUNCEMENT_THREAD: discord.ChannelType.news_thread,
-    ChannelType.PUBLIC_THREAD: discord.ChannelType.public_thread,
-    ChannelType.PRIVATE_THREAD: discord.ChannelType.private_thread,
-    ChannelType.STAGE_VOICE: discord.ChannelType.stage_voice,
-    ChannelType.FORUM: discord.ChannelType.forum,
-    ChannelType.MEDIA: discord.ChannelType.media,
-}
-
-
-def _default_value(value: EntityRef) -> discord.SelectDefaultValue:
-    kind = {
-        EntityKind.USER: discord.SelectDefaultValueType.user,
-        EntityKind.ROLE: discord.SelectDefaultValueType.role,
-        EntityKind.CHANNEL: discord.SelectDefaultValueType.channel,
-    }[value.kind]
-    return discord.SelectDefaultValue(id=value.id, type=kind)
-
-
-def _entity_ref(value: object) -> EntityRef:
-    if isinstance(value, discord.Role):
-        return EntityRef(EntityKind.ROLE, value.id)
-    if isinstance(value, discord.User | discord.Member):
-        return EntityRef(EntityKind.USER, value.id)
-    if isinstance(value, discord.abc.GuildChannel | discord.Thread):
-        return EntityRef(EntityKind.CHANNEL, value.id)
-    message = f"unsupported resolved entity {type(value).__name__}"
-    raise TypeError(message)
-
-
-@dataclass(frozen=True, slots=True)
-class _EntityValues:
-    refs: tuple[EntityRef, ...]
-    resolved: tuple[object, ...]
-
-
-type _SelectionValues = list[str] | _EntityValues | None
-
-
-class _EntityDispatch:
-    _root: AnyMessageRoot
-    _key: str
-    _generation: int
-
-    def _wire(self, message_root: AnyMessageRoot, key: str, generation: int) -> None:
-        self._root = message_root
-        self._key = key
-        self._generation = generation
-
-    async def _dispatch(self, interaction: discord.Interaction, values: Sequence[object]) -> None:
-        resolved = tuple(values)
-        await self._root.dispatch(
-            self._key,
-            interaction,
-            _EntityValues(tuple(_entity_ref(value) for value in resolved), resolved),
-            generation=self._generation,
-        )
-
-
-class _EntitySelectKwargs(TypedDict):
-    """The constructor arguments every entity select shares.
-
-    Spelled out rather than left as `dict[str, object]` because these are splatted into four
-    different discord.py select constructors, and an erased mapping makes every parameter of
-    every one of them unverifiable.
-    """
-
-    placeholder: str | None
-    min_values: int
-    max_values: int
-    disabled: bool
-    custom_id: str
-    default_values: list[discord.SelectDefaultValue]
-
-
-def _entity_kwargs(
-    node: scene.EntitySelect, message_root: AnyMessageRoot, key: str, generation: int
-) -> _EntitySelectKwargs:
-    return {
-        "placeholder": node.placeholder,
-        "min_values": node.min_values,
-        "max_values": node.max_values,
-        "disabled": node.disabled,
-        "custom_id": _custom_id(message_root.id, generation, key),
-        "default_values": [_default_value(value) for value in node.default_values],
-    }
-
-
-class _WiredUserSelect(_EntityDispatch, discord.ui.UserSelect[AnyMountedView]):
-    async def callback(self, interaction: discord.Interaction) -> None:
-        await self._dispatch(interaction, self.values)
-
-
-class _WiredRoleSelect(_EntityDispatch, discord.ui.RoleSelect[AnyMountedView]):
-    async def callback(self, interaction: discord.Interaction) -> None:
-        await self._dispatch(interaction, self.values)
-
-
-class _WiredChannelSelect(_EntityDispatch, discord.ui.ChannelSelect[AnyMountedView]):
-    async def callback(self, interaction: discord.Interaction) -> None:
-        await self._dispatch(interaction, self.values)
-
-
-class _WiredMentionableSelect(_EntityDispatch, discord.ui.MentionableSelect[AnyMountedView]):
-    async def callback(self, interaction: discord.Interaction) -> None:
-        await self._dispatch(interaction, self.values)
 
 
 def _wall_clock_now(scheduler: object) -> datetime:
@@ -645,347 +302,48 @@ def _wall_clock_now(scheduler: object) -> datetime:
     return value
 
 
-def _wired_entity_select(
-    node: scene.EntitySelect, message_root: AnyMessageRoot, key: str, generation: int
-) -> BaseSelect[Any]:
-    kwargs = _entity_kwargs(node, message_root, key, generation)
-    if node.entity_type is EntityType.USER:
-        item = _WiredUserSelect(**kwargs)
-    elif node.entity_type is EntityType.ROLE:
-        item = _WiredRoleSelect(**kwargs)
-    elif node.entity_type is EntityType.CHANNEL:
-        item = _WiredChannelSelect(channel_types=[_CHANNEL_TYPES[value] for value in node.channel_types], **kwargs)
-    else:
-        item = _WiredMentionableSelect(**kwargs)
-    item._wire(message_root, key, generation)
-    return item
-
-
-@dataclass(frozen=True, slots=True)
-class _SubmitBinding(ActionBinding):
-    """A form submission's binding, carrying the schema its values must be parsed against."""
-
-    spec: FormSpec | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class _RenewalBinding(ActionBinding):
-    """Framework lifecycle action kept out of application dispatch policy."""
-
-
-@dataclass(slots=True)
-class _Candidate:
-    """One staged render generation, which becomes the mount's state only when committed."""
-
-    view: AnyMountedView
-    rendered: RenderedMessage[Any]
-    tree: ComponentTree
-    handlers: dict[str, ActionBinding]
-    form_bindings: Mapping[str, FormBinding]
-    generation: int
-    revision: int
-    assets: tuple[Asset, ...]
-    # Presentation writes this render earned; a failed delivery simply drops them.
-    session_updates: tuple[SessionUpdate, ...]
-    settled: bool = False
-    """Whether this candidate has already been committed or rolled back.
-
-    Every path that draws a candidate owes it exactly one of those two endings. Which
-    candidate is outstanding is already unambiguous -- `_draw` stages subscriptions, and
-    the reconciler refuses a second staged set -- so what is left to get wrong is settling
-    the same one twice, and that is what this refuses.
-    """
-
-    @property
-    def payload(self) -> MessagePayload:
-        """The complete message this render delivers to.
-
-        The render already built it, in whichever mode the target chose. A message root does
-        not reassemble one, because doing so would be a second place that has to know what
-        each mode is allowed to carry.
-        """
-        return self.rendered.payload
-
-    @property
-    def plan(self) -> PlanResult:
-        return self.rendered.plan
-
-
-@dataclass(slots=True)
-class _PlannedCandidate:
-    """A staged application render whose visible identity was checked before drawing."""
-
-    plan: PlanResult
-    tree: ComponentTree
-    handlers: dict[str, ActionBinding]
-    form_bindings: Mapping[str, FormBinding]
-    revision: int
-    assets: tuple[Asset, ...]
-    session_updates: tuple[SessionUpdate, ...]
-    settled: bool = False
-
-
-type _ApplicationCandidate = _Candidate | _PlannedCandidate
-
-
-@dataclass(frozen=True, slots=True)
-class _PlanEnvironment:
-    """Every mutable owner input not carried by a component tree."""
-
-    target: object
-    chrome: Chrome
-    localization: Localization
-    palette: Palette
-    strict: bool
-    nav: NavFactory
-    status: TextLike | None
-    presentation_revision: int
-
-
 _SCHEDULED_REFRESH: ContextVar[object | None] = ContextVar("squid_ui_discord_scheduled_refresh", default=None)
 
 
-def _drawn(candidate: _ApplicationCandidate) -> _Candidate:
-    if not isinstance(candidate, _Candidate):
-        message = "an undrawn preflight candidate did not match the live scene"
-        raise LayoutInvariantError(message)
-    return candidate
-
-
-def _scene_action_keys(document: scene.Scene) -> tuple[str, ...]:
-    """Collect visible action references without allocating frontend controls."""
-    found: list[str] = []
-
-    def walk(value: object) -> None:
-        if isinstance(value, scene.Button | scene.Select | scene.EntitySelect):
-            found.append(value.action)
-            return
-        if is_dataclass(value) and not isinstance(value, type):
-            for item in fields(value):
-                walk(getattr(value, item.name))
-            return
-        if isinstance(value, Mapping):
-            for item in value.values():
-                walk(item)
-            return
-        if isinstance(value, Sequence) and not isinstance(value, str | bytes):
-            for item in value:
-                walk(item)
-
-    walk(document.body)
-    return tuple(found)
-
-
 @dataclass(slots=True)
-class _LifecycleCandidate:
-    """A framework-owned visible generation that commits no component runtime state."""
+class _LifecycleHooks:
+    """One mount's lifecycle observers, snapshotted per firing so hooks may register hooks.
 
-    view: AnyMountedView
-    rendered: RenderedMessage[Any]
-    handlers: dict[str, ActionBinding]
-    generation: int
-
-    @property
-    def payload(self) -> MessagePayload:
-        return self.rendered.payload
-
-
-@dataclass(frozen=True, slots=True)
-class MessageAddress:
-    """Where a mount's message is -- for links and diagnostics, never for writing to it.
-
-    Writing goes through an :class:`~squid_ui_discord.delivery.EditHandle`, which is
-    about credentials and when they expire. These are only coordinates, so they stay true
-    after every handle to the message has gone stale.
+    A failing observer is logged and swallowed: it must not abort another observer's
+    cleanup, nor the mount's own. The finish set fires at most once.
     """
 
-    message_id: int
-    channel_id: int
-    guild_id: int | None
-    jump_url: str
-    ephemeral: bool
+    presented: list[PresentedHook] = dataclass_field(default_factory=list)
+    committed: list[CommittedHook] = dataclass_field(default_factory=list)
+    finish: list[FinishHook] = dataclass_field(default_factory=list)
+    finish_fired: bool = False
 
+    def notify_presented(self, message_root: AnyMessageRoot) -> None:
+        """Notify observers after Discord and the matching visible state commit."""
+        for hook in tuple(self.presented):
+            try:
+                hook(message_root)
+            except Exception:
+                logger.exception("presented hook failed for mount %s", message_root.id)
 
-@dataclass(frozen=True, slots=True)
-class MessageRootSnapshot:
-    """One read-only look at a live message root, for host diagnostics.
+    def notify_committed(self, message_root: AnyMessageRoot) -> None:
+        """Notify observers after a complete application runtime commit."""
+        for hook in tuple(self.committed):
+            try:
+                hook(message_root)
+            except Exception:
+                logger.exception("committed hook failed for mount %s", message_root.id)
 
-    A single call rather than a dozen properties: it fixes what a mount is willing to say
-    about itself, and a caller cannot accidentally mutate what it reads. Everything here is
-    either a scalar or already immutable, so nothing is copied. The deeper payloads — the
-    components' declared state and the presentation session — stay behind `runtime` and
-    `presentation`, because building them costs more than a list of sessions should.
-    """
-
-    id: str
-    component: str
-    """Qualified class name of the root component."""
-    address: MessageAddress | None
-    generation: int
-    pending: bool
-    finished: bool
-    age: float
-    """Seconds since the mount was constructed."""
-    idle: float
-    """Seconds since the initial send or last accepted click — what the timeout counts."""
-    expires_in: float | None
-    """Seconds of idle timeout left, or `None` for a mount that never times out."""
-    lifecycle: MessageRootStatus
-    """Whether the application tree or framework renewal generation is visible."""
-    handle_expires_in: float | None
-    """Seconds of known edit authority left, or `None` for permanent/unknown authority."""
-    access: AccessPolicy
-    handler_keys: tuple[str, ...]
-    """Action keys the live generation answers to."""
-    suppressed: int
-    """Renders committed without a Discord edit because they matched the live generation."""
-    render_cache: RenderProgramCacheSnapshot
-    scene: scene.Scene | None
-    report: PlanReport | None
-    metrics: PlanMetrics | None
-
-
-@dataclass(slots=True)
-class _DispatchProfile:
-    """Mutable operation-local facts frozen into a dispatch result at the terminal branch."""
-
-    operation: OperationRecorder
-    interaction: discord.Interaction
-    generation: GenerationDecision
-    acknowledgement: DetachedSpanRecorder
-    action: ActionStatus = ActionStatus.NOT_RUN
-    presentation: PresentationStatus = PresentationStatus.NOT_REQUIRED
-    acknowledged: bool = False
-    finished: bool = False
-    resumed: bool = False
-    """Whether an approved challenge started this press, which decides what may be edited.
-
-    A resumed press carries the interaction that asked the question, not one that came from
-    this mount's message, so nothing in the dispatch may take a handle from it: not the
-    flush's edit target, not `_renew`'s standing-handle trade-up, and not the address a
-    mount without one would otherwise learn. The mount redraws where it already lives.
-    """
-
-    def decide_generation(self, active: int, *, rebased: bool = False) -> None:
-        self.generation = GenerationDecision(self.generation.submitted, active, rebased)
-
-    def acknowledge(self, source: str) -> None:
-        if not self.acknowledged and self.interaction.response.is_done():
-            self.acknowledged = True
-            self.acknowledgement.set_attribute("source", source)
-            self.acknowledgement.finish()
-
-    def finish(self, disposition: DispatchDisposition, error: Exception | None = None) -> None:
-        if self.finished:
+    async def run_finish(self, message_root: AnyMessageRoot) -> None:
+        # Snapshotted because a hook may register another, which belongs to no firing.
+        if self.finish_fired:
             return
-        self.finished = True
-        self.operation.increment("dispatch.rebased", int(self.generation.rebased))
-        self.acknowledge("action")
-        # Both challenge dispositions fall through to COMPLETED, which is right: asking a
-        # question and being told no are results, not failures.
-        status = (
-            TraceStatus.CANCELLED
-            if disposition is DispatchDisposition.CANCELLED
-            else TraceStatus.FAILED
-            if disposition
-            in {
-                DispatchDisposition.ACCESS_FAILED,
-                DispatchDisposition.GUARD_FAILED,
-                DispatchDisposition.ACTION_FAILED,
-                DispatchDisposition.DELIVERY_FAILED,
-            }
-            else TraceStatus.COMPLETED
-        )
-        detail = None if error is None else f"{type(error).__module__}.{type(error).__qualname__}"
-        self.operation.set_result(
-            TraceResult(
-                status,
-                detail,
-                DispatchResult(disposition, self.action, self.presentation, self.generation),
-            )
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class _Admission:
-    """What the admission stage decided, and the question it wants put to the actor.
-
-    Three-valued because a challenge is not a refusal the funnel can simply return on: the
-    dialog is presented after the action lock is released, so `_dispatch_binding` has to
-    carry it back out rather than answer it in place.
-    """
-
-    admitted: bool
-    challenge: Challenge | None = None
-
-
-_ADMITTED = _Admission(admitted=True)
-_REFUSED = _Admission(admitted=False)
-"""Refused *and already answered*: the guard denied or raised, and the profile is finished."""
-
-
-class _BusyPaint:
-    """One action's interim "working" render, and the ordering between it and the flush.
-
-    The paint is scheduled by the acknowledgement watchdog and the flush by the handler
-    returning, so the two race. They are ordered by this object's lock rather than by
-    cancellation: `close()` waits out a paint already in flight and then latches, so a
-    watchdog that wakes late paints nothing over the final render.
-    """
-
-    def __init__(
-        self,
-        message_root: AnyMessageRoot,
-        key: str,
-        busy: BusySpec,
-        interaction: discord.Interaction,
-        *,
-        resumed: bool = False,
-    ) -> None:
-        self._root = message_root
-        self._key = key
-        self._busy = busy
-        self._interaction = interaction
-        self._resumed = resumed
-        self._lock = asyncio.Lock()
-        self._closed = False
-        self._shown = False
-
-    @property
-    def shown(self) -> bool:
-        """Whether an interim render is currently what the reader is looking at."""
-        return self._shown
-
-    async def show(self, profile: _DispatchProfile) -> None:
-        """Relabel the pressed control and disable the panel, once."""
-        async with self._lock:
-            if self._closed or self._shown or self._root._finished:
-                return
-            pending = self._busy.pending
-            label = self._root._chrome_text(self._root.chrome.working if pending is None else pending)
-            source = self._root._source(self._interaction, resumed=self._resumed)
-            wrote = await self._root._repaint(self._key, label, through=source)
-            if wrote is None:
-                # Nothing could write, so the click is still unanswered: the watchdog goes
-                # on to defer it at the usual deadline.
-                return
-            self._shown = True
-            if wrote is source:
-                profile.acknowledge("busy")
-
-    async def close(self) -> bool:
-        """Stop any further painting and report whether one is on screen."""
-        async with self._lock:
-            self._closed = True
-            return self._shown
-
-    async def restore(self) -> None:
-        """Put the committed scene back, live controls and all."""
-        async with self._lock:
-            if not self._shown or self._root._finished:
-                return
-            self._shown = False
-            await self._root._repaint(None, None, through=self._root._source(self._interaction, resumed=self._resumed))
+        self.finish_fired = True
+        for hook in tuple(self.finish):
+            try:
+                await hook(message_root)
+            except Exception:
+                logger.exception("finish hook failed for mount %s", message_root.id)
 
 
 class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = DiscordPy27Adapter]:
@@ -1142,10 +500,7 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
         # Renders committed without a Discord edit because the reader already had them.
         self._suppressed = 0
         self._finished = False
-        self._finish_hooks: list[FinishHook] = []
-        self._committed_hooks: list[CommittedHook] = []
-        self._presented_hooks: list[PresentedHook] = []
-        self._hooks_fired = False
+        self._hooks = _LifecycleHooks()
         self._assets: tuple[Asset, ...] = ()
         self._plan: PlanResult | None = None
         self._planned_tree: ComponentTree | None = None
@@ -1817,7 +1172,7 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
         self._commit_render(candidate)
         if isinstance(candidate, _Candidate):
             candidate.view.stop()
-        self._notify_committed()
+        self._hooks.notify_committed(self)
         self._suppressed += 1
         if profile is not None:
             profile.increment("mount.suppressed", 1)
@@ -1826,8 +1181,8 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
     def _commit_presented(self, candidate: _Candidate) -> None:
         """Commit one successfully delivered candidate and notify both observer boundaries."""
         self._commit(candidate)
-        self._notify_committed()
-        self._notify_presented()
+        self._hooks.notify_committed(self)
+        self._hooks.notify_presented(self)
 
     def _commit_renewal(self, candidate: _LifecycleCandidate) -> None:
         """Publish a renewal generation while retaining the hidden application runtime."""
@@ -1839,23 +1194,7 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
         candidate.view.timeout = self._remaining_timeout()
         self._swap_view(candidate.view)
         live.track(self)
-        self._notify_presented()
-
-    def _notify_presented(self) -> None:
-        """Notify observers after Discord and the matching visible state commit."""
-        for hook in tuple(self._presented_hooks):
-            try:
-                hook(self)
-            except Exception:
-                logger.exception("presented hook failed for mount %s", self.id)
-
-    def _notify_committed(self) -> None:
-        """Notify observers after a complete application runtime commit."""
-        for hook in tuple(self._committed_hooks):
-            try:
-                hook(self)
-            except Exception:
-                logger.exception("committed hook failed for mount %s", self.id)
+        self._hooks.notify_presented(self)
 
     def _rollback(self, candidate: _Candidate) -> None:
         """Discard an undelivered candidate; the message still shows the live generation.
@@ -3255,10 +2594,10 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
                     run_hooks = True
         except BaseException:
             if run_hooks:
-                await self._run_finish_hooks()
+                await self._hooks.run_finish(self)
             raise
         if run_hooks:
-            await self._run_finish_hooks()
+            await self._hooks.run_finish(self)
 
     async def schedule(self) -> None:
         """Ask for an out-of-band re-render (background state change, not an interaction).
@@ -3367,7 +2706,7 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
         The callback runs under the render lock and must not await or call an operation that
         acquires it. Schedule asynchronous follow-up through an owned supervisor or a queue.
         """
-        self._presented_hooks.append(callback)
+        self._hooks.presented.append(callback)
 
     def on_committed(self, callback: CommittedHook) -> None:
         """Synchronously observe application commits, including suppressed presentations.
@@ -3375,7 +2714,7 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
         The callback runs under the render lock and must not await or call an operation that
         acquires it. Schedule asynchronous follow-up through an owned supervisor or a queue.
         """
-        self._committed_hooks.append(callback)
+        self._hooks.committed.append(callback)
 
     def on_finish(self, callback: FinishHook) -> None:
         """Call `callback` once this mount has finished, after its teardown.
@@ -3389,18 +2728,7 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
         message roots cannot loop back into this one. A hook registered on an already-finished message root
         never fires -- `finished` is the caller's to check first.
         """
-        self._finish_hooks.append(callback)
-
-    async def _run_finish_hooks(self) -> None:
-        # Snapshotted because a hook may register another, which belongs to no firing.
-        if self._hooks_fired:
-            return
-        self._hooks_fired = True
-        for hook in tuple(self._finish_hooks):
-            try:
-                await hook(self)
-            except Exception:
-                logger.exception("finish hook failed for mount %s", self.id)
+        self._hooks.finish.append(callback)
 
     async def finish(self, *, disable: bool = True) -> None:
         """Stop dispatching; optionally leave the message with its controls disabled."""
@@ -3437,10 +2765,10 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
                     run_hooks = True
         except BaseException:
             if run_hooks:
-                await self._run_finish_hooks()
+                await self._hooks.run_finish(self)
             raise
         if run_hooks:
-            await self._run_finish_hooks()
+            await self._hooks.run_finish(self)
 
     async def dismiss(self) -> None:
         """Delete the delivered message and finish this mount."""
@@ -3458,10 +2786,10 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
                     run_hooks = True
         except BaseException:
             if run_hooks:
-                await self._run_finish_hooks()
+                await self._hooks.run_finish(self)
             raise
         if run_hooks:
-            await self._run_finish_hooks()
+            await self._hooks.run_finish(self)
 
     def _teardown(self) -> None:
         """Stop the live view and unmount the committed tree, once."""
@@ -3485,14 +2813,6 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
             await self.on_error(interaction, error, source)
             return
         logger.error("unhandled component error in %s", source, exc_info=error)
-
-
-def _disable_all(view: discord.ui.LayoutView | discord.ui.View) -> None:
-    children = view.walk_children() if isinstance(view, discord.ui.LayoutView) else view.children
-    for item in children:
-        target = item.item if isinstance(item, discord.ui.DynamicItem) else item
-        if isinstance(target, discord.ui.Button | discord.ui.Select) or hasattr(target, "disabled"):
-            target.disabled = True  # pyrefly: ignore  # guarded by hasattr
 
 
 def current_message_root(component: Component[Any], user_id: int, **options: Any) -> MessageRoot:

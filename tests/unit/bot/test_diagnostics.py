@@ -19,7 +19,7 @@ from squid_ui_discord import (
     V2_LIMITS as LIMITS,
 )
 from squid_ui_discord import MessageRoot, Owner
-from squid_ui_discord.message_root import MountedView
+from squid_ui_discord.message_root_wiring import MountedView
 from squid_ui_discord.testing import assert_within_limits, commit_render, fake_interaction
 from tests.helpers.discord import make_layout_bot
 

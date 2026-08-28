@@ -79,7 +79,9 @@ from squid_ui_discord import (
     delivery,
 )
 from squid_ui_discord.access import Allowed, Check, Denied
-from squid_ui_discord.message_root import MessageRootStatus, _BusyPaint, _custom_id
+from squid_ui_discord.message_root_candidates import _BusyPaint
+from squid_ui_discord.message_root_contracts import MessageRootStatus
+from squid_ui_discord.message_root_wiring import _custom_id
 from squid_ui_discord.testing import (
     assert_within_limits,
     commit_render,

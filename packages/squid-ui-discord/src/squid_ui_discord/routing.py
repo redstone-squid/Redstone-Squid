@@ -50,7 +50,7 @@ from squid_ui.routing import Route
 from squid_ui.target_types import DiscordPyAdapter
 from squid_ui_discord._invocation_context import invocation_scope
 from squid_ui_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
-from squid_ui_discord.message_root import ErrorHook
+from squid_ui_discord.message_root_contracts import ErrorHook
 
 logger = logging.getLogger(__name__)
 _NOOP_PROFILER = NoOpProfiler()
