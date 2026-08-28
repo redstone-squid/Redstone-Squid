@@ -125,6 +125,11 @@ not implemented here.
 
 ## Still open, deliberately
 
+> Postscript, 2026-08-28: Candidate B's goal was reached by "planning: enforce the resolved
+> primitive boundary" (`2ccdbbb5`), which drove package sources to zero errors; the last 48
+> test-file errors were then fixed directly and `pyrefly-baseline.json` retired entirely.
+> Nothing below remains open.
+
 - **Candidate B** — sixteen lowered counterpart classes and a conversion for each, since
   `dataclasses.replace` returns whatever type it was handed and cannot narrow. Retires the 48
   remaining text errors in `v2.py`, `classic.py`, `realization.py` and `dialect.py`.
