@@ -14,8 +14,8 @@ type ContentLike = ContentItem | TextLike | Iterable[ContentItem | TextLike]
 """Whatever a caller hands a widget's content slot.
 
 Deliberately dialect-erased. `normalize_content` classifies an `object` at runtime, so
-there is no static type on the way in to carry a mode, and a widget cannot tell whether the
-nodes it was given are portable or V2-only. Tracking it would mean a `ModeT` on
+there is no static type on the way in to carry a render target, and a widget cannot tell whether the
+nodes it was given are portable or V2-only. Tracking it would mean a `RenderTargetT` on
 `StateMachine` and `MachineControls` and every machine implementing them; until that is
 worth doing, the planner remains the thing that rejects a V2-only node in a classic message
 here, and the static guarantee covers content written directly in a `render()` rather than

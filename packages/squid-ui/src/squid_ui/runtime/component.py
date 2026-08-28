@@ -98,17 +98,19 @@ from squid_ui.semantic import (
 from squid_ui.semantic import Toggle as SemanticToggle
 from squid_ui.target_types import RenderTarget
 
-type RenderNode[ModeT = RenderTarget] = LayoutNode[ModeT]
-type RenderResult[ModeT = RenderTarget] = Document[ModeT] | LayoutNode[ModeT] | Sequence[LayoutNode[ModeT]]
+type RenderNode[RenderTargetT = RenderTarget] = LayoutNode[RenderTargetT]
+type RenderResult[RenderTargetT = RenderTarget] = (
+    Document[RenderTargetT] | LayoutNode[RenderTargetT] | Sequence[LayoutNode[RenderTargetT]]
+)
 
 
 type AnyComponent = Component[Any]
-"""A mounted component of any target mode.
+"""A mounted component for any render target.
 
-`Component`'s `ModeT` defaults, so a bare `Component` annotation means `Component[RenderTarget]`
-and rejects every other mode -- including `Self` inside `Component`'s own methods. The tree
-machinery below holds components of whatever mode the caller mounted, so it says so, in the same
-spirit as `AnyTarget`.
+`Component`'s `RenderTargetT` defaults, so a bare `Component` annotation means `Component[RenderTarget]`
+and rejects every other target -- including `Self` inside `Component`'s own methods. The tree
+machinery below holds components for whatever target the caller mounted, so it says so, in the
+same spirit as `AnyTarget`.
 """
 
 
@@ -198,12 +200,12 @@ class _SpliceResult:
     added: tuple[tuple[str, Component], ...]
 
 
-ModeT = TypeVar("ModeT", contravariant=True, default=RenderTarget)
+RenderTargetT = TypeVar("RenderTargetT", contravariant=True, default=RenderTarget)
 """The dialects a component's rendered nodes can be drawn in.
 
 Declared the old way, and contravariant on purpose, in a file that otherwise uses PEP 695.
-`ModeT` reaches this class only through `RenderResult[ModeT]`, which is contravariant
-because `Renderable` puts the mode in a parameter position -- and neither pyrefly nor
+`RenderTargetT` reaches this class only through `RenderResult[RenderTargetT]`, which is contravariant
+because `Renderable` puts the render target in a parameter position -- and neither pyrefly nor
 basedpyright infers variance through that nesting, so both settle on invariant. Invariant is
 the one answer that makes the whole design useless: a portable `sl.Component` could not be
 mounted on a Components V2 screen, and every consumer would have to restate a dialect it
@@ -212,7 +214,7 @@ to say it.
 """
 
 
-class Component(StateOwner, Generic[ModeT]):
+class Component(StateOwner, Generic[RenderTargetT]):
     """Base class for mounted, stateful views."""
 
     _runtime: RuntimeOwner | None = None
@@ -245,15 +247,15 @@ class Component(StateOwner, Generic[ModeT]):
     def on_state_rollback(self) -> None:
         self.__dict__["_state_revision"] = self.__dict__.get("_state_revision", 0) + 1
 
-    def render(self) -> RenderResult[ModeT]:
+    def render(self) -> RenderResult[RenderTargetT]:
         """Describe the message for the current state. Pure and synchronous."""
         raise NotImplementedError
 
-    def boundary(self, child: Component[ModeT], *, key: str) -> Boundary:
+    def boundary(self, child: Component[RenderTargetT], *, key: str) -> Boundary:
         """Place child in this render tree under a stable key and namespace.
 
         The child is bound to this component's own dialect. `Component` is contravariant in
-        it -- `render` returns a `RenderResult[ModeT]`, which is contravariant -- so a
+        it -- `render` returns a `RenderResult[RenderTargetT]`, which is contravariant -- so a
         portable child goes anywhere, while a V2-only child may only be embedded by a parent
         that is itself V2-only. A bare `Component` here would have accepted portable children
         alone, which is every child except the ones a V2 screen is actually built from.
