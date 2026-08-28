@@ -2861,6 +2861,10 @@ class MessageRoot[
         logger.error("unhandled component error in %s", source, exc_info=error)
 
 
-def current_message_root(component: Component[Any], user_id: int, **options: Any) -> MessageRoot:
-    """Construct a mount whose controls belong to one Discord user."""
+def owner_message_root(
+    component: Component[ComponentsV2Target],
+    user_id: int,
+    **options: Unpack[MessageRootBehaviorOptions],
+) -> MessageRoot:
+    """Construct a V2 mount whose controls belong to one Discord user."""
     return MessageRoot(component, access=Owner(user_id), **options)
