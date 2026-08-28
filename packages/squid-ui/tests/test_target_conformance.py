@@ -14,7 +14,6 @@ import pytest
 
 import squid_ui as sl
 from squid_ui import scene, semantic
-from squid_ui.capabilities import Capability
 from squid_ui.entity import EntityKind, EntityRef, EntityType
 from squid_ui.forms import FormSpec, TextField
 from squid_ui.grids import GridCell
