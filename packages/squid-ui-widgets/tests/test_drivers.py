@@ -38,7 +38,11 @@ class Probe:
     def initial_state(self) -> sp.TabsState:
         return sp.TabsState("start")
 
-    def render(self, state: sp.TabsState, controls: sp.MachineControls[sp.TabsState]):
+    def render(
+        self,
+        state: sp.TabsState,
+        controls: sp.MachineControls[sp.TabsState, sl.ComponentsV2Target],
+    ) -> sl.runtime.component.RenderResult[sl.ComponentsV2Target]:
         content = controls.content([Echo()] if self.embed else [sl.paragraph(state.selected)], prefix="body")
         # `controls.form` hands back content in one shell and a control in the other, so every
         # machine in the library branches here exactly like this. See the test below.
@@ -221,7 +225,7 @@ class TestRouteDriverTransition:
     def test_it_applies_input_the_routed_shell_could_not_apply_at_render_time(self) -> None:
         """The host's half of the `input` phase: decode the state from the id, then apply the
         values that arrived with the interaction."""
-        driver: sp.RouteDriver[sp.TabsState] = sp.RouteDriver(lambda request: request.action)
+        driver: sp.RouteDriver[sp.TabsState, sl.ComponentsV2Target] = sp.RouteDriver(lambda request: request.action)
         machine = Probe()
 
         settled = driver.transition(machine, machine.initial_state, "pick", values=("two",))
@@ -229,7 +233,7 @@ class TestRouteDriverTransition:
         assert settled == sp.TabsState("two")
 
     def test_it_applies_a_submission_the_same_way(self) -> None:
-        driver: sp.RouteDriver[sp.TabsState] = sp.RouteDriver(lambda request: request.action)
+        driver: sp.RouteDriver[sp.TabsState, sl.ComponentsV2Target] = sp.RouteDriver(lambda request: request.action)
         machine = Probe()
 
         settled = driver.transition(machine, machine.initial_state, "edit", submitted={"value": "typed"})

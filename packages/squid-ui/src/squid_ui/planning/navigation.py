@@ -109,7 +109,14 @@ class NavigationContext:
 
 
 type NavNode = Row | SelectMenu | RoutedSelect | Sep | Thumbnail | Gallery | RawItem
-type NavFactory = Callable[[NavigationContext], Sequence[NavNode]]
+type MountNavNode = Row | SelectMenu | RoutedSelect | RawItem
+"""Navigation a live component may author before its Discord mode is selected.
+
+`NavNode` is wider because planner-internal pagination already knows its concrete target and
+may use V2-only structural nodes. A mount navigation factory runs above that decision, so
+admitting `Gallery`, `Thumbnail`, or `Sep` here falsely made every consumer target-erased.
+"""
+type NavFactory = Callable[[NavigationContext], Sequence[MountNavNode]]
 type PlannedNav = Callable[[NavigationState], Sequence[NavNode]]
 
 NAV_FACTORY_CONTEXT = ContextKey[NavFactory]("nav_factory")
@@ -143,7 +150,7 @@ def navigation_controls(context: NavigationContext) -> Row:
     )
 
 
-def default_nav(context: NavigationContext) -> Sequence[NavNode]:
+def default_nav(context: NavigationContext) -> Sequence[MountNavNode]:
     """The stock factory shared by materialized pages and source windows."""
     return (navigation_controls(context),)
 
@@ -183,7 +190,7 @@ def seek_control(context: NavigationContext) -> SelectMenu | None:
     )
 
 
-def page_select_nav(context: NavigationContext) -> Sequence[NavNode]:
+def page_select_nav(context: NavigationContext) -> Sequence[MountNavNode]:
     """`default_nav` plus a jump select wherever the cursor can address a page.
 
     Opt in per mount (`MessageRoot(..., nav=sl.page_select_nav)`): a select is a whole component
@@ -220,6 +227,7 @@ __all__ = [
     "MATERIALIZED_SEEK_KEY",
     "NAV_FACTORY_CONTEXT",
     "SEEK_OPTION_LIMIT",
+    "MountNavNode",
     "NavFactory",
     "NavNode",
     "NavigationContext",

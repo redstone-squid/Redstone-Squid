@@ -2,13 +2,13 @@
 
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
-from typing import cast
 
 from squid_ui.factories import action_controls, heading, note, stack
 from squid_ui.primitives import Lines
 from squid_ui.runtime.component import RenderResult
 from squid_ui.semantic import LayoutNode
 from squid_ui.sources import ORIGIN, Position
+from squid_ui.target_types import DiscordTarget
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 from squid_ui_widgets._paging import window
@@ -23,10 +23,12 @@ class RankedListState:
     position: Position = ORIGIN
 
 
-type ContentHook = ContentLike | Callable[[int], ContentLike]
+type ContentHook[RenderTargetT: DiscordTarget = DiscordTarget] = (
+    ContentLike[RenderTargetT] | Callable[[int], ContentLike[RenderTargetT]]
+)
 
 
-class RankedList[EntryT]:
+class RankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget]:
     """Render a fully materialized ranking through either machine shell."""
 
     def __init__(
@@ -38,12 +40,12 @@ class RankedList[EntryT]:
         value: Projector[EntryT] | None = None,
         identity: Projector[EntryT] | None = None,
         heading: TextLike | None = None,
-        header: ContentHook | None = None,
-        footer: ContentHook | None = None,
+        header: ContentHook[RenderTargetT] | None = None,
+        footer: ContentHook[RenderTargetT] | None = None,
         page_size: int | None = None,
         top_n: int | None = None,
         limit: int | None = None,
-        empty: ContentLike = "No entries",
+        empty: ContentLike[RenderTargetT] = "No entries",
         initial_position: Position = ORIGIN,
     ) -> None:
         self.key = require_key(key, name="RankedList.key")
@@ -73,7 +75,9 @@ class RankedList[EntryT]:
     def initial_state(self) -> RankedListState:
         return self._initial_state
 
-    def build_component(self, *, initial: RankedListState | None = None) -> ComponentDriver[RankedListState]:
+    def build_component(
+        self, *, initial: RankedListState | None = None
+    ) -> ComponentDriver[RankedListState, RenderTargetT]:
         """Build the in-memory shell for this ranking."""
         return ComponentDriver(self, initial=initial)
 
@@ -94,16 +98,18 @@ class RankedList[EntryT]:
 
     def _hook(
         self,
-        hook: ContentHook,
+        hook: ContentHook[RenderTargetT],
         total: int,
-        controls: MachineControls[RankedListState],
+        controls: MachineControls[RankedListState, RenderTargetT],
         *,
         name: str,
-    ) -> tuple[LayoutNode, ...]:
+    ) -> tuple[LayoutNode[RenderTargetT], ...]:
         value = hook(total) if callable(hook) else hook
         return controls.content(normalize_content(value, name=name), prefix=name)
 
-    def render(self, state: RankedListState, controls: MachineControls[RankedListState]) -> RenderResult:
+    def render(
+        self, state: RankedListState, controls: MachineControls[RankedListState, RenderTargetT]
+    ) -> RenderResult[RenderTargetT]:
         displayed = self.entries if self.top_n is None else self.entries[: self.top_n]
         total = len(displayed)
         if self.page_size is None:
@@ -139,16 +145,13 @@ class RankedList[EntryT]:
             if pages > 1
             else None
         )
-        return cast(
-            RenderResult,
-            stack(
-                heading(self.heading) if self.heading is not None else None,
-                *(self._hook(self.header, total, controls, name="header") if self.header is not None else ()),
-                *body,  # type: ignore[arg-type]
-                note(controls.chrome.page_footer(page + 1, pages)) if pages > 1 else None,
-                pager,
-                *(self._hook(self.footer, total, controls, name="footer") if self.footer is not None else ()),
-            ),
+        return stack(
+            heading(self.heading) if self.heading is not None else None,
+            *(self._hook(self.header, total, controls, name="header") if self.header is not None else ()),
+            *body,
+            note(controls.chrome.page_footer(page + 1, pages)) if pages > 1 else None,
+            pager,
+            *(self._hook(self.footer, total, controls, name="footer") if self.footer is not None else ()),
         )
 
 

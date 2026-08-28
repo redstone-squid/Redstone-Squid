@@ -3,7 +3,7 @@
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from types import MappingProxyType
-from typing import Any, cast
+from typing import Any, Generic, TypeVar, cast
 
 from squid_ui.document import Document
 from squid_ui.factories import action_controls, heading, paragraph, stack, status
@@ -21,8 +21,9 @@ from squid_ui.semantic import (
     RoutedChoices,
     Tone,
 )
+from squid_ui.target_types import RenderTarget
 from squid_ui.text import TextLike
-from squid_ui_widgets._content import ContentLike, display_text, normalize_content, require_key
+from squid_ui_widgets._content import ContentItem, ContentLike, display_text, normalize_content, require_key
 from squid_ui_widgets.commit import CommitMode
 from squid_ui_widgets.drivers import (
     ComponentDriver,
@@ -34,6 +35,10 @@ from squid_ui_widgets.drivers import (
 
 type EditorValues = Mapping[str, object]
 type EditorCommitHandler = Callable[[TransitionEvent[EditorState], EditorValues, frozenset[str]], Awaitable[None]]
+
+StateT = TypeVar("StateT")
+ValueT = TypeVar("ValueT")
+RenderTargetT = TypeVar("RenderTargetT", bound=RenderTarget, contravariant=True, default=RenderTarget)
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,7 +64,7 @@ def _formatted(value: object) -> str:
     return display_text(value)
 
 
-class EditorSection[StateT, ValueT]:
+class EditorSection(Generic[StateT, ValueT, RenderTargetT]):
     """A typed adapter between one editor value and its interactive section state."""
 
     def __init__(
@@ -71,7 +76,7 @@ class EditorSection[StateT, ValueT]:
         load: Callable[[ValueT], StateT],
         dump: Callable[[StateT], ValueT],
         summary: Callable[[ValueT], TextLike],
-        machine: StateMachine[StateT] | None = None,
+        machine: StateMachine[StateT, RenderTargetT] | None = None,
         form: FormSpec | None = None,
         issues: Callable[[StateT], Iterable[FormIssue]] | None = None,
     ) -> None:
@@ -93,7 +98,7 @@ class EditorSection[StateT, ValueT]:
         form: FormLike,
         *,
         summary: Callable[[Mapping[str, object]], TextLike] | None = None,
-    ) -> EditorSection[tuple[tuple[str, object], ...], Mapping[str, object]]:
+    ) -> EditorSection[tuple[tuple[str, object], ...], Mapping[str, object], RenderTarget]:
         """Adapt one form schema into an editor section."""
         spec = form.spec() if isinstance(form, Form) else form
         initial_values = {
@@ -125,7 +130,7 @@ class EditorSection[StateT, ValueT]:
                 parts.append(f"{display_text(field.label)}: {_formatted(formatted)}")
             return " · ".join(parts)
 
-        return cls(
+        return EditorSection[tuple[tuple[str, object], ...], Mapping[str, object], RenderTarget](
             key,
             label,
             initial=tuple(initial_values.items()),
@@ -140,15 +145,15 @@ class EditorSection[StateT, ValueT]:
         cls,
         key: str,
         label: TextLike,
-        machine: StateMachine[StateT],
+        machine: StateMachine[StateT, RenderTargetT],
         *,
         load: Callable[[ValueT], StateT],
         dump: Callable[[StateT], ValueT],
         summary: Callable[[ValueT], TextLike],
         issues: Callable[[StateT], Iterable[FormIssue]] | None = None,
-    ) -> EditorSection[StateT, ValueT]:
+    ) -> EditorSection[StateT, ValueT, RenderTargetT]:
         """Adapt a nested pure machine into an editor section."""
-        return cls(
+        section: EditorSection[StateT, ValueT, RenderTargetT] = EditorSection(
             key,
             label,
             initial=machine.initial_state,
@@ -158,6 +163,7 @@ class EditorSection[StateT, ValueT]:
             machine=machine,
             issues=issues,
         )
+        return section
 
     def value(self, state: EditorState) -> ValueT:
         """Return this section's precisely typed current value."""
@@ -167,17 +173,31 @@ class EditorSection[StateT, ValueT]:
             raise KeyError(message)
         return self.dump(cast(StateT, slot.state))
 
+    def form_prefill(self, state: StateT) -> Mapping[str, object]:
+        """Project a form section to string-keyed values, rejecting a mismatched adapter."""
+        value = self.dump(state)
+        if not isinstance(value, Mapping):
+            message = f"Editor section {self.key!r} with a form must dump a mapping"
+            raise TypeError(message)
+        result: dict[str, object] = {}
+        for key, item in value.items():
+            if not isinstance(key, str):
+                message = f"Editor section {self.key!r} form value keys must be strings"
+                raise TypeError(message)
+            result[key] = item
+        return result
 
-class Editor:
+
+class Editor[RenderTargetT: RenderTarget = RenderTarget]:
     """A pure editor whose form and nested-machine sections share one commit boundary."""
 
     def __init__(
         self,
         title: TextLike,
-        sections: Iterable[EditorSection[Any, Any]],
+        sections: Iterable[EditorSection[Any, Any, RenderTargetT]],
         *,
         key: str = "editor",
-        preview: Callable[[EditorValues], ContentLike] | None = None,
+        preview: Callable[[EditorValues], ContentLike[RenderTargetT]] | None = None,
         commit: CommitMode = CommitMode.EXPLICIT,
         commit_label: TextLike | None = None,
         validate: Callable[[EditorValues], Iterable[FormIssue]] | None = None,
@@ -223,7 +243,7 @@ class Editor:
         *,
         initial: EditorValues | EditorState | None = None,
         on_commit: EditorCommitHandler | None = None,
-    ) -> ComponentDriver[EditorState]:
+    ) -> ComponentDriver[EditorState, RenderTargetT]:
         """Build an in-memory editor and dispatch each committed value change once."""
         state = self.initial_from(initial) if isinstance(initial, Mapping) else initial
 
@@ -284,7 +304,7 @@ class Editor:
             ),
         )
 
-    def _nested_action(self, action: str) -> tuple[EditorSection[Any, Any], str] | None:
+    def _nested_action(self, action: str) -> tuple[EditorSection[Any, Any, RenderTargetT], str] | None:
         if not action.startswith("section:"):
             return None
         remainder = action.removeprefix("section:")
@@ -352,7 +372,7 @@ class Editor:
             slot = self._slot(state, key)
             if section is None or section.form is None or slot is None:
                 return None
-            return section.form.with_prefill(cast(Mapping[str, object], section.dump(slot.state)))
+            return section.form.with_prefill(section.form_prefill(slot.state))
         nested = self._nested_action(action)
         if nested is None:
             return None
@@ -369,12 +389,14 @@ class Editor:
         return frozenset(slot.key for slot in state.sections if before.get(slot.key) != slot.committed)
 
     @staticmethod
-    def _nodes(rendered: RenderResult) -> tuple[LayoutNode, ...]:
+    def _nodes(rendered: RenderResult[RenderTargetT]) -> tuple[LayoutNode[RenderTargetT], ...]:
         if isinstance(rendered, Document):
             return rendered.children
         return tuple(rendered) if isinstance(rendered, Sequence) else (rendered,)
 
-    def render(self, state: EditorState, controls: MachineControls[EditorState]) -> RenderResult:
+    def render(
+        self, state: EditorState, controls: MachineControls[EditorState, RenderTargetT]
+    ) -> RenderResult[RenderTargetT]:
         if state.editing is not None:
             section = self._sections.get(state.editing)
             slot = self._slot(state, state.editing)
@@ -415,7 +437,7 @@ class Editor:
             value = section.dump(slot.state)
             if section.form is not None:
                 edit = controls.form(
-                    section.form.with_prefill(cast(Mapping[str, object], value)),
+                    section.form.with_prefill(section.form_prefill(slot.state)),
                     f"submit:{section.key}",
                     key=f"{self.key}.{section.key}",
                     label=controls.chrome.edit,
@@ -462,12 +484,12 @@ class Editor:
         )
 
 
-class _NestedControls[ParentStateT, ChildStateT]:
+class _NestedControls[ParentStateT, ChildStateT, RenderTargetT: RenderTarget]:
     """Namespace child-machine controls through an Editor transition."""
 
     def __init__(
         self,
-        parent: MachineControls[ParentStateT],
+        parent: MachineControls[ParentStateT, RenderTargetT],
         editor_key: str,
         section_key: str,
         pattern_key: str | None,
@@ -486,7 +508,9 @@ class _NestedControls[ParentStateT, ChildStateT]:
             key = key.removeprefix(f"{self.pattern_key}.")
         return f"{self.editor_key}.{self.section_key}.{key}"
 
-    def content(self, content: Sequence[Any], *, prefix: str) -> tuple[LayoutNode, ...]:
+    def content(
+        self, content: Sequence[ContentItem[RenderTargetT]], *, prefix: str
+    ) -> tuple[LayoutNode[RenderTargetT], ...]:
         return self.parent.content(content, prefix=self._key(prefix))
 
     def action_control(
