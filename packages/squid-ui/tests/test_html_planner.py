@@ -5,7 +5,7 @@ from datetime import UTC, date, datetime, time
 import pytest
 
 import squid_ui as sl
-from squid_ui import scene
+from squid_ui import scene, testing
 from squid_ui.errors import LayoutDegradedError, LayoutInvariantError
 from squid_ui.forms import (
     BoolField,
@@ -46,15 +46,8 @@ async def _submitted(_event: SubmitEvent) -> None:
     return None
 
 
-def _walk(nodes: tuple[scene.HtmlNode, ...]):
-    for node in nodes:
-        yield node
-        if isinstance(node, scene.HtmlElement):
-            yield from _walk(node.children)
-
-
 def _elements(result: scene.PlanResult[scene.HtmlBody]) -> tuple[scene.HtmlElement, ...]:
-    return tuple(node for node in _walk(result.scene.body.children) if isinstance(node, scene.HtmlElement))
+    return testing.find_all(result.scene.body.children, scene.HtmlElement)
 
 
 def test_html_target_has_an_unbounded_semantic_identity() -> None:
@@ -246,7 +239,11 @@ def test_html_planner_renders_portable_forms_inline_with_prefill() -> None:
 def test_html_only_applies_authored_budgets_and_paging() -> None:
     unconstrained = sl.planning.plan(sl.paragraph("x" * 8000), target=sl.html.target())
     assert (
-        sum(len(node.content) for node in _walk(unconstrained.scene.body.children) if isinstance(node, scene.HtmlText))
+        sum(
+            len(node.content)
+            for node in testing.walk(unconstrained.scene.body.children)
+            if isinstance(node, scene.HtmlText)
+        )
         == 8000
     )
     assert unconstrained.scene.pagers == ()
@@ -257,7 +254,7 @@ def test_html_only_applies_authored_budgets_and_paging() -> None:
     )
     assert any(event.code == "html.budget.truncated" for event in constrained.report.events)
     assert "abcd" in [
-        node.content for node in _walk(constrained.scene.body.children) if isinstance(node, scene.HtmlText)
+        node.content for node in testing.walk(constrained.scene.body.children) if isinstance(node, scene.HtmlText)
     ]
     with pytest.raises(LayoutDegradedError, match="omitted 6"):
         sl.planning.plan(
@@ -273,9 +270,11 @@ def test_html_only_applies_authored_budgets_and_paging() -> None:
     )
     second = sl.planning.plan(paged, target=sl.html.target(), positions={"manual": Position(offset=1)})
     assert second.scene.pagers[0].page == 1
-    assert "bbbb" in [node.content for node in _walk(second.scene.body.children) if isinstance(node, scene.HtmlText)]
+    assert "bbbb" in [
+        node.content for node in testing.walk(second.scene.body.children) if isinstance(node, scene.HtmlText)
+    ]
     assert "aaaa" not in [
-        node.content for node in _walk(second.scene.body.children) if isinstance(node, scene.HtmlText)
+        node.content for node in testing.walk(second.scene.body.children) if isinstance(node, scene.HtmlText)
     ]
 
 
@@ -286,10 +285,10 @@ def test_html_searches_authored_fallbacks_only_under_an_explicit_budget() -> Non
     constrained = sl.planning.plan(sl.budget(fallback, min=3, prefer=5), target=sl.html.target())
 
     assert "preferred is too long" in [
-        node.content for node in _walk(preferred.scene.body.children) if isinstance(node, scene.HtmlText)
+        node.content for node in testing.walk(preferred.scene.body.children) if isinstance(node, scene.HtmlText)
     ]
     assert "short" in [
-        node.content for node in _walk(constrained.scene.body.children) if isinstance(node, scene.HtmlText)
+        node.content for node in testing.walk(constrained.scene.body.children) if isinstance(node, scene.HtmlText)
     ]
     assert constrained.metrics.states_explored == 2
     assert any(event.code == "html.budget.fallback" for event in constrained.report.events)

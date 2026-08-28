@@ -2,14 +2,13 @@
 
 import asyncio
 import json
-import subprocess
-import sys
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 import pytest
 
+from squid_ui import testing
 from squid_ui.profiling import (
     MemoryProfiler,
     NoOpProfiler,
@@ -24,19 +23,9 @@ from squid_ui.profiling import (
 )
 
 
-class Clock:
-    def __init__(self) -> None:
-        self.value = 100.0
-        self.wall = datetime(2026, 8, 22, tzinfo=UTC)
-
-    def monotonic(self) -> float:
-        return self.value
-
-    def utc(self) -> datetime:
-        return self.wall + timedelta(seconds=self.value - 100.0)
-
-    def advance(self, seconds: float) -> None:
-        self.value += seconds
+def _clock() -> testing.ManualClock:
+    """The profiler's clock, seeded where this file's expected timestamps assume it starts."""
+    return testing.ManualClock(monotonic=100.0, wall=datetime(2026, 8, 22, tzinfo=UTC))
 
 
 def _ids() -> Iterator[bytes]:
@@ -46,7 +35,7 @@ def _ids() -> Iterator[bytes]:
         counter += 1
 
 
-def profiler(clock: Clock, **kwargs: object) -> MemoryProfiler:
+def profiler(clock: testing.ManualClock, **kwargs: object) -> MemoryProfiler:
     generated = _ids()
 
     def next_id(size: int) -> bytes:
@@ -107,7 +96,7 @@ def test_identifier_width_and_nonzero_are_enforced() -> None:
 
 
 def test_root_and_nested_parentage_and_offsets() -> None:
-    clock = Clock()
+    clock = _clock()
     subject = profiler(clock)
 
     with subject.operation(OperationKind.DISPATCH, name="save") as operation:
@@ -136,7 +125,7 @@ def test_root_and_nested_parentage_and_offsets() -> None:
 
 
 def test_concurrent_sibling_spans_keep_operation_parent() -> None:
-    clock = Clock()
+    clock = _clock()
     subject = profiler(clock)
 
     entered = asyncio.Event()
@@ -164,7 +153,7 @@ def test_concurrent_sibling_spans_keep_operation_parent() -> None:
 
 
 def test_detached_span_measures_work_overlapping_lexical_spans() -> None:
-    clock = Clock()
+    clock = _clock()
     subject = profiler(clock)
 
     with subject.operation(OperationKind.DISPATCH, name="click") as operation:
@@ -187,7 +176,7 @@ def test_detached_span_measures_work_overlapping_lexical_spans() -> None:
 
 
 def test_operation_may_include_elapsed_queue_time_and_record_its_span() -> None:
-    clock = Clock()
+    clock = _clock()
     subject = profiler(clock)
     queued_at = clock.monotonic()
     clock.advance(2.0)
@@ -205,7 +194,7 @@ def test_operation_may_include_elapsed_queue_time_and_record_its_span() -> None:
 
 
 def test_operation_counters_survive_tail_sampling_and_roll_into_window() -> None:
-    clock = Clock()
+    clock = _clock()
     subject = profiler(clock, recent=0)
 
     with subject.operation(OperationKind.SEND, name="panel") as operation:
@@ -222,7 +211,7 @@ def test_operation_counters_survive_tail_sampling_and_roll_into_window() -> None
 
 
 def test_task_local_parentage_carries_into_child_tasks() -> None:
-    clock = Clock()
+    clock = _clock()
     subject = profiler(clock)
     links: list[TraceLink | None] = []
 
@@ -251,7 +240,7 @@ def test_task_local_parentage_carries_into_child_tasks() -> None:
 
 
 def test_caught_child_failure_still_completes_operation() -> None:
-    clock = Clock()
+    clock = _clock()
     subject = profiler(clock)
 
     with subject.operation(OperationKind.DISPATCH, name="caught") as operation, operation.span("handler") as captured:
@@ -263,7 +252,7 @@ def test_caught_child_failure_still_completes_operation() -> None:
 
 
 def test_escaping_exception_overrides_an_explicit_span_outcome() -> None:
-    clock = Clock()
+    clock = _clock()
     subject = profiler(clock)
 
     with (
@@ -280,7 +269,7 @@ def test_escaping_exception_overrides_an_explicit_span_outcome() -> None:
 
 
 def test_escaping_exception_records_only_type() -> None:
-    clock = Clock()
+    clock = _clock()
     subject = profiler(clock)
 
     with pytest.raises(LookupError), subject.operation(OperationKind.DELIVERY, name="lookup"):
@@ -294,7 +283,7 @@ def test_escaping_exception_records_only_type() -> None:
 
 
 def test_cancellation_is_recorded_and_propagated() -> None:
-    clock = Clock()
+    clock = _clock()
     subject = profiler(clock)
 
     async def cancelled() -> None:
@@ -308,7 +297,7 @@ def test_cancellation_is_recorded_and_propagated() -> None:
 
 
 def test_exception_group_cancellation_detected_when_nested() -> None:
-    clock = Clock()
+    clock = _clock()
     subject = profiler(clock)
 
     async def grouped() -> None:
@@ -325,7 +314,7 @@ def test_exception_group_cancellation_detected_when_nested() -> None:
 
 
 def test_active_snapshot_exposes_only_running_spans() -> None:
-    clock = Clock()
+    clock = _clock()
     subject = profiler(clock)
 
     with subject.operation(OperationKind.DISPATCH, name="vote") as operation, operation.span("action"):
@@ -345,7 +334,7 @@ def test_active_snapshot_exposes_only_running_spans() -> None:
 
 
 def test_capture_link_deduplicates_and_tracks_omitted() -> None:
-    clock = Clock()
+    clock = _clock()
     subject = profiler(clock, max_links=1)
 
     with subject.operation(OperationKind.DISPATCH, name="producer") as operation, operation.span("work"):
@@ -369,7 +358,7 @@ def test_capture_link_deduplicates_and_tracks_omitted() -> None:
 
 
 def test_max_links_zero_keeps_no_links() -> None:
-    clock = Clock()
+    clock = _clock()
     subject = profiler(clock, max_links=0)
 
     with subject.operation(OperationKind.DISPATCH, name="producer") as operation, operation.span("work"):
@@ -385,7 +374,7 @@ def test_max_links_zero_keeps_no_links() -> None:
 
 
 def test_attribute_validation_limits_and_rejection_count() -> None:
-    clock = Clock()
+    clock = _clock()
     subject = profiler(clock)
 
     with subject.operation(
@@ -418,7 +407,7 @@ def test_attribute_validation_limits_and_rejection_count() -> None:
 
 
 def test_tail_sampling_prefers_fail_slow_and_deadline() -> None:
-    clock = Clock()
+    clock = _clock()
     calls: list[int] = []
 
     def sample_source() -> float:
@@ -455,7 +444,7 @@ def test_tail_sampling_prefers_fail_slow_and_deadline() -> None:
 
 
 def test_all_operations_contribute_to_aggregates() -> None:
-    clock = Clock()
+    clock = _clock()
     subject = profiler(clock, recent=0, slow=0, failed=0, deadline_misses=0)
 
     with subject.operation(OperationKind.DISPATCH, name="first") as operation, operation.span("handler"):
@@ -474,7 +463,7 @@ def test_all_operations_contribute_to_aggregates() -> None:
 
 
 def test_zero_sized_buffers_record_zero_traces_and_counts() -> None:
-    clock = Clock()
+    clock = _clock()
     subject = profiler(clock, recent=0, slow=0, failed=0, deadline_misses=0)
 
     with subject.operation(OperationKind.DISPATCH, name="one"):
@@ -488,7 +477,7 @@ def test_zero_sized_buffers_record_zero_traces_and_counts() -> None:
 
 
 def test_disabled_failure_retention_is_dropped_not_sampled_out() -> None:
-    clock = Clock()
+    clock = _clock()
     subject = profiler(clock, recent=0, slow=0, failed=0, deadline_misses=0, slow_threshold=1)
 
     with pytest.raises(RuntimeError), subject.operation(OperationKind.DISPATCH, name="failed"):
@@ -500,7 +489,7 @@ def test_disabled_failure_retention_is_dropped_not_sampled_out() -> None:
 
 
 def test_recent_eviction_count() -> None:
-    clock = Clock()
+    clock = _clock()
     subject = profiler(clock, recent=2, slow=0, failed=0, deadline_misses=0, sample_rate=1.0)
 
     with subject.operation(OperationKind.DISPATCH, name="one"):
@@ -516,7 +505,7 @@ def test_recent_eviction_count() -> None:
 
 
 def test_rolling_window_histograms_expire_without_new_traces() -> None:
-    clock = Clock()
+    clock = _clock()
     subject = profiler(clock, window_seconds=10, window_slices=2)
 
     with subject.operation(OperationKind.SEND, name="send") as operation, operation.span("write"):
@@ -530,7 +519,7 @@ def test_rolling_window_histograms_expire_without_new_traces() -> None:
 
 
 def test_aggregate_overflow() -> None:
-    clock = Clock()
+    clock = _clock()
     subject = profiler(clock, max_aggregate_keys=1)
 
     with subject.operation(OperationKind.DISPATCH, name="a"):
@@ -555,7 +544,7 @@ def test_aggregate_overflow() -> None:
 
 
 def test_zero_aggregate_key_bound_uses_single_overflow_key() -> None:
-    clock = Clock()
+    clock = _clock()
     subject = profiler(clock, max_aggregate_keys=0)
 
     with subject.operation(OperationKind.DISPATCH, name="a"):
@@ -569,7 +558,7 @@ def test_zero_aggregate_key_bound_uses_single_overflow_key() -> None:
 
 
 def test_span_aggregate_overflow_is_bounded_and_honest() -> None:
-    clock = Clock()
+    clock = _clock()
     subject = profiler(clock, max_span_aggregate_keys=1)
 
     with subject.operation(OperationKind.DISPATCH, name="action") as operation:
@@ -589,7 +578,7 @@ def test_span_aggregate_overflow_is_bounded_and_honest() -> None:
 
 
 def test_counter_aggregate_overflow_is_bounded_and_honest() -> None:
-    clock = Clock()
+    clock = _clock()
     subject = profiler(clock, max_counter_keys=1)
 
     with subject.operation(OperationKind.SEND, name="panel") as operation:
@@ -606,7 +595,7 @@ def test_counter_aggregate_overflow_is_bounded_and_honest() -> None:
 
 
 def test_percentile_rank_uses_ceiling() -> None:
-    clock = Clock()
+    clock = _clock()
     subject = profiler(clock, window_seconds=30, histogram_bounds=(0.1, 0.2, 0.3), max_aggregate_keys=1)
 
     with subject.operation(OperationKind.DISPATCH, name="a"):
@@ -622,7 +611,7 @@ def test_percentile_rank_uses_ceiling() -> None:
 
 
 def test_snapshot_json_exports_frozen_snapshot() -> None:
-    clock = Clock()
+    clock = _clock()
     subject = profiler(clock)
 
     with subject.operation(OperationKind.SEND, name="send"):
@@ -637,7 +626,7 @@ def test_snapshot_json_exports_frozen_snapshot() -> None:
 
 
 def test_trace_start_is_relative_to_the_exported_wall_clock_anchor() -> None:
-    clock = Clock()
+    clock = _clock()
     subject = profiler(clock)
     clock.advance(2.0)
 
@@ -652,7 +641,7 @@ def test_trace_start_is_relative_to_the_exported_wall_clock_anchor() -> None:
 
 
 def test_operation_recorder_expires_with_its_dynamic_scope() -> None:
-    clock = Clock()
+    clock = _clock()
     subject = profiler(clock)
 
     with subject.operation(OperationKind.DISPATCH, name="done") as operation:
@@ -692,7 +681,7 @@ def test_noop_profiler_does_not_inspect_inputs() -> None:
 
 
 def test_profiler_failure_isolation_preserves_application_behavior() -> None:
-    clock = Clock()
+    clock = _clock()
 
     def bad_ids(_: int) -> bytes:
         return b"\x00" * 16
@@ -708,27 +697,4 @@ def test_profiler_failure_isolation_preserves_application_behavior() -> None:
 
 
 def test_core_import_still_works_when_discord_and_anyio_missing() -> None:
-    code = """
-import importlib.abc
-import sys
-
-
-class BlockAdapterDependencies(importlib.abc.MetaPathFinder):
-    def find_spec(self, fullname, path=None, target=None):
-        head = fullname.split(\".\", 1)[0]
-        if head in {\"discord\", \"anyio\"}:
-            raise ModuleNotFoundError(fullname)
-        return None
-
-
-sys.meta_path.insert(0, BlockAdapterDependencies())
-import squid_ui
-import squid_ui.profiling
-assert \"discord\" not in sys.modules
-assert \"anyio\" not in sys.modules
-"""
-
-    # `sys.executable`, not a bare "python": the interpreter on PATH is not this venv when
-    # pytest is driven from Git Bash, and the import assertions below only mean anything when
-    # the subprocess is the same interpreter that installed squid_ui.
-    subprocess.run([sys.executable, "-c", code], check=True)
+    testing.assert_imports_without(["squid_ui", "squid_ui.profiling"], "discord", "anyio")
