@@ -1,12 +1,12 @@
 """Small per-runtime LRU for callback-free resolved plan structure."""
 
 from collections import OrderedDict
-from dataclasses import dataclass
-from typing import Any
+from dataclasses import dataclass, replace
+from typing import Any, cast
 
 from squid_ui import scene
-from squid_ui.runtime.presentation_state import SessionUpdate
-from squid_ui.scene.model import PlanReport
+from squid_ui.runtime.presentation_state import PresentationState, SessionUpdate
+from squid_ui.scene.model import PlanReport, PlanResult, PlanReuse
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +96,27 @@ class PlanMemo:
         self._session = session
         self._session_revisions = {session_revision}
         self._result = result
+
+    def replay[BodyT: scene.Body](
+        self, source: object, key: object, session: PresentationState
+    ) -> PlanResult[BodyT] | None:
+        """The retained result re-marked as an exact hit, or None if this is not one.
+
+        Re-marking belongs here rather than at each planner backend: a caller that returned
+        the retained result unchanged would report the metrics of the render that produced
+        it, and both backends previously had to remember not to.
+        """
+        retained = self.get(source, key, session, session.revision)
+        if not isinstance(retained, PlanResult):
+            return None
+        return cast(
+            PlanResult[BodyT],
+            replace(retained, metrics=replace(retained.metrics, cache_hit=True, reuse=PlanReuse.EXACT)),
+        )
+
+    def store(self, source: object, key: object, session: PresentationState, result: PlanResult[Any]) -> None:
+        """Retain one exact result against the session's current revision."""
+        self.put(source, key, session, session.revision, result)
 
     def promote(self, session: object, session_revision: int) -> None:
         """Accept the post-commit revision of the session this result already describes."""
