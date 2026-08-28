@@ -308,10 +308,8 @@ def allocate_budgeted(
     """Allocate transparent budget regions as siblings, then solve inside each grant."""
     claimed: set[int] = set()
     groups: list[_GrantGroup] = []
-    candidate_units = units
     for region in reversed(regions):
-        candidate_units = tuple(unit for unit in region.units if unit.index not in claimed)
-        region_units = candidate_units
+        region_units = tuple(unit for unit in region.units if unit.index not in claimed)
         if not region_units:
             continue
         claimed.update(unit.index for unit in region_units)
@@ -340,7 +338,10 @@ def allocate_budgeted(
                 region.best_effort,
             )
         )
-    for unit in candidate_units:
+    # Every unit outside a region is a sibling of the budgeted ones, not something a region
+    # may absorb. Iterating anything narrower than `units` here drops the unbudgeted siblings
+    # from the solve entirely, and a dropped unit is drawn as empty text rather than omitted.
+    for unit in units:
         if unit.index in claimed:
             continue
         fixed = isinstance(unit.overflow, Never | Condense)
