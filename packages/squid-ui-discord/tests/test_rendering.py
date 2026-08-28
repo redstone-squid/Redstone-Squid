@@ -94,7 +94,7 @@ class TestBoundaries:
     def test_controls_are_namespaced_including_every_explicit_key(self):
         message_root = MessageRoot(Pair(), access=Everyone(), timeout=None)
         commit_render(message_root)
-        assert set(message_root._handlers) == {"left.inc", "left.help", "right.inc", "right.help"}
+        assert set(message_root.snapshot().handler_keys) == {"left.inc", "left.help", "right.inc", "right.help"}
 
     def test_a_childs_state_change_re_renders_the_root_message(self):
         pair = Pair()
@@ -103,7 +103,7 @@ class TestBoundaries:
 
         pair.right.count = 3
 
-        assert message_root._dirty
+        assert message_root.pending
         assert "right: 3" in payload_texts(commit_render(message_root))
 
     def test_components_do_not_expose_the_frontend_root(self):
@@ -756,7 +756,7 @@ def test_nested_embeds_stay_addressable(depth):
     assert len(ids) == depth + 1
     assert len(set(ids)) == len(ids), "two controls in one message may not share a custom_id"
     assert all(len(custom_id) <= 100 for custom_id in ids)
-    assert len(message_root._handlers) == depth + 1
+    assert len(message_root.snapshot().handler_keys) == depth + 1
 
 
 class PagedChild(Component[sl.ComponentsV2Target]):
@@ -781,8 +781,8 @@ def test_embed_namespaces_pager_state_and_controls() -> None:
         "left.items": 0,
         "right.items": 0,
     }
-    assert "__cursor_next.left.items" in message_root._handlers
-    assert "__cursor_next.right.items" in message_root._handlers
+    assert "__cursor_next.left.items" in message_root.snapshot().handler_keys
+    assert "__cursor_next.right.items" in message_root.snapshot().handler_keys
 
 
 def test_duplicate_sibling_embed_keys_are_rejected() -> None:
@@ -892,7 +892,7 @@ def test_semantic_actions_are_namespaced_across_embedded_instances() -> None:
     message_root = MessageRoot(Parent(), access=Everyone(), timeout=None)
     commit_render(message_root)
 
-    assert {"left.run", "right.run"} <= message_root._handlers.keys()
+    assert {"left.run", "right.run"} <= set(message_root.snapshot().handler_keys)
 
 
 def test_all_keyed_semantics_are_namespaced_through_semantic_containers() -> None:
@@ -927,9 +927,9 @@ def test_all_keyed_semantics_are_namespaced_through_semantic_containers() -> Non
     commit_render(message_root)
 
     assert {"left.entries", "right.entries"} <= message_root.presentation.cursors.keys()
-    assert {"left.choice", "right.choice"} <= message_root._handlers.keys()
-    assert "__cursor_next.left.entries" in message_root._handlers
-    assert "__cursor_next.right.entries" in message_root._handlers
+    assert {"left.choice", "right.choice"} <= set(message_root.snapshot().handler_keys)
+    assert "__cursor_next.left.entries" in message_root.snapshot().handler_keys
+    assert "__cursor_next.right.entries" in message_root.snapshot().handler_keys
 
 
 class TestRenderItem:

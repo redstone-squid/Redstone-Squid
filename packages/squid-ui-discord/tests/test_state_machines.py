@@ -80,7 +80,7 @@ async def test_tabs_component_shell_embeds_only_selected_content() -> None:
     view = commit_render(message_root)
     assert "screen: one" in _texts(view)
     assert "screen: two" not in _texts(view)
-    assert set(message_root._handlers) == {"screens.one", "screens.two"}
+    assert set(message_root.snapshot().handler_keys) == {"screens.one", "screens.two"}
 
 
 def test_tabs_router_shell_encodes_next_state_and_input_state() -> None:
@@ -137,7 +137,7 @@ async def test_menu_component_shell_drills_down_and_owns_chrome() -> None:
     await message_root.dispatch("settings.home", fake_interaction())
     assert menu.machine_state == sp.MenuState()
     await message_root.dispatch("settings.close", fake_interaction())
-    assert message_root._finished
+    assert message_root.finished
 
 
 def test_menu_entry_supports_shorthand_keys_and_rejects_duplicates() -> None:
