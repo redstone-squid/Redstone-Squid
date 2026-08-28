@@ -6,6 +6,7 @@ from time import perf_counter
 from squid_ui import Palette, fallback, form, scene
 from squid_ui.forms import FormSpec, TextField
 from squid_ui.planning import PlanCache, PlanMemo, plan
+from squid_ui.planning.adapter import AdapterCapability
 from squid_ui.planning.cache import CachedPlan
 from squid_ui.planning.semantic_adaptation.handlers import ChooseChoice
 from squid_ui.primitives import (
@@ -76,12 +77,12 @@ def test_plan_cache_separates_targets_with_different_capabilities() -> None:
     cache = PlanCache()
     document = Variants(
         (
-            Variant((Text("rich"),), requires=frozenset({"rich-text"})),
+            Variant((Text("rich"),), requires=frozenset({AdapterCapability.RENDER_HTML})),
             Variant((Text("plain"),)),
         )
     )
     basic = sd.target_profile("test")
-    rich = sd.target_profile("rich", capabilities=frozenset({"rich-text"}))
+    rich = sd.target_profile("rich", capabilities=frozenset({AdapterCapability.RENDER_HTML}))
 
     first = plan(document, target=basic, cache=cache)
     second = plan(document, target=rich, cache=cache)

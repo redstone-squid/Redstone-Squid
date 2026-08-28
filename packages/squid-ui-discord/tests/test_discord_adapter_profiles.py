@@ -31,14 +31,14 @@ def test_builtin_targets_bind_the_verified_discord_py_profile() -> None:
 
 
 def test_alternate_profile_can_plan_for_an_injected_renderer() -> None:
-    profile = AdapterProfile(AlternateAdapter, "alternate", ">=1", frozenset({"alternate.render"}))
+    profile = AdapterProfile(AlternateAdapter, "alternate", ">=1", frozenset({AdapterCapability.RENDER_V2}))
     target = components_v2_target(profile)
 
     document = plan(Text("hello"), target=target).scene
 
     assert isinstance(document.body, scene.ComponentsV2)
     assert target.adapter is profile
-    assert "alternate.render" in target.capabilities
+    assert AdapterCapability.RENDER_V2 in target.capabilities
 
 
 def test_protocol_target_import_does_not_load_discord_py() -> None:

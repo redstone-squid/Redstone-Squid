@@ -63,7 +63,7 @@ class AdapterProfile[AdapterT]:
     family: type[AdapterT]
     name: str
     version_expression: str
-    capabilities: frozenset[str] = frozenset()
+    capabilities: frozenset[AdapterCapability] = frozenset()
     extensions: Mapping[str, ExtensionAdapter[Any]] = field(default_factory=dict)
     """Extension adapters by kind.
 

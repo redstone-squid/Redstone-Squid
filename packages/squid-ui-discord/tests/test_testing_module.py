@@ -2,6 +2,7 @@
 
 import discord
 
+from squid_ui.planning.adapter import AdapterCapability
 from squid_ui.planning.limits import LIMITS
 from squid_ui.primitives import Heading, Panel, RoutedButton, Row, Sep, Text
 from squid_ui_discord import testing as sd
@@ -42,9 +43,9 @@ class TestPayloadQueries:
 
 class TestConstruction:
     def test_a_target_profile_supplies_exactly_the_capabilities_it_is_given(self) -> None:
-        target = sd.target_profile("narrow", capabilities=frozenset({"files"}))
+        target = sd.target_profile("narrow", capabilities=frozenset({AdapterCapability.MODAL_FORMS}))
 
-        assert target.adapter.capabilities == frozenset({"files"})
+        assert target.adapter.capabilities == frozenset({AdapterCapability.MODAL_FORMS})
         assert target.limits == LIMITS
 
     def test_a_layout_view_holds_the_items_in_the_order_given(self) -> None:
