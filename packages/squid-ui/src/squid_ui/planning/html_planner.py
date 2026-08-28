@@ -32,7 +32,7 @@ from squid_ui.planning.semantic_adaptation.handlers import (
     SelectEntities,
     ToggleDetails,
 )
-from squid_ui.planning.structure import indexed_children
+from squid_ui.planning.structure import disclosure_state, indexed_children, toggle_action_key, toggle_state
 from squid_ui.planning.target import Target
 from squid_ui.planning.text_allocation import allocate_pages, truncate_text
 from squid_ui.runtime.presentation_state import (
@@ -475,8 +475,8 @@ class _Compiler:
         """Resolve a node whose HTML depends on session state, a binding, or a route."""
         match node:
             case sem.Details(key=key, summary=summary, children=children):
-                open_ = self._disclosure(node)
-                action = self.bind(f"{key}.toggle", ToggleDetails(node, open_, self.presentation))
+                open_ = disclosure_state(node, self.presentation)
+                action = self.bind(toggle_action_key(key), ToggleDetails(node, open_, self.presentation))
                 return (
                     self.element(
                         scene.HtmlTag.DETAILS,
@@ -487,7 +487,7 @@ class _Compiler:
                     ),
                 )
             case sem.Toggle(key=key, label=label, available=available):
-                on = self._toggle_state(node)
+                on = toggle_state(node, self.presentation)
                 action = self.bind(key, FlipToggle(node, on, self.presentation), label=label)
                 checkbox = self.element(
                     scene.HtmlTag.INPUT,
@@ -657,20 +657,6 @@ class _Compiler:
             message = f"asset key {asset.key!r} identifies two different assets"
             raise LayoutInvariantError(message)
         self.assets.setdefault(asset.key, asset)
-
-    def _disclosure(self, node: sem.Details) -> bool:
-        match node.open:
-            case sem.Controlled(value=value):
-                return value
-            case sem.Uncontrolled(initial=initial):
-                return self.presentation.disclosure(node.key, initial=initial).open
-
-    def _toggle_state(self, node: sem.Toggle) -> bool:
-        match node.on:
-            case sem.Controlled(value=value):
-                return value
-            case sem.Uncontrolled(initial=initial):
-                return self.presentation.toggle(node.key, initial=initial).on
 
     def _labelled_time(self, label: TextLike | None, time_node: scene.HtmlElement) -> tuple[scene.HtmlNode, ...]:
         if label is None:
