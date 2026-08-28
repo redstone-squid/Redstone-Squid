@@ -8,6 +8,43 @@ edit_uri = "edit/master/docs/"
 docs_dir = "docs"
 site_dir = "site"
 
+
+# Navigation: the framework docs and bot guides. Pages not listed here (docs/plans,
+# docs/decisions, translated READMEs) still build and remain searchable and linkable,
+# but stay out of the reader-facing tree.
+[[project.nav]]
+Home = "index.md"
+
+[[project.nav]]
+"Squid UI" = [
+    { Overview = "squid-ui.md" },
+    { Quickstart = "squid-ui-quickstart.md" },
+    { "API map" = "squid-ui-api.md" },
+    { Architecture = "squid-ui-architecture.md" },
+    { Vocabulary = "squid-vocabulary.md" },
+    { Reference = [
+        { "squid-ui" = "reference/squid-ui.md" },
+        { "squid-ui-widgets" = "reference/squid-ui-widgets.md" },
+        { "squid-ui-discord" = "reference/squid-ui-discord.md" },
+        { "squid-reactivity" = "reference/squid-reactivity.md" },
+        { "squid-storage" = "reference/squid-storage.md" },
+        { "squid-replication" = "reference/squid-replication.md" },
+    ] },
+]
+
+[[project.nav]]
+Bot = [
+    { Internationalization = "i18n.md" },
+    { Notifications = "notifications.md" },
+    { "Error reports" = "error-reports.md" },
+    { "Action ledger" = "action-ledger.md" },
+    { "Credential hashing" = "credential-hashing.md" },
+    { "Media normalization" = "media-normalization.md" },
+    { "Adding a build attribute" = "new-build-attribute.md" },
+    { "Writing a migration" = "new-migration.md" },
+    { "Plan 68 migration" = "plan68-migration.md" },
+]
+
 [project.theme]
 language = "en"
 features = [

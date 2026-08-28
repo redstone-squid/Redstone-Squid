@@ -30,6 +30,7 @@ use that exact version, so one environment cannot silently mix incompatible alph
 - Follow the [Discord quickstart](squid-ui-quickstart.md) for a first live screen.
 - Plan with `squid_ui.html.target()` and draw with `squid_ui.html.Renderer` for native HTML.
 - Use the [API map](squid-ui-api.md) to find the supported entry point for each job.
+- Look up any supported name in the per-package [reference](reference/squid-ui.md).
 - Read [architecture and API interactions](squid-ui-architecture.md) for planning, ownership,
   cancellation, durability, and extension boundaries.
 - Consume [scene protocol 1](schema/scene-v1.schema.json) when writing a renderer in another process

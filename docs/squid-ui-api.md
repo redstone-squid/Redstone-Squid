@@ -24,6 +24,15 @@ composition and adapter contracts.
 | Persist reactive state | `squid_storage.PersistentStatePool` |
 | Replicate state | `squid_replication.Replica` and a selected backend |
 
+## Reference
+
+Each package has a curated reference page rendering every supported name:
+[squid-ui](reference/squid-ui.md), [squid-ui-widgets](reference/squid-ui-widgets.md),
+[squid-ui-discord](reference/squid-ui-discord.md),
+[squid-reactivity](reference/squid-reactivity.md),
+[squid-storage](reference/squid-storage.md), and
+[squid-replication](reference/squid-replication.md).
+
 ## Stability boundary
 
 Names in each package's `__all__` are the supported alpha surface and are snapshot-tested. A module
