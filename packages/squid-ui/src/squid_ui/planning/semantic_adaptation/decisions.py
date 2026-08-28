@@ -2,13 +2,57 @@
 
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
+from typing import assert_never
 
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.factories import is_layout_node
 from squid_ui.planning.limits import MessageLimits
 from squid_ui.planning.search import StrategyAxis, StrategyCandidate
 from squid_ui.planning.semantic_adaptation.model import FallbackAxis, SemanticDecisions
-from squid_ui.planning.structure import branch_paths, fallback_rung, indexed_children
-from squid_ui.primitives.nodes import Panel
+from squid_ui.planning.structure import branch_paths, disclosure_state, fallback_rung, indexed_children
+from squid_ui.primitives.nodes import (
+    Boundary,
+    Break,
+    Budget,
+    Button,
+    Card,
+    Content,
+    EntitySelect,
+    Extension,
+    Footer,
+    Gallery,
+    Lines,
+    LinkButton,
+    MediaCollection,
+    Panel,
+    PremiumButton,
+    RawItem,
+    RoutedButton,
+    RoutedSelect,
+    Row,
+    SelectMenu,
+    Sep,
+    Text,
+    Thumbnail,
+    Time,
+    Variants,
+    ZonedTime,
+)
+from squid_ui.primitives.nodes import (
+    Code as PrimitiveCode,
+)
+from squid_ui.primitives.nodes import (
+    ControlGroup as PrimitiveActionGroup,
+)
+from squid_ui.primitives.nodes import (
+    File as PrimitiveFile,
+)
+from squid_ui.primitives.nodes import (
+    Heading as PrimitiveHeading,
+)
+from squid_ui.primitives.nodes import (
+    Section as PrimitiveSection,
+)
 from squid_ui.runtime.presentation_state import PresentationState
 from squid_ui.semantic import (
     ActionControl,
@@ -18,33 +62,53 @@ from squid_ui.semantic import (
     BestEffort,
     Block,
     Budgeted,
+    Choices,
     Cluster,
+    Code,
     ControlDisplay,
     ControlGroup,
     Controlled,
     Details,
+    Download,
+    Entities,
     FallbackContent,
+    Fields,
+    Figure,
     Flexibility,
+    FormTrigger,
     Grid,
     Group,
+    Heading,
     ItemDisplay,
     Items,
     KeepWithNext,
     LayoutNode,
+    List,
     Media,
+    Metric,
     Navigation,
     NavigationDisplay,
+    Note,
     OptionalContent,
     Paged,
+    Paragraph,
+    ProgressBar,
+    Quote,
+    Roster,
+    RoutedChoices,
     Section,
     Spilled,
     Stack,
+    Status,
     Table,
     TableDisplay,
     Themed,
+    Timestamp,
+    Toggle,
     Truncated,
     Unbreakable,
     Uncontrolled,
+    ZonedTimestamp,
 )
 
 ACTIONS_ADAPTER_ID = "discord.actions"
@@ -78,6 +142,9 @@ def nominate_decisions(
             walk(child, child_path)
 
     def walk(node: LayoutNode, path: str) -> None:
+        if not is_layout_node(node):
+            message = f"{path}: {type(node).__name__} is neither a semantic node nor a Discord primitive"
+            raise LayoutInvariantError(message)
         match node:
             case (
                 Truncated(node=child)
@@ -128,16 +195,72 @@ def nominate_decisions(
                 | Panel(children=children)
             ):
                 walk_children(children, path)
-            case Details(children=children, open=ownership):
-                match ownership:
-                    case Controlled(value=open_):
-                        pass
-                    case Uncontrolled(initial=initial):
-                        open_ = session.disclosure(node.key, initial=initial).open
-                if open_:
+            case Details(children=children):
+                if disclosure_state(node, session):
                     walk_children(children, path)
-            case _:
+            case (
+                Heading()
+                | Paragraph()
+                | Note()
+                | List()
+                | Fields()
+                | Quote()
+                | Code()
+                | Figure()
+                | Toggle()
+                | Download()
+                | Status()
+                | ProgressBar()
+                | Roster()
+                | Metric()
+                | Timestamp()
+                | ZonedTimestamp()
+                | FormTrigger()
+                | Choices()
+                | Entities()
+                | RoutedChoices()
+            ):
+                # Semantic leaves: no interior strategy axes and nothing semantic to descend
+                # into. Named so a new leaf that does grow an axis cannot vanish silently.
                 return
+            case (
+                Text()
+                | PrimitiveHeading()
+                | Footer()
+                | PrimitiveCode()
+                | Lines()
+                | Time()
+                | ZonedTime()
+                | PrimitiveFile()
+                | Sep()
+                | Row()
+                | PrimitiveActionGroup()
+                | Button()
+                | LinkButton()
+                | SelectMenu()
+                | EntitySelect()
+                | RoutedSelect()
+                | RoutedButton()
+                | PremiumButton()
+                | Thumbnail()
+                | Gallery()
+                | MediaCollection()
+                | PrimitiveSection()
+                | Budget()
+                | Break()
+                | RawItem()
+                | Boundary()
+                | Card()
+                | Content()
+                | Extension()
+                | Variants()
+            ):
+                # Exact primitives carry no semantic decision axes; `Panel` alone is claimed
+                # above because its children may hold semantic nodes, and `Variants` ladders
+                # belong to frontier.py, not to semantic nomination.
+                return
+            case _ as unreachable:
+                assert_never(unreachable)
 
     for index, node in enumerate(nodes):
         walk(node, f"$.{index}")
