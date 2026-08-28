@@ -14,7 +14,7 @@ import weakref
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from squid_ui_discord.message_root import AnyMessageRoot, MessageRoot
+    from squid_ui_discord.message_root import AnyMessageRoot
 
 _LIVE: weakref.WeakValueDictionary[str, AnyMessageRoot] = weakref.WeakValueDictionary()
 
@@ -43,6 +43,6 @@ def message_roots() -> tuple[AnyMessageRoot, ...]:
     return tuple(_LIVE.values())
 
 
-def find(message_root_id: str) -> MessageRoot | None:
+def find(message_root_id: str) -> AnyMessageRoot | None:
     """The live message root with this id, or `None` if it has finished or was collected."""
     return _LIVE.get(message_root_id)
