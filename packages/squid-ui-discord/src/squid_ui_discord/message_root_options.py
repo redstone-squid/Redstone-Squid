@@ -13,13 +13,15 @@ from squid_ui.runtime.component import Component
 from squid_ui.text import NEUTRAL, Localization
 from squid_ui_discord.access import AccessPolicy
 from squid_ui_discord.message_root import (
+    MessageRoot,
+    _monotonic,
+)
+from squid_ui_discord.message_root_contracts import (
     DEFAULT_EXPIRY,
     ChallengePresenter,
     ErrorHook,
     ExpiryPolicy,
-    MessageRoot,
     Scheduler,
-    _monotonic,
 )
 from squid_ui_discord.render_cache import RenderProgramCache
 from squid_ui_discord.target import DISCORD_V2_DPY27, Target

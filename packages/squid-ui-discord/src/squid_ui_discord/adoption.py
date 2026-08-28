@@ -51,7 +51,7 @@ from squid_ui.runtime.component import Component
 from squid_ui.runtime.reactivity import state
 from squid_ui.target_types import ComponentsV2Target
 from squid_ui_discord.actions import ActionResponder, responder, selected_entities
-from squid_ui_discord.message_root import _CHANNEL_TYPES
+from squid_ui_discord.message_root_wiring import _CHANNEL_TYPES
 
 type Item = discord.ui.Item[Any]
 type KeyFactory = Callable[[Item], str]

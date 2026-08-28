@@ -9,7 +9,8 @@ from squid_ui.runtime.component import Component
 from squid_ui.target_types import ComponentsV2Target
 from squid_ui_discord.access import Owner
 from squid_ui_discord.invocation import Invocation, Visibility
-from squid_ui_discord.message_root import ExpiryPolicy, MessageRoot, PauseUpdates, RenewEphemeral
+from squid_ui_discord.message_root import MessageRoot
+from squid_ui_discord.message_root_contracts import ExpiryPolicy, PauseUpdates, RenewEphemeral
 from squid_ui_discord.message_root_options import MessageRootOptions
 from squid_ui_discord.runtime import InvocationSource
 from squid_ui_discord.session_specs import ScopeKind, SessionSpec

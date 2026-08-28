@@ -18,7 +18,7 @@ from squid_ui.profiling import DispatchDisposition, MemoryProfiler, OperationKin
 from squid_ui.runtime.reactivity import readonly_transaction, transaction
 from squid_ui_discord import Everyone, MessageRoot, delivery
 from squid_ui_discord.challenges import ChallengeRunner, DialogPresenter
-from squid_ui_discord.message_root import ChallengeRequest
+from squid_ui_discord.message_root_contracts import ChallengeRequest
 from squid_ui_discord.sessions import SessionManager
 from squid_ui_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 

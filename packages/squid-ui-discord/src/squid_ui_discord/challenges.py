@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 
 from squid_ui.guards import ChallengeResolver
 from squid_ui_discord.delivery import respond_to
-from squid_ui_discord.message_root import ChallengeRequest, ChallengeSupervisor, ResumedPress
+from squid_ui_discord.message_root_contracts import ChallengeRequest, ChallengeSupervisor, ResumedPress
 from squid_ui_discord.session_specs import OpenContext, SessionSpec
 from squid_ui_discord.sessions import SessionManager
 

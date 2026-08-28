@@ -97,13 +97,15 @@ from squid_ui_discord.message_payload import (
     message_mode,
 )
 from squid_ui_discord.message_root import (
+    MessageRoot,
+    current_message_root,
+)
+from squid_ui_discord.message_root_contracts import (
     ChallengePresenter,
     ChallengeRequest,
     ChallengeSupervisor,
-    MessageRoot,
     PauseUpdates,
     RenewEphemeral,
-    current_message_root,
 )
 from squid_ui_discord.message_root_options import (
     MessageRootDefaults,
