@@ -1,8 +1,7 @@
 """Plan documents and render complete Discord message payloads."""
 
 import logging
-from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -18,10 +17,10 @@ from squid_ui.planning.cache import PlanCache, PlanMemo
 from squid_ui.planning.limits import V2Limits
 from squid_ui.planning.navigation import PlannedNav
 from squid_ui.planning.planner import EMPTY_RESERVATION
-from squid_ui.planning.planner import plan as plan_document
+from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_ui.planning.target import ResourceCost
-from squid_ui.profiling import OperationRecorder, SpanRecorder
+from squid_ui.profiling import OperationRecorder
 from squid_ui.runtime.component import Component
 from squid_ui.runtime.presentation_state import PresentationState
 from squid_ui.scene.model import PlanResult
@@ -29,21 +28,13 @@ from squid_ui.semantic import LayoutNode
 from squid_ui.sources import Position
 from squid_ui.target_types import ComponentsV2Target, DiscordPyAdapter
 from squid_ui.text import NEUTRAL, Localization
+from squid_ui_discord._draw import plan_and_draw
 from squid_ui_discord.adapter import require_discord_py_target
 from squid_ui_discord.message_payload import MessageModeError, MessagePayload
 from squid_ui_discord.renderer import V2Renderer, Wire
 from squid_ui_discord.target import DISCORD_V2_DPY27, Target
 
 logger = logging.getLogger(__name__)
-
-
-@contextmanager
-def _span(profile: OperationRecorder | None, name: str) -> Iterator[SpanRecorder | None]:
-    if profile is None:
-        yield None
-        return
-    with profile.span(name) as span:
-        yield span
 
 
 @dataclass(slots=True)
@@ -102,9 +93,9 @@ def render_message(
 ) -> RenderedMessage[discord.ui.LayoutView, scene.ComponentsV2]:
     """Plan a logical document, then draw its resolved Components V2 scene."""
     adapter = require_discord_py_target(target, AdapterCapability.RENDER_V2, "render a Components V2 message")
-    with _span(profile, "planner") as planner_span:
-        result = plan_document(
-            rendered,
+    payload, result = plan_and_draw(
+        rendered,
+        PlanRequest(
             target=target,
             chrome=chrome,
             localization=localization,
@@ -114,24 +105,14 @@ def render_message(
             positions=positions,
             nav=nav,
             session=session,
-            cache=cache,
-            memo=memo,
             search_budget=search_budget,
-        )
-        if planner_span is not None:
-            planner_span.set_attribute("cache_hit", result.metrics.cache_hit)
-            planner_span.set_attribute("states_explored", result.metrics.states_explored)
-            planner_span.set_attribute("search_fallback", result.metrics.search_fallback)
-        if profile is not None:
-            profile.increment("planner.calls")
-            profile.increment("planner.cache_hits", int(result.metrics.cache_hit))
-            profile.increment("planner.search_fallbacks", int(result.metrics.search_fallback))
-            profile.increment("planner.states_explored", result.metrics.states_explored)
-    drawer = renderer if renderer is not None else V2Renderer(limits=target.limits, adapter=adapter)
-    with _span(profile, "renderer"):
-        payload = drawer.draw(result.scene, plan=result, wire=wire)
-    if result.report.events:
-        logger.warning("layout degraded: %s", "; ".join(event.message for event in result.report.events))
+        ),
+        drawer=renderer if renderer is not None else V2Renderer(limits=target.limits, adapter=adapter),
+        wire=wire,
+        cache=cache,
+        memo=memo,
+        profile=profile,
+    )
     return RenderedMessage(payload, result)
 
 
