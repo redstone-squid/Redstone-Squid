@@ -9,6 +9,7 @@ from typing import Any, cast
 
 from squid_ui.emoji import Emoji
 from squid_ui.entity import ChannelType, EntityKind, EntityRef, EntityType
+from squid_ui.errors import SquidUiError
 from squid_ui.interactions import ActionMode
 from squid_ui.primitives.styles import ActionStyle
 from squid_ui.scene.model import (
@@ -65,7 +66,7 @@ from squid_ui.scene.schema import SCHEMA
 from squid_ui.text import Markup
 
 
-class CodecError(ValueError):
+class CodecError(SquidUiError, ValueError):
     """A scene payload is malformed or uses an unsupported protocol."""
 
 
