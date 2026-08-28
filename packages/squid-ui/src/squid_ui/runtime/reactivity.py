@@ -11,7 +11,6 @@ from squid_reactivity.actions import (
     RollbackReason,
 )
 from squid_reactivity.core import (
-    _CURRENT,
     CellPatch,
     CellPatchSet,
     CellReport,
@@ -28,9 +27,6 @@ from squid_reactivity.core import (
     TransactionParticipant,
     TransactionView,
     UndeclaredStateError,
-    _Cell,
-    _State,
-    _Transaction,
     addresses,
     apply_conditional_patches,
     apply_local_overwrite_patches,
@@ -55,6 +51,10 @@ from squid_reactivity.core import (
     transaction,
     untracked,
 )
+from squid_reactivity.internals import CURRENT_TRANSACTION as _CURRENT
+from squid_reactivity.internals import Cell as _Cell
+from squid_reactivity.internals import StateDescriptor as _State
+from squid_reactivity.internals import Transaction as _Transaction
 
 __all__ = [
     "_CURRENT",

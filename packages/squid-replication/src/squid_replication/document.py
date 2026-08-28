@@ -22,11 +22,11 @@ from squid_reactivity.actions import (
 from squid_reactivity.core import (
     ReactiveConflictError,
     TransactionView,
-    _Cell,
     action_participant,
     enlist,
     transaction,
 )
+from squid_reactivity.internals import Cell as _Cell
 from squid_replication.engine import ReplicationBackend, ReplicationEngine
 from squid_replication.model import (
     ReplicatedItem,
