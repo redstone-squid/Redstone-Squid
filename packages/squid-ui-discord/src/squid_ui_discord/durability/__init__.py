@@ -16,6 +16,7 @@ from squid_storage import (
     SQLiteSessionStore,
     TopicBridgeSnapshot,
 )
+from squid_ui.errors import SquidUiError
 from squid_ui.runtime.component import AnyComponent, Component, render_component_tree
 from squid_ui.runtime.presentation_state import (
     CursorState,
@@ -78,7 +79,7 @@ __all__ = [
 ]
 
 
-class MessageRootStateError(ValueError):
+class MessageRootStateError(SquidUiError, ValueError):
     """A snapshot is malformed, incompatible, or unsafe to restore."""
 
 

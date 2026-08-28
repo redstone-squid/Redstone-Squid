@@ -5,6 +5,8 @@ from datetime import UTC, datetime, tzinfo
 from enum import StrEnum
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from squid_ui.errors import SquidUiError
+
 
 class AmbiguousTimeMode(StrEnum):
     """How a repeated local time maps to one of its two instants."""
@@ -21,15 +23,15 @@ class NonexistentTimeMode(StrEnum):
     SHIFT_FORWARD = "shift_forward"
 
 
-class AmbiguousLocalTimeError(ValueError):
+class AmbiguousLocalTimeError(SquidUiError, ValueError):
     """A wall time maps to two instants and its policy rejects both."""
 
 
-class NonexistentLocalTimeError(ValueError):
+class NonexistentLocalTimeError(SquidUiError, ValueError):
     """A wall time maps to no instant and its policy rejects adjustment."""
 
 
-class InvalidTimezoneOffsetError(ValueError):
+class InvalidTimezoneOffsetError(SquidUiError, ValueError):
     """An explicit offset is not valid for a wall time in its named zone."""
 
 

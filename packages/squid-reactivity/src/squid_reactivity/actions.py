@@ -564,16 +564,38 @@ def causal_scope(cause: CausalRef, root_action_id: ActionId | None):
 
 
 def add_action_result_sink(sink: ActionResultSink, *, policy: RedactionPolicy = DEFAULT_REDACTION) -> None:
+    """Register a process-wide observer of committed and rolled-back actions.
+
+    The sink is held weakly and observes redacted snapshots under `policy`. Registering an
+    already-registered sink is a no-op and keeps its original policy. For an observer with a
+    narrower life than the process, prefer :func:`action_result_sink`, which cannot leak a
+    registration.
+    """
     if not any(registration.reference() is sink for registration in _sinks):
         _sinks.append(_SinkRegistration(weakref.ref(sink), policy))
 
 
 def remove_action_result_sink(sink: ActionResultSink) -> None:
+    """Unregister a sink; unknown sinks are ignored."""
     _sinks[:] = [
         registration
         for registration in _sinks
         if (registered := registration.reference()) is not None and registered is not sink
     ]
+
+
+@contextmanager
+def action_result_sink(sink: ActionResultSink, *, policy: RedactionPolicy = DEFAULT_REDACTION):
+    """Register a sink until the lexical scope exits.
+
+    The scoped form of :func:`add_action_result_sink`, for observers -- a test collector, a
+    bounded diagnostic capture -- whose life is a block rather than the process.
+    """
+    add_action_result_sink(sink, policy=policy)
+    try:
+        yield sink
+    finally:
+        remove_action_result_sink(sink)
 
 
 def emit_result(result: ActionResult) -> None:

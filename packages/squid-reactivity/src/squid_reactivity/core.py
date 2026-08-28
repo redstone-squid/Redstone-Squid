@@ -108,27 +108,36 @@ class TransactionParticipant[PreparedT](Protocol):
         """
 
 
-class ReactiveWriteError(RuntimeError):
+class ReactivityError(Exception):
+    """Base class for every failure squid-reactivity raises deliberately.
+
+    Each error keeps a standard exception base alongside this one (`RuntimeError`,
+    `ValueError`, or `LookupError`), so catching by standard type keeps working while
+    `except ReactivityError` covers the package.
+    """
+
+
+class ReactiveWriteError(ReactivityError, RuntimeError):
     """A state mutation was attempted inside a read-only action."""
 
 
-class ActionValidationError(ValueError):
+class ActionValidationError(ReactivityError, ValueError):
     """An admitted action failed application validation before publication."""
 
 
-class FrameworkIntegrityError(RuntimeError):
+class FrameworkIntegrityError(ReactivityError, RuntimeError):
     """An infallible publication adapter failed after the local commit point."""
 
 
-class FreshActionError(RuntimeError):
+class FreshActionError(ReactivityError, RuntimeError):
     """A distinct action was requested after its admitting transaction staged work."""
 
 
-class UndeclaredStateError(RuntimeError):
+class UndeclaredStateError(ReactivityError, RuntimeError):
     """An attribute that is not declared state was written inside a transaction."""
 
 
-class ReactiveCycleError(RuntimeError):
+class ReactiveCycleError(ReactivityError, RuntimeError):
     """A derived value depends, through some chain, on itself.
 
     Raised for a computed that reads itself and for a resource whose loader awaits one
@@ -144,7 +153,7 @@ class ReactiveCycleError(RuntimeError):
         super().__init__(message)
 
 
-class StaleReactiveContextError(RuntimeError):
+class StaleReactiveContextError(ReactivityError, RuntimeError):
     """A transaction was written through from outside the scope or the task that owns it.
 
     Two mistakes with one shape, because a transaction travels in a `ContextVar` and a task
@@ -158,7 +167,7 @@ class StaleReactiveContextError(RuntimeError):
     """
 
 
-class ReactiveConflictError(RuntimeError):
+class ReactiveConflictError(ReactivityError, RuntimeError):
     """An action's strong input or explicit inverse precondition moved before commit.
 
     Nothing was published: the action rolls back whole and travels the ordinary failed-handler
