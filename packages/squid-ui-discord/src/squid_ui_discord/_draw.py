@@ -41,8 +41,8 @@ def plan_and_draw[BodyT: scene.Body, RenderTargetT](
     *,
     drawer: MountedRenderer[BodyT],
     wire: Wire | None = None,
-    cache: PlanCache | None = None,
-    memo: PlanMemo | None = None,
+    cache: PlanCache[BodyT] | None = None,
+    memo: PlanMemo[BodyT] | None = None,
     profile: OperationRecorder | None = None,
 ) -> tuple[MessagePayload, PlanResult[BodyT]]:
     """Resolve a document for its target and draw the message its scene describes.

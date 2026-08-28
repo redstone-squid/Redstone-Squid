@@ -2,7 +2,7 @@
 
 from collections import OrderedDict
 from dataclasses import dataclass, replace
-from typing import Any, cast
+from typing import Any
 
 from squid_ui import scene
 from squid_ui.runtime.presentation_state import PresentationState, SessionUpdate
@@ -10,8 +10,8 @@ from squid_ui.scene.model import PlanReport, PlanResult, PlanReuse
 
 
 @dataclass(frozen=True, slots=True)
-class CachedPlan:
-    scene: scene.Scene[Any]
+class CachedPlan[BodyT: scene.Body = scene.Body]:
+    scene: scene.Scene[BodyT]
     report: PlanReport
     session_updates: tuple[SessionUpdate, ...] = ()
     """Replayed on a hit: the session is part of the key, so these stay correct."""
@@ -25,24 +25,29 @@ class CachedPlan:
     """Selected primitive tree with every process-local value replaced by a document slot."""
 
 
-class PlanCache:
-    """A deliberately small LRU; runtimes do not retain unbounded document history."""
+class PlanCache[BodyT: scene.Body = Any]:
+    """A deliberately small LRU; runtimes do not retain unbounded document history.
+
+    A bare cache starts unbound because its constructor has no target-bearing input from which
+    to infer `BodyT`. Owners that know their target specialize it; passing an unbound cache to
+    the first planner call binds the checked operation without pretending construction knew.
+    """
 
     def __init__(self, capacity: int = 32) -> None:
         if capacity < 1:
             message = "plan cache capacity must be positive"
             raise ValueError(message)
         self.capacity = capacity
-        self._entries: OrderedDict[str, CachedPlan] = OrderedDict()
+        self._entries: OrderedDict[str, CachedPlan[BodyT]] = OrderedDict()
         self._incremental: OrderedDict[str, None] = OrderedDict()
 
-    def get(self, key: str) -> CachedPlan | None:
+    def get(self, key: str) -> CachedPlan[BodyT] | None:
         value = self._entries.get(key)
         if value is not None:
             self._entries.move_to_end(key)
         return value
 
-    def put(self, key: str, value: CachedPlan) -> None:
+    def put(self, key: str, value: CachedPlan[BodyT]) -> None:
         self._entries[key] = value
         self._entries.move_to_end(key)
         while len(self._entries) > self.capacity:
@@ -66,7 +71,7 @@ class PlanCache:
         return len(self._entries)
 
 
-class PlanMemo:
+class PlanMemo[BodyT: scene.Body = Any]:
     """One runtime's callback-bearing exact result; :meth:`clear` ends its retention.
 
     This is deliberately separate from :class:`PlanCache`: the latter is safe to share because
@@ -78,9 +83,9 @@ class PlanMemo:
         self._key: object | None = None
         self._session: object | None = None
         self._session_revisions: set[int] = set()
-        self._result: object | None = None
+        self._result: PlanResult[BodyT] | None = None
 
-    def get(self, source: object, key: object, session: object, session_revision: int) -> object | None:
+    def get(self, source: object, key: object, session: object, session_revision: int) -> PlanResult[BodyT] | None:
         if (
             self._source is source
             and self._key == key
@@ -90,16 +95,16 @@ class PlanMemo:
             return self._result
         return None
 
-    def put(self, source: object, key: object, session: object, session_revision: int, result: object) -> None:
+    def put(
+        self, source: object, key: object, session: object, session_revision: int, result: PlanResult[BodyT]
+    ) -> None:
         self._source = source
         self._key = key
         self._session = session
         self._session_revisions = {session_revision}
         self._result = result
 
-    def replay[BodyT: scene.Body](
-        self, source: object, key: object, session: PresentationState
-    ) -> PlanResult[BodyT] | None:
+    def replay(self, source: object, key: object, session: PresentationState) -> PlanResult[BodyT] | None:
         """The retained result re-marked as an exact hit, or None if this is not one.
 
         Re-marking belongs here rather than at each planner backend: a caller that returned
@@ -107,14 +112,11 @@ class PlanMemo:
         it, and both backends previously had to remember not to.
         """
         retained = self.get(source, key, session, session.revision)
-        if not isinstance(retained, PlanResult):
+        if retained is None:
             return None
-        return cast(
-            PlanResult[BodyT],
-            replace(retained, metrics=replace(retained.metrics, cache_hit=True, reuse=PlanReuse.EXACT)),
-        )
+        return replace(retained, metrics=replace(retained.metrics, cache_hit=True, reuse=PlanReuse.EXACT))
 
-    def store(self, source: object, key: object, session: PresentationState, result: PlanResult[Any]) -> None:
+    def store(self, source: object, key: object, session: PresentationState, result: PlanResult[BodyT]) -> None:
         """Retain one exact result against the session's current revision."""
         self.put(source, key, session, session.revision, result)
 
