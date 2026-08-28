@@ -829,6 +829,14 @@ handed and leave the dialect judgement to the target's dialect, so narrowing the
 portable default would be a claim none of them makes.
 """
 
+type PortableNode[RenderTargetT = RenderTarget] = (
+    SemanticNode[RenderTargetT] | Adaptation[RenderTargetT] | FallbackContent[RenderTargetT]
+)
+"""The closed portable vocabulary: what every planner backend must answer for.
+
+`LayoutNode` minus the open `Renderable` escape. A traversal that matches over this union
+can be proven exhaustive, which `AnyLayoutNode` structurally cannot.
+"""
 type ConcreteLayoutNode = SemanticNode | Adaptation | FallbackContent | PrimitiveNode
 type LayoutNode[RenderTargetT = RenderTarget] = (
     SemanticNode[RenderTargetT] | Adaptation[RenderTargetT] | FallbackContent[RenderTargetT] | Renderable[RenderTargetT]
@@ -1017,6 +1025,7 @@ __all__ = [
     "Ownership",
     "Paged",
     "Paragraph",
+    "PortableNode",
     "ProgressBar",
     "Quote",
     "Roster",
