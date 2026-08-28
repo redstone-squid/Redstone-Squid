@@ -101,9 +101,11 @@ from squid_ui_discord.message_root import (
     current_message_root,
 )
 from squid_ui_discord.message_root_contracts import (
+    DEFAULT_MESSAGE_ROOT_CONFIG,
     ChallengePresenter,
     ChallengeRequest,
     ChallengeSupervisor,
+    MessageRootConfig,
     PauseUpdates,
     RenewEphemeral,
 )
@@ -187,6 +189,7 @@ __all__ = [
     "ANY",
     "AT_LEAST_ONE",
     "AT_MOST_ONE",
+    "DEFAULT_MESSAGE_ROOT_CONFIG",
     "DISCORD_V1_DPY27",
     "DISCORD_V2_DPY27",
     "EMPTY_RESERVATION",
@@ -217,6 +220,7 @@ __all__ = [
     "MessageModeError",
     "MessagePayload",
     "MessageRoot",
+    "MessageRootConfig",
     "MessageRootDefaults",
     "MessageRootFactory",
     "MessageRootOptions",
