@@ -12,8 +12,11 @@ How a target reacts to what it finds there does not.
 """
 
 from collections.abc import Iterator, Mapping, Sequence
-from typing import Any
+from contextlib import contextmanager
+from typing import Any, Protocol
 
+from squid_ui.palette import Accent, AccentDefault, Palette
+from squid_ui.primitives.styles import Color
 from squid_ui.runtime.presentation_state import PresentationState
 from squid_ui.semantic import Controlled, Details, Toggle, Uncontrolled
 
@@ -36,6 +39,28 @@ def fallback_rung(path: str, branches: int, selected: Mapping[str, int]) -> int:
         message = f"{path}: planner selected unavailable fallback branch {rung}"
         raise ValueError(message)
     return rung
+
+
+class PaletteHolder(Protocol):
+    """Traversal state whose active palette a Themed region rescopes."""
+
+    palette: Palette
+
+
+@contextmanager
+def scoped_palette(holder: PaletteHolder, palette: Palette) -> Iterator[None]:
+    """Make ``palette`` the holder's active palette for the scope, then restore the previous one."""
+    previous = holder.palette
+    holder.palette = palette
+    try:
+        yield
+    finally:
+        holder.palette = previous
+
+
+def resolve_accent(accent: Accent, palette: Palette) -> Color | None:
+    """Resolve a structural accent to an exact colour: the palette brand when inherited."""
+    return palette.brand if accent is AccentDefault.INHERIT else accent
 
 
 def disclosure_state(node: Details[Any], session: PresentationState) -> bool:
@@ -66,10 +91,13 @@ def toggle_action_key(key: str) -> str:
 
 
 __all__ = [
+    "PaletteHolder",
     "branch_paths",
     "disclosure_state",
     "fallback_rung",
     "indexed_children",
+    "resolve_accent",
+    "scoped_palette",
     "toggle_action_key",
     "toggle_state",
 ]
