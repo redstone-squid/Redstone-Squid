@@ -9,6 +9,7 @@ from squid_ui import scene
 from squid_ui.capabilities import Capability
 from squid_ui.chrome import Chrome
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
+from squid_ui.planning.control_validation import fail, register_pager, validate_component
 from squid_ui.planning.cursors import CursorCoordinator, MaterializedCursorRequest
 from squid_ui.planning.discord_dialect import SceneBindings
 from squid_ui.planning.identity import stable_fingerprint
@@ -32,7 +33,6 @@ from squid_ui.planning.resolved import text as resolved_text
 from squid_ui.planning.target import Target
 from squid_ui.primitives.constraints import Never, Paginate
 from squid_ui.primitives.nodes import (
-    Boundary,
     Break,
     Budget,
     Button,
@@ -273,87 +273,15 @@ def _lower(
 
 
 def _validate_v2(nodes: Sequence[Node], limits: V2Limits) -> None:
+    """Reject what a Components V2 message cannot express, naming the node that cannot be drawn."""
     pager_keys: set[str] = set()
 
-    def fail(path: str, detail: str) -> None:
-        message = f"{path}: {detail}"
-        raise LayoutInvariantError(message)
-
     def walk(node: Node, path: str) -> None:
-        if isinstance(node, Boundary):
-            fail(path, "Boundary must be expanded by a component mount before planning")
-        overflow = getattr(node, "overflow", None)
-        if isinstance(overflow, Paginate):
-            key = overflow.key
-            if key is None:
-                fail(path, "Paginate requires an explicit key")
-                return
-            if key in pager_keys:
-                fail(path, f"duplicate pager key {key!r}")
-            pager_keys.add(key)
+        register_pager(node, path, pager_keys)
         match node:
-            case Button(label=label) | RoutedButton(label=label):
-                label = resolved_optional_text(label)
-                if label is None and node.emoji is None:
-                    fail(path, "interactive button needs a label or emoji")
-                if label is not None and len(label) > limits.components.button_label:
-                    fail(path, f"button label exceeds {limits.components.button_label}")
-            case LinkButton(label=label, url=url):
-                label = resolved_optional_text(label)
-                if label is None and node.emoji is None:
-                    fail(path, "link button needs a label or emoji")
-                if label is not None and len(label) > limits.components.button_label:
-                    fail(path, f"button label exceeds {limits.components.button_label}")
-                if len(url) > limits.components.link_url:
-                    fail(path, f"link URL exceeds {limits.components.link_url}")
             case PremiumButton(sku_id=sku_id):
                 if sku_id <= 0:
                     fail(path, "premium button SKU must be positive")
-            case Row(items=items):
-                if len(items) > limits.components.row_buttons:
-                    fail(path, f"row has {len(items)} controls; maximum is {limits.components.row_buttons}")
-                for index, item in enumerate(items):
-                    if isinstance(item, Button | RoutedButton | LinkButton | PremiumButton):
-                        walk(item, f"{path}.{index}")
-            case SelectMenu(options=options, placeholder=placeholder, min_values=minimum, max_values=maximum) | (
-                RoutedSelect(options=options, placeholder=placeholder, min_values=minimum, max_values=maximum)
-            ):
-                placeholder = resolved_optional_text(placeholder)
-                if not options:
-                    fail(path, "select needs at least one option")
-                if len(options) > limits.components.select_options:
-                    remedy = (
-                        "split the routed picker into separate routes"
-                        if isinstance(node, RoutedSelect)
-                        else "use an option-paging semantic node"
-                    )
-                    fail(path, f"select has {len(options)} options; {remedy}")
-                if placeholder is not None and len(placeholder) > limits.components.select_placeholder:
-                    fail(path, f"select placeholder exceeds {limits.components.select_placeholder}")
-                if minimum < 0 or maximum < minimum or maximum > max(1, len(options)):
-                    fail(path, "select value bounds are invalid")
-                for index, option in enumerate(options):
-                    label = resolved_text(option.label)
-                    description = resolved_optional_text(option.description)
-                    if len(label) > limits.components.option_label:
-                        fail(f"{path}.option.{index}", f"label exceeds {limits.components.option_label}")
-                    if len(option.value) > limits.components.option_value:
-                        fail(f"{path}.option.{index}", f"value exceeds {limits.components.option_value}")
-                    if description is not None and len(description) > limits.components.option_description:
-                        fail(f"{path}.option.{index}", f"description exceeds {limits.components.option_description}")
-            case EntitySelect(
-                placeholder=placeholder,
-                default_values=defaults,
-                min_values=minimum,
-                max_values=maximum,
-            ):
-                placeholder = resolved_optional_text(placeholder)
-                if placeholder is not None and len(placeholder) > limits.components.select_placeholder:
-                    fail(path, f"select placeholder exceeds {limits.components.select_placeholder}")
-                if minimum < 0 or maximum < minimum or maximum > limits.components.select_options:
-                    fail(path, "entity select value bounds are invalid")
-                if len(defaults) > maximum:
-                    fail(path, "entity select has more defaults than max_values")
             case Gallery(items=items):
                 if len(items) > limits.gallery_items:
                     fail(path, f"gallery has {len(items)} items; use MediaCollection")
@@ -374,19 +302,11 @@ def _validate_v2(nodes: Sequence[Node], limits: V2Limits) -> None:
                             "Paginate cannot be nested in a Section; place it beside the Section",
                         )
                     walk(text, f"{path}.text.{index}")
-            case Panel(children=children) | Budget(children=children) | Break(children=children):
+            case Panel(children=children):
                 for index, child in enumerate(children):
                     walk(child, f"{path}.{index}")
-            case Variants(variants=variants):
-                # Every rung is checked, not just the one the search will open on, so a
-                # document is rejected for a bad rung it might never reach. That also means
-                # two rungs cannot share a Paginate key — as under the previous Fold, whose
-                # primary and fallback were both walked.
-                for index, variant in enumerate(variants):
-                    for child_index, child in enumerate(variant.nodes):
-                        walk(child, f"{path}.variant.{index}.{child_index}")
             case _:
-                return
+                validate_component(node, path, limits=limits, walk=walk)
 
     for index, node in enumerate(nodes):
         walk(node, f"$.{index}")
