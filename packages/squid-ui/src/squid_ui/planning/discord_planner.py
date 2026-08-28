@@ -365,17 +365,30 @@ class _Expansion:
 
 
 @dataclass(frozen=True, slots=True)
-class _Search:
-    """Everything one document's search needs that does not change between candidates."""
+class _Compilation:
+    """One document compiled for one target: everything that does not vary between candidates.
 
+    The target is already reserved and the chrome already localized, which is the whole reason
+    this is a value rather than the request itself. Everything else is read back off the
+    request, so a search candidate, a structural replay and the final assembly all see one
+    set of inputs instead of three re-spreadings of the same eight fields.
+    """
+
+    request: PlanRequest[Any, Any, Any]
     document: Document[Any]
     target: AnyTarget
     chrome: Chrome
-    localization: Localization
-    palette: Palette
-    presentation: PresentationState
-    positions: Mapping[str, Position] | None
-    nav: PlannedNav | None
+
+    @classmethod
+    def resolve(cls, document: Document[Any], request: PlanRequest[Any, Any, Any]) -> _Compilation:
+        """Withhold the reservation and localize the chrome, once, for every phase below."""
+        # Every axis is withheld the same way: by planning against a smaller target.
+        return cls(
+            request=request,
+            document=document,
+            target=request.target.reserve(request.reservation),
+            chrome=localize_chrome(request.chrome, request.localization),
+        )
 
     @property
     def limits(self) -> MessageLimits:
@@ -384,6 +397,101 @@ class _Search:
     @property
     def dialect(self) -> DiscordDialect[Any, Any, Any]:
         return cast(DiscordDialect[Any, Any, Any], self.target.dialect)
+
+    @property
+    def localization(self) -> Localization:
+        return self.request.localization
+
+    @property
+    def palette(self) -> Palette:
+        return self.request.palette
+
+    @property
+    def presentation(self) -> PresentationState:
+        return self.request.presentation
+
+    @property
+    def positions(self) -> Mapping[str, Position] | None:
+        return self.request.positions
+
+    @property
+    def nav(self) -> PlannedNav | None:
+        return self.request.nav
+
+    def coordinator(self) -> CursorCoordinator:
+        return CursorCoordinator(self.presentation, self.chrome, self.nav, self.positions)
+
+    def replay(self, cached: CachedPlan) -> PlanResult[Any]:
+        """Rebuild a result around a cached scene, recovering only what could not be cached.
+
+        The scene, its report and its staged session updates come back untouched. Callbacks
+        cannot be cached, so the primitive tree carrying them is recovered first -- from the
+        compiled template when it materializes, and by re-lowering under the cached decisions
+        when it does not. Both routes reach the same bindings; only their cost differs.
+        """
+        nodes = self._materialized(cached)
+        if nodes is not None:
+            assets: Sequence[Asset] = _declared_assets(self.document)
+        else:
+            broker = self.coordinator()
+            semantic = lower_semantics(
+                self.document.children,
+                limits=self.limits,
+                chrome=self.chrome,
+                localization=self.localization,
+                palette=self.palette,
+                session=self.presentation,
+                pages=broker,
+                capabilities=self.target.capabilities,
+                strategies=dict(cached.strategies),
+                fallbacks=dict(cached.fallbacks),
+            )
+            lowered = self.dialect.normalize(semantic.nodes, self.target)
+            assets = _merge_assets(self.document.assets, semantic.assets)
+            self.dialect.validate(lowered, self.limits)
+            nodes = tuple(resolve_variants(lowered, dict(cached.variant_positions)))
+        collected = _collect_cached_bindings(nodes, cached.scene, self.nav, self.chrome)
+        return PlanResult(
+            scene=cached.scene,
+            bindings=collected.bindings,
+            form_bindings=collected.form_bindings,
+            report=cached.report,
+            resources={f"asset:{asset.key}": asset for asset in assets},
+            metrics=PlanMetrics(
+                states_explored=cached.states_explored,
+                cache_hit=True,
+                reuse=PlanReuse.STRUCTURAL,
+                search_fallback=cached.search_fallback,
+            ),
+            session_updates=cached.session_updates,
+        )
+
+    def _materialized(self, cached: CachedPlan) -> tuple[Node, ...] | None:
+        """The cached primitive tree with this render's live values bound back into it."""
+        if cached.lowered_template is None:
+            return None
+        dynamic = self.dynamic_values(cached.scene)
+        try:
+            restored = _materialize(cached.lowered_template, dynamic)
+        except _UnboundDynamic, IndexError, TypeError, ValueError:
+            return None
+        return cast(tuple[Node, ...], restored) if isinstance(restored, tuple) else None
+
+    def dynamic_values(self, planned: scene.Scene[Any]) -> tuple[object, ...]:
+        """The process-local values a compiled template holds slots for."""
+        return _program_dynamic_values(
+            self.document,
+            target=self.target,
+            limits=self.limits,
+            chrome=self.chrome,
+            localization=self.localization,
+            palette=self.palette,
+            presentation=self.presentation,
+            positions=self.positions,
+            nav=self.nav,
+            capabilities=self.target.capabilities,
+            planned=planned,
+        )
 
     def evaluate(self, state: _State) -> _Candidate:
         """Lower, validate, and measure exactly one candidate in its own coordinator.
@@ -611,7 +719,7 @@ def _fallback_notes(occurrences: Sequence[FallbackAxis], selected: Mapping[str, 
     return notes
 
 
-def _search(search: _Search, *, search_budget: int) -> _Candidate:
+def _search(search: _Compilation, *, search_budget: int) -> _Candidate:
     """Explore one conditional decision graph best-first and return the least degraded fit.
 
     Strategies, semantic fallbacks, and primitive ladders are all decisions in the same
@@ -692,31 +800,17 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
 
     Planning owns every fit and fallback decision. The resulting scene contains visual action
     references, while callbacks remain in the plan result for the mounted frontend.
+
+    Three ways in, cheapest first: an exact memo hit returns the previous result outright, a
+    structural cache hit replays a stored scene, and a miss runs the layout search.
     """
-    localization = request.localization
-    palette = request.palette
-    strict = request.strict
-    positions = request.positions
-    nav = request.nav
-    search_budget = request.search_budget
-    presentation = request.presentation
     exact_key = request.exact_key()
-    if memo is not None:
-        exact = memo.get(rendered, exact_key, presentation, presentation.revision)
-        if isinstance(exact, PlanResult):
-            return cast(
-                PlanResult[BodyT],
-                replace(exact, metrics=replace(exact.metrics, cache_hit=True, reuse=PlanReuse.EXACT)),
-            )
-    document = as_document(rendered)
-    # Every axis is withheld the same way: by planning against a smaller target.
-    target = request.target.reserve(request.reservation)
-    dialect = cast(DiscordDialect[Any, BodyT, RenderTargetT], target.dialect)
-    limits = target.limits
-    chrome = localize_chrome(request.chrome, localization)
-    cache_context = request.cache_context(target=target, chrome=chrome)
-    cache_key = _plan_cache_key((document,), context=cache_context)
-    incremental_shape = None if cache is None else _incremental_shape(document)
+    if memo is not None and (exact := memo.replay(rendered, exact_key, request.presentation)) is not None:
+        return cast(PlanResult[BodyT], exact)
+    compilation = _Compilation.resolve(as_document(rendered), request)
+    cache_context = request.cache_context(target=compilation.target, chrome=compilation.chrome)
+    cache_key = _plan_cache_key((compilation.document,), context=cache_context)
+    incremental_shape = None if cache is None else _incremental_shape(compilation.document)
     incremental_key = (
         None
         if cache is None or incremental_shape is None
@@ -724,105 +818,49 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
     )
     cached = cache.get(cache_key) if cache is not None else None
     if cached is not None:
-        selected_nodes: tuple[Node, ...] | None = None
-        if cached.lowered_template is not None:
-            dynamic = _program_dynamic_values(
-                document,
-                target=target,
-                limits=limits,
-                chrome=chrome,
-                localization=localization,
-                palette=palette,
-                presentation=presentation,
-                positions=positions,
-                nav=nav,
-                capabilities=target.capabilities,
-                planned=cached.scene,
-            )
-            try:
-                restored = _materialize(cached.lowered_template, dynamic)
-            except _UnboundDynamic, IndexError, TypeError, ValueError:
-                pass
-            else:
-                if isinstance(restored, tuple):
-                    selected_nodes = cast(tuple[Node, ...], restored)
-        if selected_nodes is not None:
-            assets = _declared_assets(document)
-            collected = _collect_cached_bindings(selected_nodes, cached.scene, nav, chrome)
-            resources = {f"asset:{asset.key}": asset for asset in assets}
-            result = PlanResult(
-                scene=cast(scene.Scene[BodyT], cached.scene),
-                bindings=collected.bindings,
-                form_bindings=collected.form_bindings,
-                report=cached.report,
-                resources=resources,
-                metrics=PlanMetrics(
-                    states_explored=cached.states_explored,
-                    cache_hit=True,
-                    reuse=PlanReuse.STRUCTURAL,
-                    search_fallback=cached.search_fallback,
-                ),
-                session_updates=cached.session_updates,
-            )
-            if memo is not None:
-                memo.put(rendered, exact_key, presentation, presentation.revision, result)
-            return result
-        broker = CursorCoordinator(presentation, chrome, nav, positions)
-        semantic = lower_semantics(
-            document.children,
-            limits=limits,
-            chrome=chrome,
-            localization=localization,
-            palette=palette,
-            session=presentation,
-            pages=broker,
-            capabilities=target.capabilities,
-            strategies=dict(cached.strategies),
-            fallbacks=dict(cached.fallbacks),
-        )
-        lowered = dialect.normalize(semantic.nodes, target)
-        assets = _merge_assets(document.assets, semantic.assets)
-        dialect.validate(lowered, limits)
-        selected_nodes = tuple(resolve_variants(lowered, dict(cached.variant_positions)))
-        collected = _collect_cached_bindings(selected_nodes, cached.scene, nav, chrome)
-        resources = {f"asset:{asset.key}": asset for asset in assets}
-        result = PlanResult(
-            scene=cast(scene.Scene[BodyT], cached.scene),
-            bindings=collected.bindings,
-            form_bindings=collected.form_bindings,
-            report=cached.report,
-            resources=resources,
-            metrics=PlanMetrics(
-                states_explored=cached.states_explored,
-                cache_hit=True,
-                reuse=PlanReuse.STRUCTURAL,
-                search_fallback=cached.search_fallback,
-            ),
-            session_updates=cached.session_updates,
-        )
+        result = cast(PlanResult[BodyT], compilation.replay(cached))
         if memo is not None:
-            memo.put(rendered, exact_key, presentation, presentation.revision, result)
+            memo.store(rendered, exact_key, request.presentation, result)
         return result
-
-    search = _Search(
-        document=document,
-        target=target,
-        chrome=chrome,
-        localization=localization,
-        palette=palette,
-        presentation=presentation,
-        positions=positions,
-        nav=nav,
+    return _compile(
+        compilation,
+        rendered=rendered,
+        exact_key=exact_key,
+        cache=cache,
+        cache_key=cache_key,
+        incremental_key=incremental_key,
+        memo=memo,
     )
+
+
+def _compile[RenderTargetT, AdapterT, BodyT: scene.Body](
+    compilation: _Compilation,
+    *,
+    rendered: DocumentLike[RenderTargetT],
+    exact_key: tuple[object, ...],
+    cache: PlanCache | None,
+    cache_key: str,
+    incremental_key: str | None,
+    memo: PlanMemo | None,
+) -> PlanResult[BodyT]:
+    """Search the layout space, assemble the scene, and record what may be reused."""
+    request = compilation.request
+    document = compilation.document
+    target = compilation.target
+    dialect = compilation.dialect
+    limits = compilation.limits
+    chrome = compilation.chrome
+    nav = compilation.nav
+    presentation = compilation.presentation
     reuse = PlanReuse.MISS
     selected: _Candidate | None = None
     if cache is not None and incremental_key is not None and cache.admits_incremental(incremental_key):
-        candidate = search.evaluate(_State())
+        candidate = compilation.evaluate(_State())
         if _certifies_incremental(candidate):
             selected = replace(candidate, semantic=replace(candidate.semantic, states_explored=1))
             reuse = PlanReuse.INCREMENTAL
     if selected is None:
-        selected = _search(search, search_budget=search_budget)
+        selected = _search(compilation, search_budget=request.search_budget)
     broker = selected.broker
     semantic = selected.semantic
     assets = _merge_assets(document.assets, semantic.assets)
@@ -871,7 +909,7 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
             ),
         )
     _reconcile_pagers(measured, broker)
-    if strict and (lossy := lossy_notes(measured.notes)):
+    if request.strict and (lossy := lossy_notes(measured.notes)):
         raise LayoutDegradedError("; ".join(note.message for note in lossy))
     hard_failures = measured.failures
     if hard_failures:
@@ -942,28 +980,13 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
                 semantic.search_fallback,
                 selected.state.variants,
                 selected.state.fallbacks,
-                _compile_template(
-                    lowered,
-                    _program_dynamic_values(
-                        document,
-                        target=target,
-                        limits=limits,
-                        chrome=chrome,
-                        localization=localization,
-                        palette=palette,
-                        presentation=presentation,
-                        positions=positions,
-                        nav=nav,
-                        capabilities=target.capabilities,
-                        planned=planned,
-                    ),
-                ),
+                _compile_template(lowered, compilation.dynamic_values(planned)),
             ),
         )
         if incremental_key is not None and _certifies_incremental(selected) and not root_events:
             cache.certify_incremental(incremental_key)
     if memo is not None and _cacheable(lowered):
-        memo.put(rendered, exact_key, presentation, presentation.revision, result)
+        memo.store(rendered, exact_key, presentation, result)
     return result
 
 
