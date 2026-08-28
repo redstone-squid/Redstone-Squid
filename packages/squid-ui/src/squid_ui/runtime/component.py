@@ -16,11 +16,11 @@ from dataclasses import dataclass, field, replace
 from typing import Any, Generic, Protocol, TypeVar, cast
 
 from squid_reactivity.core import (
-    _RENDER_OBSERVATION,
     Observation,
     StateOwner,
     observe_render,
 )
+from squid_reactivity.internals import RENDER_OBSERVATION as _RENDER_OBSERVATION
 from squid_ui.document import Asset, Document
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.primitives.constraints import Paginate

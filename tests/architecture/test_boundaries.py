@@ -227,6 +227,43 @@ def test_discord_package_stays_a_leaf() -> None:
     )
 
 
+def test_private_names_do_not_cross_distribution_boundaries() -> None:
+    """A leading-underscore name imported from a sibling distribution is an undocumented ABI.
+
+    Inside one distribution, private imports between modules are that package's own
+    business. Across distributions they couple separately versioned wheels to
+    implementation details, so the only sanctioned crossing is squid_reactivity.internals,
+    which exists to re-export exactly what the suite's siblings need.
+    """
+    framework_packages = {
+        "squid_reactivity",
+        "squid_replication",
+        "squid_storage",
+        "squid_ui",
+        "squid_ui_discord",
+        "squid_ui_widgets",
+    }
+    violations: list[tuple[str, int, str]] = []
+    for root in SCAN_ROOTS:
+        if root == Path("squid"):
+            continue
+        own = root.parent.name.replace("-", "_")
+        for path in root.rglob("*.py"):
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if not isinstance(node, ast.ImportFrom) or node.module is None or node.level:
+                    continue
+                source = node.module.partition(".")[0]
+                if source == own or source not in framework_packages:
+                    continue
+                violations.extend(
+                    (str(path), node.lineno, f"{node.module}.{alias.name}")
+                    for alias in node.names
+                    if alias.name.startswith("_")
+                )
+
+    assert violations == []
+
+
 def test_reactive_package_has_no_hard_dependencies() -> None:
     """The extracted runtime may import only itself and Python's standard library."""
     allowed = sys.stdlib_module_names | {"squid_reactivity"}
