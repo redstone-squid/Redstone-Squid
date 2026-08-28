@@ -37,7 +37,7 @@ from squid_ui_discord.devtools_runtime import (
 )
 from squid_ui_discord.devtools_view import OperationalInspector, metrics_text, plan_text, scene_attachment
 from squid_ui_discord.live import find
-from squid_ui_discord.message_root import current_message_root
+from squid_ui_discord.message_root import owner_message_root
 from squid_ui_discord.message_root_contracts import MessageRootSnapshot
 from squid_ui_discord.message_root_scheduler import MessageRootScheduler, MessageRootSchedulerSnapshot
 from squid_ui_discord.routing import routers
@@ -392,7 +392,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
             inspector.message_root_id = message_root_id
         if session_id is not None:
             inspector.session_id = session_id
-        message_root = current_message_root(inspector, ctx.author.id, timeout=SESSION_SECONDS)
+        message_root = owner_message_root(inspector, ctx.author.id, timeout=SESSION_SECONDS)
         await message_root.send(delivery.reply_to(ctx, ephemeral=ctx.interaction is not None))
 
     async def _snapshot_or_refuse(self, ctx: Context[BotT], message_root_id: str) -> MessageRootSnapshot | None:

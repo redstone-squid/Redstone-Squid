@@ -29,6 +29,7 @@ def test_renamed_submodules_are_modules_not_shadowed_callables(dotted: str) -> N
 def test_the_adapter_namespace_exposes_its_surface() -> None:
     """What `squid_ui_discord` promotes to its root, and what it deliberately does not."""
     assert squid_ui_discord.MessageRoot
+    assert squid_ui_discord.owner_message_root
     assert squid_ui_discord.button_grid
     assert squid_ui_discord.modals.CheckboxGroupField
     assert squid_ui_discord.MessageRootDefaults
