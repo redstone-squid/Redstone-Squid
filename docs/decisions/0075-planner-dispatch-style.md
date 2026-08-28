@@ -74,3 +74,21 @@ hold.
 `tests/architecture/test_naming.py` would reject a class named `Visitor` until `"Visitor": "visit"` is added to
 `AGENT_NOUNS`. That check is not the reason for this decision, but it does mean introducing one is a deliberate,
 reviewable act rather than a drive-by.
+
+## Addendum (2026-08-28): the worked example evolved
+
+The claim-or-`None` staging this ADR named as the worked example (`_Compiler.compile`) has been
+replaced by a stronger form of the same idiom, not a revisiting of the decision. `compile` now
+rejects the open `Renderable` escape before matching, then dispatches through one grouping `match`
+over the closed `PortableNode` union whose stages are typed against private sub-union aliases, and
+every planner traversal `match` (`html_planner.py`, `semantic_adaptation/lowering.py`,
+`semantic_adaptation/decisions.py`) ends in `case _ as unreachable: assert_never(unreachable)`.
+
+This delivers the exhaustiveness this ADR's Consequences section said catch-alls forfeit: a
+forgotten member is a `Never` type error naming it, under both Pyrefly and BasedPyright, with the
+runtime raise preserved for genuine escapes. It also removes the one reviewer burden the
+Consequences flagged — the checker, not the reviewer, now verifies that no member is claimed by
+the wrong stage, because each stage's parameter is its sub-union. Dispatch remains `match`; no
+visitor, `accept`, or registry was introduced.
+`tests/architecture/test_boundaries.py::test_planner_traversals_keep_their_exhaustiveness_proof`
+keeps the terminal arms honest.
