@@ -2,16 +2,17 @@
 
 Two halves. `fake_interaction`, `fake_message`, `delivered_to` and `commit_render` stand in
 for the Discord boundary, so a test can send a message root to nowhere and then drive it through
-`MessageRoot.dispatch` — the same funnel a real press takes. `payload_problems`, `modal_problems`
-and `assert_within_limits` check the other end: they walk the serialized wire payload, not the
-Python objects, so they verify exactly what Discord will see, including any chrome discord.py
-adds during serialization.
+`MessageRoot.dispatch` — the same funnel a real press takes. `payload_problems`, `modal_problems`,
+`assert_within_limits` and the `payload_*` queries check the other end: they walk the
+serialized wire payload, not the Python objects, so they verify exactly what Discord will see,
+including any chrome discord.py adds during serialization.
 
 This module is public and versioned like the rest of the package. It is imported by tests
 rather than by a running bot, so it is reachable as `squid_ui_discord.testing.X` and promotes no
 names to `squid_ui_discord` itself.
 """
 
+import asyncio
 from collections.abc import Iterator
 from copy import copy
 from dataclasses import replace
@@ -20,15 +21,21 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
 
+import anyio
 import discord
 
 from squid_ui import scene
+from squid_ui.planning.adapter import AdapterProfile
+from squid_ui.planning.discord import components_v2_target
 from squid_ui.planning.limits import COMPONENT_LIMITS, LIMITS, ComponentLimits, MessageLimits, V2Limits
 from squid_ui.planning.target import Target
+from squid_ui.planning.types import DiscordAdapter
 from squid_ui_discord.delivery import DeliveryResult, EditHandle, MessageDestination, handle_for
 from squid_ui_discord.message_payload import MessagePayload
 from squid_ui_discord.message_root import MessageRoot
+from squid_ui_discord.message_root_scheduler import MessageRootScheduler
 from squid_ui_discord.message_root_wiring import AnyMountedView, ClassicMountedView, MountedView
+from squid_ui_discord.rendering import render_static
 
 type ComponentPayload = dict[str, Any]
 
@@ -275,15 +282,123 @@ def assert_within_limits(built: discord.ui.LayoutView | discord.ui.Modal, *, lim
     assert not problems, "; ".join(problems)
 
 
+# --- Payload queries ------------------------------------------------------------------------
+
+
+def _payloads(built: discord.ui.LayoutView | list[ComponentPayload]) -> list[ComponentPayload]:
+    components = built if isinstance(built, list) else built.to_components()
+    return list(iter_component_payloads(components))
+
+
+def payload_texts(built: discord.ui.LayoutView | list[ComponentPayload]) -> list[str]:
+    """Every display text Discord will receive, in order.
+
+    Reads the serialized payload rather than walking `discord.ui` objects. The two agree on
+    content, but only this one keeps agreeing when discord.py changes how it builds the tree --
+    and, unlike matching a substring against `str(view.to_components())`, it cannot pass
+    because the string turned up in a custom id or a placeholder.
+    """
+    return [component["content"] for component in _payloads(built) if component.get("type") == 10]
+
+
+def payload_labels(built: discord.ui.LayoutView | list[ComponentPayload]) -> list[str]:
+    """Every button label Discord will receive, in order."""
+    return [component["label"] for component in _payloads(built) if component.get("type") == 2 and "label" in component]
+
+
+def payload_custom_ids(built: discord.ui.LayoutView | list[ComponentPayload]) -> list[str]:
+    """Every custom id Discord will receive, in order, across every interactive component."""
+    return [component["custom_id"] for component in _payloads(built) if "custom_id" in component]
+
+
+# --- Target and view construction -----------------------------------------------------------
+
+
+def target_profile(name: str = "test", *, capabilities: frozenset[str] = frozenset(), limits: V2Limits = LIMITS) -> Any:
+    """A V2 target whose adapter supplies exactly `capabilities` and no extensions.
+
+    Capabilities that are not Discord protocol facts belong to the adapter axis, which is what
+    lets a test vary them without inventing a dialect. Use `without_capabilities` to take a
+    *protocol* capability away from a target that already exists.
+    """
+    return components_v2_target(AdapterProfile(DiscordAdapter, name, ">=1", capabilities=capabilities), limits=limits)
+
+
+def static_view(*args: Any, **kwargs: Any) -> discord.ui.LayoutView:
+    """The drawn layout of a sessionless V2 document, for tests that only read components."""
+    return render_static(*args, **kwargs).layout
+
+
+def layout_view(*items: discord.ui.Item[Any], timeout: float | None = None) -> discord.ui.LayoutView:
+    """A host-owned discord.py view holding `items` -- the shape adoption and conform start from."""
+    view = discord.ui.LayoutView(timeout=timeout)
+    for item in items:
+        view.add_item(item)
+    return view
+
+
+def action_row(*items: Any) -> discord.ui.ActionRow[Any]:
+    """A discord.py action row holding `items`."""
+    row: discord.ui.ActionRow[Any] = discord.ui.ActionRow()
+    for item in items:
+        row.add_item(item)
+    return row
+
+
+# --- Failure injection ----------------------------------------------------------------------
+
+
+def http_error(status: int = 500, *, code: int = 0, message: str = "nope") -> discord.HTTPException:
+    """A generic Discord failure, for the paths that only care that the write did not land."""
+    response = SimpleNamespace(status=status, reason=message)
+    return discord.HTTPException(response, {"code": code, "message": message})  # type: ignore[arg-type]
+
+
+def stale_http_error() -> discord.HTTPException:
+    """Discord's way of saying the credentials behind a write are gone.
+
+    Code 10015 specifically: an unknown webhook is what an expired interaction token looks
+    like from the other side, and the recovery path keys on it rather than on the status.
+    """
+    return http_error(404, code=10015, message="Unknown Webhook")
+
+
+# --- Scheduling -----------------------------------------------------------------------------
+
+
+async def drain(scheduler: MessageRootScheduler, *, timeout: float = 1) -> None:
+    """Run `scheduler` until its queue is empty, then cancel it.
+
+    Reaches into `_queue` on purpose, the way `commit_render` reaches past `send`: the queue's
+    join is the only honest "everything enqueued has been handled" signal, and the alternative
+    is polling a render count and hoping. Four test files each carried this, all four reaching
+    into the same private, and one of them took a `bus` argument it immediately discarded.
+    """
+    async with anyio.create_task_group() as tasks:
+        tasks.start_soon(scheduler.run)
+        await asyncio.wait_for(scheduler._queue.join(), timeout=timeout)
+        tasks.cancel_scope.cancel()
+
+
 __all__ = [
+    "action_row",
     "assert_within_limits",
     "commit_classic_render",
     "commit_render",
     "delivered_to",
+    "drain",
     "fake_interaction",
     "fake_message",
+    "http_error",
     "iter_component_payloads",
+    "layout_view",
     "modal_problems",
+    "payload_custom_ids",
+    "payload_labels",
     "payload_problems",
+    "payload_texts",
+    "stale_http_error",
+    "static_view",
+    "target_profile",
     "without_capabilities",
 ]
