@@ -1,6 +1,7 @@
 """Reusable, frontend-neutral state-machine machines."""
 
 from squid_ui_widgets import guards
+from squid_ui_widgets._window import DEFAULT_LOADING_COPY, LoadingCopy
 from squid_ui_widgets.agreement import Agreement, AgreementParticipant, AgreementResolveHandler
 from squid_ui_widgets.browser import Browser, BrowserDetail, BrowserOpenHandler, BrowserOverview
 from squid_ui_widgets.collection import (
@@ -63,6 +64,7 @@ from squid_ui_widgets.wizard import (
 )
 
 __all__ = [
+    "DEFAULT_LOADING_COPY",
     "REVIEW_STEP",
     "Agreement",
     "AgreementParticipant",
@@ -88,6 +90,7 @@ __all__ = [
     "EditorState",
     "EditorValues",
     "GridCell",
+    "LoadingCopy",
     "MachineControls",
     "Menu",
     "MenuEntry",
