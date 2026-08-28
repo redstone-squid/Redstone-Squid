@@ -212,7 +212,8 @@ This list of commands is subject to change due to improvements and new features.
 
 ## Contributing
 
-Please read [CODE_OF_CONDUCT.md](https://github.com/redstone-squid/Redstone-Squid/blob/master/CODE_OF_CONDUCT.md) for details on our code of conduct, and the process for submitting pull requests to us.
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and the process for
+submitting pull requests, and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for our code of conduct.
 
 ## License
 
