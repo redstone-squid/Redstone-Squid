@@ -31,6 +31,15 @@ dependencies = [
 durable = ["squid-storage==0.1.0a1"]
 postgres = ["squid-storage[postgres]==0.1.0a1"]
 
+# Test-only. This package's suite drives the widget library across the transport boundary --
+# `tests/test_widget_integration.py` -- but nothing it ships imports it, and
+# `tests/architecture/test_boundaries.py` enforces that squid_ui_widgets sits *beside* this
+# package rather than below it. A PEP 735 group says so without touching the wheel's
+# dependencies. Until now these imports resolved only because the uv workspace installs every
+# member, which left the coupling invisible.
+[dependency-groups]
+test = ["squid-ui-widgets"]
+
 [project.urls]
 Changelog = "https://github.com/redstone-squid/Redstone-Squid/blob/master/CHANGELOG.md"
 Documentation = "https://redstone-squid.github.io/Redstone-Squid/squid-ui/"
