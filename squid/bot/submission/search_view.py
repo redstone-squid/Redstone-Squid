@@ -150,9 +150,11 @@ class SearchResultsView(sl.Component[sl.ComponentsV2Target]):
             page_size=request.page_size,
             title=L("Search results"),
             empty=L("No results match this query."),
-            loading=L("Loading search results…"),
-            load_failed=L("Could not load search results."),
-            retry=L("Retry"),
+            copy=sp.LoadingCopy(
+                loading=L("Loading search results…"),
+                failed=L("Could not load search results."),
+                retry=L("Retry"),
+            ),
         )
         self._browser.window.replace(self._source.initial_loaded())
 

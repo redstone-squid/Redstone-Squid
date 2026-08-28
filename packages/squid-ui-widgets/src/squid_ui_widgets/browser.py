@@ -1,11 +1,9 @@
 """Resource-backed master-detail browsing."""
 
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any
 
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
-from squid_ui.errors import LayoutInvariantError
 from squid_ui.factories import (
     action_control,
     action_controls,
@@ -41,22 +39,23 @@ from squid_ui.sources import (
 )
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, render_content, require_key
+from squid_ui_widgets._window import (
+    DEFAULT_LOADING_COPY,
+    LoadingCopy,
+    WindowRequest,
+    last_ready,
+    load_window,
+)
 
 type BrowserDetail[ItemT] = Callable[[ItemT], ContentLike | Component[Any]]
 type BrowserOpenHandler[ItemT] = Callable[[ActionEvent, ItemT], Awaitable[None]]
 type BrowserOverview[ItemT] = Callable[[LoadedWindow[ItemT]], ContentLike]
 
 
-@dataclass(frozen=True, slots=True)
-class _WindowRequest:
-    operation: Literal["refresh", "previous", "next", "seek"] = "refresh"
-    position: Position | None = None
-
-
 class Browser[ItemT](Component[Any]):
     """Browse a remote window, open one item, and act within its detail."""
 
-    _request: _WindowRequest = state(default=_WindowRequest(), persist=False, opaque=True)
+    _request: WindowRequest = state(default=WindowRequest(), persist=False, opaque=True)
     opened: ItemT | None = state(None, persist=False, opaque=True)
     _detail_value: object | None = state(None, persist=False, opaque=True)
 
@@ -75,9 +74,7 @@ class Browser[ItemT](Component[Any]):
         on_open: BrowserOpenHandler[ItemT] | None = None,
         title: TextLike | None = None,
         empty: ContentLike = "No entries",
-        loading: TextLike = "Loading…",
-        load_failed: TextLike = "Could not load entries.",
-        retry: TextLike = "Retry",
+        copy: LoadingCopy = DEFAULT_LOADING_COPY,
     ) -> None:
         self.key = require_key(key, name="Browser.key")
         if page_size < 1 or page_size > 25:
@@ -94,45 +91,34 @@ class Browser[ItemT](Component[Any]):
         self.on_open = on_open
         self.title = title
         self.empty = normalize_content(empty, name="Browser.empty")
-        self.loading = loading
-        self.load_failed = load_failed
-        self.retry = retry
+        self.copy = copy
         self.loader = WindowLoader(source, page_size, identity, initial=ORIGIN)
 
     @resource
     async def window(self) -> LoadedWindow[ItemT]:
-        current = self.window.status
-        previous = current.previous.value if isinstance(current, Pending | Failed) and current.previous else None
-        match self._request:
-            case _WindowRequest("previous") if previous is not None:
-                loaded = await self.loader.previous(previous)
-            case _WindowRequest("next") if previous is not None:
-                loaded = await self.loader.next(previous)
-            case _WindowRequest("seek", position):
-                loaded = await self.loader.load(position, previous=previous)
-            case _:
-                loaded = await self.loader.load(previous=previous)
-        if loaded is None:
-            message = "browser window request was superseded before it loaded"
-            raise LayoutInvariantError(message)
-        return loaded
+        return await load_window(
+            self.loader,
+            self._request,
+            previous=last_ready(self.window.status),
+            subject="browser",
+        )
 
     async def refresh(self) -> None:
         """Refresh around the visible anchor and wait for settlement."""
-        self._request = _WindowRequest()
+        self._request = WindowRequest()
         await self.window._load()
 
     async def _previous(self, _event: ActionEvent) -> None:
-        self._request = _WindowRequest("previous")
+        self._request = WindowRequest("previous")
 
     async def _next(self, _event: ActionEvent) -> None:
-        self._request = _WindowRequest("next")
+        self._request = WindowRequest("next")
 
     async def _seek(self, page: int) -> None:
-        self._request = _WindowRequest("seek", Position(offset=page * self.page_size))
+        self._request = WindowRequest("seek", Position(offset=page * self.page_size))
 
     async def _retry(self, _event: ActionEvent) -> None:
-        self._request = _WindowRequest(self._request.operation, self._request.position)
+        self._request = WindowRequest(self._request.operation, self._request.position)
 
     def _ready(self) -> LoadedWindow[ItemT] | None:
         current = self.window.status
@@ -190,19 +176,19 @@ class Browser[ItemT](Component[Any]):
                 return self._render_loaded(loaded)
             case Pending(previous=previous):
                 if previous is None:
-                    return self._status(self.loading)
-                return self._render_loaded(previous.value, status_text=self.loading)
+                    return self._status(self.copy.loading)
+                return self._render_loaded(previous.value, status_text=self.copy.loading)
             case Failed(previous=previous):
                 if previous is None:
-                    return self._status(self.load_failed, retry=True)
-                return self._render_loaded(previous.value, status_text=self.load_failed, retry=True)
+                    return self._status(self.copy.failed, retry=True)
+                return self._render_loaded(previous.value, status_text=self.copy.failed, retry=True)
 
     def _status(self, message: TextLike, *, retry: bool = False) -> RenderResult[Any]:
         return stack(
             heading(self.title) if self.title is not None else None,
             note(message),
             action_controls(
-                action_control(self.retry, self._retry, key=f"{self.key}.retry"), key=f"{self.key}.retry-row"
+                action_control(self.copy.retry, self._retry, key=f"{self.key}.retry"), key=f"{self.key}.retry-row"
             )
             if retry
             else None,
@@ -264,7 +250,7 @@ class Browser[ItemT](Component[Any]):
             *self._navigation(loaded),
             note(status_text) if status_text is not None else None,
             action_controls(
-                action_control(self.retry, self._retry, key=f"{self.key}.retry"), key=f"{self.key}.retry-row"
+                action_control(self.copy.retry, self._retry, key=f"{self.key}.retry"), key=f"{self.key}.retry-row"
             )
             if retry
             else None,
@@ -360,7 +346,7 @@ class Browser[ItemT](Component[Any]):
             ),
             note(status_text) if status_text is not None else None,
             action_controls(
-                action_control(self.retry, self._retry, key=f"{self.key}.retry"), key=f"{self.key}.retry-row"
+                action_control(self.copy.retry, self._retry, key=f"{self.key}.retry"), key=f"{self.key}.retry-row"
             )
             if retry
             else None,
