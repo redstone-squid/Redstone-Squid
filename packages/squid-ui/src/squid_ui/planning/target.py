@@ -190,7 +190,8 @@ class Target(Generic[LimitsT, BodyT, ModeT_co, AdapterT_co]):
         unknown = sorted(set(cost.values) - set(self.capacities))
         if unknown:
             known = ", ".join(sorted(self.capacities)) or "none"
-            message = f"target {self.triple!r} has no reservable resource {unknown[0]!r} (known: {known})"
+            # str() first: an Axis member reprs as `<Axis.X: 'x'>`, and this message names axes.
+            message = f"target {self.triple!r} has no reservable resource {str(unknown[0])!r} (known: {known})"
             raise LayoutInvariantError(message)
         return replace(self, limits=self.limits.with_capacities(cost.values))
 
