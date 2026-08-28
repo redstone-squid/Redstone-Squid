@@ -144,6 +144,8 @@ class MultiChoice:
             if on_commit is not None and event.state.committed != event.previous.committed:
                 await on_commit(event, event.state.committed)
 
+        if initial is None:
+            return ComponentDriver(self, on_change=changed)
         return ComponentDriver(self, initial=initial, on_change=changed)
 
     def _ordered(self, selected: Iterable[str]) -> tuple[str, ...]:

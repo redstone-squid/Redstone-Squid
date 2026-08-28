@@ -17,7 +17,7 @@ promotes no names to `squid_ui_widgets` itself.
 
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, overload
 
 from squid_ui import testing as engine
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
@@ -26,11 +26,13 @@ from squid_ui.runtime.component import RenderResult
 from squid_ui.semantic import ActionControl, AnyLayoutNode, LayoutNode, RoutedActionControl, RoutedChoices
 from squid_ui.target_types import RenderTarget
 from squid_ui_widgets.drivers import (
+    _MISSING_INITIAL_STATE,
     ComponentDriver,
     RouteDriver,
     StateMachine,
     TransitionHandler,
     TransitionRoute,
+    _MissingInitialState,
 )
 
 
@@ -87,10 +89,31 @@ class MachineHarness[StateT, RenderTargetT: RenderTarget = RenderTarget]:
         return self.responder.finished
 
 
+@overload
 def mounted[StateT](
     machine: StateMachine[StateT, Any],
     *,
-    initial: StateT | None = None,
+    on_change: TransitionHandler[StateT] | None = None,
+    handlers: Mapping[str, TransitionHandler[StateT]] | None = None,
+    finish_actions: Collection[str] = (),
+) -> MachineHarness[StateT, Any]: ...
+
+
+@overload
+def mounted[StateT](
+    machine: StateMachine[StateT, Any],
+    *,
+    initial: StateT,
+    on_change: TransitionHandler[StateT] | None = None,
+    handlers: Mapping[str, TransitionHandler[StateT]] | None = None,
+    finish_actions: Collection[str] = (),
+) -> MachineHarness[StateT, Any]: ...
+
+
+def mounted[StateT](
+    machine: StateMachine[StateT, Any],
+    *,
+    initial: StateT | _MissingInitialState = _MISSING_INITIAL_STATE,
     on_change: TransitionHandler[StateT] | None = None,
     handlers: Mapping[str, TransitionHandler[StateT]] | None = None,
     finish_actions: Collection[str] = (),
@@ -101,13 +124,21 @@ def mounted[StateT](
     the shell on close, `Decision` can finish on a chosen option, and both do that inside
     `build_component`. A test about any of it wants `driving(machine.build_component(...))`.
     """
-    driver: ComponentDriver[StateT, Any] = ComponentDriver(
-        machine,
-        initial=initial,
-        on_change=on_change,
-        handlers=handlers,
-        finish_actions=finish_actions,
-    )
+    if isinstance(initial, _MissingInitialState):
+        driver: ComponentDriver[StateT, Any] = ComponentDriver(
+            machine,
+            on_change=on_change,
+            handlers=handlers,
+            finish_actions=finish_actions,
+        )
+    else:
+        driver = ComponentDriver(
+            machine,
+            initial=initial,
+            on_change=on_change,
+            handlers=handlers,
+            finish_actions=finish_actions,
+        )
     return MachineHarness(driver, engine.RecordingResponder())
 
 
@@ -161,9 +192,26 @@ class _RouteRecorder[StateT]:
         return f"route:{len(self.routes) - 1}:{request.action}"
 
 
+@overload
 def routed[StateT](
     machine: StateMachine[StateT, Any],
-    state: StateT | None = None,
+    *,
+    chrome: Chrome = DEFAULT_CHROME,
+) -> RoutedRender[StateT, Any]: ...
+
+
+@overload
+def routed[StateT](
+    machine: StateMachine[StateT, Any],
+    state: StateT,
+    *,
+    chrome: Chrome = DEFAULT_CHROME,
+) -> RoutedRender[StateT, Any]: ...
+
+
+def routed[StateT](
+    machine: StateMachine[StateT, Any],
+    state: StateT | _MissingInitialState = _MISSING_INITIAL_STATE,
     *,
     chrome: Chrome = DEFAULT_CHROME,
 ) -> RoutedRender[StateT, Any]:
@@ -174,7 +222,7 @@ def routed[StateT](
     """
     recorder: _RouteRecorder[StateT] = _RouteRecorder()
     driver: RouteDriver[StateT, Any] = RouteDriver(recorder, chrome)
-    result = driver.render(machine, machine.initial_state if state is None else state)
+    result = driver.render(machine, machine.initial_state if isinstance(state, _MissingInitialState) else state)
     return RoutedRender(_as_nodes(result), tuple(recorder.routes))
 
 

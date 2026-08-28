@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Literal, Protocol, runtime_checkable
+from typing import Literal, Protocol, overload, runtime_checkable
 
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME, Chrome
 from squid_ui.factories import action_control, choice, choices, controlled, form, routed_action_control, routed_choices
@@ -55,6 +55,13 @@ class TransitionEvent[StateT]:
 
 type TransitionHandler[StateT] = Callable[[TransitionEvent[StateT]], Awaitable[None]]
 type RouteEncoder[StateT] = Callable[[TransitionRoute[StateT]], str]
+
+
+class _MissingInitialState:
+    pass
+
+
+_MISSING_INITIAL_STATE = _MissingInitialState()
 
 
 class StateMachine[StateT, RenderTargetT: RenderTarget = RenderTarget](Protocol):
@@ -143,17 +150,38 @@ class ComponentDriver[StateT, RenderTargetT: RenderTarget = RenderTarget](Compon
     # decoder for durable component restoration.
     machine_state: StateT = state(persist=False)
 
+    @overload
     def __init__(
         self,
         machine: StateMachine[StateT, RenderTargetT],
         *,
-        initial: StateT | None = None,
+        on_change: TransitionHandler[StateT] | None = None,
+        handlers: Mapping[str, TransitionHandler[StateT]] | None = None,
+        finish_actions: Collection[str] = (),
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        machine: StateMachine[StateT, RenderTargetT],
+        *,
+        initial: StateT,
+        on_change: TransitionHandler[StateT] | None = None,
+        handlers: Mapping[str, TransitionHandler[StateT]] | None = None,
+        finish_actions: Collection[str] = (),
+    ) -> None: ...
+
+    def __init__(
+        self,
+        machine: StateMachine[StateT, RenderTargetT],
+        *,
+        initial: StateT | _MissingInitialState = _MISSING_INITIAL_STATE,
         on_change: TransitionHandler[StateT] | None = None,
         handlers: Mapping[str, TransitionHandler[StateT]] | None = None,
         finish_actions: Collection[str] = (),
     ) -> None:
         self.machine = machine
-        self.machine_state = machine.initial_state if initial is None else initial
+        self.machine_state = machine.initial_state if isinstance(initial, _MissingInitialState) else initial
         self.on_change = on_change
         self.handlers = dict(handlers or {})
         self.finish_actions = frozenset(finish_actions)

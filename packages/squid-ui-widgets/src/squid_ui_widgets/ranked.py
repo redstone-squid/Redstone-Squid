@@ -79,6 +79,8 @@ class RankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget]:
         self, *, initial: RankedListState | None = None
     ) -> ComponentDriver[RankedListState, RenderTargetT]:
         """Build the in-memory shell for this ranking."""
+        if initial is None:
+            return ComponentDriver(self)
         return ComponentDriver(self, initial=initial)
 
     def transition(
