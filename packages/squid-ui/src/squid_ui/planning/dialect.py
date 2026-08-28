@@ -49,7 +49,7 @@ class TargetDialect[LimitsT: TargetLimits, BodyT: scene.Body, RenderTargetT](Pro
     id: str
     version: int
     capabilities: frozenset[Capability]
-    mode: type[RenderTargetT]
+    render_target: type[RenderTargetT]
     body_type: type[BodyT]
     default_limits: LimitsT
     realizes_extensions: bool

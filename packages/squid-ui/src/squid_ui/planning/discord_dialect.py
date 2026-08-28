@@ -146,7 +146,7 @@ class DiscordDialect[LimitsT: MessageLimits, BodyT: scene.Body, RenderTargetT](P
     version: int
     capabilities: frozenset[Capability]
     """What the *protocol* can draw. Never an adapter behavior or an extension string."""
-    mode: type[RenderTargetT]
+    render_target: type[RenderTargetT]
     """The marker type that decides which nodes a document for this dialect may hold."""
     body_type: type[BodyT]
     default_limits: LimitsT
