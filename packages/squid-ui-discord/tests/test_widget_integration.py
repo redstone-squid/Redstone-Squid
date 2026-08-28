@@ -139,7 +139,7 @@ async def test_one_interaction_through_the_real_funnel_reaches_a_handler(
     handlers = set(message_root.snapshot().handler_keys)
 
     key: str | None = None
-    values: tuple[str, ...] | None = None
+    values: list[str] | None = None
     for node in engine.walk(engine.render_tree(component)):
         if not isinstance(node, KEYED_CONTROLS) or node.key not in handlers:
             continue
@@ -147,7 +147,7 @@ async def test_one_interaction_through_the_real_funnel_reaches_a_handler(
             continue
         key = node.key
         if isinstance(node, Choices):
-            values = (node.choices[0].key,)
+            values = [node.choices[0].key]
         break
 
     assert key is not None, "every advertised widget draws at least one usable control"
