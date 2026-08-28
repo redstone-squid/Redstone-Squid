@@ -9,6 +9,7 @@ from squid_ui.runtime.component import (
     AnyComponent,
     Component,
     ComponentTree,
+    IncrementalRender,
     _ComponentRender,
     _ExpandedSubtree,
     render_component_tree,
@@ -157,13 +158,15 @@ class ComponentRuntime:
             runtime=self,
             context=self.context,
             defer=defer,
-            _render_cache=self._render_cache,
-            _dirty=self._dirty_components,
-            _forced=self._forced_components,
-            _force_all=self._force_all,
-            _subtree_cache=self._subtree_cache,
-            _dirty_paths=self._dirty_paths,
-            _component_paths=self._component_paths,
+            incremental=IncrementalRender(
+                render_cache=self._render_cache,
+                dirty=self._dirty_components,
+                forced=self._forced_components,
+                force_all=self._force_all,
+                subtree_cache=self._subtree_cache,
+                dirty_paths=self._dirty_paths,
+                component_paths=self._component_paths,
+            ),
         )
         if reuse_committed and self._committed_tree is not None and tree == self._committed_tree:
             tree = self._committed_tree
