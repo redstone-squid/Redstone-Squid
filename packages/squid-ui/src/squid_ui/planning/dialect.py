@@ -1,6 +1,5 @@
 """Target-neutral planning backend and dialect contracts."""
 
-from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Protocol
 
 from squid_ui import scene
@@ -8,17 +7,10 @@ from squid_ui.capabilities import Capability
 from squid_ui.planning.resources import TargetLimits
 
 if TYPE_CHECKING:
-    from squid_ui.chrome import Chrome
     from squid_ui.document import DocumentLike
-    from squid_ui.palette import Palette
     from squid_ui.planning.cache import PlanCache, PlanMemo
-    from squid_ui.planning.navigation import PlannedNav
-    from squid_ui.planning.resources import ResourceCost
-    from squid_ui.planning.target import Target
-    from squid_ui.runtime.presentation_state import PresentationState
+    from squid_ui.planning.request import PlanRequest
     from squid_ui.scene.model import PlanResult
-    from squid_ui.sources import Position
-    from squid_ui.text import Localization
 
 
 class TargetPlanner[LimitsT: TargetLimits, BodyT: scene.Body, RenderTargetT, AdapterT](Protocol):
@@ -27,19 +19,10 @@ class TargetPlanner[LimitsT: TargetLimits, BodyT: scene.Body, RenderTargetT, Ada
     def plan(
         self,
         rendered: DocumentLike[RenderTargetT],
+        request: PlanRequest[BodyT, RenderTargetT, AdapterT],
         *,
-        target: Target[LimitsT, BodyT, RenderTargetT, AdapterT],
-        chrome: Chrome,
-        localization: Localization,
-        palette: Palette,
-        strict: bool,
-        reservation: ResourceCost,
-        positions: Mapping[str, Position] | None,
-        nav: PlannedNav | None,
-        session: PresentationState | None,
         cache: PlanCache | None,
         memo: PlanMemo | None,
-        search_budget: int,
     ) -> PlanResult[BodyT]: ...
 
 
