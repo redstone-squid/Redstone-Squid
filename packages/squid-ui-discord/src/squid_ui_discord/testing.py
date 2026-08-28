@@ -33,9 +33,9 @@ from squid_ui_discord.message_root_wiring import AnyMountedView, ClassicMountedV
 type ComponentPayload = dict[str, Any]
 
 
-def without_capabilities[LimitsT: MessageLimits, BodyT: scene.Body, ModeT, AdapterT](
-    target: Target[LimitsT, BodyT, ModeT, AdapterT], *capabilities: str
-) -> Target[LimitsT, BodyT, ModeT, AdapterT]:
+def without_capabilities[LimitsT: MessageLimits, BodyT: scene.Body, RenderTargetT, AdapterT](
+    target: Target[LimitsT, BodyT, RenderTargetT, AdapterT], *capabilities: str
+) -> Target[LimitsT, BodyT, RenderTargetT, AdapterT]:
     """A copy of `target` whose dialect declares fewer protocol capabilities.
 
     Every degradation path is reached by a target that lacks something, and a protocol

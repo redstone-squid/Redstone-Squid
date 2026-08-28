@@ -20,10 +20,10 @@ from squid_ui.text import NEUTRAL, Localization
 EMPTY_RESERVATION = EMPTY_COST
 
 
-def plan[ModeT, AdapterT, BodyT: scene.Body](
-    rendered: DocumentLike[ModeT] | PortableDocumentLike,
+def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
+    rendered: DocumentLike[RenderTargetT] | PortableDocumentLike,
     *,
-    target: Target[Any, BodyT, ModeT, AdapterT],
+    target: Target[Any, BodyT, RenderTargetT, AdapterT],
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,

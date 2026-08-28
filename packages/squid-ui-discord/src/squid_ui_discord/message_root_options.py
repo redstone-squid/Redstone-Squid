@@ -75,13 +75,13 @@ class MessageRootDefaults:
     pending_after: float = 1.0
     clock: Callable[[], float] = _monotonic
 
-    def mount[ModeT](
+    def mount[RenderTargetT](
         self,
-        component: Component[ModeT],
+        component: Component[RenderTargetT],
         *,
         access: AccessPolicy,
         **overrides: Unpack[MessageRootOptions],
-    ) -> MessageRoot[ModeT]:
+    ) -> MessageRoot[RenderTargetT]:
         """Construct a mount, applying per-call overrides over these defaults."""
         configured = self.replace(**overrides)
         return MessageRoot(

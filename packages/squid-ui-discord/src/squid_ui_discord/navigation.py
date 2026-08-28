@@ -16,21 +16,21 @@ from squid_ui.semantic import LayoutNode
 from squid_ui.target_types import ComponentsV2Target
 
 
-class StackNavigator[ModeT: ComponentsV2Target = ComponentsV2Target](Component[ModeT]):
+class StackNavigator[RenderTargetT: ComponentsV2Target = ComponentsV2Target](Component[RenderTargetT]):
     """A component that shows one child at a time and owns the navigation controls."""
 
-    def __init__(self, root: Component[ModeT]) -> None:
-        self._stack: list[Component[ModeT]] = [root]
+    def __init__(self, root: Component[RenderTargetT]) -> None:
+        self._stack: list[Component[RenderTargetT]] = [root]
 
     @property
-    def current(self) -> Component[ModeT]:
+    def current(self) -> Component[RenderTargetT]:
         return self._stack[-1]
 
     @property
     def depth(self) -> int:
         return len(self._stack)
 
-    def push(self, child: Component[ModeT]) -> None:
+    def push(self, child: Component[RenderTargetT]) -> None:
         """Show ``child``, with Back leading to the current screen."""
         self._stack.append(child)
         self.invalidate()

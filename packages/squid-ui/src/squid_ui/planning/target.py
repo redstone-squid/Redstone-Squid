@@ -45,18 +45,18 @@ class TargetIdentity(Protocol):
 
 LimitsT = TypeVar("LimitsT", bound=TargetLimits)
 BodyT = TypeVar("BodyT", bound=scene.Body)
-ModeT_co = TypeVar("ModeT_co", covariant=True)
+RenderTargetT_co = TypeVar("RenderTargetT_co", covariant=True)
 AdapterT_co = TypeVar("AdapterT_co", covariant=True)
 
 
 @dataclass(frozen=True, slots=True)
-class Target(Generic[LimitsT, BodyT, ModeT_co, AdapterT_co]):
+class Target(Generic[LimitsT, BodyT, RenderTargetT_co, AdapterT_co]):
     """What a document is compiled to: a protocol dialect and an adapter for it.
 
     Two axes and nothing else, the way a compiler names `x86_64-unknown-linux-gnu` rather
     than threading arch, OS and ABI separately. The dialect says what a legal message is;
     the adapter says which library has been verified to produce one. Everything the planner
-    used to be handed alongside a target — its id, version, mode, body type and protocol
+    used to be handed alongside a target — its id, version, render target, body type and protocol
     capabilities — is derived from one of the two, so no two of them can fall out of step.
 
     Only `limits` is stored separately, because it is not a fact about either axis: it is
@@ -97,8 +97,8 @@ class Target(Generic[LimitsT, BodyT, ModeT_co, AdapterT_co]):
         return self.dialect.version
 
     @property
-    def mode(self) -> type[ModeT_co]:
-        return cast(type[ModeT_co], self.dialect.mode)
+    def mode(self) -> type[RenderTargetT_co]:
+        return cast(type[RenderTargetT_co], self.dialect.mode)
 
     @property
     def body_type(self) -> type[BodyT]:

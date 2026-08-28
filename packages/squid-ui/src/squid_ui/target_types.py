@@ -37,8 +37,8 @@ class HtmlAdapter:
     """Marker for adapters that mechanically draw semantic HTML scenes."""
 
 
-class Renderable[ModeT = RenderTarget]:
+class Renderable[RenderTargetT = RenderTarget]:
     """A value whose accepted protocol target is tracked by the type checker."""
 
-    def _accepts_target(self, target: ModeT, /) -> None:
+    def _accepts_target(self, target: RenderTargetT, /) -> None:
         del target
