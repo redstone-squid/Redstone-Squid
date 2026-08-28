@@ -2,7 +2,7 @@
 
 import hashlib
 from collections.abc import Awaitable
-from typing import Annotated, Protocol, TypeVar, cast
+from typing import Annotated, Protocol, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
@@ -35,8 +35,6 @@ from squid.cli_auth.domain import (
     IssuedCliSessionChallenge,
 )
 from squid.core.errors import AuthenticationError, NotFoundError, ServiceUnavailableError
-
-_T = TypeVar("_T")
 
 
 class CliAuthorizationHttpService(Protocol):
@@ -349,7 +347,7 @@ async def revoke_current_session(
     return _empty_no_store()
 
 
-async def _execute(operation: Awaitable[_T]) -> _T:
+async def _execute[T](operation: Awaitable[T]) -> T:
     return await operation
 
 
