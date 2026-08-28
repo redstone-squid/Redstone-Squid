@@ -1,6 +1,6 @@
 """Native semantic-document planning for the HTML target."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, time
 from typing import Any, assert_never, cast
@@ -14,7 +14,8 @@ from squid_ui.document import DocumentLike, as_document
 from squid_ui.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
 from squid_ui.factories import is_layout_node, is_portable_node
 from squid_ui.forms import FormBinding
-from squid_ui.interactions import ActionBinding, ActionMode
+from squid_ui.guards import Guard
+from squid_ui.interactions import ActionBinding, ActionEvent, ActionMode, BusySpec
 from squid_ui.palette import Palette
 from squid_ui.planning.breaking import BreakItem, balanced_breaks
 from squid_ui.planning.cache import CachedPlan, PlanCache, PlanMemo
@@ -48,6 +49,7 @@ from squid_ui.planning.structure import (
 )
 from squid_ui.planning.target import Target
 from squid_ui.planning.text_allocation import truncate_text
+from squid_ui.runtime.histories import History
 from squid_ui.runtime.presentation_state import (
     ActivePagers,
     CursorState,
@@ -225,30 +227,30 @@ class _Compiler:
             asset,
         )
 
-    def bind(
+    def bind[EventT: ActionEvent](
         self,
         key: str,
-        handler: object,
+        handler: Callable[[EventT], Awaitable[None]],
         *,
         mode: ActionMode = ActionMode.EXCLUSIVE,
         routes: Mapping[str, ActionBinding] | None = None,
-        guard: object | None = None,
-        busy: object | None = None,
+        guard: Guard | None = None,
+        busy: BusySpec | None = None,
         label: TextLike = "",
-        record: object | None = None,
+        record: History | None = None,
     ) -> scene.HtmlActionRef:
         if key in self.bindings:
             message = f"duplicate action key {key!r}"
             raise LayoutInvariantError(message)
         self.bindings[key] = ActionBinding(
             key,
-            cast(Any, handler),
+            handler,
             mode,
             {} if routes is None else routes,
-            cast(Any, guard),
-            cast(Any, busy),
+            guard,
+            busy,
             label,
-            cast(Any, record),
+            record,
         )
         return scene.HtmlActionRef(key, mode)
 

@@ -9,7 +9,7 @@ from collections.abc import Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from typing import Any, assert_type
 
-from squid_ui import Component, resource, state
+from squid_ui import Component, ContextKey, resource, state
 from squid_ui.runtime import (
     AtomicResource,
     AtomicResourceStatus,
@@ -79,3 +79,12 @@ assert_type(ResourceTypes().visible.status, ResourceStatus[int])
 assert_type(Ready[int](1), Ready[int])
 assert_type(Failed[int](ValueError()), Failed[int])
 assert_type(Pending[int](), Pending[int])
+
+text_context = ContextKey[str]("text")
+
+
+class ContextTypes(Component):
+    def render(self):
+        assert_type(self.inject(text_context), str)
+        assert_type(self.inject(text_context, "fallback"), str)
+        return ()

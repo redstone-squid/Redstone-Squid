@@ -21,6 +21,7 @@ from squid_ui.guards import Challenge
 from squid_ui.interactions import ActionBinding, BusySpec
 from squid_ui.palette import Palette
 from squid_ui.planning.navigation import NavFactory
+from squid_ui.planning.target import AnyTarget
 from squid_ui.profiling import (
     ActionStatus,
     DetachedSpanRecorder,
@@ -115,7 +116,7 @@ type _ApplicationCandidate = _Candidate | _PlannedCandidate
 class _PlanEnvironment:
     """Every mutable owner input not carried by a component tree."""
 
-    target: object
+    target: AnyTarget
     chrome: Chrome
     localization: Localization
     palette: Palette
