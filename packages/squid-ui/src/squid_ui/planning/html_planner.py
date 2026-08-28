@@ -32,6 +32,7 @@ from squid_ui.planning.semantic_adaptation.handlers import (
     SelectEntities,
     ToggleDetails,
 )
+from squid_ui.planning.structure import indexed_children
 from squid_ui.planning.target import Target
 from squid_ui.planning.text_allocation import allocate_pages, truncate_text
 from squid_ui.runtime.presentation_state import (
@@ -193,7 +194,9 @@ class _Compiler:
 
     def compile_children(self, children: Sequence[sem.AnyLayoutNode], path: str) -> tuple[scene.HtmlNode, ...]:
         return tuple(
-            compiled for index, child in enumerate(children) for compiled in self.compile(child, f"{path}.{index}")
+            compiled
+            for child, child_path in indexed_children(children, path)
+            for compiled in self.compile(child, child_path)
         )
 
     def compile(self, node: sem.AnyLayoutNode, path: str) -> tuple[scene.HtmlNode, ...]:

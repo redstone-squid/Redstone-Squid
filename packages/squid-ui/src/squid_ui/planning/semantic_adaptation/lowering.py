@@ -26,12 +26,6 @@ from squid_ui.planning.semantic_adaptation.controls import (
     _with_best_effort,
     _with_overflow,
 )
-from squid_ui.planning.semantic_adaptation.decisions import (
-    branch_paths as _branch_paths,
-)
-from squid_ui.planning.semantic_adaptation.decisions import (
-    fallback_rung as _fallback_rung,
-)
 from squid_ui.planning.semantic_adaptation.model import (
     LoweringContext as _Context,
 )
@@ -52,6 +46,15 @@ from squid_ui.planning.semantic_adaptation.structures import (
     _media,
     _roster,
     _table,
+)
+from squid_ui.planning.structure import (
+    branch_paths as _branch_paths,
+)
+from squid_ui.planning.structure import (
+    fallback_rung as _fallback_rung,
+)
+from squid_ui.planning.structure import (
+    indexed_children as _indexed_children,
 )
 from squid_ui.primitives.constraints import (
     Alt,
@@ -664,6 +667,6 @@ def _field_entry(field: Field, context: _Context) -> str | Alt:
 
 def _children(children: Sequence[AnyLayoutNode], path: str, context: _Context) -> list[Node]:
     lowered: list[Node] = []
-    for index, child in enumerate(children):
-        lowered.extend(_node(child, f"{path}.{index}", context))
+    for child, child_path in _indexed_children(children, path):
+        lowered.extend(_node(child, child_path, context))
     return _fold(lowered, context) if _cards(context) else lowered
