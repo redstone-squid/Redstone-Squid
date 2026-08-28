@@ -98,7 +98,7 @@ from squid_ui_discord.message_payload import (
 )
 from squid_ui_discord.message_root import (
     MessageRoot,
-    current_message_root,
+    owner_message_root,
 )
 from squid_ui_discord.message_root_contracts import (
     DEFAULT_MESSAGE_ROOT_CONFIG,
@@ -268,7 +268,6 @@ __all__ = [
     "conformance",
     "contribute",
     "current_invocation",
-    "current_message_root",
     "deliver_to",
     "delivery",
     "devtools",
@@ -292,6 +291,7 @@ __all__ = [
     "native",
     "navigation",
     "navigation_controls",
+    "owner_message_root",
     "render_item",
     "render_message",
     "render_static",

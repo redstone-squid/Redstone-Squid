@@ -74,7 +74,7 @@ through `ClientRuntime.mount` or a session spec rather than directly.
 
 ::: squid_ui_discord.MessageRootFactory
 
-::: squid_ui_discord.current_message_root
+::: squid_ui_discord.owner_message_root
 
 ::: squid_ui_discord.message_roots
 

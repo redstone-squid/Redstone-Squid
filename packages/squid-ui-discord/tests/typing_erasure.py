@@ -20,7 +20,7 @@ from squid_ui.planning import ClassicTarget, ComponentsV2Target
 from squid_ui.planning.adapter import ResourceCost
 from squid_ui.planning.limits import LIMITS, Axis
 from squid_ui.runtime.component import AnyComponent, RenderResult
-from squid_ui_discord import Everyone, MessageRoot
+from squid_ui_discord import Everyone, MessageRoot, owner_message_root
 from squid_ui_discord.emoji import discord_emoji
 from squid_ui_discord.message_root import AnyMessageRoot
 from squid_ui_discord.target import classic, v2
@@ -45,6 +45,8 @@ v2_mount = MessageRoot(V2Panel(), access=Everyone())
 MessageRoot(ClassicPanel(), access=Everyone())  # pyrefly: ignore[bad-argument-type]
 MessageRoot(V2Panel(), access=Everyone(), target=classic())  # pyrefly: ignore[no-matching-overload]
 MessageRoot(ClassicPanel(), access=Everyone(), target=v2())  # pyrefly: ignore[no-matching-overload]
+owner_message_root(V2Panel(), 7)
+owner_message_root(ClassicPanel(), 7)  # pyrefly: ignore[bad-argument-type]
 
 
 def takes_any_mount(mount: AnyMessageRoot) -> None: ...
