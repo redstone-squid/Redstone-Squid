@@ -121,7 +121,7 @@ class TestSharedContracts:
         await message_root.send(delivered_to(message_for(target)))
         key = _control_ids(message_root._view)[0].rsplit(":", 1)[-1]
 
-        await message_root.dispatch(key, interaction_for(target), generation=message_root._generation)
+        await message_root.dispatch(key, interaction_for(target), generation=message_root.generation)
 
         assert _screen(message_root).presses == 1
 
@@ -130,7 +130,7 @@ class TestSharedContracts:
         await message_root.send(delivered_to(message_for(target)))
         key = _control_ids(message_root._view)[0].rsplit(":", 1)[-1]
 
-        await message_root.dispatch(key, interaction_for(target), generation=message_root._generation - 1)
+        await message_root.dispatch(key, interaction_for(target), generation=message_root.generation - 1)
 
         assert _screen(message_root).presses == 0
 
@@ -139,7 +139,7 @@ class TestSharedContracts:
         await message_root.send(delivered_to(message_for(target)))
         key = _control_ids(message_root._view)[0].rsplit(":", 1)[-1]
 
-        await message_root.dispatch(key, interaction_for(target, user_id=2), generation=message_root._generation)
+        await message_root.dispatch(key, interaction_for(target, user_id=2), generation=message_root.generation)
 
         assert _screen(message_root).presses == 0
 

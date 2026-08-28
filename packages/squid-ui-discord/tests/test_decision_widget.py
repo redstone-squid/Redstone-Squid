@@ -63,7 +63,7 @@ async def test_component_handler_receives_the_option_and_finish_action_ends_root
 
     assert component.machine_state == sp.DecisionState("delete")
     assert seen == [("delete", sp.DecisionState("delete"))]
-    assert message_root._finished
+    assert message_root.finished
 
 
 async def test_confirm_wires_handlers_default_chrome_and_tone() -> None:

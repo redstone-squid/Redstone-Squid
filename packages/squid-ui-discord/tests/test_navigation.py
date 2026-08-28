@@ -64,7 +64,7 @@ async def test_child_state_changes_rerender_through_the_shared_root():
 
     child.count = 5
 
-    assert message_root._dirty
+    assert message_root.pending
     assert "count 5" in sd.payload_texts(commit_render(message_root))
 
 
@@ -75,4 +75,4 @@ async def test_close_finishes_the_root():
 
     await message_root.dispatch("__nav_close", fake_interaction())
 
-    assert message_root._finished
+    assert message_root.finished
