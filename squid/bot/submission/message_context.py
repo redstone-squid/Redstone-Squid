@@ -4,7 +4,7 @@ import logging
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal, Protocol, TypeVar, cast
+from typing import Literal, Protocol, cast
 
 import discord
 
@@ -32,9 +32,6 @@ class GroupableMessage(Protocol):
     def reference_id(self) -> int | None: ...
 
 
-MessageT = TypeVar("MessageT", bound=GroupableMessage)
-
-
 @dataclass(frozen=True, slots=True)
 class MessageGroup[MessageT: GroupableMessage]:
     """Primary author run and interleaved messages retained as context."""
@@ -43,7 +40,7 @@ class MessageGroup[MessageT: GroupableMessage]:
     context: tuple[MessageT, ...] = ()
 
 
-def group_messages(
+def group_messages[MessageT: GroupableMessage](
     messages: Iterable[MessageT], *, window_seconds: float = 300, max_messages: int = 8
 ) -> list[MessageGroup[MessageT]]:
     """Group chronological messages into author runs without losing interleaved context."""
@@ -119,7 +116,9 @@ async def resolve_reply_chain(
     return tuple(parents)
 
 
-def collect_lookback(history: Sequence[MessageT], group: Sequence[MessageT], *, limit: int = 3) -> tuple[MessageT, ...]:
+def collect_lookback[MessageT: GroupableMessage](
+    history: Sequence[MessageT], group: Sequence[MessageT], *, limit: int = 3
+) -> tuple[MessageT, ...]:
     """Return the messages immediately preceding a group from chronological history."""
     if not group or limit <= 0:
         return ()
