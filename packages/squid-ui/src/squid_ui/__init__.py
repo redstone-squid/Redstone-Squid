@@ -1,5 +1,8 @@
 """Semantic-first, limits-aware UI planning and component runtime."""
 
+from importlib import import_module
+from typing import TYPE_CHECKING
+
 from squid_reactivity.operations import operation
 from squid_ui import (
     errors,
@@ -21,15 +24,22 @@ from squid_ui import (
     text,
 )
 
-# chrome, emoji, and entity carry no ROOT_API names of their own but stay reachable as
-# sl.chrome.X etc, deeper-tier escape hatches: the namespace bundle above transitively
-# imports each of them (runtime -> histories -> chrome, primitives -> emoji, semantic ->
-# entity), which is what binds them as attributes of this package. document and palette get
-# the same binding as a side effect of the Document/Palette imports below. Nothing here
-# imports any of the five directly, on purpose: chrome.py itself needs
-# squid_ui.runtime.context, so an eager `import chrome` placed ahead of the namespace
-# bundle (which ruff's isort would do, being alphabetical) resurrects the exact partial-init
-# cycle this transitive order avoids.
+# These deeper-tier namespaces are part of the root API, but importing chrome before runtime
+# completes resurrects a partial-initialization cycle. Bind them explicitly after the namespace
+# bundle is ready; the type-checking imports make their module surfaces visible statically.
+if TYPE_CHECKING:
+    import squid_ui.chrome as chrome
+    import squid_ui.document as document
+    import squid_ui.emoji as emoji
+    import squid_ui.entity as entity
+    import squid_ui.palette as palette
+else:
+    chrome = import_module("squid_ui.chrome")
+    document = import_module("squid_ui.document")
+    emoji = import_module("squid_ui.emoji")
+    entity = import_module("squid_ui.entity")
+    palette = import_module("squid_ui.palette")
+
 from squid_ui.document import (
     Document,
     DocumentLike,
