@@ -194,17 +194,17 @@ class _ReplicationParticipant:
         self,
         document: ReplicatedDocument,
         *,
-        remote: object | None = None,
+        remote_payload: bytes | None = None,
         remote_update_id: str | None = None,
     ) -> None:
         self.document = document
         self.branch = document.engine.branch()
-        self.remote = remote
+        self.remote_payload = remote_payload
         self.remote_update_id = remote_update_id
 
     def prepare(self, view: TransactionView) -> object:
-        if self.remote is not None:
-            return self.remote
+        if self.remote_payload is not None:
+            return self.document.engine.prepare_remote(self.remote_payload)
         base = self.branch.base
         if self.document.engine.version() != base:
             detail = ConflictDetail(self.document.identity, hash(base), hash(self.document.engine.version()))
@@ -219,6 +219,8 @@ class _ReplicationParticipant:
         return TransactionContribution(self.document.identity, token, ChangeReport(participants=1))
 
     def apply(self, prepared: object) -> None:
+        if self.document.engine.change_token(prepared) is None:
+            return
         self.document.engine.apply(prepared)
         self.document._version_cell.write(self.document.engine.snapshot())
 
@@ -226,6 +228,8 @@ class _ReplicationParticipant:
         return None
 
     def finalize(self, prepared: object) -> None:
+        if self.document.engine.change_token(prepared) is None:
+            return
         self.document._notify()
         if self.remote_update_id is None and self.document.engine.change_token(prepared) is not None:
             self.document._publish_update(prepared)
@@ -348,7 +352,6 @@ class ReplicatedDocument:
         update_id = str(envelope.update_id)
         if update_id in self._seen_update_ids:
             return
-        prepared = self.engine.prepare_remote(envelope.payload)
         cause = (
             None if envelope.origin_action_id is None else CausalRef("remote_action", str(envelope.origin_action_id))
         )
@@ -363,7 +366,7 @@ class ReplicatedDocument:
         with transaction(action_context=context):
             joined = enlist(
                 self,
-                lambda: _ReplicationParticipant(self, remote=prepared, remote_update_id=update_id),
+                lambda: _ReplicationParticipant(self, remote_payload=envelope.payload, remote_update_id=update_id),
             )
             assert joined is not None
         self._remember_update(update_id)
