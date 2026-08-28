@@ -7,7 +7,6 @@ from squid_ui.factories import action_controls, heading, paragraph, stack, statu
 from squid_ui.forms import ChoiceOption, FormSpec, MultiChoiceField
 from squid_ui.runtime.component import RenderResult
 from squid_ui.semantic import Choice, ControlDisplay, FormTrigger, Tone, fallback
-from squid_ui.sources import Position
 from squid_ui.text import TextLike
 from squid_ui_widgets._actions import (
     MachineKeySegment,
@@ -17,7 +16,7 @@ from squid_ui_widgets._actions import (
     match_keyed_action,
 )
 from squid_ui_widgets._content import display_text, require_key
-from squid_ui_widgets._paging import window
+from squid_ui_widgets._paging import PagePosition, window
 from squid_ui_widgets.commit import CommitMode
 from squid_ui_widgets.drivers import ComponentDriver, MachineControls, TransitionEvent
 
@@ -164,12 +163,12 @@ class MultiChoice:
         visible, position, extent = window(
             group.choices,
             key=f"{self.key}.{group.key}",
-            position=Position(offset=self._pages(state).get(group.key, 0)),
+            position=PagePosition(self._pages(state).get(group.key, 0)),
             per_page=self.window_size,
             chrome=controls.chrome,
             identity=lambda entry: entry.key,
         )
-        return visible, position.offset, extent
+        return visible, position.index, extent
 
     def _rivals(self, group_key: MachineKeySegment) -> frozenset[MachineKeySegment]:
         direct = next(group.exclusive_with for group in self.groups if group.key == group_key)

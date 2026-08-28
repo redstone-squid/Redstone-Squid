@@ -56,7 +56,7 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget](Com
         identity: Projector[EntryT],
         label: Projector[EntryT] | None = None,
         value: Projector[EntryT] | None = None,
-        heading: TextLike | None = None,
+        title: TextLike | None = None,
         header: SourceContentHook[RenderTargetT] | None = None,
         footer: SourceContentHook[RenderTargetT] | None = None,
         empty: ContentLike[RenderTargetT] = "No entries",
@@ -70,7 +70,7 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget](Com
         self.source = source
         self.page_size = page_size
         self.rows = RankedRows(label, value, identity)
-        self.heading = heading
+        self.title = title
         self.header = header
         self.footer = footer
         self.empty = normalize_content(empty, name="SourceRankedList.empty")
@@ -129,7 +129,7 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget](Com
 
     def _status(self, message: TextLike, *, retry: bool = False) -> RenderResult[RenderTargetT]:
         return stack(
-            heading(self.heading) if self.heading is not None else None,
+            heading(self.title) if self.title is not None else None,
             note(message),
             action_controls(
                 action_control(self.copy.retry, self._retry, key=f"{self.key}.retry"),
@@ -202,7 +202,7 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget](Com
         )
         numeric_footer = window_footer(chrome, self.source, loaded, self.page_size)
         return stack(
-            heading(self.heading) if self.heading is not None else None,
+            heading(self.title) if self.title is not None else None,
             *(self._hook(self.header, total, name="header") if self.header is not None else ()),
             *body,
             note(numeric_footer) if navigable and numeric_footer is not None else None,
