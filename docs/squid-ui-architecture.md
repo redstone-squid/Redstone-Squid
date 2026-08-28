@@ -719,6 +719,16 @@ JavaScript runtime, or transport implementation.
 `sl.html.DiscordPreviewRenderer` preserves the former browser preview for Components V2 scenes.
 It is useful for Discord tooling but is not an HTML planning target and cannot draw `HtmlBody`.
 
+### How a traversal dispatches
+
+Every node representation here — semantic, primitive, scene, and each renderer's private draw
+program — is a closed PEP 695 union of behaviour-free frozen dataclasses, and every pass over one is
+a `match` closing with a structured raise. Nodes carry no `accept` method and there is no
+type-to-handler registry; a pass that needs a different shape lowers to a new union instead. Extend
+the open node set through `target.extensions`, and attach per-case behaviour through
+`GeneratedHandler`. See [ADR 0075](decisions/0075-planner-dispatch-style.md) for why, and for what
+to do when a `match` grows too long or two dialects start sharing rules.
+
 ## Durable sessions
 
 Durability is opt-in:
