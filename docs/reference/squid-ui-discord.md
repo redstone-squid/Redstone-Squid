@@ -60,6 +60,10 @@ through `ClientRuntime.mount` or a session spec rather than directly.
 
 ::: squid_ui_discord.MessageRoot
 
+::: squid_ui_discord.MessageRootConfig
+
+::: squid_ui_discord.DEFAULT_MESSAGE_ROOT_CONFIG
+
 ::: squid_ui_discord.MessageRootDefaults
 
 ::: squid_ui_discord.MessageRootOptions

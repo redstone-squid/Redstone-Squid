@@ -1,6 +1,5 @@
 """Session identity, structured outcomes, cardinality, and attachment lifetime."""
 
-import inspect
 from dataclasses import fields
 from typing import Any, cast
 from unittest.mock import AsyncMock
@@ -99,14 +98,10 @@ def test_session_keys_use_typed_frozen_scopes() -> None:
     assert len({SessionKey.global_("status"), SessionKey.global_("status")}) == 1
 
 
-def test_message_root_defaults_fields_track_message_root_keyword_options() -> None:
-    message_root_keywords = {
-        name
-        for name, parameter in inspect.signature(squid_ui_discord.MessageRoot.__init__).parameters.items()
-        if parameter.kind is inspect.Parameter.KEYWORD_ONLY
-    }
-
-    assert {field.name for field in fields(MessageRootDefaults)} == message_root_keywords - {"access"}
+def test_message_root_defaults_expose_every_configurable_value() -> None:
+    assert {field.name for field in fields(MessageRootDefaults)} == set(
+        squid_ui_discord.message_root_contracts.MessageRootConfig.__dataclass_fields__
+    )
 
 
 def test_message_root_defaults_apply_overrides_without_mutating_the_defaults() -> None:

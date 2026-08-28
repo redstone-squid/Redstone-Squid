@@ -17,7 +17,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, replace
 from dataclasses import field as dataclass_field
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any, Unpack, cast
 
 import anyio
 import discord
@@ -26,7 +26,7 @@ import discord
 # reachable by importing from it directly.
 from squid_reactivity.actions import ActionContext, ActorRef
 from squid_ui import scene
-from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME, LOCALIZATION_CONTEXT, Chrome, localize_chrome
+from squid_ui.chrome import CHROME_CONTEXT, LOCALIZATION_CONTEXT, localize_chrome
 from squid_ui.document import Asset, Document
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.forms import FormBinding, FormSpec, FormValidationMode, SubmitHandler
@@ -45,14 +45,13 @@ from squid_ui.interactions import (
     SelectionEvent,
     SubmitEvent,
 )
-from squid_ui.palette import DEFAULT_PALETTE, Palette
+from squid_ui.palette import Palette
 from squid_ui.planning.adapter import (
     AdapterCapability,
 )
 from squid_ui.planning.discord import CLASSIC_TARGET_ID, V2_TARGET_ID
 from squid_ui.planning.navigation import (
     NAV_FACTORY_CONTEXT,
-    NavFactory,
     NavigationContext,
     NavigationState,
     NavNode,
@@ -70,7 +69,6 @@ from squid_ui.profiling import (
     OperationKind,
     OperationRecorder,
     PresentationStatus,
-    Profiler,
     TraceLink,
     TraceResult,
     TraceStatus,
@@ -94,7 +92,7 @@ from squid_ui.scene.model import PlanResult
 from squid_ui.semantic import Status
 from squid_ui.sources import Position
 from squid_ui.target_types import ComponentsV2Target, DiscordPy27Adapter, DiscordPyAdapter
-from squid_ui.text import NEUTRAL, Localization, TextLike, resolve_text
+from squid_ui.text import Localization, TextLike, resolve_text
 from squid_ui_discord import delivery as deliver
 from squid_ui_discord import live
 from squid_ui_discord._invocation_context import invocation_scope
@@ -122,22 +120,20 @@ from squid_ui_discord.message_root_candidates import (
     _SubmitBinding,
 )
 from squid_ui_discord.message_root_contracts import (
-    DEFAULT_EXPIRY,
-    ChallengePresenter,
+    DEFAULT_MESSAGE_ROOT_CONFIG,
     ChallengeRequest,
     CommittedHook,
-    ErrorHook,
-    ExpiryPolicy,
     ExpirySupervisor,
     FinishHook,
     MessageAddress,
+    MessageRootConfig,
+    MessageRootOptions,
     MessageRootSnapshot,
     MessageRootStatus,
     PresentedHook,
     ProfiledScheduler,
     ReactiveScheduler,
     RenewEphemeral,
-    Scheduler,
     TopicScheduler,
 )
 from squid_ui_discord.message_root_wiring import (
@@ -154,7 +150,7 @@ from squid_ui_discord.message_root_wiring import (
 from squid_ui_discord.render_cache import RenderProgramCache
 from squid_ui_discord.renderer import MountedRenderer, V2Renderer
 from squid_ui_discord.rendering import RenderedMessage, render_message
-from squid_ui_discord.target import DISCORD_V2_DPY27, Target
+from squid_ui_discord.target import Target
 
 logger = logging.getLogger(__name__)
 
@@ -354,24 +350,26 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
         component: Component[Any],
         *,
         access: AccessPolicy,
-        target: Target[Any, Any, RenderTargetT, AdapterT] | None = None,
-        chrome: Chrome = DEFAULT_CHROME,
-        localization: Localization = NEUTRAL,
-        palette: Palette = DEFAULT_PALETTE,
-        strict: bool = False,
-        timeout: float | None = 900,
-        on_error: ErrorHook | None = None,
-        middleware: Sequence[ActionMiddleware] = (),
-        profiler: Profiler | None = None,
-        render_cache: RenderProgramCache | None = None,
-        scheduler: Scheduler | None = None,
-        expiry: ExpiryPolicy | None = DEFAULT_EXPIRY,
-        nav: NavFactory | None = None,
-        challenge: ChallengePresenter | None = None,
-        acknowledgement_timeout: float = 2.5,
-        pending_after: float = 1.0,
-        clock: Callable[[], float] = _monotonic,
+        config: MessageRootConfig = DEFAULT_MESSAGE_ROOT_CONFIG,
+        **overrides: Unpack[MessageRootOptions],
     ) -> None:
+        """Bind a component to a message.
+
+        `config` supplies every value at once -- a host that configures its mounts the same
+        way builds one and reuses it -- and keywords override it for this mount. `access` is
+        neither, because it names who may use this specific mount.
+        """
+        config = config.replace(**overrides) if overrides else config
+        chrome = config.chrome
+        localization = config.localization
+        nav = config.nav
+        scheduler = config.scheduler
+        expiry = config.expiry
+        clock = config.clock
+        acknowledgement_timeout = config.acknowledgement_timeout
+        target = cast(Target[Any, Any, RenderTargetT, AdapterT], config.target)
+        self.config = config
+        """What this mount was configured with, for a replacement that should match it."""
         self.id = secrets.token_urlsafe(6)
         self.component = component
         self.clock = clock
@@ -382,7 +380,7 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
         """Where this mount's message is, once it has one. Read `handle` to write to it."""
         self._chrome = chrome
         self.localization = localization
-        self.palette = palette
+        self.palette = config.palette
         self.chrome = localize_chrome(chrome, localization)
         self.nav = nav if nav is not None else default_nav
 
@@ -412,13 +410,12 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
             message = "a mount acknowledgement timeout must be greater than zero and below Discord's 3-second limit"
             raise ValueError(message)
         self.acknowledgement_timeout = acknowledgement_timeout
-        self.pending_after = pending_after
+        self.pending_after = config.pending_after
         """How long an action carrying `BusySpec` may run before its interim paint appears."""
         self.guards = GuardLedger(now=clock)
         """Where stateful guards keep their counts; it lives and dies with this mount."""
-        self.challenge = challenge
+        self.challenge = config.challenge
         """Who shows a guard's challenge and runs the press the actor approves, if anyone."""
-        target = cast(Target[Any, Any, RenderTargetT, AdapterT], DISCORD_V2_DPY27) if target is None else target
         self.target = target
         """The message mode this mount owns for its whole life.
 
@@ -432,18 +429,18 @@ class MessageRoot[RenderTargetT = ComponentsV2Target, AdapterT: DiscordPyAdapter
         require_discord_py_target(target, AdapterCapability.DISPATCH, "dispatch mounted interactions")
         require_discord_py_target(target, AdapterCapability.INTERACTION_DELIVERY, "deliver mounted interactions")
         """Which kind of Discord message this mount owns, for its whole life."""
-        self.strict = strict
-        self.timeout = timeout
+        self.strict = config.strict
+        self.timeout = config.timeout
         self.access = access
-        self.on_error = on_error
-        self._middleware = _unique_by_identity(middleware)
-        if profiler is not None:
+        self.on_error = config.on_error
+        self._middleware = _unique_by_identity(config.middleware)
+        if (profiler := config.profiler) is not None:
             self.profiler = profiler
         elif isinstance(scheduler, ProfiledScheduler):
             self.profiler = scheduler.profiler
         else:
             self.profiler = _NOOP_PROFILER
-        self._owns_render_cache = render_cache is None
+        self._owns_render_cache = (render_cache := config.render_cache) is None
         self.render_cache = render_cache if render_cache is not None else RenderProgramCache()
         self.scheduler = scheduler
         topic_bus = scheduler.bus if isinstance(scheduler, TopicScheduler) else None
