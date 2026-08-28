@@ -38,6 +38,8 @@ from squid_ui_discord.message_root_wiring import AnyMountedView, ClassicMountedV
 from squid_ui_discord.rendering import render_static
 
 type ComponentPayload = dict[str, Any]
+type BuiltView = discord.ui.LayoutView | discord.ui.View | list[ComponentPayload]
+"""Anything the payload queries read: either kind of built view, or a payload already taken."""
 
 
 def without_capabilities[LimitsT: MessageLimits, BodyT: scene.Body, RenderTargetT, AdapterT](
@@ -285,12 +287,12 @@ def assert_within_limits(built: discord.ui.LayoutView | discord.ui.Modal, *, lim
 # --- Payload queries ------------------------------------------------------------------------
 
 
-def _payloads(built: discord.ui.LayoutView | list[ComponentPayload]) -> list[ComponentPayload]:
+def _payloads(built: BuiltView) -> list[ComponentPayload]:
     components = built if isinstance(built, list) else built.to_components()
     return list(iter_component_payloads(components))
 
 
-def payload_texts(built: discord.ui.LayoutView | list[ComponentPayload]) -> list[str]:
+def payload_texts(built: BuiltView) -> list[str]:
     """Every display text Discord will receive, in order.
 
     Reads the serialized payload rather than walking `discord.ui` objects. The two agree on
@@ -301,12 +303,12 @@ def payload_texts(built: discord.ui.LayoutView | list[ComponentPayload]) -> list
     return [component["content"] for component in _payloads(built) if component.get("type") == 10]
 
 
-def payload_labels(built: discord.ui.LayoutView | list[ComponentPayload]) -> list[str]:
+def payload_labels(built: BuiltView) -> list[str]:
     """Every button label Discord will receive, in order."""
     return [component["label"] for component in _payloads(built) if component.get("type") == 2 and "label" in component]
 
 
-def payload_custom_ids(built: discord.ui.LayoutView | list[ComponentPayload]) -> list[str]:
+def payload_custom_ids(built: BuiltView) -> list[str]:
     """Every custom id Discord will receive, in order, across every interactive component."""
     return [component["custom_id"] for component in _payloads(built) if "custom_id" in component]
 
