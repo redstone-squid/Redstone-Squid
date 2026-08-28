@@ -1,6 +1,6 @@
 """Public search metadata and result representations."""
 
-from typing import Annotated, Literal, TypeAlias
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -126,7 +126,7 @@ class MetadataSearchResult(BaseModel):
     metadata: MetadataSearchEntry
 
 
-SearchResult: TypeAlias = Annotated[
+type SearchResult = Annotated[
     BuildSearchResult | RecordSearchResult | MetadataSearchResult,
     Field(discriminator="resource_kind"),
 ]
