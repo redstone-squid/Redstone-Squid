@@ -14,7 +14,7 @@ from squid_ui.profiling import NoOpProfiler, Profiler, RuntimeSnapshot
 from squid_ui.runtime.histories import HistorySnapshot, inspect_histories
 from squid_ui.runtime.topics import Address, BusSnapshot, CellAddress, Topic, TopicBus
 from squid_ui_discord.live import find, message_roots
-from squid_ui_discord.message_root import MessageRootSnapshot
+from squid_ui_discord.message_root_contracts import MessageRootSnapshot
 from squid_ui_discord.message_root_scheduler import MessageRootScheduler, MessageRootSchedulerSnapshot
 from squid_ui_discord.sessions import Session, SessionManager
 

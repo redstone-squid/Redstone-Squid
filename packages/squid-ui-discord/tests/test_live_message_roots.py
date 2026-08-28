@@ -54,7 +54,7 @@ class TestLiveRegistry:
 
         assert live.message_roots() == (message_root,)
         # One hook, not one per generation: the mount is deregistered once when it finishes.
-        assert len(message_root._finish_hooks) == 1
+        assert len(message_root._hooks.finish) == 1
 
     async def test_finishing_deregisters_before_collection(self) -> None:
         message_root = MessageRoot(Panel(), access=Everyone())
