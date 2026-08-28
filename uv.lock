@@ -2805,6 +2805,11 @@ postgres = [
     { name = "squid-storage", extra = ["postgres"] },
 ]
 
+[package.dev-dependencies]
+test = [
+    { name = "squid-ui-widgets" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "anyio", specifier = ">=4.14,<5" },
@@ -2816,6 +2821,9 @@ requires-dist = [
     { name = "squid-ui", editable = "packages/squid-ui" },
 ]
 provides-extras = ["durable", "postgres"]
+
+[package.metadata.requires-dev]
+test = [{ name = "squid-ui-widgets", editable = "packages/squid-ui-widgets" }]
 
 [[package]]
 name = "squid-ui-widgets"
