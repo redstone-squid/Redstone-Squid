@@ -16,7 +16,7 @@ from squid_ui.interactions import ActionEvent
 from squid_ui.semantic import ActionControl, ActionControls, Heading, Paragraph
 from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, MessageRoot, Owner
 from squid_ui_discord.message_payload import MessageMode
-from squid_ui_discord.message_root import ClassicMountedView, MountedView
+from squid_ui_discord.message_root_wiring import ClassicMountedView, MountedView
 from squid_ui_discord.testing import (
     commit_classic_render,
     commit_render,

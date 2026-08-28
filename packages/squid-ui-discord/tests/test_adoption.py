@@ -33,7 +33,7 @@ from squid_ui.primitives import (
 )
 from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord.adoption import AdoptionError, adopt
-from squid_ui_discord.message_root import _EntityValues
+from squid_ui_discord.message_root_wiring import _EntityValues
 from squid_ui_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 
 
