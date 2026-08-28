@@ -9,7 +9,7 @@ import pytest
 import squid_ui as sl
 import squid_ui_discord
 from squid_ui.primitives import Button, Heading, Row, Text
-from squid_ui_discord import Everyone, MessageRoot, Owner, live
+from squid_ui_discord import Everyone, MessageRoot, Owner
 from squid_ui_discord.devtools_runtime import DevToolsRuntime
 from squid_ui_discord.devtools_view import (
     MessageRootInspector,
@@ -44,13 +44,6 @@ class Subject(sl.Component[sl.ComponentsV2Target]):
 
     async def _open(self, event: sl.PressEvent) -> None:
         self.opened = True
-
-
-@pytest.fixture(autouse=True)
-def _isolated_manager():
-    live._LIVE.clear()
-    yield
-    live._LIVE.clear()
 
 
 async def live_subject(**kwargs: Any) -> MessageRoot:

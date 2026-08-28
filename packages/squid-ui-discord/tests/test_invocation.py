@@ -12,7 +12,6 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid_ui.text import Localization, Message
 from squid_ui_discord.invocation import Invocation, Private, current_invocation, invocation_scope
-from squid_ui_discord.runtime import _INSTALLED
 from squid_ui_discord.sessions import AdmissionSpec, Opened, Reject, Rejected
 from squid_ui_discord.testing import fake_interaction, fake_message
 
@@ -24,12 +23,6 @@ class FakeClient:
 class Panel(sl.Component[sl.ComponentsV2Target]):
     def render(self):
         return [sl.heading("Panel")]
-
-
-@pytest.fixture(autouse=True)
-def _forget_installations():
-    yield
-    _INSTALLED.clear()
 
 
 def _context(
