@@ -14,9 +14,6 @@ from squid_ui.planning.semantic_adaptation.common import (
     _select_strategy,
 )
 from squid_ui.planning.semantic_adaptation.decisions import (
-    item_state as _item_state,
-)
-from squid_ui.planning.semantic_adaptation.decisions import (
     items_axis as _items_axis,
 )
 from squid_ui.planning.semantic_adaptation.decisions import (
@@ -42,7 +39,17 @@ from squid_ui.planning.semantic_adaptation.handlers import (
 from squid_ui.planning.semantic_adaptation.model import (
     LoweringContext as _Context,
 )
-from squid_ui.planning.structure import disclosure_state, toggle_action_key, toggle_state
+from squid_ui.planning.structure import (
+    disclosure_state,
+    toggle_action_key,
+    toggle_state,
+)
+from squid_ui.planning.structure import (
+    item_state as _item_state,
+)
+from squid_ui.planning.structure import (
+    navigation_current as _navigation_current,
+)
 from squid_ui.primitives.constraints import (
     Never,
     Overflow,
@@ -322,18 +329,7 @@ def _navigation(node: Navigation, path: str, context: _Context) -> list[Node]:
     strategy = _select_strategy(_navigation_axis(node, path, context.limits, context.session), context)
     grouped = strategy == "grouped"
 
-    match node.current:
-        case Controlled(value=value):
-            current = value
-        case Uncontrolled(initial=initial):
-            # A remembered destination that has since gone unavailable is the engine's own
-            # stale data, so drop it. An author's value is theirs to be wrong about.
-            keys = {destination.key for destination in available}
-            seed = () if initial is None else (initial,)
-            remembered = context.session.selection(node.key, initial=seed).selected
-            current = remembered[0] if remembered and remembered[0] in keys else None
-    if current is None and available:
-        current = available[0].key
+    current = _navigation_current(node, context.session)
     commit = NavigationCommit(node.current, node.key, context.session)
 
     if grouped:

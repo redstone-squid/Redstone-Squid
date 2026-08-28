@@ -31,6 +31,7 @@ from squid_ui.interactions import ActionEvent, SelectionEvent, SubmitEvent
 from squid_ui.planning import PlanCache, PlanMemo, ResourceCost
 from squid_ui.planning.limits import Axis
 from squid_ui.rosters import RosterEntry, RosterSlot, place_roster
+from squid_ui.runtime.presentation_state import PresentationState, SelectionState
 from squid_ui.sources import Position
 from squid_ui.target_types import HtmlTarget, Renderable
 from squid_ui.temporal import ZonedDateTime
@@ -327,3 +328,27 @@ def test_html_plans_assets_and_rebuilds_ephemeral_bindings_on_cache_hits() -> No
     assert first.scene.assets == (scene.Asset("report", "report.txt", "text/plain"),)
     assert first.resources["asset:report"] == asset
     assert exact.metrics.cache_hit
+
+
+def test_stale_remembered_selections_are_dropped_by_html_planning() -> None:
+    # The engine's own stale memory -- a remembered key whose entry or destination no
+    # longer exists -- must not survive into the scene; only an author's controlled value
+    # may be wrong. Discord already validated these reads; HTML now shares them.
+    session = PresentationState()
+    session.selections["entries"] = SelectionState(("gone",))
+    session.selections["nav"] = SelectionState(("gone",))
+    document = sl.group(
+        sl.items(sl.item(sl.item_label("One"), sl.paragraph("first"), key="one"), key="entries"),
+        sl.navigation(sl.nav_option("Home", key="home"), sl.nav_option("Away", key="away"), key="nav"),
+    )
+
+    result = sl.planning.plan(document, target=sl.html.target(), session=session)
+
+    current = [
+        attribute.value
+        for element in _elements(result)
+        if element.tag is scene.HtmlTag.BUTTON
+        for attribute in element.attributes
+        if attribute.name is scene.HtmlAttributeName.ARIA_CURRENT
+    ]
+    assert current == ["page"], "navigation falls back to the first available destination"

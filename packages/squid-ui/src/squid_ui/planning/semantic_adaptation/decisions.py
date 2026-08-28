@@ -9,7 +9,13 @@ from squid_ui.factories import is_layout_node
 from squid_ui.planning.limits import MessageLimits
 from squid_ui.planning.search import StrategyAxis, StrategyCandidate
 from squid_ui.planning.semantic_adaptation.model import FallbackAxis, SemanticDecisions
-from squid_ui.planning.structure import branch_paths, disclosure_state, fallback_rung, indexed_children
+from squid_ui.planning.structure import (
+    branch_paths,
+    disclosure_state,
+    fallback_rung,
+    indexed_children,
+    item_state,
+)
 from squid_ui.primitives.nodes import (
     Boundary,
     Break,
@@ -67,7 +73,6 @@ from squid_ui.semantic import (
     Code,
     ControlDisplay,
     ControlGroup,
-    Controlled,
     Details,
     Download,
     Entities,
@@ -107,7 +112,6 @@ from squid_ui.semantic import (
     Toggle,
     Truncated,
     Unbreakable,
-    Uncontrolled,
     ZonedTimestamp,
 )
 
@@ -303,18 +307,6 @@ def strategy_axis(
 def individual_fits(controls: int, limits: MessageLimits) -> bool:
     rows = (controls + limits.components.row_buttons - 1) // limits.components.row_buttons
     return limits.fits_controls(controls, rows)
-
-
-def item_state(node: Items, session: PresentationState) -> tuple[str | None, bool]:
-    keys = {item.key for item in node.items}
-    match node.opened:
-        case Controlled(value=value):
-            return (value if value in keys else None), True
-        case Uncontrolled(initial=initial):
-            seed = () if initial is None else (initial,)
-            remembered = session.selection(node.key, initial=seed).selected
-            opened = remembered[0] if remembered and remembered[0] in keys else None
-            return opened, node.key in session.selections or initial is not None
 
 
 def items_axis(node: Items, path: str, limits: MessageLimits, session: PresentationState) -> StrategyAxis:
