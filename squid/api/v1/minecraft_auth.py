@@ -2,7 +2,7 @@
 
 import hashlib
 from collections.abc import Awaitable
-from typing import Annotated, Protocol, TypeVar, cast
+from typing import Annotated, Protocol, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Request, Response, status
@@ -39,7 +39,6 @@ from squid.minecraft_auth.domain import (
     PublicServerProfile,
 )
 
-_T = TypeVar("_T")
 _NO_STORE = "no-store"
 
 
@@ -449,7 +448,7 @@ async def revoke_grant(
     return _empty_no_store()
 
 
-async def _execute(operation: Awaitable[_T]) -> _T:
+async def _execute[T](operation: Awaitable[T]) -> T:
     return await operation
 
 
