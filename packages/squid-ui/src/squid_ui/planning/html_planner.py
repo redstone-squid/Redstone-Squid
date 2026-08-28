@@ -34,6 +34,7 @@ from squid_ui.planning.semantic_adaptation.handlers import (
     ToggleDetails,
 )
 from squid_ui.planning.structure import (
+    branch_paths,
     disclosure_state,
     indexed_children,
     resolve_accent,
@@ -719,9 +720,10 @@ class _Compiler:
         self, fallback: sem.FallbackContent[Any], capacity: int, path: str
     ) -> tuple[scene.HtmlNode, ...]:
         branches = (fallback.primary, *fallback.alternates)
+        paths = branch_paths(path, len(branches))
         for index, branch in enumerate(branches):
             candidate = self._fork()
-            compiled = candidate.compile(branch, f"{path}.fallback.{index}")
+            compiled = candidate.compile(branch, paths[index])
             if index:
                 self.states_explored += 1
             if sum(_html_size(node) for node in compiled) <= capacity:
@@ -738,7 +740,7 @@ class _Compiler:
                         )
                     )
                 return compiled
-        compiled = self.compile(fallback.primary, f"{path}.fallback.0")
+        compiled = self.compile(fallback.primary, paths[0])
         return self._fit_budget(compiled, capacity, path)
 
     def _heading(self, heading: sem.Heading) -> scene.HtmlElement:
