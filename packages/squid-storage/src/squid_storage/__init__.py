@@ -11,6 +11,7 @@ from squid_storage.scoped import (
     SlotCodec,
     SlotVersionError,
     SQLiteScopedStore,
+    StorageError,
     json_codec,
 )
 from squid_storage.stores import (
@@ -40,6 +41,7 @@ __all__ = [
     "Slot",
     "SlotCodec",
     "SlotVersionError",
+    "StorageError",
     "TopicBridgeSnapshot",
     "json_codec",
 ]

@@ -14,7 +14,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, Self, overload
 
 from squid_ui.emoji import EmojiLike, normalize_emoji
-from squid_ui.errors import LayoutInvariantError
+from squid_ui.errors import LayoutInvariantError, SquidUiError
 from squid_ui.interactions import ActionMode, SubmitEvent
 from squid_ui.temporal import (
     AmbiguousLocalTimeError,
@@ -58,7 +58,7 @@ class FormValidationMode(StrEnum):
     ACCEPT_AND_MARK = "accept_and_mark"
 
 
-class FormValueError(ValueError):
+class FormValueError(SquidUiError, ValueError):
     """A user-correctable parse failure, converted to :class:`FieldError`.
 
     The one failure boundary :meth:`FormSpec.evaluate` treats as validation. Anything else a

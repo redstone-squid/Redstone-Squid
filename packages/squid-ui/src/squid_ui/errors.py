@@ -1,7 +1,16 @@
 """Typed failures raised at the logical, planning, and drawing boundaries."""
 
 
-class LayoutError(Exception):
+class SquidUiError(Exception):
+    """Base class for every failure the Squid UI packages raise deliberately.
+
+    Errors outside the layout family keep a standard exception base alongside this one
+    (`CodecError` stays a `ValueError`, `HistoryError` a `RuntimeError`), so catching by
+    standard type keeps working while `except SquidUiError` covers the whole suite.
+    """
+
+
+class LayoutError(SquidUiError):
     """Base class for frontend-neutral layout failures."""
 
 
@@ -44,5 +53,6 @@ __all__ = [
     "LayoutError",
     "LayoutInvariantError",
     "LimitViolationError",
+    "SquidUiError",
     "UnsolvableLayoutError",
 ]

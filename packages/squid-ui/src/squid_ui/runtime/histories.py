@@ -26,6 +26,7 @@ from squid_reactivity.actions import (
 )
 from squid_reactivity.operations import OperationContext
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
+from squid_ui.errors import SquidUiError
 from squid_ui.factories import action_control, control_group
 from squid_ui.interactions import ActionEvent
 from squid_ui.runtime.reactivity import (
@@ -52,7 +53,7 @@ from squid_ui.text import TextLike
 logger = logging.getLogger(__name__)
 
 
-class HistoryError(RuntimeError):
+class HistoryError(SquidUiError, RuntimeError):
     """A history operation could not be honoured or was already reserved by this action."""
 
 

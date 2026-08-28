@@ -14,6 +14,7 @@ def test_public_api_snapshot() -> None:
         "Replica",
         "ReplicaBranch",
         "ReplicaClosedError",
+        "ReplicationError",
         "ReplicatedCounter",
         "ReplicatedDocument",
         "ReplicatedItem",

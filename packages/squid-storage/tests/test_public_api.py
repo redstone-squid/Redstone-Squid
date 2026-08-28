@@ -22,6 +22,7 @@ def test_public_api_snapshot() -> None:
         "Slot",
         "SlotCodec",
         "SlotVersionError",
+        "StorageError",
         "TopicBridgeSnapshot",
         "json_codec",
     }
