@@ -29,7 +29,7 @@ from squid_ui.interactions import (
     Visibility,
 )
 from squid_ui.runtime.component import AnyComponent, Component, render_component_tree
-from squid_ui.semantic import AnyLayoutNode, ChoiceEvent
+from squid_ui.semantic import ActionControl, AnyLayoutNode, ChoiceEvent, Choices, Controlled, FormTrigger
 from squid_ui.text import NEUTRAL, TextLike, resolve_text
 
 type Tree = AnyLayoutNode | Iterable[Any] | object
@@ -253,6 +253,45 @@ def submit_event(
     )
 
 
+# --- Driving a render ---------------------------------------------------------------------
+
+
+def control(tree: Tree, key: str) -> ActionControl:
+    """The single control keyed `key` in `tree`."""
+    return find(tree, ActionControl, key=key)
+
+
+async def press(component: AnyComponent, key: str, *, actor: str = "1", responder: object | None = None) -> None:
+    """Press the control keyed `key` in `component`'s current render.
+
+    Renders first, so the control pressed is the one the reader would be looking at rather than
+    one captured before an earlier press moved the tree.
+    """
+    await control(render_tree(component), key).on_trigger(press_event(actor=actor, responder=responder))
+
+
+async def choose(
+    component: AnyComponent, key: str, *values: str, actor: str = "1", responder: object | None = None
+) -> None:
+    """Settle the picker keyed `key` in `component`'s current render on `values`."""
+    picker = find(render_tree(component), Choices, key=key)
+    assert isinstance(picker.selection, Controlled), f"the picker keyed {key!r} does not own its selection"
+    await picker.selection.on_change(choice_event(*values, actor=actor, responder=responder))
+
+
+async def submit(
+    component: AnyComponent,
+    key: str,
+    values: Mapping[str, object],
+    *,
+    actor: str = "1",
+    responder: object | None = None,
+) -> None:
+    """Submit `values` to the form the trigger keyed `key` opens."""
+    trigger = find(render_tree(component), FormTrigger, key=key)
+    await trigger.on_submit(submit_event(values, actor=actor, responder=responder))
+
+
 # --- Determinism --------------------------------------------------------------------------
 
 
@@ -366,13 +405,17 @@ __all__ = [
     "UntouchedResponder",
     "assert_imports_without",
     "choice_event",
+    "choose",
+    "control",
     "find",
     "find_all",
     "keys",
     "labels",
+    "press",
     "press_event",
     "render_tree",
     "selection_event",
+    "submit",
     "submit_event",
     "text_component",
     "texts",
