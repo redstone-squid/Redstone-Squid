@@ -133,10 +133,10 @@ deliberately *not* accepted: ``x and y`` evaluates to ``y`` or to the falsy ``x`
 would render a literal ``0`` in looser designs — a type error rather than a surprise.
 """
 
-type ChildLike[ModeT = RenderTarget] = Conditional[LayoutNode[ModeT] | TextLike | Template]
+type ChildLike[RenderTargetT = RenderTarget] = Conditional[LayoutNode[RenderTargetT] | TextLike | Template]
 """Anything acceptable in a container's child position; text is promoted to `Paragraph`.
 
-`ModeT` is what makes a nested dialect mistake a type error. A container factory solves it
+`RenderTargetT` is what makes a nested dialect mistake a type error. A container factory solves it
 from its children, so a `Panel` two levels down inside an otherwise portable document makes
 the whole document `ComponentsV2Target`, and handing that to a classic target does not
 type-check. See `docs/plans/squid-ui-redesign/spikes/73/` for the measurement that chose
@@ -148,7 +148,7 @@ def _node_types(annotation: object) -> Iterator[type]:
     """Flatten a union of type aliases into the concrete classes it admits.
 
     The `get_origin` branch is not decoration: once the containers became generic in their
-    dialect, `Stack[ModeT]` stopped being a `type`, every container silently fell out of
+    dialect, `Stack[RenderTargetT]` stopped being a `type`, every container silently fell out of
     `_NODE_TYPES`, and `is_layout_node(sl.stack(...))` went quietly False -- which reads at
     runtime as "a stack is not content".
     """
@@ -214,8 +214,10 @@ def _is_component(value: object) -> bool:
     return isinstance(value, Component)
 
 
-def _children[ModeT](values: tuple[ChildLike[ModeT], ...], origin: str) -> tuple[LayoutNode[ModeT], ...]:
-    collected: list[LayoutNode[ModeT]] = []
+def _children[RenderTargetT](
+    values: tuple[ChildLike[RenderTargetT], ...], origin: str
+) -> tuple[LayoutNode[RenderTargetT], ...]:
+    collected: list[LayoutNode[RenderTargetT]] = []
     for index, value in enumerate(values):
         if value is None or value is False:
             continue
@@ -232,7 +234,7 @@ def _collect[ItemT](values: Iterable[Conditional[ItemT]], kinds: tuple[type, ...
     """Drop omitted entries and reject anything that is not one of `kinds`.
 
     `kinds` is the erased runtime table, not `type[ItemT]`: a generic entry such as `Item`
-    has no runtime class per mode, so tying the two would solve `ItemT` to the erased class
+    has no runtime class per render target, so tying the two would solve `ItemT` to the erased class
     and lose the caller's.
     """
     collected: list[ItemT] = []
@@ -249,52 +251,58 @@ def _collect[ItemT](values: Iterable[Conditional[ItemT]], kinds: tuple[type, ...
 # --- containers ---------------------------------------------------------------------------
 
 
-def group[ModeT = RenderTarget](*children: ChildLike[ModeT]) -> Group[ModeT]:
+def group[RenderTargetT = RenderTarget](*children: ChildLike[RenderTargetT]) -> Group[RenderTargetT]:
     """Related content with no layout opinion; lowers to its children in place."""
     return Group(_children(children, "sl.group()"))
 
 
-def stack[ModeT = RenderTarget](*children: ChildLike[ModeT]) -> Stack[ModeT]:
+def stack[RenderTargetT = RenderTarget](*children: ChildLike[RenderTargetT]) -> Stack[RenderTargetT]:
     """Content read top to bottom."""
     return Stack(_children(children, "sl.stack()"))
 
 
-def cluster[ModeT = RenderTarget](*children: ChildLike[ModeT]) -> Cluster[ModeT]:
+def cluster[RenderTargetT = RenderTarget](*children: ChildLike[RenderTargetT]) -> Cluster[RenderTargetT]:
     """Content read as a set rather than a sequence."""
     return Cluster(_children(children, "sl.cluster()"))
 
 
-def themed[ModeT = RenderTarget](palette: Palette, *children: ChildLike[ModeT]) -> Themed[ModeT]:
+def themed[RenderTargetT = RenderTarget](
+    palette: Palette, *children: ChildLike[RenderTargetT]
+) -> Themed[RenderTargetT]:
     """Apply a presentation palette to one semantic subtree."""
     return Themed(_children(children, "sl.themed()"), palette)
 
 
-def block[ModeT = RenderTarget](*children: ChildLike[ModeT], accent: Accent = INHERIT) -> Block[ModeT]:
+def block[RenderTargetT = RenderTarget](
+    *children: ChildLike[RenderTargetT], accent: Accent = INHERIT
+) -> Block[RenderTargetT]:
     """An untitled region; ``accent`` is a house-colour override."""
     return Block(_children(children, "sl.block()"), accent)
 
 
-def section[ModeT = RenderTarget](
+def section[RenderTargetT = RenderTarget](
     heading: Heading,
-    *children: ChildLike[ModeT],
+    *children: ChildLike[RenderTargetT],
     accent: Accent = INHERIT,
     thumbnail: str | None = None,
-) -> Section[ModeT]:
+) -> Section[RenderTargetT]:
     """A titled block of related content; ``accent`` is a house-colour override."""
     return Section(heading, _children(children, "sl.section()"), accent, thumbnail)
 
 
-def article[ModeT = RenderTarget](
+def article[RenderTargetT = RenderTarget](
     heading: Heading,
-    *children: ChildLike[ModeT],
+    *children: ChildLike[RenderTargetT],
     accent: Accent = INHERIT,
     thumbnail: str | None = None,
-) -> Article[ModeT]:
+) -> Article[RenderTargetT]:
     """A self-contained block that stands on its own."""
     return Article(heading, _children(children, "sl.article()"), accent, thumbnail)
 
 
-def aside[ModeT = RenderTarget](*children: ChildLike[ModeT], tone: Tone = Tone.NEUTRAL) -> Aside[ModeT]:
+def aside[RenderTargetT = RenderTarget](
+    *children: ChildLike[RenderTargetT], tone: Tone = Tone.NEUTRAL
+) -> Aside[RenderTargetT]:
     """Tangential or advisory content, coloured by tone."""
     return Aside(_children(children, "sl.aside()"), tone)
 
@@ -312,12 +320,12 @@ def uncontrolled[ValueT](initial: ValueT) -> Uncontrolled[ValueT]:
     return Uncontrolled(initial)
 
 
-def details[ModeT = RenderTarget](
+def details[RenderTargetT = RenderTarget](
     summary: Summary,
-    *children: ChildLike[ModeT],
+    *children: ChildLike[RenderTargetT],
     key: str,
     open: DisclosureOwnership = CLOSED,
-) -> Details[ModeT]:
+) -> Details[RenderTargetT]:
     """Content the reader expands; ``key`` carries its disclosure state."""
     return Details(key, summary, _children(children, "sl.details()"), open)
 
@@ -352,9 +360,9 @@ def form(
     return FormTrigger(key, _text(label), resolved, handler, selected_mode, tone, emphasis, guard, record)
 
 
-def item[ModeT = RenderTarget](
-    label: ItemLabel, *children: ChildLike[ModeT], key: str, summary: TextValue | None = None
-) -> Item[ModeT]:
+def item[RenderTargetT = RenderTarget](
+    label: ItemLabel, *children: ChildLike[RenderTargetT], key: str, summary: TextValue | None = None
+) -> Item[RenderTargetT]:
     """One entry of an `items` collection."""
     return Item(key, label, _children(children, "sl.item()"), _opt_text(summary))
 
@@ -364,13 +372,13 @@ def item_label(content: TextValue) -> ItemLabel:
     return ItemLabel(_text(content))
 
 
-def items[ModeT = RenderTarget](
-    *entries: Conditional[Item[ModeT]],
+def items[RenderTargetT = RenderTarget](
+    *entries: Conditional[Item[RenderTargetT]],
     key: str,
     opened: ItemOwnership = UNOPENED,
     display: ItemDisplay = ItemDisplay.AUTO,
     flexibility: Flexibility = Flexibility.NORMAL,
-) -> Items[ModeT]:
+) -> Items[RenderTargetT]:
     """A set of entries the reader browses; ``key`` carries the opened entry."""
     return Items(key, _collect(entries, (Item,), "sl.items()"), opened, display, flexibility)
 

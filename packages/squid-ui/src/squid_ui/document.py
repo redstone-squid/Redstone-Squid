@@ -11,19 +11,21 @@ __all__ = ["Asset", "AssetSource", "Document", "DocumentLike", "InlineAsset", "S
 
 
 @dataclass(frozen=True, slots=True)
-class Document[ModeT = RenderTarget]:
+class Document[RenderTargetT = RenderTarget]:
     """Visual nodes and delivery assets derived from one component state snapshot."""
 
-    children: tuple[LayoutNode[ModeT], ...]
+    children: tuple[LayoutNode[RenderTargetT], ...]
     assets: tuple[Asset, ...] = ()
     key: str | None = None
 
 
-type DocumentLike[ModeT = RenderTarget] = Document[ModeT] | LayoutNode[ModeT] | Sequence[LayoutNode[ModeT]]
+type DocumentLike[RenderTargetT = RenderTarget] = (
+    Document[RenderTargetT] | LayoutNode[RenderTargetT] | Sequence[LayoutNode[RenderTargetT]]
+)
 type PortableDocumentLike = DocumentLike[RenderTarget]
 
 
-def as_document[ModeT](rendered: DocumentLike[ModeT]) -> Document[ModeT]:
+def as_document[RenderTargetT](rendered: DocumentLike[RenderTargetT]) -> Document[RenderTargetT]:
     if isinstance(rendered, Document):
         return rendered
     if isinstance(rendered, Sequence):

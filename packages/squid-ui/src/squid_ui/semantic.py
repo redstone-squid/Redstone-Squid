@@ -137,38 +137,38 @@ FIRST_OPTION: NavOwnership = Uncontrolled(None)
 
 
 @dataclass(frozen=True, slots=True)
-class Group[ModeT = RenderTarget](Renderable[ModeT]):
-    children: tuple[LayoutNode[ModeT], ...]
+class Group[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
+    children: tuple[LayoutNode[RenderTargetT], ...]
 
 
 @dataclass(frozen=True, slots=True)
-class Stack[ModeT = RenderTarget](Renderable[ModeT]):
-    children: tuple[LayoutNode[ModeT], ...]
+class Stack[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
+    children: tuple[LayoutNode[RenderTargetT], ...]
 
 
 @dataclass(frozen=True, slots=True)
-class Cluster[ModeT = RenderTarget](Renderable[ModeT]):
-    children: tuple[LayoutNode[ModeT], ...]
+class Cluster[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
+    children: tuple[LayoutNode[RenderTargetT], ...]
 
 
 @dataclass(frozen=True, slots=True)
-class Themed[ModeT = RenderTarget](Renderable[ModeT]):
+class Themed[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
     """A subtree planned with a presentation palette override."""
 
-    children: tuple[LayoutNode[ModeT], ...]
+    children: tuple[LayoutNode[RenderTargetT], ...]
     palette: Palette
 
 
 @dataclass(frozen=True, slots=True)
-class Block[ModeT = RenderTarget](Renderable[ModeT]):
+class Block[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
     """An untitled semantic region with an exact or inherited accent."""
 
-    children: tuple[LayoutNode[ModeT], ...]
+    children: tuple[LayoutNode[RenderTargetT], ...]
     accent: Accent = INHERIT
 
 
 @dataclass(frozen=True, slots=True)
-class Section[ModeT = RenderTarget](Renderable[ModeT]):
+class Section[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
     """A titled block of related content.
 
     ``accent`` is an exact colour override, not a semantic fact. Omit it to inherit the
@@ -181,24 +181,24 @@ class Section[ModeT = RenderTarget](Renderable[ModeT]):
     """
 
     heading: Heading
-    children: tuple[LayoutNode[ModeT], ...]
+    children: tuple[LayoutNode[RenderTargetT], ...]
     accent: Accent = INHERIT
     thumbnail: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
-class Article[ModeT = RenderTarget](Renderable[ModeT]):
+class Article[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
     """A self-contained block that stands on its own; see `Section` for the extras."""
 
     heading: Heading
-    children: tuple[LayoutNode[ModeT], ...]
+    children: tuple[LayoutNode[RenderTargetT], ...]
     accent: Accent = INHERIT
     thumbnail: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
-class Aside[ModeT = RenderTarget](Renderable[ModeT]):
-    children: tuple[LayoutNode[ModeT], ...]
+class Aside[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
+    children: tuple[LayoutNode[RenderTargetT], ...]
     tone: Tone = Tone.NEUTRAL
 
 
@@ -334,10 +334,10 @@ class Summary:
 
 
 @dataclass(frozen=True, slots=True)
-class Details[ModeT = RenderTarget](Renderable[ModeT]):
+class Details[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
     key: str
     summary: Summary
-    children: tuple[LayoutNode[ModeT], ...]
+    children: tuple[LayoutNode[RenderTargetT], ...]
     open: DisclosureOwnership = CLOSED
 
 
@@ -634,17 +634,17 @@ class ItemLabel:
 
 
 @dataclass(frozen=True, slots=True)
-class Item[ModeT = RenderTarget](Renderable[ModeT]):
+class Item[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
     key: str
     label: ItemLabel
-    children: tuple[LayoutNode[ModeT], ...]
+    children: tuple[LayoutNode[RenderTargetT], ...]
     summary: TextLike | None = None
 
 
 @dataclass(frozen=True, slots=True)
-class Items[ModeT = RenderTarget](Renderable[ModeT]):
+class Items[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
     key: str
-    items: tuple[Item[ModeT], ...]
+    items: tuple[Item[RenderTargetT], ...]
     opened: ItemOwnership = UNOPENED
     display: ItemDisplay = ItemDisplay.AUTO
     flexibility: Flexibility = Flexibility.NORMAL
@@ -673,28 +673,28 @@ class Navigation:
 
 
 @dataclass(frozen=True, slots=True)
-class Truncated[ModeT = RenderTarget](Renderable[ModeT]):
-    node: LayoutNode[ModeT]
+class Truncated[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
+    node: LayoutNode[RenderTargetT]
     keep: str = "head"
 
 
 @dataclass(frozen=True, slots=True)
-class Spilled[ModeT = RenderTarget](Renderable[ModeT]):
-    node: LayoutNode[ModeT]
+class Spilled[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
+    node: LayoutNode[RenderTargetT]
 
 
 @dataclass(frozen=True, slots=True)
-class OptionalContent[ModeT = RenderTarget](Renderable[ModeT]):
-    node: LayoutNode[ModeT]
+class OptionalContent[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
+    node: LayoutNode[RenderTargetT]
     importance: Importance = Importance.LOW
 
 
 @dataclass(frozen=True, slots=True)
-class FallbackContent[ModeT = RenderTarget](Renderable[ModeT]):
+class FallbackContent[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
     """Complete author-supplied representations of one region, best first."""
 
-    primary: LayoutNode[ModeT]
-    alternates: tuple[LayoutNode[ModeT], ...]
+    primary: LayoutNode[RenderTargetT]
+    alternates: tuple[LayoutNode[RenderTargetT], ...]
 
     def __post_init__(self) -> None:
         if not self.alternates:
@@ -703,15 +703,15 @@ class FallbackContent[ModeT = RenderTarget](Renderable[ModeT]):
 
 
 @dataclass(frozen=True, slots=True)
-class BestEffort[ModeT = RenderTarget](Renderable[ModeT]):
-    node: LayoutNode[ModeT]
+class BestEffort[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
+    node: LayoutNode[RenderTargetT]
 
 
 @dataclass(frozen=True, slots=True)
-class Budgeted[ModeT = RenderTarget](Renderable[ModeT]):
+class Budgeted[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
     """Reserve and cap the character grant for one logical region."""
 
-    node: LayoutNode[ModeT]
+    node: LayoutNode[RenderTargetT]
     minimum: int
     preferred: int
     stretch: int = 0
@@ -726,24 +726,24 @@ class Budgeted[ModeT = RenderTarget](Renderable[ModeT]):
 
 
 @dataclass(frozen=True, slots=True)
-class Unbreakable[ModeT = RenderTarget](Renderable[ModeT]):
+class Unbreakable[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
     """Keep every primitive produced by ``node`` together on a region page."""
 
-    node: LayoutNode[ModeT]
+    node: LayoutNode[RenderTargetT]
 
 
 @dataclass(frozen=True, slots=True)
-class KeepWithNext[ModeT = RenderTarget](Renderable[ModeT]):
+class KeepWithNext[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
     """Forbid a region page break immediately after ``node``."""
 
-    node: LayoutNode[ModeT]
+    node: LayoutNode[RenderTargetT]
 
 
 @dataclass(frozen=True, slots=True)
-class Paged[ModeT = RenderTarget](Renderable[ModeT]):
+class Paged[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
     """Paginate the direct children of a keyed heterogeneous region."""
 
-    node: LayoutNode[ModeT]
+    node: LayoutNode[RenderTargetT]
     key: str
     chars: int
     min_fill: int = 0
@@ -766,17 +766,17 @@ class Paged[ModeT = RenderTarget](Renderable[ModeT]):
             raise ValueError(message)
 
 
-type SemanticNode[ModeT = RenderTarget] = (
-    Group[ModeT]
-    | Stack[ModeT]
-    | Cluster[ModeT]
-    | Themed[ModeT]
-    | Block[ModeT]
-    | Section[ModeT]
-    | Article[ModeT]
-    | Aside[ModeT]
-    | Details[ModeT]
-    | Items[ModeT]
+type SemanticNode[RenderTargetT = RenderTarget] = (
+    Group[RenderTargetT]
+    | Stack[RenderTargetT]
+    | Cluster[RenderTargetT]
+    | Themed[RenderTargetT]
+    | Block[RenderTargetT]
+    | Section[RenderTargetT]
+    | Article[RenderTargetT]
+    | Aside[RenderTargetT]
+    | Details[RenderTargetT]
+    | Items[RenderTargetT]
     | Heading
     | Paragraph
     | Note
@@ -805,21 +805,21 @@ type SemanticNode[ModeT = RenderTarget] = (
 )
 """Everything the semantic vocabulary offers, in the dialects it can be drawn in.
 
-Only the containers take the parameter. The rest are mode-neutral by construction: a
+Only the containers take the parameter. The rest are target-neutral by construction: a
 `Table` or a `Roster` says what the information *means* and every dialect has some way to
 draw it, which is the whole reason to author semantically. A leaf that grew a dialect
 restriction would belong in `primitives`, not here.
 """
 
-type Adaptation[ModeT = RenderTarget] = (
-    Truncated[ModeT]
-    | Spilled[ModeT]
-    | OptionalContent[ModeT]
-    | BestEffort[ModeT]
-    | Budgeted[ModeT]
-    | Unbreakable[ModeT]
-    | KeepWithNext[ModeT]
-    | Paged[ModeT]
+type Adaptation[RenderTargetT = RenderTarget] = (
+    Truncated[RenderTargetT]
+    | Spilled[RenderTargetT]
+    | OptionalContent[RenderTargetT]
+    | BestEffort[RenderTargetT]
+    | Budgeted[RenderTargetT]
+    | Unbreakable[RenderTargetT]
+    | KeepWithNext[RenderTargetT]
+    | Paged[RenderTargetT]
 )
 type AnyLayoutNode = LayoutNode[Any]
 """A node whose dialect is deliberately not tracked.
@@ -830,29 +830,31 @@ portable default would be a claim none of them makes.
 """
 
 type ConcreteLayoutNode = SemanticNode | Adaptation | FallbackContent | PrimitiveNode
-type LayoutNode[ModeT = RenderTarget] = (
-    SemanticNode[ModeT] | Adaptation[ModeT] | FallbackContent[ModeT] | Renderable[ModeT]
+type LayoutNode[RenderTargetT = RenderTarget] = (
+    SemanticNode[RenderTargetT] | Adaptation[RenderTargetT] | FallbackContent[RenderTargetT] | Renderable[RenderTargetT]
 )
 
 
-def truncate[ModeT = RenderTarget](node: LayoutNode[ModeT], *, keep: str = "head") -> Truncated[ModeT]:
+def truncate[RenderTargetT = RenderTarget](
+    node: LayoutNode[RenderTargetT], *, keep: str = "head"
+) -> Truncated[RenderTargetT]:
     """Allow prose in ``node`` to truncate when no lossless plan fits."""
     return Truncated(node, keep)
 
 
-def spill[ModeT = RenderTarget](node: LayoutNode[ModeT]) -> Spilled[ModeT]:
+def spill[RenderTargetT = RenderTarget](node: LayoutNode[RenderTargetT]) -> Spilled[RenderTargetT]:
     """Allow a static collection in ``node`` to omit its lowest-priority entries."""
     return Spilled(node)
 
 
-def optional[ModeT = RenderTarget](
-    node: LayoutNode[ModeT], *, importance: Importance = Importance.LOW
-) -> OptionalContent[ModeT]:
+def optional[RenderTargetT = RenderTarget](
+    node: LayoutNode[RenderTargetT], *, importance: Importance = Importance.LOW
+) -> OptionalContent[RenderTargetT]:
     """Allow the whole node to disappear as an explicit last resort."""
     return OptionalContent(node, importance)
 
 
-# Positional-only throughout. The arity ladder exists to union each rung's mode into the
+# Positional-only throughout. The arity ladder exists to union each rung's render target into the
 # result, which a `*args` signature cannot express; but the implementation *is* variadic, so
 # an overload naming its parameters would promise a keyword call the implementation cannot
 # accept, and the two signatures would not agree.
@@ -905,30 +907,30 @@ def fallback(primary: AnyLayoutNode, /, *alternates: AnyLayoutNode) -> FallbackC
     return FallbackContent(primary, alternates)
 
 
-def best_effort[ModeT = RenderTarget](node: LayoutNode[ModeT]) -> BestEffort[ModeT]:
+def best_effort[RenderTargetT = RenderTarget](node: LayoutNode[RenderTargetT]) -> BestEffort[RenderTargetT]:
     """Allow safe prose truncation and static collection spill, never consequential loss."""
     return BestEffort(node)
 
 
-def budget[ModeT = RenderTarget](
-    node: LayoutNode[ModeT], *, min: int, prefer: int, stretch: int = 0
-) -> Budgeted[ModeT]:
+def budget[RenderTargetT = RenderTarget](
+    node: LayoutNode[RenderTargetT], *, min: int, prefer: int, stretch: int = 0
+) -> Budgeted[RenderTargetT]:
     """Give ``node`` a hard floor, preferred size, and lossless stretch band."""
     return Budgeted(node, min, prefer, stretch)
 
 
-def unbreakable[ModeT = RenderTarget](node: LayoutNode[ModeT]) -> Unbreakable[ModeT]:
+def unbreakable[RenderTargetT = RenderTarget](node: LayoutNode[RenderTargetT]) -> Unbreakable[RenderTargetT]:
     """Keep ``node`` atomic when its containing region paginates."""
     return Unbreakable(node)
 
 
-def keep_with_next[ModeT = RenderTarget](node: LayoutNode[ModeT]) -> KeepWithNext[ModeT]:
+def keep_with_next[RenderTargetT = RenderTarget](node: LayoutNode[RenderTargetT]) -> KeepWithNext[RenderTargetT]:
     """Keep ``node`` off the bottom of a region page without its successor."""
     return KeepWithNext(node)
 
 
-def paged[ModeT = RenderTarget](
-    node: LayoutNode[ModeT],
+def paged[RenderTargetT = RenderTarget](
+    node: LayoutNode[RenderTargetT],
     *,
     key: str,
     chars: int,
@@ -938,7 +940,7 @@ def paged[ModeT = RenderTarget](
     widows: int = 1,
     initial: Literal["start", "end"] = "start",
     footer: Callable[[int, int], TextLike] | None = None,
-) -> Budgeted[ModeT]:
+) -> Budgeted[RenderTargetT]:
     """Apply a preferred character budget and heterogeneous paging to ``node``."""
     region = Paged(node, key, chars, min_fill, widows, initial, footer)
     return Budgeted(region, min, chars, stretch)

@@ -162,14 +162,14 @@ class Invocation:
             allowed_mentions=allowed_mentions,
         )(self.render(*nodes))
 
-    async def mount[ModeT](
+    async def mount[RenderTargetT](
         self,
-        component: Component[ModeT],
+        component: Component[RenderTargetT],
         *,
         access: AccessPolicy,
         visibility: Visibility = "public",
         **options: Unpack[MessageRootOptions],
-    ) -> MessageRoot[ModeT]:
+    ) -> MessageRoot[RenderTargetT]:
         """Construct and deliver a plain message root through this invocation."""
         configured = cast(MessageRootOptions, {**options, "localization": self.localization})
         message_root = self.runtime.mount(component, access=access, **configured)
