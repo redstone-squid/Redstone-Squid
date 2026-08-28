@@ -389,7 +389,7 @@ class V2Dialect:
             Capability.LAYOUT_SECTION,
         }
     )
-    mode = ComponentsV2Target
+    render_target = ComponentsV2Target
     body_type = scene.ComponentsV2
     default_limits = LIMITS
     realizes_extensions = True
