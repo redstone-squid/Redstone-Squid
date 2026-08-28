@@ -9,6 +9,7 @@ from squid_ui.document import DocumentLike, PortableDocumentLike
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.cache import PlanCache, PlanMemo
 from squid_ui.planning.navigation import PlannedNav
+from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_ui.planning.target import Target
@@ -37,12 +38,7 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
     search_budget: int = DEFAULT_SEARCH_BUDGET,
 ) -> PlanResult[BodyT]:
     """Resolve a logical document through the selected target's planner backend."""
-    if search_budget < 1:
-        message = "planner search budget must be positive"
-        raise ValueError(message)
-    backend: Any = target.dialect.planner
-    return backend.plan(
-        rendered,
+    request = PlanRequest(
         target=target,
         chrome=chrome,
         localization=localization,
@@ -52,10 +48,26 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
         positions=positions,
         nav=nav,
         session=session,
-        cache=cache,
-        memo=memo,
         search_budget=search_budget,
     )
+    return plan_request(rendered, request, cache=cache, memo=memo)
 
 
-__all__ = ["EMPTY_RESERVATION", "plan"]
+def plan_request[RenderTargetT, AdapterT, BodyT: scene.Body](
+    rendered: DocumentLike[RenderTargetT] | PortableDocumentLike,
+    request: PlanRequest[BodyT, RenderTargetT, AdapterT],
+    *,
+    cache: PlanCache | None = None,
+    memo: PlanMemo | None = None,
+) -> PlanResult[BodyT]:
+    """Plan against an already-assembled request.
+
+    The keyword form above is the authoring entry point; this one is for callers that hold a
+    request already and would otherwise have to spread it back out only for it to be
+    reassembled -- every layer between a mount and a backend is one of those.
+    """
+    backend: Any = request.target.dialect.planner
+    return backend.plan(rendered, request, cache=cache, memo=memo)
+
+
+__all__ = ["EMPTY_RESERVATION", "plan", "plan_request"]

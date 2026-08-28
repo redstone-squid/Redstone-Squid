@@ -9,10 +9,10 @@ from typing import Any, cast
 
 from squid_ui import scene
 from squid_ui.assets import Asset
-from squid_ui.chrome import DEFAULT_CHROME, Chrome, localize_chrome
+from squid_ui.chrome import Chrome, localize_chrome
 from squid_ui.document import Document, DocumentLike, as_document
 from squid_ui.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
-from squid_ui.palette import DEFAULT_PALETTE, Palette
+from squid_ui.palette import Palette
 from squid_ui.planning.cache import CachedPlan, PlanCache, PlanMemo
 from squid_ui.planning.cursors import CursorCoordinator, MaterializedCursorRequest, content_fingerprint
 from squid_ui.planning.degradation import DegradationEffect, DegradationProfile
@@ -41,9 +41,9 @@ from squid_ui.planning.layout_measurement.solver import (
 )
 from squid_ui.planning.limits import Axis, MessageLimits
 from squid_ui.planning.navigation import PlannedNav, materialized_navigation_state
+from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.resources import ResourceCost
 from squid_ui.planning.search import (
-    DEFAULT_SEARCH_BUDGET,
     CostVector,
     StrategyAxis,
     assignment_cost,
@@ -54,7 +54,7 @@ from squid_ui.planning.semantic_adaptation.lowering import (
     lower_semantics,
 )
 from squid_ui.planning.semantic_adaptation.model import FallbackAxis, SemanticDecisions, SemanticLowering
-from squid_ui.planning.target import AnyTarget, Target, TargetIdentity
+from squid_ui.planning.target import AnyTarget
 from squid_ui.primitives.constraints import Paginate
 from squid_ui.primitives.nodes import (
     Break,
@@ -80,21 +80,7 @@ from squid_ui.scene.model import PlanEvent, PlanMetrics, PlanReport, PlanResult,
 from squid_ui.semantic import Code as SemanticCode
 from squid_ui.semantic import Paragraph as SemanticParagraph
 from squid_ui.sources import Position
-from squid_ui.text import NEUTRAL, Localization
-
-EMPTY_RESERVATION = ResourceCost()
-
-
-class _Identity:
-    """Identity comparison that also keeps its value alive while an exact memo does."""
-
-    __slots__ = ("value",)
-
-    def __init__(self, value: object) -> None:
-        self.value = value
-
-    def __eq__(self, other: object) -> bool:
-        return isinstance(other, _Identity) and self.value is other.value
+from squid_ui.text import Localization
 
 
 @dataclass(frozen=True, slots=True)
@@ -304,32 +290,6 @@ def _certifies_incremental(candidate: _Candidate) -> bool:
         and not candidate.state.strategies
         and not candidate.state.fallbacks
         and not steppable(candidate.lowered, dict(candidate.state.variants))
-    )
-
-
-def _exact_key(
-    *,
-    target: object,
-    chrome: object,
-    localization: object,
-    palette: object,
-    reservation: ResourceCost,
-    strict: bool,
-    positions: object,
-    nav: object,
-    search_budget: int,
-) -> tuple[object, ...]:
-    return (
-        _Identity(target),
-        _Identity(chrome),
-        _Identity(localization),
-        _Identity(palette),
-        reservation,
-        strict,
-        _Identity(positions),
-        _Identity(nav),
-        getattr(nav, "version", 0),
-        search_budget,
     )
 
 
@@ -723,40 +683,24 @@ def _search(search: _Search, *, search_budget: int) -> _Candidate:
 
 def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
     rendered: DocumentLike[RenderTargetT],
+    request: PlanRequest[BodyT, RenderTargetT, AdapterT],
     *,
-    target: Target[Any, BodyT, RenderTargetT, AdapterT],
-    chrome: Chrome = DEFAULT_CHROME,
-    localization: Localization = NEUTRAL,
-    palette: Palette = DEFAULT_PALETTE,
-    strict: bool = False,
-    reservation: ResourceCost = EMPTY_RESERVATION,
-    positions: Mapping[str, Position] | None = None,
-    nav: PlannedNav | None = None,
-    session: PresentationState | None = None,
     cache: PlanCache | None = None,
     memo: PlanMemo | None = None,
-    search_budget: int = DEFAULT_SEARCH_BUDGET,
 ) -> PlanResult[BodyT]:
     """Resolve a complete logical document for one target.
 
     Planning owns every fit and fallback decision. The resulting scene contains visual action
     references, while callbacks remain in the plan result for the mounted frontend.
     """
-    if search_budget < 1:
-        message = "planner search budget must be positive"
-        raise ValueError(message)
-    presentation = session if session is not None else PresentationState()
-    exact_key = _exact_key(
-        target=target,
-        chrome=chrome,
-        localization=localization,
-        palette=palette,
-        reservation=reservation,
-        strict=strict,
-        positions=positions,
-        nav=nav,
-        search_budget=search_budget,
-    )
+    localization = request.localization
+    palette = request.palette
+    strict = request.strict
+    positions = request.positions
+    nav = request.nav
+    search_budget = request.search_budget
+    presentation = request.presentation
+    exact_key = request.exact_key()
     if memo is not None:
         exact = memo.get(rendered, exact_key, presentation, presentation.revision)
         if isinstance(exact, PlanResult):
@@ -766,22 +710,11 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
             )
     document = as_document(rendered)
     # Every axis is withheld the same way: by planning against a smaller target.
-    target = target.reserve(reservation)
+    target = request.target.reserve(request.reservation)
     dialect = cast(DiscordDialect[Any, BodyT, RenderTargetT], target.dialect)
     limits = target.limits
-    chrome = localize_chrome(chrome, localization)
-    cache_context = _plan_cache_context(
-        target=target,
-        chrome=chrome,
-        localization=localization,
-        palette=palette,
-        presentation=presentation,
-        reservation=reservation,
-        strict=strict,
-        nav=nav,
-        positions=positions,
-        search_budget=search_budget,
-    )
+    chrome = localize_chrome(request.chrome, localization)
+    cache_context = request.cache_context(target=target, chrome=chrome)
     cache_key = _plan_cache_key((document,), context=cache_context)
     incremental_shape = None if cache is None else _incremental_shape(document)
     incremental_key = (
@@ -1055,49 +988,6 @@ def _reconcile_pagers(measured: MeasuredLayout, broker: CursorCoordinator) -> No
         broker.record(request, grant.position)
         positions[pager.key] = grant.position
     measured.reposition(positions)
-
-
-def _plan_cache_context(
-    *,
-    target: TargetIdentity,
-    chrome: Chrome,
-    localization: Localization,
-    palette: Palette,
-    presentation: PresentationState,
-    reservation: ResourceCost,
-    strict: bool,
-    nav: PlannedNav | None,
-    positions: Mapping[str, Position] | None,
-    search_budget: int,
-) -> Mapping[str, object]:
-    return {
-        "target": target.fingerprint,
-        "presentation": stable_value(presentation),
-        "chrome": (
-            chrome.previous,
-            chrome.next,
-            chrome.back,
-            chrome.home,
-            chrome.close,
-            chrome.page_footer(1, 2),
-            chrome.and_n_more(2),
-        ),
-        "locale": localization.locale,
-        "palette": stable_value(palette),
-        "reservation": stable_value(reservation),
-        "strict": strict,
-        "positions": stable_value(positions),
-        "search_budget": search_budget,
-        "nav": (
-            None
-            if nav is None
-            else (
-                getattr(nav, "__module__", ""),
-                getattr(nav, "__qualname__", type(nav).__qualname__),
-                getattr(nav, "version", 0),
-            )
-        ),
-    }
 
 
 def _plan_cache_key(nodes: Sequence[object], *, context: Mapping[str, object]) -> str:
