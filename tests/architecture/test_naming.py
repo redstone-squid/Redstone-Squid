@@ -220,6 +220,9 @@ NOT_AGENT_NOUNS = frozenset(
         "OpenContext",
         "Owner",
         "Pager",
+        # "One expanded render" is this codebase's own phrase for the noun (see
+        # `runtime.component.ComponentTree`); a Render does not render anything.
+        "Render",
         "Roster",
         "Separator",
         "Trigger",
