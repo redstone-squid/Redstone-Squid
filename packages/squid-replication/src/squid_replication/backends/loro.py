@@ -1190,7 +1190,7 @@ class LoroEngine:
             raise
 
     def change_token(self, prepared: LoroDocumentPrepared) -> object | None:
-        if not prepared.operations:
+        if prepared.before == prepared.after:
             return None
         return self._token(prepared)
 

@@ -11,6 +11,7 @@ import pytest
 from squid_reactivity import (
     ActionCommit,
     ActionLedger,
+    ChangeReport,
     ConflictDetail,
     ReactiveConflictError,
     StateOwner,
@@ -492,6 +493,32 @@ def test_duplicate_update_identity_is_ignored_before_backend_prepare() -> None:
     target.import_update(encoded)
 
     assert target.counter("votes").value == 1
+
+
+def test_duplicate_operations_remain_a_reactive_noop_after_envelope_deduplication_expires() -> None:
+    source = Replica("a").open("project")
+    target = Replica("b").open("project")
+    with transaction():
+        source.counter("votes").increment(1)
+    encoded = source.export_since()
+    target.import_update(encoded)
+    target._seen_updates.clear()
+    target._seen_update_ids.clear()
+    snapshots = []
+    target.subscribe(snapshots.append)
+    version = target._version_cell.version
+    ledger = ActionLedger()
+    add_action_result_sink(ledger)
+
+    try:
+        target.import_update(encoded)
+    finally:
+        ledger.close()
+
+    assert target.counter("votes").value == 1
+    assert target._version_cell.version == version
+    assert snapshots == []
+    assert ledger.results[-1].changes == ChangeReport()
 
 
 def test_envelope_rejects_invalid_identifiers() -> None:
