@@ -43,6 +43,7 @@ from squid_ui_discord.rendering import RenderedMessage
 if TYPE_CHECKING:
     from squid_ui_discord.message_root import AnyMessageRoot
 
+
 @dataclass(frozen=True, slots=True)
 class _SubmitBinding(ActionBinding):
     """A form submission's binding, carrying the schema its values must be parsed against."""
