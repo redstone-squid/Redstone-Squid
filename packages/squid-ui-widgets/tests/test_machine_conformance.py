@@ -6,6 +6,7 @@ would think to assert. A new machine joins `MACHINES` and inherits every one of 
 """
 
 from collections.abc import Callable
+from typing import Any
 
 import pytest
 from hypothesis import given
@@ -65,7 +66,7 @@ def _wizard() -> sp.Wizard:
     return sp.Wizard("Wizard", (sp.WizardStep("value", "Value", _form()),), review=True)
 
 
-MACHINES: tuple[tuple[str, Callable[[], sp.StateMachine]], ...] = (
+MACHINES: tuple[tuple[str, Callable[[], sp.StateMachine[Any, Any]]], ...] = (
     ("decision", _decision),
     ("collection", _collection),
     ("editor", _editor),
@@ -84,25 +85,25 @@ def _control_keys(nodes: tuple[object, ...]) -> list[str]:
 
 
 @machine
-def test_the_initial_state_is_stable_across_reads(build: Callable[[], sp.StateMachine]) -> None:
+def test_the_initial_state_is_stable_across_reads(build: Callable[[], sp.StateMachine[Any, Any]]) -> None:
     """Two reads must agree, and rendering must not quietly move it."""
     subject = build()
     first = subject.initial_state
 
-    wt.mounted(subject).nodes
+    _ = wt.mounted(subject).nodes
 
     assert subject.initial_state == first
     assert subject.initial_state == subject.initial_state
 
 
 @machine
-def test_both_shells_render_something(build: Callable[[], sp.StateMachine]) -> None:
+def test_both_shells_render_something(build: Callable[[], sp.StateMachine[Any, Any]]) -> None:
     assert wt.mounted(build()).nodes
     assert wt.routed(build()).nodes
 
 
 @machine
-def test_no_two_controls_in_one_render_share_a_key(build: Callable[[], sp.StateMachine]) -> None:
+def test_no_two_controls_in_one_render_share_a_key(build: Callable[[], sp.StateMachine[Any, Any]]) -> None:
     """A duplicate key silently cross-wires two controls through the mount's handler table:
     the second registration wins, and the first button starts doing the second one's job."""
     for nodes in (wt.mounted(build()).nodes, wt.routed(build()).nodes):
@@ -115,7 +116,7 @@ def test_no_two_controls_in_one_render_share_a_key(build: Callable[[], sp.StateM
 
 @machine
 def test_every_action_the_routed_shell_encodes_is_one_the_machine_accepts(
-    build: Callable[[], sp.StateMachine],
+    build: Callable[[], sp.StateMachine[Any, Any]],
 ) -> None:
     """The render and the transition table are written apart; nothing else checks they agree."""
     subject = build()
@@ -128,7 +129,9 @@ def test_every_action_the_routed_shell_encodes_is_one_the_machine_accepts(
 
 
 @machine
-def test_a_render_encodes_exactly_one_route_per_routed_control(build: Callable[[], sp.StateMachine]) -> None:
+def test_a_render_encodes_exactly_one_route_per_routed_control(
+    build: Callable[[], sp.StateMachine[Any, Any]],
+) -> None:
     """An unencoded control is dead; an encoded route with no control is an id nobody can reach."""
     render = wt.routed(build())
 
@@ -136,7 +139,9 @@ def test_a_render_encodes_exactly_one_route_per_routed_control(build: Callable[[
 
 
 @machine
-def test_an_unknown_action_is_the_identity_rather_than_an_error(build: Callable[[], sp.StateMachine]) -> None:
+def test_an_unknown_action_is_the_identity_rather_than_an_error(
+    build: Callable[[], sp.StateMachine[Any, Any]],
+) -> None:
     """Discord replays ids from messages that may be older than the current code, so a machine
     meets actions it no longer has. Ignoring one is recoverable; raising is not."""
     subject = build()
@@ -147,7 +152,7 @@ def test_an_unknown_action_is_the_identity_rather_than_an_error(build: Callable[
 
 
 @machine
-def test_a_transition_is_deterministic(build: Callable[[], sp.StateMachine]) -> None:
+def test_a_transition_is_deterministic(build: Callable[[], sp.StateMachine[Any, Any]]) -> None:
     subject = build()
     render = wt.routed(subject)
 
@@ -160,7 +165,7 @@ def test_a_transition_is_deterministic(build: Callable[[], sp.StateMachine]) -> 
 
 @machine
 @given(action=st.text(max_size=40))
-def test_any_string_at_all_is_a_safe_action(build: Callable[[], sp.StateMachine], action: str) -> None:
+def test_any_string_at_all_is_a_safe_action(build: Callable[[], sp.StateMachine[Any, Any]], action: str) -> None:
     """The stronger form of the law above, over inputs nobody would think to write down."""
     subject = build()
     initial = subject.initial_state

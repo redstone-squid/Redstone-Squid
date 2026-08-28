@@ -17,7 +17,7 @@ def _walk(node: object) -> Iterable[object]:
         yield from node.items
 
 
-def _profile_section() -> sp.EditorSection[tuple[tuple[str, object], ...], Mapping[str, object]]:
+def _profile_section() -> sp.EditorSection[tuple[tuple[str, object], ...], Mapping[str, object], sl.RenderTarget]:
     return sp.EditorSection.from_form(
         "profile",
         "Profile",
@@ -100,7 +100,7 @@ def test_invalid_immediate_edit_stays_staged_until_aggregate_becomes_valid() -> 
 
 def _collection_section() -> tuple[
     sp.CollectionEditor,
-    sp.EditorSection[sp.CollectionState, tuple[Mapping[str, object], ...]],
+    sp.EditorSection[sp.CollectionState, tuple[Mapping[str, object], ...], sl.RenderTarget],
 ]:
     collection = sp.CollectionEditor(
         "Links",

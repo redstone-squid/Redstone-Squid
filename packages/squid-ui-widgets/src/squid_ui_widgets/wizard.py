@@ -8,6 +8,7 @@ from squid_ui.factories import action_controls, field, fields, heading, progress
 from squid_ui.forms import Form, FormField, FormLike, FormSpec
 from squid_ui.runtime.component import RenderResult
 from squid_ui.semantic import ActionControl, ControlDisplay, FormTrigger, LayoutNode, RoutedActionControl, Tone
+from squid_ui.target_types import RenderTarget
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import ContentItem, ContentLike, normalize_content, require_key
 from squid_ui_widgets.drivers import ComponentDriver, MachineControls, TransitionEvent
@@ -25,12 +26,12 @@ class WizardAnswer:
 
 
 @dataclass(frozen=True, slots=True)
-class WizardReview:
+class WizardReview[RenderTargetT: RenderTarget = RenderTarget]:
     """A final screen that shows every answer and lets the reader jump back to one."""
 
     label: TextLike | None = None
     """Heading and control wording for the review destination; `None` uses chrome."""
-    summarize: Callable[[WizardAnswers], ContentLike] | None = None
+    summarize: Callable[[WizardAnswers], ContentLike[RenderTargetT]] | None = None
     """Replace the default per-step rows with content of your own."""
 
 
@@ -51,19 +52,19 @@ class WizardState:
 
 
 @dataclass(frozen=True, slots=True, init=False)
-class WizardStep:
+class WizardStep[RenderTargetT: RenderTarget = RenderTarget]:
     """One keyed form or plain-content step."""
 
     key: str
     label: TextLike
     form: FormSpec | None
-    content: tuple[ContentItem, ...]
+    content: tuple[ContentItem[RenderTargetT], ...]
 
-    def __init__(self, key: str, label: TextLike, body: FormLike | ContentLike) -> None:
+    def __init__(self, key: str, label: TextLike, body: FormLike | ContentLike[RenderTargetT]) -> None:
         require_key(key, name="WizardStep.key")
         if isinstance(body, Form):
             form_spec: FormSpec | None = body.spec()
-            content: tuple[ContentItem, ...] = ()
+            content: tuple[ContentItem[RenderTargetT], ...] = ()
         elif isinstance(body, FormSpec):
             form_spec = body
             content = ()
@@ -77,25 +78,27 @@ class WizardStep:
 
 
 type WizardAnswers = Mapping[str, Mapping[str, object]]
-type StepSource = Iterable[WizardStep] | Callable[[WizardAnswers], Iterable[WizardStep]]
+type StepSource[RenderTargetT: RenderTarget = RenderTarget] = (
+    Iterable[WizardStep[RenderTargetT]] | Callable[[WizardAnswers], Iterable[WizardStep[RenderTargetT]]]
+)
 type WizardFinishHandler = Callable[[TransitionEvent[WizardState], WizardAnswers], Awaitable[None]]
 
 
-class Wizard:
+class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
     """A pure branching wizard whose step list is recomputed after every answer."""
 
     def __init__(
         self,
         title: TextLike,
-        steps: StepSource,
+        steps: StepSource[RenderTargetT],
         *,
         key: str = "wizard",
-        review: WizardReview | bool = False,
+        review: WizardReview[RenderTargetT] | bool = False,
     ) -> None:
         self.key = require_key(key, name="Wizard.key")
         self.title = title
         self.steps = steps
-        self.review = WizardReview() if review is True else (review or None)
+        self.review: WizardReview[RenderTargetT] | None = WizardReview() if review is True else (review or None)
         initial_steps = self._steps(())
         if not initial_steps:
             message = "Wizard needs at least one initial step"
@@ -111,7 +114,7 @@ class Wizard:
         *,
         initial: WizardState | None = None,
         on_finish: WizardFinishHandler | None = None,
-    ) -> ComponentDriver[WizardState]:
+    ) -> ComponentDriver[WizardState, RenderTargetT]:
         """Build an in-memory wizard shell and dispatch Finish once."""
 
         async def changed(event: TransitionEvent[WizardState]) -> None:
@@ -124,7 +127,7 @@ class Wizard:
     def _answer_map(answers: tuple[WizardAnswer, ...]) -> dict[str, Mapping[str, object]]:
         return {answer.step: dict(answer.values) for answer in answers}
 
-    def _steps(self, answers: tuple[WizardAnswer, ...]) -> tuple[WizardStep, ...]:
+    def _steps(self, answers: tuple[WizardAnswer, ...]) -> tuple[WizardStep[RenderTargetT], ...]:
         answer_map = self._answer_map(answers)
         resolved = tuple(self.steps(MappingProxyType(answer_map)) if callable(self.steps) else self.steps)
         if any(not isinstance(step, WizardStep) for step in resolved):
@@ -142,7 +145,7 @@ class Wizard:
             raise ValueError(message)
         return resolved
 
-    def live_steps(self, state: WizardState) -> tuple[WizardStep, ...]:
+    def live_steps(self, state: WizardState) -> tuple[WizardStep[RenderTargetT], ...]:
         """Return the branch visible for all answers currently retained."""
         return self._steps(state.answers)
 
@@ -168,7 +171,7 @@ class Wizard:
         return tuple(result)
 
     @staticmethod
-    def _index(steps: tuple[WizardStep, ...], key: str) -> int:
+    def _index(steps: tuple[WizardStep[RenderTargetT], ...], key: str) -> int:
         return next((index for index, step in enumerate(steps) if step.key == key), 0)
 
     def transition(
@@ -229,7 +232,7 @@ class Wizard:
             return WizardState(recomputed[recomputed_index].key, answers, complete=True)
         return WizardState(recomputed[recomputed_index + 1].key, answers)
 
-    def _prefilled(self, step: WizardStep, state: WizardState) -> FormSpec:
+    def _prefilled(self, step: WizardStep[RenderTargetT], state: WizardState) -> FormSpec:
         assert step.form is not None
         attempted = self._answer_map(state.answers).get(step.key)
         return step.form if attempted is None else step.form.with_prefill(attempted)
@@ -243,7 +246,9 @@ class Wizard:
         return None if step is None or step.form is None else self._prefilled(step, state)
 
     @staticmethod
-    def _summarize_step(step: WizardStep, answer: Mapping[str, object] | None, unanswered: TextLike) -> TextLike:
+    def _summarize_step(
+        step: WizardStep[RenderTargetT], answer: Mapping[str, object] | None, unanswered: TextLike
+    ) -> TextLike:
         """One step's answers as a single line, each value through its field's prefill form."""
         if step.form is None or answer is None:
             return unanswered
@@ -258,14 +263,14 @@ class Wizard:
     def _render_review(
         self,
         state: WizardState,
-        controls: MachineControls[WizardState],
-        review: WizardReview,
-    ) -> RenderResult:
+        controls: MachineControls[WizardState, RenderTargetT],
+        review: WizardReview[RenderTargetT],
+    ) -> RenderResult[RenderTargetT]:
         live = self.live_steps(state)
         answered = self._answer_map(state.answers)
         steps = tuple(step for step in live if step.form is not None)
         if review.summarize is not None:
-            body: tuple[LayoutNode, ...] = controls.content(
+            body: tuple[LayoutNode[RenderTargetT], ...] = controls.content(
                 normalize_content(review.summarize(self.live_answers(state)), name=f"Wizard {self.key!r} review"),
                 prefix=f"{self.key}-review",
             )
@@ -312,7 +317,9 @@ class Wizard:
             ),
         )
 
-    def render(self, state: WizardState, controls: MachineControls[WizardState]) -> RenderResult:
+    def render(
+        self, state: WizardState, controls: MachineControls[WizardState, RenderTargetT]
+    ) -> RenderResult[RenderTargetT]:
         if self.review is not None and state.current == REVIEW_STEP:
             return self._render_review(state, controls, self.review)
         live = self.live_steps(state)

@@ -2,28 +2,28 @@
 
 import re
 from collections.abc import Iterable, Mapping
-from typing import Any
 
 from squid_ui.factories import is_layout_node, paragraph
 from squid_ui.runtime.component import Component
-from squid_ui.semantic import AnyLayoutNode
+from squid_ui.semantic import LayoutNode
+from squid_ui.target_types import RenderTarget
 from squid_ui.text import Message, ResolvedText, TextLike
 
-type ContentItem = AnyLayoutNode | Component[Any]
-type ContentLike = ContentItem | TextLike | Iterable[ContentItem | TextLike]
+type ContentItem[RenderTargetT: RenderTarget = RenderTarget] = LayoutNode[RenderTargetT] | Component[RenderTargetT]
+type ContentLike[RenderTargetT: RenderTarget = RenderTarget] = (
+    ContentItem[RenderTargetT] | TextLike | Iterable[ContentItem[RenderTargetT] | TextLike]
+)
 """Whatever a caller hands a widget's content slot.
 
-Deliberately dialect-erased. `normalize_content` classifies an `object` at runtime, so
-there is no static type on the way in to carry a render target, and a widget cannot tell whether the
-nodes it was given are portable or V2-only. Tracking it would mean a `RenderTargetT` on
-`StateMachine` and `MachineControls` and every machine implementing them; until that is
-worth doing, the planner remains the thing that rejects a V2-only node in a classic message
-here, and the static guarantee covers content written directly in a `render()` rather than
-routed through a widget slot.
+The render-target parameter survives normalization. A V2-only child therefore makes the
+content slot, its widget, and the component shell V2-only instead of disappearing into
+`AnyLayoutNode` at this boundary.
 """
 
 
-def normalize_content(value: object, *, name: str) -> tuple[ContentItem, ...]:
+def normalize_content[RenderTargetT: RenderTarget](
+    value: ContentLike[RenderTargetT], *, name: str
+) -> tuple[ContentItem[RenderTargetT], ...]:
     """Normalize one machine content slot into renderable nodes and child components."""
     if isinstance(value, Component):
         return (value,)
@@ -40,7 +40,9 @@ def normalize_content(value: object, *, name: str) -> tuple[ContentItem, ...]:
     raise TypeError(message)
 
 
-def _normalize_item(value: object, *, name: str) -> ContentItem:
+def _normalize_item[RenderTargetT: RenderTarget](
+    value: ContentItem[RenderTargetT] | TextLike, *, name: str
+) -> ContentItem[RenderTargetT]:
     """Normalize one member of an iterable content slot."""
     if isinstance(value, Component):
         return value
@@ -52,7 +54,9 @@ def _normalize_item(value: object, *, name: str) -> ContentItem:
     raise TypeError(message)
 
 
-def render_content(owner: Component, content: Iterable[ContentItem], *, prefix: str) -> tuple[AnyLayoutNode, ...]:
+def render_content[RenderTargetT: RenderTarget](
+    owner: Component[RenderTargetT], content: Iterable[ContentItem[RenderTargetT]], *, prefix: str
+) -> tuple[LayoutNode[RenderTargetT], ...]:
     """Expand component children under stable embed keys while retaining semantic nodes."""
     return tuple(
         owner.boundary(item, key=f"{prefix}-{index}") if isinstance(item, Component) else item
