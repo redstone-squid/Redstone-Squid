@@ -32,8 +32,8 @@ from squid_ui.runtime.component import AnyComponent, Component, render_component
 from squid_ui.semantic import ActionControl, AnyLayoutNode, ChoiceEvent, Choices, Controlled, FormTrigger
 from squid_ui.text import NEUTRAL, TextLike, resolve_text
 
-type Tree = AnyLayoutNode | Iterable[Any] | object
-"""Anything `walk` accepts: one node, a sequence of them, or a `ComponentTree`'s `nodes`."""
+type Tree = object
+"""Anything `walk` can inspect recursively."""
 
 
 # --- Tree queries -------------------------------------------------------------------------

@@ -217,13 +217,13 @@ type EntitySelectionHandler = Callable[[EntitySelectionEvent], Awaitable[None]]
 
 
 @dataclass(frozen=True, slots=True)
-class ActionBinding:
+class ActionBinding[EventT: ActionEvent = Any]:
     """Ephemeral handler data kept out of serializable scenes."""
 
     key: str
-    handler: Callable[[Any], Awaitable[None]]
+    handler: Callable[[EventT], Awaitable[None]]
     mode: ActionMode = ActionMode.EXCLUSIVE
-    routes: Mapping[str, ActionBinding] = field(default_factory=dict)
+    routes: Mapping[str, ActionBinding[Any]] = field(default_factory=dict)
     guard: Guard | None = None
     """Admission checked by the frontend after the concurrency gate, before the handler."""
     busy: BusySpec | None = None
@@ -233,7 +233,7 @@ class ActionBinding:
     record: History | None = None
     """History this action enters itself into, under `label`, before the handler runs."""
 
-    def routed(self, values: tuple[str, ...]) -> ActionBinding | None:
+    def routed(self, values: tuple[str, ...]) -> ActionBinding[Any] | None:
         """Resolve a grouped control to its logical action binding."""
         if not self.routes:
             return self
