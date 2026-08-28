@@ -53,9 +53,11 @@ jobs:
         run: uv run --locked pytest --no-cov packages tests/architecture
 
       - name: Build and inspect distributions
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
         run: |
           python scripts/build_squid_ui_dist.py dist
-          python scripts/check_squid_ui_dist.py dist
+          python scripts/check_squid_ui_dist.py dist "$RELEASE_VERSION"
 
       - name: Upload release set
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

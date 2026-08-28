@@ -14,6 +14,8 @@ DISTRIBUTIONS = (
     "squid-ui-widgets",
 )
 TAG_PREFIX = "squid-ui-v"
+# Final releases and alpha/beta/rc pre-releases; PEP 440 dev and post releases stay rejected.
+VERSION_PATTERN = r"[0-9]+\.[0-9]+\.[0-9]+(?:(?:a|b|rc)[0-9]+)?"
 
 
 def main() -> None:
@@ -23,7 +25,7 @@ def main() -> None:
     args = parser.parse_args()
     assert args.tag.startswith(TAG_PREFIX), f"release tag must start with {TAG_PREFIX!r}"
     version = args.tag.removeprefix(TAG_PREFIX)
-    assert re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+a[0-9]+", version), "release tag must name an alpha version"
+    assert re.fullmatch(VERSION_PATTERN, version), "release tag must name a PEP 440 release or pre-release version"
 
     for distribution in DISTRIBUTIONS:
         manifest = Path("packages") / distribution / "pyproject.toml"

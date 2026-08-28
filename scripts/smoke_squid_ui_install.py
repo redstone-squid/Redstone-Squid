@@ -1,9 +1,13 @@
-"""Smoke-test a clean installation of every Squid UI distribution and extra."""
+"""Smoke-test a clean installation of every Squid UI distribution and extra.
 
+The expected release version arrives through the ``FRAMEWORK_VERSION`` environment
+variable, which the release workflow already exports for the install step.
+"""
+
+import os
 from importlib import import_module
 from importlib.metadata import version
 
-VERSION = "0.1.0a1"
 DISTRIBUTIONS = {
     "squid-reactivity": "squid_reactivity",
     "squid-replication": "squid_replication",
@@ -16,8 +20,9 @@ DISTRIBUTIONS = {
 
 def main() -> None:
     """Import the release roots and backend modules from the installed environment."""
+    expected = os.environ["FRAMEWORK_VERSION"]
     for distribution, package in DISTRIBUTIONS.items():
-        assert version(distribution) == VERSION
+        assert version(distribution) == expected
         import_module(package)
 
     import_module("asyncpg")
