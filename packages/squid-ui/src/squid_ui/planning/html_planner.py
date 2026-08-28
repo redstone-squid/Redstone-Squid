@@ -17,8 +17,7 @@ from squid_ui.interactions import ActionBinding, ActionMode
 from squid_ui.palette import AccentDefault, Palette
 from squid_ui.planning.cache import CachedPlan, PlanCache, PlanMemo
 from squid_ui.planning.identity import stable_fingerprint
-from squid_ui.planning.navigation import PlannedNav
-from squid_ui.planning.resources import ResourceCost
+from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.semantic_adaptation.handlers import (
     ChoiceCommit,
     EntityCommit,
@@ -1201,25 +1200,22 @@ class HtmlPlanner:
     def plan(
         self,
         rendered: DocumentLike[HtmlTarget],
+        request: PlanRequest[scene.HtmlBody, HtmlTarget, Any],
         *,
-        target: HtmlTargetT,
-        chrome: Chrome,
-        localization: Localization,
-        palette: Palette,
-        strict: bool,
-        reservation: ResourceCost,
-        positions: Mapping[str, Position] | None,
-        nav: PlannedNav | None,
-        session: PresentationState | None,
-        cache: PlanCache | None,
-        memo: PlanMemo | None,
-        search_budget: int,
+        cache: PlanCache | None = None,
+        memo: PlanMemo | None = None,
     ) -> PlanResult[scene.HtmlBody]:
-        del nav, search_budget
-        if reservation.values:
+        # HTML has neither a bounded document nor a global resource budget, so the two request
+        # fields that exist to bound one are refused rather than quietly ignored.
+        if request.reservation.values:
             message = "HTML has no reservable global resource axes"
             raise LayoutInvariantError(message)
-        presentation = PresentationState() if session is None else session
+        target = cast(HtmlTargetT, request.target)
+        localization = request.localization
+        palette = request.palette
+        positions = request.positions
+        strict = request.strict
+        presentation = request.presentation
         key = stable_fingerprint(
             (
                 rendered,
@@ -1239,7 +1235,7 @@ class HtmlPlanner:
                     replace(exact, metrics=replace(exact.metrics, cache_hit=True, reuse=PlanReuse.EXACT)),
                 )
         document = as_document(rendered)
-        compiler = _Compiler(target, chrome, localization, palette, presentation, positions, strict)
+        compiler = _Compiler(target, request.chrome, localization, palette, presentation, positions, strict)
         for asset in document.assets:
             compiler._asset(asset)
         children = compiler.compile_children(document.children, "$")
