@@ -95,7 +95,7 @@ async def test_show_sets_opening_and_prepares_before_the_first_render() -> None:
             order.append("render")
             return sl.heading(self.label)
 
-    screen = await Prepared.show(context, "ready")
+    screen = await Prepared("ready").show(context)
 
     assert isinstance(screen, Prepared)
     assert order == ["construct:ready", "prepare", "render"]
@@ -111,8 +111,8 @@ async def test_show_returns_none_after_invocation_renders_a_rejection_notice() -
         session = "exclusive"
         admission = AdmissionSpec(collision=Reject(notice=Message("Already open")))
 
-    first = await Exclusive.show(context)
-    second = await Exclusive.show(context)
+    first = await Exclusive().show(context)
+    second = await Exclusive().show(context)
 
     assert isinstance(first, Exclusive)
     assert second is None
@@ -127,7 +127,7 @@ async def test_show_attaches_below_a_parent_session() -> None:
     parent_result = await invocation.open(BasicScreen(), sd.SessionSpec("parent"))
     assert isinstance(parent_result, Opened)
 
-    child = await BasicScreen.show(invocation, parent=parent_result.session.root)
+    child = await BasicScreen().show(invocation, parent=parent_result.session.root)
 
     assert isinstance(child, BasicScreen)
     child_root = parent_result.session.message_roots[-1]
@@ -141,7 +141,7 @@ async def test_show_passes_a_custom_session_key_through_invocation() -> None:
     context = _context(client)
     key = sd.SessionKey.custom("build-edit", (7, 99))
 
-    screen = await BasicScreen.show(context, key=key)
+    screen = await BasicScreen().show(context, key=key)
 
     assert isinstance(screen, BasicScreen)
     assert len(runtime.sessions.get(key)) == 1
@@ -159,7 +159,7 @@ async def test_renew_ephemeral_degrades_without_an_installed_scheduler() -> None
         def render(self):
             return sl.heading("Renewable")
 
-    screen = await Renewable.show(context)
+    screen = await Renewable().show(context)
 
     assert isinstance(screen, Renewable)
     session = runtime.sessions.get(sd.SessionKey.user("renewable", 7))[0]
@@ -178,7 +178,7 @@ async def test_follow_topics_selects_the_installed_scheduler() -> None:
         def render(self):
             return sl.heading("Following")
 
-    screen = await Following.show(context)
+    screen = await Following().show(context)
 
     assert isinstance(screen, Following)
     session = runtime.sessions.get(sd.SessionKey.user("following", 7))[0]
@@ -199,8 +199,19 @@ async def test_sessionless_show_uses_a_plain_owner_mount() -> None:
         def render(self):
             return sl.heading("Plain")
 
-    screen = await Plain.show(interaction)
+    screen = await Plain().show(interaction)
 
     assert isinstance(screen, Plain)
     assert tuple(runtime.sessions.active()) == ()
     assert interaction.response.send_message.await_args.kwargs["ephemeral"] is True
+
+
+async def test_one_screen_instance_cannot_be_shown_twice() -> None:
+    client = FakeClient()
+    sd.install(cast(discord.Client, client))
+    screen = BasicScreen()
+
+    await screen.show(_context(client))
+
+    with pytest.raises(RuntimeError, match="BasicScreen has already been shown"):
+        await screen.show(_context(client))

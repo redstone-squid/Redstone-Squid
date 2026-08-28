@@ -150,7 +150,7 @@ from squid_ui_discord.runtime import (
     install,
 )
 from squid_ui_discord.screen import Screen
-from squid_ui_discord.session_specs import MessageRootOptionsResolver, OpenContext, ScopeKind, SessionSpec
+from squid_ui_discord.session_specs import OpenContext, ScopeKind, SessionOptions, SessionOptionsResolver, SessionSpec
 from squid_ui_discord.sessions import (
     SessionKey,
     SessionManager,
@@ -224,7 +224,6 @@ __all__ = [
     "MessageRootDefaults",
     "MessageRootFactory",
     "MessageRootOptions",
-    "MessageRootOptionsResolver",
     "MessageRootScheduler",
     "MessageRootSchedulerSnapshot",
     "OpenContext",
@@ -249,6 +248,8 @@ __all__ = [
     "Screen",
     "SessionKey",
     "SessionManager",
+    "SessionOptions",
+    "SessionOptionsResolver",
     "SessionSpec",
     "StackNavigator",
     "SuccessRenderer",
