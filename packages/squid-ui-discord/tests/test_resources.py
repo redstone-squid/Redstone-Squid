@@ -56,7 +56,7 @@ class TestResourceCost:
         ]
 
     def test_an_unbudgeted_axis_is_unconstrained_rather_than_zero_capacity(self) -> None:
-        assert ResourceCost({"embed_text": 9000}).within({Axis.COMPONENTS: 40})
+        assert ResourceCost({Axis.EMBED_TEXT: 9000}).within({Axis.COMPONENTS: 40})
 
     def test_cheaper_anywhere_is_per_axis_and_never_trades_one_for_another(self) -> None:
         components = ResourceCost({Axis.COMPONENTS: 1, Axis.DISPLAY_TEXT: 100})
@@ -86,11 +86,11 @@ class TestTargetCapacities:
         assert reserved.capacity(Axis.DISPLAY_TEXT) == LIMITS.total_text
 
     def test_an_axis_the_target_does_not_budget_has_no_capacity(self) -> None:
-        assert DISCORD_V2_DPY27.capacity("embed_text") is None  # type: ignore[arg-type]
+        assert DISCORD_V2_DPY27.capacity(Axis.EMBED_TEXT) is None
 
     def test_reserving_an_unknown_axis_names_the_ones_that_exist(self) -> None:
         with pytest.raises(LayoutInvariantError, match="no reservable resource 'embed_text'"):
-            DISCORD_V2_DPY27.reserve(ResourceCost({"embed_text": 1}))
+            DISCORD_V2_DPY27.reserve(ResourceCost({Axis.EMBED_TEXT: 1}))
 
 
 class TestMeasuredCost:

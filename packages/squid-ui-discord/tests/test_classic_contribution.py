@@ -64,7 +64,7 @@ class TestMeasurement:
         layout = discord.ui.LayoutView(timeout=None)
         layout.add_item(discord.ui.TextDisplay("hello"))
 
-        assert measure(MessagePayload.components_v2(layout)).reserved.get("display_text") == 5
+        assert measure(MessagePayload.components_v2(layout)).reserved.get(Axis.DISPLAY_TEXT) == 5
 
 
 class TestContribution:

@@ -96,11 +96,13 @@ async def test_shared_resource_publishes_its_cell_address() -> None:
             return "dark"
 
     preferences = Preferences(bus, 7)
-    unsubscribe = bus.subscribe(preferences.theme.address, published.append)
+    address = preferences.theme.address
+    assert address is not None
+    unsubscribe = bus.subscribe(address, published.append)
 
     await preferences.theme.reload()
 
-    assert published == [preferences.theme.address]
+    assert published == [address]
     unsubscribe()
 
 

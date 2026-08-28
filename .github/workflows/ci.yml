@@ -156,7 +156,7 @@ jobs:
         run: uvx --from basedpyright==1.39.9 basedpyright --level=warning
 
       - name: Check types with Pyrefly
-        run: uv run --locked pyrefly check --config pyproject.toml --baseline pyrefly-baseline.json
+        run: uv run --locked pyrefly check --config pyproject.toml
 
       - name: Minimize uv cache
         if: always()

@@ -6,6 +6,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from squid_ui import PressEvent
+from squid_ui.planning.limits import Axis
 from squid_ui.primitives import (
     Button,
     Code,
@@ -75,7 +76,7 @@ class TestRenderMessage:
 
 @given(documents(), st.integers(min_value=0, max_value=3900))
 def test_reserved_text_is_held_back_from_the_budget(nodes, reserved):
-    view = render_message(nodes, reservation=ResourceCost({"display_text": reserved})).view
+    view = render_message(nodes, reservation=ResourceCost({Axis.DISPLAY_TEXT: reserved})).view
     assert _display_text(view) <= LIMITS.total_text - reserved
 
 
@@ -88,6 +89,6 @@ def test_a_reserved_budget_survives_nesting():
     # The host case: one card composed into a message whose other half the solver never sees.
     body = Panel(children=(Text("x" * 5000),))
     assert (
-        _display_text(render_message([body], reservation=ResourceCost({"display_text": 1000})).view)
+        _display_text(render_message([body], reservation=ResourceCost({Axis.DISPLAY_TEXT: 1000})).view)
         <= LIMITS.total_text - 1000
     )

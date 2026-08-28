@@ -346,6 +346,7 @@ def test_action_token_reloads_against_a_recreated_document() -> None:
         on_action_commit(lambda commit, continuation: commits.append(commit))
         source.counter("votes").increment(2)
     token = commits[0].participant_changes[0].token
+    assert isinstance(token, ReplicationChangeToken)
     encoded = token.encode()
     update = source.export_since()
 
@@ -444,7 +445,9 @@ def test_durable_history_token_rejects_wrong_document_and_schema() -> None:
     with transaction():
         on_action_commit(lambda commit, continuation: commits.append(commit))
         source.counter("votes").increment(1)
-    encoded = commits[0].participant_changes[0].token.encode()
+    token = commits[0].participant_changes[0].token
+    assert isinstance(token, ReplicationChangeToken)
+    encoded = token.encode()
 
     target = Replica("b").open("target")
     with pytest.raises(ValueError, match="wrong backend or document"):
