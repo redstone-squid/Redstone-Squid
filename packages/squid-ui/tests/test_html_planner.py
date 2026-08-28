@@ -352,3 +352,27 @@ def test_stale_remembered_selections_are_dropped_by_html_planning() -> None:
         if attribute.name is scene.HtmlAttributeName.ARIA_CURRENT
     ]
     assert current == ["page"], "navigation falls back to the first available destination"
+
+
+def test_html_paging_honors_min_fill() -> None:
+    # Four 4-character pages under a 12-character budget balance to 8/8; a 9-character
+    # fill floor forbids the 8-character first page, forcing 12/4. Before HTML adopted
+    # balanced_breaks, min_fill was silently ignored here.
+    def build(min_fill: int) -> sl.semantic.Paged:
+        return sl.semantic.Paged(
+            sl.stack(sl.paragraph("aaaa"), sl.paragraph("bbbb"), sl.paragraph("cccc"), sl.paragraph("dddd")),
+            key="filled",
+            chars=12,
+            min_fill=min_fill,
+        )
+
+    def first_page_text(result) -> str:
+        return "".join(
+            node.content for node in testing.walk(result.scene.body.children) if isinstance(node, scene.HtmlText)
+        )
+
+    balanced = sl.planning.plan(build(0), target=sl.html.target())
+    assert first_page_text(balanced) == "aaaabbbb"
+
+    filled = sl.planning.plan(build(9), target=sl.html.target())
+    assert first_page_text(filled) == "aaaabbbbcccc"
