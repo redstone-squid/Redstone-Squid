@@ -8,9 +8,9 @@ from typing import assert_type
 
 import squid_ui as sl
 import squid_ui_widgets as sp
+from squid_ui.document import DocumentLike
 from squid_ui.planning import ClassicTarget, ComponentsV2Target, plan
 from squid_ui.primitives import Panel, Text
-from squid_ui.runtime.component import RenderResult
 from squid_ui_discord.target import classic, v2
 
 v2_tab = sp.Tab("details", "Details", Panel((Text("V2 only"),)))
@@ -36,6 +36,6 @@ accepts_classic(v2_component)  # pyrefly: ignore[bad-argument-type]
 routed = sp.RouteDriver[sp.TabsState, ComponentsV2Target](lambda route: route.action).render(
     v2_tabs, v2_tabs.initial_state
 )
-assert_type(routed, RenderResult[ComponentsV2Target])
+assert_type(routed, DocumentLike[ComponentsV2Target])
 plan(routed, target=v2())
 plan(routed, target=classic())  # pyrefly: ignore[no-matching-overload, bad-argument-type]

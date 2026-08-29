@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
+from squid_ui.document import DocumentLike
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.factories import (
     ChildLike,
@@ -21,7 +22,7 @@ from squid_ui.factories import (
 )
 from squid_ui.forms import FormSpec, TextField
 from squid_ui.interactions import ActionEvent, SubmitEvent
-from squid_ui.runtime.component import Component, RenderResult
+from squid_ui.runtime.component import Component
 from squid_ui.runtime.reactivity import state
 from squid_ui.runtime.resources import Failed, Pending, Ready, resource
 from squid_ui.semantic import ChoiceEvent, ControlDisplay, LayoutNode, Tone
@@ -211,7 +212,7 @@ class SearchPicker[ItemT](Component):
             )
         return tuple(nodes)
 
-    def render(self) -> RenderResult:
+    def render(self) -> DocumentLike:
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         search_form = FormSpec(chrome.search, (TextField(key="query", label=chrome.search),))
         search_control = form(

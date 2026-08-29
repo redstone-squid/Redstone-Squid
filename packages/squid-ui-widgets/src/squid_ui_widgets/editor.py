@@ -5,10 +5,9 @@ from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import Any, Generic, TypeVar, cast
 
-from squid_ui.document import Document
+from squid_ui.document import Document, DocumentLike
 from squid_ui.factories import action_controls, heading, paragraph, stack, status
 from squid_ui.forms import Form, FormField, FormIssue, FormLike, FormSpec
-from squid_ui.runtime.component import RenderResult
 from squid_ui.semantic import (
     ActionControl,
     Choice,
@@ -386,14 +385,14 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget]:
         return frozenset(slot.key for slot in state.sections if before.get(slot.key) != slot.committed)
 
     @staticmethod
-    def _nodes(rendered: RenderResult[RenderTargetT]) -> tuple[LayoutNode[RenderTargetT], ...]:
+    def _nodes(rendered: DocumentLike[RenderTargetT]) -> tuple[LayoutNode[RenderTargetT], ...]:
         if isinstance(rendered, Document):
             return rendered.children
         return tuple(rendered) if isinstance(rendered, Sequence) else (rendered,)
 
     def render(
         self, state: EditorState, controls: MachineControls[EditorState, RenderTargetT]
-    ) -> RenderResult[RenderTargetT]:
+    ) -> DocumentLike[RenderTargetT]:
         if state.editing is not None:
             section = self._sections.get(state.editing)
             slot = self._slot(state, state.editing)

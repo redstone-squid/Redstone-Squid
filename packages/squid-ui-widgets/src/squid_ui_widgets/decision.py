@@ -3,8 +3,8 @@
 from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping
 from dataclasses import dataclass
 
+from squid_ui.document import DocumentLike
 from squid_ui.factories import action_controls, stack, status
-from squid_ui.runtime.component import RenderResult
 from squid_ui.semantic import ControlDisplay, Emphasis, Tone
 from squid_ui.target_types import RenderTarget
 from squid_ui.text import TextLike
@@ -92,7 +92,7 @@ class Decision[RenderTargetT: RenderTarget = RenderTarget]:
 
     def render(
         self, state: DecisionState, controls: MachineControls[DecisionState, RenderTargetT]
-    ) -> RenderResult[RenderTargetT]:
+    ) -> DocumentLike[RenderTargetT]:
         options = self._options(controls)
         selected = next((option for option in options if option.key == state.decided), None)
         return stack(

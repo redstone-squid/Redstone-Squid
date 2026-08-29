@@ -3,9 +3,9 @@
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 
+from squid_ui.document import DocumentLike
 from squid_ui.factories import action_controls, heading, note, stack
 from squid_ui.primitives import Lines
-from squid_ui.runtime.component import RenderResult
 from squid_ui.semantic import LayoutNode
 from squid_ui.target_types import DiscordTarget
 from squid_ui.text import TextLike
@@ -108,7 +108,7 @@ class RankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget]:
 
     def render(
         self, state: RankedListState, controls: MachineControls[RankedListState, RenderTargetT]
-    ) -> RenderResult[RenderTargetT]:
+    ) -> DocumentLike[RenderTargetT]:
         displayed = self.entries if self.top_n is None else self.entries[: self.top_n]
         total = len(displayed)
         if self.page_size is None:
