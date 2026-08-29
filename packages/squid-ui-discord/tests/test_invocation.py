@@ -1,9 +1,8 @@
 """Localized invocation rendering, delivery, mounting, and session opening."""
 
+from dataclasses import dataclass
 from io import BytesIO
-from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import AsyncMock
 
 import discord
 import pytest
@@ -13,11 +12,29 @@ import squid_ui_discord as sd
 from squid_ui.text import Localization, Message
 from squid_ui_discord.invocation import Invocation, Private, current_invocation, invocation_scope
 from squid_ui_discord.sessions import AdmissionSpec, Opened, Reject, Rejected
-from squid_ui_discord.testing import interaction_harness, message_harness
+from squid_ui_discord.testing import AsyncCallRecorder, ContextHarness, InteractionHarness, MessageHarness
 
 
 class FakeClient:
     """A weak-referenceable installed client double."""
+
+
+@dataclass(slots=True)
+class Identity:
+    id: int
+    send: AsyncCallRecorder
+
+
+@dataclass(frozen=True, slots=True)
+class Guild:
+    id: int
+
+
+@dataclass(frozen=True, slots=True)
+class HttpResponse:
+    status: int
+    reason: str
+    headers: dict[str, str]
 
 
 class Panel(sl.Component[sl.ComponentsV2Target]):
@@ -30,31 +47,30 @@ def _context(
     *,
     guild: bool = True,
     interaction: Any | None = None,
-    dm: AsyncMock | None = None,
+    dm: AsyncCallRecorder | None = None,
 ) -> Any:
-    author = SimpleNamespace(id=7, send=dm or AsyncMock(return_value=message_harness(guild_id=None)))
-    return SimpleNamespace(
-        bot=client,
-        author=author,
-        guild=SimpleNamespace(id=42) if guild else None,
-        interaction=interaction,
-        send=AsyncMock(return_value=message_harness()),
-    )
+    context = ContextHarness(message=MessageHarness(), bot=client, user_id=7)
+    context.author.send = dm or AsyncCallRecorder(result=MessageHarness(guild_id=None))
+    context.guild = Guild(42) if guild else None
+    context.interaction = interaction
+    return context.source
 
 
 def _interaction(client: FakeClient) -> Any:
-    interaction = interaction_harness(user_id=7)
-    interaction.client = client
-    interaction.guild = SimpleNamespace(id=7)
-    return interaction
+    interaction = InteractionHarness(user_id=7)
+    source = interaction.source
+    source.client = client
+    source.guild = Guild(7)
+    return source
 
 
 def _message(client: FakeClient, *, guild: bool = True) -> Any:
-    message = message_harness(guild_id=42 if guild else None)
-    message.client = client
-    message.author = SimpleNamespace(id=7, send=AsyncMock(return_value=message_harness(guild_id=None)))
-    message.channel.send = AsyncMock(return_value=message_harness())
-    return message
+    message = MessageHarness(guild_id=42 if guild else None)
+    source = message.source
+    source.client = client
+    source.author = Identity(7, AsyncCallRecorder(result=MessageHarness(guild_id=None)))
+    source.channel.send.result = MessageHarness()
+    return source
 
 
 def test_invocation_has_one_async_construction_path() -> None:
@@ -175,9 +191,9 @@ async def test_private_prefix_delivery_uses_dm_and_confirms_in_the_channel() -> 
 async def test_private_prefix_delivery_reports_closed_dms_without_leaking_the_payload() -> None:
     client = FakeClient()
     sd.install(cast(discord.Client, client))
-    response = SimpleNamespace(status=403, reason="Forbidden", headers={})
+    response = HttpResponse(status=403, reason="Forbidden", headers={})
     forbidden = discord.Forbidden(cast(Any, response), {"code": 50007, "message": "Cannot send messages to this user"})
-    context = _context(client, dm=AsyncMock(side_effect=forbidden))
+    context = _context(client, dm=AsyncCallRecorder(error=forbidden))
 
     invocation = await Invocation.of(context)
     with pytest.raises(sd.delivery.DeliveryAbandoned):
