@@ -1,7 +1,7 @@
 """Record context errors."""
 
 from squid.core.errors import ErrorCode, NotFoundError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 
 
 class RecordNotFoundError(NotFoundError):
@@ -12,8 +12,8 @@ class RecordNotFoundError(NotFoundError):
     are not part of the catalogue.
     """
 
-    default_message = _("Record not found.")
-    default_title = _("Record not found")
+    default_message = tr(t"Record not found.")
+    default_title = tr(t"Record not found")
     default_code = ErrorCode.RECORD_NOT_FOUND
     default_resource = "record"
 
@@ -25,8 +25,8 @@ class RecordNotFoundError(NotFoundError):
 class RecordDefinitionNotFoundError(NotFoundError):
     """No record definition exists with the requested identifier."""
 
-    default_message = _("Record category not found.")
-    default_title = _("Record category not found")
+    default_message = tr(t"Record category not found.")
+    default_title = tr(t"Record category not found")
     default_code = ErrorCode.RECORD_NOT_FOUND
     default_resource = "record_definition"
 
@@ -41,8 +41,8 @@ class RecordDefinitionNotFoundError(NotFoundError):
 class NoMatchingRecordCategoryError(NotFoundError):
     """No confirmed build satisfies the requested record category."""
 
-    default_message = _("No confirmed build satisfies the requested record category.")
-    default_title = _("Record category not found")
+    default_message = tr(t"No confirmed build satisfies the requested record category.")
+    default_title = tr(t"Record category not found")
     default_code = ErrorCode.RECORD_NOT_FOUND
     default_resource = "record_category"
 
