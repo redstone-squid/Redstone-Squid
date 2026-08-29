@@ -4,7 +4,7 @@
 retired vocabulary across public and private identifiers.**
 
 One dictionary for `squid-ui`, `squid-reactivity`, `squid-replication`, `squid-storage`,
-`squid-ui-discord`, and `squid-ui-widgets`, covering head nouns, suffixes, callable verbs, and
+`squid-ui-discord`, `squid-ui-slack`, and `squid-ui-widgets`, covering head nouns, suffixes, callable verbs, and
 private identifiers. It is the naming source of truth referenced by
 [squid-ui-architecture.md §Naming](squid-ui-architecture.md#naming).
 
@@ -306,7 +306,7 @@ require more exceptions than rules. New synonyms fail without constraining new c
 - `UndoMode` is an enum; `Policy` remains reserved for injected decision-makers.
 - `semantic.Summary` keeps the HTML `<summary>` term of art.
 - `PatternControls.content/action/choices/form` mirror the module-level factories.
-- The naming checks cover the six packages. Application repositories keep their own domain
+- The naming checks cover the seven packages. Application repositories keep their own domain
   verbs where changing them would alter API operation names.
 
 Scene, durability, profiler, and durable-store formats use the vocabulary-correct shape as

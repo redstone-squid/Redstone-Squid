@@ -14,6 +14,7 @@ DISTRIBUTIONS = {
     "squid-storage": "squid_storage",
     "squid-ui": "squid_ui",
     "squid-ui-discord": "squid_ui_discord",
+    "squid-ui-slack": "squid_ui_slack",
     "squid-ui-widgets": "squid_ui_widgets",
 }
 
@@ -28,6 +29,7 @@ def main() -> None:
     import_module("asyncpg")
     import_module("loro")
     import_module("pycrdt")
+    import_module("slack_sdk")
     backends = import_module("squid_replication.backends")
     assert backends.LoroBackend
     assert backends.PycrdtTextEngine
