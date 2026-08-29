@@ -31,15 +31,13 @@ from squid.bot.ui import (
     text_node,
 )
 from squid.bot.utils.autocomplete import autocompletes
-from squid.bot.utils.permissions import hide_unless, requires
+from squid.bot.utils.permissions import requires
 from squid.builds.domain import Build
-from squid.builds.errors import AliasAlreadyAddedError
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import (
     BUILD_SUBMISSION_APPROVE,
     BUILD_SUBMISSION_DEBUG,
     BUILD_SUBMISSION_REJECT,
-    RESTRICTION_ALIAS_CREATE,
 )
 from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
 from squid_ui.document import DocumentLike
@@ -162,7 +160,6 @@ class SearchCog[
         self.builds = bot.services.builds
         self.inference = bot.services.build_inference
         self.messages = bot.services.messages
-        self.restrictions = bot.services.restrictions
         self.consent_sticky = BuildLogConsentStickyMessage()
         self.register_edit_context_menu()
         self.register_recalc_context_menu()
@@ -224,36 +221,6 @@ class SearchCog[
             render_build=lambda build: self.bot.for_build(build).render_node(),
         )
         await screen.show(source)
-
-    @commands.hybrid_group(name="restrictions")
-    @requires(RESTRICTION_ALIAS_CREATE)
-    @hide_unless(manage_guild=True)
-    async def restrictions_group(self, ctx: Context[BotT]) -> None:
-        """Maintain the restriction taxonomy."""
-        await ctx.send_help("restrictions")
-
-    @autocompletes(restriction="approved_restrictions")
-    @restrictions_group.command(name="add-alias")
-    @requires(RESTRICTION_ALIAS_CREATE)
-    @app_commands.describe(
-        restriction=app_commands.locale_str(_("The restriction to add another name for.")),
-        alias=app_commands.locale_str(_("The additional name.")),
-    )
-    @managed_result
-    async def add_restriction_alias(
-        self, ctx: Context[BotT], restriction: str, alias: str
-    ) -> DocumentLike[sl.ComponentsV2Target]:
-        """Add another name for a restriction."""
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-
-        try:
-            await self.restrictions.add_alias(restriction, alias)
-        except AliasAlreadyAddedError:
-            return info_node(
-                t(locale, _("Already added")),
-                t(locale, _("Alias already on this restriction.")),
-            )
-        return info_node(t(locale, _("Success")), t(locale, _("Alias added.")))
 
     @BuildCommandGroup.build_hybrid_group.command(name="queue")  # type: ignore
     async def get_pending_submissions(self, ctx: Context[BotT]):

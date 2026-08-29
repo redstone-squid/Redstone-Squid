@@ -47,9 +47,6 @@ UNGATED_COMMANDS = frozenset(
         "layout demo",
         "layout lobby",
         "layout shared",
-        "tag",
-        "tag apply",
-        "tag propose",
     }
 )
 """Commands that legitimately declare no permission node: the public ones.
@@ -124,7 +121,6 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "nodes",
         "revoke",
     ),
-    "restrictions": ("add-alias",),
     "role": (
         "add-role",
         "assign",
@@ -155,7 +151,6 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "weight remove",
         "weight set",
     ),
-    "tag": ("apply", "approve", "archive", "pending", "propose", "reject"),
 }
 
 
@@ -173,7 +168,6 @@ PICKER_VISIBILITY: dict[str, frozenset[str]] = {
     "perm": frozenset({"manage_guild"}),
     "records": frozenset({"manage_guild"}),
     "redstoner": frozenset({"manage_roles"}),
-    "restrictions": frozenset({"manage_guild"}),
     "role": frozenset({"manage_guild"}),
     "settings": frozenset({"manage_guild"}),
     "starboard": frozenset({"manage_guild"}),
@@ -281,15 +275,10 @@ def test_sensitive_commands_declare_the_intended_permission_nodes() -> None:
     assert _nodes(search.__cog_commands__, "build debug") == {"build.submission.debug"}
     assert _nodes(search.__cog_commands__, "build schematic measure-timing") == {"build.schematic.measure_timing"}
     assert _nodes(search.__cog_commands__, "build schematic detect-lattice") == {"build.schematic.detect_lattice"}
-    assert _nodes(search.__cog_commands__, "restrictions") == {"restriction.alias.create"}
-    assert _nodes(search.__cog_commands__, "restrictions add-alias") == {"restriction.alias.create"}
 
     starboard = StarboardCog.__new__(StarboardCog)
     assert _nodes(starboard.__cog_commands__, "starboard create") == {"starboard.board.create"}
     assert _nodes(starboard.__cog_commands__, "starboard recount") == {"starboard.board.recount"}
-
-    admin = Admin.__new__(Admin)
-    assert _nodes(admin.__cog_commands__, "tag approve") == {"tag.proposal.approve"}
 
     verify = VerifyCog.__new__(VerifyCog)
     assert _nodes(verify.__cog_commands__, "account claims") == {"account.claim.list"}
@@ -301,10 +290,7 @@ def test_group_gates_admit_anyone_holding_one_of_their_commands_nodes() -> None:
     Every node is separately grantable, so gating a group on one node would make
     the others unreachable for anyone granted only those.
     """
-    for cog, group, member in (
-        (StarboardCog, "starboard", "starboard recount"),
-        (SearchCog, "restrictions", "restrictions add-alias"),
-    ):
+    for cog, group, member in ((StarboardCog, "starboard", "starboard recount"),):
         commands = _commands_of(cog)
         assert _nodes(commands, member) <= _nodes(commands, group)
 
