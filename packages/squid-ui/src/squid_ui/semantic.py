@@ -13,7 +13,7 @@ from squid_ui.grids import GridCell, validate_grid
 from squid_ui.guards import Guard
 from squid_ui.interactions import ActionEvent, ActionMode, BusySpec, PressHandler, SelectionEvent
 from squid_ui.palette import INHERIT, Accent, Palette, Tone
-from squid_ui.primitives.nodes import Node as PrimitiveNode
+from squid_ui.primitives.nodes import Node
 from squid_ui.rosters import RosterPlacement
 from squid_ui.target_types import Renderable, RenderTarget
 from squid_ui.temporal import ZonedDateTime
@@ -837,7 +837,13 @@ type PortableNode[RenderTargetT = RenderTarget] = (
 `LayoutNode` minus the open `Renderable` escape. A traversal that matches over this union
 can be proven exhaustive, which `AnyLayoutNode` structurally cannot.
 """
-type ConcreteLayoutNode = SemanticNode | Adaptation | FallbackContent | PrimitiveNode
+type BuiltinLayoutNode = SemanticNode | Adaptation | FallbackContent | Node
+"""Every layout node the framework itself ships, as classes an `isinstance` can test.
+
+The closed spelling of `LayoutNode`, which is open at its `Renderable` arm. "Builtin" is
+the operative word: a caller's own `Renderable` is a layout node and is deliberately not
+one of these, which is what the Discord lowering needs to say when it meets one.
+"""
 type LayoutNode[RenderTargetT = RenderTarget] = (
     SemanticNode[RenderTargetT] | Adaptation[RenderTargetT] | FallbackContent[RenderTargetT] | Renderable[RenderTargetT]
 )
