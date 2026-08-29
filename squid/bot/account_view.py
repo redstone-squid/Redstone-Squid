@@ -9,14 +9,13 @@ the shape 5.3 and 5.4 already removed from notifications and claim review).
 """
 
 from collections.abc import Awaitable, Callable, Iterable, Mapping
-from typing import cast
+from typing import Protocol, cast
 
 import discord
 
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
-from squid.accounts.application import AccountService
 from squid.accounts.domain import (
     MAX_BIO_LENGTH,
     MAX_DISPLAY_NAME_LENGTH,
@@ -24,6 +23,7 @@ from squid.accounts.domain import (
     MAX_LINK_URL_LENGTH,
     MAX_PROFILE_LINKS,
     MAX_PRONOUNS_LENGTH,
+    Account,
     AccountConsent,
     AccountIdentity,
     AccountProfile,
@@ -45,6 +45,24 @@ type ConsentRequest = Callable[
     [sl.ActionEvent, Callable[[AccountConsent | None], Awaitable[None]]],
     Awaitable[None],
 ]
+
+
+class AccountOperations(Protocol):
+    """Account reads and mutations used by the account workspace."""
+
+    async def get_account_by_id(self, account_id: int) -> Account | None: ...
+
+    async def get_profile(self, account_id: int) -> AccountProfile: ...
+
+    async def grant_current_consent(self, account_id: int) -> Account: ...
+
+    async def set_identity_visibility(
+        self, account_id: int, identity_id: int, *, is_public: bool
+    ) -> AccountIdentity: ...
+
+    async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity: ...
+
+    async def update_profile(self, account_id: int, update: ProfileUpdate) -> AccountProfile: ...
 
 
 def _link_count(count: int) -> sl.text.Message:
@@ -99,7 +117,7 @@ class AccountScreen(sd.Screen):
     def __init__(
         self,
         *,
-        accounts: AccountService,
+        accounts: AccountOperations,
         account_id: int,
         actor_id: int,
         request_consent: ConsentRequest,

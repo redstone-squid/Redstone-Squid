@@ -3,7 +3,7 @@
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, cast
+from typing import Any, Protocol, cast
 
 import anyio
 import discord
@@ -11,10 +11,10 @@ from discord.ext import commands
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.accounts.application import AccountService
 from squid.accounts.domain import (
     CURRENT_CONSENT_VERSION,
     PRIVACY_NOTICE,
+    Account,
     AccountConsent,
     IdentityProvider,
     LinkPreview,
@@ -306,9 +306,23 @@ type ConsentedAccountWork = Callable[[sl.ActionEvent, int], Awaitable[None]]
 """Work needing a consented account id, run against whichever press is live when it runs."""
 
 
+class ConsentAccountOperations(Protocol):
+    """Account identity operations needed to resolve informed consent."""
+
+    async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None: ...
+
+    async def get_or_create_identity(
+        self,
+        provider: IdentityProvider,
+        subject: str,
+        *,
+        consent: AccountConsent,
+    ) -> Account: ...
+
+
 async def with_consented_account(
     event: sl.ActionEvent,
-    accounts: AccountService,
+    accounts: ConsentAccountOperations,
     work: ConsentedAccountWork,
     *,
     timeout: float = 120.0,
@@ -352,7 +366,7 @@ async def with_consented_account(
 
 async def ensure_consented_account(
     target: ConsentTarget,
-    accounts: AccountService,
+    accounts: ConsentAccountOperations,
     *,
     timeout: float = 120.0,
     parent: sd.MessageRoot | None = None,
