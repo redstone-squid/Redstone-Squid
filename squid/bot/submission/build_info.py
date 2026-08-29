@@ -4,7 +4,6 @@ from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
 import squid_ui as sl
-import squid_ui_discord as sd
 from squid.bot.submission.ui.controls import build_edit
 from squid.bot.ui import L
 from squid.topics import resource_topic
@@ -17,7 +16,7 @@ type Refresh = Callable[[int], Awaitable[Projection | None]]
 
 
 class BuildInfoComponent(sl.Component[sl.ComponentsV2Target]):
-    """Show a rendered build card with an edit action at a native-form boundary.
+    """Show a rendered build card with a durable edit action.
 
     Given a `refresh`, the card stays current: the resource below watches the build's topic,
     so anything that publishes it -- another command, the render worker -- redraws every panel
@@ -30,16 +29,10 @@ class BuildInfoComponent(sl.Component[sl.ComponentsV2Target]):
         node: sl.LayoutNode[sl.ComponentsV2Target],
         *,
         refresh: Refresh | None = None,
-        ephemeral: bool = False,
-        timeout: float = 300,
-        access: sd.AccessPolicy | None = None,
     ) -> None:
         self._seed: Projection | None = (build, node)
         self._refresh = refresh
         self._build_id = build.id
-        self._ephemeral = ephemeral
-        self._timeout = timeout
-        self._access = access if access is not None else sd.Everyone()
 
     @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
     async def projection(self) -> Projection:
@@ -83,20 +76,12 @@ class BuildInfoComponent(sl.Component[sl.ComponentsV2Target]):
 
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if not isinstance(self.projection.status, sl.resources.Ready) and self.projection.status.previous is None:
-            return (sl.status(L("Loading build.")),)
+            return (sl.status(L(t"Loading build.")),)
         build, node = self._current()
         if build.id is None:
-            # Nothing stored to point a route at yet, so the control lives in this session.
-            edit = sl.action_controls(sl.action_control(L("Edit"), self._edit, key="edit"), key="build-actions")
-        else:
-            edit = sl.primitives.Section(
-                (sl.primitives.Text(L("Edit this build."), priority=-10),),
-                sl.primitives.RoutedButton(L("Edit"), build_edit.id(build_id=build.id)),
-            )
+            return (node,)
+        edit = sl.primitives.Section(
+            (sl.primitives.Text(L(t"Edit this build."), priority=-10),),
+            sl.primitives.RoutedButton(L(t"Edit"), build_edit.id(build_id=build.id)),
+        )
         return (node, edit)
-
-    async def _edit(self, event: sl.PressEvent) -> None:
-        interaction = sd.native(event)
-        from squid.bot.submission.ui.opening import open_build_editor
-
-        await open_build_editor(interaction, self.build)
