@@ -1,42 +1,27 @@
 """Worker scheduling coverage for synchronized-draft retention."""
 
-from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import AsyncMock, Mock
 
 from squid.config import WorkerConfig
 from squid.worker.app import DatabaseWorker
+from tests.unit.worker.fakes import MaintenanceRecorder, SupervisorRecorder, worker_services
 
 
 async def test_worker_schedules_and_invokes_bounded_draft_expiry() -> None:
-    services = SimpleNamespace(
-        votes=Mock(),
-        builds=Mock(),
-        notifications=Mock(),
-        events=Mock(),
-        event_wake_listener=None,
-        media_runner=None,
-        media_cleanup=AsyncMock(),
-        record_queue_health=AsyncMock(),
-        purge_idempotency=AsyncMock(return_value=0),
-        expire_submission_drafts=AsyncMock(return_value=2),
-        error_reports=Mock(),
-    )
-    supervisor = Mock()
+    maintenance = MaintenanceRecorder(expiry_result=2)
+    supervisor = SupervisorRecorder()
     worker = DatabaseWorker(
-        cast(Any, services),
-        AsyncMock(),
+        worker_services(maintenance=maintenance),
+        cast(Any, object()),
         WorkerConfig(maintenance_interval_seconds=30),
-        Mock(),
-        Mock(),
-        supervisor=cast(Any, supervisor),
+        cast(Any, object()),
+        cast(Any, object()),
+        supervisor=supervisor,
     )
 
     worker.start()
 
-    expiry_call = next(
-        call for call in supervisor.start_periodic.call_args_list if call.kwargs["name"] == "submission-draft-expiry"
-    )
-    assert expiry_call.kwargs["interval"] == 300
-    await expiry_call.args[0]()
-    services.expire_submission_drafts.assert_awaited_once_with()
+    expiry_job = supervisor.job("submission-draft-expiry")
+    assert expiry_job.interval == 300
+    await expiry_job.operation()
+    assert maintenance.expiry_calls == 1
