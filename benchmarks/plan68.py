@@ -14,7 +14,7 @@ import tracemalloc
 from collections.abc import Callable
 from typing import Any
 
-from squid_reactive import LocalTopicBus, StateOwner, SharedState, state, transaction
+from squid_reactive import LocalTopicBus, SharedState, StateOwner, state, transaction
 
 
 def _shared_type(cells: int) -> type[SharedState[str]]:
@@ -76,8 +76,9 @@ def core_baseline() -> dict[str, dict[str, int]]:
 
 def retention_baseline() -> dict[str, int]:
     """Measure retained bytes for bounded action outcomes and conditional history entries."""
-    from squid_ui.runtime import History
     from squid_reactive import ActionLedger, add_action_outcome_sink
+
+    from squid_ui.runtime import History
 
     ledger = ActionLedger(limit=100)
     add_action_outcome_sink(ledger)

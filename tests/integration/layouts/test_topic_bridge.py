@@ -9,8 +9,8 @@ import pytest
 from testcontainers.postgres import PostgresContainer
 
 from squid.topics import resource_topic
-from squid_ui.runtime import LocalTopicBus, Topic
 from squid_storage import PostgresTopicBridge
+from squid_ui.runtime import LocalTopicBus, Topic
 
 
 async def _announce(event: anyio.Event) -> None:
