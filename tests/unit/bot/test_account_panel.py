@@ -21,7 +21,7 @@ from squid.accounts.domain import (
     ProfileLink,
     PublicCreatorProfile,
 )
-from squid.bot.account_view import AccountPanel
+from squid.bot.account_view import AccountScreen
 from squid.bot.verify import VerifyCog
 from squid_ui.text import NEUTRAL, resolve_text
 from squid_ui_discord.testing import commit_render, fake_interaction
@@ -99,11 +99,12 @@ async def test_somebody_elses_creator_page_is_a_public_read() -> None:
     assert ctx.send.await_args.kwargs.get("ephemeral") is not True
 
 
-def _account_panel(profile: AccountProfile) -> AccountPanel:
-    panel = AccountPanel(
+def _account_panel(profile: AccountProfile) -> AccountScreen:
+    panel = AccountScreen(
         accounts=cast(Any, SimpleNamespace(update_profile=AsyncMock())),
         account_id=ACCOUNT_ID,
-        author_id=AUTHOR_ID,
+        actor_id=AUTHOR_ID,
+        request_consent=AsyncMock(),
     )
     panel._profile = profile
     return panel
@@ -160,13 +161,24 @@ async def test_profile_editor_commit_persists_and_returns_to_account_panel() -> 
     source.notice.assert_awaited_once()
 
 
-def _gated_panel(monkeypatch: pytest.MonkeyPatch) -> tuple[AccountPanel, dict[str, Any]]:
+def _gated_panel(monkeypatch: pytest.MonkeyPatch) -> tuple[AccountScreen, dict[str, Any]]:
     """A panel whose reader has not consented, with the notice stubbed out.
 
     The prompt is a mount of its own and is covered in `test_consent_gate`; what matters here
     is that the press ends without one being awaited, and that the continuation does the work.
     """
-    panel = AccountPanel(
+    del monkeypatch
+    opened: dict[str, Any] = {}
+
+    async def request(event: sl.ActionEvent, on_answer: Any) -> None:
+        async def answer(consent: AccountConsent | None) -> None:
+            await on_answer(consent)
+            if consent is not None:
+                await cast(Any, event).responder.message_root.schedule()
+
+        opened["on_answer"] = answer
+
+    panel = AccountScreen(
         accounts=cast(
             Any,
             SimpleNamespace(
@@ -176,18 +188,13 @@ def _gated_panel(monkeypatch: pytest.MonkeyPatch) -> tuple[AccountPanel, dict[st
             ),
         ),
         account_id=ACCOUNT_ID,
-        author_id=AUTHOR_ID,
+        actor_id=AUTHOR_ID,
+        request_consent=cast(Any, request),
     )
     panel._profile = AccountProfile.empty(ACCOUNT_ID)
     panel._needs_consent = True
     panel._refresh = AsyncMock()  # type: ignore[method-assign]
-    opened: dict[str, Any] = {}
 
-    async def request(_target: object, *, on_answer: Any, **_kwargs: Any) -> bool:
-        opened["on_answer"] = on_answer
-        return True
-
-    monkeypatch.setattr("squid.bot.account_view.request_consent", request)
     return panel, opened
 
 
@@ -218,7 +225,7 @@ async def test_a_press_needing_consent_ends_instead_of_holding_the_panel(
     assert panel._profile_editor is None
     message_root.schedule.assert_not_awaited()
 
-    await opened["on_answer"](cast(Any, None), AccountConsent.grant_current())
+    await opened["on_answer"](AccountConsent.grant_current())
 
     # The press resumes where the reader left it, on the panel's own message.
     assert panel._profile_editor is not None
@@ -234,7 +241,7 @@ async def test_declining_leaves_the_panel_exactly_as_it_was(monkeypatch: pytest.
     message_root = SimpleNamespace(schedule=AsyncMock(), localization=NEUTRAL)
 
     await panel._edit_page(cast(Any, _press(message_root)))
-    await opened["on_answer"](cast(Any, None), None)
+    await opened["on_answer"](None)
 
     assert panel._profile_editor is None
     assert panel._needs_consent
@@ -261,7 +268,7 @@ async def test_a_toggle_needing_consent_still_applies_once_the_reader_agrees(
 
     cast(AsyncMock, panel._accounts.set_identity_visibility).assert_not_awaited()
 
-    await opened["on_answer"](cast(Any, None), AccountConsent.grant_current())
+    await opened["on_answer"](AccountConsent.grant_current())
 
     cast(AsyncMock, panel._accounts.set_identity_visibility).assert_awaited_once_with(
         ACCOUNT_ID, DISCORD.id, is_public=True
@@ -279,12 +286,13 @@ class _Recorder:
         self.requests.append(request)
 
 
-def _linked_panel() -> tuple[AccountPanel, _Recorder, AsyncMock, sd.MessageRoot]:
+def _linked_panel() -> tuple[AccountScreen, _Recorder, AsyncMock, sd.MessageRoot]:
     unlink = AsyncMock(return_value=JAVA)
-    panel = AccountPanel(
+    panel = AccountScreen(
         accounts=cast(Any, SimpleNamespace(unlink_identity=unlink)),
         account_id=ACCOUNT_ID,
-        author_id=AUTHOR_ID,
+        actor_id=AUTHOR_ID,
+        request_consent=AsyncMock(),
     )
     panel._profile = AccountProfile.empty(ACCOUNT_ID)
     panel._identities = (DISCORD, JAVA)

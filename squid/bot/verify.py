@@ -1,5 +1,6 @@
 """A cog for verifying minecraft accounts."""
 
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -13,15 +14,16 @@ import squid_ui_discord as sd
 from squid.accounts.domain import (
     CURRENT_CONSENT_VERSION,
     Account,
+    AccountConsent,
     AccountIdentity,
     IdentityProvider,
     IdentityRefresh,
     LinkPreview,
 )
 from squid.accounts.errors import AccountAlreadyLinkedError, AccountNotFoundError
-from squid.bot.account_view import AccountPanel
+from squid.bot.account_view import AccountScreen
 from squid.bot.claims_view import ClaimReviewComponent
-from squid.bot.consent import NOT_ASKED, ensure_consented_account, prompt_for_consent
+from squid.bot.consent import NOT_ASKED, ensure_consented_account, prompt_for_consent, request_consent
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.profile_render import (
     public_profile_fields,
@@ -109,18 +111,32 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             return
 
         await self._refresh_discord_avatar_key(account, ctx.author)
-        component = AccountPanel(
+
+        async def open_consent(
+            event: sl.ActionEvent,
+            answered: Callable[[AccountConsent | None], Awaitable[None]],
+        ) -> None:
+            message_root = sd.responder(event).message_root
+
+            async def completed(_prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
+                await answered(consent)
+                if consent is not None:
+                    await message_root.schedule()
+
+            await request_consent(
+                sd.native(event),
+                user_id=ctx.author.id,
+                on_answer=completed,
+                parent=message_root,
+            )
+
+        screen = AccountScreen(
             accounts=self.account_service,
             account_id=account.id,
-            author_id=ctx.author.id,
+            actor_id=ctx.author.id,
+            request_consent=open_consent,
         )
-        message_root = await invocation.mount(
-            component,
-            access=sd.Owner(ctx.author.id),
-            visibility="personal",
-            timeout=300,
-        )
-        component._root = message_root
+        await screen.show(invocation)
 
     async def _show_creator_page(self, ctx: Context[BotT], user: discord.Member | discord.User, locale: str) -> None:
         """Show somebody else's page, which is shared content and answers where the channel sees it."""
