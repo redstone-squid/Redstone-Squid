@@ -90,32 +90,6 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "view",
     ),
     "layout": ("demo", "lobby", "shared"),
-    # `whoami`, `test` and `explain` were three spellings of "what may this person do";
-    # `can` is the one (docs/plans/command-redesign/05-condensation.md).
-    "perm": (
-        "audit",
-        "can",
-        "deny",
-        "forbid",
-        "grant",
-        "list",
-        "nodes",
-        "revoke",
-    ),
-    "role": (
-        "add-role",
-        "assign",
-        "create",
-        "delete",
-        "exclude",
-        "include",
-        "list",
-        "rank",
-        "remove-pattern",
-        "remove-role",
-        "show",
-        "unassign",
-    ),
 }
 
 
@@ -130,10 +104,9 @@ PICKER_VISIBILITY: dict[str, frozenset[str]] = {
     # admin can override any of these per command in Server Settings; the bits below
     # are chosen to match the operation, so the override is rarely needed.
     "errors": frozenset({"manage_guild"}),
-    "perm": frozenset({"manage_guild"}),
+    "access": frozenset({"manage_guild"}),
     "records": frozenset({"manage_guild"}),
     "redstoner": frozenset({"manage_roles"}),
-    "role": frozenset({"manage_guild"}),
     "settings": frozenset({"manage_guild"}),
     "starboard": frozenset({"manage_guild"}),
 }
@@ -220,7 +193,11 @@ def test_guided_submit_puts_attachments_last() -> None:
 def test_search_modes_have_user_friendly_labels() -> None:
     cog = cast(Any, SearchCog)
     search = next(command for command in cog.__cog_app_commands__ if command.qualified_name == "search")
-    mode = next(parameter for parameter in cast(app_commands.Command[Any, ..., Any], search).parameters if parameter.name == "mode")
+    mode = next(
+        parameter
+        for parameter in cast(app_commands.Command[Any, ..., Any], search).parameters
+        if parameter.name == "mode"
+    )
     assert [(choice.name, choice.value) for choice in mode.choices] == [
         ("keyword", "keyword"),
         ("smart", "smart"),
@@ -240,6 +217,7 @@ def test_sensitive_commands_declare_the_intended_permission_nodes() -> None:
     assert _nodes(search.__cog_commands__, "build debug") == {"build.submission.debug"}
     assert _nodes(search.__cog_commands__, "build schematic measure-timing") == {"build.schematic.measure_timing"}
     assert _nodes(search.__cog_commands__, "build schematic detect-lattice") == {"build.schematic.detect_lattice"}
+
 
 def test_every_privileged_command_declares_a_node() -> None:
     """A privileged command shipped with no gate fails CI.
@@ -309,3 +287,9 @@ def test_settings_are_one_app_only_workspace() -> None:
     settings = cast(Any, SettingsCog)
     assert settings.__cog_commands__ == []
     assert [command.qualified_name for command in settings.__cog_app_commands__] == ["settings"]
+
+
+def test_access_is_one_app_only_workspace() -> None:
+    access = cast(Any, PermissionCog)
+    assert access.__cog_commands__ == []
+    assert [command.qualified_name for command in access.__cog_app_commands__] == ["access"]
