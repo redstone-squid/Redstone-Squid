@@ -81,9 +81,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             str(interaction.user.id),
         )
         account_id = (
-            account.id
-            if account is not None and account.id is not None and not account.needs_consent_refresh
-            else None
+            account.id if account is not None and account.id is not None and not account.needs_consent_refresh else None
         )
         await TagsScreen(
             self.tags,
