@@ -1,15 +1,23 @@
 """The "Recalculate Build" context menu: who may run it, and on what."""
 
-from types import SimpleNamespace
+from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Any, cast
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import discord
 import pytest
+from whenever import Instant
 
+from squid.accounts.application import AccountService
+from squid.accounts.domain import CURRENT_CONSENT_VERSION, Account, AccountConsent, IdentityProvider
+from squid.bot.submission.consent_banner import BuildLogConsentStickyMessage
 from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.utils.permissions import PermissionNodeRequired
-from squid.permissions.domain import Decision, Reason
+from squid.permissions.application import PermissionService
+from squid.permissions.domain import Decision, PermissionNode, Reason, Subject
+from squid.settings.application import SettingsService
+from squid_ui_discord.testing import InteractionHarness
 from tests.support.discord import make_layout_bot
 
 BUILD_LOG_CHANNEL = 500
@@ -21,58 +29,111 @@ def _sticky_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("squid.bot.submission.submit.CONSENT_STICKY_ENABLED", True)
 
 
-class StubPermissions:
+class StubPermissions(PermissionService):
     def __init__(self, *, allowed: bool) -> None:
         self.allowed = allowed
 
-    async def decisions(self, subject: Any, nodes: tuple[Any, ...]) -> tuple[Decision, ...]:
-        return tuple(Decision(node=node.name, allowed=self.allowed, reason=Reason.DEFAULT) for node in nodes)
+    async def decisions(
+        self, subject: Subject, nodes: Iterable[PermissionNode | str]
+    ) -> tuple[Decision, ...]:
+        return tuple(
+            Decision(node=node.name if isinstance(node, PermissionNode) else node, allowed=self.allowed, reason=Reason.DEFAULT)
+            for node in nodes
+        )
 
 
-def _cog(*, allowed: bool = True, account_consented: bool = True) -> BuildSubmitCommands[Any]:
-    cog = BuildSubmitCommands.__new__(BuildSubmitCommands)
-    accounts = AsyncMock()
-    if account_consented:
-        accounts.get_account_by_identity.return_value = SimpleNamespace(id=1, needs_consent_refresh=False)
-    else:
-        accounts.get_account_by_identity.return_value = None
+class AccountRecorder(AccountService):
+    def __init__(self, account: Account | None) -> None:
+        self.account = account
+
+    async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
+        return self.account
+
+
+class SettingsRecorder(SettingsService):
+    def __init__(self) -> None:
+        pass
+
+    async def get_locale(self, server_id: int) -> str | None:
+        return None
+
+
+class AccountIdResolver:
+    async def resolve(self, accounts: AccountService, discord_id: int) -> int | None:
+        return 1
+
+
+class OwnerCheck:
+    async def __call__(self, user: object) -> bool:
+        return False
+
+
+@dataclass(frozen=True)
+class CommunityConfig:
+    build_log_channel_ids: set[int]
+
+
+class ConsentStickyRecorder(BuildLogConsentStickyMessage):
+    def __init__(self) -> None:
+        self.calls: list[discord.TextChannel] = []
+
+    async def trigger(self, channel: discord.TextChannel) -> None:
+        self.calls.append(channel)
+
+
+class RecordingSubmitCommands(BuildSubmitCommands[Any]):
+    def __init__(self) -> None:
+        self.inferred: list[discord.Message] = []
+
+    async def infer_build_from_message(self, message: discord.Message) -> None:
+        self.inferred.append(message)
+
+
+@dataclass(frozen=True)
+class Services:
+    settings: SettingsService
+    accounts: AccountService
+    permissions: PermissionService
+
+
+def _cog(*, allowed: bool = True, account_consented: bool = True) -> RecordingSubmitCommands:
+    cog = RecordingSubmitCommands()
+    account = (
+        Account(
+            id=1,
+            created_at=Instant.from_utc(2026, 8, 29),
+            consent=AccountConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 29)),
+        )
+        if account_consented
+        else None
+    )
 
     cog.bot = cast(
         Any,
         make_layout_bot(
-            services=SimpleNamespace(
-                settings=SimpleNamespace(),
-                accounts=accounts,
+            services=Services(
+                settings=SettingsRecorder(),
+                accounts=AccountRecorder(account),
                 permissions=StubPermissions(allowed=allowed),
             ),
-            account_ids=SimpleNamespace(resolve=AsyncMock(return_value=1)),
-            is_owner=AsyncMock(return_value=False),
-            community_config=SimpleNamespace(build_log_channel_ids={BUILD_LOG_CHANNEL}),
+            account_ids=AccountIdResolver(),
+            is_owner=OwnerCheck(),
+            community_config=CommunityConfig(build_log_channel_ids={BUILD_LOG_CHANNEL}),
         ),
     )
-    cog.consent_sticky = MagicMock()
-    cog.consent_sticky.trigger = AsyncMock()
-    cog.infer_build_from_message = AsyncMock()  # type: ignore[method-assign]
+    cog.consent_sticky = ConsentStickyRecorder()
     return cog
 
 
 def _interaction() -> discord.Interaction[Any]:
-    return cast(
-        discord.Interaction[Any],
-        cast(
-            Any,
-            SimpleNamespace(
-                user=SimpleNamespace(id=7),
-                guild=None,
-                guild_id=None,
-                guild_locale=None,
-                locale="en-US",
-                client=None,
-                response=SimpleNamespace(defer=AsyncMock(), is_done=lambda: True),
-                followup=SimpleNamespace(send=AsyncMock(return_value=None)),
-            ),
-        ),
-    )
+    interaction = InteractionHarness(user_id=7).source
+    interaction.guild = None
+    interaction.guild_id = None
+    interaction.guild_locale = None
+    interaction.locale = "en-US"
+    interaction.client = None
+    interaction.response._done = True
+    return cast(discord.Interaction[Any], interaction)
 
 
 def _message(*, channel_id: int = BUILD_LOG_CHANNEL, from_bot: bool = False) -> discord.Message:
@@ -80,10 +141,17 @@ def _message(*, channel_id: int = BUILD_LOG_CHANNEL, from_bot: bool = False) -> 
     # the channel's history, which a thread or a DM does not offer the same way.
     channel = MagicMock(spec=discord.TextChannel)
     channel.id = channel_id
-    return cast(
-        discord.Message,
-        cast(Any, SimpleNamespace(author=SimpleNamespace(id=42, bot=from_bot), channel=channel)),
-    )
+    @dataclass(frozen=True)
+    class Author:
+        id: int
+        bot: bool
+
+    @dataclass(frozen=True)
+    class Message:
+        author: Author
+        channel: discord.TextChannel
+
+    return cast(discord.Message, Message(author=Author(id=42, bot=from_bot), channel=channel))
 
 
 async def _run(cog: BuildSubmitCommands[Any], message: discord.Message) -> discord.Interaction[Any]:
@@ -102,7 +170,7 @@ async def test_the_menu_denies_the_way_the_command_did() -> None:
         await _run(cog, _message())
 
     assert denial.value.nodes == ("build.submission.recalc",)
-    cast(Any, cog.infer_build_from_message).assert_not_awaited()
+    assert cog.inferred == []
 
 
 async def test_a_message_no_build_can_come_from_says_so() -> None:
@@ -112,7 +180,7 @@ async def test_a_message_no_build_can_come_from_says_so() -> None:
 
     interaction = await _run(cog, _message(channel_id=999))
 
-    cast(Any, cog.infer_build_from_message).assert_not_awaited()
+    assert cog.inferred == []
     assert cast(Any, interaction).followup.send.await_count == 1
 
 
@@ -122,7 +190,7 @@ async def test_a_build_log_message_is_recalculated() -> None:
 
     await _run(cog, message)
 
-    cast(Any, cog.infer_build_from_message).assert_awaited_once_with(message)
+    assert cog.inferred == [message]
 
 
 async def test_recalc_refuses_when_author_is_unconsented() -> None:
@@ -131,6 +199,7 @@ async def test_recalc_refuses_when_author_is_unconsented() -> None:
 
     interaction = await _run(cog, message)
 
-    cast(Any, cog.infer_build_from_message).assert_not_awaited()
+    assert cog.inferred == []
     assert cast(Any, interaction).followup.send.await_count == 1
-    cast(Any, cog.consent_sticky).trigger.assert_awaited_once_with(message.channel)
+    assert isinstance(cog.consent_sticky, ConsentStickyRecorder)
+    assert cog.consent_sticky.calls == [message.channel]
