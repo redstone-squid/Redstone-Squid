@@ -18,7 +18,7 @@ from squid_ui_discord.runtime import _INSTALLED, ClientRuntimeMissing
 from squid_ui_discord.testing import delivered_to, fake_interaction, fake_message
 
 
-class Panel(sl.Component):
+class Panel(sl.Component[sl.ComponentsV2Target]):
     def render(self):
         return [Heading("Panel")]
 
@@ -29,13 +29,6 @@ class FakeClient:
 
 def fake_client() -> Any:
     return FakeClient()
-
-
-@pytest.fixture(autouse=True)
-def _forget_installations():
-    """Installations are process-wide, so a leaked one would reach the next test."""
-    yield
-    _INSTALLED.clear()
 
 
 def test_install_wires_the_presenter_the_registry_could_not_build_for_itself() -> None:
@@ -78,6 +71,16 @@ def test_install_keeps_host_defaults_and_adds_to_them() -> None:
 
     assert runtime.defaults.chrome is chrome
     assert runtime.defaults.strict is True
+
+
+def test_install_keeps_the_optional_localization_resolver() -> None:
+    async def resolve(source: sd.InvocationSource) -> sl.text.Localization:
+        del source
+        return sl.text.Localization(locale="en-GB")
+
+    runtime = install(cast(discord.Client, fake_client()), localization=resolve)
+
+    assert runtime.localization is resolve
 
 
 def test_of_resolves_from_a_client_an_interaction_and_a_command_context() -> None:

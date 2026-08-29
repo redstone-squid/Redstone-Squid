@@ -12,12 +12,12 @@ nucleation = "2026-08-16T00:00:00Z"
 [manifest]
 members = [
     "redstone-squid",
-    "squid-ui-discord",
-    "squid-ui",
-    "squid-ui-widgets",
     "squid-reactivity",
     "squid-replication",
     "squid-storage",
+    "squid-ui",
+    "squid-ui-discord",
+    "squid-ui-widgets",
 ]
 
 [[package]]
@@ -2314,11 +2314,11 @@ dependencies = [
     { name = "rapidfuzz" },
     { name = "redis" },
     { name = "sqlalchemy", extra = ["postgresql-asyncpg", "postgresql-psycopg2binary"] },
-    { name = "squid-ui-discord" },
-    { name = "squid-ui" },
-    { name = "squid-ui-widgets" },
     { name = "squid-replication" },
     { name = "squid-storage", extra = ["postgres"] },
+    { name = "squid-ui" },
+    { name = "squid-ui-discord" },
+    { name = "squid-ui-widgets" },
     { name = "uvicorn" },
     { name = "uvloop", marker = "sys_platform != 'win32'" },
     { name = "whenever" },
@@ -2343,9 +2343,11 @@ dev = [
     { name = "docker" },
     { name = "hypothesis" },
     { name = "jsonschema" },
+    { name = "loro" },
     { name = "nucleation", marker = "(platform_machine == 'x86_64' and sys_platform != 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin')" },
     { name = "pip-tools" },
     { name = "prek" },
+    { name = "pycrdt" },
     { name = "pyrefly" },
     { name = "pytest" },
     { name = "pytest-archon" },
@@ -2399,11 +2401,11 @@ requires-dist = [
     { name = "rapidfuzz", specifier = ">=3.13.0" },
     { name = "redis", specifier = ">=8,<9" },
     { name = "sqlalchemy", extras = ["postgresql-asyncpg", "postgresql-psycopg2binary"], specifier = ">=2.0.41" },
-    { name = "squid-ui-discord", editable = "packages/squid-ui-discord" },
-    { name = "squid-ui", editable = "packages/squid-ui" },
-    { name = "squid-ui-widgets", editable = "packages/squid-ui-widgets" },
     { name = "squid-replication", editable = "packages/squid-replication" },
     { name = "squid-storage", extras = ["postgres"], editable = "packages/squid-storage" },
+    { name = "squid-ui", editable = "packages/squid-ui" },
+    { name = "squid-ui-discord", editable = "packages/squid-ui-discord" },
+    { name = "squid-ui-widgets", editable = "packages/squid-ui-widgets" },
     { name = "uvicorn", specifier = ">=0.34.0" },
     { name = "uvloop", marker = "sys_platform != 'win32'", specifier = ">=0.21.0" },
     { name = "whenever", specifier = ">=0.10.3" },
@@ -2416,9 +2418,11 @@ dev = [
     { name = "docker", specifier = ">=7.2,<8" },
     { name = "hypothesis", specifier = ">=6.0.0" },
     { name = "jsonschema", specifier = ">=4.23" },
+    { name = "loro", specifier = "==1.13.2" },
     { name = "nucleation", marker = "(platform_machine == 'x86_64' and sys_platform != 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin')", specifier = "==0.10.14" },
     { name = "pip-tools", specifier = ">=7.4.1" },
     { name = "prek", specifier = ">=0.2.28" },
+    { name = "pycrdt", specifier = "==0.14.2" },
     { name = "pyrefly", specifier = ">=1.2.0" },
     { name = "pytest", specifier = ">=8.3.5" },
     { name = "pytest-archon", specifier = ">=0.0.6" },
@@ -2716,65 +2720,13 @@ postgresql-psycopg2binary = [
 ]
 
 [[package]]
-name = "squid-ui-discord"
-version = "0.1.0"
-source = { editable = "packages/squid-ui-discord" }
-dependencies = [
-    { name = "anyio" },
-    { name = "discord-py" },
-    { name = "packaging" },
-    { name = "squid-ui" },
-]
-
-[package.optional-dependencies]
-durable = [
-    { name = "squid-storage" },
-]
-postgres = [
-    { name = "squid-storage", extra = ["postgres"] },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "anyio", specifier = ">=4.14,<5" },
-    { name = "discord-py", specifier = ">=2.7,<3" },
-    { name = "packaging", specifier = ">=24,<27" },
-    { name = "squid-ui", editable = "packages/squid-ui" },
-    { name = "squid-storage", marker = "extra == 'durable'", editable = "packages/squid-storage" },
-    { name = "squid-storage", extras = ["postgres"], marker = "extra == 'postgres'", editable = "packages/squid-storage" },
-]
-provides-extras = ["durable", "postgres"]
-
-[[package]]
-name = "squid-ui"
-version = "0.1.0"
-source = { editable = "packages/squid-ui" }
-dependencies = [
-    { name = "squid-reactivity" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "squid-reactivity", editable = "packages/squid-reactivity" }]
-
-[[package]]
-name = "squid-ui-widgets"
-version = "0.1.0"
-source = { editable = "packages/squid-ui-widgets" }
-dependencies = [
-    { name = "squid-ui" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "squid-ui", editable = "packages/squid-ui" }]
-
-[[package]]
 name = "squid-reactivity"
-version = "0.1.0"
+version = "0.1.0a1"
 source = { editable = "packages/squid-reactivity" }
 
 [[package]]
 name = "squid-replication"
-version = "0.1.0"
+version = "0.1.0a1"
 source = { editable = "packages/squid-replication" }
 dependencies = [
     { name = "squid-reactivity" },
@@ -2798,7 +2750,7 @@ provides-extras = ["loro", "pycrdt"]
 
 [[package]]
 name = "squid-storage"
-version = "0.1.0"
+version = "0.1.0a1"
 source = { editable = "packages/squid-storage" }
 dependencies = [
     { name = "anyio" },
@@ -2817,6 +2769,64 @@ requires-dist = [
     { name = "squid-reactivity", editable = "packages/squid-reactivity" },
 ]
 provides-extras = ["postgres"]
+
+[[package]]
+name = "squid-ui"
+version = "0.1.0a1"
+source = { editable = "packages/squid-ui" }
+dependencies = [
+    { name = "markdown-it-py" },
+    { name = "squid-reactivity" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "markdown-it-py", specifier = ">=4.0,<5" },
+    { name = "squid-reactivity", editable = "packages/squid-reactivity" },
+]
+
+[[package]]
+name = "squid-ui-discord"
+version = "0.1.0a1"
+source = { editable = "packages/squid-ui-discord" }
+dependencies = [
+    { name = "anyio" },
+    { name = "discord-py" },
+    { name = "packaging" },
+    { name = "squid-reactivity" },
+    { name = "squid-ui" },
+]
+
+[package.optional-dependencies]
+durable = [
+    { name = "squid-storage" },
+]
+postgres = [
+    { name = "squid-storage", extra = ["postgres"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "anyio", specifier = ">=4.14,<5" },
+    { name = "discord-py", specifier = ">=2.7,<3" },
+    { name = "packaging", specifier = ">=24,<27" },
+    { name = "squid-reactivity", editable = "packages/squid-reactivity" },
+    { name = "squid-storage", marker = "extra == 'durable'", editable = "packages/squid-storage" },
+    { name = "squid-storage", extras = ["postgres"], marker = "extra == 'postgres'", editable = "packages/squid-storage" },
+    { name = "squid-ui", editable = "packages/squid-ui" },
+]
+provides-extras = ["durable", "postgres"]
+
+[[package]]
+name = "squid-ui-widgets"
+version = "0.1.0a1"
+source = { editable = "packages/squid-ui-widgets" }
+dependencies = [
+    { name = "squid-ui" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "squid-ui", editable = "packages/squid-ui" }]
 
 [[package]]
 name = "starlette"

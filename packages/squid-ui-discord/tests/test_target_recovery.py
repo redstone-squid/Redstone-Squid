@@ -2,6 +2,7 @@
 
 import json
 import re
+from typing import Any
 
 import pytest
 
@@ -21,7 +22,7 @@ from squid_ui_discord.targets import TargetRegistry
 from squid_ui_discord.testing import commit_classic_render, commit_render
 
 
-class Screen(sl.Component):
+class Screen(sl.Component[sl.RenderTarget]):
     count: int = sl.state(0)
 
     def render(self):
@@ -41,7 +42,7 @@ def captured(target: Target):
     return components, components.capture(message_root, "screen")
 
 
-def commit(target: Target, message_root: MessageRoot) -> None:
+def commit(target: Target, message_root: MessageRoot[Any, Any]) -> None:
     if target.id == DISCORD_V2_DPY27.id:
         commit_render(message_root)
     else:

@@ -20,15 +20,21 @@ from typing import TYPE_CHECKING, Any
 import discord
 
 import squid_ui as sl
+import squid_ui_discord as sd
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.routes.polls import poll_close, poll_refresh, polls
-from squid.bot.ui import respond_payload, text_layout
+from squid.bot.routes._root import _feature_group, _feature_route
+from squid.bot.ui import text_node
 from squid.bot.voting.actors import describe_rejection, resolve_actor
 from squid.core.i18n import _
 from squid.voting.domain import VoteActor, VoteRejection, VoteSessionSnapshot
 
 if TYPE_CHECKING:
     import squid.bot.app
+
+
+polls, _polls_created = _feature_group("polls")
+poll_close = _feature_route(polls, "close", aliases=("poll:close",))
+poll_refresh = _feature_route(polls, "refresh", aliases=("poll:refresh",))
 
 
 def poll_controls() -> sl.semantic.ActionControls:
@@ -54,7 +60,8 @@ async def close_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSqui
         await _refuse(interaction, locale, result.rejection or VoteRejection.NOT_FOUND)
         return
     await bot.refresh_posts("vote_session", str(result.session.id))
-    await respond_payload(interaction, text_layout(t(locale, _("Poll closed."))))
+    invocation = await sd.Invocation.of(interaction)
+    await invocation.reply(text_node(t(locale, _("Poll closed."))), visibility="personal")
 
 
 @polls.route(poll_refresh)
@@ -77,7 +84,8 @@ async def refresh_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSq
             _("{count} voter(s) could not be resolved, so their cached weight was kept."),
             count=len(result.unresolved_account_ids),
         )
-    await respond_payload(interaction, text_layout(text))
+    invocation = await sd.Invocation.of(interaction)
+    await invocation.reply(text_node(text), visibility="personal")
 
 
 async def _authorize(
@@ -110,4 +118,5 @@ async def _authorize(
 
 
 async def _refuse(interaction: discord.Interaction[Any], locale: str | None, rejection: VoteRejection) -> None:
-    await respond_payload(interaction, text_layout(describe_rejection(locale, rejection)))
+    invocation = await sd.Invocation.of(interaction)
+    await invocation.reply(text_node(describe_rejection(locale, rejection)), visibility="personal")

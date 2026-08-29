@@ -6,8 +6,10 @@ from typing import Any
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.cache import PlanCache, PlanMemo
 from squid_ui.runtime.component import (
+    AnyComponent,
     Component,
     ComponentTree,
+    IncrementalRender,
     _ComponentRender,
     _ExpandedSubtree,
     render_component_tree,
@@ -23,7 +25,7 @@ class ComponentRuntime:
 
     def __init__(
         self,
-        root: Component,
+        root: AnyComponent,
         *,
         presentation: PresentationState | None = None,
         on_invalidate: Callable[[], None] | None = None,
@@ -40,8 +42,8 @@ class ComponentRuntime:
         self.components: dict[str, Component] = {}
         self._render_cache: dict[Component, _ComponentRender] = {}
         self._subtree_cache: dict[str, _ExpandedSubtree] = {}
-        self._dirty_components: set[Component] = set()
-        self._forced_components: set[Component] = set()
+        self._dirty_components: set[AnyComponent] = set()
+        self._forced_components: set[AnyComponent] = set()
         self._dirty_paths: set[str] = set()
         self._component_paths: dict[Component, str] = {}
         self._force_all = True
@@ -55,7 +57,7 @@ class ComponentRuntime:
         self.dirty = True
         """Whether the committed tree is behind the inputs a fresh render would read."""
 
-    def invalidate(self, component: Component | None = None, *, check_dependencies: bool = False) -> None:
+    def invalidate(self, component: AnyComponent | None = None, *, check_dependencies: bool = False) -> None:
         """Declare the render inputs moved, so anything rendered before now is stale."""
         self._invalidate_components(
             () if component is None else (component,),
@@ -77,7 +79,7 @@ class ComponentRuntime:
         if not relevant:
             return
 
-        matched: set[Component] = set()
+        matched: set[AnyComponent] = set()
         covered: set[Address] = set()
         for component, snapshot in self._render_cache.items():
             observed = relevant.intersection(snapshot.observation.addresses())
@@ -96,7 +98,7 @@ class ComponentRuntime:
 
     def _invalidate_components(
         self,
-        components: Iterable[Component],
+        components: Iterable[AnyComponent],
         *,
         force_all: bool,
         check_dependencies: bool,
@@ -130,7 +132,7 @@ class ComponentRuntime:
     def render(
         self,
         *,
-        defer: Callable[[Component], bool] | None = None,
+        defer: Callable[[AnyComponent], bool] | None = None,
         reuse_committed: bool = False,
     ) -> ComponentTree:
         """Render a candidate tree; call :meth:`commit` after planning and drawing succeed.
@@ -156,13 +158,15 @@ class ComponentRuntime:
             runtime=self,
             context=self.context,
             defer=defer,
-            _render_cache=self._render_cache,
-            _dirty=self._dirty_components,
-            _forced=self._forced_components,
-            _force_all=self._force_all,
-            _subtree_cache=self._subtree_cache,
-            _dirty_paths=self._dirty_paths,
-            _component_paths=self._component_paths,
+            incremental=IncrementalRender(
+                render_cache=self._render_cache,
+                dirty=self._dirty_components,
+                forced=self._forced_components,
+                force_all=self._force_all,
+                subtree_cache=self._subtree_cache,
+                dirty_paths=self._dirty_paths,
+                component_paths=self._component_paths,
+            ),
         )
         if reuse_committed and self._committed_tree is not None and tree == self._committed_tree:
             tree = self._committed_tree

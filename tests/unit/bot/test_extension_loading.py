@@ -11,7 +11,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import discord
-import pytest
+import pytest_asyncio
 from discord.ext import commands
 
 from squid.bot.app import DEVELOPMENT_EXTENSIONS, EXTENSIONS
@@ -62,7 +62,7 @@ class StubBot(commands.Bot):
         return MagicMock()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def loaded_bot() -> AsyncIterator[commands.Bot]:
     """Load the real extension list, then put `sys.modules` back exactly as it was.
 

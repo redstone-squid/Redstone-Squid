@@ -10,11 +10,13 @@ from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Protocol
+from typing import Any, Protocol, Self, overload
 
 from squid_reactivity.actions import (
     DEFAULT_REDACTION,
+    ActionId,
     CausalRef,
+    ChangeToken,
     ConflictDetail,
     ExceptionReport,
     OperationEventSnapshot,
@@ -24,6 +26,7 @@ from squid_reactivity.actions import (
 )
 from squid_reactivity.operations import OperationContext
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
+from squid_ui.errors import SquidUiError
 from squid_ui.factories import action_control, control_group
 from squid_ui.interactions import ActionEvent
 from squid_ui.runtime.reactivity import (
@@ -50,7 +53,7 @@ from squid_ui.text import TextLike
 logger = logging.getLogger(__name__)
 
 
-class HistoryError(RuntimeError):
+class HistoryError(SquidUiError, RuntimeError):
     """A history operation could not be honoured or was already reserved by this action."""
 
 
@@ -84,6 +87,12 @@ class UndoMode(Enum):
 
 
 class HistoryOwner(Protocol):
+    __dict__: dict[str, Any]
+    """Declared because `_HistoryField` writes its stack straight into it.
+
+    `squid_reactivity.resources.ResourceOwner` declares the same member for the same reason.
+    """
+
     def invalidate(self) -> None: ...
 
 
@@ -413,12 +422,12 @@ class HistoryEntry:
     """One retained committed action and the fresh plan that can reverse it."""
 
     label: TextLike
-    original_action_id: object
+    original_action_id: ActionId
     undo_plan: UndoPlan
     state: HistoryEntryState = HistoryEntryState.READY
     recorded_at: float = field(default_factory=time.monotonic)
     last_result: HistoryResult | None = None
-    undo_action_id: object | None = None
+    undo_action_id: ActionId | None = None
     redo_plan: UndoPlan | None = None
     compensation: CompensationSpec | None = None
     original_commit: ActionCommit | None = None
@@ -433,8 +442,8 @@ class HistoryResult:
 
     status: HistoryResultStatus
     entry: HistoryEntry | None = None
-    action_id: object | None = None
-    conflict: object | None = None
+    action_id: ActionId | None = None
+    conflict: ConflictDetail | None = None
     error: Exception | None = None
 
     @property
@@ -543,7 +552,7 @@ class History:
 
         self._reserve(committed)
 
-    async def undo(self, action_id: object | None = None) -> UndoResult:
+    async def undo(self, action_id: ActionId | None = None) -> UndoResult:
         """Conditionally reverse one retained action as a fresh ``UNDO`` action."""
         entry = self._select(self._undone, action_id)
         if entry is None:
@@ -573,7 +582,7 @@ class History:
         )
         try:
             with fresh_action_transaction(action_context=context):
-                planned: list[tuple[object, object]] = []
+                planned: list[tuple[ChangeToken[Any], object]] = []
                 if entry.mode is UndoMode.LOCAL_OVERWRITE and entry.undo_plan.participants:
                     detail = ConflictDetail("participant", 0, 0)
                     raise ReactiveConflictError(  # noqa: TRY301
@@ -783,7 +792,7 @@ class History:
         )
         try:
             with fresh_action_transaction(action_context=context):
-                planned: list[tuple[object, object]] = []
+                planned: list[tuple[ChangeToken[Any], object]] = []
                 if entry.mode is UndoMode.LOCAL_OVERWRITE and entry.redo_plan.participants:
                     detail = ConflictDetail("participant", 0, 0)
                     raise ReactiveConflictError(  # noqa: TRY301
@@ -834,7 +843,7 @@ class History:
         assert entry.last_result is not None
         return entry.last_result
 
-    def delete_conflicted(self, action_id: object | None = None) -> HistoryEntry | None:
+    def delete_conflicted(self, action_id: ActionId | None = None) -> HistoryEntry | None:
         """Forget a conflicted entry without touching application state."""
         for stack in (self._undone, self._redoable):
             entry = self._select(stack, action_id)
@@ -897,7 +906,7 @@ class History:
                 release()
 
     @staticmethod
-    def _select(stack: list[HistoryEntry], action_id: object | None) -> HistoryEntry | None:
+    def _select(stack: list[HistoryEntry], action_id: ActionId | None) -> HistoryEntry | None:
         if action_id is None:
             return stack[-1] if stack else None
         return next((entry for entry in reversed(stack) if entry.original_action_id == action_id), None)
@@ -919,13 +928,27 @@ class _HistoryField:
     def __set_name__(self, owner: type, name: str) -> None:
         self._slot = f"__history_{name}"
 
-    def __get__(self, instance: HistoryOwner | None, owner: type | None = None) -> History:
+    @overload
+    def __get__(self, instance: None, owner: type | None = None) -> Self: ...
+
+    @overload
+    def __get__(self, instance: HistoryOwner, owner: type | None = None) -> History: ...
+
+    def __get__(self, instance: HistoryOwner | None, owner: type | None = None) -> Self | History:
+        """The owner's stack, created on first access; the descriptor itself off the class.
+
+        The overload pair is what `forms.FormField.__get__` already does: reached through an
+        instance this is a `History`, reached through the class it is the descriptor, and one
+        signature covering both had to lie about one of them.
+        """
         if instance is None:
-            return self  # type: ignore[bad-return]
-        stack = instance.__dict__.get(self._slot)  # type: ignore[missing-attribute]
+            return self
+        # Straight into `__dict__`, not `setattr`: an owner that is a `Component` intercepts
+        # attribute writes for reactivity, and an undo stack is not reactive state.
+        stack = instance.__dict__.get(self._slot)
         if stack is None:
             stack = History(instance, limit=self._limit, compensation_outbox=self._compensation_outbox)
-            instance.__dict__[self._slot] = stack  # type: ignore[missing-attribute]
+            instance.__dict__[self._slot] = stack
         return stack
 
 

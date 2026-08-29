@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from string.templatelib import Interpolation, Template
-from typing import Any
+from typing import Any, Protocol
 
 
 class Markup(StrEnum):
@@ -21,6 +21,21 @@ class ResolvedText:
 
     content: str
     markup: Markup = Markup.DISCORD_MARKDOWN
+
+
+class MarkupText(Protocol):
+    """Resolved content plus the markup it is written in.
+
+    `ResolvedText` and `scene.Text` are the same two fields at two layers, and `scene`
+    imports this module, so the seam between them is structural rather than a union.
+    Read-only members, because both sides are frozen.
+    """
+
+    @property
+    def content(self) -> str: ...
+
+    @property
+    def markup(self) -> Markup: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,7 +125,7 @@ def resolve_text(value: TextLike, localization: Localization) -> ResolvedText:
     return ResolvedText(content, value.markup)
 
 
-def discord_text(value: ResolvedText) -> str:
+def discord_text(value: MarkupText) -> str:
     """Render resolved text into Discord's Markdown input markup."""
     if value.markup is Markup.DISCORD_MARKDOWN:
         return value.content
@@ -193,6 +208,7 @@ __all__ = [
     "NEUTRAL",
     "Localization",
     "Markup",
+    "MarkupText",
     "Message",
     "RawMarkdown",
     "ResolvedText",

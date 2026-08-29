@@ -5,11 +5,12 @@ from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import squid_ui as sl
+import squid_ui_discord as sd
 from squid.bot.submission.ui.views import SubmissionFormComponent, _submission_basics_form
 from squid.builds.application import BuildService
 from squid.builds.domain import BuildDraft
 from squid_ui_discord.testing import commit_render
-from tests.helpers.discord import make_layout_bot
+from tests.helpers.discord import invocation_scope, make_interaction, make_layout_bot
 
 
 def _component(**kwargs: Any) -> SubmissionFormComponent:
@@ -26,8 +27,10 @@ def test_submission_form_uses_semantic_controls() -> None:
     assert any(isinstance(node, sl.semantic.ActionControls) for node in nodes)
 
 
-def test_basics_form_describes_portable_fields() -> None:
-    form = _submission_basics_form(BuildDraft(), None)
+async def test_basics_form_describes_portable_fields() -> None:
+    interaction = make_interaction().interaction
+    async with invocation_scope(interaction) as invocation:
+        form = _submission_basics_form(BuildDraft(), invocation)
 
     assert form.field_keys == ("door_size", "pattern", "dimensions", "versions", "creators")
     first = form.items[0]
@@ -37,7 +40,8 @@ def test_basics_form_describes_portable_fields() -> None:
 
 async def test_changing_the_door_type_marks_the_message_root_dirty() -> None:
     component = _component()
-    message_root = component.mount(source=make_layout_bot())
+    bot = make_layout_bot()
+    message_root = bot.client_runtime.mount(component, access=sd.Everyone(), timeout=300)
     commit_render(message_root)
 
     await component._door_changed(cast(sl.ChoiceEvent, SimpleNamespace(selected=("Door",))))

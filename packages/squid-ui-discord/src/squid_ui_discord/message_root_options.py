@@ -1,109 +1,38 @@
 """Reusable host defaults for Discord message roots."""
 
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass, replace
-from typing import TypedDict, Unpack
+from dataclasses import dataclass
+from typing import Unpack
 
-from squid_ui.chrome import DEFAULT_CHROME, Chrome
-from squid_ui.interactions import ActionMiddleware
-from squid_ui.palette import DEFAULT_PALETTE, Palette
-from squid_ui.planning.navigation import NavFactory
-from squid_ui.profiling import Profiler
 from squid_ui.runtime.component import Component
-from squid_ui.text import NEUTRAL, Localization
 from squid_ui_discord.access import AccessPolicy
-from squid_ui_discord.message_root import (
-    DEFAULT_EXPIRY,
-    ChallengePresenter,
-    ErrorHook,
-    ExpiryPolicy,
-    MessageRoot,
-    Scheduler,
-    _monotonic,
+from squid_ui_discord.message_root import MessageRoot
+from squid_ui_discord.message_root_contracts import (
+    MessageRootConfig,
 )
-from squid_ui_discord.render_cache import RenderProgramCache
-from squid_ui_discord.target import DISCORD_V2_DPY27, Target
-
-
-class MessageRootOptions(TypedDict, total=False):
-    """Per-mount overrides accepted by :meth:`MessageRootDefaults.mount`."""
-
-    target: Target
-    chrome: Chrome
-    localization: Localization
-    palette: Palette
-    strict: bool
-    timeout: float | None
-    on_error: ErrorHook | None
-    middleware: Sequence[ActionMiddleware]
-    profiler: Profiler | None
-    render_cache: RenderProgramCache | None
-    scheduler: Scheduler | None
-    expiry: ExpiryPolicy | None
-    nav: NavFactory | None
-    challenge: ChallengePresenter | None
-    acknowledgement_timeout: float
-    pending_after: float
-    clock: Callable[[], float]
+from squid_ui_discord.message_root_contracts import (
+    MessageRootOptions as MessageRootOptions,
+)
 
 
 @dataclass(frozen=True, slots=True)
-class MessageRootDefaults:
+class MessageRootDefaults(MessageRootConfig):
     """Host-wide values used to construct message roots.
 
-    Access remains deliberately absent: it identifies the actor allowed to use a specific
-    mount and must be supplied at each construction site.
+    The values and their defaults come from :class:`MessageRootConfig`; this adds the one
+    thing a host wants from them, which is to build a mount. Access remains deliberately
+    absent: it identifies the actor allowed to use a specific mount and must be supplied at
+    each construction site.
     """
 
-    target: Target = DISCORD_V2_DPY27
-    chrome: Chrome = DEFAULT_CHROME
-    localization: Localization = NEUTRAL
-    palette: Palette = DEFAULT_PALETTE
-    strict: bool = False
-    timeout: float | None = 900
-    on_error: ErrorHook | None = None
-    middleware: Sequence[ActionMiddleware] = ()
-    profiler: Profiler | None = None
-    render_cache: RenderProgramCache | None = None
-    scheduler: Scheduler | None = None
-    expiry: ExpiryPolicy | None = DEFAULT_EXPIRY
-    nav: NavFactory | None = None
-    challenge: ChallengePresenter | None = None
-    acknowledgement_timeout: float = 2.5
-    pending_after: float = 1.0
-    clock: Callable[[], float] = _monotonic
-
-    def mount(
+    def mount[RenderTargetT](
         self,
-        component: Component,
+        component: Component[RenderTargetT],
         *,
         access: AccessPolicy,
         **overrides: Unpack[MessageRootOptions],
-    ) -> MessageRoot:
+    ) -> MessageRoot[RenderTargetT]:
         """Construct a mount, applying per-call overrides over these defaults."""
-        configured = self.replace(**overrides)
-        return MessageRoot(
-            component,
-            access=access,
-            target=configured.target,
-            chrome=configured.chrome,
-            localization=configured.localization,
-            palette=configured.palette,
-            strict=configured.strict,
-            timeout=configured.timeout,
-            on_error=configured.on_error,
-            middleware=configured.middleware,
-            profiler=configured.profiler,
-            render_cache=configured.render_cache,
-            scheduler=configured.scheduler,
-            expiry=configured.expiry,
-            nav=configured.nav,
-            challenge=configured.challenge,
-            acknowledgement_timeout=configured.acknowledgement_timeout,
-            pending_after=configured.pending_after,
-            clock=configured.clock,
-        )
+        return MessageRoot(component, access=access, config=self, **overrides)
 
-    def replace(self, **changes: Unpack[MessageRootOptions]) -> MessageRootDefaults:
-        """Return a copy with selected host defaults replaced."""
-        return replace(self, **changes)
+
+__all__ = ["MessageRootDefaults", "MessageRootOptions"]

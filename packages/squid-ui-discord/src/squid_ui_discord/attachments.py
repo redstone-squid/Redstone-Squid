@@ -25,6 +25,8 @@ def scene_nodes(document: scene.Scene) -> tuple[scene.Node, ...]:
             # A classic body's text lives in embeds, which cannot reference a file; only its
             # controls can carry a link, and only rows hold controls.
             return tuple(control for row in rows for control in row.controls)
+        case _:
+            return ()
 
 
 def attachment_assets(plan: PlanResult) -> tuple[Asset, ...]:

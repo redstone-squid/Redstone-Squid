@@ -383,7 +383,7 @@ class Card(Renderable[ClassicTarget]):
 
 
 @dataclass(frozen=True, slots=True)
-class Extension[ModeT = Any](Renderable[ModeT]):
+class Extension[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
     """Target extension with a mandatory portable fallback."""
 
     kind: str
@@ -464,7 +464,7 @@ class Panel(Renderable[ComponentsV2Target]):
 
 
 @dataclass(frozen=True, slots=True)
-class Budget[ModeT = Any](Renderable[ModeT]):
+class Budget[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
     """Transparent group carrying an author-sized character reservation and ceiling."""
 
     children: tuple[Node, ...]
@@ -475,7 +475,7 @@ class Budget[ModeT = Any](Renderable[ModeT]):
 
 
 @dataclass(frozen=True, slots=True)
-class Break[ModeT = Any](Renderable[ModeT]):
+class Break[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
     """Transparent group carrying region-break annotations through semantic lowering."""
 
     children: tuple[Node, ...]
@@ -504,7 +504,7 @@ class Fidelity(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class Variant[ModeT = Any]:
+class Variant[RenderTargetT = DiscordTarget]:
     """One structural representation of a region and the capabilities it requires.
 
     ``nodes`` is a tuple because a variant may lower to several nodes — an ControlGroup becomes
@@ -527,7 +527,7 @@ class Variant[ModeT = Any]:
 
 
 @dataclass(frozen=True, slots=True)
-class Variants[ModeT = Any](Renderable[ModeT]):
+class Variants[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
     """An ordered ladder of structural representations for one region.
 
     Overflow policies shrink *text*; nothing they do returns a component, so a document with
@@ -560,46 +560,50 @@ class Variants[ModeT = Any](Renderable[ModeT]):
 
     @classmethod
     @overload
-    def of[FirstT, SecondT](  # pyrefly: ignore[inconsistent-overload]
+    def of[FirstT, SecondT](
         cls,
         first: PrimitiveNode[FirstT] | Variant[FirstT],
         second: PrimitiveNode[SecondT] | Variant[SecondT],
+        /,
         *,
         priority: int = 0,
     ) -> Variants[FirstT | SecondT]: ...
 
     @classmethod
     @overload
-    def of[FirstT, SecondT, ThirdT](  # pyrefly: ignore[inconsistent-overload]
+    def of[FirstT, SecondT, ThirdT](
         cls,
         first: PrimitiveNode[FirstT] | Variant[FirstT],
         second: PrimitiveNode[SecondT] | Variant[SecondT],
         third: PrimitiveNode[ThirdT] | Variant[ThirdT],
+        /,
         *,
         priority: int = 0,
     ) -> Variants[FirstT | SecondT | ThirdT]: ...
 
     @classmethod
     @overload
-    def of[FirstT, SecondT, ThirdT, FourthT](  # pyrefly: ignore[inconsistent-overload]
+    def of[FirstT, SecondT, ThirdT, FourthT](
         cls,
         first: PrimitiveNode[FirstT] | Variant[FirstT],
         second: PrimitiveNode[SecondT] | Variant[SecondT],
         third: PrimitiveNode[ThirdT] | Variant[ThirdT],
         fourth: PrimitiveNode[FourthT] | Variant[FourthT],
+        /,
         *,
         priority: int = 0,
     ) -> Variants[FirstT | SecondT | ThirdT | FourthT]: ...
 
     @classmethod
     @overload
-    def of[FirstT, SecondT, ThirdT, FourthT, FifthT](  # pyrefly: ignore[inconsistent-overload]
+    def of[FirstT, SecondT, ThirdT, FourthT, FifthT](
         cls,
         first: PrimitiveNode[FirstT] | Variant[FirstT],
         second: PrimitiveNode[SecondT] | Variant[SecondT],
         third: PrimitiveNode[ThirdT] | Variant[ThirdT],
         fourth: PrimitiveNode[FourthT] | Variant[FourthT],
         fifth: PrimitiveNode[FifthT] | Variant[FifthT],
+        /,
         *,
         priority: int = 0,
     ) -> Variants[FirstT | SecondT | ThirdT | FourthT | FifthT]: ...
@@ -629,6 +633,8 @@ type Node = (
     | Sep
     | Row
     | ControlGroup
+    | Button
+    | LinkButton
     | SelectMenu
     | EntitySelect
     | RoutedSelect
@@ -649,7 +655,7 @@ type Node = (
     | Variants
 )
 
-type PrimitiveNode[ModeT = Any] = Renderable[ModeT]
+type PrimitiveNode[RenderTargetT = DiscordTarget] = Renderable[RenderTargetT]
 
 
 def as_nodes(rendered: Node | Sequence[Node]) -> list[Node]:

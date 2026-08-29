@@ -6,10 +6,10 @@ import pytest
 
 from squid_reactivity import (
     ActionLedger,
-    TransactionParticipant,
     LocalTopicBus,
     ReactiveConflictError,
     SharedState,
+    TransactionParticipant,
     add_action_result_sink,
     enlist,
     on_action_commit,

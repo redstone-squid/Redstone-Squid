@@ -22,10 +22,11 @@ from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.document import DocumentLike
 from squid_ui.errors import ExistingLayoutError, LayoutError
 from squid_ui.palette import DEFAULT_PALETTE, Palette
-from squid_ui.planning.limits import LIMITS, V2Limits
+from squid_ui.planning.limits import LIMITS, Axis, V2Limits
 from squid_ui.planning.planner import EMPTY_RESERVATION
 from squid_ui.planning.target import ResourceCost
 from squid_ui.scene.model import PlanReport, PlanResult
+from squid_ui.target_types import ComponentsV2Target
 from squid_ui.text import NEUTRAL, Localization
 from squid_ui_discord.attachments import files_for
 from squid_ui_discord.inspection import MessageReservation, audit, cost, measure
@@ -183,7 +184,7 @@ class Fragment:
 
 
 def fragment(
-    document: DocumentLike,
+    document: DocumentLike[ComponentsV2Target],
     *,
     alongside: discord.ui.LayoutView | None = None,
     reserve: ResourceCost = EMPTY_RESERVATION,
@@ -233,7 +234,7 @@ def fragment(
 
 
 def contribute(
-    document: DocumentLike,
+    document: DocumentLike[ComponentsV2Target],
     *,
     to: discord.ui.LayoutView,
     followed_by: Sequence[discord.ui.Item[Any]] = (),
@@ -295,9 +296,9 @@ def _preflight(
 
     additions = (*fragment_items, *trailing)
     addition_cost = cost(*additions)
-    components = reservation.cost.get("components") + addition_cost.get("components")
-    text = reservation.cost.get("display_text") + addition_cost.get("display_text")
-    attachments = reservation.cost.get("attachments") + len(assets)
+    components = reservation.cost.get(Axis.COMPONENTS) + addition_cost.get(Axis.COMPONENTS)
+    text = reservation.cost.get(Axis.DISPLAY_TEXT) + addition_cost.get(Axis.DISPLAY_TEXT)
+    attachments = reservation.cost.get(Axis.ATTACHMENTS) + len(assets)
 
     problems: list[str] = []
     if components > limits.total_components:
@@ -340,7 +341,7 @@ def _walk_ids(item: object) -> list[str]:
     return found
 
 
-def _reject_dispatchable(view: discord.ui.LayoutView) -> None:
+def _reject_dispatchable(view: discord.ui.view.BaseView) -> None:
     """Refuse any control the host would have to dispatch for us.
 
     Component-local callbacks are already refused during sessionless planning. This closes

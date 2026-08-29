@@ -11468,7 +11468,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Page_Annotated_Union_BuildSearchResult__RecordSearchResult__MetadataSearchResult___FieldInfo_annotation_NoneType__required_True__discriminator__resource_kind____"
+                  "$ref": "#/components/schemas/Page_SearchResult_"
                 }
               }
             },
@@ -19681,68 +19681,6 @@
         "title": "PageAnchor",
         "description": "Query-parameter values addressing an adjacent page. Exactly one field is set."
       },
-      "Page_Annotated_Union_BuildSearchResult__RecordSearchResult__MetadataSearchResult___FieldInfo_annotation_NoneType__required_True__discriminator__resource_kind____": {
-        "properties": {
-          "items": {
-            "items": {
-              "oneOf": [
-                {
-                  "$ref": "#/components/schemas/BuildSearchResult"
-                },
-                {
-                  "$ref": "#/components/schemas/RecordSearchResult"
-                },
-                {
-                  "$ref": "#/components/schemas/MetadataSearchResult"
-                }
-              ],
-              "discriminator": {
-                "propertyName": "resource_kind",
-                "mapping": {
-                  "build": "#/components/schemas/BuildSearchResult",
-                  "metadata": "#/components/schemas/MetadataSearchResult",
-                  "record": "#/components/schemas/RecordSearchResult"
-                }
-              }
-            },
-            "type": "array",
-            "title": "Items"
-          },
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          },
-          "next": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PageAnchor"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "prev": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PageAnchor"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "items",
-          "total",
-          "next",
-          "prev"
-        ],
-        "title": "Page[Annotated[Union[BuildSearchResult, RecordSearchResult, MetadataSearchResult], FieldInfo(annotation=NoneType, required=True, discriminator='resource_kind')]]"
-      },
       "Page_BuildSummary_": {
         "properties": {
           "items": {
@@ -19962,6 +19900,50 @@
           "prev"
         ],
         "title": "Page[SchematicSummary]"
+      },
+      "Page_SearchResult_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SearchResult"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "next": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prev": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "next",
+          "prev"
+        ],
+        "title": "Page[SearchResult]"
       },
       "Page_TagDetail_": {
         "properties": {
@@ -20982,6 +20964,27 @@
         ],
         "title": "SearchField",
         "description": "One query field supported by the public search grammar."
+      },
+      "SearchResult": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/BuildSearchResult"
+          },
+          {
+            "$ref": "#/components/schemas/RecordSearchResult"
+          },
+          {
+            "$ref": "#/components/schemas/MetadataSearchResult"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "resource_kind",
+          "mapping": {
+            "build": "#/components/schemas/BuildSearchResult",
+            "metadata": "#/components/schemas/MetadataSearchResult",
+            "record": "#/components/schemas/RecordSearchResult"
+          }
+        }
       },
       "SearchScope": {
         "type": "string",

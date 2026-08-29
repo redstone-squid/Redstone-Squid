@@ -1,6 +1,6 @@
 """Reusable recipes for opening logical Discord sessions."""
 
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Hashable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from types import MappingProxyType
@@ -40,7 +40,7 @@ class OpenContext:
     guild_id: int | None = None
 
     @classmethod
-    def of(cls, source: discord.Interaction[Any] | Replyable) -> OpenContext:
+    def of(cls, source: discord.Interaction[Any] | Replyable | discord.Message) -> OpenContext:
         """Build an open context from an interaction or command context.
 
         Read duck-typed, the way `reply_to` peeks at `ctx.interaction`: an interaction names
@@ -50,7 +50,10 @@ class OpenContext:
         """
         user = getattr(source, "user", None)
         if user is None:
-            user = cast(Any, source).author
+            user = getattr(source, "author", None)
+        if user is None:
+            message = "open context source names neither a user nor an author"
+            raise TypeError(message)
         guild_id = getattr(source, "guild_id", None)
         if guild_id is None:
             guild = getattr(source, "guild", None)
@@ -173,11 +176,12 @@ class SessionSpec:
 
     async def open(
         self,
-        component: Component,
+        component: Component[Any],  # the dialect ends here: `OpenResult` exposes no typed mount
         message_destination: MessageDestination,
         *,
         sessions: SessionManager | RuntimeSource,
         open_context: OpenContext,
+        key: Hashable | None = None,
         **overrides: Unpack[MessageRootOptions],
     ) -> OpenResult:
         """Construct and open a root mount using this screen's policy.
@@ -192,7 +196,7 @@ class SessionSpec:
         return await sessions.open(
             message_root,
             message_destination,
-            key=self.key(open_context),
+            key=self.key(open_context) if key is None else key,
             admission=self.admission,
             actor_id=open_context.user_id,
             capacity=self.capacity,
@@ -202,7 +206,7 @@ class SessionSpec:
 
     async def attach(
         self,
-        component: Component,
+        component: Component[Any],  # the dialect ends here: `OpenResult` exposes no typed mount
         message_destination: MessageDestination,
         *,
         sessions: SessionManager | RuntimeSource,
@@ -223,7 +227,7 @@ class SessionSpec:
 
     async def respond(
         self,
-        component: Component,
+        component: Component[Any],  # the dialect ends here: `OpenResult` exposes no typed mount
         interaction: discord.Interaction[Any],
         *,
         sessions: SessionManager | RuntimeSource | None = None,
@@ -246,7 +250,7 @@ class SessionSpec:
 
     async def respond_attached(
         self,
-        component: Component,
+        component: Component[Any],  # the dialect ends here: `OpenResult` exposes no typed mount
         interaction: discord.Interaction[Any],
         *,
         parent: MessageRoot,

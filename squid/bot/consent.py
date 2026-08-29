@@ -19,18 +19,9 @@ from squid.accounts.domain import (
     IdentityProvider,
     LinkPreview,
 )
-from squid.bot.i18n import t
-from squid.bot.ui import CardField, localization_for, text_layout
+from squid.bot.ui import CardField, L, text_node
 from squid.bot.utils.sentinel import Sentinel
-from squid.core.i18n import _, ntranslate
-from squid_ui_discord import OpenContext, SessionSpec
-from squid_ui_discord.sessions import AdmissionSpec, Opened, Reject, Rejected
-
-CONSENT_SESSION_SPEC = SessionSpec(
-    "consent",
-    admission=AdmissionSpec(collision=Reject()),
-    options={"timeout": 120},
-)
+from squid_ui_discord.sessions import AdmissionSpec, Reject
 
 
 class NotAskedType(Enum):
@@ -68,8 +59,14 @@ class _Answer:
     consent: AccountConsent | None = None
 
 
-class ConsentPrompt(sl.Component):
+class ConsentPrompt(sd.Screen):
     """A semantic consent prompt with a native-free waiting lifecycle."""
+
+    session = "consent"
+    admission = AdmissionSpec(
+        collision=Reject(notice=L("You already have a consent prompt open. Please answer that one."))
+    )
+    timeout = 120
 
     closed: bool = sl.state(default=False)
 
@@ -77,21 +74,19 @@ class ConsentPrompt(sl.Component):
         self,
         *,
         user_id: int,
-        title: str,
-        summary: str,
+        title: sl.TextLike,
+        summary: sl.TextLike,
         fields: tuple[CardField, ...],
-        accept_label: str,
-        locale: str | None,
-        timeout: float,
+        accept_label: sl.TextLike,
+        wait_timeout: float,
         on_answer: ConsentContinuation | None = None,
     ) -> None:
         self.user_id = user_id
-        self.locale = locale
         self._title = title
         self._summary = summary
         self._fields = fields
         self._accept_label = accept_label
-        self._timeout = timeout
+        self._wait_timeout = wait_timeout
         self._on_answer = on_answer
         self._answer = _Answer()
         self._done = anyio.Event()
@@ -104,7 +99,7 @@ class ConsentPrompt(sl.Component):
     def notice_version(self) -> str:
         return CURRENT_CONSENT_VERSION
 
-    def render(self) -> tuple[sl.LayoutNode, ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         card_fields = tuple(sl.field(field.name, field.value) for field in self._fields)
         return (
             sl.section(
@@ -119,8 +114,8 @@ class ConsentPrompt(sl.Component):
                     key="accept",
                     tone=sl.Tone.SUCCESS,
                 ),
-                sl.action_control(t(self.locale, _("Cancel")), self._cancel, key="cancel"),
-                sl.action_control(t(self.locale, _("Privacy notice")), self._privacy, key="privacy"),
+                sl.action_control(L("Cancel"), self._cancel, key="cancel"),
+                sl.action_control(L("Privacy notice"), self._privacy, key="privacy"),
                 key="consent-actions",
             ),
         )
@@ -132,7 +127,7 @@ class ConsentPrompt(sl.Component):
         await self._finish(event, None)
 
     async def _privacy(self, event: sl.PressEvent) -> None:
-        await event.notice(t(self.locale, PRIVACY_NOTICE))
+        await event.notice(L(PRIVACY_NOTICE))
 
     async def _finish(self, event: sl.PressEvent, consent: AccountConsent | None) -> None:
         self._answer.consent = consent
@@ -149,7 +144,7 @@ class ConsentPrompt(sl.Component):
         self._done.set()
 
     async def wait(self) -> AccountConsent | None:
-        with anyio.move_on_after(self._timeout) as scope:
+        with anyio.move_on_after(self._wait_timeout) as scope:
             await self._done.wait()
         return None if scope.cancel_called else self._answer.consent
 
@@ -162,19 +157,10 @@ def _is_context(target: ConsentTarget) -> bool:
     return callable(getattr(target, "send", None))
 
 
-def _destination(target: ConsentTarget) -> sd.MessageDestination:
-    """Choose the reply transport for a consent prompt.
-
-    Ephemeral wherever the surface allows it: a consent notice names what the bot would store
-    about one reader, and a channel is not the audience for that.
-    """
-    ephemeral = not _is_context(target) or cast(commands.Context[Any], target).interaction is not None
-    return sd.deliver_to(target, ephemeral=ephemeral, wait=True)
-
-
-async def _send(target: ConsentTarget, payload: sd.message_payload.MessagePayload) -> None:
-    """Send a plain payload where the prompt itself would have gone."""
-    await _destination(target)(payload)
+async def _send(target: ConsentTarget, node: sl.LayoutNode[sl.ComponentsV2Target]) -> None:
+    """Send a plain node where the prompt itself would have gone."""
+    invocation = await sd.Invocation.of(target)
+    await invocation.reply(node, visibility="personal")
 
 
 def _user_of(target: ConsentTarget) -> discord.User | discord.Member:
@@ -183,147 +169,99 @@ def _user_of(target: ConsentTarget) -> discord.User | discord.Member:
     return cast(discord.Interaction[Any], target).user
 
 
-def _link_credit_value(preview: LinkPreview, locale: str | None) -> str:
+def _link_credit_value(preview: LinkPreview) -> sl.TextLike:
     credit = preview.credit
     if credit is None:
-        return t(
-            locale, _("No build credits **{username}** yet, so nothing is reattributed."), username=preview.username
-        )
-    builds = ntranslate(
-        locale,
-        _("{count} build"),
-        _("{count} builds"),
-        credit.build_count,
-        count=credit.build_count,
+        return L("No build credits **{username}** yet, so nothing is reattributed.", username=preview.username)
+    builds = sl.text.Message(
+        "{count} build",
+        {"count": credit.build_count},
+        plural="{count} builds",
     )
     if credit.is_contested:
-        return t(
-            locale,
-            _(
-                "**{name}** ({builds}) is already credited to another creator, so agreeing moves "
-                "nothing and opens a claim for staff to review."
-            ),
+        return L(
+            "**{name}** ({builds}) is already credited to another creator, so agreeing moves "
+            "nothing and opens a claim for staff to review.",
             name=credit.name,
             builds=builds,
         )
-    return t(
-        locale,
-        _("**{name}** ({builds}) becomes attributed to your account."),
+    return L(
+        "**{name}** ({builds}) becomes attributed to your account.",
         name=credit.name,
         builds=builds,
     )
 
 
-def _build_prompt(
+async def _show_prompt(
+    target: ConsentTarget,
     *,
     user_id: int,
-    locale: str | None,
     preview: LinkPreview | None,
     timeout: float,
     on_answer: ConsentContinuation | None,
-) -> ConsentPrompt:
+    parent: sd.MessageRoot | None,
+) -> ConsentPrompt | None:
     """The notice this reader is owed, worded for what agreeing would actually store."""
     if preview is None:
-        component = ConsentPrompt(
+        return await ConsentPrompt.show(
+            target,
             user_id=user_id,
-            title=t(locale, _("Before Redstone Squid stores anything about you")),
-            summary=t(
-                locale,
-                _(
-                    "Agreeing stores your Discord user ID and records this consent, so the bot can "
-                    "recognise you and attribute your builds. Cancelling stores nothing."
-                ),
+            title=L("Before Redstone Squid stores anything about you"),
+            summary=L(
+                "Agreeing stores your Discord user ID and records this consent, so the bot can "
+                "recognise you and attribute your builds. Cancelling stores nothing."
             ),
             fields=(
                 CardField(
-                    t(locale, _("Discord account")),
-                    t(locale, _("<@{user_id}> (`{user_id}`)"), user_id=user_id),
+                    L("Discord account"),
+                    L("<@{user_id}> (`{user_id}`)", user_id=user_id),
                 ),
                 CardField(
-                    t(locale, _("Consent recorded")),
-                    t(locale, _("Notice {version}, timed at the moment you agree."), version=CURRENT_CONSENT_VERSION),
+                    L("Consent recorded"),
+                    L("Notice {version}, timed at the moment you agree.", version=CURRENT_CONSENT_VERSION),
                 ),
             ),
-            accept_label=t(locale, _("Agree")),
-            locale=locale,
-            timeout=timeout,
+            accept_label=L("Agree"),
+            wait_timeout=timeout,
             on_answer=on_answer,
-        )
-    else:
-        component = ConsentPrompt(
-            user_id=user_id,
-            title=t(locale, _("Link {username} to your Discord account"), username=preview.username),
-            summary=t(
-                locale,
-                _(
-                    "Agreeing stores your Discord user ID, your Minecraft UUID and your current "
-                    "Minecraft username, and records this consent. Cancelling stores nothing."
-                ),
-            ),
-            fields=(
-                CardField(
-                    t(locale, _("Minecraft account")),
-                    t(locale, _("**{username}**\n`{uuid}`"), username=preview.username, uuid=preview.java_uuid),
-                ),
-                CardField(
-                    t(locale, _("Discord account")),
-                    t(locale, _("<@{user_id}> (`{user_id}`)"), user_id=user_id),
-                ),
-                CardField(t(locale, _("Build credit")), _link_credit_value(preview, locale)),
-                CardField(
-                    t(locale, _("Consent recorded")),
-                    t(locale, _("Notice {version}, timed at the moment you agree."), version=CURRENT_CONSENT_VERSION),
-                ),
-            ),
-            accept_label=t(locale, _("Agree and link")),
-            locale=locale,
-            timeout=timeout,
-            on_answer=on_answer,
-        )
-    return component
-
-
-async def _open_prompt(
-    target: ConsentTarget,
-    component: ConsentPrompt,
-    *,
-    user_id: int,
-    locale: str | None,
-    timeout: float,
-    parent: sd.MessageRoot | None,
-) -> bool:
-    """Put the prompt on screen, telling the reader why not when it could not be opened."""
-    options: sd.MessageRootOptions = {"localization": localization_for(locale), "timeout": timeout}
-    if parent is None:
-        opened = await CONSENT_SESSION_SPEC.open(
-            component,
-            _destination(target),
-            sessions=target,
-            open_context=OpenContext(user_id),
-            **options,
-        )
-    else:
-        opened = await CONSENT_SESSION_SPEC.attach(
-            component,
-            _destination(target),
-            sessions=target,
-            open_context=OpenContext(user_id),
             parent=parent,
-            **options,
+            wait=True,
         )
-    if isinstance(opened, Rejected):
-        await _send(
-            target, text_layout(t(locale, _("You already have a consent prompt open. Please answer that one.")))
-        )
-        return False
-    return isinstance(opened, Opened)
+    return await ConsentPrompt.show(
+        target,
+        user_id=user_id,
+        title=L("Link {username} to your Discord account", username=preview.username),
+        summary=L(
+            "Agreeing stores your Discord user ID, your Minecraft UUID and your current "
+            "Minecraft username, and records this consent. Cancelling stores nothing."
+        ),
+        fields=(
+            CardField(
+                L("Minecraft account"),
+                L("**{username}**\n`{uuid}`", username=preview.username, uuid=preview.java_uuid),
+            ),
+            CardField(
+                L("Discord account"),
+                L("<@{user_id}> (`{user_id}`)", user_id=user_id),
+            ),
+            CardField(L("Build credit"), _link_credit_value(preview)),
+            CardField(
+                L("Consent recorded"),
+                L("Notice {version}, timed at the moment you agree.", version=CURRENT_CONSENT_VERSION),
+            ),
+        ),
+        accept_label=L("Agree and link"),
+        wait_timeout=timeout,
+        on_answer=on_answer,
+        parent=parent,
+        wait=True,
+    )
 
 
 async def prompt_for_consent(
     target: ConsentTarget,
     *,
     user_id: int,
-    locale: str | None = None,
     preview: LinkPreview | None = None,
     timeout: float = 120.0,
     parent: sd.MessageRoot | None = None,
@@ -334,8 +272,15 @@ async def prompt_for_consent(
     blocks. A mounted action handler wants `request_consent` instead, because the wait it
     would do here happens inside the mount's transaction and dispatch lock.
     """
-    component = _build_prompt(user_id=user_id, locale=locale, preview=preview, timeout=timeout, on_answer=None)
-    if not await _open_prompt(target, component, user_id=user_id, locale=locale, timeout=timeout, parent=parent):
+    component = await _show_prompt(
+        target,
+        user_id=user_id,
+        preview=preview,
+        timeout=timeout,
+        on_answer=None,
+        parent=parent,
+    )
+    if component is None:
         return NOT_ASKED
     return await component.wait()
 
@@ -345,7 +290,6 @@ async def request_consent(
     *,
     user_id: int,
     on_answer: ConsentContinuation,
-    locale: str | None = None,
     preview: LinkPreview | None = None,
     timeout: float = 120.0,
     parent: sd.MessageRoot | None = None,
@@ -357,8 +301,15 @@ async def request_consent(
     also never runs it, which is the right reading of an abandoned question: nothing was
     stored, and nothing the reader did not ask for happens later.
     """
-    component = _build_prompt(user_id=user_id, locale=locale, preview=preview, timeout=timeout, on_answer=on_answer)
-    return await _open_prompt(target, component, user_id=user_id, locale=locale, timeout=timeout, parent=parent)
+    component = await _show_prompt(
+        target,
+        user_id=user_id,
+        preview=preview,
+        timeout=timeout,
+        on_answer=on_answer,
+        parent=parent,
+    )
+    return component is not None
 
 
 type ConsentedAccountWork = Callable[[sl.ActionEvent, int], Awaitable[None]]
@@ -370,7 +321,6 @@ async def with_consented_account(
     accounts: AccountService,
     work: ConsentedAccountWork,
     *,
-    locale: str | None = None,
     timeout: float = 120.0,
 ) -> None:
     """Run `work` with the reader's consented account id, asking first when consent is stale.
@@ -405,7 +355,6 @@ async def with_consented_account(
         interaction,
         user_id=user.id,
         on_answer=answered,
-        locale=locale,
         timeout=timeout,
         parent=message_root,
     )
@@ -415,7 +364,6 @@ async def ensure_consented_account(
     target: ConsentTarget,
     accounts: AccountService,
     *,
-    locale: str | None = None,
     timeout: float = 120.0,
     parent: sd.MessageRoot | None = None,
 ) -> int | None:
@@ -429,10 +377,10 @@ async def ensure_consented_account(
     if account is not None and account.id is not None and not account.needs_consent_refresh:
         return account.id
 
-    consent = await prompt_for_consent(target, user_id=user.id, locale=locale, timeout=timeout, parent=parent)
+    consent = await prompt_for_consent(target, user_id=user.id, timeout=timeout, parent=parent)
     if consent is NOT_ASKED or consent is None:
         if consent is None:
-            await _send(target, text_layout(t(locale, _("Cancelled. No account information was stored."))))
+            await _send(target, text_node(L("Cancelled. No account information was stored.")))
         return None
 
     granted = await accounts.get_or_create_identity(IdentityProvider.DISCORD, str(user.id), consent=consent)

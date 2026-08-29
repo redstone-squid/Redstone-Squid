@@ -7,7 +7,7 @@ into `publish` when multiple processes need to refresh one another"), and the bo
 have a second process: `squid/worker/rendering.py` finishes renders whose panels live in the
 bot. Today its only route to a panel is a database row the panel re-reads on its next click.
 CascadeUI answers this with a persisted Redux store coordinated over PostgreSQL
-`LISTEN`/`NOTIFY`. The store half is rejected and stays rejected ([90](90-deferred.md),
+`LISTEN`/`NOTIFY`. The store half is rejected and stays rejected ([90](../../squid-ui-redesign/90-deferred.md),
 [40](40-shared-state.md) §3); the coordination half is the gap.
 
 ## Decision

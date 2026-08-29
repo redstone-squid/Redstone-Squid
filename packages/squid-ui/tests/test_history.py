@@ -4,6 +4,7 @@ import gc
 import uuid
 import weakref
 from datetime import UTC, datetime
+from typing import cast
 
 import anyio
 import pytest
@@ -17,8 +18,9 @@ from squid_reactivity import (
     enlist,
     on_action_commit,
 )
+from squid_reactivity.actions import ChangeToken
 from squid_reactivity.operations import OperationContext
-from squid_ui import Component, state
+from squid_ui import Component, DiscordTarget, state
 from squid_ui.primitives import Text
 from squid_ui.runtime import (
     CompensationClaim,
@@ -49,7 +51,7 @@ class Workspace(SharedState[str]):
     filters: tuple[str, ...] = state(())
 
 
-class Panel(Component):
+class Panel(Component[DiscordTarget]):
     history: History = history(limit=3)
     page: int = state(1)
     open: bool = state(default=False)
@@ -61,7 +63,7 @@ class Panel(Component):
         return Text(str(self.page))
 
 
-class UnassignedPanel(Component):
+class UnassignedPanel(Component[DiscordTarget]):
     """A slot that holds no value of its own until an action puts one there.
 
     How an absent slot actually arises: `__init__` leaves the field alone, so the cell exists
@@ -358,7 +360,8 @@ async def test_participant_planning_failure_returns_failed_without_partial_inver
             return None
 
         def describe_change(self, prepared: None) -> TransactionContribution:
-            return TransactionContribution("bad", BadToken(), ChangeReport(participants=1))
+            # Deliberately not a ChangeToken; the runtime refusal is the behaviour under test.
+            return TransactionContribution("bad", cast(ChangeToken, BadToken()), ChangeReport(participants=1))
 
         def apply(self, prepared: None) -> None:
             pass

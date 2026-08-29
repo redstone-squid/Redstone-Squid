@@ -10,7 +10,8 @@ from squid_ui.planning.cursors import MaterializedCursorRequest
 from squid_ui.planning.identity import stable_fingerprint
 from squid_ui.planning.layout_measurement.costing import measure_nodes
 from squid_ui.planning.layout_measurement.text import split_text_node, text_total
-from squid_ui.planning.limits import Axis, DiscordLimits
+from squid_ui.planning.limits import Axis, MessageLimits
+from squid_ui.planning.resolved import text as resolved_text
 from squid_ui.planning.semantic_adaptation.common import (
     _resolve,
 )
@@ -27,6 +28,7 @@ from squid_ui.primitives.nodes import (
     Budget,
     Card,
     CardFooter,
+    CardText,
     Fidelity,
     Footer,
     Lines,
@@ -123,7 +125,7 @@ def _as_fragment(node: Node, open_card: _Fragment | None) -> _Fragment | None:
     return None
 
 
-def _merge(first: _Fragment, second: _Fragment, limits: DiscordLimits) -> _Fragment | None:
+def _merge(first: _Fragment, second: _Fragment, limits: MessageLimits) -> _Fragment | None:
     """Fold `second` into `first`, or None when the result would not be one legal embed."""
     embeds = limits.embeds
     if embeds is None or len(first.fields) + len(second.fields) > embeds.fields:
@@ -185,8 +187,8 @@ def _close(card: _Fragment, context: _Context) -> Node:
     return Variants((Variant((plain,)), Variant((reformatted,), fidelity=Fidelity.REFORMATTED)))
 
 
-def _slot_text(value: object) -> str:
-    return card_text(value).content  # type: ignore[arg-type]
+def _slot_text(value: CardText) -> str:
+    return resolved_text(card_text(value).content)
 
 
 def _region(card: Card, body: Sequence[Node], context: _Context) -> Node:
@@ -244,7 +246,7 @@ def _split_oversized_region_items(
     chars: int,
     min_fill: int,
     widows: int,
-    limits: DiscordLimits,
+    limits: MessageLimits,
     path: str,
 ) -> list[_RegionItem]:
     result: list[_RegionItem] = []
@@ -278,7 +280,7 @@ def _break_region(
     chars: int,
     min_fill: int,
     widows: int,
-    limits: DiscordLimits,
+    limits: MessageLimits,
     path: str,
 ) -> list[tuple[_RegionItem, ...]]:
     if not items:

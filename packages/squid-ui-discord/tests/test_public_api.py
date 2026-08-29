@@ -9,6 +9,8 @@ from types import ModuleType
 import pytest
 
 import squid_ui_discord
+from squid_ui.text import Message
+from squid_ui_discord.sessions import Reject
 
 RENAMED_SUBMODULES = (
     "squid_ui_discord.rendering",
@@ -42,6 +44,13 @@ def test_the_adapter_namespace_exposes_its_surface() -> None:
     assert squid_ui_discord.OpenContext
     assert squid_ui_discord.ScopeKind
     assert squid_ui_discord.MessageRootOptionsResolver
+    assert squid_ui_discord.Invocation
+    assert squid_ui_discord.Private
+    assert squid_ui_discord.Visibility
+    assert squid_ui_discord.LocalizationResolver
+    assert squid_ui_discord.current_invocation
+    assert squid_ui_discord.invocation_scope
+    assert squid_ui_discord.Screen
     assert squid_ui_discord.message_payload.MessagePayload
     assert squid_ui_discord.MessageMode.COMPONENTS_V2
     assert squid_ui_discord.MessageModeError
@@ -57,6 +66,12 @@ def test_the_adapter_namespace_exposes_its_surface() -> None:
     assert squid_ui_discord.MessageRootScheduler.follow
     for removed in ("AdmissionSpec", "Router", "V2Renderer", "ClassicRenderer", "AuditReport"):
         assert removed not in squid_ui_discord.__all__ and not hasattr(squid_ui_discord, removed)
+
+
+def test_rejection_notices_accept_public_deferred_text() -> None:
+    notice = Message("This screen is already open.")
+
+    assert Reject(notice=notice).notice is notice
 
 
 def test_testing_helpers_are_a_declared_namespace_not_an_accident() -> None:
@@ -124,12 +139,13 @@ assert "squid_storage" not in sys.modules
 def test_package_metadata_keeps_its_base_and_optional_dependencies() -> None:
     metadata = tomllib.loads((Path(__file__).parents[1] / "pyproject.toml").read_text())
     project = metadata["project"]
-    assert project["version"] == "0.1.0"
+    assert project["version"] == "0.1.0a1"
     assert project["dependencies"] == [
-        "squid-ui",
+        "squid-ui==0.1.0a1",
+        "squid-reactivity==0.1.0a1",
         "discord-py>=2.7,<3",
         "anyio>=4.14,<5",
         "packaging>=24,<27",
     ]
-    assert project["optional-dependencies"]["durable"] == ["squid-storage"]
-    assert project["optional-dependencies"]["postgres"] == ["squid-storage[postgres]"]
+    assert project["optional-dependencies"]["durable"] == ["squid-storage==0.1.0a1"]
+    assert project["optional-dependencies"]["postgres"] == ["squid-storage[postgres]==0.1.0a1"]

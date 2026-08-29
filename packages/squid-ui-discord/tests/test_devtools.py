@@ -21,12 +21,12 @@ from squid_ui_discord.routing import Router
 from squid_ui_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 
 
-class Subject(sl.Component):
+class Subject(sl.Component[sl.ComponentsV2Target]):
     def render(self):
         return [Heading("Subject")]
 
 
-class Clicker(sl.Component):
+class Clicker(sl.Component[sl.ComponentsV2Target]):
     count: int = sl.state(0)
 
     def render(self):
@@ -43,13 +43,6 @@ class FakeBot:
 
     def add_dynamic_items(self, *items: type[discord.ui.DynamicItem[Any]]) -> None:
         self.items.extend(items)
-
-
-@pytest.fixture(autouse=True)
-def _isolated_manager():
-    live._LIVE.clear()
-    yield
-    live._LIVE.clear()
 
 
 def make_context(*, bot: FakeBot | None = None) -> Any:

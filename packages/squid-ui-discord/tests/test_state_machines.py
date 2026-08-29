@@ -17,15 +17,15 @@ from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 
 
-def _texts(view: discord.ui.LayoutView) -> list[str]:
+def _texts(view: discord.ui.View | discord.ui.LayoutView) -> list[str]:
     return [item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)]
 
 
-def _labels(view: discord.ui.LayoutView) -> list[str | None]:
+def _labels(view: discord.ui.View | discord.ui.LayoutView) -> list[str | None]:
     return [item.label for item in view.walk_children() if isinstance(item, discord.ui.Button)]
 
 
-class Screen(sl.Component):
+class Screen(sl.Component[sl.ComponentsV2Target]):
     def __init__(self, name: str) -> None:
         self.name = name
 

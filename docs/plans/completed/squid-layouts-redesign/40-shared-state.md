@@ -30,7 +30,7 @@ inverse plus a bus topic, three mechanisms deep for one value.
 
 ### What this overturns, and what it does not
 
-[90](90-deferred.md) rejects a store, and reaffirmed it on 2026-08-22 when the bus moved
+[90](../../squid-ui-redesign/90-deferred.md) rejects a store, and reaffirmed it on 2026-08-22 when the bus moved
 package-side. This plan does not overturn it. **There is no store here** — no registry, no
 keyed lookup, no container the host installs. A shared namespace is an object; components
 that share state hold the same object, the way they already share a service.

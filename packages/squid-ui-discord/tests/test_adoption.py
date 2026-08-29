@@ -33,7 +33,7 @@ from squid_ui.primitives import (
 )
 from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord.adoption import AdoptionError, adopt
-from squid_ui_discord.message_root import _EntityValues
+from squid_ui_discord.message_root_wiring import _EntityValues
 from squid_ui_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 
 
@@ -767,7 +767,7 @@ async def test_the_adopted_scene_conforms_strictly() -> None:
 
 
 async def test_an_adopted_view_embeds_in_a_larger_squid_screen() -> None:
-    class Screen(sl.Component):
+    class Screen(sl.Component[sl.ComponentsV2Target]):
         def __init__(self, child: sl.Component) -> None:
             self.child = child
 

@@ -3,10 +3,11 @@
 import asyncio
 import logging
 from dataclasses import dataclass
+from typing import Any
 
 import pytest
 
-from squid_ui import Component, computed, state
+from squid_ui import Component, DiscordTarget, computed, state
 from squid_ui.primitives import Text
 from squid_ui.runtime import ComponentRuntime, ReactiveWriteError, UndeclaredStateError, enlist, transaction
 from squid_ui.runtime.reactivity import (
@@ -27,7 +28,7 @@ class Uncopyable:
         raise AssertionError(message)
 
 
-class Panel(Component):
+class Panel(Component[DiscordTarget]):
     declared: int = state(0)
     service: Uncopyable = state(opaque=True)
     handles: list[Uncopyable] = state(opaque=True)
@@ -41,7 +42,7 @@ class Panel(Component):
         return Text(str(self.declared))
 
 
-def attached[ComponentT: Component](component: ComponentT) -> ComponentT:
+def attached[ComponentT: Component[Any]](component: ComponentT) -> ComponentT:
     """Give a component a runtime, which is what makes its writes state changes."""
     ComponentRuntime(component)
     return component
@@ -193,7 +194,7 @@ class TestStaging:
     def test_a_computed_sees_the_staged_value(self):
         """Read-your-writes has to reach derived values, or an action renders its own past."""
 
-        class Derived(Component):
+        class Derived(Component[DiscordTarget]):
             count: int = state(0)
 
             @computed
@@ -210,7 +211,7 @@ class TestStaging:
         assert component.doubled == 8
 
     def test_a_rolled_back_computed_goes_back_with_its_source(self):
-        class Derived(Component):
+        class Derived(Component[DiscordTarget]):
             count: int = state(0)
 
             @computed
@@ -234,7 +235,7 @@ class TestStateWithoutAnInitialValue:
     def test_leaving_it_unassigned_fails_at_construction(self):
         """Like a dataclass field with no default, not like a bare annotation."""
 
-        class Late(Component):
+        class Late(Component[DiscordTarget]):
             value: int = state()
 
             def __init__(self, *, assign: bool) -> None:
@@ -251,7 +252,7 @@ class TestStateWithoutAnInitialValue:
     def test_a_subclass_may_assign_it_after_calling_super(self):
         """The base's wrapper must not fire before the subclass has finished."""
 
-        class Base(Component):
+        class Base(Component[DiscordTarget]):
             value: int = state()
 
             def __init__(self) -> None:
@@ -268,7 +269,7 @@ class TestStateWithoutAnInitialValue:
         assert Derived().value == 2
 
     def test_a_subclass_inheriting_a_constructor_is_still_checked(self):
-        class Base(Component):
+        class Base(Component[DiscordTarget]):
             def __init__(self) -> None:
                 self.ready = True
 
@@ -284,7 +285,7 @@ class TestStateWithoutAnInitialValue:
     def test_reading_an_unassigned_field_is_still_guarded(self):
         """A backstop for construction paths that bypass __init__ entirely."""
 
-        class Late(Component):
+        class Late(Component[DiscordTarget]):
             value: int = state()
 
             def render(self):
@@ -294,7 +295,7 @@ class TestStateWithoutAnInitialValue:
             _ = Late.__new__(Late).value
 
     def test_it_round_trips_through_a_snapshot(self):
-        class Late(Component):
+        class Late(Component[DiscordTarget]):
             value: int = state()
 
             def __init__(self, value: int) -> None:
@@ -309,7 +310,7 @@ class TestStateWithoutAnInitialValue:
         assert restored.value == 3
 
     def test_it_still_rolls_back(self):
-        class Late(Component):
+        class Late(Component[DiscordTarget]):
             value: int = state()
 
             def __init__(self) -> None:
@@ -372,7 +373,7 @@ class TestMutatedInPlace:
 
 class TestAbstractBases:
     def test_an_unimplemented_component_may_leave_state_to_its_subclasses(self):
-        class BasePanel(Component):
+        class BasePanel(Component[DiscordTarget]):
             profile: str = state()
 
             def __init__(self, name: str) -> None:
@@ -391,7 +392,7 @@ class TestAbstractBases:
     def test_an_abc_base_burdens_only_its_concrete_subclass(self):
         from abc import ABC, abstractmethod
 
-        class BasePanel(Component, ABC):
+        class BasePanel(Component[DiscordTarget], ABC):
             profile: str = state()
 
             @abstractmethod
@@ -417,7 +418,7 @@ class TestAbstractBases:
             Forgetful()
 
     def test_the_concrete_subclass_is_still_checked(self):
-        class BasePanel(Component):
+        class BasePanel(Component[DiscordTarget]):
             profile: str = state()
 
         class Panel(BasePanel):

@@ -2,42 +2,78 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
-from typing import Any, Self
+from typing import Any, Generic, Protocol, Self, TypeVar, cast
 
 from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.adapter import (
-    EMPTY_COST as EMPTY_COST,
-)
-from squid_ui.planning.adapter import (
     AdapterProfile,
     ExtensionAdapter,
-    ResourceCost,
     extension_capability,
 )
 from squid_ui.planning.adapter import (
     PreparedExtension as PreparedExtension,
 )
 from squid_ui.planning.dialect import TargetDialect
-from squid_ui.planning.limits import Axis, DiscordLimits
+from squid_ui.planning.resources import EMPTY_COST as EMPTY_COST
+from squid_ui.planning.resources import Axis, ResourceCost, TargetLimits
+
+
+class TargetIdentity(Protocol):
+    """What a target is called and what it can do -- everything but how to compile for it.
+
+    Enough for the layers that only need to *name* a target: cache keys, diagnostics,
+    capability checks. They took `Target[Any, Any, Any, Any]` before, which said nothing
+    about what they read and erased four parameters to say it.
+    """
+
+    @property
+    def id(self) -> str: ...
+
+    @property
+    def version(self) -> int: ...
+
+    @property
+    def triple(self) -> str: ...
+
+    @property
+    def fingerprint(self) -> str: ...
+
+    @property
+    def capabilities(self) -> frozenset[str]: ...
+
+
+LimitsT = TypeVar("LimitsT", bound=TargetLimits)
+BodyT = TypeVar("BodyT", bound=scene.Body)
+RenderTargetT_co = TypeVar("RenderTargetT_co", covariant=True)
+AdapterT_co = TypeVar("AdapterT_co", covariant=True)
+"""Declared the old way, and covariant on purpose, in a package that otherwise uses PEP 695.
+
+`Target` reads its render target and adapter back out — through the `render_target` property
+and `AdapterProfile[AdapterT_co]` — so a `Target[.., ComponentsV2Target, DiscordPyAdapter]`
+must satisfy a parameter typed for the wider markers those refine. PEP 695 infers variance
+rather than letting it be declared, and there is no syntax to override the inference, so the
+old spelling is the only one that can say this. `Component` carries the mirror-image note for
+its contravariant parameter.
+"""
 
 
 @dataclass(frozen=True, slots=True)
-class Target[LimitsT: DiscordLimits, BodyT: scene.Body, ModeT, AdapterT]:
+class Target(Generic[LimitsT, BodyT, RenderTargetT_co, AdapterT_co]):
     """What a document is compiled to: a protocol dialect and an adapter for it.
 
     Two axes and nothing else, the way a compiler names `x86_64-unknown-linux-gnu` rather
     than threading arch, OS and ABI separately. The dialect says what a legal message is;
     the adapter says which library has been verified to produce one. Everything the planner
-    used to be handed alongside a target — its id, version, mode, body type and protocol
+    used to be handed alongside a target — its id, version, render target, body type and protocol
     capabilities — is derived from one of the two, so no two of them can fall out of step.
 
     Only `limits` is stored separately, because it is not a fact about either axis: it is
     the dialect's table after any reservation has been withheld from it.
     """
 
-    dialect: TargetDialect[LimitsT, BodyT, ModeT]
-    adapter: AdapterProfile[AdapterT]
+    dialect: TargetDialect[LimitsT, BodyT, Any]
+    adapter: AdapterProfile[AdapterT_co]
     limits: LimitsT
     selected_adapter_capabilities: frozenset[str] | None = None
     """The adapter capabilities planning was frozen to, when a snapshot recorded a subset."""
@@ -70,8 +106,8 @@ class Target[LimitsT: DiscordLimits, BodyT: scene.Body, ModeT, AdapterT]:
         return self.dialect.version
 
     @property
-    def mode(self) -> type[ModeT]:
-        return self.dialect.mode
+    def render_target(self) -> type[RenderTargetT_co]:
+        return cast(type[RenderTargetT_co], self.dialect.render_target)
 
     @property
     def body_type(self) -> type[BodyT]:
@@ -163,6 +199,17 @@ class Target[LimitsT: DiscordLimits, BodyT: scene.Body, ModeT, AdapterT]:
         unknown = sorted(set(cost.values) - set(self.capacities))
         if unknown:
             known = ", ".join(sorted(self.capacities)) or "none"
-            message = f"target {self.triple!r} has no reservable resource {unknown[0]!r} (known: {known})"
+            # str() first: an Axis member reprs as `<Axis.X: 'x'>`, and this message names axes.
+            message = f"target {self.triple!r} has no reservable resource {str(unknown[0])!r} (known: {known})"
             raise LayoutInvariantError(message)
         return replace(self, limits=self.limits.with_capacities(cost.values))
+
+
+type AnyTarget = Target[Any, Any, Any, Any]
+"""A target whose four parameters are deliberately erased.
+
+For the layers that need both real axes -- the search hands the target to its own dialect,
+the adapter check reads the adapter -- but are written once for every dialect. Stating the
+erasure once beats spelling `Any` four times at each site, and distinguishes it from the
+places that only need `TargetIdentity`.
+"""

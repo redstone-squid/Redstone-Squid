@@ -1,10 +1,26 @@
 [project]
 name = "squid-ui"
-version = "0.1.0"
+version = "0.1.0a1"
 description = "Declarative, limits-aware UI planning with a portable HTML renderer"
 requires-python = ">=3.14"
+readme = "README.md"
 license = "MIT"
-dependencies = ["squid-reactivity"]
+license-files = ["LICENSE"]
+authors = [{ name = "Redstone Squid contributors" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
+]
+dependencies = ["markdown-it-py>=4.0,<5", "squid-reactivity==0.1.0a1"]
+
+[project.urls]
+Changelog = "https://github.com/redstone-squid/Redstone-Squid/blob/master/CHANGELOG.md"
+Documentation = "https://redstone-squid.github.io/Redstone-Squid/squid-ui/"
+Issues = "https://github.com/redstone-squid/Redstone-Squid/issues"
+Repository = "https://github.com/redstone-squid/Redstone-Squid"
 
 [build-system]
 requires = ["uv_build>=0.11,<0.13"]

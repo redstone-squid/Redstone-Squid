@@ -7,6 +7,7 @@ from typing import Literal
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.factories import (
+    ChildLike,
     action_control,
     action_controls,
     choice,
@@ -27,6 +28,7 @@ from squid_ui.semantic import ChoiceEvent, ControlDisplay, LayoutNode, Tone
 from squid_ui.sources import LoadedWindow, WindowLoader, WindowSource, window_footer
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import require_key
+from squid_ui_widgets._window import LoadingCopy
 
 type SearchProvider[ItemT] = Callable[[str], WindowSource[ItemT]]
 type SearchPickHandler[ItemT] = Callable[[ActionEvent, tuple[ItemT, ...]], Awaitable[None]]
@@ -44,6 +46,10 @@ class _LookupWindow[ItemT]:
     source: WindowSource[ItemT]
     loader: WindowLoader[ItemT]
     loaded: LoadedWindow[ItemT]
+
+
+SEARCH_LOADING_COPY = LoadingCopy(failed="Could not load results.")
+"""Default copy for a search: what failed to load was results, not entries."""
 
 
 class SearchPicker[ItemT](Component):
@@ -66,9 +72,7 @@ class SearchPicker[ItemT](Component):
         picked: Sequence[ItemT] = (),
         on_pick: SearchPickHandler[ItemT],
         page_size: int = 10,
-        loading: TextLike = "Loading…",
-        load_failed: TextLike = "Could not load results.",
-        retry: TextLike = "Retry",
+        copy: LoadingCopy = SEARCH_LOADING_COPY,
     ) -> None:
         self.key = require_key(key, name="SearchPicker.key")
         if minimum < 0 or maximum < 1 or minimum > maximum:
@@ -94,9 +98,7 @@ class SearchPicker[ItemT](Component):
         self.picked = initial
         self.on_pick = on_pick
         self.page_size = page_size
-        self.loading = loading
-        self.load_failed = load_failed
-        self.retry = retry
+        self.copy = copy
 
     @resource
     async def results(self) -> _LookupWindow[ItemT]:
@@ -221,24 +223,31 @@ class SearchPicker[ItemT](Component):
         if self.query is None:
             return stack(heading(chrome.search), *self._picked_nodes(), search_control)
 
+        # One arm per member of `Ready | Pending | Failed`, with the `previous` case inside it.
+        # Splitting on `previous` in the pattern instead left the match unprovably exhaustive,
+        # so `body` read as possibly unbound on a path that cannot happen.
         match self.results.status:
-            case Pending(previous=None):
-                body = (note(self.loading),)
-            case Failed(previous=None):
-                body = self._failure()
-            case Pending(previous=Ready(value=current)):
-                body = self._loaded_nodes(current, status_text=self.loading)
-            case Failed(previous=Ready(value=current)):
-                body = self._loaded_nodes(current, status_text=self.load_failed, retry=True)
             case Ready(value=current):
                 body = self._loaded_nodes(current)
+            case Pending(previous=previous):
+                body = (
+                    (note(self.copy.loading),)
+                    if previous is None
+                    else self._loaded_nodes(previous.value, status_text=self.copy.loading)
+                )
+            case Failed(previous=previous):
+                body = (
+                    self._failure()
+                    if previous is None
+                    else self._loaded_nodes(previous.value, status_text=self.copy.failed, retry=True)
+                )
         return stack(heading(chrome.search), *self._picked_nodes(), search_control, *body)
 
     def _failure(self) -> tuple[LayoutNode, ...]:
         return (
-            note(self.load_failed),
+            note(self.copy.failed),
             action_controls(
-                action_control(self.retry, self._retry, key=f"{self.key}.retry"), key=f"{self.key}.retry-row"
+                action_control(self.copy.retry, self._retry, key=f"{self.key}.retry"), key=f"{self.key}.retry-row"
             ),
         )
 
@@ -248,7 +257,7 @@ class SearchPicker[ItemT](Component):
         *,
         status_text: TextLike | None = None,
         retry: bool = False,
-    ) -> tuple[LayoutNode, ...]:
+    ) -> tuple[ChildLike, ...]:
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         window = current.loaded.window
         entries = tuple(
@@ -290,7 +299,7 @@ class SearchPicker[ItemT](Component):
             navigation,
             note(status_text) if status_text is not None else None,
             action_controls(
-                action_control(self.retry, self._retry, key=f"{self.key}.retry"), key=f"{self.key}.retry-row"
+                action_control(self.copy.retry, self._retry, key=f"{self.key}.retry"), key=f"{self.key}.retry-row"
             )
             if retry
             else None,

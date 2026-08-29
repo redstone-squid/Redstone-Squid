@@ -3,6 +3,7 @@
 from collections.abc import Sequence
 from dataclasses import replace
 
+from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.adapter import ResourceCost
 from squid_ui.planning.layout_measurement.model import (
     MeasuredCard,
@@ -14,7 +15,7 @@ from squid_ui.planning.layout_measurement.model import (
     Realized,
 )
 from squid_ui.planning.layout_measurement.realization import Builder
-from squid_ui.planning.limits import LIMITS, Axis, DiscordLimits
+from squid_ui.planning.limits import LIMITS, Axis, MessageLimits, V2Limits
 from squid_ui.planning.navigation import NavNode
 from squid_ui.primitives.nodes import (
     Break,
@@ -36,7 +37,7 @@ from squid_ui.primitives.nodes import (
 )
 
 
-def measure_nodes(nodes: Sequence[Node], *, limits: DiscordLimits = LIMITS) -> ResourceCost:
+def measure_nodes(nodes: Sequence[Node], *, limits: MessageLimits = LIMITS) -> ResourceCost:
     """Measure preferred cost per named axis, without applying any budget pressure."""
 
     def lower_shape(node: Node) -> list[Node]:
@@ -47,6 +48,9 @@ def measure_nodes(nodes: Sequence[Node], *, limits: DiscordLimits = LIMITS) -> R
                     for start in range(0, len(items), limits.components.row_buttons)
                 ]
             case MediaCollection(items=items):
+                if not isinstance(limits, V2Limits):
+                    message = "MediaCollection requires Components V2 limits"
+                    raise LayoutInvariantError(message)
                 return [
                     Gallery(tuple(items[start : start + limits.gallery_items]))
                     for start in range(0, len(items), limits.gallery_items)
@@ -120,7 +124,7 @@ def _item_component_cost(item: object) -> int:
     return item.component_cost if isinstance(item, RawItem) else 1
 
 
-def structural_cost(children: Sequence[Realized]) -> dict[str, int]:
+def structural_cost(children: Sequence[Realized]) -> dict[Axis, int]:
     """Count every structural axis at once, whichever target budgets them."""
     totals = {Axis.COMPONENTS: 0, Axis.EMBEDS: 0, Axis.ROWS: 0, Axis.CONTROLS: 0}
 

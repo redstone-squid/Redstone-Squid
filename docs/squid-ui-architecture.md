@@ -1,8 +1,8 @@
 # squid-ui architecture and API interactions
 
 squid-ui separates UI intent, target planning, and drawing. Discord is one frontend,
-not the data model: the same resolved scene can be drawn as Discord Components V2 or safe
-HTML, serialized to JSON, and handed to another process.
+not the data model: the same semantic document can be planned independently into a Discord
+scene or a native HTML scene, serialized to JSON, and handed to another process.
 
 ## Concepts at a glance
 
@@ -29,22 +29,26 @@ owning background work ends through one named method.
         |
         | render()
         v
-    semantic Document -- keyed components, assets, Discord Markdown text
+    semantic Document -- keyed components, assets, semantic content
         |
-        v
-    target adapters -- finite lossless strategies plus sticky presentation state
+        +-- plan(..., Discord target)
+        |       |
+        |       v
+        |   DiscordPlanner -- adaptation, search, measurement, pagination
+        |       |
+        |       v
+        |   immutable Scene[Discord body] --> sd.Renderer
         |
-        v
-    exact primitives -- one measured candidate per searched state
-        |
-        +-- PlanReport (notes and fingerprints)
-        +-- PlanMetrics (search/cache/latency instrumentation)
-        +-- ephemeral ActionBindings (never serialized)
-        v
-    immutable sl.scene.Scene -- `sl.scene.Codec` JSON and JSON Schema
-        |
-        +-- sd.Renderer --> discord.ui.LayoutView
-        +-- sl.html.Renderer ----> safe semantic HTML
+        +-- plan(..., HTML target)
+                |
+                v
+            HtmlPlanner -- native semantic resolution
+                |
+                v
+            immutable Scene[HtmlBody] --> sl.html.Renderer
+
+    Every PlanResult also carries PlanReport, PlanMetrics, and ephemeral ActionBindings.
+    Every immutable Scene supports `sl.scene.Codec` JSON and JSON Schema.
 
 The planner is the only layer allowed to choose an alternate, drop content, split a page, or
 spend a target resource. A renderer is mechanical. If Discord drawing needs to clamp after
@@ -54,21 +58,25 @@ planning, that is a DrawInvariantError, not a second degradation mechanism.
 
 | Need | API | Result |
 |---|---|---|
-| Runtime for one discord.py client | sd.install(client, defaults=..., bus=...) | ClientRuntime: registry, scheduler, challenge runner |
-| That runtime, from an interaction or context | sd.ClientRuntime.of(source) | the installed host, or `ClientRuntimeMissing` |
-| Stateful Discord interaction | sd.MessageRoot(component, access=...) | lifecycle, access, events, paging, edits |
-| Scoped live UI lifetime | sd.SessionManager | root/child cascade, cardinality, replacement |
-| Per-open policy for one screen | sd.SessionSpec(name, scope=..., admission=...) | session key, cardinality, capacity, quota, access |
+| Runtime for one discord.py client | `sd.install(client, defaults=..., bus=..., localization=...)` | `ClientRuntime`: sessions, scheduler, challenges, and the host localization hook |
+| Current command or routed action | `inv = await sd.Invocation.of(source)` | source, runtime, localization, user, guild, and source-aware delivery |
+| Terminal command reply | `await inv.reply(*nodes, visibility=...)` | a localized public, personal, or `sd.Private(reason)` response |
+| Plain live panel | `await inv.mount(component, access=..., visibility=...)` | a delivered `MessageRoot` without session policy |
+| Reusable application screen | `await MyScreen.show(source, ...)` | the prepared screen, or `None` after a policy-authored rejection |
+| Dynamic session composition | `await inv.open(component, spec, visibility=...)` | `Opened` or `Rejected`; destination and open context come from the invocation |
+| Low-level root composition | `runtime.mount(...)`, then `root.send(inv.destination(...))` | explicit message-root and delivery ownership when a higher entry point cannot express it |
+| Low-level Discord destination | `sd.reply_to`, `sd.respond_to`, `sd.send_to` | a `MessageDestination` for framework internals and transport adapters |
 | Static Components V2 message | sd.render_static(document) | MessagePayload |
 | One node as a detached item | sd.render_item(node, reservation=...) | discord.ui.Item for a host-built view |
 | Static classic message | sd.classic.render_static(document) | MessagePayload |
 | Region in a host-owned classic message | sd.classic.contribute(document, to=...) | AttachedClassicContribution |
 | Discord message plus diagnostics | sd.render_message(document) | RenderedMessage |
 | Portable planning | plan(document, target=...) | PlanResult |
-| Browser or preview drawing | sl.html.Renderer().draw(scene) | HTML string |
+| Native browser document | plan(document, target=sl.html.target()), then sl.html.Renderer().draw(scene) | semantic HTML string |
+| Components V2 browser preview | sl.html.DiscordPreviewRenderer().draw(scene) | preview HTML string |
 | Cross-process transport | sl.scene.Codec.dumps and loads | canonical protocol JSON |
 | Resume an opted-in session | sd.durability.DurableSessionRuntime | recovered Session graph |
-| Stateful root on a message the bot owns | sd.edit_to(message) | MessageDestination writing that message |
+| Stateful root on a message the bot owns | `sd.edit_to(message)` | `MessageDestination` writing that message |
 
 sd.render_message is the Components V2 convenience path: plan for `DISCORD_V2_DPY27`, draw with
 `V2Renderer`, then strictly audit the result. `sd.classic.render_message` is its counterpart
@@ -79,17 +87,26 @@ document is preferable because the planner can see every cost. A reservation is 
 planning against a reduced target, so adaptation and measurement agree on the room available. It never adopts an arbitrary existing `discord.py` view: renderers own their
 output object, so unknown pre-existing controls cannot undermine measurement.
 
-`sd.SessionSpec` is the per-open recipe for one logical screen, written once and shared by
-every opening of it: `scope` picks the key an opening collides on, `admission` decides what happens
-when it does, `capacity` caps members per session, `quota` caps how many sessions in `domain` one
-user may be in, and `access` builds the message root's access policy from the open context.
-`SessionSpec.open` and `SessionSpec.respond` construct the message root and hand it to the
-`SessionManager`, which still owns lifetime -- a spec owns the recipe, not the sessions. Either accepts the manager itself or
-anything an installed `ClientRuntime` can be found from, and `SessionSpec.respond` defaults it to the
-interaction's own client, so a caller holding neither does not dispatch over the two invocation
-surfaces to find one. The two are separate values because a
-component is not intrinsically a session policy: the same component can be opened under more than
-one screen, or under none at all.
+`Invocation` is the product entry point for one Discord event. `Invocation.of` resolves the
+installed runtime and host localization hook once inside the ambient dispatch scope; callers then
+reuse its audience policy for static replies, plain mounts, and session opens. Router dispatch and
+message-root action/submit dispatch establish that scope themselves, so a handler does not install
+one. `inv.t(...)` is only for strings leaving the layout system, such as autocomplete or a native
+modal API; layout nodes retain `TextLike` values and resolve them when their message root renders.
+
+`Screen` is the declarative application layer over `Invocation`. A subclass places stable policy in
+class variables: `session`, `scope`, `admission`, `capacity`, `quota`, `domain`, `visibility`,
+`timeout`, `expiry`, `follow_topics`, and root `options`. `show()` constructs the instance, records
+its opening invocation, awaits `prepare()`, and then mounts or opens it. A rejected session returns
+`None` only after its deferred policy notice has already been answered. Override cached `spec()`
+only when the derived `SessionSpec` cannot express the screen.
+
+`SessionSpec` remains the composition recipe for dynamic policy: `scope` picks the collision key,
+`admission` decides what happens on collision, `capacity` and `quota` bound membership, and `access`
+builds the root policy from the open context. `SessionSpec.open`/`respond`, `SessionManager`, raw
+`MessageRoot`, and `reply_to`/`respond_to` remain public lower layers for framework extensions and
+transport adapters. Application handlers normally enter through `Invocation` or `Screen`, which
+derive destination, sessions, open context, and localization from one source.
 
 ## Semantic authoring, adaptation, and exact primitives
 
@@ -190,11 +207,49 @@ Target-native features use Extension(kind, version, payload, fallback). A target
 prepares and measures the native resource once. Unsupported targets use the mandatory
 portable fallback. Extension payloads in scenes are versioned and JSON-safe.
 
-Discord Markdown is the default text dialect, not a structured inline-content tree. Bare
+Discord Markdown is the default authored text dialect, not a structured inline-content tree. Bare
 strings are trusted author markup. `md(t"Build {title}")` safely escapes Python 3.14 template
 interpolations and neutralizes mentions; `plain()` requests literal text; `raw_md()` opts one
-known-safe interpolation back into trusted markup. Scenes preserve the dialect so every
-renderer can choose an appropriate Markdown implementation.
+known-safe interpolation back into trusted markup. Scenes preserve the dialect so each renderer
+can choose an appropriate Markdown implementation. The HTML renderer uses markdown-it-py's
+`js-default` configuration with raw HTML disabled, converts only allowlisted tokens, and validates
+links and images as recommended by its
+[security guidance](https://markdown-it-py.readthedocs.io/en/latest/security.html).
+
+### Declaring a component's dialect
+
+A node's type says which targets can plan it. Semantic factories such as `sl.heading` and
+`sl.paragraph` produce `RenderTarget` nodes that can be planned for Discord or HTML. Exact
+`sl.primitives.Text` and `sl.primitives.Heading` nodes are Discord-shaped, as are all other
+primitive nodes: `Panel`, `Section`, `Gallery`, `File`, `Sep` and `Thumbnail` are Components V2
+only, while `Card` and `Content` are classic only. The mode is a *type parameter*, and it
+propagates: a primitive container factory takes the meet of its children's modes, so one `Panel`
+nested three levels down makes the whole document `ComponentsV2Target`, and planning that against
+`classic()` or `sl.html.target()` is a static error rather than a runtime one.
+
+That reaches `Component` through `render`, so a component that uses a dialect-specific
+primitive declares which dialect it is for:
+
+```python
+class BuildPanel(sl.Component[sl.ComponentsV2Target]):
+    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
+        return sl.stack(sl.heading("Build"), sl.primitives.Panel(...))
+```
+
+An unannotated `sl.Component` is portable: it may render semantic nodes and can be planned for
+either frontend. `Component` is contravariant in its mode. The markers live at the package root:
+`sl.RenderTarget`, `sl.DiscordTarget`, `sl.HtmlTarget`, `sl.ComponentsV2Target`, and
+`sl.ClassicTarget`.
+
+Two cases this does not catch, both deliberate. A container mixing a V2-only and a
+classic-only child works in neither, but contravariance makes the union the solver's natural
+answer, so pyrefly accepts it against both targets; basedpyright rejects it at the call, and
+the planner rejects it at runtime. And widget content slots are dialect-erased, because
+`normalize_content` classifies an `object` and has no static type to carry a mode.
+
+Planning internals that walk any document take `AnyLayoutNode`, which is the deliberate
+opt-out: they rewrite whatever they are handed and leave the dialect judgement to the
+target's dialect.
 
 ## Patterns: one state machine, two shells
 
@@ -651,11 +706,28 @@ the engine never presents two competing navigation systems.
 PlanResult.bindings and PlanResult.resources are ephemeral side tables for a live frontend.
 
 `sl.scene.Codec` provides canonical JSON, fingerprints, and a Draft 2020-12 schema through `schema`
-and `schema_json`. Protocol 1 is current; incompatible changes increment the protocol.
+and `schema_json`. Protocol 1 is current and additively includes `HtmlBody`; incompatible changes
+increment the protocol.
 
-sl.html.Renderer emits escaped semantic markup, action identifiers, policies, and pager metadata.
-Standalone mode includes Discord-like CSS. It preserves planned structure; pixel-level
-fidelity also needs the website's chosen Discord-markdown and emoji renderer.
+`sl.html.Renderer` accepts only `Scene[HtmlBody]`. It mechanically emits escaped, accessible
+semantic markup with native forms and controls plus action, route, selection, and pager metadata.
+Fragment output is the default; standalone mode adds a document shell, escaped title, locale,
+viewport metadata, and neutral colour-scheme-aware responsive CSS. Caller-supplied CSS is trusted
+host configuration. There is no raw-HTML scene node, unrestricted scene style attribute,
+JavaScript runtime, or transport implementation.
+
+`sl.html.DiscordPreviewRenderer` preserves the former browser preview for Components V2 scenes.
+It is useful for Discord tooling but is not an HTML planning target and cannot draw `HtmlBody`.
+
+### How a traversal dispatches
+
+Every node representation here — semantic, primitive, scene, and each renderer's private draw
+program — is a closed PEP 695 union of behaviour-free frozen dataclasses, and every pass over one is
+a `match` closing with a structured raise. Nodes carry no `accept` method and there is no
+type-to-handler registry; a pass that needs a different shape lowers to a new union instead. Extend
+the open node set through `target.extensions`, and attach per-case behaviour through
+`GeneratedHandler`. See [ADR 0075](decisions/0075-planner-dispatch-style.md) for why, and for what
+to do when a `match` grows too long or two dialects start sharing rules.
 
 ## Durable sessions
 
@@ -714,13 +786,16 @@ is the single framework boundary outside the whole user onion.
 ## Library binding: discord.py, not Discord alone
 
 For an ownership-first path from existing views and persistent controls into these adapter
-boundaries, see [Migrating an existing discord.py bot](../packages/squid-ui-discord/docs/migrating.md).
+boundaries, see the [Discord migration guide](https://github.com/redstone-squid/Redstone-Squid/blob/master/packages/squid-ui-discord/docs/migrating.md).
 
-The portable seam is the scene. Everything above it — semantic vocabulary, planner,
-`measure()`, `CursorCoordinator`, components — binds to Discord's *shape* (budgets, option windows,
-row widths) but imports no discord.py; `sl.html` consumes scenes. Everything below it —
-`renderer`, `message_root`, `delivery`, `routing` — is a **discord.py adapter**, not a
-Discord-protocol adapter, and its dependencies sort into three strata:
+The portable seam is the semantic `Document`. The public planner delegates to the selected target
+backend and shares only target-neutral resources, options, state, caches, and reports.
+`DiscordPlanner` owns adaptation, measurement, search, pagination, Discord budgets, and exact
+primitive conversion. `HtmlPlanner` resolves semantic nodes directly into `HtmlBody`, without the
+Discord solver or its limits. Each renderer is mechanical and consumes only its own scene body.
+
+Below the Discord scene, `renderer`, `message_root`, `delivery`, and `routing` form a
+**discord.py adapter**, not a Discord-protocol adapter, and its dependencies sort into three strata:
 
 - **Protocol facts** — component budgets, token lifetimes, callback-type restrictions,
   custom-id length, error codes 10015/10062/50027/50035. Depending on these is the
@@ -858,5 +933,11 @@ to describe, and saying so is noise.
   edited out of band at all; Discord expires the only credentials that reach it. Interactive
   use is unaffected, and `MessageRoot.pending` reports a render held back for this reason.
 - HTML action transport is not prescribed. Markup exposes action IDs; HTTP or WebSocket
-  routing and authentication belong to the host.
-- The engine depends only on `squid-reactivity`. Two leaf packages sit on it as independent siblings: `squid-ui-discord` for the discord.py adapter -- message roots, sessions, routing, durability, with `squid-ui-discord[durable]` adding `squid-storage` -- and `squid-ui-widgets` for the reusable application state machines. Neither imports the other. Discord *protocol* knowledge stays in the engine: the planner plans against Components V2 limits and dialects, and the HTML renderer reads the same target ids.
+  routing and authentication belong to the host. Action and form callbacks remain only in
+  `PlanResult.bindings` and never enter a scene.
+- The engine depends directly on `squid-reactivity` and `markdown-it-py`. Two leaf packages sit on
+  it as independent siblings: `squid-ui-discord` for the discord.py adapter -- message roots,
+  sessions, routing, durability, with `squid-ui-discord[durable]` adding `squid-storage` -- and
+  `squid-ui-widgets` for the reusable application state machines. Neither imports the other.
+  Discord protocol knowledge stays behind `DiscordPlanner`; HTML planning and drawing do not
+  import Discord limits, primitives, or measured-layout types.

@@ -4,7 +4,7 @@
 
 Shipped. Membership is `sessions.py`; the record protocol is `durability/session_records.py`;
 the durable path is `durability/runtime.py`; the worked consumer is `/layout lobby` in
-`../../../../squid/bot/layout_showcase.py`. This closes [90](../../squid-layouts-redesign/90-deferred.md)'s "Participant tracking /
+`../../../../squid/bot/layout_showcase.py`. This closes [90](../../squid-ui-redesign/90-deferred.md)'s "Participant tracking /
 shared sessions" entry on [34](34-safe-session-runtime.md)
 §B.4's terms.
 

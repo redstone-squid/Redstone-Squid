@@ -7,7 +7,8 @@ from squid_ui.planning.adapter import ResourceCost
 from squid_ui.planning.breaking import BreakItem, balanced_breaks
 from squid_ui.planning.layout_measurement.model import MeasuredText
 from squid_ui.planning.limits import ELLIPSIS, TEXT_AXES, Axis
-from squid_ui.primitives.constraints import Never, Overflow
+from squid_ui.planning.resolved import text as resolved_text
+from squid_ui.primitives.constraints import Alt, Never, Overflow
 from squid_ui.primitives.nodes import Code, Footer, Heading, Lines, Node, Text
 
 type TextBearing = Text | Heading | Footer | Code | Lines
@@ -20,7 +21,7 @@ class TextUnit:
     node: TextBearing
     slot: MeasuredText
     index: int
-    axis: str
+    axis: Axis
     """Which message-wide text pool this unit draws from."""
     prefix: str
     suffix: str
@@ -70,24 +71,27 @@ def _escape_fences(content: str) -> str:
     return content.replace("```", "``\N{ZERO WIDTH SPACE}`")
 
 
-def make_unit(node: TextBearing, slot: MeasuredText, index: int, axis: str = Axis.DISPLAY_TEXT) -> TextUnit | None:
+def make_unit(node: TextBearing, slot: MeasuredText, index: int, axis: Axis = Axis.DISPLAY_TEXT) -> TextUnit | None:
     """Create the allocation unit for one text-bearing primitive."""
-    prefix, suffix, ladders, join = "", "", None, "\n"
+    prefix, suffix, content, ladders, join = "", "", "", None, "\n"
     ranks: tuple[int, ...] = ()
     match node:
         case Text(content=content):
-            pass
+            content = resolved_text(content)
         case Heading(content=content, level=level):
             prefix = "#" * level + " "
+            content = resolved_text(content)
         case Footer(content=content):
             prefix = "-# "
+            content = resolved_text(content)
         case Code(content=content, lang=lang):
             prefix = f"```{lang}\n"
             suffix = "\n```"
-            content = _escape_fences(content)
+            content = _escape_fences(resolved_text(content))
         case Lines(lines=raw_lines, join=join):
             entries = [
-                ((entry,), 0) if isinstance(entry, str) else (entry.steps, entry.priority) for entry in raw_lines
+                (entry.steps, entry.priority) if isinstance(entry, Alt) else ((resolved_text(entry),), 0)
+                for entry in raw_lines
             ]
             kept = [(ladder, rank) for ladder, rank in entries if ladder[0]]
             ladders = tuple(ladder for ladder, _ in kept)

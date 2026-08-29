@@ -1,9 +1,11 @@
-"""Pins target-mode variance and adapter profile families under the project type check."""
+"""Pins target-mode variance and adapter profile families under the project type check.
+
+Renderer protocol conformance moved to `typing_renderers.py`.
+"""
 
 from typing import Any, assert_type
 
-from squid_ui import fallback, scene
-from squid_ui.html import Renderer as HtmlRenderer
+from squid_ui import RenderTarget, fallback, html, scene
 from squid_ui.planning import (
     AdapterProfile,
     ClassicTarget,
@@ -11,7 +13,6 @@ from squid_ui.planning import (
     DiscordAdapter,
     DiscordPy27Adapter,
     DiscordPyAdapter,
-    DiscordTarget,
     Renderable,
     Target,
     classic_target,
@@ -20,16 +21,12 @@ from squid_ui.planning import (
 )
 from squid_ui.planning.limits import ClassicLimits, V2Limits
 from squid_ui.primitives import Card, Panel, Text, Variants
-from squid_ui.renderer import Renderer
 from squid_ui.scene.model import PlanResult
-from squid_ui.semantic import FallbackContent
-from squid_ui_discord.classic_renderer import ClassicRenderer
-from squid_ui_discord.message_payload import MessagePayload
-from squid_ui_discord.renderer import V2Renderer
+from squid_ui.semantic import FallbackContent, Paragraph
 from squid_ui_discord.target import classic, v2
 
 
-class Portable(Renderable[DiscordTarget]):
+class Portable(Renderable[RenderTarget]):
     pass
 
 
@@ -69,6 +66,9 @@ assert_type(
 )
 assert_type(plan(Text("v2"), target=v2()), PlanResult[scene.ComponentsV2])
 assert_type(plan(Text("classic"), target=classic()), PlanResult[scene.ClassicMessage])
+assert_type(plan(Paragraph("portable"), target=v2()), PlanResult[scene.ComponentsV2])
+assert_type(plan(Paragraph("html"), target=html.target()), PlanResult[scene.HtmlBody])
+plan(Text("primitive"), target=html.target())  # pyrefly: ignore[bad-argument-type]
 
 v2_only = Panel((Text("v2"),))
 classic_only = Card(children=(Text("classic"),))
@@ -87,23 +87,3 @@ assert_type(
     Variants.of(v2_only, classic_only, Text("a"), Text("b"), Text("c"), Text("long")),
     Variants[Any],
 )
-
-
-def accepts_v2_renderer(value: Renderer[scene.ComponentsV2, MessagePayload]) -> None:
-    del value
-
-
-def accepts_classic_renderer(value: Renderer[scene.ClassicMessage, MessagePayload]) -> None:
-    del value
-
-
-def accepts_html_renderer(value: Renderer[scene.ComponentsV2, str]) -> None:
-    del value
-
-
-# A declared protocol nothing implements is how the contravariance bug survived: `draw` took
-# an unparameterized `scene.Scene`, so no renderer that narrowed to its own body could
-# satisfy it. These three pin that it is satisfiable.
-accepts_v2_renderer(V2Renderer())
-accepts_classic_renderer(ClassicRenderer())
-accepts_html_renderer(HtmlRenderer())

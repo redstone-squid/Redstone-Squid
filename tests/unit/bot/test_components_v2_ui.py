@@ -9,6 +9,7 @@ from uuid import UUID
 import discord
 import pytest
 
+import squid_ui_discord as sd
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.submission.search_view import SearchResultsView
 from squid.bot.submission.ui.components import get_text_input
@@ -125,7 +126,8 @@ def test_search_results_use_named_selection_and_direct_build_action() -> None:
     )
     view = SearchResultsView(cast(SearchService, object()), SearchRequest("door"), page, author_id=123)
 
-    message_root = view.mount(source=make_layout_bot())
+    bot = make_layout_bot()
+    message_root = bot.client_runtime.mount(view, access=sd.Owner(123), timeout=180)
     rendered = commit_render(message_root)
     result_buttons = [
         child
@@ -148,7 +150,8 @@ def test_search_results_preserve_page_warnings_without_refetching_the_initial_pa
     )
     view = SearchResultsView(cast(SearchService, service), SearchRequest("door"), page, author_id=123)
 
-    payload = commit_render(view.mount(source=make_layout_bot())).to_components()
+    bot = make_layout_bot()
+    payload = commit_render(bot.client_runtime.mount(view, access=sd.Owner(123), timeout=180)).to_components()
 
     service.search.assert_not_awaited()
     assert "Semantic fallback used" in str(payload)
@@ -158,7 +161,8 @@ def test_search_results_preserve_page_warnings_without_refetching_the_initial_pa
 async def test_search_timeout_disables_bound_controls() -> None:
     page = SearchPage((BuildSearchHit("8", "Fast door", "confirmed"),), total=1, next=None, prev=None)
     view = SearchResultsView(cast(SearchService, object()), SearchRequest("door"), page, author_id=123)
-    message_root = view.mount(source=make_layout_bot())
+    bot = make_layout_bot()
+    message_root = bot.client_runtime.mount(view, access=sd.Owner(123), timeout=180)
     message = fake_message()
     await message_root.send(delivered_to(message))
 

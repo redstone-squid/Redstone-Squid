@@ -1,7 +1,7 @@
 """Discord target conveniences bound to the shipped discord.py adapter."""
 
 from collections.abc import Callable
-from typing import overload
+from typing import cast, overload
 
 import discord
 
@@ -15,7 +15,7 @@ from squid_ui.planning.discord import (
 )
 from squid_ui.planning.limits import CLASSIC_LIMITS, LIMITS, ClassicLimits, V2Limits
 from squid_ui.planning.target import Target
-from squid_ui.primitives.nodes import Extension, PrimitiveNode
+from squid_ui.primitives.nodes import Extension, Node, PrimitiveNode
 from squid_ui.target_types import (
     ClassicTarget,
     ComponentsV2Target,
@@ -66,7 +66,10 @@ def NativeItem[FallbackT](
     factory: Callable[[], discord.ui.Item], *, fallback: PrimitiveNode[FallbackT]
 ) -> Extension[ComponentsV2Target | FallbackT]:
     """Create a measured Discord item with a required portable fallback."""
-    return Extension(kind="discord.item", version=1, payload=factory, fallback=fallback)
+    return cast(
+        Extension[ComponentsV2Target | FallbackT],
+        Extension(kind="discord.item", version=1, payload=factory, fallback=cast(Node, fallback)),
+    )
 
 
 DISCORD_V2_DPY27 = v2()

@@ -10,7 +10,7 @@ import pytest
 
 import squid_ui as sl
 
-# ~105 names: the authoring vocabulary. See docs/plans/squid-ui-redesign/58-public-api-narrowing.md
+# ~115 names: the authoring vocabulary. See docs/plans/squid-ui-redesign/58-public-api-narrowing.md
 # for the promotion rule and the grouped rationale (namespaces, component model, document,
 # semantic factories, factory type aliases, adaptation verbs, text, node union, event types,
 # central nouns) this list encodes.
@@ -19,26 +19,44 @@ ROOT_API = frozenset(
         "ActionEvent",
         "ChildLike",
         "ChoiceEvent",
+        # The four dialect markers are authoring vocabulary now, not planner internals:
+        # a component using a dialect-specific primitive names one in its own base class.
+        "ClassicTarget",
         "Component",
+        "ComponentsV2Target",
         "Conditional",
         "ContextKey",
+        "DiscordTarget",
         "Document",
         "DocumentLike",
+        # The error family is authoring vocabulary too: application code catches planning
+        # and drawing failures without reaching into the errors submodule.
+        "DrawInvariantError",
         "EntityEvent",
         "EntitySelectionEvent",
+        "ExistingLayoutError",
+        "HtmlTarget",
+        "LayoutDegradedError",
+        "LayoutError",
+        "LayoutInvariantError",
         "LayoutNode",
+        "LimitViolationError",
         "NavigateEvent",
         "OpenEvent",
         "Palette",
         "PaletteRegistry",
         "PressEvent",
+        "Renderable",
+        "RenderTarget",
         "ScaleEvent",
         "SelectionEvent",
+        "SquidUiError",
         "SubmitEvent",
         "TextLike",
         "TextValue",
         "ToggleEvent",
         "Tone",
+        "UnsolvableLayoutError",
         "action_control",
         "control_group",
         "action_controls",
@@ -168,7 +186,6 @@ SPECIALIST_SAMPLES = {
     "Button": sl.primitives,
     "Renderer": sl.html,
     "Guard": sl.guards,
-    "LayoutError": sl.errors,
     "ZonedDateTime": sl.temporal,
     "Message": sl.text,
 }
@@ -280,8 +297,8 @@ assert not {"discord", "anyio", "squid_storage", "squid_ui_discord", "squid_ui_w
 def test_package_metadata_names_only_the_reactive_kernel() -> None:
     metadata = tomllib.loads((Path(__file__).parents[1] / "pyproject.toml").read_text())
     project = metadata["project"]
-    assert project["version"] == "0.1.0"
-    assert project["dependencies"] == ["squid-reactivity"]
+    assert project["version"] == "0.1.0a1"
+    assert project["dependencies"] == ["markdown-it-py>=4.0,<5", "squid-reactivity==0.1.0a1"]
     # Both extras left with the adapter: `discord` carried discord.py/anyio/packaging, and
     # `postgres` only ever forwarded to squid-storage for Discord durability.
     assert "optional-dependencies" not in project

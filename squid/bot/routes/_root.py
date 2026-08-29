@@ -14,6 +14,33 @@ if TYPE_CHECKING:
 routes: sd.routing.RouteGroup[RedstoneSquid] = sd.routing.RouteGroup("r")
 """The ordinary root group reserving the bot's durable ``r:`` namespace."""
 
+_FEATURE_GROUPS: dict[str, sd.routing.RouteGroup[RedstoneSquid]] = {}
+_FEATURE_ROUTES: dict[tuple[str, str], sd.routing.Route] = {}
+
+
+def _feature_group(prefix: str) -> tuple[sd.routing.RouteGroup[RedstoneSquid], bool]:
+    """Return a feature-owned group and whether this import created it."""
+    if group := _FEATURE_GROUPS.get(prefix):
+        return group, False
+    group = routes.group(prefix)
+    _FEATURE_GROUPS[prefix] = group
+    return group, True
+
+
+def _feature_route(
+    group: sd.routing.RouteGroup[RedstoneSquid], format: str, *, aliases: tuple[str, ...] = ()
+) -> sd.routing.Route:
+    """Define an identity once while allowing discord.py to reload its handler module."""
+    key = (group.prefix, format)
+    if route := _FEATURE_ROUTES.get(key):
+        if route.aliases != aliases:
+            message = f"reloaded route {route.format!r} changed aliases"
+            raise ValueError(message)
+        return route
+    route = group.define(format, aliases=aliases)
+    _FEATURE_ROUTES[key] = route
+    return route
+
 
 class TraceRoutes[BotT: discord.Client](sd.routing.Middleware[BotT]):
     """Trace every routed interaction without recording user-controlled route values."""
@@ -34,11 +61,12 @@ class TraceRoutes[BotT: discord.Client](sd.routing.Middleware[BotT]):
 
 async def _route_gone_hook(interaction: discord.Interaction[RedstoneSquid]) -> None:
     from squid.bot.i18n import resolve_locale, t
-    from squid.bot.ui import respond_payload, text_layout
+    from squid.bot.ui import text_node
     from squid.core.i18n import _
 
+    invocation = await sd.Invocation.of(interaction)
     locale = await resolve_locale(interaction, interaction.client.services.settings)
-    await respond_payload(interaction, text_layout(t(locale, _("This control is no longer available."))))
+    await invocation.reply(text_node(t(locale, _("This control is no longer available."))), visibility="personal")
 
 
 async def _route_error_hook(interaction: discord.Interaction, error: Exception, source: str) -> None:

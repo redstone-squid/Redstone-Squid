@@ -6,22 +6,14 @@ import discord
 from discord import app_commands
 from discord.ext.commands import Cog, Context, guild_only, hybrid_group
 
+import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.operations import managed_result
-from squid.bot.settings_view import FOLLOW_DISCORD, SETTINGS_SESSION_SPEC, SettingsCapabilities, SettingsPanel
-from squid.bot.ui import (
-    error_layout,
-    error_node,
-    info_layout,
-    info_node,
-    localization_for,
-    message_destination,
-    reply_payload,
-)
+from squid.bot.settings_view import FOLLOW_DISCORD, SettingsCapabilities, SettingsPanel
+from squid.bot.ui import error_node, info_node
 from squid.bot.utils.permissions import hide_unless, requires, subject_for
-from squid.bot.utils.visibility import personal
 from squid.core.i18n import SUPPORTED_LOCALES, _
 from squid.permissions.domain.catalogue import (
     SETTINGS_SERVER_EDIT,
@@ -49,23 +41,15 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
     async def settings_hybrid_group(self, ctx: Context[BotT]) -> None:
         """Open this server's settings panel."""
         assert ctx.guild is not None
-        locale = await resolve_locale(ctx, self.settings_service)
-        view = SettingsPanel(
+        # One panel per admin per guild: a second `/settings` replaces the first rather than
+        # leaving two live panels writing the same settings service.
+        await SettingsPanel.show(
+            ctx,
             settings=self.settings_service,
             votes=self.bot.services.votes,
             guild=ctx.guild,
             capabilities=await self._capabilities(ctx),
-            locale=locale,
             owner_guild_id=self.bot.owner_server_id,
-        )
-        # One panel per admin per guild: a second `/settings` replaces the first rather than
-        # leaving two live panels writing the same settings service.
-        await SETTINGS_SESSION_SPEC.open(
-            view,
-            message_destination(ctx, visibility="personal", locale=locale),
-            sessions=ctx,
-            open_context=sd.OpenContext.of(ctx),
-            localization=localization_for(locale),
         )
 
     async def _capabilities(self, ctx: Context[BotT]) -> SettingsCapabilities:
@@ -104,7 +88,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         ctx: Context[BotT],
         setting: ScalarChannelSetting,
         channel: GuildMessageable | None = None,
-    ) -> RenderResult:
+    ) -> RenderResult[sl.ComponentsV2Target]:
         """Point one setting at a channel, or clear it. The panel edits several at once."""
         assert ctx.guild is not None
         locale = await resolve_locale(ctx, self.settings_service)
@@ -135,7 +119,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
     )
     @requires(SETTINGS_SERVER_EDIT)
     @managed_result
-    async def set_locale(self, ctx: Context[BotT], language: str) -> RenderResult:
+    async def set_locale(self, ctx: Context[BotT], language: str) -> RenderResult[sl.ComponentsV2Target]:
         """Set the language the bot responds with in this server."""
         assert ctx.guild is not None
         locale = await resolve_locale(ctx, self.settings_service)
@@ -170,7 +154,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         locale = await resolve_locale(ctx, self.settings_service)
         if role.guild != ctx.guild:
             await self._reply(
-                ctx, error_layout(t(locale, _("Error")), t(locale, _("That role is not from this server.")))
+                ctx, error_node(t(locale, _("Error")), t(locale, _("That role is not from this server.")))
             )
             return
         try:
@@ -178,7 +162,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         except InvalidVoteConfigurationError:
             await self._reply(
                 ctx,
-                error_layout(
+                error_node(
                     t(locale, _("Error")),
                     t(locale, _("A vote multiplier must be a positive number, such as 1.5.")),
                 ),
@@ -187,7 +171,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         await self.bot.services.votes.set_role_weight(weight)
         await self._reply(
             ctx,
-            info_layout(
+            info_node(
                 t(locale, _("Voting updated")),
                 t(locale, _("{role} now counts {multiplier}x."), role=role.name, multiplier=f"{multiplier:g}")
                 + self._weight_scope_note(ctx.guild.id, kind, locale),
@@ -202,13 +186,13 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         locale = await resolve_locale(ctx, self.settings_service)
         if role.guild != ctx.guild:
             await self._reply(
-                ctx, error_layout(t(locale, _("Error")), t(locale, _("That role is not from this server.")))
+                ctx, error_node(t(locale, _("Error")), t(locale, _("That role is not from this server.")))
             )
             return
         await self.bot.services.votes.remove_role_weight(ctx.guild.id, kind, role.id)
         await self._reply(
             ctx,
-            info_layout(
+            info_node(
                 t(locale, _("Voting updated")),
                 t(locale, _("{role} no longer carries extra weight."), role=role.name)
                 + self._weight_scope_note(ctx.guild.id, kind, locale),
@@ -224,7 +208,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         await self.bot.services.votes.reset_configuration(ctx.guild.id, kind)
         await self._reply(
             ctx,
-            info_layout(
+            info_node(
                 t(locale, _("Voting reset")),
                 t(locale, _("{kind} voting is back to its defaults."), kind=kind.value)
                 if kind is not None
@@ -232,13 +216,10 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
             ),
         )
 
-    async def _reply(self, ctx: Context[BotT], payload: sd.message_payload.MessagePayload) -> None:
-        """Answer the caller privately through the payload delivery boundary."""
-        await reply_payload(
-            ctx,
-            payload,
-            visibility="personal" if personal(ctx) else "public",
-        )
+    async def _reply(self, ctx: Context[BotT], node: sl.LayoutNode[sl.ComponentsV2Target]) -> None:
+        """Answer the caller privately through the invocation delivery boundary."""
+        invocation = await sd.Invocation.of(ctx)
+        await invocation.reply(node, visibility="personal")
 
     def _weight_scope_note(self, guild_id: int, kind: VoteKind, locale: str | None) -> str:
         """Warn when this server's multipliers bind nothing it can see."""

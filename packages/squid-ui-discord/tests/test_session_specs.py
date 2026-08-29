@@ -10,6 +10,7 @@ import pytest
 import squid_ui as sl
 import squid_ui_discord
 from squid_ui.primitives import Heading
+from squid_ui.text import Message
 from squid_ui_discord import (
     Everyone,
     MessageRootDefaults,
@@ -20,11 +21,11 @@ from squid_ui_discord import (
     SessionManager,
     SessionSpec,
 )
-from squid_ui_discord.sessions import Opened, Rejected, RejectionReason
+from squid_ui_discord.sessions import AdmissionSpec, Opened, Reject, Rejected, RejectionReason
 from squid_ui_discord.testing import fake_interaction, fake_message
 
 
-class Panel(sl.Component):
+class Panel(sl.Component[sl.ComponentsV2Target]):
     def render(self):
         return [Heading("Panel")]
 
@@ -135,6 +136,19 @@ async def test_session_spec_applies_options_overrides_and_access() -> None:
     assert result.session.root.on_error is on_error
     assert result.session.key == squid_ui_discord.SessionKey.user("panel", 7)
     assert result.session.actor_for(result.session.root) == 7
+
+
+async def test_session_spec_preserves_a_collision_notice() -> None:
+    manager = SessionManager()
+    notice = Message("This screen is already open.")
+    spec = SessionSpec("panel", admission=AdmissionSpec(collision=Reject(notice=notice)))
+
+    first = await spec.open(Panel(), to_message(), sessions=manager, open_context=OpenContext(7))
+    result = await spec.open(Panel(), to_message(), sessions=manager, open_context=OpenContext(7))
+
+    assert isinstance(first, Opened)
+    assert isinstance(result, Rejected)
+    assert result.notice is notice
 
 
 async def test_session_spec_resolves_options_once_between_static_options_and_overrides() -> None:

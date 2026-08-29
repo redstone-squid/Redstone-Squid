@@ -51,7 +51,7 @@ enforced a layer down: `_draw` stages subscriptions and the reconciler refuses a
 set, so two live candidates cannot coexist and a stale one cannot rewind the live generation. A
 check for it was written, found unreachable, and removed rather than shipped untested.
 
-Everything else the review proposed is recorded in [90](../../squid-layouts-redesign/90-deferred.md) with its reason.
+Everything else the review proposed is recorded in [90](../../squid-ui-redesign/90-deferred.md) with its reason.
 
 ## Status
 

@@ -28,15 +28,15 @@ from typing import Any, ClassVar, Protocol, Self, overload
 from squid_reactivity.actions import (
     ActionCommit,
     ActionContext,
+    ActionContinuation,
     ActionResult,
     ActionRollback,
-    ActionContinuation,
     ChangeReport,
     ConflictDetail,
     ExceptionReport,
     ObservedRead,
-    TransactionContribution,
     RollbackReason,
+    TransactionContribution,
     action_scope,
     continuation_callback,
     current_action,
@@ -108,27 +108,36 @@ class TransactionParticipant[PreparedT](Protocol):
         """
 
 
-class ReactiveWriteError(RuntimeError):
+class ReactivityError(Exception):
+    """Base class for every failure squid-reactivity raises deliberately.
+
+    Each error keeps a standard exception base alongside this one (`RuntimeError`,
+    `ValueError`, or `LookupError`), so catching by standard type keeps working while
+    `except ReactivityError` covers the package.
+    """
+
+
+class ReactiveWriteError(ReactivityError, RuntimeError):
     """A state mutation was attempted inside a read-only action."""
 
 
-class ActionValidationError(ValueError):
+class ActionValidationError(ReactivityError, ValueError):
     """An admitted action failed application validation before publication."""
 
 
-class FrameworkIntegrityError(RuntimeError):
+class FrameworkIntegrityError(ReactivityError, RuntimeError):
     """An infallible publication adapter failed after the local commit point."""
 
 
-class FreshActionError(RuntimeError):
+class FreshActionError(ReactivityError, RuntimeError):
     """A distinct action was requested after its admitting transaction staged work."""
 
 
-class UndeclaredStateError(RuntimeError):
+class UndeclaredStateError(ReactivityError, RuntimeError):
     """An attribute that is not declared state was written inside a transaction."""
 
 
-class ReactiveCycleError(RuntimeError):
+class ReactiveCycleError(ReactivityError, RuntimeError):
     """A derived value depends, through some chain, on itself.
 
     Raised for a computed that reads itself and for a resource whose loader awaits one
@@ -144,7 +153,7 @@ class ReactiveCycleError(RuntimeError):
         super().__init__(message)
 
 
-class StaleReactiveContextError(RuntimeError):
+class StaleReactiveContextError(ReactivityError, RuntimeError):
     """A transaction was written through from outside the scope or the task that owns it.
 
     Two mistakes with one shape, because a transaction travels in a `ContextVar` and a task
@@ -158,7 +167,7 @@ class StaleReactiveContextError(RuntimeError):
     """
 
 
-class ReactiveConflictError(RuntimeError):
+class ReactiveConflictError(ReactivityError, RuntimeError):
     """An action's strong input or explicit inverse precondition moved before commit.
 
     Nothing was published: the action rolls back whole and travels the ordinary failed-handler
@@ -197,7 +206,7 @@ _STRONG_READS: ContextVar[int] = ContextVar("squid_reactivity_strong_reads", def
 _INTERLEAVER: ContextVar[Callable[[str], None] | None] = ContextVar(
     "squid_reactivity_deterministic_interleaver", default=None
 )
-_INTERLEAVER_USERS = 0
+_INTERLEAVER_USERS: int = 0
 
 
 def _checkpoint(name: str) -> None:
@@ -670,11 +679,15 @@ class _Transaction:
     changed_names: dict[int, set[str]] = field(default_factory=dict)
     # Held by strong reference, so an id cannot be recycled while this transaction runs.
     born: dict[int, object] = field(default_factory=dict)
-    commit_hooks: list[tuple[object | None, Callable[[ActionCommit, ActionContinuation], None]]] = field(default_factory=list)
+    commit_hooks: list[tuple[object | None, Callable[[ActionCommit, ActionContinuation], None]]] = field(
+        default_factory=list
+    )
     rollback_hooks: list[tuple[object | None, Callable[[ActionRollback, ActionContinuation], None]]] = field(
         default_factory=list
     )
-    result_hooks: list[tuple[object | None, Callable[[ActionResult, ActionContinuation], None]]] = field(default_factory=list)
+    result_hooks: list[tuple[object | None, Callable[[ActionResult, ActionContinuation], None]]] = field(
+        default_factory=list
+    )
     context: ActionContext = field(default_factory=ActionContext.create)
     participants: dict[object, TransactionParticipant[Any]] = field(default_factory=dict)
     applied: bool = False
@@ -1247,17 +1260,23 @@ def readonly_transaction() -> Iterator[None]:
         _emit_commit(current, commit)
 
 
-def on_action_commit(callback: Callable[[ActionCommit, ActionContinuation], None], *, key: object | None = None) -> None:
+def on_action_commit(
+    callback: Callable[[ActionCommit, ActionContinuation], None], *, key: object | None = None
+) -> None:
     """Run a failure-isolated synchronous callback after definitive commit."""
     _add_action_hook("commit", callback, key=key)
 
 
-def on_action_rollback(callback: Callable[[ActionRollback, ActionContinuation], None], *, key: object | None = None) -> None:
+def on_action_rollback(
+    callback: Callable[[ActionRollback, ActionContinuation], None], *, key: object | None = None
+) -> None:
     """Run a failure-isolated callback after staged state is dead."""
     _add_action_hook("rollback", callback, key=key)
 
 
-def on_action_result(callback: Callable[[ActionResult, ActionContinuation], None], *, key: object | None = None) -> None:
+def on_action_result(
+    callback: Callable[[ActionResult, ActionContinuation], None], *, key: object | None = None
+) -> None:
     """Run a failure-isolated callback after either terminal result."""
     _add_action_hook("result", callback, key=key)
 
@@ -1647,14 +1666,14 @@ def inspect_computed(owner: ReactiveOwner) -> dict[str, ComputedReport]:
     return reports
 
 
-def declared_cells(owner: ReactiveOwner) -> dict[Any, int]:
+def declared_cells(owner: ReactiveOwner) -> dict[_Cell, int]:
     """Every declared state cell on `owner`, at the version it holds now.
 
     The presumed dependency set for something that has not yet said what it reads -- a
     resource holding a value that was installed rather than loaded. Over-subscribing is the
     safe direction, and the first real run replaces the presumption with the truth.
     """
-    presumed: dict[Any, int] = {}
+    presumed: dict[_Cell, int] = {}
     for klass in type(owner).__mro__:
         for descriptor in vars(klass).values():
             if isinstance(descriptor, _State):

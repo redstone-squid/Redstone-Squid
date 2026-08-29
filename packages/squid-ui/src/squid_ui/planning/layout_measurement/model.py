@@ -6,6 +6,7 @@ from datetime import datetime
 
 from squid_ui.planning.limits import Axis
 from squid_ui.primitives.nodes import (
+    Button,
     CardMedia,
     EntitySelect,
     File,
@@ -46,7 +47,7 @@ class MeasuredZonedTime:
 @dataclass(frozen=True, slots=True)
 class MeasuredSection:
     texts: list[MeasuredText]
-    accessory: Thumbnail | LinkButton | PremiumButton | RoutedButton | RawItem
+    accessory: Thumbnail | LinkButton | PremiumButton | Button | RoutedButton | RawItem
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,6 +110,9 @@ type Realized = (
     | File
     | Sep
     | Row
+    | Button
+    | LinkButton
+    | PremiumButton
     | SelectMenu
     | EntitySelect
     | RoutedSelect
@@ -132,7 +136,7 @@ class Pager:
     fragments: list[str]
     footer_slot: MeasuredText
     footer: Callable[[int, int], str]
-    axis: str = Axis.DISPLAY_TEXT
+    axis: Axis = Axis.DISPLAY_TEXT
     """The text pool this pager's body and footer draw from."""
     initial: int = 0
     """The page to open on; a mount adopts this before its first render."""

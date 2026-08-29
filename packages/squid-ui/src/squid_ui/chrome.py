@@ -75,6 +75,13 @@ class Chrome:
     """Framework-owned action that renews an expiring ephemeral session."""
     changed_elsewhere: TextLike = "Someone else changed this while you were working. Try again."
     """Wording for a shared-state conflict: what the action read moved before it committed."""
+    sent_privately: TextLike = "Sent by direct message."
+    """Channel confirmation after a reply was delivered by direct message."""
+    dm_unavailable: TextLike = (
+        "This reply is too private for a channel, and your direct messages are closed. "
+        "Run the command in a direct message, or allow direct messages and retry."
+    )
+    """Channel notice when a private reply cannot be delivered by direct message."""
     previous: TextLike = "Previous"
     next: TextLike = "Next"
     older: TextLike = "Older"
@@ -141,6 +148,8 @@ def localize_chrome(chrome: Chrome, localization: Localization) -> Chrome:
         session_expiring=resolve_text(chrome.session_expiring, localization).content,
         continue_session=resolve_text(chrome.continue_session, localization).content,
         changed_elsewhere=resolve_text(chrome.changed_elsewhere, localization).content,
+        sent_privately=resolve_text(chrome.sent_privately, localization).content,
+        dm_unavailable=resolve_text(chrome.dm_unavailable, localization).content,
         previous=resolve_text(chrome.previous, localization).content,
         next=resolve_text(chrome.next, localization).content,
         older=resolve_text(chrome.older, localization).content,

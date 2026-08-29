@@ -4,6 +4,7 @@ New code that does not need the layout frontend can import this optional layer f
 ``squid_reactivity.resources`` directly.
 """
 
+from squid_reactivity.internals import AtomicResourcePending as _AtomicResourcePending
 from squid_reactivity.resources import (
     AsyncBinding,
     AtomicResource,
@@ -16,7 +17,6 @@ from squid_reactivity.resources import (
     Resource,
     ResourceNotReadyError,
     ResourceStatus,
-    _AtomicResourcePending,
     abandon_superseded_loads,
     observe_async_bindings,
     observe_resources,

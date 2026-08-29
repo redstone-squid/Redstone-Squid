@@ -11,6 +11,7 @@ from squid_storage.scoped import (
     SlotCodec,
     SlotVersionError,
     SQLiteScopedStore,
+    StorageError,
     json_codec,
 )
 from squid_storage.stores import (
@@ -18,8 +19,8 @@ from squid_storage.stores import (
     ClaimToken,
     DurableSessionStore,
     MemorySessionStore,
-    SQLiteSessionStore,
     SessionRecord,
+    SQLiteSessionStore,
 )
 
 __all__ = [
@@ -36,10 +37,11 @@ __all__ = [
     "SQLiteScopedStore",
     "SQLiteSessionStore",
     "ScopedStore",
+    "SessionRecord",
     "Slot",
     "SlotCodec",
     "SlotVersionError",
-    "SessionRecord",
+    "StorageError",
     "TopicBridgeSnapshot",
     "json_codec",
 ]

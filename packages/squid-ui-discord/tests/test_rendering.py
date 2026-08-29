@@ -1,6 +1,7 @@
 """Composable components: embedding, key namespacing, and where invalidation travels."""
 
 from collections.abc import Callable
+from typing import Any
 
 import discord
 import pytest
@@ -38,7 +39,7 @@ from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord.testing import commit_render, fake_interaction
 
 
-class Counter(Component):
+class Counter(Component[sl.ComponentsV2Target]):
     count: int = state(0)
 
     def __init__(self, name: str) -> None:
@@ -61,7 +62,7 @@ class Counter(Component):
     async def noop(self, event: PressEvent) -> None: ...
 
 
-class Pair(Component):
+class Pair(Component[sl.ComponentsV2Target]):
     """The shape that used to cross-wire: two instances of one child class."""
 
     def __init__(self) -> None:
@@ -136,7 +137,7 @@ class TestRenderCaching:
             def __eq__(self, other: object) -> bool:
                 return isinstance(other, EqualService)
 
-        class Child(Component):
+        class Child(Component[sl.ComponentsV2Target]):
             def __init__(self) -> None:
                 self.services: list[object] = []
 
@@ -146,7 +147,7 @@ class TestRenderCaching:
                 assert isinstance(service, EqualService)
                 return Text(str(service.value))
 
-        class Root(Component):
+        class Root(Component[sl.ComponentsV2Target]):
             value: int = state(0)
 
             def __init__(self) -> None:
@@ -176,7 +177,7 @@ class TestRenderCaching:
 
         service_key = ContextKey[Service]("service", cache_version=lambda service: service.version)
 
-        class Child(Component):
+        class Child(Component[sl.ComponentsV2Target]):
             def __init__(self) -> None:
                 self.renders = 0
 
@@ -184,7 +185,7 @@ class TestRenderCaching:
                 self.renders += 1
                 return Text(str(self.inject(service_key).version))
 
-        class Root(Component):
+        class Root(Component[sl.ComponentsV2Target]):
             service_version: int = state(0)
             unrelated: int = state(0)
 
@@ -231,11 +232,11 @@ class TestRenderCaching:
         self,
         changes: list[tuple[int, int, bool, bool]],
     ) -> None:
-        class Child(Component):
+        class Child(Component[sl.ComponentsV2Target]):
             def render(self) -> Text:
                 return Text("child")
 
-        class Leaf(Component):
+        class Leaf(Component[sl.ComponentsV2Target]):
             value: int = state(0)
             wrapped: bool = state(default=False)
             child_visible: bool = state(default=False)
@@ -252,12 +253,12 @@ class TestRenderCaching:
                 child = (self.boundary(self.child, key="child"),) if self.child_visible else ()
                 return (body, *child, Row((Button("Run", self.press, "run"),)))
 
-        class Root(Component):
+        class Root(Component[sl.ComponentsV2Target]):
             def __init__(self) -> None:
                 self.leaves = tuple(Leaf() for _ in range(4))
                 self.asset = Asset("evidence", "evidence.txt", "text/plain", InlineAsset(b"evidence"))
 
-            def render(self) -> Document:
+            def render(self) -> Document[sl.ComponentsV2Target]:
                 children = tuple(self.boundary(leaf, key=str(index)) for index, leaf in enumerate(self.leaves))
                 return Document(children, (self.asset,), key="oracle")
 
@@ -291,13 +292,13 @@ class TestRenderCaching:
             runtime.commit(optimized, rendered_revision=runtime.revision)
 
     def test_dirty_leaf_splices_without_visiting_clean_siblings(self, monkeypatch) -> None:
-        class Leaf(Component):
+        class Leaf(Component[sl.ComponentsV2Target]):
             value: int = state(0)
 
             def render(self) -> Text:
                 return Text(str(self.value))
 
-        class Root(Component):
+        class Root(Component[sl.ComponentsV2Target]):
             def __init__(self) -> None:
                 self.leaves = tuple(Leaf() for _ in range(1_000))
 
@@ -325,13 +326,13 @@ class TestRenderCaching:
         assert namespaces == 1
 
     def test_metadata_stable_commit_reuses_topology_indexes(self) -> None:
-        class Leaf(Component):
+        class Leaf(Component[sl.ComponentsV2Target]):
             value: int = state(0)
 
             def render(self) -> Text:
                 return Text(str(self.value))
 
-        class Root(Component):
+        class Root(Component[sl.ComponentsV2Target]):
             def __init__(self) -> None:
                 self.leaves = tuple(Leaf() for _ in range(100))
 
@@ -354,7 +355,7 @@ class TestRenderCaching:
         assert runtime.components["50"] is root.leaves[50]
 
     def test_structural_commit_reconciles_only_the_changed_subtree(self) -> None:
-        class Child(Component):
+        class Child(Component[sl.ComponentsV2Target]):
             def __init__(self) -> None:
                 self.mounts = 0
                 self.unmounts = 0
@@ -368,7 +369,7 @@ class TestRenderCaching:
             def on_unmount(self) -> None:
                 self.unmounts += 1
 
-        class Leaf(Component):
+        class Leaf(Component[sl.ComponentsV2Target]):
             visible: bool = state(default=False)
 
             def __init__(self) -> None:
@@ -377,7 +378,7 @@ class TestRenderCaching:
             def render(self):
                 return self.boundary(self.child, key="child") if self.visible else Text("empty")
 
-        class Root(Component):
+        class Root(Component[sl.ComponentsV2Target]):
             def __init__(self) -> None:
                 self.leaves = tuple(Leaf() for _ in range(100))
 
@@ -414,20 +415,20 @@ class TestRenderCaching:
         assert child not in runtime._render_cache
 
     def test_dirty_nested_leaf_splices_through_structural_ancestors(self, monkeypatch) -> None:
-        class Leaf(Component):
+        class Leaf(Component[sl.ComponentsV2Target]):
             value: int = state(0)
 
             def render(self) -> Text:
                 return Text(str(self.value))
 
-        class Middle(Component):
+        class Middle(Component[sl.ComponentsV2Target]):
             def __init__(self) -> None:
                 self.leaf = Leaf()
 
             def render(self) -> Panel:
                 return Panel(children=(Text("before"), self.boundary(self.leaf, key="leaf"), Text("after")))
 
-        class Root(Component):
+        class Root(Component[sl.ComponentsV2Target]):
             def __init__(self) -> None:
                 self.middle = Middle()
 
@@ -455,7 +456,7 @@ class TestRenderCaching:
         assert namespaces == 2
 
     def test_one_changed_leaf_does_not_render_its_parent_or_sibling(self) -> None:
-        class Counting(Component):
+        class Counting(Component[sl.ComponentsV2Target]):
             value: int = state(0)
 
             def __init__(self, label: str) -> None:
@@ -466,7 +467,7 @@ class TestRenderCaching:
                 self.renders += 1
                 return Text(f"{self.label}:{self.value}")
 
-        class Root(Component):
+        class Root(Component[sl.ComponentsV2Target]):
             def __init__(self) -> None:
                 self.left = Counting("left")
                 self.right = Counting("right")
@@ -490,7 +491,7 @@ class TestRenderCaching:
         assert changed.nodes == (Text("left:1"), Text("right:0"))
 
     def test_computed_backdating_keeps_the_render_snapshot(self) -> None:
-        class Parity(Component):
+        class Parity(Component[sl.ComponentsV2Target]):
             source: int = state(0)
 
             def __init__(self) -> None:
@@ -521,7 +522,7 @@ class TestRenderCaching:
 
         values = Values(LocalTopicBus(), object())
 
-        class Parity(Component):
+        class Parity(Component[sl.ComponentsV2Target]):
             def __init__(self) -> None:
                 self.renders = 0
 
@@ -562,7 +563,7 @@ class TestRenderCaching:
 
         values = Values(LocalTopicBus(), object())
 
-        class Panel(Component):
+        class Panel(Component[sl.ComponentsV2Target]):
             def __init__(self) -> None:
                 self.renders = 0
 
@@ -607,7 +608,7 @@ class TestRenderCaching:
 
         values = Values(LocalTopicBus(), object())
 
-        class Value(Component):
+        class Value(Component[sl.ComponentsV2Target]):
             def __init__(self, name: str) -> None:
                 self.name = name
                 self.renders = 0
@@ -616,7 +617,7 @@ class TestRenderCaching:
                 self.renders += 1
                 return Text(str(getattr(values, self.name)))
 
-        class Root(Component):
+        class Root(Component[sl.ComponentsV2Target]):
             def __init__(self) -> None:
                 self.left = Value("left")
                 self.right = Value("right")
@@ -641,7 +642,7 @@ class TestRenderCaching:
         assert changed.nodes == (Text("1"), Text("0"))
 
     def test_explicit_invalidation_rerenders_opaque_inputs(self) -> None:
-        class Opaque(Component):
+        class Opaque(Component[sl.ComponentsV2Target]):
             def __init__(self) -> None:
                 self.value = "first"
                 self.renders = 0
@@ -668,13 +669,13 @@ class TestRenderCaching:
         class Inline(Tracked):
             pass
 
-        class Stable(Component):
+        class Stable(Component[sl.ComponentsV2Target]):
             value: int = state(0)
 
             def render(self) -> Text:
                 return Text(str(self.value))
 
-        class Root(Component):
+        class Root(Component[sl.ComponentsV2Target]):
             def __init__(self) -> None:
                 self.stable = Stable()
 
@@ -711,7 +712,7 @@ def test_boundaries_expand_and_namespace_inside_every_primitive_child_container(
 ) -> None:
     child = Counter("nested")
 
-    class Parent(Component):
+    class Parent(Component[Any]):
         def render(self) -> Node:
             return wrap((self.boundary(child, key="child"),))
 
@@ -724,7 +725,7 @@ def test_boundaries_expand_and_namespace_inside_every_primitive_child_container(
 
 
 def test_component_expansion_preserves_container_metadata() -> None:
-    class Parent(Component):
+    class Parent(Component[sl.ComponentsV2Target]):
         def render(self) -> Panel:
             return Panel((Text("body"),), accent=0x123456, spoiler=True)
 
@@ -734,7 +735,7 @@ def test_component_expansion_preserves_container_metadata() -> None:
     assert panel.spoiler is True
 
 
-class Nest(Component):
+class Nest(Component[sl.ComponentsV2Target]):
     """A chain of embeds `depth` deep, each level keyed with a long-ish name."""
 
     def __init__(self, depth: int) -> None:
@@ -762,12 +763,12 @@ def test_nested_embeds_stay_addressable(depth):
     assert len(message_root._handlers) == depth + 1
 
 
-class PagedChild(Component):
+class PagedChild(Component[sl.ComponentsV2Target]):
     def render(self):
         return Lines(tuple(f"entry {index}" for index in range(6)), overflow=Paginate(key="items", per=2))
 
 
-class PagedPair(Component):
+class PagedPair(Component[sl.ComponentsV2Target]):
     def __init__(self) -> None:
         self.left = PagedChild()
         self.right = PagedChild()
@@ -789,7 +790,7 @@ def test_embed_namespaces_pager_state_and_controls() -> None:
 
 
 def test_duplicate_sibling_embed_keys_are_rejected() -> None:
-    class Duplicate(Component):
+    class Duplicate(Component[sl.ComponentsV2Target]):
         def render(self):
             return [self.boundary(Counter("one"), key="same"), self.boundary(Counter("two"), key="same")]
 
@@ -800,7 +801,7 @@ def test_duplicate_sibling_embed_keys_are_rejected() -> None:
 def test_one_component_instance_cannot_occupy_two_paths() -> None:
     child = Counter("shared")
 
-    class Duplicate(Component):
+    class Duplicate(Component[sl.ComponentsV2Target]):
         def render(self):
             return [self.boundary(child, key="one"), self.boundary(child, key="two")]
 
@@ -809,7 +810,7 @@ def test_one_component_instance_cannot_occupy_two_paths() -> None:
 
 
 def test_component_embedding_cycles_are_rejected() -> None:
-    class Cycle(Component):
+    class Cycle(Component[sl.ComponentsV2Target]):
         def render(self):
             return self.boundary(self, key="self")
 
@@ -817,12 +818,12 @@ def test_component_embedding_cycles_are_rejected() -> None:
         commit_render(MessageRoot(Cycle(), access=Everyone(), timeout=None))
 
 
-class Tracked(Component):
+class Tracked(Component[sl.ComponentsV2Target]):
     def __init__(self, name: str, events: list[str]) -> None:
         self.name = name
         self.events = events
 
-    def render(self) -> Node:
+    def render(self) -> Text | Boundary:
         return Text(self.name)
 
     def on_mount(self) -> None:
@@ -860,11 +861,11 @@ async def test_keyed_component_lifecycle_tracks_replacement_and_finish() -> None
 def test_typed_context_flows_to_descendants_without_entering_component_state() -> None:
     greeting = ContextKey[str]("greeting")
 
-    class Child(Component):
-        def render(self) -> Node:
+    class Child(Component[sl.ComponentsV2Target]):
+        def render(self) -> Text:
             return Text(self.inject(greeting))
 
-    class Parent(Component):
+    class Parent(Component[sl.ComponentsV2Target]):
         def __init__(self) -> None:
             self.child = Child()
 
@@ -880,11 +881,11 @@ def test_typed_context_flows_to_descendants_without_entering_component_state() -
 def test_semantic_actions_are_namespaced_across_embedded_instances() -> None:
     async def run(_event) -> None: ...
 
-    class Child(Component):
+    class Child(Component[sl.ComponentsV2Target]):
         def render(self):
             return ActionControls((ActionControl("run", "Run", run),), key="toolbar")
 
-    class Parent(Component):
+    class Parent(Component[sl.ComponentsV2Target]):
         def __init__(self) -> None:
             self.left = Child()
             self.right = Child()
@@ -901,7 +902,7 @@ def test_semantic_actions_are_namespaced_across_embedded_instances() -> None:
 def test_all_keyed_semantics_are_namespaced_through_semantic_containers() -> None:
     async def change(_event) -> None: ...
 
-    class Child(Component):
+    class Child(Component[sl.ComponentsV2Target]):
         def render(self):
             return Group(
                 (
@@ -918,7 +919,7 @@ def test_all_keyed_semantics_are_namespaced_through_semantic_containers() -> Non
                 )
             )
 
-    class Parent(Component):
+    class Parent(Component[sl.ComponentsV2Target]):
         def __init__(self) -> None:
             self.left = Child()
             self.right = Child()

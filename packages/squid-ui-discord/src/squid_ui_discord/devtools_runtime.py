@@ -5,15 +5,16 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 import anyio
 
+from squid_ui.errors import SquidUiError
 from squid_ui.profiling import NoOpProfiler, Profiler, RuntimeSnapshot
 from squid_ui.runtime.histories import HistorySnapshot, inspect_histories
 from squid_ui.runtime.topics import Address, BusSnapshot, CellAddress, Topic, TopicBus
 from squid_ui_discord.live import find, message_roots
-from squid_ui_discord.message_root import MessageRootSnapshot
+from squid_ui_discord.message_root_contracts import MessageRootSnapshot
 from squid_ui_discord.message_root_scheduler import MessageRootScheduler, MessageRootSchedulerSnapshot
 from squid_ui_discord.sessions import Session, SessionManager
 
@@ -145,7 +146,7 @@ class OperationResult:
     detail: str
 
 
-class DevToolsError(RuntimeError):
+class DevToolsError(SquidUiError, RuntimeError):
     """Base error for refused or unavailable operational actions."""
 
 
@@ -166,6 +167,23 @@ class RuntimeUnavailable(DevToolsError):
 
 
 AuditHook = Callable[[DevToolsOperation], None]
+
+
+@runtime_checkable
+class SnapshotableBus(Protocol):
+    """A bus that can report its own queue depth.
+
+    `TopicBus` does not require this -- a bus that only delivers is a legal bus -- so the
+    capability is a separate shape rather than an optional method, and asking for it is an
+    `isinstance` rather than a `getattr` and a cast at each call site.
+    """
+
+    def snapshot(self) -> BusSnapshot: ...
+
+
+def _bus_snapshot(bus: TopicBus) -> BusSnapshot | None:
+    """This bus's queue depth, or None when it does not report one."""
+    return bus.snapshot() if isinstance(bus, SnapshotableBus) else None
 
 
 class DevToolsRuntime:
@@ -201,10 +219,7 @@ class DevToolsRuntime:
         sessions = (
             () if self.sessions is None else tuple(_session_inspection(session) for session in self.sessions.active())
         )
-        snapshot_topics = (
-            None if self.bus is None else cast(Callable[[], BusSnapshot] | None, getattr(self.bus, "snapshot", None))
-        )
-        topics = snapshot_topics() if callable(snapshot_topics) else None
+        topics = None if self.bus is None else _bus_snapshot(self.bus)
         return OperationalSnapshot(
             sessions,
             tuple(message_root.snapshot() for message_root in message_roots()),
@@ -292,8 +307,7 @@ class DevToolsRuntime:
     def _queues_idle(self) -> bool:
         """Return whether both configured queue owners report no pending work."""
         if self.bus is not None:
-            snapshot_topics = cast(Callable[[], BusSnapshot] | None, getattr(self.bus, "snapshot", None))
-            snapshot = snapshot_topics() if callable(snapshot_topics) else None
+            snapshot = _bus_snapshot(self.bus)
             if snapshot is not None and (snapshot.queued or snapshot.in_flight):
                 return False
         if self.scheduler is not None:

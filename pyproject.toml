@@ -79,6 +79,10 @@ dev = [
     # squid-ui' tests. Arrived transitively via schemathesis before; a
     # cross-language contract should not depend on another tool's dependency tree.
     "jsonschema>=4.23",
+    # The replication package keeps both real adapters optional for users, but its test and
+    # type-check suite exercises them together as the production/conformance pair.
+    "loro==1.13.2",
+    "pycrdt==0.14.2",
     "pip-tools>=7.4.1",
     "pytest-archon>=0.0.6",
     "ruff>=0.5.1",
@@ -123,7 +127,14 @@ build-backend = "setuptools.build_meta"
 packages = []
 
 [tool.uv.workspace]
-members = ["packages/*"]
+members = [
+    "packages/squid-reactivity",
+    "packages/squid-replication",
+    "packages/squid-storage",
+    "packages/squid-ui",
+    "packages/squid-ui-discord",
+    "packages/squid-ui-widgets",
+]
 
 [tool.uv.sources]
 squid-ui-discord = { workspace = true }
@@ -381,6 +392,20 @@ enableExperimentalFeatures = true  # For `TypeForm` support
 project-includes = ["squid/**/*.py", "tests/**/*.py", "packages/**/*.py", "app.py"]
 project-excludes = ["alembic/**/*.py", "scripts/migrations/**/*.py"]
 python-version = "3.14"
+# uv installs the workspace packages as editable `.pth` files pointing at `packages/*/src`, which
+# puts those directories on Pyrefly's site-package path. Anything reachable from there counts as
+# third-party and is skipped, so `project-includes` alone silently left every package source file
+# unchecked. `search-path` is consulted before the site-package path, which claims them as
+# first-party again. Keep this list in sync with `[tool.uv.workspace] members`.
+search-path = [
+    ".",
+    "packages/squid-reactivity/src",
+    "packages/squid-replication/src",
+    "packages/squid-storage/src",
+    "packages/squid-ui/src",
+    "packages/squid-ui-discord/src",
+    "packages/squid-ui-widgets/src",
+]
 # `observability` is an optional extra (see the dependency group below) that isn't installed in
 # every environment; these imports are already guarded by `try`/`ModuleNotFoundError` at runtime.
 ignore-missing-imports = ["opentelemetry", "opentelemetry.*"]

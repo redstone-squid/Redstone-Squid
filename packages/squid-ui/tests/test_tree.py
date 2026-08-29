@@ -8,11 +8,12 @@ from squid_ui.errors import LayoutInvariantError
 from squid_ui.primitives import Text
 from squid_ui.runtime._tree import map_layout_children
 from squid_ui.semantic import LayoutNode
+from squid_ui.target_types import DiscordTarget
 
 
 @dataclass(frozen=True, slots=True)
 class UnregisteredContainer:
-    children: tuple[LayoutNode, ...]
+    children: tuple[LayoutNode[DiscordTarget], ...]
 
 
 def test_a_new_structural_node_must_register_its_children() -> None:

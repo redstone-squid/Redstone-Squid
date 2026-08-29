@@ -118,7 +118,7 @@ high-durability; a paginating cursor is not.
 
 **Decision: file, do not build.** The cliff is real but unmeasured, and the fix would change the
 hottest path in the package. The removal condition is a measurement, not a consumer: profile a
-settle pass under many live mounts — [37](37-runtime-profiling.md)'s counters, reachable through
+settle pass under many live mounts — [37](../completed/squid-layouts-redesign/37-runtime-profiling.md)'s counters, reachable through
 `sl.discord.devtools`' `ui metrics`, already carry the data — and act if source-walking shows up.
 Recorded now so that when it does show up, the answer is not re-derived from first principles.
 
@@ -132,7 +132,7 @@ A merge function would have to run at commit time, inside `_COMMIT_GATE`, betwee
 `check_preconditions` and `publish`. That is author code in the one region the participant split
 exists to keep author code out of — everything fallible happens in `prepare` (`core.py:87`). A
 merge that raises would have to become a conflict, which is where we started. (**Weakened by
-[§6.3 A](#a-commute-beats-a-three-way-merge--and-it-sharpens-32-rather-than-overturning-it)**: that
+[§6.3 A](#a-commute-beats-a-three-way-merge-and-it-sharpens-32-rather-than-overturning-it)**: that
 region is inside `_COMMIT_GATE` but *before* `publish`, so a raising merge really could just be a
 conflict. The two grounds below are the load-bearing ones.)
 

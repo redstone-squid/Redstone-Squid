@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from squid_ui import Component, computed, state
+from squid_ui import Component, DiscordTarget, computed, state
 from squid_ui.primitives import Text
 from squid_ui.runtime import CellAddress, ReactiveConflictError, SharedState, transaction
 from squid_ui.runtime.topics import LocalTopicBus
@@ -106,7 +106,7 @@ def test_one_declaration_serves_both_owners(bus: LocalTopicBus, here: Member) ->
     class Namespace(SharedState[Member]):
         value: int = state(0)
 
-    class Panel(Component):
+    class Panel(Component[DiscordTarget]):
         value: int = state(0)
 
         def render(self):
@@ -126,7 +126,7 @@ def test_only_a_namespace_gives_its_state_an_address(bus: LocalTopicBus, here: M
     class Namespace(SharedState[Member]):
         value: int = state(0)
 
-    class Panel(Component):
+    class Panel(Component[DiscordTarget]):
         value: int = state(0)
 
         def render(self):
@@ -401,7 +401,7 @@ def test_a_conflict_publishes_nothing_at_all(bus: LocalTopicBus, here: Member) -
 def test_local_state_rolls_back_with_a_conflict(bus: LocalTopicBus, here: Member) -> None:
     preferences = Preferences(bus, here)
 
-    class Panel(Component):
+    class Panel(Component[DiscordTarget]):
         open: bool = state(default=False)
 
     panel = Panel()
@@ -427,7 +427,7 @@ def test_a_computed_recomputes_when_another_owner_writes(bus: LocalTopicBus, her
     workspace = Workspace(bus, here)
     runs: list[int] = []
 
-    class Detail(Component):
+    class Detail(Component[DiscordTarget]):
         def __init__(self, workspace: Workspace) -> None:
             self.workspace = workspace
 

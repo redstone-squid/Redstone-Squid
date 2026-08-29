@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
-from typing import Literal, TypeAlias
+from typing import Literal
 
 from squid.core.errors import ErrorCode, ValidationError
 from squid.core.pagination import MAX_PAGE_OFFSET, PageAnchor
@@ -123,7 +123,7 @@ class MetadataSearchHit:
     resource_kind: Literal["metadata"] = field(default="metadata", init=False)
 
 
-SearchHit: TypeAlias = RecordSearchHit | BuildSearchHit | MetadataSearchHit
+type SearchHit = RecordSearchHit | BuildSearchHit | MetadataSearchHit
 
 
 @dataclass(frozen=True, slots=True)

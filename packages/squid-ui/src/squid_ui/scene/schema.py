@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from squid_ui.interactions import ActionMode
 from squid_ui.scene.model import (
     Button,
     ClassicMessage,
@@ -10,6 +11,11 @@ from squid_ui.scene.model import (
     Extension,
     File,
     Gallery,
+    HtmlAttributeName,
+    HtmlBody,
+    HtmlElement,
+    HtmlTag,
+    HtmlText,
     Link,
     Panel,
     PremiumButton,
@@ -35,9 +41,23 @@ def _node(kind: str, properties: dict[str, Any], *required: str) -> dict[str, An
     }
 
 
+def _nullable(properties: dict[str, Any], *required: str) -> dict[str, Any]:
+    return {
+        "oneOf": [
+            {"type": "null"},
+            {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": properties,
+                "required": list(required),
+            },
+        ]
+    }
+
+
 SCHEMA: dict[str, Any] = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://schem-at.github.io/squid-ui/scene-v1.schema.json",
+    "$id": "https://redstone-squid.github.io/Redstone-Squid/schema/scene-v1.schema.json",
     "title": "squid-ui resolved scene protocol 1",
     "type": "object",
     "additionalProperties": False,
@@ -76,7 +96,9 @@ SCHEMA: dict[str, Any] = {
     },
     "required": ["protocol", "target", "target_version", "body", "assets", "pagers"],
     "$defs": {
-        "body": {"oneOf": [{"$ref": f"#/$defs/{kind}"} for kind in (ComponentsV2.KIND, ClassicMessage.KIND)]},
+        "body": {
+            "oneOf": [{"$ref": f"#/$defs/{kind}"} for kind in (ComponentsV2.KIND, ClassicMessage.KIND, HtmlBody.KIND)]
+        },
         "components_v2": _node(
             ComponentsV2.KIND,
             {"children": {"type": "array", "items": {"$ref": "#/$defs/node"}}},
@@ -93,6 +115,87 @@ SCHEMA: dict[str, Any] = {
             "embeds",
             "rows",
         ),
+        "html": _node(
+            HtmlBody.KIND,
+            {
+                "children": {"type": "array", "items": {"$ref": "#/$defs/html_node"}},
+                "locale": {"type": ["string", "null"]},
+            },
+            "children",
+            "locale",
+        ),
+        "html_node": {
+            "oneOf": [
+                {"$ref": f"#/$defs/{HtmlText.KIND}"},
+                {"$ref": f"#/$defs/{HtmlElement.KIND}"},
+            ]
+        },
+        "html_text": _node(
+            HtmlText.KIND,
+            {"content": {"type": "string"}, "markup": {"enum": ["plain", "discord-markdown"]}},
+            "content",
+            "markup",
+        ),
+        "html_element": _node(
+            HtmlElement.KIND,
+            {
+                "tag": {"enum": [tag.value for tag in HtmlTag]},
+                "children": {"type": "array", "items": {"$ref": "#/$defs/html_node"}},
+                "attributes": {"type": "array", "items": {"$ref": "#/$defs/html_attribute"}},
+                "action": _nullable(
+                    {"action": {"type": "string"}, "mode": {"enum": [mode.value for mode in ActionMode]}},
+                    "action",
+                    "mode",
+                ),
+                "route": _nullable({"route_id": {"type": "string"}}, "route_id"),
+                "form": _nullable(
+                    {"key": {"type": "string"}, "field_name": {"type": ["string", "null"]}},
+                    "key",
+                    "field_name",
+                ),
+                "url": _nullable({"url": {"type": "string"}}, "url"),
+                "time": _nullable(
+                    {
+                        "instant": {"type": "string"},
+                        "timezone": {"type": ["string", "null"]},
+                        "style": {"type": ["string", "null"]},
+                    },
+                    "instant",
+                    "timezone",
+                    "style",
+                ),
+                "colour": _nullable({"value": {"type": "integer", "minimum": 0, "maximum": 16777215}}, "value"),
+                "asset": _nullable(
+                    {
+                        "key": {"type": "string"},
+                        "name": {"type": "string"},
+                        "media_type": {"type": "string"},
+                    },
+                    "key",
+                    "name",
+                    "media_type",
+                ),
+            },
+            "tag",
+            "children",
+            "attributes",
+            "action",
+            "route",
+            "form",
+            "url",
+            "time",
+            "colour",
+            "asset",
+        ),
+        "html_attribute": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "name": {"enum": [name.value for name in HtmlAttributeName]},
+                "value": {"type": ["string", "integer", "number", "boolean"]},
+            },
+            "required": ["name", "value"],
+        },
         "classic_row": {
             "type": "object",
             "additionalProperties": False,

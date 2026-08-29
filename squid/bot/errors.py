@@ -9,9 +9,10 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+import squid_ui as sl
 import squid_ui_discord as sd
 from squid.accounts.errors import ConsentRequiredError
-from squid.bot.ui import error_layout, reply_payload, respond_payload
+from squid.bot.ui import error_node
 from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.core.errors import DomainError, JSONValue, SquidError
 from squid.core.i18n import _, translate
@@ -30,7 +31,7 @@ from squid.permissions.domain import CATALOGUE
 logger = logging.getLogger(__name__)
 
 _PRESENTED_ATTRIBUTE = "_squid_error_presented"
-type ErrorResponder = Callable[[sd.message_payload.MessagePayload], Awaitable[None]]
+type ErrorResponder = Callable[[sl.LayoutNode[sl.ComponentsV2Target]], Awaitable[None]]
 
 
 def _reports_from(client: object) -> ErrorReportService | None:
@@ -52,9 +53,9 @@ class ErrorNotice:
     ID, while a moderator looking one up will be quoting whatever the card showed.
     """
 
-    def to_payload(self) -> sd.message_payload.MessagePayload:
-        """Build the complete Components V2 payload for this error."""
-        return error_layout(self.title, self.detail)
+    def to_node(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
+        """Build the composable Components V2 node for this error."""
+        return error_node(self.title, self.detail)
 
 
 def _safe_log_context(context: Mapping[str, object] | None) -> dict[str, object]:
@@ -301,7 +302,7 @@ async def _handle_discord_error(
         )
 
     try:
-        await responder(notice.to_payload())
+        await responder(notice.to_node())
     except discord.HTTPException:
         logger.exception(
             "Failed to send Discord error response [error_id=%s surface=%s]",
@@ -318,12 +319,10 @@ async def handle_context_error[BotT: commands.Bot](
 ) -> None:
     """Handle an exception raised by a prefix or hybrid command."""
 
-    async def respond(payload: sd.message_payload.MessagePayload) -> None:
-        await reply_payload(
-            context,
-            payload,
-            visibility="personal" if context.interaction is not None else "public",
-        )
+    invocation = await sd.Invocation.of(context)
+
+    async def respond(node: sl.LayoutNode[sl.ComponentsV2Target]) -> None:
+        await invocation.reply(node, visibility="personal")
 
     command_name = context.command.qualified_name if context.command is not None else None
     await _handle_discord_error(
@@ -348,8 +347,10 @@ async def handle_interaction_error(
 ) -> None:
     """Handle an exception raised by an application command or UI interaction."""
 
-    async def respond(payload: sd.message_payload.MessagePayload) -> None:
-        await respond_payload(interaction, payload)
+    invocation = await sd.Invocation.of(interaction)
+
+    async def respond(node: sl.LayoutNode[sl.ComponentsV2Target]) -> None:
+        await invocation.reply(node, visibility="personal")
 
     command = interaction.command
     await _handle_discord_error(
@@ -426,7 +427,11 @@ class SquidCommandTree[ClientT: discord.Client](app_commands.CommandTree[ClientT
         # The correlation scope opens inside the span so it adopts the trace id when one exists.
         # Binding here rather than at notice time is what lets an error report carry the log
         # lines the command produced before it failed.
-        with trace_span(f"discord.command {command_name}", attributes) as span, correlation_scope():
+        with (
+            trace_span(f"discord.command {command_name}", attributes) as span,
+            correlation_scope(),
+            sd.invocation_scope(interaction),
+        ):
             await super()._call(interaction)  # pyright: ignore[reportPrivateUsage]
             if interaction.command_failed:
                 span.set_error()

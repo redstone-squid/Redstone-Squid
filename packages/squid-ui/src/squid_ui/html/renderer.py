@@ -1,271 +1,286 @@
-"""Safe semantic HTML drawing for resolved scenes."""
+"""Safe mechanical drawing for semantic HTML scenes."""
 
 import base64
 import json
-from collections.abc import Callable
-from datetime import datetime
+import re
+from collections.abc import Callable, Iterable
 from html import escape
 from urllib.parse import urlsplit
+
+from markdown_it import MarkdownIt
+from markdown_it.token import Token
 
 from squid_ui import scene
 from squid_ui.assets import Asset, InlineAsset, StoredAsset
 from squid_ui.errors import DrawInvariantError
 from squid_ui.scene.model import PlanResult
-from squid_ui.temporal import ZonedDateTime
+from squid_ui.text import Markup
 
-PREVIEW_CSS = """
-.squid-view{box-sizing:border-box;max-width:720px;padding:16px;border-radius:8px;background:#313338;color:#dbdee1;
-font:14px/1.375 system-ui,sans-serif}.squid-view *{box-sizing:border-box}.squid-panel{display:grid;gap:12px;padding:16px;
-border-left:4px solid var(--squid-accent,#4e5058);border-radius:4px;background:#2b2d31}.squid-text{white-space:pre-wrap}
-.squid-row{display:flex;flex-wrap:wrap;gap:8px}.squid-button{min-height:32px;padding:2px 16px;border:0;border-radius:3px;
-background:#4e5058;color:#fff;font-weight:600}.squid-button--primary{background:#5865f2}.squid-button--success{background:#248046}
-.squid-button--danger{background:#da373c}.squid-button:disabled{opacity:.5}.squid-link{text-decoration:none}
-.squid-select{width:100%;min-height:40px;padding:8px;border:1px solid #1e1f22;border-radius:3px;background:#1e1f22;color:#dbdee1}
-.squid-section{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:start}.squid-thumbnail{max-width:96px;max-height:96px;
-border-radius:4px}.squid-gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:4px}
-.squid-gallery img{width:100%;border-radius:4px}.squid-separator{height:1px;margin:4px 0;border:0;background:#3f4147}
-.squid-separator--large{margin:12px 0}.squid-extension{padding:8px;border:1px dashed #6d6f78;border-radius:3px}
-.squid-file[aria-disabled=true]{opacity:.5}
-.squid-spoiler{filter:blur(12px);transition:filter .15s}.squid-spoiler:hover,.squid-spoiler:focus{filter:none}
+DEFAULT_CSS = """
+:root{color-scheme:light dark;font:16px/1.5 system-ui,sans-serif}
+body{margin:0;background:Canvas;color:CanvasText}.squid-document{box-sizing:border-box;max-width:72rem;margin:auto;padding:1rem}
+.squid-document *{box-sizing:border-box}.squid-stack,.squid-group,.squid-form,.squid-fields{display:grid;gap:.75rem}
+.squid-cluster,.squid-actions{display:flex;flex-wrap:wrap;gap:.5rem}.squid-section,.squid-article,.squid-block,.squid-aside{
+padding:1rem;border-inline-start:.25rem solid var(--squid-accent,GrayText);border-radius:.25rem;background:color-mix(in srgb,Canvas 92%,CanvasText)}
+.squid-gallery,.squid-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(10rem,1fr));gap:.75rem}
+.squid-gallery img,figure img{display:block;max-width:100%;height:auto}table{width:100%;border-collapse:collapse}th,td{padding:.5rem;
+border:1px solid color-mix(in srgb,CanvasText 25%,transparent);text-align:start}input,textarea,select,button{font:inherit}
+textarea,select,input:not([type=checkbox]){width:100%;max-width:36rem;padding:.5rem}.squid-field{display:grid;gap:.25rem}
+.squid-spoiler{filter:blur(.5rem)}.squid-spoiler:focus,.squid-spoiler:hover{filter:none}
 """.strip()
 
 type AssetResolver = Callable[[scene.Asset], str | None]
-type FileResolver = Callable[[scene.File], str | None]
+
+_MARKDOWN = MarkdownIt("js-default", {"html": False, "linkify": False})
+_MEDIA_TYPE = re.compile(r"[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*\Z")
+_BOOLEAN_ATTRIBUTES = frozenset(
+    {
+        scene.HtmlAttributeName.CHECKED,
+        scene.HtmlAttributeName.DISABLED,
+        scene.HtmlAttributeName.MULTIPLE,
+        scene.HtmlAttributeName.OPEN,
+        scene.HtmlAttributeName.REQUIRED,
+        scene.HtmlAttributeName.SELECTED,
+    }
+)
+_DATA_ATTRIBUTES = {
+    scene.HtmlAttributeName.CHANNEL_TYPES: "data-squid-channel-types",
+    scene.HtmlAttributeName.DISPLAY: "data-squid-display",
+    scene.HtmlAttributeName.EMPHASIS: "data-squid-emphasis",
+    scene.HtmlAttributeName.ENTITY_TYPE: "data-squid-entity-type",
+    scene.HtmlAttributeName.SELECTION_MAX: "data-squid-max",
+    scene.HtmlAttributeName.SELECTION_MIN: "data-squid-min",
+    scene.HtmlAttributeName.TIME_STYLE: "data-squid-time-style",
+    scene.HtmlAttributeName.TIMEZONE: "data-squid-timezone",
+    scene.HtmlAttributeName.TONE: "data-squid-tone",
+}
+_VOID_TAGS = frozenset({scene.HtmlTag.BR, scene.HtmlTag.HR, scene.HtmlTag.IMG, scene.HtmlTag.INPUT})
 
 
 def _attribute(value: object) -> str:
     return escape(str(value), quote=True)
 
 
-def _url(value: str) -> str | None:
+def _safe_url(value: str) -> str | None:
     parsed = urlsplit(value)
     return value if parsed.scheme in {"http", "https"} and parsed.netloc else None
 
 
+def _token_attribute(token: Token, name: str) -> str | None:
+    value = token.attrGet(name)
+    return value if isinstance(value, str) else None
+
+
 class Renderer:
-    """Draw scenes as semantic HTML suitable for previews or browser adapters."""
+    """Draw a semantic HTML scene, without adding browser behavior or transport.
+
+    Passing ``css`` opts into trusted host configuration. It is embedded verbatim in a
+    standalone document and must never contain untrusted authored content.
+    """
 
     def __init__(
         self,
         *,
         standalone: bool = False,
-        css: str = PREVIEW_CSS,
+        title: str = "Squid UI",
+        css: str = DEFAULT_CSS,
         asset_resolver: AssetResolver | None = None,
     ) -> None:
         self.standalone = standalone
+        self.title = title
         self.css = css
         self.asset_resolver = asset_resolver
 
-    def draw(self, document: scene.Scene, *, plan: PlanResult | None = None) -> str:
+    def draw(
+        self,
+        document: scene.Scene[scene.HtmlBody],
+        *,
+        plan: PlanResult[scene.HtmlBody] | None = None,
+    ) -> str:
+        """Draw one planned HTML scene as a fragment or standalone document."""
         if document.protocol != scene.Codec.protocol:
             message = f"Renderer cannot draw scene protocol {document.protocol}"
             raise DrawInvariantError(message)
         if document.target_version != 1:
-            message = f"Renderer cannot preview target version {document.target_version}"
+            message = f"Renderer cannot draw HTML target version {document.target_version}"
             raise DrawInvariantError(message)
-        if not isinstance(document.body, scene.ComponentsV2):
-            # The real gate, and both stricter and more honest than a target id: what this
-            # preview can draw is a component tree, not a name. A classic message is content
-            # and embeds with no tree to walk.
-            message = f"HTML preview cannot draw a {type(document.body).__name__} body"
+        if not isinstance(document.body, scene.HtmlBody):
+            message = f"HTML Renderer cannot draw a {type(document.body).__name__} body"
             raise DrawInvariantError(message)
+
+        assets = {asset.key: asset for asset in document.assets}
         pager_data = json.dumps(
             [{"key": pager.key, "page": pager.page, "pages": pager.pages} for pager in document.pagers],
             separators=(",", ":"),
         )
-        assets = {asset.key: asset for asset in document.assets}
-
-        def resolve_file(node: scene.File) -> str | None:
-            metadata = assets.get(node.asset_key)
-            if metadata is None:
-                return None
-            if self.asset_resolver is not None and (resolved := self.asset_resolver(metadata)) is not None:
-                return resolved
-            resource = plan.resources.get(f"asset:{node.asset_key}") if plan is not None else None
-            if not isinstance(resource, Asset):
-                return None
-            if isinstance(resource.source, InlineAsset):
-                encoded = base64.b64encode(resource.source.data).decode("ascii")
-                return f"data:{resource.media_type};base64,{encoded}"
-            if isinstance(resource.source, StoredAsset):
-                return _url(resource.source.reference)
-            return None
-
-        body = "".join(self._node(child, resolve_file) for child in document.body.children)
+        body = "".join(self._node(child, assets, plan) for child in document.body.children)
+        locale = document.body.locale
+        locale_attribute = "" if locale is None else f' lang="{_attribute(locale)}"'
         root = (
-            f'<div class="squid-view" data-squid-protocol="{document.protocol}" '
-            f'data-squid-target="{_attribute(document.target)}" data-squid-pagers="{_attribute(pager_data)}">{body}</div>'
+            f'<main class="squid-document"{locale_attribute} data-squid-protocol="{document.protocol}" '
+            f'data-squid-target="{_attribute(document.target)}" data-squid-pagers="{_attribute(pager_data)}">'
+            f"{body}</main>"
         )
         if not self.standalone:
             return root
+        document_locale = "und" if locale is None else locale
         return (
-            '<!doctype html><html><head><meta charset="utf-8">'
-            f"<style>{self.css}</style></head><body>{root}</body></html>"
+            f'<!doctype html><html lang="{_attribute(document_locale)}"><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            f"<title>{escape(self.title)}</title><style>{self.css}</style></head><body>{root}</body></html>"
         )
 
     def _node(
         self,
-        node: scene.Node | scene.Link | scene.PremiumButton | scene.Button | scene.RoutedButton,
-        resolve_file: FileResolver,
+        node: scene.HtmlNode,
+        assets: dict[str, scene.Asset],
+        plan: PlanResult[scene.HtmlBody] | None,
     ) -> str:
-        match node:
-            case scene.Text(content=content, markup=markup):
-                return f'<div class="squid-text" data-squid-markup="{markup.value}">{escape(content)}</div>'
-            case scene.Time(instant=instant, style=style, prefix=prefix):
-                return (
-                    f'<div class="squid-text">{escape(prefix or "")}'
-                    f'<time datetime="{_attribute(instant)}" data-squid-style="{_attribute(style)}">'
-                    f"{escape(instant)}</time></div>"
+        if isinstance(node, scene.HtmlText):
+            if node.markup is Markup.PLAIN:
+                return escape(node.content)
+            return self._markdown(node.content)
+        return self._element(node, assets, plan)
+
+    def _element(
+        self,
+        element: scene.HtmlElement,
+        assets: dict[str, scene.Asset],
+        plan: PlanResult[scene.HtmlBody] | None,
+    ) -> str:
+        attributes = list(self._attributes(element.attributes))
+        if element.action is not None:
+            attributes.extend(
+                (
+                    f'data-squid-action="{_attribute(element.action.action)}"',
+                    f'data-squid-mode="{element.action.mode.value}"',
                 )
-            case scene.ZonedTime(instant=instant, timezone=timezone, prefix=prefix):
-                value = ZonedDateTime(datetime.fromisoformat(instant), timezone)
-                return (
-                    f'<div class="squid-text">{escape(prefix or "")}'
-                    f'<time datetime="{_attribute(instant)}" data-squid-timezone="{_attribute(timezone)}">'
-                    f"{escape(value.isoformat())}</time></div>"
-                )
-            case scene.File(name=name, spoiler=spoiler):
-                spoiler_class = " squid-spoiler" if spoiler else ""
-                focus = ' tabindex="0"' if spoiler else ""
-                resolved = resolve_file(node)
-                if resolved is None:
-                    return (
-                        f'<span class="squid-button squid-file{spoiler_class}" aria-disabled="true"{focus}>'
-                        f"{escape(name)}</span>"
-                    )
-                return (
-                    f'<a class="squid-button squid-link squid-file{spoiler_class}" href="{_attribute(resolved)}" '
-                    f'download="{_attribute(name)}"{focus}>{escape(name)}</a>'
-                )
-            case scene.Separator(large=large, visible=visible):
-                if not visible:
+            )
+        if element.route is not None:
+            attributes.append(f'data-route-id="{_attribute(element.route.route_id)}"')
+        if element.form is not None:
+            attributes.append(f'data-squid-form="{_attribute(element.form.key)}"')
+            if element.form.field_name is not None:
+                attributes.append(f'data-squid-field="{_attribute(element.form.field_name)}"')
+        if element.time is not None:
+            if element.tag is not scene.HtmlTag.TIME:
+                message = "HTML time references require a time element"
+                raise DrawInvariantError(message)
+            attributes.append(f'datetime="{_attribute(element.time.instant)}"')
+            if element.time.timezone is not None:
+                attributes.append(f'data-squid-timezone="{_attribute(element.time.timezone)}"')
+            if element.time.style is not None:
+                attributes.append(f'data-squid-time-style="{_attribute(element.time.style)}"')
+        if element.colour is not None:
+            attributes.append(f'style="--squid-accent:#{element.colour.value:06x}"')
+
+        tag = element.tag.value
+        if element.url is not None:
+            attribute_name = (
+                "href" if element.tag is scene.HtmlTag.A else "src" if element.tag is scene.HtmlTag.IMG else None
+            )
+            if attribute_name is None:
+                message = "HTML URL references require an anchor or image element"
+                raise DrawInvariantError(message)
+            if (safe := _safe_url(element.url.url)) is not None:
+                attributes.append(f'{attribute_name}="{_attribute(safe)}"')
+            elif element.tag is scene.HtmlTag.A:
+                attributes.append('aria-disabled="true"')
+        if element.asset is not None:
+            if element.tag is not scene.HtmlTag.A:
+                message = "HTML asset references require an anchor element"
+                raise DrawInvariantError(message)
+            if (resolved := self._resolve_asset(element.asset, assets, plan)) is not None:
+                attributes.append(f'href="{_attribute(resolved)}"')
+            else:
+                attributes.append('aria-disabled="true"')
+
+        suffix = "" if not attributes else " " + " ".join(attributes)
+        if element.tag in _VOID_TAGS:
+            if element.children:
+                message = f"void HTML element {tag!r} cannot have children"
+                raise DrawInvariantError(message)
+            return f"<{tag}{suffix}>"
+        children = "".join(self._node(child, assets, plan) for child in element.children)
+        return f"<{tag}{suffix}>{children}</{tag}>"
+
+    def _attributes(self, attributes: Iterable[scene.HtmlAttribute]) -> Iterable[str]:
+        for attribute in attributes:
+            name = _DATA_ATTRIBUTES.get(attribute.name, attribute.name.value)
+            if attribute.name in _BOOLEAN_ATTRIBUTES:
+                if bool(attribute.value):
+                    yield name
+                continue
+            yield f'{name}="{_attribute(attribute.value)}"'
+
+    def _resolve_asset(
+        self,
+        reference: scene.HtmlAssetRef,
+        assets: dict[str, scene.Asset],
+        plan: PlanResult[scene.HtmlBody] | None,
+    ) -> str | None:
+        metadata = assets.get(reference.key)
+        if metadata is None or (metadata.name, metadata.media_type) != (reference.name, reference.media_type):
+            return None
+        if self.asset_resolver is not None and (resolved := self.asset_resolver(metadata)) is not None:
+            return _safe_url(resolved)
+        resource = plan.resources.get(f"asset:{reference.key}") if plan is not None else None
+        if not isinstance(resource, Asset):
+            return None
+        if isinstance(resource.source, InlineAsset) and _MEDIA_TYPE.fullmatch(resource.media_type):
+            encoded = base64.b64encode(resource.source.data).decode("ascii")
+            return f"data:{resource.media_type};base64,{encoded}"
+        if isinstance(resource.source, StoredAsset):
+            return _safe_url(resource.source.reference)
+        return None
+
+    def _markdown(self, content: str) -> str:
+        parsed = _MARKDOWN.parseInline(content)
+        tokens = () if not parsed else parsed[0].children or ()
+        return "".join(self._markdown_token(token) for token in tokens)
+
+    def _markdown_token(self, token: Token) -> str:
+        match token.type:
+            case "text":
+                return escape(token.content)
+            case "softbreak":
+                return "\n"
+            case "hardbreak":
+                return "<br>"
+            case "code_inline":
+                return f"<code>{escape(token.content)}</code>"
+            case "strong_open":
+                return "<strong>"
+            case "strong_close":
+                return "</strong>"
+            case "em_open":
+                return "<em>"
+            case "em_close":
+                return "</em>"
+            case "s_open":
+                return "<s>"
+            case "s_close":
+                return "</s>"
+            case "link_open":
+                href = _token_attribute(token, "href")
+                if href is None or (safe := _safe_url(href)) is None:
                     return ""
-                modifier = " squid-separator--large" if large else ""
-                return f'<hr class="squid-separator{modifier}">'
-            case scene.Panel(children=children, accent=accent, spoiler=spoiler):
-                style = f' style="--squid-accent:#{accent:06x}"' if accent is not None else ""
-                spoiler_attributes = ' squid-spoiler" tabindex="0' if spoiler else '"'
-                return (
-                    f'<section class="squid-panel{spoiler_attributes}{style}>'
-                    f"{''.join(self._node(child, resolve_file) for child in children)}</section>"
-                )
-            case scene.Section(texts=texts, accessory=accessory):
-                content = "".join(self._node(text, resolve_file) for text in texts)
-                return (
-                    f'<section class="squid-section"><div>{content}</div>'
-                    f"{self._node(accessory, resolve_file)}</section>"
-                )
-            case scene.Row(items=items):
-                return f'<div class="squid-row">{"".join(self._node(item, resolve_file) for item in items)}</div>'
-            case scene.Button(
-                label=label,
-                action=action,
-                style=style,
-                emoji=emoji,
-                disabled=disabled,
-                mode=mode,
-            ):
-                disabled_attribute = " disabled" if disabled else ""
-                icon = f'<span class="squid-button__emoji">{escape(emoji.name)}</span> ' if emoji else ""
-                return (
-                    f'<button type="button" class="squid-button squid-button--{style.value}" '
-                    f'data-squid-action="{_attribute(action)}" data-squid-mode="{mode.value}"'
-                    f"{disabled_attribute}>{icon}{escape(label or '')}</button>"
-                )
-            case scene.RoutedButton(label=label, route_id=route_id, style=style, emoji=emoji, disabled=disabled):
-                disabled_attribute = " disabled" if disabled else ""
-                icon = f'<span class="squid-button__emoji">{escape(emoji.name)}</span> ' if emoji else ""
-                return (
-                    f'<button type="button" class="squid-button squid-button--{style.value}" '
-                    f'data-route-id="{_attribute(route_id)}"'
-                    f"{disabled_attribute}>{icon}{escape(label or '')}</button>"
-                )
-            case scene.Link(label=label, url=url, emoji=emoji, disabled=disabled):
-                icon = f'<span class="squid-button__emoji">{escape(emoji.name)}</span> ' if emoji else ""
-                safe = _url(url)
-                if safe is None or disabled:
-                    return (
-                        f'<span class="squid-button squid-link" aria-disabled="true">{icon}{escape(label or "")}</span>'
-                    )
-                return (
-                    f'<a class="squid-button squid-link" href="{_attribute(safe)}" '
-                    f'rel="noopener noreferrer">{icon}{escape(label or "")}</a>'
-                )
-            case scene.PremiumButton(sku_id=sku_id):
-                return (
-                    f'<button type="button" class="squid-button squid-premium" disabled '
-                    f'data-sku-id="{sku_id}">Premium</button>'
-                )
-            case scene.Select(
-                options=options,
-                action=action,
-                placeholder=placeholder,
-                min_values=minimum,
-                max_values=maximum,
-                disabled=disabled,
-                mode=mode,
-            ):
-                disabled_attribute = " disabled" if disabled else ""
-                multiple = " multiple" if maximum > 1 else ""
-                prompt = (
-                    f'<option value="" disabled selected>{escape(placeholder)}</option>'
-                    if placeholder is not None
-                    else ""
-                )
-                rendered = "".join(
-                    f'<option value="{_attribute(option.value)}"{" selected" if option.default else ""}>'
-                    f"{escape((option.emoji.name + ' ') if option.emoji else '')}{escape(option.label)}</option>"
-                    for option in options
-                )
-                return (
-                    f'<select class="squid-select" data-squid-action="{_attribute(action)}" '
-                    f'data-squid-mode="{mode.value}" data-squid-min="{minimum}" data-squid-max="{maximum}"'
-                    f"{multiple}{disabled_attribute}>{prompt}{rendered}</select>"
-                )
-            case scene.RoutedSelect(
-                options=options,
-                route_id=route_id,
-                placeholder=placeholder,
-                min_values=minimum,
-                max_values=maximum,
-                disabled=disabled,
-            ):
-                disabled_attribute = " disabled" if disabled else ""
-                multiple = " multiple" if maximum > 1 else ""
-                prompt = (
-                    f'<option value="" disabled selected>{escape(placeholder)}</option>'
-                    if placeholder is not None
-                    else ""
-                )
-                rendered = "".join(
-                    f'<option value="{_attribute(option.value)}"{" selected" if option.default else ""}>'
-                    f"{escape((option.emoji.name + ' ') if option.emoji else '')}{escape(option.label)}</option>"
-                    for option in options
-                )
-                return (
-                    f'<select class="squid-select" data-route-id="{_attribute(route_id)}" '
-                    f'data-squid-min="{minimum}" data-squid-max="{maximum}"'
-                    f"{multiple}{disabled_attribute}>{prompt}{rendered}</select>"
-                )
-            case scene.Thumbnail(url=url, description=description, spoiler=spoiler):
-                safe = _url(url)
-                if safe is None:
-                    return ""
-                spoiler_class = " squid-spoiler" if spoiler else ""
-                focus = ' tabindex="0"' if spoiler else ""
-                return f'<img class="squid-thumbnail{spoiler_class}" src="{_attribute(safe)}" alt="{_attribute(description or "")}"{focus}>'
-            case scene.Gallery(items=items):
-                images = "".join(
-                    f'<img class="{"squid-spoiler" if item.spoiler else ""}" src="{_attribute(safe)}" '
-                    f'alt="{_attribute(item.description or "")}"{' tabindex="0"' if item.spoiler else ""}>'
-                    for item in items
-                    if (safe := _url(item.url)) is not None
-                )
-                return f'<div class="squid-gallery">{images}</div>'
-            case scene.Extension(kind=kind, version=version):
-                return (
-                    f'<div class="squid-extension" data-squid-extension="{_attribute(kind)}" '
-                    f'data-squid-extension-version="{version}"></div>'
-                )
-        message = f"Renderer cannot draw scene node {type(node).__name__}"
-        raise DrawInvariantError(message)
+                title = _token_attribute(token, "title")
+                title_attribute = "" if title is None else f' title="{_attribute(title)}"'
+                return f'<a href="{_attribute(safe)}" rel="noopener noreferrer"{title_attribute}>'
+            case "link_close":
+                return "</a>"
+            case "image":
+                source = _token_attribute(token, "src")
+                if source is None or (safe := _safe_url(source)) is None:
+                    return escape(token.content)
+                title = _token_attribute(token, "title")
+                title_attribute = "" if title is None else f' title="{_attribute(title)}"'
+                return f'<img src="{_attribute(safe)}" alt="{_attribute(token.content)}"{title_attribute}>'
+            case _:
+                if token.content:
+                    return escape(token.content)
+                return escape(token.markup)
+
+
+__all__ = ["DEFAULT_CSS", "AssetResolver", "Renderer"]

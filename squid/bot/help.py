@@ -9,8 +9,9 @@ from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Command, Group
 
+import squid_ui_discord as sd
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.ui import CardField, CardSection, error_layout, help_layout, respond_payload
+from squid.bot.ui import CardField, CardSection, card_node, error_node, render_payload
 from squid.config import BuildConfig
 from squid.core.i18n import _
 from squid.suggestions.application import candidate, rank
@@ -77,6 +78,7 @@ class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     @app_commands.describe(command=app_commands.locale_str(_("The command to get help for.")))
     async def help(self, interaction: discord.Interaction[BotT], command: str | None):
         """Show a grouped command directory or focused command details."""
+        invocation = await sd.Invocation.of(interaction)
         locale = await resolve_locale(interaction, interaction.client.services.settings)
         if command is not None:
             target = self.bot.get_command(command)
@@ -87,16 +89,16 @@ class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 )
                 candidates = list(cog.walk_commands()) if cog is not None else []
                 if not candidates:
-                    await respond_payload(
-                        interaction,
-                        error_layout(
+                    await invocation.reply(
+                        error_node(
                             t(locale, _("Command not found")),
                             t(locale, _("No command named `{name}` is available."), name=command),
                         ),
+                        visibility="personal",
                     )
                     return
                 assert cog is not None
-                layout = help_layout(
+                node = card_node(
                     t(locale, _("{name} commands"), name=cog.qualified_name),
                     cog.description or t(locale, _("Commands in this area.")),
                     sections=(_command_section(t(locale, _("Commands")), candidates, locale),),
@@ -105,7 +107,7 @@ class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             else:
                 children = list(target.commands) if isinstance(target, Group) else []
                 signature = f" {target.signature}" if target.signature else ""
-                layout = help_layout(
+                node = card_node(
                     f"/{target.qualified_name}{signature}",
                     target.help or t(locale, _("No details provided")),
                     sections=(_command_section(t(locale, _("Subcommands")), children, locale),) if children else (),
@@ -117,13 +119,13 @@ class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 _command_section(t(locale, title), [item for item in root_commands if item.name in names], locale)
                 for title, names in DIRECTORY_CATEGORIES
             )
-            layout = help_layout(
+            node = card_node(
                 t(locale, _("Redstone Squid help")),
                 t(locale, _("Choose a workflow, then use `/help command` for syntax and details.")),
                 sections=sections,
                 footer=t(locale, MORE_INFORMATION),
             )
-        await respond_payload(interaction, layout, ephemeral=False)
+        await invocation.reply(node)
 
     def _root_commands(self) -> list[AnyCommand]:
         """Every top-level command a user could run, prefix tree and app tree alike.
@@ -201,16 +203,20 @@ class Help(commands.MinimalHelpCommand):
             and build_config.commit_message is not None
         ):
             footer = f"commit: {build_config.commit_hash[:7]}, message: {build_config.commit_message.strip()}"
-        await send_to(self.get_destination())(help_layout(t(locale, _("Help")), desc, footer=footer))
+        await send_to(self.get_destination())(render_payload([card_node(t(locale, _("Help")), desc, footer=footer)]))
 
     # !help <command>
     @override
     async def send_command_help(self, command: Command[Any, ..., Any], /) -> None:
         locale = await resolve_locale(self.context, self._bot.services.settings)
         await send_to(self.get_destination())(
-            help_layout(
-                t(locale, _("Command Help - `{name}`"), name=command.qualified_name),
-                command.help or t(locale, _("No details provided")),
+            render_payload(
+                [
+                    card_node(
+                        t(locale, _("Command Help - `{name}`"), name=command.qualified_name),
+                        command.help or t(locale, _("No details provided")),
+                    )
+                ]
             )
         )
 
@@ -264,7 +270,7 @@ class Help(commands.MinimalHelpCommand):
             commands=command_details or t(locale, _("None")),
             more_information=t(locale, MORE_INFORMATION),
         )
-        await send_to(self.get_destination())(help_layout(t(locale, _("Command Help")), desc))
+        await send_to(self.get_destination())(render_payload([card_node(t(locale, _("Command Help")), desc)]))
         return None
 
     # !help <cog>
@@ -281,7 +287,7 @@ class Help(commands.MinimalHelpCommand):
             commands=command_details or t(locale, _("None")),
             more_information=t(locale, MORE_INFORMATION),
         )
-        await send_to(self.get_destination())(help_layout(t(locale, _("Command Help")), desc))
+        await send_to(self.get_destination())(render_payload([card_node(t(locale, _("Command Help")), desc)]))
 
     @override
     async def command_not_found(self, string: str, /) -> str:  # type: ignore  # overriding a sync method
@@ -296,7 +302,7 @@ class Help(commands.MinimalHelpCommand):
     async def send_error_message(self, error: str, /) -> None:  # type: ignore  # overriding a sync method
         # TODO: error can be a custom Error too
         locale = await resolve_locale(self.context, self._bot.services.settings)
-        await send_to(self.get_destination())(error_layout(t(locale, _("Error.")), error))
+        await send_to(self.get_destination())(render_payload([error_node(t(locale, _("Error.")), error)]))
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid):

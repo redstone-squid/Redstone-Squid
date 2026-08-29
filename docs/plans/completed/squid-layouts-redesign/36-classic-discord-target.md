@@ -369,7 +369,7 @@ fields cannot be chosen downstream of semantic lowering, `ActionRow` forces a re
 
 **Shipped 2026-08-22** in twelve commits, `primitives: rename the component boundary node`
 through `docs: document classic target adoption`. User guide:
-[`../../../../packages/squid-layouts/docs/classic-messages.md`](../../../../packages/squid-layouts/docs/classic-messages.md).
+the current [classic-message guide](https://github.com/redstone-squid/Redstone-Squid/blob/master/packages/squid-ui-discord/docs/classic-messages.md).
 
 Six things came out differently from the sketch, each because the tree said so:
 

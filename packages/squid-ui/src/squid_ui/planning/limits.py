@@ -17,41 +17,18 @@ per-value embed cap — is server-only, which is why the renderer runs a strict 
 
 The caps split three ways, and the split is what lets a function say what it reads.
 `ComponentLimits` holds what every component obeys in either mode, `EmbedLimits` what one
-embed may hold, and a `DiscordLimits` subclass the message-wide budgets that mode alone
-knows. A shared planning layer takes a `DiscordLimits` and may touch only what it declares.
+embed may hold, and a `MessageLimits` subclass the message-wide budgets that mode alone
+knows. A shared planning layer takes a `MessageLimits` and may touch only what it declares.
 """
 
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, fields, is_dataclass, replace
-from enum import StrEnum
 from typing import Self
 
+from squid_ui.planning.resources import TEXT_AXES as TEXT_AXES
+from squid_ui.planning.resources import Axis as Axis
+
 ELLIPSIS = "\N{HORIZONTAL ELLIPSIS}"
-
-
-class Axis(StrEnum):
-    """One message-wide budget a document is measured against.
-
-    Only whole-message totals are axes. A local cap describes what a legal component *is*
-    rather than how much room is left, so reducing one would change the document rather
-    than the reservation.
-    """
-
-    DISPLAY_TEXT = "display_text"
-    """Components V2 TextDisplay content, budgeted across the whole message."""
-    CONTENT_TEXT = "content_text"
-    """A classic message's `content` field."""
-    EMBED_TEXT = "embed_text"
-    """Every embed's titles, descriptions, field names and values, footers, and authors."""
-    COMPONENTS = "components"
-    ATTACHMENTS = "attachments"
-    EMBEDS = "embeds"
-    ROWS = "rows"
-    CONTROLS = "controls"
-
-
-TEXT_AXES = frozenset({Axis.DISPLAY_TEXT, Axis.CONTENT_TEXT, Axis.EMBED_TEXT})
-"""Every axis that holds message text, whichever target is in play."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,8 +108,8 @@ def _cap_values(value: object, prefix: str = "") -> Iterator[tuple[str, object]]
 
 
 @dataclass(frozen=True, slots=True)
-class DiscordLimits:
-    """What every Discord message obeys, whichever component mode it is in.
+class MessageLimits:
+    """The message-wide budgets every dialect obeys, whichever component mode it is in.
 
     Abstract: message-wide budgets live on the subclasses, because a mode-specific strategy
     may not borrow another mode's totals. What is shared is stated here, and a shared
@@ -203,7 +180,7 @@ class DiscordLimits:
 
 
 @dataclass(frozen=True, slots=True)
-class V2Limits(DiscordLimits):
+class V2Limits(MessageLimits):
     """Hard limits for a Components V2 message and its children."""
 
     # Message-wide budgets.
@@ -250,10 +227,16 @@ class V2Limits(DiscordLimits):
 
 
 @dataclass(frozen=True, slots=True)
-class ClassicLimits(DiscordLimits):
+class ClassicLimits(MessageLimits):
     """Hard limits for a pre-Components-V2 message: content, embeds, and action rows."""
 
-    embeds: EmbedLimits | None = EMBED_LIMITS
+    embeds: EmbedLimits = EMBED_LIMITS
+    """Narrowed from the base's optional: a classic message always has embeds.
+
+    Plan 71 made `MessageLimits.embeds` optional so a mode without embeds could say so and
+    every read would be guarded. The classic path is the mode that always has them, and
+    saying so here is what spares its own code seven `is None` checks that can never fire.
+    """
 
     # Message-wide budgets.
     content: int = 2000

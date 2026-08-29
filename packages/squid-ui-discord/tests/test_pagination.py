@@ -167,13 +167,13 @@ def _total_text(solved) -> int:
     return walk(solved.children)
 
 
-class Browser(Component):
+class Browser(Component[sl.ComponentsV2Target]):
     def render(self):
         body = "\n".join(f"entry {index:04d}" for index in range(2000))
         return [Heading("Entries"), Code(body, overflow=Paginate(key="entries"))]
 
 
-class TwoBrowsers(Component):
+class TwoBrowsers(Component[sl.ComponentsV2Target]):
     def __init__(self) -> None:
         self.left_version = "old"
 
@@ -186,7 +186,7 @@ class TwoBrowsers(Component):
         ]
 
 
-class Catalog(Component):
+class Catalog(Component[sl.ComponentsV2Target]):
     """A semantic picker whose list can shift under the reader."""
 
     def __init__(self) -> None:
