@@ -42,7 +42,7 @@ class Probe:
         self,
         state: sp.TabsState,
         controls: sp.MachineControls[sp.TabsState, sl.ComponentsV2Target],
-    ) -> sl.runtime.component.RenderResult[sl.ComponentsV2Target]:
+    ) -> sl.DocumentLike[sl.ComponentsV2Target]:
         content = controls.content([Echo()] if self.embed else [sl.paragraph(state.selected)], prefix="body")
         # `controls.form` hands back content in one shell and a control in the other, so every
         # machine in the library branches here exactly like this. See the test below.
@@ -91,7 +91,7 @@ class OptionalProbe:
         self,
         state: str | None,
         controls: sp.MachineControls[str | None, sl.ComponentsV2Target],
-    ) -> sl.runtime.component.RenderResult[sl.ComponentsV2Target]:
+    ) -> sl.DocumentLike[sl.ComponentsV2Target]:
         del controls
         return sl.paragraph(repr(state))
 

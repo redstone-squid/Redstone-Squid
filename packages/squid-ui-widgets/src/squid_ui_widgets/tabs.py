@@ -3,8 +3,8 @@
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
+from squid_ui.document import DocumentLike
 from squid_ui.factories import action_controls, choice, heading, stack
-from squid_ui.runtime.component import RenderResult
 from squid_ui.semantic import ControlDisplay
 from squid_ui.target_types import RenderTarget
 from squid_ui.text import TextLike
@@ -93,7 +93,7 @@ class Tabs[RenderTargetT: RenderTarget = RenderTarget]:
 
     def render(
         self, state: TabsState, controls: MachineControls[TabsState, RenderTargetT]
-    ) -> RenderResult[RenderTargetT]:
+    ) -> DocumentLike[RenderTargetT]:
         current = next((tab for tab in self.tabs if tab.key == state.selected), self.tabs[0])
         if len(self.tabs) <= 5:
             selector = action_controls(

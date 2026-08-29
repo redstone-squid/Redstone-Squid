@@ -10,7 +10,7 @@ from squid.bot.errors import is_error_presented
 from squid.bot.operations import managed_result, run_command_operation
 from squid.bot.ui import info_node
 from squid_ui import ComponentsV2Target
-from squid_ui.runtime.component import RenderResult
+from squid_ui.document import DocumentLike
 from squid_ui_discord.testing import fake_message
 from tests.helpers.discord import invocation_scope, make_layout_bot
 
@@ -88,13 +88,13 @@ async def test_managed_result_keeps_the_command_signature_and_renders_its_return
 
     class Handler:
         @managed_result
-        async def command(self, context: object, value: int) -> RenderResult[ComponentsV2Target]:
+        async def command(self, context: object, value: int) -> DocumentLike[ComponentsV2Target]:
             seen.append((context, value))
             return info_node("Done", "Complete")
 
     assert (
         str(inspect.signature(Handler.command))
-        == "(self, context: object, value: int) -> RenderResult[squid_ui.target_types.ComponentsV2Target]"
+        == "(self, context: object, value: int) -> DocumentLike[squid_ui.target_types.ComponentsV2Target]"
     )
 
     async with invocation_scope(ctx):
@@ -110,7 +110,7 @@ async def test_managed_result_requires_dispatch_invocation_scope() -> None:
 
     class Handler:
         @managed_result
-        async def command(self, ctx: object) -> RenderResult[ComponentsV2Target]:
+        async def command(self, ctx: object) -> DocumentLike[ComponentsV2Target]:
             del ctx
             return info_node("Done", "Complete")
 

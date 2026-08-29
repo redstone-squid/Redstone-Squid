@@ -21,8 +21,7 @@ from typing import Any, overload
 
 from squid_ui import testing as engine
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
-from squid_ui.document import as_document
-from squid_ui.runtime.component import RenderResult
+from squid_ui.document import DocumentLike, as_document
 from squid_ui.semantic import ActionControl, AnyLayoutNode, LayoutNode, RoutedActionControl, RoutedChoices
 from squid_ui.target_types import RenderTarget
 from squid_ui_widgets.drivers import (
@@ -227,9 +226,9 @@ def routed[StateT](
 
 
 def _as_nodes[RenderTargetT: RenderTarget](
-    result: RenderResult[RenderTargetT],
+    result: DocumentLike[RenderTargetT],
 ) -> tuple[LayoutNode[RenderTargetT], ...]:
-    """A `RenderResult` is one node, a sequence of them, or a document; queries want a tuple."""
+    """A `DocumentLike` is one node, a sequence of them, or a document; queries want a tuple."""
     return as_document(result).children
 
 

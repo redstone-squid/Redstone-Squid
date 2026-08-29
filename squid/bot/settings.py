@@ -23,7 +23,7 @@ from squid.permissions.domain.catalogue import (
 from squid.settings.domain import ScalarChannelSetting
 from squid.voting.domain import RoleWeight, VoteKind
 from squid.voting.errors import InvalidVoteConfigurationError
-from squid_ui.runtime.component import RenderResult
+from squid_ui.document import DocumentLike
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -87,7 +87,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         ctx: Context[BotT],
         setting: ScalarChannelSetting,
         channel: GuildMessageable | None = None,
-    ) -> RenderResult[sl.ComponentsV2Target]:
+    ) -> DocumentLike[sl.ComponentsV2Target]:
         """Point one setting at a channel, or clear it. The panel edits several at once."""
         assert ctx.guild is not None
         locale = await resolve_locale(ctx, self.settings_service)
@@ -118,7 +118,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
     )
     @requires(SETTINGS_SERVER_EDIT)
     @managed_result
-    async def set_locale(self, ctx: Context[BotT], language: str) -> RenderResult[sl.ComponentsV2Target]:
+    async def set_locale(self, ctx: Context[BotT], language: str) -> DocumentLike[sl.ComponentsV2Target]:
         """Set the language the bot responds with in this server."""
         assert ctx.guild is not None
         locale = await resolve_locale(ctx, self.settings_service)
