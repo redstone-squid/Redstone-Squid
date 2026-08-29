@@ -12,7 +12,7 @@ import squid_ui_discord as sd
 from squid.bot.app import RedstoneSquid
 from squid.topics import resource_topic
 from squid_ui_discord import Everyone
-from squid_ui_discord.testing import delivered_to, fake_message
+from squid_ui_discord.testing import delivered_to, message_harness
 
 
 class Projection(sl.Component):
@@ -50,7 +50,7 @@ async def _drain_scheduler(scheduler: sd.MessageRootScheduler) -> None:
 async def test_one_resource_publish_refreshes_two_panels_without_second_post_writer() -> None:
     bus = sl.runtime.LocalTopicBus()
     scheduler = sd.MessageRootScheduler(bus)
-    messages = [fake_message(message_id=1), fake_message(message_id=2)]
+    messages = [message_harness(message_id=1), message_harness(message_id=2)]
     source = "before"
     panels = [Projection(lambda: source), Projection(lambda: source)]
 

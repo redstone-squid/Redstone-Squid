@@ -11,7 +11,7 @@ from squid.bot.operations import managed_result, run_command_operation
 from squid.bot.ui import info_node
 from squid_ui import ComponentsV2Target
 from squid_ui.document import DocumentLike
-from squid_ui_discord.testing import fake_message
+from squid_ui_discord.testing import message_harness
 from tests.helpers.discord import invocation_scope, make_layout_bot
 
 
@@ -25,7 +25,7 @@ def _context(target: Messageable, bot: object) -> object:
 
 
 async def test_command_operation_receives_the_initial_delivery_before_work_starts() -> None:
-    message = fake_message()
+    message = message_harness()
     target, send = _target(message)
     context = _context(target, make_layout_bot())
     seen: list[object] = []
@@ -44,7 +44,7 @@ async def test_command_operation_receives_the_initial_delivery_before_work_start
 
 
 async def test_command_operation_renders_and_rethrows_failure_once() -> None:
-    message = fake_message()
+    message = message_harness()
     target, _send = _target(message)
     context = _context(target, make_layout_bot())
     error = RuntimeError("private")
@@ -61,7 +61,7 @@ async def test_command_operation_renders_and_rethrows_failure_once() -> None:
 
 
 async def test_command_operation_suppresses_a_terminal_scene_equal_to_its_initial_scene() -> None:
-    message = fake_message()
+    message = message_harness()
     target, _send = _target(message)
     context = _context(target, make_layout_bot())
 
@@ -75,7 +75,7 @@ async def test_command_operation_suppresses_a_terminal_scene_equal_to_its_initia
 
 
 async def test_managed_result_keeps_the_command_signature_and_renders_its_return_value() -> None:
-    message = fake_message()
+    message = message_harness()
     send = AsyncMock(return_value=message)
     ctx = SimpleNamespace(
         bot=make_layout_bot(),

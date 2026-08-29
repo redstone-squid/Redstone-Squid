@@ -10,7 +10,7 @@ from discord.ext import commands
 from squid.bot.submission.search import SearchCog, SearchTarget
 from squid.core.errors import ValidationError
 from squid.search.domain import SearchMode, SearchPage, SearchRequest, SearchScope, SortDirection
-from squid_ui_discord.testing import fake_message
+from squid_ui_discord.testing import message_harness
 from tests.helpers.discord import make_layout_bot
 
 
@@ -41,7 +41,7 @@ def _context() -> commands.Context[Any]:
             SimpleNamespace(
                 bot=make_layout_bot(),
                 defer=AsyncMock(),
-                send=AsyncMock(return_value=fake_message(message_id=1)),
+                send=AsyncMock(return_value=message_harness(message_id=1)),
                 guild=None,
                 interaction=None,
                 author=SimpleNamespace(id=7),

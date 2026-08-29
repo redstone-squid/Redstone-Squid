@@ -42,6 +42,29 @@ class TestPayloadQueries:
 
 
 class TestConstruction:
+    async def test_interaction_harness_records_responses_and_exposes_its_source(self) -> None:
+        harness = sd.interaction_harness(user_id=7)
+
+        await harness.source.response.send_message("hello", ephemeral=True)
+        await harness.source.followup.send("again")
+
+        assert harness.source.user.id == 7
+        assert [record.args for record in harness.sends] == [("hello",), ("again",)]
+        assert harness.sends[0].kwargs["ephemeral"] is True
+
+    async def test_message_harness_records_edits_and_injects_faults_explicitly(self) -> None:
+        failure = sd.http_error(503)
+        harness = sd.message_harness().fail_edits_with(failure)
+
+        try:
+            await harness.source.edit(content="new")
+        except discord.HTTPException as error:
+            assert error is failure
+        else:
+            raise AssertionError("the configured edit fault was not raised")
+
+        assert harness.edits == [sd.CallRecord((), {"content": "new"})]
+
     def test_a_target_profile_supplies_exactly_the_capabilities_it_is_given(self) -> None:
         target = sd.target_profile("narrow", capabilities=frozenset({AdapterCapability.MODAL_FORMS}))
 

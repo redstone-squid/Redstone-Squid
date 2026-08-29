@@ -40,7 +40,7 @@ from squid_ui_discord.sessions import (
     Session,
     Unprotected,
 )
-from squid_ui_discord.testing import delivered_to, fake_message
+from squid_ui_discord.testing import delivered_to, message_harness
 
 
 class Counter(sl.Component[sl.ComponentsV2Target]):
@@ -94,7 +94,7 @@ class FakeFrontend:
         for binding in bindings:
             message_id = binding.address.values["message_id"]
             assert isinstance(message_id, int)
-            await binding.message_root.send(delivered_to(fake_message(message_id=message_id)))
+            await binding.message_root.send(delivered_to(message_harness(message_id=message_id)))
         return Reconnected(tuple(binding.record_message_root_id for binding in bindings))
 
 
@@ -141,7 +141,7 @@ async def open_counter(
     message_root = squid_ui_discord.MessageRoot(Counter(), access=Everyone(), timeout=None)
     result = await runtime.open(
         message_root,
-        delivered_to(fake_message(message_id=message_id)),
+        delivered_to(message_harness(message_id=message_id)),
         recipe="counter",
         key=SessionKey.user("counter", 7) if key is None else key,
         actor_id=7,
@@ -208,7 +208,7 @@ async def test_a_remote_summary_protects_another_user_from_replacement() -> None
             message_root = squid_ui_discord.MessageRoot(Counter(), access=Everyone(), timeout=None)
             result = await second.open(
                 message_root,
-                delivered_to(fake_message(message_id=100)),
+                delivered_to(message_harness(message_id=100)),
                 recipe="counter",
                 key=key,
                 actor_id=9,
@@ -247,7 +247,7 @@ async def test_suppressed_runtime_commit_checkpoints_hidden_component_state() ->
         await tasks.start(durable.run)
         opened = await durable.open(
             message_root,
-            delivered_to(fake_message(message_id=7)),
+            delivered_to(message_harness(message_id=7)),
             recipe="hidden-draft",
             key=SessionKey.user("hidden-draft", 7),
             actor_id=7,
@@ -302,7 +302,7 @@ async def test_attached_message_root_is_checkpointed_in_the_same_record() -> Non
 
         attached = await opened.session.attach(
             child,
-            delivered_to(fake_message(message_id=2)),
+            delivered_to(message_harness(message_id=2)),
             recipe="counter",
             actor_id=8,
         )
@@ -368,7 +368,7 @@ async def test_remote_summaries_participate_in_distributed_cardinality() -> None
             message_root = squid_ui_discord.MessageRoot(Counter(), access=Everyone(), timeout=None)
             result = await contender.open(
                 message_root,
-                delivered_to(fake_message(message_id=2)),
+                delivered_to(message_harness(message_id=2)),
                 recipe="counter",
                 key=SessionKey.user("counter", 7),
                 admission=AdmissionSpec(replacement=Unprotected()),
@@ -441,7 +441,7 @@ async def test_missing_child_is_pruned_from_the_whole_session_record() -> None:
         child = squid_ui_discord.MessageRoot(Counter(), access=Everyone(), timeout=None)
         attached = await opened.session.attach(
             child,
-            delivered_to(fake_message(message_id=2)),
+            delivered_to(message_harness(message_id=2)),
             recipe="counter",
             actor_id=8,
         )
@@ -520,7 +520,7 @@ async def test_a_durable_join_is_checkpointed_and_survives_recovery() -> None:
         message_root = squid_ui_discord.MessageRoot(Counter(), access=Everyone(), timeout=None)
         opened = await first.open(
             message_root,
-            delivered_to(fake_message(message_id=99)),
+            delivered_to(message_harness(message_id=99)),
             recipe="counter",
             key=key,
             actor_id=7,
@@ -564,11 +564,11 @@ async def test_a_recovered_attachment_actor_is_attributed_but_not_a_member() -> 
         await tasks.start(first.run)
         message_root = squid_ui_discord.MessageRoot(Counter(), access=Everyone(), timeout=None)
         opened = await first.open(
-            message_root, delivered_to(fake_message(message_id=99)), recipe="counter", key=key, actor_id=7
+            message_root, delivered_to(message_harness(message_id=99)), recipe="counter", key=key, actor_id=7
         )
         assert isinstance(opened, Opened)
         child = squid_ui_discord.MessageRoot(Counter(), access=Everyone(), timeout=None)
-        await opened.session.attach(child, delivered_to(fake_message(message_id=100)), recipe="counter", actor_id=8)
+        await opened.session.attach(child, delivered_to(message_harness(message_id=100)), recipe="counter", actor_id=8)
         tasks.cancel_scope.cancel()
 
     async with anyio.create_task_group() as tasks:
@@ -696,7 +696,7 @@ async def test_a_durable_quota_survives_recovery() -> None:
         await tasks.start(first.run)
         opened = await first.open(
             squid_ui_discord.MessageRoot(Counter(), access=Everyone(), timeout=None),
-            delivered_to(fake_message(message_id=99)),
+            delivered_to(message_harness(message_id=99)),
             recipe="counter",
             key=key,
             actor_id=7,
@@ -720,7 +720,7 @@ async def test_a_durable_quota_survives_recovery() -> None:
         # The recovered session counts, so the same user cannot open a second game.
         blocked = await second.open(
             squid_ui_discord.MessageRoot(Counter(), access=Everyone(), timeout=None),
-            delivered_to(fake_message(message_id=100)),
+            delivered_to(message_harness(message_id=100)),
             recipe="counter",
             key=SessionKey.guild("game", 6),
             actor_id=7,
@@ -749,7 +749,7 @@ async def test_attaching_a_durable_session_without_a_recipe_is_refused_not_raise
         session: Session = opened.session
         child = squid_ui_discord.MessageRoot(Counter(), access=Everyone(), timeout=None)
 
-        refused = await session.attach(child, delivered_to(fake_message(message_id=2)), actor_id=8)
+        refused = await session.attach(child, delivered_to(message_harness(message_id=2)), actor_id=8)
 
         assert isinstance(refused, Rejected)
         assert refused.reason is RejectionReason.RECIPE_REQUIRED

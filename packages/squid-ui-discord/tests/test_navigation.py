@@ -6,7 +6,7 @@ from squid_ui.primitives import Heading, Text
 from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord import testing as sd
 from squid_ui_discord.navigation import StackNavigator
-from squid_ui_discord.testing import commit_render, fake_interaction
+from squid_ui_discord.testing import commit_render, interaction_harness
 
 
 class Screen(Component[sl.ComponentsV2Target]):
@@ -25,12 +25,12 @@ async def test_push_pop_and_controls_render_last():
     assert sd.payload_labels(view) == ["Back", "Close"]
 
     navigator.push(Screen("child"))
-    interaction = fake_interaction()
+    interaction = interaction_harness()
     await message_root.refresh(interaction)
     pushed = interaction.response.edit_message.await_args.kwargs["view"]
     assert "## child" in sd.payload_texts(pushed)
 
-    await message_root.dispatch("__nav_back", fake_interaction())
+    await message_root.dispatch("__nav_back", interaction_harness())
     assert navigator.current.name == "root"  # pyrefly: ignore
 
 
@@ -42,7 +42,7 @@ async def test_home_appears_only_when_deep():
     view = commit_render(message_root)
     assert "Home" in sd.payload_labels(view)
 
-    await message_root.dispatch("__nav_home", fake_interaction())
+    await message_root.dispatch("__nav_home", interaction_harness())
     assert navigator.depth == 1
 
 
@@ -73,6 +73,6 @@ async def test_close_finishes_the_root():
     message_root = MessageRoot(navigator, access=Everyone(), timeout=None)
     commit_render(message_root)
 
-    await message_root.dispatch("__nav_close", fake_interaction())
+    await message_root.dispatch("__nav_close", interaction_harness())
 
     assert message_root.finished

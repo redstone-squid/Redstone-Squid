@@ -13,7 +13,7 @@ import squid_ui_discord as sd
 from squid_ui.text import Localization, Message
 from squid_ui_discord.invocation import Invocation, Private, current_invocation, invocation_scope
 from squid_ui_discord.sessions import AdmissionSpec, Opened, Reject, Rejected
-from squid_ui_discord.testing import fake_interaction, fake_message
+from squid_ui_discord.testing import interaction_harness, message_harness
 
 
 class FakeClient:
@@ -32,28 +32,28 @@ def _context(
     interaction: Any | None = None,
     dm: AsyncMock | None = None,
 ) -> Any:
-    author = SimpleNamespace(id=7, send=dm or AsyncMock(return_value=fake_message(guild_id=None)))
+    author = SimpleNamespace(id=7, send=dm or AsyncMock(return_value=message_harness(guild_id=None)))
     return SimpleNamespace(
         bot=client,
         author=author,
         guild=SimpleNamespace(id=42) if guild else None,
         interaction=interaction,
-        send=AsyncMock(return_value=fake_message()),
+        send=AsyncMock(return_value=message_harness()),
     )
 
 
 def _interaction(client: FakeClient) -> Any:
-    interaction = fake_interaction(user_id=7)
+    interaction = interaction_harness(user_id=7)
     interaction.client = client
     interaction.guild = SimpleNamespace(id=7)
     return interaction
 
 
 def _message(client: FakeClient, *, guild: bool = True) -> Any:
-    message = fake_message(guild_id=42 if guild else None)
+    message = message_harness(guild_id=42 if guild else None)
     message.client = client
-    message.author = SimpleNamespace(id=7, send=AsyncMock(return_value=fake_message(guild_id=None)))
-    message.channel.send = AsyncMock(return_value=fake_message())
+    message.author = SimpleNamespace(id=7, send=AsyncMock(return_value=message_harness(guild_id=None)))
+    message.channel.send = AsyncMock(return_value=message_harness())
     return message
 
 

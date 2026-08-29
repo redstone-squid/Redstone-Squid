@@ -25,7 +25,7 @@ is why this lives here rather than beside the semantic layer.
 None of the mount's guarantees apply: no author lock, no generation check, no transaction.
 A routed handler owns its own concurrency.
 
-`squid_ui_discord.testing.fake_interaction` plus `Router.dispatch` is this module's
+`squid_ui_discord.testing.interaction_harness` plus `Router.dispatch` is this module's
 test client — a handler can be exercised without a bot, a gateway or a real message.
 """
 

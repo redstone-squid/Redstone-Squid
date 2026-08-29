@@ -16,7 +16,7 @@ from squid.bot.submission.consent_banner import (
     open_consent_prompt,
 )
 from squid.bot.submission.submit import BuildSubmitCommands
-from squid_ui_discord.testing import fake_message
+from squid_ui_discord.testing import message_harness
 from tests.helpers.discord import make_layout_bot
 
 BUILD_LOG_CHANNEL = 500
@@ -111,7 +111,7 @@ async def test_consented_message_records_activity_and_proceeds_with_ingestion(
 
 
 def _make_interaction(accounts: Any) -> Any:
-    message = fake_message(message_id=999)
+    message = message_harness(message_id=999)
     response = SimpleNamespace(_done=False)
 
     async def send_message(**_kwargs: Any) -> Any:

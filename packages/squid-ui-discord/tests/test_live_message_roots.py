@@ -7,7 +7,7 @@ from squid_ui import Component, PressEvent, state
 from squid_ui.primitives import Button, Heading, Row, Text
 from squid_ui_discord import Everyone, MessageRoot, Owner, live
 from squid_ui_discord.delivery import DeliveryResult
-from squid_ui_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
+from squid_ui_discord.testing import commit_render, delivered_to, interaction_harness, message_harness
 
 
 class Panel(Component[sl.ComponentsV2Target]):
@@ -32,7 +32,7 @@ class TestLiveRegistry:
 
     async def test_a_delivered_message_root_is_live(self) -> None:
         message_root = MessageRoot(Panel(), access=Everyone())
-        await message_root.send(delivered_to(fake_message()))
+        await message_root.send(delivered_to(message_harness()))
 
         assert live.message_roots() == (message_root,)
         assert live.find(message_root.id) is message_root
@@ -48,7 +48,7 @@ class TestLiveRegistry:
 
     async def test_finishing_deregisters_before_collection(self) -> None:
         message_root = MessageRoot(Panel(), access=Everyone())
-        await message_root.send(delivered_to(fake_message()))
+        await message_root.send(delivered_to(message_harness()))
         await message_root.finish()
 
         # Still strongly referenced here, so anything left in the registry would be a lie
@@ -76,7 +76,7 @@ class TestLiveRegistry:
 class TestSnapshot:
     async def test_a_delivered_message_root_knows_where_it_is(self) -> None:
         message_root = MessageRoot(Panel(), access=Everyone())
-        await message_root.send(delivered_to(fake_message(message_id=42, channel_id=5, guild_id=7)))
+        await message_root.send(delivered_to(message_harness(message_id=42, channel_id=5, guild_id=7)))
         snapshot = message_root.snapshot()
 
         assert snapshot.address is not None
@@ -91,7 +91,7 @@ class TestSnapshot:
         await message_root.send(lambda presentation: _none())
         assert message_root.snapshot().address is None
 
-        await message_root.dispatch("inc", fake_interaction(message_id=42))
+        await message_root.dispatch("inc", interaction_harness(message_id=42))
         address = message_root.snapshot().address
 
         assert address is not None
