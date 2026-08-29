@@ -8,7 +8,7 @@ from squid.accounts.application import AccountService
 from squid.accounts.domain import AliasClaim, IdentityProvider
 from squid.accounts.errors import AliasAlreadyClaimedError
 from squid.bot.consent import with_consented_account
-from squid.bot.ui import DISCORD_BLUE, L
+from squid.bot.ui import DISCORD_BLUE, tr
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import ACCOUNT_CLAIM_APPROVE, ACCOUNT_CLAIM_REJECT
 
@@ -55,8 +55,8 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
         if self.closed:
             return (
                 sl.section(
-                    sl.heading(L(t"Claims closed")),
-                    sl.paragraph(L(t"This review queue is closed.")),
+                    sl.heading(tr(t"Claims closed")),
+                    sl.paragraph(tr(t"This review queue is closed.")),
                 ),
             )
         entries = tuple(_claim_entry(claim) for claim in self._claims)
@@ -67,7 +67,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
                 overflow=sl.primitives.Paginate(key="claims", footer=self._page_footer),
             )
             if entries
-            else sl.primitives.Text(L(t"No creator credit claims are awaiting review."))
+            else sl.primitives.Text(tr(t"No creator credit claims are awaiting review."))
         )
         choices: sl.primitives.Node | None = None
         if self._claims:
@@ -94,9 +94,9 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
         if self._can_approve:
             buttons.append(
                 sl.action_control(
-                    L(t"Take the name")
+                    tr(t"Take the name")
                     if self.selected_id is not None and self.reassign_armed == self.selected_id
-                    else L(t"Approve"),
+                    else tr(t"Approve"),
                     self._approve,
                     key="approve",
                     tone=sl.Tone.DANGER if self.reassign_armed == self.selected_id else sl.Tone.SUCCESS,
@@ -106,17 +106,17 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
         if self._can_reject:
             buttons.append(
                 sl.action_control(
-                    L(t"Reject"),
+                    tr(t"Reject"),
                     self._reject,
                     key="reject",
                     available=self.selected is not None,
                 )
             )
-        buttons.append(sl.action_control(L(t"Close"), self._close, key="close"))
+        buttons.append(sl.action_control(tr(t"Close"), self._close, key="close"))
         return (
             sl.primitives.Panel(
                 (
-                    sl.primitives.Heading(L(t"Creator credit claims awaiting review")),
+                    sl.primitives.Heading(tr(t"Creator credit claims awaiting review")),
                     body,
                     *((choices,) if choices is not None else ()),
                 ),
@@ -127,7 +127,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
 
     def _page_footer(self, page: int, pages: int) -> sl.text.Message:
         total = len(self._claims)
-        return L(t"Page {page} of {pages} — {total} in total")
+        return tr(t"Page {page} of {pages} — {total} in total")
 
     async def _select_claim(self, event: sl.ChoiceEvent) -> None:
         self.selected_id = int(event.selected[0])
@@ -145,7 +145,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
             return
         node = ACCOUNT_CLAIM_APPROVE if approve else ACCOUNT_CLAIM_REJECT
         if not await self._authorize(node):
-            await event.notice(L(t"You are no longer allowed to resolve creator claims."))
+            await event.notice(tr(t"You are no longer allowed to resolve creator claims."))
             return
 
         async def resolve(live: sl.ActionEvent, staff_account_id: int) -> None:
@@ -178,9 +178,9 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
         name = resolved.alias_name
         claimant = _claimant(resolved)
         message = (
-            L(t"Credited **{name}** to {claimant}.")
+            tr(t"Credited **{name}** to {claimant}.")
             if approve
-            else L(t"Closed {claimant}'s claim on **{name}** without crediting it.")
+            else tr(t"Closed {claimant}'s claim on **{name}** without crediting it.")
         )
         await event.notice(message, visibility=sl.interactions.Visibility.PUBLIC)
 
@@ -205,32 +205,32 @@ def _claimant(claim: AliasClaim, *, mention: bool = True) -> sl.TextLike:
             return java.display_name
         if claimant.public_creator_id is not None:
             creator_id = claimant.public_creator_id
-            return L(t"creator `{creator_id}`")
+            return tr(t"creator `{creator_id}`")
         if discord is not None and discord.discord_id is not None:
             discord_id = discord.discord_id
-            return L(t"Discord user `{discord_id}`")
+            return tr(t"Discord user `{discord_id}`")
     account_id = claim.account_id
-    return L(t"unidentified account (internal ID `{account_id}`)")
+    return tr(t"unidentified account (internal ID `{account_id}`)")
 
 
 def _claim_entry(claim: AliasClaim) -> sl.TextLike:
     claim_id = claim.id
     name = claim.alias_name
-    heading = L(t"Claim #{claim_id} — {name}")
+    heading = tr(t"Claim #{claim_id} — {name}")
     claimant = _claimant(claim)
     age = sl.md(t"{sl.timestamp(claim.created_at.to_stdlib(), style=sl.semantic.TimeStyle.RELATIVE)}")
-    detail = L(t"{claimant} — opened {age}")
-    return L(t"**{heading}**\n{detail}")
+    detail = tr(t"{claimant} — opened {age}")
+    return tr(t"**{heading}**\n{detail}")
 
 
 def _claim_label(claim: AliasClaim) -> sl.text.Message:
     claim_id = claim.id
     name = claim.alias_name
-    return L(t"Claim #{claim_id} — {name}")
+    return tr(t"Claim #{claim_id} — {name}")
 
 
 def _conflict_text(conflict: AliasAlreadyClaimedError) -> sl.TextLike:
     """Explain the second deliberate approval click."""
-    held = L(conflict.message, **conflict.message_params)
-    action = L(t"Approving again takes the name from them.")
-    return L(t"{held} {action}")
+    held = tr(conflict.message, **conflict.message_params)
+    action = tr(t"Approving again takes the name from them.")
+    return tr(t"{held} {action}")

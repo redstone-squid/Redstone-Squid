@@ -14,7 +14,7 @@ import squid_ui_discord as sd
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.routes._root import _feature_group, _feature_route
-from squid.bot.ui import L, render_payload, text_node
+from squid.bot.ui import render_payload, text_node, tr
 from squid.bot.utils.permissions import allows, enforce, hide_unless
 from squid.community.domain import RedstonerDecisionKind
 from squid.core.i18n import _
@@ -132,15 +132,15 @@ class RedstonerScreen(sd.Screen):
         source_channel_mention = sl.raw_md(f"<#{self._source_channel_id}>")
         actions: list[sl.semantic.ActionControl] = []
         if self._can_deploy:
-            actions.append(sl.action_control(L(t"Deploy role controls"), self._deploy, key="deploy"))
-        actions.append(sl.action_control(L(t"Close"), self._close, key="close"))
+            actions.append(sl.action_control(tr(t"Deploy role controls"), self._deploy, key="deploy"))
+        actions.append(sl.action_control(tr(t"Close"), self._close, key="close"))
         return (
             sl.section(
-                sl.heading(L(t"Redstoner automation")),
+                sl.heading(tr(t"Redstoner automation")),
                 sl.fields(
-                    sl.field(L(t"Role"), sl.md(L(t"{role_mention}"))),
-                    sl.field(L(t"Source channel"), sl.md(L(t"{source_channel_mention}"))),
-                    sl.field(L(t"Server"), str(self._guild_id)),
+                    sl.field(tr(t"Role"), sl.md(tr(t"{role_mention}"))),
+                    sl.field(tr(t"Source channel"), sl.md(tr(t"{source_channel_mention}"))),
+                    sl.field(tr(t"Server"), str(self._guild_id)),
                 ),
             ),
             sl.action_controls(*actions, key="redstoner-admin-actions"),
@@ -148,10 +148,10 @@ class RedstonerScreen(sd.Screen):
 
     async def _deploy(self, event: sl.PressEvent) -> None:
         if not await self._authorize_deploy():
-            await event.notice(L(t"You are no longer allowed to deploy Redstoner controls."))
+            await event.notice(tr(t"You are no longer allowed to deploy Redstoner controls."))
             return
         await self._publish_panel()
-        await event.notice(L(t"Redstoner role controls deployed."))
+        await event.notice(tr(t"Redstoner role controls deployed."))
 
     async def _close(self, event: sl.PressEvent) -> None:
         await event.finish()
