@@ -386,11 +386,17 @@ class _Lowerer:
             (child for child in node.children if isinstance(child, scene.HtmlElement) and child.tag in _HEADINGS),
             None,
         )
-        title = None if heading is None else self.plain(_html_text(heading), path, capacity=2000)
+        title = (
+            None
+            if heading is None
+            else self.plain(_html_text(heading), path, capacity=self.limits.components.card_title)
+        )
         description = "\n".join(_html_text(child) for child in node.children if child is not heading).strip()
         return scene.SlackCard(
             title=title,
-            description=None if not description else self.text(description, path, capacity=3000),
+            description=(
+                None if not description else self.text(description, path, capacity=self.limits.components.card_body)
+            ),
         )
 
     def _gallery(self, node: scene.HtmlElement, path: str) -> tuple[scene.SlackBlock, ...]:

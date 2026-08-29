@@ -61,6 +61,17 @@ def test_message_compiles_text_actions_dates_and_accessible_fallback() -> None:
     assert set(result.bindings) == {"approve"}
 
 
+def test_cards_are_planned_to_the_sdk_card_text_limits() -> None:
+    result = sl.planning.plan(
+        sl.article(sl.heading("T" * 200), sl.paragraph("B" * 300)),
+        target=HOME,
+    )
+
+    card = next(block for block in result.scene.body.blocks if isinstance(block, scene.SlackCard))
+    assert card.title is not None and len(card.title.content) == 150
+    assert card.description is not None and len(card.description.content) == 200
+
+
 def test_message_and_home_use_native_slack_entity_selectors() -> None:
     user = sl.entities(
         key="reviewer",

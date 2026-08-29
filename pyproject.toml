@@ -133,12 +133,14 @@ members = [
     "packages/squid-storage",
     "packages/squid-ui",
     "packages/squid-ui-discord",
+    "packages/squid-ui-slack",
     "packages/squid-ui-widgets",
 ]
 
 [tool.uv.sources]
 squid-ui-discord = { workspace = true }
 squid-ui = { workspace = true }
+squid-ui-slack = { workspace = true }
 squid-ui-widgets = { workspace = true }
 squid-reactivity = { workspace = true }
 squid-replication = { workspace = true }
@@ -294,6 +296,7 @@ ignore = [
 # The workspace member's src layout is outside ruff's first-party detection at the repo root.
 known-first-party = [
     "squid_ui_discord",
+    "squid_ui_slack",
     "squid_ui",
     "squid_ui_widgets",
     "squid_reactivity",
@@ -404,6 +407,7 @@ search-path = [
     "packages/squid-storage/src",
     "packages/squid-ui/src",
     "packages/squid-ui-discord/src",
+    "packages/squid-ui-slack/src",
     "packages/squid-ui-widgets/src",
 ]
 # `observability` is an optional extra (see the dependency group below) that isn't installed in
@@ -425,6 +429,7 @@ testpaths = [
     "packages/squid-storage/tests",
     "packages/squid-ui/tests",
     "packages/squid-ui-discord/tests",
+    "packages/squid-ui-slack/tests",
     "packages/squid-ui-widgets/tests",
     "packages/squid-replication/tests",
 ]
@@ -443,6 +448,7 @@ addopts = [
     "--cov=squid_ui",
     "--cov=squid_replication",
     "--cov=squid_ui_discord",
+    "--cov=squid_ui_slack",
     "--cov=squid_ui_widgets",
 ]
 # https://docs.pytest.org/en/stable/how-to/capture-warnings.html#controlling-warnings
