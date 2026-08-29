@@ -1,6 +1,8 @@
 """HTTP API transport tests."""
 
 import re
+from dataclasses import dataclass, field
+from typing import override
 
 import httpx
 from fastapi import FastAPI
@@ -10,9 +12,11 @@ from pytest_mock import MockerFixture
 from squid.accounts.errors import MinecraftServiceUnavailableError
 from squid.api import app as api_app
 from squid.api.errors import PROBLEM_DETAIL_MEDIA_TYPE
+from squid.auth.application.web import WebSessionService
 from squid.auth.domain.sessions import WebSessionIdentity
 from squid.builds.errors import BuildRevisionMismatchError, BuildRevisionRequiredError
 from squid.core.errors import ErrorCode, InternalError
+from squid.idempotency import IdempotencyService, PendingRequest, StoredResponse
 from tests.unit.api.fakes import (
     NONEXISTENT_UUID,
     TEST_CONFIG,
@@ -23,6 +27,37 @@ from tests.unit.api.fakes import (
     MockErrorReports,
     build_app,
 )
+
+
+SESSION_IDENTITY = WebSessionIdentity(session_id="session", account_id=1, consent_pending=False)
+
+
+@dataclass(slots=True)
+class WebSessionRecorder(WebSessionService):
+    identity: WebSessionIdentity = SESSION_IDENTITY
+    logout_tokens: list[str] = field(default_factory=list)
+
+    @override
+    async def authenticate(self, token: str) -> WebSessionIdentity:
+        return self.identity
+
+    @override
+    async def logout(self, token: str) -> None:
+        self.logout_tokens.append(token)
+
+
+@dataclass(slots=True)
+class IdempotencyRecorder(IdempotencyService):
+    reservations: list[dict[str, object]] = field(default_factory=list)
+
+    @override
+    async def reserve(
+        self, *, caller: str, key: str, fingerprint: bytes, method: str, route: str
+    ) -> PendingRequest | StoredResponse:
+        self.reservations.append(
+            {"caller": caller, "key": key, "fingerprint": fingerprint, "method": method, "route": route}
+        )
+        raise AssertionError("a rejected write must not reserve an idempotency key")
 
 
 def test_main_owns_observability_shutdown(mocker: MockerFixture) -> None:
@@ -92,18 +127,9 @@ def test_success_returns_verification_code(client: httpx.Client):
     assert resp.json() == TEST_VERIFICATION_CODE
 
 
-def test_cookie_authenticated_write_requires_csrf_header(mocker: MockerFixture) -> None:
-    web_auth = mocker.Mock()
-    web_auth.authenticate = mocker.AsyncMock(
-        return_value=WebSessionIdentity(
-            session_id="session",
-            account_id=1,
-            consent_pending=False,
-        )
-    )
-    web_auth.logout = mocker.AsyncMock()
-    idempotency = mocker.Mock()
-    idempotency.reserve = mocker.AsyncMock()
+def test_cookie_authenticated_write_requires_csrf_header() -> None:
+    web_auth = WebSessionRecorder()
+    idempotency = IdempotencyRecorder()
     app, database = build_app(web_auth=web_auth, idempotency=idempotency)
 
     with TestClient(app, base_url="https://testserver") as session_client:
@@ -113,20 +139,12 @@ def test_cookie_authenticated_write_requires_csrf_header(mocker: MockerFixture) 
 
     assert database.closed
     assert response.status_code == 403
-    idempotency.reserve.assert_not_awaited()
-    web_auth.logout.assert_not_awaited()
+    assert idempotency.reservations == []
+    assert web_auth.logout_tokens == []
 
 
-def test_cookie_authenticated_write_rejects_mismatched_csrf_header(mocker: MockerFixture) -> None:
-    web_auth = mocker.Mock()
-    web_auth.authenticate = mocker.AsyncMock(
-        return_value=WebSessionIdentity(
-            session_id="session",
-            account_id=1,
-            consent_pending=False,
-        )
-    )
-    web_auth.logout = mocker.AsyncMock()
+def test_cookie_authenticated_write_rejects_mismatched_csrf_header() -> None:
+    web_auth = WebSessionRecorder()
     app, database = build_app(web_auth=web_auth)
 
     with TestClient(app, base_url="https://testserver") as session_client:
@@ -136,19 +154,11 @@ def test_cookie_authenticated_write_rejects_mismatched_csrf_header(mocker: Mocke
 
     assert database.closed
     assert response.status_code == 403
-    web_auth.logout.assert_not_awaited()
+    assert web_auth.logout_tokens == []
 
 
-def test_cookie_authenticated_write_accepts_matching_csrf_header(mocker: MockerFixture) -> None:
-    web_auth = mocker.Mock()
-    web_auth.authenticate = mocker.AsyncMock(
-        return_value=WebSessionIdentity(
-            session_id="session",
-            account_id=1,
-            consent_pending=False,
-        )
-    )
-    web_auth.logout = mocker.AsyncMock()
+def test_cookie_authenticated_write_accepts_matching_csrf_header() -> None:
+    web_auth = WebSessionRecorder()
     app, database = build_app(web_auth=web_auth)
 
     with TestClient(app, base_url="https://testserver") as session_client:
@@ -158,18 +168,11 @@ def test_cookie_authenticated_write_accepts_matching_csrf_header(mocker: MockerF
 
     assert database.closed
     assert response.status_code == 204
-    web_auth.logout.assert_awaited_once_with("session-token")
+    assert web_auth.logout_tokens == ["session-token"]
 
 
-def test_cookie_authenticated_frontend_can_fetch_its_no_store_csrf_token(mocker: MockerFixture) -> None:
-    web_auth = mocker.Mock()
-    web_auth.authenticate = mocker.AsyncMock(
-        return_value=WebSessionIdentity(
-            session_id="session",
-            account_id=1,
-            consent_pending=False,
-        )
-    )
+def test_cookie_authenticated_frontend_can_fetch_its_no_store_csrf_token() -> None:
+    web_auth = WebSessionRecorder()
     config = TEST_CONFIG.model_copy(
         update={"api": TEST_CONFIG.api.model_copy(update={"cors_origins": ("https://catalogue.test",)})}
     )
@@ -194,20 +197,6 @@ def test_anonymous_frontend_cannot_fetch_a_csrf_token(client: httpx.Client) -> N
 
     assert response.status_code == 401
     assert "csrf_token" not in response.text
-
-
-async def test_verify_handler_depends_on_accounts_capability(mocker: MockerFixture) -> None:
-    accounts = mocker.Mock()
-    accounts.generate_verification_code = mocker.AsyncMock(return_value=TEST_VERIFICATION_CODE)
-
-    result = await api_app.get_verification_code(
-        api_app.User(uuid=TEST_UUID),
-        accounts,
-        mocker.Mock(),
-    )
-
-    assert result == TEST_VERIFICATION_CODE
-    accounts.generate_verification_code.assert_awaited_once_with(TEST_UUID)
 
 
 def test_internal_error_is_redacted_and_correlated(app_factory: tuple[FastAPI, MockDatabaseManager]) -> None:
