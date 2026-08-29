@@ -18,7 +18,7 @@ from squid_ui_discord import Everyone, MessageRoot, Owner, live
 from squid_ui_discord.devtools import DevTools
 from squid_ui_discord.devtools_runtime import DevToolsRuntime
 from squid_ui_discord.routing import Router
-from squid_ui_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
+from squid_ui_discord.testing import commit_render, delivered_to, interaction_harness, message_harness
 
 
 class Subject(sl.Component[sl.ComponentsV2Target]):
@@ -49,7 +49,7 @@ def make_context(*, bot: FakeBot | None = None) -> Any:
     return SimpleNamespace(
         interaction=None,
         author=SimpleNamespace(id=1),
-        send=AsyncMock(return_value=fake_message()),
+        send=AsyncMock(return_value=message_harness()),
         send_help=AsyncMock(),
         bot=FakeBot() if bot is None else bot,
     )
@@ -89,7 +89,7 @@ class TestMountCommands:
     @pytest.mark.parametrize(("command", "expected"), (("dump_plan", "logical"), ("dump_metrics", "cache:")))
     async def test_snapshot_reports_render_with_squid_ui(self, command: str, expected: str) -> None:
         subject = MessageRoot(Subject(), access=Everyone())
-        await subject.send(delivered_to(fake_message()))
+        await subject.send(delivered_to(message_harness()))
         ctx = make_context()
         cog = DevTools()
 
@@ -100,7 +100,7 @@ class TestMountCommands:
 
     async def test_scene_is_attached_as_protocol_json(self) -> None:
         subject = MessageRoot(Subject(), access=Everyone())
-        await subject.send(delivered_to(fake_message()))
+        await subject.send(delivered_to(message_harness()))
         ctx = make_context()
         cog = DevTools()
 
@@ -194,7 +194,7 @@ class TestProfiles:
     async def test_message_root_profile_filters_bounded_traces_by_non_aggregate_attribute(self) -> None:
         profiler = MemoryProfiler()
         subject = MessageRoot(Subject(), access=Everyone(), profiler=profiler)
-        await subject.send(delivered_to(fake_message()))
+        await subject.send(delivered_to(message_harness()))
         assert {aggregate.key.counter_name for aggregate in profiler.snapshot().counter_aggregates} >= {
             "planner.calls",
             "planner.states_explored",
@@ -215,8 +215,8 @@ class TestProfiles:
         second = MessageRoot(Clicker(), access=Everyone(), profiler=profiler, timeout=None)
         commit_render(first)
         commit_render(second)
-        await first.dispatch("bump", fake_interaction(user_id=11))
-        await second.dispatch("bump", fake_interaction(user_id=22))
+        await first.dispatch("bump", interaction_harness(user_id=11))
+        await second.dispatch("bump", interaction_harness(user_id=22))
         ctx = make_context()
         cog = DevTools(profiler=profiler)
 
@@ -234,8 +234,8 @@ class TestProfiles:
         profiler = MemoryProfiler()
         message_root = MessageRoot(Clicker(), access=Everyone(), profiler=profiler, timeout=None)
         commit_render(message_root)
-        await message_root.dispatch("bump", fake_interaction(user_id=11))
-        await message_root.dispatch("bump", fake_interaction(user_id=22))
+        await message_root.dispatch("bump", interaction_harness(user_id=11))
+        await message_root.dispatch("bump", interaction_harness(user_id=22))
         ctx = make_context()
         cog = DevTools(profiler=profiler)
 

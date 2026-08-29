@@ -17,7 +17,7 @@ from squid.accounts.domain import CURRENT_CONSENT_VERSION, Account, AccountConse
 from squid.bot.consent import NOT_ASKED, ensure_consented_account, prompt_for_consent, request_consent
 from squid_ui_discord import Everyone, SessionKey, SessionManager
 from squid_ui_discord.sessions import Opened
-from squid_ui_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
+from squid_ui_discord.testing import commit_render, delivered_to, interaction_harness, message_harness
 from tests.helpers.discord import make_layout_bot
 
 AFTER_CUTOFF = Instant.from_utc(2026, 8, 5)
@@ -47,7 +47,7 @@ def make_context() -> Any:
         SimpleNamespace(
             author=SimpleNamespace(id=USER_ID),
             interaction=None,
-            send=AsyncMock(return_value=fake_message(message_id=1)),
+            send=AsyncMock(return_value=message_harness(message_id=1)),
             bot=make_layout_bot(),
         ),
     )
@@ -57,8 +57,8 @@ def make_interaction(*, response_done: bool) -> Any:
     return SimpleNamespace(
         user=SimpleNamespace(id=USER_ID),
         response=SimpleNamespace(is_done=lambda: response_done, send_message=AsyncMock()),
-        followup=SimpleNamespace(send=AsyncMock(return_value=fake_message(message_id=1))),
-        original_response=AsyncMock(return_value=fake_message(message_id=1)),
+        followup=SimpleNamespace(send=AsyncMock(return_value=message_harness(message_id=1))),
+        original_response=AsyncMock(return_value=message_harness(message_id=1)),
     )
 
 
@@ -194,7 +194,7 @@ async def test_a_closing_parent_ends_the_wait_instead_of_stranding_it() -> None:
     """
     ctx = make_context()
     parent = sd.MessageRoot(_Blank(), access=Everyone(), timeout=None)
-    parent_opened = await ctx.bot.sessions.open(parent, delivered_to(fake_message()))
+    parent_opened = await ctx.bot.sessions.open(parent, delivered_to(message_harness()))
     assert isinstance(parent_opened, Opened)
     outcomes: list[Any] = []
 
@@ -255,7 +255,7 @@ class _Gate(sl.Component):
 
 def _clicked(client: Any, *, message_id: int) -> Any:
     """An interaction whose client carries the host the prompt opens through."""
-    interaction = fake_interaction(USER_ID, message_id=message_id)
+    interaction = interaction_harness(USER_ID, message_id=message_id)
     interaction.client = client
     return interaction
 
@@ -279,7 +279,7 @@ async def test_asking_for_consent_from_a_handler_leaves_the_panel_free() -> None
     registry = bot.sessions
     panel = _Gate()
     message_root = sd.MessageRoot(panel, access=Everyone(), timeout=None)
-    assert isinstance(await registry.open(message_root, delivered_to(fake_message())), Opened)
+    assert isinstance(await registry.open(message_root, delivered_to(message_harness())), Opened)
     commit_render(message_root)
 
     # Bounded well under the prompt's 120 s: a press that still waited would hang here rather
@@ -300,7 +300,7 @@ async def test_the_prompt_carries_the_answer_back_to_the_panel() -> None:
     registry = bot.sessions
     panel = _Gate()
     message_root = sd.MessageRoot(panel, access=Everyone(), timeout=None)
-    assert isinstance(await registry.open(message_root, delivered_to(fake_message())), Opened)
+    assert isinstance(await registry.open(message_root, delivered_to(message_harness())), Opened)
     commit_render(message_root)
     await message_root.dispatch("ask", _clicked(bot, message_id=1))
 

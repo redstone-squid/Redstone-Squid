@@ -18,7 +18,7 @@ from squid.builds.domain import Build, BuildLink, DoorBuild, SourceMessage, Stat
 from squid.search.application import SearchService
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
 from squid.sponsors import PublicSponsor
-from squid_ui_discord.testing import commit_render, delivered_to, fake_message
+from squid_ui_discord.testing import commit_render, delivered_to, message_harness
 from tests.helpers.discord import make_layout_bot
 
 if TYPE_CHECKING:
@@ -175,7 +175,7 @@ async def test_search_timeout_disables_bound_controls() -> None:
     view = SearchScreen(cast(SearchService, object()), SearchRequest("door"), page)
     bot = make_layout_bot()
     message_root = bot.client_runtime.mount(view, access=sd.Owner(123), timeout=180)
-    message = fake_message()
+    message = message_harness()
     await message_root.send(delivered_to(message))
 
     await message_root.finish()

@@ -21,7 +21,7 @@ import squid_ui_widgets as sp
 from squid_ui import testing as engine
 from squid_ui.semantic import ActionControl, Choices, FormTrigger
 from squid_ui_discord import Everyone, MessageRoot
-from squid_ui_discord.testing import assert_within_limits, commit_render, fake_interaction
+from squid_ui_discord.testing import assert_within_limits, commit_render, interaction_harness
 
 KEYED_CONTROLS = (ActionControl, Choices, FormTrigger)
 
@@ -152,7 +152,7 @@ async def test_one_interaction_through_the_real_funnel_reaches_a_handler(
 
     assert key is not None, "every advertised widget draws at least one usable control"
 
-    interaction = fake_interaction()
+    interaction = interaction_harness()
     # Values only when there are some: `dispatch(key, interaction, ())` is a *selection* of
     # nothing, and a button pressed that way never reaches its press handler.
     if values is None:

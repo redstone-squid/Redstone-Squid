@@ -25,8 +25,8 @@ from squid_ui_discord.testing import (
     assert_within_limits,
     commit_render,
     delivered_to,
-    fake_interaction,
-    fake_message,
+    interaction_harness,
+    message_harness,
 )
 from tests.helpers.discord import make_layout_bot
 
@@ -98,7 +98,7 @@ async def test_each_exhibit_keeps_its_declaration_one_press_away(section: str, s
     assert source_marker not in _texts(collapsed), "the listing is not in the message a reader is sent"
     assert any(button.label == "Show the code behind this exhibit" for button in _buttons(collapsed))
 
-    await message_root.dispatch("source.toggle", fake_interaction())
+    await message_root.dispatch("source.toggle", interaction_harness())
     expanded = commit_render(message_root)
 
     assert source_marker in _texts(expanded)
@@ -142,7 +142,7 @@ async def test_grid_exhibit_keeps_spatial_rows_and_stable_selection_keys() -> No
     assert numbered[5].disabled
     assert numbered[10].disabled
 
-    await message_root.dispatch("showcase-grid.cell-0", fake_interaction())
+    await message_root.dispatch("showcase-grid.cell-0", interaction_harness())
 
     assert component.grid_pick == "You picked square 1."
 
@@ -152,14 +152,14 @@ async def test_ownership_exhibit_separates_session_owned_and_component_owned_val
     message_root = MessageRoot(component, access=Everyone(), timeout=None)
     commit_render(message_root)
 
-    await message_root.dispatch("ownership.controlled", fake_interaction())
-    await message_root.dispatch("ownership.rating.4", fake_interaction())
+    await message_root.dispatch("ownership.controlled", interaction_harness())
+    await message_root.dispatch("ownership.rating.4", interaction_harness())
 
     assert component.subscribed is True, "a controlled value only moves through its handler"
     assert component.rating == 4
     assert "\N{BLACK STAR}" * 4 in _texts(commit_render(message_root))
 
-    await message_root.dispatch("ownership.managed", fake_interaction())
+    await message_root.dispatch("ownership.managed", interaction_harness())
     labels = [button.label for button in _buttons(commit_render(message_root))]
 
     assert "First switch: on" in labels
@@ -180,7 +180,7 @@ async def test_forms_exhibit_validates_then_binds_typed_values_and_prefills() ->
 
     await message_root.dispatch_submit(
         "feedback",
-        fake_interaction(),
+        interaction_harness(),
         binding.spec,
         {"exhibit": "data", "headline": "Typed all the way down", "score": "5"},
         binding.on_submit,
@@ -205,7 +205,7 @@ async def test_localization_exhibit_escapes_values_and_relocalizes_the_same_root
     assert "\\*shouty title\\*" in _texts(first)
     assert "@\u200beveryone" in _texts(first)
 
-    interaction = fake_interaction()
+    interaction = interaction_harness()
     await message_root.dispatch("switch-language", interaction)
 
     assert component.display_locale == "zh-CN"
@@ -224,7 +224,7 @@ async def test_composed_children_keep_independent_state_and_keys() -> None:
     assert any("left.increment" in custom_id for custom_id in ids)
     assert any("right.increment" in custom_id for custom_id in ids)
 
-    await message_root.dispatch("left.increment", fake_interaction())
+    await message_root.dispatch("left.increment", interaction_harness())
 
     assert component.left.count == 1
     assert component.right.count == 0
@@ -235,24 +235,24 @@ async def test_history_exhibit_preserves_a_sibling_write_and_presents_rollback_c
     message_root = MessageRoot(component, access=Everyone(), timeout=None)
     commit_render(message_root)
 
-    await message_root.dispatch("history.rename", fake_interaction())
+    await message_root.dispatch("history.rename", interaction_harness())
     assert component.project_name == "Action Ledger"
     assert component.outcome_result.startswith("Finished cleanly, as change #")
 
-    await message_root.dispatch("history.sibling", fake_interaction())
-    await message_root.dispatch("history.undo", fake_interaction())
+    await message_root.dispatch("history.sibling", interaction_harness())
+    await message_root.dispatch("history.undo", interaction_harness())
 
     assert component.project_name == "Squid, renamed by somebody else"
     assert component.history_result.startswith("Undo refused:")
     assert component.action_history.entries[0].state is sl.runtime.HistoryEntryState.CONFLICTED
 
-    await message_root.dispatch("history.rollback", fake_interaction())
+    await message_root.dispatch("history.rollback", interaction_harness())
 
     assert component.project_name == "Squid, renamed by somebody else", "the staged name never published"
     assert component.outcome_result.startswith("Failed and rolled back (handler_exception)")
     assert component.outcome_result.endswith("written afterwards by a fresh action.")
 
-    await message_root.dispatch("history.drop", fake_interaction())
+    await message_root.dispatch("history.drop", interaction_harness())
     assert component.action_history.entries == ()
     assert component.project_name == "Squid, renamed by somebody else", "dropping history is not a forced restore"
 
@@ -262,16 +262,16 @@ async def test_replication_exhibit_selectively_undoes_only_the_local_contributio
     message_root = MessageRoot(component, access=Everyone(), timeout=None)
     commit_render(message_root)
 
-    await message_root.dispatch("replication.local", fake_interaction())
+    await message_root.dispatch("replication.local", interaction_harness())
     assert component.local_document.counter("votes").value == 2
     assert component.local_document.set("reviewers").value == frozenset({"you"})
 
-    await message_root.dispatch("replication.peer", fake_interaction())
+    await message_root.dispatch("replication.peer", interaction_harness())
     assert component.local_document.counter("votes").value == 5
     assert component.local_document.set("reviewers").value == frozenset({"you", "them"})
     assert component.peer_document.snapshot() == component.local_document.snapshot()
 
-    await message_root.dispatch("replication.undo", fake_interaction())
+    await message_root.dispatch("replication.undo", interaction_harness())
 
     assert component.local_document.counter("votes").value == 3, "their three survive"
     assert component.local_document.set("reviewers").value == frozenset({"them"})
@@ -283,27 +283,27 @@ async def test_effects_exhibit_retries_compensation_and_accepts_an_operation_res
     message_root = MessageRoot(component, access=Everyone(), timeout=None)
     commit_render(message_root)
 
-    await message_root.dispatch("effects.publish", fake_interaction())
+    await message_root.dispatch("effects.publish", interaction_harness())
     first_execution = component.publication
     assert first_execution is not None
     assert isinstance(first_execution.status, sl.operations.Succeeded)
 
-    await message_root.dispatch("effects.accept", fake_interaction())
+    await message_root.dispatch("effects.accept", interaction_harness())
     assert component.published_revision == 41
 
-    await message_root.dispatch("effects.publish", fake_interaction())
+    await message_root.dispatch("effects.publish", interaction_harness())
     assert component.publication is not None
     assert component.publication.context.execution_id != first_execution.context.execution_id
 
-    await message_root.dispatch("effects.create", fake_interaction())
-    await message_root.dispatch("effects.fail", fake_interaction())
-    await message_root.dispatch("effects.undo", fake_interaction())
+    await message_root.dispatch("effects.create", interaction_harness())
+    await message_root.dispatch("effects.fail", interaction_harness())
+    await message_root.dispatch("effects.undo", interaction_harness())
 
     assert component.channel_service.exists is True
     assert component.channel_present is True
     assert component.compensation_result.startswith("Undo failed")
 
-    await message_root.dispatch("effects.undo", fake_interaction())
+    await message_root.dispatch("effects.undo", interaction_harness())
 
     assert component.channel_service.exists is False
     assert component.channel_present is False
@@ -323,7 +323,7 @@ async def test_demo_command_and_controls_are_public() -> None:
                 interaction=None,
                 guild=None,
                 author=SimpleNamespace(id=7),
-                send=AsyncMock(return_value=fake_message(message_id=1)),
+                send=AsyncMock(return_value=message_harness(message_id=1)),
             ),
         ),
     )
@@ -353,7 +353,7 @@ class TestSharedAppearance:
 
     async def test_the_reading_panel_follows_what_it_rendered(self) -> None:
         _, _, appearance, session, writer, reader = self.panels()
-        await reader.send(delivered_to(fake_message(message_id=2)))
+        await reader.send(delivered_to(message_harness(message_id=2)))
 
         assert set(reader.followed) == {
             sl.runtime.CellAddress(appearance, "accent"),
@@ -364,33 +364,33 @@ class TestSharedAppearance:
 
     async def test_a_press_on_one_panel_schedules_the_other(self) -> None:
         bus, scheduler, _, _, writer, reader = self.panels()
-        await writer.send(delivered_to(fake_message(message_id=1)))
-        await reader.send(delivered_to(fake_message(message_id=2)))
+        await writer.send(delivered_to(message_harness(message_id=1)))
+        await reader.send(delivered_to(message_harness(message_id=2)))
 
-        await writer.dispatch("controls.density", fake_interaction(user_id=7))
+        await writer.dispatch("controls.density", interaction_harness(user_id=7))
 
         assert reader in scheduler._queued
 
     async def test_the_injected_namespace_reaches_a_leaf_and_undo_covers_it(self) -> None:
         _, _, appearance, _, writer, _ = self.panels()
-        await writer.send(delivered_to(fake_message(message_id=1)))
+        await writer.send(delivered_to(message_harness(message_id=1)))
 
-        await writer.dispatch("controls.density", fake_interaction(user_id=7))
+        await writer.dispatch("controls.density", interaction_harness(user_id=7))
         assert appearance.density == "compact"
 
-        await writer.dispatch("controls.undo", fake_interaction(user_id=7))
+        await writer.dispatch("controls.undo", interaction_harness(user_id=7))
         assert appearance.density == "comfortable", "one entry restores state the panel does not own"
 
     async def test_the_accent_button_declares_its_own_recording(self) -> None:
         """`record=` on the control: the handler only writes, the framework opens the entry."""
         _, _, appearance, _, writer, _ = self.panels()
-        await writer.send(delivered_to(fake_message(message_id=1)))
+        await writer.send(delivered_to(message_harness(message_id=1)))
         before = appearance.accent
 
-        await writer.dispatch("controls.accent", fake_interaction(user_id=7))
+        await writer.dispatch("controls.accent", interaction_harness(user_id=7))
         assert appearance.accent != before
 
-        await writer.dispatch("controls.undo", fake_interaction(user_id=7))
+        await writer.dispatch("controls.undo", interaction_harness(user_id=7))
         assert appearance.accent == before
 
     async def test_the_session_dies_with_its_panels_and_appearance_does_not(self) -> None:
@@ -398,8 +398,8 @@ class TestSharedAppearance:
         import weakref
 
         _, _, appearance, session, writer, reader = self.panels()
-        await writer.send(delivered_to(fake_message(message_id=1)))
-        await reader.send(delivered_to(fake_message(message_id=2)))
+        await writer.send(delivered_to(message_harness(message_id=1)))
+        await reader.send(delivered_to(message_harness(message_id=2)))
         gone, kept = weakref.ref(session), weakref.ref(appearance)
 
         await writer.finish(disable=False)
@@ -437,7 +437,7 @@ class TestLobby:
             author=SimpleNamespace(id=host_id),
             guild=SimpleNamespace(id=guild_id),
             interaction=None,
-            send=AsyncMock(return_value=fake_message(message_id=guild_id)),
+            send=AsyncMock(return_value=message_harness(message_id=guild_id)),
         )
         panel = await Lobby(host_id).show(cast(sd.InvocationSource, context))
         assert panel is not None
@@ -452,7 +452,7 @@ class TestLobby:
     async def test_a_press_from_anyone_joins_and_the_roster_redraws(self) -> None:
         bot, panel = await self.opened()
 
-        await _lobby_root(panel).dispatch("lobby-roster.players", fake_interaction(user_id=8))
+        await _lobby_root(panel).dispatch("lobby-roster.players", interaction_harness(user_id=8))
 
         assert next(iter(bot.sessions.active())).members == frozenset({7, 8})
         assert "### Players — 2/4" in _texts(commit_render(_lobby_root(panel)))
@@ -461,7 +461,7 @@ class TestLobby:
         bot, panel = await self.opened()
 
         for user_id in (8, 9, 10, 11, 12):
-            await _lobby_root(panel).dispatch("lobby-roster.players", fake_interaction(user_id=user_id))
+            await _lobby_root(panel).dispatch("lobby-roster.players", interaction_harness(user_id=user_id))
 
         assert next(iter(bot.sessions.active())).members == frozenset({7, 8, 9, 10})
 
@@ -469,8 +469,8 @@ class TestLobby:
         bot, panel = await self.opened()
         session = next(iter(bot.sessions.active()))
 
-        await _lobby_root(panel).dispatch("leave", fake_interaction(user_id=7))
-        await _lobby_root(panel).dispatch("lobby-roster.players", fake_interaction(user_id=8))
+        await _lobby_root(panel).dispatch("leave", interaction_harness(user_id=7))
+        await _lobby_root(panel).dispatch("lobby-roster.players", interaction_harness(user_id=8))
 
         assert session.members == frozenset()
         assert not session.root.finished
@@ -479,11 +479,11 @@ class TestLobby:
         """Everyone may press Join, so the control that is not for everyone checks itself."""
         _, panel = await self.opened()
 
-        await _lobby_root(panel).dispatch("start", fake_interaction(user_id=8))
+        await _lobby_root(panel).dispatch("start", interaction_harness(user_id=8))
         assert panel.started_with is None
 
-        await _lobby_root(panel).dispatch("lobby-roster.players", fake_interaction(user_id=8))
-        await _lobby_root(panel).dispatch("start", fake_interaction(user_id=8))
+        await _lobby_root(panel).dispatch("lobby-roster.players", interaction_harness(user_id=8))
+        await _lobby_root(panel).dispatch("start", interaction_harness(user_id=8))
 
         assert panel.started_with == 2
         assert "Started with 2 players." in _texts(commit_render(_lobby_root(panel)))
@@ -493,8 +493,8 @@ class TestLobby:
         bot, here = await self.opened()
         _, elsewhere = await self.opened(bot=bot, guild_id=6, host_id=9)
 
-        await _lobby_root(elsewhere).dispatch("lobby-roster.players", fake_interaction(user_id=8))
-        await _lobby_root(here).dispatch("lobby-roster.players", fake_interaction(user_id=8))
+        await _lobby_root(elsewhere).dispatch("lobby-roster.players", interaction_harness(user_id=8))
+        await _lobby_root(here).dispatch("lobby-roster.players", interaction_harness(user_id=8))
 
         assert bot.sessions.sessions_for_member(8) == (bot.sessions.sessions_for_member(8)[0],)
         assert 8 in _lobby_session(elsewhere).members

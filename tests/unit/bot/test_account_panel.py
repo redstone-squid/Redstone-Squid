@@ -27,7 +27,7 @@ from squid.bot.verify import VerifyCog
 from squid.permissions.domain import PermissionNode
 from squid_ui.testing import labels
 from squid_ui.text import NEUTRAL, resolve_text
-from squid_ui_discord.testing import commit_render, fake_interaction
+from squid_ui_discord.testing import commit_render, interaction_harness
 
 ACCOUNT_ID = 42
 AUTHOR_ID = 555
@@ -361,7 +361,7 @@ async def test_unlinking_asks_before_it_removes_anything() -> None:
     """
     panel, presenter, unlink, message_root = _linked_panel()
 
-    await message_root.dispatch("unlink", fake_interaction(user_id=AUTHOR_ID))
+    await message_root.dispatch("unlink", interaction_harness(user_id=AUTHOR_ID))
 
     unlink.assert_not_awaited()
     assert len(presenter.requests) == 1
@@ -370,7 +370,7 @@ async def test_unlinking_asks_before_it_removes_anything() -> None:
 
 async def test_agreeing_to_the_question_removes_the_identity() -> None:
     panel, presenter, unlink, message_root = _linked_panel()
-    await message_root.dispatch("unlink", fake_interaction(user_id=AUTHOR_ID))
+    await message_root.dispatch("unlink", interaction_harness(user_id=AUTHOR_ID))
 
     await presenter.requests[0].approve()
 
@@ -379,7 +379,7 @@ async def test_agreeing_to_the_question_removes_the_identity() -> None:
 
 async def test_declining_the_question_removes_nothing() -> None:
     panel, presenter, unlink, message_root = _linked_panel()
-    await message_root.dispatch("unlink", fake_interaction(user_id=AUTHOR_ID))
+    await message_root.dispatch("unlink", interaction_harness(user_id=AUTHOR_ID))
 
     await presenter.requests[0].decline()
 
