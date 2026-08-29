@@ -24,30 +24,30 @@ _DURATION = re.compile(r"^(\d+)\s*([mhd])$", re.IGNORECASE)
 _DURATION_UNITS = {"m": 60, "h": 3600, "d": 86400}
 
 DURATION_PRESETS: tuple[tuple[sl.TextLike, int], ...] = (
-    (L("1 hour"), 3600),
-    (L("6 hours"), 6 * 3600),
-    (L("12 hours"), 12 * 3600),
-    (L("24 hours"), 24 * 3600),
-    (L("3 days"), 3 * 86400),
-    (L("7 days"), 7 * 86400),
+    (L(t"1 hour"), 3600),
+    (L(t"6 hours"), 6 * 3600),
+    (L(t"12 hours"), 12 * 3600),
+    (L(t"24 hours"), 24 * 3600),
+    (L(t"3 days"), 3 * 86400),
+    (L(t"7 days"), 7 * 86400),
 )
 CUSTOM_DURATION = "custom"
 
 VISIBILITY_CHOICES: tuple[tuple[VoteVisibility, sl.TextLike, sl.TextLike], ...] = (
     (
         VoteVisibility.ANONYMOUS_LIVE,
-        L("Live Anonymous"),
-        L("Running totals are public; who voted for what is not."),
+        L(t"Live Anonymous"),
+        L(t"Running totals are public; who voted for what is not."),
     ),
     (
         VoteVisibility.VISIBLE_LIVE,
-        L("Live Public"),
-        L("Reactions stay on the message, so every ballot is attributable."),
+        L(t"Live Public"),
+        L(t"Reactions stay on the message, so every ballot is attributable."),
     ),
     (
         VoteVisibility.ANONYMOUS_HIDDEN,
-        L("Hidden until Close"),
-        L("No totals at all until the poll closes."),
+        L(t"Hidden until Close"),
+        L(t"No totals at all until the poll closes."),
     ),
 )
 
@@ -126,8 +126,8 @@ def parse_option_lines(
 
 
 SCOPE_CHOICES: tuple[tuple[PollScope, sl.TextLike, sl.TextLike], ...] = (
-    (PollScope.GUILD, L("This server"), L("Card the poll in this channel only.")),
-    (PollScope.NETWORK, L("Every server"), L("Card the poll in every server's vote channel.")),
+    (PollScope.GUILD, L(t"This server"), L(t"Card the poll in this channel only.")),
+    (PollScope.NETWORK, L(t"Every server"), L(t"Card the poll in every server's vote channel.")),
 )
 
 
@@ -149,19 +149,19 @@ class PollDraft:
 def poll_form(draft: PollDraft | None = None) -> sl.forms.FormSpec:
     """Describe the poll's free-text input through the portable form API."""
     return sl.forms.FormSpec(
-        L("Create a poll"),
+        L(t"Create a poll"),
         (
             sl.forms.TextField(
                 key="question",
-                label=L("Question"),
+                label=L(t"Question"),
                 default="" if draft is None else draft.question,
                 maximum=300,
             ),
             sl.forms.TextAreaField(
                 key="options",
-                label=L("Options (one per line)"),
+                label=L(t"Options (one per line)"),
                 default="" if draft is None else draft.options_text,
-                placeholder=L("emoji | label (emoji may be omitted)"),
+                placeholder=L(t"emoji | label (emoji may be omitted)"),
                 minimum=3,
                 maximum=1000,
             ),

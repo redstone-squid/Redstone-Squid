@@ -63,9 +63,7 @@ def test_native_event_access_stays_inside_the_reviewed_transport_allowlist() -> 
         relative = str(path.relative_to(BOT_ROOT))
         tree = ast.parse(path.read_text(encoding="utf-8"))
         parents: dict[ast.AST, ast.AST] = {
-            child: parent
-            for parent in ast.walk(tree)
-            for child in ast.iter_child_nodes(parent)
+            child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)
         }
         for node in ast.walk(tree):
             if not (
@@ -83,3 +81,29 @@ def test_native_event_access_stays_inside_the_reviewed_transport_allowlist() -> 
             found.add((relative, function))
 
     assert found == NATIVE_EVENT_ALLOWLIST
+
+
+def test_localized_ui_literals_use_template_strings() -> None:
+    """Literal UI copy keeps interpolation in the t-string instead of keyword side channels."""
+    violations: list[str] = []
+    for path in BOT_ROOT.rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if (
+                not isinstance(node, ast.Call)
+                or not isinstance(node.func, ast.Name)
+                or node.func.id != "L"
+                or not node.args
+            ):
+                continue
+            first = node.args[0]
+            if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                violations.append(f'{path}:{node.lineno}: use L(t"…") for literal UI copy')
+            if isinstance(first, ast.TemplateStr):
+                violations.extend(
+                    f"{path}:{node.lineno}: assign {interpolation.str!r} to an identifier before interpolation"
+                    for interpolation in first.values
+                    if isinstance(interpolation, ast.Interpolation) and not interpolation.str.isidentifier()
+                )
+
+    assert not violations, "\n".join(violations)

@@ -62,8 +62,8 @@ async def show_build_editor(
         invocation = await sd.Invocation.of(interaction)
         await invocation.reply(
             error_node(
-                L("Cannot edit this build"),
-                L("Only the pending build's submitter or a trusted staff member can edit it."),
+                L(t"Cannot edit this build"),
+                L(t"Only the pending build's submitter or a trusted staff member can edit it."),
             ),
             visibility="personal",
         )

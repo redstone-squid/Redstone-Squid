@@ -208,9 +208,10 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target]):
 
     def _review_prompt(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
         action = self._pending_review or "review"
+        build_id = self._build_id
         return sl.section(
             sl.heading(L(t"Confirm review decision")),
-            sl.paragraph(L(t"{action} build #{self._build_id}?")),
+            sl.paragraph(L(t"{action} build #{build_id}?")),
         )
 
     async def _request_approve(self, _event: sl.PressEvent) -> None:
@@ -314,7 +315,8 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target]):
             version_label=version,
         )
         self._asset = self._schematic_asset(data, WRITABLE_EXTENSIONS[file_format])
-        self._schematic_result = L(t"Conversion report: {summarise_losses(losses)}")
+        loss_summary = summarise_losses(losses)
+        self._schematic_result = L(t"Conversion report: {loss_summary}")
 
     async def _timing(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, BUILD_SCHEMATIC_MEASURE_TIMING) or await self._primary(event) is None:
