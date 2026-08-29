@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from inspect import isawaitable
-from typing import TYPE_CHECKING, Any, Protocol, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast, overload
 
 from squid_ui.interactions import ActionEvent
 from squid_ui.text import TextLike
@@ -118,6 +118,30 @@ class _Staged:
 
 
 @dataclass(frozen=True, slots=True)
+class GuardKind[ValueT]:
+    """What one stateful guard stores, declared once beside the guard that stores it.
+
+    The parameter is what a bare string could not carry. `GuardLedger.read` and `.write`
+    used to take a `str` and an `object`, with `read`'s return type inferred from whatever
+    default the caller passed -- so a cooldown written as a float and read back with an
+    `int` default type-checked and lied.
+    """
+
+    name: str
+
+
+@dataclass(frozen=True, slots=True)
+class GuardKey[ValueT]:
+    """One `GuardKind` scoped to an action and an actor: where that value actually lives.
+
+    Built by :meth:`GuardLedger.bucket`, which owns the scoping rule. Carrying the entry
+    name in a typed wrapper is what keeps the read and the write agreeing about the value.
+    """
+
+    entry: str
+
+
+@dataclass(frozen=True, slots=True)
 class GuardLedger:
     """MessageRoot-owned state for stateful guards, seen by a guard as one action-scoped view.
 
@@ -158,29 +182,47 @@ class GuardLedger:
             self._entries.pop(key, None)
         self._entries.update(staged.writes)
 
-    def bucket(self, kind: str, *, per: GuardScope = GuardScope.ACTOR, actor: str = "", key: str | None = None) -> str:
-        """The entry name for one guard kind, scoped as `per` says."""
-        return f"{key or self.action}|{kind}|{actor if per is GuardScope.ACTOR else '*'}"
+    def bucket[ValueT](
+        self,
+        kind: GuardKind[ValueT],
+        *,
+        per: GuardScope = GuardScope.ACTOR,
+        actor: str = "",
+        key: str | None = None,
+    ) -> GuardKey[ValueT]:
+        """Where one guard kind's value lives for this action, scoped as `per` says."""
+        return GuardKey(f"{key or self.action}|{kind.name}|{actor if per is GuardScope.ACTOR else '*'}")
 
-    def read[ValueT](self, key: str, default: ValueT) -> ValueT:
-        """The entry stored under `key`, or `default` when nothing is stored."""
+    @overload
+    def read[ValueT](self, key: GuardKey[ValueT], default: ValueT) -> ValueT: ...
+
+    @overload
+    def read[ValueT](self, key: GuardKey[ValueT], default: None) -> ValueT | None: ...
+
+    def read[ValueT](self, key: GuardKey[ValueT], default: ValueT | None) -> ValueT | None:
+        """The value stored under `key`, or `default` when nothing is stored.
+
+        The overload pair is for the guards that use `None` to mean "never yet": a cooldown
+        asks for a `float` and gets `float | None`, without widening every other caller.
+        """
+        entry = key.entry
         if (staged := self._staged) is not None:
-            if key in staged.writes:
-                stored = staged.writes[key]
+            if entry in staged.writes:
+                stored = staged.writes[entry]
                 return default if stored is None else cast(ValueT, stored)
-            if staged.cleared_all or key in staged.cleared:
+            if staged.cleared_all or entry in staged.cleared:
                 return default
-        stored = self._entries.get(key)
+        stored = self._entries.get(entry)
         return default if stored is None else cast(ValueT, stored)
 
-    def write(self, key: str, value: object) -> None:
+    def write[ValueT](self, key: GuardKey[ValueT], value: ValueT) -> None:
         if (staged := self._staged) is not None:
-            staged.writes[key] = value
-            staged.cleared.discard(key)
+            staged.writes[key.entry] = value
+            staged.cleared.discard(key.entry)
             return
-        self._entries[key] = value
+        self._entries[key.entry] = value
 
-    def clear(self, key: str | None = None) -> None:
+    def clear(self, key: GuardKey[Any] | None = None) -> None:
         """Forget one entry, or every entry this ledger holds."""
         if (staged := self._staged) is not None:
             if key is None:
@@ -188,16 +230,20 @@ class GuardLedger:
                 staged.cleared.clear()
                 staged.cleared_all = True
                 return
-            staged.writes.pop(key, None)
-            staged.cleared.add(key)
+            staged.writes.pop(key.entry, None)
+            staged.cleared.add(key.entry)
             return
         if key is None:
             self._entries.clear()
             return
-        self._entries.pop(key, None)
+        self._entries.pop(key.entry, None)
 
 
-def approvals(ledger: GuardLedger, actor: str, *, key: str | None = None) -> str:
+CHALLENGE = GuardKind[int]("challenge")
+"""Outstanding approvals for one actor. See :func:`approvals`."""
+
+
+def approvals(ledger: GuardLedger, actor: str, *, key: str | None = None) -> GuardKey[int]:
     """Where this action's outstanding approvals for one actor are counted.
 
     The contract between a challenging guard and the frontend: the frontend increments this
@@ -206,13 +252,17 @@ def approvals(ledger: GuardLedger, actor: str, *, key: str | None = None) -> str
     pass that ends in the second challenge is discarded, so the first guard's approval is
     still there when the second one is answered.
     """
-    return ledger.bucket("challenge", per=GuardScope.ACTOR, actor=actor, key=key)
+    return ledger.bucket(CHALLENGE, per=GuardScope.ACTOR, actor=actor, key=key)
 
 
 class Guard(Protocol):
     """Decide whether one press may execute, given the mount's guard ledger."""
 
     async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardResult: ...
+
+
+_COOLDOWN = GuardKind[float]("cooldown")
+"""When this actor last passed the cooldown."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -222,7 +272,7 @@ class _Cooldown:
     key: str | None
 
     async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardDecision:
-        bucket = ledger.bucket("cooldown", per=self.per, actor=event.actor.id, key=self.key)
+        bucket = ledger.bucket(_COOLDOWN, per=self.per, actor=event.actor.id, key=self.key)
         now = ledger.now()
         last: float | None = ledger.read(bucket, None)
         if last is not None and (remaining := last + self.seconds - now) > 0:
@@ -253,17 +303,25 @@ class _Permission:
         return ADMIT if await self.check(event) else deny(self.reason)
 
 
+_ONCE = GuardKind[bool]("once")
+"""Whether this actor has already spent their single press."""
+
+
 @dataclass(frozen=True, slots=True)
 class _Once:
     per: GuardScope
     key: str | None
 
     async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardDecision:
-        bucket = ledger.bucket("once", per=self.per, actor=event.actor.id, key=self.key)
+        bucket = ledger.bucket(_ONCE, per=self.per, actor=event.actor.id, key=self.key)
         if ledger.read(bucket, default=False):
             return deny()
         ledger.write(bucket, value=True)
         return ADMIT
+
+
+_RATE_LIMIT = GuardKind[tuple[float, ...]]("rate_limit")
+"""The press timestamps still inside this actor's window."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -274,7 +332,7 @@ class _RateLimit:
     key: str | None
 
     async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardDecision:
-        bucket = ledger.bucket("rate_limit", per=self.per, actor=event.actor.id, key=self.key)
+        bucket = ledger.bucket(_RATE_LIMIT, per=self.per, actor=event.actor.id, key=self.key)
         now = ledger.now()
         recent = tuple(stamp for stamp in ledger.read(bucket, ()) if stamp > now - self.per_seconds)
         if len(recent) >= self.count:
@@ -401,10 +459,13 @@ def any_of(*guards: Guard) -> Guard:
 
 __all__ = [
     "ADMIT",
+    "CHALLENGE",
     "Challenge",
     "ChallengeResolver",
     "Guard",
     "GuardDecision",
+    "GuardKey",
+    "GuardKind",
     "GuardLedger",
     "GuardResult",
     "GuardScope",
