@@ -88,9 +88,7 @@ def _map_layout_children_routed[RenderTargetT: RenderTarget](
             )
         return tuple(transformed)
 
-    def one(
-        child: LayoutNode[RenderTargetT], child_path: str, child_route: _LayoutRoute
-    ) -> LayoutNode[RenderTargetT]:
+    def one(child: LayoutNode[RenderTargetT], child_path: str, child_route: _LayoutRoute) -> LayoutNode[RenderTargetT]:
         transformed = tuple(transform(child, child_path, child_route))
         if len(transformed) != 1:
             message = f"{child_path}: this structural position requires exactly one node"
