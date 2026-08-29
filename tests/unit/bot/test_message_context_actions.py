@@ -1,35 +1,82 @@
 """Message context actions and their live Redstoner workspace."""
 
-from types import SimpleNamespace
+from dataclasses import dataclass, field
 from typing import Any, cast
-from unittest.mock import AsyncMock, MagicMock
 
 import discord
 
-import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.admin import Admin
 from squid.bot.give_redstoner import RedstonerScreen
-from squid_ui.testing import labels
+from squid_ui.testing import RecordingResponder, labels, press, press_event
+from squid_ui_discord.testing import AsyncCallRecorder
+
+
+@dataclass
+class ArchivedMessage:
+    add_reaction: AsyncCallRecorder = field(default_factory=AsyncCallRecorder)
+
+
+@dataclass
+class Channel:
+    send: AsyncCallRecorder
+
+
+@dataclass(frozen=True)
+class Author:
+    id: int
+    mention: str
+
+
+@dataclass
+class Attachment:
+    to_file: AsyncCallRecorder = field(default_factory=lambda: AsyncCallRecorder(result="upload"))
+
+
+@dataclass(frozen=True)
+class Reaction:
+    count: int
+
+
+@dataclass
+class Message:
+    author: Author
+    reactions: tuple[Reaction, ...]
+    channel: Channel
+    clean_content: str
+    embeds: tuple[str, ...]
+    attachments: tuple[Attachment, ...]
+    stickers: tuple[str, ...]
+    delete: AsyncCallRecorder = field(default_factory=AsyncCallRecorder)
+
+
+@dataclass(frozen=True)
+class User:
+    name: str
+
+
+class Bot:
+    def get_user(self, user_id: int) -> User:
+        assert user_id == 7
+        return User("builder")
 
 
 async def test_archive_copies_attachments_and_deletes_the_original() -> None:
-    archived = SimpleNamespace(add_reaction=AsyncMock())
-    channel = SimpleNamespace(send=AsyncMock(return_value=archived))
-    author = SimpleNamespace(id=7, mention="<@7>")
-    attachment = SimpleNamespace(to_file=AsyncMock(return_value="upload"))
-    message = SimpleNamespace(
+    archived = ArchivedMessage()
+    channel = Channel(send=AsyncCallRecorder(result=archived))
+    author = Author(id=7, mention="<@7>")
+    attachment = Attachment()
+    message = Message(
         author=author,
-        reactions=(SimpleNamespace(count=3), SimpleNamespace(count=2)),
+        reactions=(Reaction(count=3), Reaction(count=2)),
         channel=channel,
         clean_content="A useful old message",
         embeds=("embed",),
         attachments=(attachment,),
         stickers=("sticker",),
-        delete=AsyncMock(),
     )
     cog = Admin.__new__(Admin)
-    cog.bot = cast(Any, SimpleNamespace(get_user=MagicMock(return_value=SimpleNamespace(name="builder"))))
+    cog.bot = cast(Any, Bot())
 
     await cog._archive_message(cast(discord.Message, message))
 
@@ -43,14 +90,31 @@ async def test_archive_copies_attachments_and_deletes_the_original() -> None:
     message.delete.assert_awaited_once_with()
 
 
+class AsyncAuthorizer:
+    def __init__(self, *, result: bool = True) -> None:
+        self.result = result
+        self.calls = 0
+
+    async def __call__(self) -> bool:
+        self.calls += 1
+        return self.result
+
+
+class AsyncAction:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def __call__(self) -> None:
+        self.calls += 1
+
+
 def make_redstoner_screen(
     *,
     can_deploy: bool = True,
-    authorize: AsyncMock | None = None,
-    publish: AsyncMock | None = None,
-) -> tuple[RedstonerScreen, AsyncMock, AsyncMock]:
-    authorizer = authorize or AsyncMock(return_value=True)
-    publisher = publish or AsyncMock()
+    allowed: bool = True,
+) -> tuple[RedstonerScreen, AsyncAuthorizer, AsyncAction]:
+    authorizer = AsyncAuthorizer(result=allowed)
+    publisher = AsyncAction()
     return (
         RedstonerScreen(
             guild_id=1,
@@ -81,23 +145,22 @@ def test_redstoner_hides_deployment_without_initial_permission() -> None:
 
 
 async def test_redstoner_rechecks_permission_before_deployment() -> None:
-    authorize = AsyncMock(return_value=False)
-    screen, _, publish = make_redstoner_screen(authorize=authorize)
-    event = SimpleNamespace(notice=AsyncMock())
+    screen, authorize, publish = make_redstoner_screen(allowed=False)
+    responder = RecordingResponder()
 
-    await screen._deploy(cast(sl.PressEvent, event))
+    await screen._deploy(press_event(responder=responder))
 
-    authorize.assert_awaited_once_with()
-    publish.assert_not_awaited()
-    event.notice.assert_awaited_once()
+    assert authorize.calls == 1
+    assert publish.calls == 0
+    assert len(responder.notices) == 1
 
 
 async def test_redstoner_deploys_after_permission_recheck() -> None:
     screen, authorize, publish = make_redstoner_screen()
-    event = SimpleNamespace(notice=AsyncMock())
+    responder = RecordingResponder()
 
-    await screen._deploy(cast(sl.PressEvent, event))
+    await press(screen, "deploy", responder=responder)
 
-    authorize.assert_awaited_once_with()
-    publish.assert_awaited_once_with()
-    event.notice.assert_awaited_once()
+    assert authorize.calls == 1
+    assert publish.calls == 1
+    assert len(responder.notices) == 1
