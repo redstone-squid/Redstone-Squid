@@ -16,6 +16,7 @@ from squid.accounts.errors import (
     ConsentRequiredError,
     NoLinkedMinecraftAccountError,
 )
+from squid.core.i18n import tr
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 
@@ -63,7 +64,7 @@ def test_already_linked_names_the_conflicting_minecraft_account() -> None:
     assert error.context["minecraft_uuid"] == str(JAVA_UUID)
     assert error.context["provider"] == IdentityProvider.JAVA
     assert error.minecraft_uuid == JAVA_UUID
-    assert "Discord" not in error.default_message.template
+    assert "Discord" not in tr(error.default_message)
 
 
 def test_already_linked_requires_keywords() -> None:
@@ -77,7 +78,7 @@ def test_no_linked_account_is_distinct_from_an_unknown_uuid() -> None:
     error = NoLinkedMinecraftAccountError(account_id=42)
 
     assert error.context == {"account_id": 42}
-    assert "Minecraft account linked" in error.default_message.template
+    assert "Minecraft account linked" in tr(error.default_message)
 
 
 def test_no_public_context_leaks_internal_identifiers() -> None:
