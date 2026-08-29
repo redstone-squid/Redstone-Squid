@@ -1,15 +1,16 @@
 """Discord-facing permission checks over the node engine."""
 
-from types import SimpleNamespace
+from dataclasses import dataclass
 from typing import cast
 from unittest.mock import Mock
 
 import discord
 import pytest
 from discord.ext.commands import Context
+from whenever import Instant
 
 from squid.accounts.application import AccountService
-from squid.accounts.domain import IdentityProvider
+from squid.accounts.domain import Account, IdentityProvider
 from squid.bot.app import RedstoneSquid
 from squid.bot.utils.permissions import (
     AccountIdCache,
@@ -28,14 +29,14 @@ BUILTIN_ROWS = tuple(
 ROLE_ID = {row.builtin_key: row.id for row in BUILTIN_ROWS}
 
 
-class FakeAccountService:
+class FakeAccountService(AccountService):
     def __init__(self) -> None:
         self.lookups = 0
 
-    async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> SimpleNamespace:
+    async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account:
         assert provider is IdentityProvider.DISCORD
         self.lookups += 1
-        return SimpleNamespace(id=int(subject))
+        return Account(id=int(subject), created_at=Instant.from_utc(2026, 8, 29))
 
 
 class FakePermissionStore:
@@ -49,7 +50,50 @@ class FakePermissionStore:
         return 1
 
 
-def _member(user_id: int, guild: SimpleNamespace, **permissions: bool):
+@dataclass(frozen=True)
+class Role:
+    id: int
+
+
+class Guild:
+    def __init__(self, guild_id: int, owner_id: int) -> None:
+        self.id = guild_id
+        self.owner_id = owner_id
+        self.member: discord.Member | None = None
+
+    def get_member(self, user_id: int) -> discord.Member | None:
+        return self.member if self.member is not None and self.member.id == user_id else None
+
+
+@dataclass(frozen=True)
+class Services:
+    accounts: AccountService
+    permissions: PermissionService
+
+
+class Bot:
+    def __init__(self, *, owner_id: int, services: Services, guild: Guild) -> None:
+        self.owner_id = owner_id
+        self.owner_ids = None
+        self.services = services
+        self.account_ids = AccountIdCache()
+        self.guild = guild
+
+    def get_guild(self, server_id: int) -> Guild | None:
+        return self.guild if server_id == self.guild.id else None
+
+    async def is_owner(self, user: object) -> bool:
+        return getattr(user, "id", None) == self.owner_id
+
+
+@dataclass
+class ContextRecord:
+    bot: RedstoneSquid
+    author: discord.Member
+    guild: Guild
+
+
+def _member(user_id: int, guild: Guild, **permissions: bool) -> discord.Member:
     """A stand-in that passes `isinstance(..., discord.Member)`.
 
     Subject building keys off that check to decide whether there are roles and a
@@ -62,7 +106,7 @@ def _member(user_id: int, guild: SimpleNamespace, **permissions: bool):
     member.id = user_id
     member.guild = guild
     member.guild_permissions = guild_permissions
-    member.roles = [SimpleNamespace(id=30)]
+    member.roles = [Role(id=30)]
     return member
 
 
@@ -71,31 +115,20 @@ def _bot(
     owner_id: int = 1,
     member_id: int | None = None,
     store: FakePermissionStore | None = None,
-) -> tuple[RedstoneSquid, SimpleNamespace]:
-    guild = SimpleNamespace(id=100, owner_id=2)
+) -> tuple[RedstoneSquid, Guild]:
+    guild = Guild(guild_id=100, owner_id=2)
     member = _member(member_id, guild) if member_id is not None else None
-    guild.get_member = lambda user_id: member if member is not None and member.id == user_id else None
-    services = SimpleNamespace(
+    guild.member = member
+    services = Services(
         accounts=FakeAccountService(),
         permissions=PermissionService(store or FakePermissionStore()),
     )
-
-    async def is_owner(user: object) -> bool:
-        return getattr(user, "id", None) == owner_id
-
-    bot = SimpleNamespace(
-        owner_id=owner_id,
-        owner_ids=None,
-        services=services,
-        account_ids=AccountIdCache(),
-        get_guild=lambda server_id: guild if server_id == guild.id else None,
-        is_owner=is_owner,
-    )
+    bot = Bot(owner_id=owner_id, services=services, guild=guild)
     return cast(RedstoneSquid, bot), guild
 
 
-def _context(bot: RedstoneSquid, guild: SimpleNamespace, author: SimpleNamespace) -> Context[RedstoneSquid]:
-    return cast(Context[RedstoneSquid], SimpleNamespace(bot=bot, author=author, guild=guild))
+def _context(bot: RedstoneSquid, guild: Guild, author: discord.Member) -> Context[RedstoneSquid]:
+    return cast(Context[RedstoneSquid], ContextRecord(bot=bot, author=author, guild=guild))
 
 
 class TestRequires:
@@ -181,16 +214,16 @@ class TestAccountIdCache:
         accounts = FakeAccountService()
         cache = AccountIdCache()
 
-        assert await cache.resolve(cast(AccountService, accounts), 5) == 5
-        assert await cache.resolve(cast(AccountService, accounts), 5) == 5
+        assert await cache.resolve(accounts, 5) == 5
+        assert await cache.resolve(accounts, 5) == 5
         assert accounts.lookups == 1
 
     async def test_forgetting_an_entry_forces_a_reread(self) -> None:
         accounts = FakeAccountService()
         cache = AccountIdCache()
 
-        await cache.resolve(cast(AccountService, accounts), 5)
+        await cache.resolve(accounts, 5)
         cache.forget(5)
-        await cache.resolve(cast(AccountService, accounts), 5)
+        await cache.resolve(accounts, 5)
 
         assert accounts.lookups == 2
