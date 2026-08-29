@@ -72,7 +72,7 @@ def test_staff_submission_delivery_uses_pending_review_command_not_public_link()
 
     rendered = render_delivery(delivery, "https://example.test")
 
-    assert rendered == "A new build is awaiting staff review.\nOpen it in Discord with `/build view id:42`."
+    assert rendered == "A new build is awaiting staff review.\nOpen it in Discord with `/build browse id:42`."
     assert "https://example.test/builds/42" not in rendered
 
 

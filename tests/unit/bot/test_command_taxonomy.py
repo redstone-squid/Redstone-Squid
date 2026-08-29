@@ -5,7 +5,7 @@ from typing import Any, cast
 
 import discord
 from discord import app_commands
-from discord.ext.commands import Command, HybridGroup
+from discord.ext.commands import Command
 
 from squid.bot.admin import Admin
 from squid.bot.diagnostics import Diagnostics
@@ -25,14 +25,6 @@ type AnyCommand = Command[Any, ..., Any]
 UNGATED_COMMANDS = frozenset(
     {
         # Public: anyone may run these.
-        "build",
-        "build queue",
-        "build schematic",
-        "build schematic convert",
-        "build schematic download",
-        "build schematic info",
-        "build schematic render",
-        "build view",
         "layout",
         "layout demo",
         "layout lobby",
@@ -73,22 +65,6 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
     # `show` fallback, so bare `account` opens the panel that `identities`, `visibility`,
     # `unlink`, `profile` and `profile-edit` used to answer a piece at a time
     # (docs/plans/command-redesign/07-account.md).
-    # The schematic tools all sit under `build schematic`, which is what their
-    # permission nodes always said (docs/plans/command-redesign/06-build.md).
-    "build": (
-        "approve",
-        "debug",
-        "queue",
-        "reject",
-        "schematic",
-        "schematic convert",
-        "schematic detect-lattice",
-        "schematic download",
-        "schematic info",
-        "schematic measure-timing",
-        "schematic render",
-        "view",
-    ),
     "layout": ("demo", "lobby", "shared"),
 }
 
@@ -164,13 +140,11 @@ def test_public_prefix_command_tree_matches_taxonomy() -> None:
 
 
 def test_build_slash_group_includes_the_app_only_workspaces() -> None:
-    cog = SearchCog.__new__(SearchCog)
-    build_group = cast(HybridGroup, _command(cog.__cog_commands__, "build"))
-    # `submit` and `edit` are app-only: both open a workspace, which needs an interaction
-    # (docs/plans/command-redesign/01-build-submit.md, 06-build.md).
-    expected_commands = {f"build {command}" for command in (*EXPECTED_PREFIX_COMMAND_TREE["build"], "submit", "edit")}
+    build_group = next(
+        command for command in cast(Any, SearchCog).__cog_app_commands__ if command.qualified_name == "build"
+    )
 
-    assert {command.qualified_name for command in build_group.app_command.walk_commands()} == expected_commands
+    assert {command.qualified_name for command in build_group.walk_commands()} == {"build browse", "build submit"}
 
 
 def test_guided_submit_puts_attachments_last() -> None:
@@ -179,11 +153,10 @@ def test_guided_submit_puts_attachments_last() -> None:
     Attachments-first was the original dogfooding complaint against `/build submit`
     (docs/plans/command-redesign/01-build-submit.md), so the order is pinned.
     """
-    cog = SearchCog.__new__(SearchCog)
-    build_group = cast(HybridGroup, _command(cog.__cog_commands__, "build"))
-    submit = next(
-        command for command in build_group.app_command.walk_commands() if command.qualified_name == "build submit"
+    build_group = next(
+        command for command in cast(Any, SearchCog).__cog_app_commands__ if command.qualified_name == "build"
     )
+    submit = next(command for command in build_group.walk_commands() if command.qualified_name == "build submit")
     names = [parameter.name for parameter in cast(app_commands.Command[Any, ..., Any], submit).parameters]
 
     assert names[0] == "door_size"
@@ -202,21 +175,6 @@ def test_search_modes_have_user_friendly_labels() -> None:
         ("keyword", "keyword"),
         ("smart", "smart"),
     ]
-
-
-def test_sensitive_commands_declare_the_intended_permission_nodes() -> None:
-    """The node contract, read from the predicate rather than from its name.
-
-    The old form counted checks and compared their qualified names, which could
-    only tell that *a* tier was applied. A node set is the actual contract, so a
-    command silently regated to the wrong capability fails here.
-    """
-    search = SearchCog.__new__(SearchCog)
-    assert _nodes(search.__cog_commands__, "build approve") == {"build.submission.approve"}
-    assert _nodes(search.__cog_commands__, "build reject") == {"build.submission.reject"}
-    assert _nodes(search.__cog_commands__, "build debug") == {"build.submission.debug"}
-    assert _nodes(search.__cog_commands__, "build schematic measure-timing") == {"build.schematic.measure_timing"}
-    assert _nodes(search.__cog_commands__, "build schematic detect-lattice") == {"build.schematic.detect_lattice"}
 
 
 def test_every_privileged_command_declares_a_node() -> None:
