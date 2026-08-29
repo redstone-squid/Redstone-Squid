@@ -1132,7 +1132,7 @@ class TestFinishHooks:
         message_root.on_finish(lambda finished: _record(seen, finished))
         commit_render(message_root)
         interaction = interaction_harness()
-        interaction.response.edit_message = AsyncMock(side_effect=RuntimeError("gateway is down"))
+        interaction.response.edit_message.error = RuntimeError("gateway is down")
 
         with pytest.raises(RuntimeError):
             await message_root.finish_via(interaction)
@@ -1150,7 +1150,7 @@ class TestFinishHooks:
         seen: list[MessageRoot] = []
         message_root.on_finish(lambda finished: _record(seen, finished))
         message: Any = message_harness()
-        message.edit = AsyncMock(side_effect=RuntimeError("message is gone"))
+        message.edit.error = RuntimeError("message is gone")
         await message_root.send(delivered_to(message))
 
         with pytest.raises(RuntimeError):
@@ -1982,7 +1982,7 @@ class TestDeliveryAtomicity:
         component = Counter()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
         message: Any = message_harness()
-        message.edit = AsyncMock(side_effect=sd.http_error(message="edit refused"))
+        message.edit.error = sd.http_error(message="edit refused")
         await message_root.send(delivered_to(message))
         component.count = 7
         live_generation = message_root.generation
@@ -1993,7 +1993,7 @@ class TestDeliveryAtomicity:
         assert message_root.generation == live_generation
         assert message_root.pending
 
-        message.edit = AsyncMock(return_value=message)
+        message.edit.error = None
         await message_root.refresh()
 
         assert message_root.generation > live_generation
@@ -2013,7 +2013,7 @@ class TestDeliveryAtomicity:
             await release.wait()
             return message
 
-        message.edit = AsyncMock(side_effect=edit)
+        message.edit.callback = edit
         component.count = 1
 
         async with anyio.create_task_group() as tasks:
@@ -2046,7 +2046,7 @@ class TestDeliveryAtomicity:
                 second_started.set()
             return message
 
-        message.edit = AsyncMock(side_effect=edit)
+        message.edit.callback = edit
         component.count = 1
 
         async with anyio.create_task_group() as tasks:
@@ -2054,7 +2054,7 @@ class TestDeliveryAtomicity:
             await started.wait()
             component.count = 2
             interaction = interaction_harness()
-            interaction.response.edit_message = AsyncMock(side_effect=edit)
+            interaction.response.edit_message.callback = edit
             tasks.start_soon(message_root.refresh, interaction)
             await anyio.sleep(0)
             assert not second_started.is_set()
@@ -2108,8 +2108,8 @@ class TestDeliveryAtomicity:
 
         first = interaction_harness()
         second = interaction_harness()
-        first.response.edit_message = AsyncMock(side_effect=edit)
-        second.response.edit_message = AsyncMock(side_effect=edit)
+        first.response.edit_message.callback = edit
+        second.response.edit_message.callback = edit
 
         async def dispatch_first() -> None:
             await message_root.dispatch("a", first)
@@ -2144,7 +2144,7 @@ class TestDeliveryAtomicity:
                 await release.wait()
             return message
 
-        message.edit = AsyncMock(side_effect=edit)
+        message.edit.callback = edit
         component.count = 1
 
         async with anyio.create_task_group() as tasks:
