@@ -57,8 +57,8 @@ def render_message(
     wire: Wire | None = None,
     renderer: ClassicRenderer | None = None,
     target: Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, DiscordPyAdapter] = DISCORD_V1_DPY27,
-    cache: PlanCache | None = None,
-    memo: PlanMemo | None = None,
+    cache: PlanCache[scene.ClassicMessage] | None = None,
+    memo: PlanMemo[scene.ClassicMessage] | None = None,
     profile: OperationRecorder | None = None,
     **options: Unpack[PlanOptions],
 ) -> RenderedMessage[discord.ui.View | None, scene.ClassicMessage]:

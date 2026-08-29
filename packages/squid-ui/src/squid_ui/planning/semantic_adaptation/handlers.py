@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from squid_ui.entity import EntityRef
+from squid_ui.entity import EntityRef, encode_entity_ref
 from squid_ui.forms import FormSpec, SubmitHandler
 from squid_ui.interactions import (
     ActionBinding,
@@ -267,4 +267,4 @@ class RouteSelection(GeneratedHandler[SelectionEvent]):
 
 
 def _entity_key(ref: EntityRef) -> str:
-    return f"{ref.kind.value}:{ref.id}"
+    return encode_entity_ref(ref)

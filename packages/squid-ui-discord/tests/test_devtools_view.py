@@ -10,6 +10,7 @@ import squid_ui as sl
 import squid_ui_discord
 from squid_ui.primitives import Button, Heading, Row, Text
 from squid_ui_discord import Everyone, MessageRoot, Owner
+from squid_ui_discord import testing as sd
 from squid_ui_discord.devtools_runtime import DevToolsRuntime
 from squid_ui_discord.devtools_view import (
     MessageRootInspector,
@@ -57,10 +58,6 @@ def message_root_inspector(inspector: MessageRootInspector) -> tuple[MessageRoot
     return message_root, commit_render(message_root)
 
 
-def _texts(view: discord.ui.LayoutView) -> list[str]:
-    return [item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)]
-
-
 class TestList:
     def test_the_inspector_authors_high_level_semantic_nodes(self) -> None:
         nodes = MessageRootInspector().render()
@@ -72,7 +69,7 @@ class TestList:
         subject = await live_subject()
         _, view = message_root_inspector(MessageRootInspector())
 
-        body = "\n".join(_texts(view))
+        body = "\n".join(sd.payload_texts(view))
         assert subject.id in body
         assert "Subject" in body
         assert "/42" in body
@@ -80,7 +77,7 @@ class TestList:
     def test_an_empty_process_says_so_rather_than_drawing_a_dead_picker(self) -> None:
         _, view = message_root_inspector(MessageRootInspector())
 
-        assert "Nothing is mounted" in "\n".join(_texts(view))
+        assert "Nothing is mounted" in "\n".join(sd.payload_texts(view))
         assert not [item for item in view.walk_children() if isinstance(item, discord.ui.Select)]
 
     async def test_the_picker_opens_the_chosen_root(self) -> None:
@@ -91,14 +88,14 @@ class TestList:
         await message_root.dispatch("open", fake_interaction(), [subject.id])
 
         assert inspector.focus == subject.id
-        assert f"MessageRoot {subject.id}" in "\n".join(_texts(commit_render(message_root)))
+        assert f"MessageRoot {subject.id}" in "\n".join(sd.payload_texts(commit_render(message_root)))
 
     async def test_it_marks_itself_in_its_own_list(self) -> None:
         inspector = MessageRootInspector()
         message_root, _ = message_root_inspector(inspector)
         inspector.own_id = message_root.id
 
-        assert "(this panel)" in "\n".join(_texts(commit_render(message_root)))
+        assert "(this panel)" in "\n".join(sd.payload_texts(commit_render(message_root)))
 
 
 class TestDetail:
@@ -107,7 +104,7 @@ class TestDetail:
         await subject.refresh()
         _, view = message_root_inspector(MessageRootInspector(focus=subject.id))
 
-        body = "\n".join(_texts(view))
+        body = "\n".join(sd.payload_texts(view))
         assert "'opened': False" in body
         assert "<@7>" in body
         assert "open" in body
@@ -138,7 +135,7 @@ class TestDetail:
         subject.invalidate()
 
         _, view = message_root_inspector(MessageRootInspector(focus=subject.id))
-        body = "\n".join(_texts(view))
+        body = "\n".join(sd.payload_texts(view))
 
         assert "renewal armed" in body
         assert "dirty" in body
@@ -149,7 +146,7 @@ class TestDetail:
         await subject.dispatch("open", fake_interaction(message_id=42))
         _, view = message_root_inspector(MessageRootInspector(focus=subject.id))
 
-        body = "\n".join(_texts(view))
+        body = "\n".join(sd.payload_texts(view))
         assert "opened v1" in body
         assert "label v2 <- $.opened" in body
         assert "unread (never evaluated)" in body
@@ -164,7 +161,7 @@ class TestDetail:
         # state change of its own or the message would keep showing the old dump.
         await message_root.dispatch("refresh", fake_interaction())
 
-        assert "'opened': True" in "\n".join(_texts(commit_render(message_root)))
+        assert "'opened': True" in "\n".join(sd.payload_texts(commit_render(message_root)))
 
     async def test_a_message_root_that_finished_while_the_panel_was_open_falls_back_to_the_list(self) -> None:
         subject = await live_subject()
@@ -173,7 +170,7 @@ class TestDetail:
         await subject.finish(disable=False)
 
         await message_root.dispatch("refresh", fake_interaction())
-        body = "\n".join(_texts(commit_render(message_root)))
+        body = "\n".join(sd.payload_texts(commit_render(message_root)))
 
         assert "no longer live" in body
         assert "Message roots" in body
@@ -200,7 +197,7 @@ class TestDetail:
 
         _, view = message_root_inspector(MessageRootInspector(manager=manager))
 
-        assert "('editor', 7)" in "\n".join(_texts(view))
+        assert "('editor', 7)" in "\n".join(sd.payload_texts(view))
 
 
 class TestSceneDump:

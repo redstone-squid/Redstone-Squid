@@ -13,6 +13,7 @@ DISTRIBUTIONS = {
     "squid-storage": "squid_storage",
     "squid-ui": "squid_ui",
     "squid-ui-discord": "squid_ui_discord",
+    "squid-ui-slack": "squid_ui_slack",
     "squid-ui-widgets": "squid_ui_widgets",
 }
 

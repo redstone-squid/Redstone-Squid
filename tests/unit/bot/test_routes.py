@@ -12,7 +12,7 @@ from squid.bot.routes import router, routes
     [
         ("squid.bot.voting.controls", "poll_close", {}, "r:polls:close", "poll:close"),
         ("squid.bot.voting.controls", "poll_refresh", {}, "r:polls:refresh", "poll:refresh"),
-        ("squid.bot.submission.ui.components", "build_edit", {"build_id": 5}, "r:builds:5:edit", "edit:build:5"),
+        ("squid.bot.submission.ui.controls", "build_edit", {"build_id": 5}, "r:builds:5:edit", "edit:build:5"),
         (
             "squid.bot.submission.consent_banner",
             "build_log_consent",
@@ -44,7 +44,7 @@ def test_production_routes_build_canonical_ids_and_keep_legacy_ids(
 
 def test_route_namespace_is_an_ordinary_root_group() -> None:
     polls = import_module("squid.bot.voting.controls").polls
-    builds = import_module("squid.bot.submission.ui.components").builds
+    builds = import_module("squid.bot.submission.ui.controls").builds
     redstoner_roles = import_module("squid.bot.give_redstoner").redstoner_roles
     assert routes.prefix == "r"
     assert polls.prefix == "r:polls"
@@ -56,7 +56,7 @@ def test_route_namespace_is_an_ordinary_root_group() -> None:
 def test_production_route_table_has_one_feature_owned_registration_per_identity() -> None:
     for module in (
         "squid.bot.voting.controls",
-        "squid.bot.submission.ui.components",
+        "squid.bot.submission.ui.controls",
         "squid.bot.submission.consent_banner",
         "squid.bot.give_redstoner",
     ):

@@ -10,13 +10,13 @@ import pytest
 import squid_ui as sl
 from squid_ui import scene
 from squid_ui.interactions import ActionMode
-from squid_ui.planning.adapter import AdapterProfile
+from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.discord import components_v2_target
 from squid_ui.planning.limits import LIMITS, V2Limits
 from squid_ui.planning.types import DiscordAdapter
 
 
-def _target(name: str, *, capabilities: frozenset[str] = frozenset(), limits: V2Limits = LIMITS):
+def _target(name: str, *, capabilities: frozenset[AdapterCapability] = frozenset(), limits: V2Limits = LIMITS):
     """A V2 target whose adapter supplies exactly `capabilities` and no extensions.
 
     Capabilities that are not Discord protocol facts belong to the adapter axis, which is
@@ -332,6 +332,27 @@ def test_zoned_datetime_field_applies_instant_bounds() -> None:
 
     with pytest.raises(sl.forms.FormValueError, match="on or after"):
         field.parse("2026-11-01 01:30-04:00")
+
+
+def test_a_prefill_a_control_cannot_be_seeded_with_becomes_no_prefill() -> None:
+    """`format` answers in `PrefillValue`, so an unusable stored value drops out here.
+
+    It used to hand the object straight back and leave every consumer to cope: the Discord
+    modal wraps one result in `str()` and calls `set()` on another.
+    """
+
+    class Opaque:
+        pass
+
+    assert sl.forms.DateField().format(Opaque()) is None
+    assert sl.forms.TextField().format(Opaque()) is None
+
+
+def test_a_prefill_that_survived_a_json_round_trip_is_kept() -> None:
+    """Which is the case the `object` fallthrough was really there for."""
+    assert sl.forms.DateField().format("2026-08-22") == "2026-08-22"
+    assert sl.forms.IntField().format(7) == 7
+    assert sl.forms.BoolField().format(value=True) is True
 
 
 def test_temporal_field_prefill_uses_isoformat() -> None:

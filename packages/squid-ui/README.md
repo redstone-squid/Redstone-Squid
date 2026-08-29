@@ -29,8 +29,8 @@ class Counter(sl.Component):
 ```
 
 The base package contains semantic nodes, planning, exact primitives, the component runtime,
-the resolved-scene codec, and a first-class HTML target. It has no Discord client dependency;
-`markdown-it-py` is its direct Markdown parser dependency.
+the resolved-scene codec, and first-class HTML and Slack planning targets. It has no frontend SDK
+dependency; `markdown-it-py` is its direct Markdown parser dependency.
 
 Plan a portable document directly to native HTML:
 
@@ -55,6 +55,8 @@ pip install squid-ui==0.1.0a1
 
 Most Discord applications should install `squid-ui-discord`, which brings this package with it
 and provides the `Invocation` and `Screen` entry points.
+Applications compiling Block Kit should install `squid-ui-slack`, which adds Slack SDK drawing
+without a listener or delivery runtime.
 
 - [Suite overview](https://redstone-squid.github.io/Redstone-Squid/squid-ui/)
 - [Quickstart](https://redstone-squid.github.io/Redstone-Squid/squid-ui-quickstart/)
@@ -70,5 +72,6 @@ The suite is deliberately split so portable code does not acquire transport or s
 - `squid-ui`: semantic UI, target planners, runtime, scenes, and native HTML
 - `squid-ui-widgets`: reusable frontend-neutral application machines
 - `squid-ui-discord`: discord.py rendering, delivery, sessions, and routing
+- `squid-ui-slack`: Slack SDK drawing for messages, modals, and App Home
 - `squid-storage`: portable persistence contracts and backends
 - `squid-replication`: optional replicated-state backends

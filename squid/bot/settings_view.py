@@ -1,6 +1,6 @@
 """Interactive Components V2 rendering for server settings."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
@@ -10,7 +10,6 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.i18n import localization_for
 from squid.bot.ui import CardField, L
-from squid.bot.utils.permissions import allows
 from squid.core.i18n import SUPPORTED_LOCALES, _
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import SETTINGS_SERVER_EDIT, SETTINGS_VOTING_EDIT
@@ -30,14 +29,14 @@ FOLLOW_DISCORD = "-"
 CHANNEL_SETTINGS: tuple[ScalarChannelSetting, ...] = ("Smallest", "Fastest", "First", "Builds", "Vote")
 """Every channel setting, in the order the panel offers them."""
 
-CHANNEL_TYPES = (
-    sl.entity.ChannelType.TEXT,
-    sl.entity.ChannelType.ANNOUNCEMENT,
-    sl.entity.ChannelType.VOICE,
-    sl.entity.ChannelType.STAGE_VOICE,
-    sl.entity.ChannelType.PUBLIC_THREAD,
-    sl.entity.ChannelType.PRIVATE_THREAD,
-    sl.entity.ChannelType.ANNOUNCEMENT_THREAD,
+CONVERSATION_TYPES = (
+    sl.entity.ConversationType.GUILD_TEXT,
+    sl.entity.ConversationType.GUILD_ANNOUNCEMENT,
+    sl.entity.ConversationType.GUILD_VOICE,
+    sl.entity.ConversationType.GUILD_STAGE_VOICE,
+    sl.entity.ConversationType.GUILD_PUBLIC_THREAD,
+    sl.entity.ConversationType.GUILD_PRIVATE_THREAD,
+    sl.entity.ConversationType.GUILD_ANNOUNCEMENT_THREAD,
 )
 """What `GuildMessageable` admits, as channel types a picker can offer."""
 
@@ -70,10 +69,13 @@ class SettingsCapabilities:
     edit_voting: bool
 
 
+type SettingsAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
+
+
 class SettingsPanel(sd.Screen):
     """A semantic, mount-owned settings workspace."""
 
-    session = "settings"
+    session_name = "settings"
     scope = sd.ScopeKind.USER_GUILD
     timeout = SESSION_SECONDS
 
@@ -97,12 +99,14 @@ class SettingsPanel(sd.Screen):
         votes: VoteService,
         guild: discord.Guild,
         capabilities: SettingsCapabilities,
+        authorize: SettingsAuthorizer,
         owner_guild_id: int | None = None,
     ) -> None:
         self._settings = settings
         self._votes = votes
         self._guild = guild
         self._capabilities = capabilities
+        self._authorize = authorize
         self._owner_guild_id = owner_guild_id
 
     @property
@@ -183,14 +187,16 @@ class SettingsPanel(sd.Screen):
                 children.append(
                     sl.entities(
                         key=f"channel-{setting}",
-                        entity_type=sl.entity.EntityType.CHANNEL,
+                        entity_type=sl.entity.EntityType.CONVERSATION,
                         selection=sl.controlled(
-                            () if selected is None else (sl.entity.EntityRef(sl.entity.EntityKind.CHANNEL, selected),),
+                            ()
+                            if selected is None
+                            else (sl.entity.EntityRef(sl.entity.EntityKind.CONVERSATION, selected),),
                             change,
                         ),
                         minimum=0,
                         maximum=1,
-                        channel_types=CHANNEL_TYPES,
+                        conversation_types=CONVERSATION_TYPES,
                         placeholder=L(SETTING_LABELS[setting]),
                     )
                 )
@@ -228,9 +234,10 @@ class SettingsPanel(sd.Screen):
 
     def _voting_nodes(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         scope_note = self._scope_note()
+        kind_label = L(KIND_LABELS[self.kind])
         children: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
             sl.section(
-                sl.heading(L("Voting — {kind}", kind=L(KIND_LABELS[self.kind]))),
+                sl.heading(L(t"Voting — {kind_label}")),
                 sl.fields(*(sl.field(field.name, field.value) for field in self._voting_fields())),
                 scope_note and sl.note(scope_note),
             ),
@@ -284,7 +291,11 @@ class SettingsPanel(sd.Screen):
     async def _channel_changed(self, event: sl.EntityEvent, setting: ScalarChannelSetting) -> None:
         if not await self._may_event(event, SETTINGS_SERVER_EDIT):
             return
-        await self.set_channel(setting, event.selected[0].id if event.selected else None)
+        channel_id = event.selected[0].id if event.selected else None
+        if channel_id is not None and not isinstance(channel_id, int):
+            await event.notice(L(t"That channel selection is invalid."))
+            return
+        await self.set_channel(setting, channel_id)
 
     async def _locale_changed(self, event: sl.ChoiceEvent) -> None:
         if not await self._may_event(event, SETTINGS_SERVER_EDIT):
@@ -301,18 +312,21 @@ class SettingsPanel(sd.Screen):
         if not await self._may_event(event, SETTINGS_VOTING_EDIT):
             return
         role_id = event.selected[0].id
+        if not isinstance(role_id, int):
+            await event.notice(L(t"That role selection is invalid."))
+            return
         role = self._guild.get_role(role_id)
         if role is None:
             await event.notice(L(t"That role has been deleted."))
             return
-        invocation = await sd.Invocation.of(sd.native(event))
+        role_name = role.name
         await event.present_form(
             sl.forms.FormSpec(
-                invocation.t(L("Vote weight for {role}", role=role.name)),
+                L(t"Vote weight for {role_name}"),
                 (
                     sl.forms.TextField(
                         key="multiplier",
-                        label=invocation.t(L("Multiplier; leave empty to remove this role's weight")),
+                        label=L(t"Multiplier; leave empty to remove this role's weight"),
                         placeholder="1.5",
                         default=(f"{current:g}" if (current := self.weight_for(role.id)) is not None else ""),
                         required=False,
@@ -326,14 +340,14 @@ class SettingsPanel(sd.Screen):
 
     async def _edit_emojis(self, event: sl.PressEvent) -> None:
         if await self._may_event(event, SETTINGS_VOTING_EDIT):
-            invocation = await sd.Invocation.of(sd.native(event))
+            kind = self.kind.value
             await event.present_form(
                 sl.forms.FormSpec(
-                    invocation.t(L("{kind} vote emojis", kind=self.kind.value)),
+                    L(t"{kind} vote emojis"),
                     (
                         sl.forms.TextAreaField(
                             key="aliases",
-                            label=invocation.t(L("One `choice | emoji` per line")),
+                            label=L(t"One `choice | emoji` per line"),
                             placeholder="approve | ✅\ndeny | ❌",
                             default=self.emoji_preset_text(),
                             minimum=1,
@@ -350,37 +364,34 @@ class SettingsPanel(sd.Screen):
         try:
             await self.set_weight(role_id, float(text) if text else None)
         except InvalidVoteConfigurationError, ValueError:
-            await event.notice(L("A vote multiplier must be a positive number, such as 1.5."))
+            await event.notice(L(t"A vote multiplier must be a positive number, such as 1.5."))
 
     async def _emoji_form_submitted(self, event: sl.SubmitEvent) -> None:
-        interaction = sd.native(event)
-        if interaction.guild is None:
-            return
         text = cast(str, event.values["aliases"])
         options: list[VoteOption] = []
         for position, line in enumerate(filter(None, (line.strip() for line in text.splitlines()))):
             parts = [part.strip() for part in line.split("|", 1)]
             if len(parts) != 2:
-                await event.notice(L("Each line must read `choice | emoji`."))
+                await event.notice(L(t"Each line must read `choice | emoji`."))
                 return
             choice_text, emoji = parts
             try:
                 choice = VoteChoice.GENERIC if self.kind is VoteKind.GENERIC else VoteChoice(choice_text)
             except ValueError:
-                await event.notice(L("`{choice}` is not a vote choice.", choice=choice_text))
+                await event.notice(L(t"`{choice_text}` is not a vote choice."))
                 return
             parsed = discord.PartialEmoji.from_str(emoji)
             if parsed.is_custom_emoji():
-                custom = interaction.guild.get_emoji(parsed.id or 0)
+                custom = self._guild.get_emoji(parsed.id or 0)
                 if custom is None or not custom.is_usable():
-                    await event.notice(L("The custom emoji {emoji} is inaccessible.", emoji=emoji))
+                    await event.notice(L(t"The custom emoji {emoji} is inaccessible."))
                     return
             options.append(
                 VoteOption(
                     emoji,
                     choice,
                     identifier=str(position + 1) if self.kind is VoteKind.GENERIC else choice.value,
-                    guild_id=interaction.guild.id,
+                    guild_id=self._guild.id,
                     label=f"Option {position + 1}" if self.kind is VoteKind.GENERIC else None,
                     position=position,
                 )
@@ -388,8 +399,7 @@ class SettingsPanel(sd.Screen):
         try:
             await self.set_emojis(options)
         except InvalidVoteConfigurationError as error:
-            invocation = await sd.Invocation.of(interaction)
-            await event.notice(invocation.t(L(str(error))))
+            await event.notice(str(error))
 
     async def _reset(self, event: sl.PressEvent) -> None:
         if not await self._may_event(event, SETTINGS_VOTING_EDIT):
@@ -406,7 +416,8 @@ class SettingsPanel(sd.Screen):
             return
         result = await self.history.undo()
         if result.applied and result.entry is not None:
-            await event.notice(L("Undid: {change}", change=result.entry.label))
+            change = result.entry.label
+            await event.notice(L(t"Undid: {change}"))
         elif result.status is sl.runtime.HistoryResultStatus.CONFLICT:
             await event.notice(L(t"That change was modified elsewhere and cannot be undone safely."))
 
@@ -415,7 +426,8 @@ class SettingsPanel(sd.Screen):
             return
         result = await self.history.redo()
         if result.applied and result.entry is not None:
-            await event.notice(L("Redid: {change}", change=result.entry.label))
+            change = result.entry.label
+            await event.notice(L(t"Redid: {change}"))
         elif result.status is sl.runtime.HistoryResultStatus.CONFLICT:
             await event.notice(L(t"That change was modified elsewhere and cannot be redone safely."))
 
@@ -429,7 +441,7 @@ class SettingsPanel(sd.Screen):
         await event.finish()
 
     async def _may_event(self, event: sl.ActionEvent, node: PermissionNode) -> bool:
-        if await allows(sd.native(event), node):
+        if await self._authorize(node):
             return True
         await event.notice(L(t"You are no longer allowed to change this."))
         return False
@@ -438,8 +450,9 @@ class SettingsPanel(sd.Screen):
         previous = self._channels[setting]
         await self._write_channel(setting, channel_id)
         self._channels = {**self._channels, setting: channel_id}
+        setting_label = L(SETTING_LABELS[setting])
         self.history.record(
-            L("Changed {setting}", setting=L(SETTING_LABELS[setting])),
+            L(t"Changed {setting_label}"),
             compensate=sl.runtime.CompensationSpec(
                 lambda _key: self._write_channel(setting, previous),
                 lambda commit: f"settings:{self._guild.id}:channel:{setting}:{commit.context.action_id}",
@@ -511,7 +524,7 @@ class SettingsPanel(sd.Screen):
         if channel_id is None:
             return L(t"_Not set_")
         if self._guild.get_channel_or_thread(channel_id) is None:
-            return L("_Not found_ ({id})", id=channel_id)
+            return L(t"_Not found_ ({channel_id})")
         return sl.md("{mention}", mention=sl.raw_md(f"<#{channel_id}>"))
 
     def _voting_fields(self) -> list[CardField]:
@@ -527,7 +540,7 @@ class SettingsPanel(sd.Screen):
             key = f"role_{index}"
             weight_params[key] = self._role_display(weight.role_id)
             weight_lines.append(f"{{{key}}} — {weight.multiplier:g}x")
-        weights = L("\n".join(weight_lines), **weight_params) if weight_lines else L(t"_None_")
+        weights = sl.text.Message("\n".join(weight_lines), weight_params) if weight_lines else L(t"_None_")
         return [
             CardField(L(t"Emojis"), emojis),
             CardField(L(t"Role multipliers"), weights),
@@ -536,7 +549,7 @@ class SettingsPanel(sd.Screen):
     def _role_display(self, role_id: int) -> sl.TextLike:
         role = self._guild.get_role(role_id)
         if role is None:
-            return L("_Deleted role_ ({id})", id=role_id)
+            return L(t"_Deleted role_ ({role_id})")
         return role.name
 
     def _scope_note(self) -> sl.TextLike | None:

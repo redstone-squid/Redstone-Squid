@@ -1,15 +1,13 @@
 """Component-driven wizard for composing and publishing generic polls."""
 
 import re
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, cast
-
-import discord
+from typing import cast
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot._types import GuildMessageable
+import squid_ui_widgets as sp
 from squid.bot.ui import L
 from squid.core.i18n import _
 from squid.voting.domain import (
@@ -22,37 +20,34 @@ from squid.voting.domain import (
 )
 from squid.voting.errors import InvalidVoteConfigurationError
 
-if TYPE_CHECKING:
-    from squid.bot.voting.publisher import PollPublisher
-
 _DURATION = re.compile(r"^(\d+)\s*([mhd])$", re.IGNORECASE)
 _DURATION_UNITS = {"m": 60, "h": 3600, "d": 86400}
 
 DURATION_PRESETS: tuple[tuple[sl.TextLike, int], ...] = (
-    (L("1 hour"), 3600),
-    (L("6 hours"), 6 * 3600),
-    (L("12 hours"), 12 * 3600),
-    (L("24 hours"), 24 * 3600),
-    (L("3 days"), 3 * 86400),
-    (L("7 days"), 7 * 86400),
+    (L(t"1 hour"), 3600),
+    (L(t"6 hours"), 6 * 3600),
+    (L(t"12 hours"), 12 * 3600),
+    (L(t"24 hours"), 24 * 3600),
+    (L(t"3 days"), 3 * 86400),
+    (L(t"7 days"), 7 * 86400),
 )
 CUSTOM_DURATION = "custom"
 
 VISIBILITY_CHOICES: tuple[tuple[VoteVisibility, sl.TextLike, sl.TextLike], ...] = (
     (
         VoteVisibility.ANONYMOUS_LIVE,
-        L("Live Anonymous"),
-        L("Running totals are public; who voted for what is not."),
+        L(t"Live Anonymous"),
+        L(t"Running totals are public; who voted for what is not."),
     ),
     (
         VoteVisibility.VISIBLE_LIVE,
-        L("Live Public"),
-        L("Reactions stay on the message, so every ballot is attributable."),
+        L(t"Live Public"),
+        L(t"Reactions stay on the message, so every ballot is attributable."),
     ),
     (
         VoteVisibility.ANONYMOUS_HIDDEN,
-        L("Hidden until Close"),
-        L("No totals at all until the poll closes."),
+        L(t"Hidden until Close"),
+        L(t"No totals at all until the poll closes."),
     ),
 )
 
@@ -131,8 +126,8 @@ def parse_option_lines(
 
 
 SCOPE_CHOICES: tuple[tuple[PollScope, sl.TextLike, sl.TextLike], ...] = (
-    (PollScope.GUILD, L("This server"), L("Card the poll in this channel only.")),
-    (PollScope.NETWORK, L("Every server"), L("Card the poll in every server's vote channel.")),
+    (PollScope.GUILD, L(t"This server"), L(t"Card the poll in this channel only.")),
+    (PollScope.NETWORK, L(t"Every server"), L(t"Card the poll in every server's vote channel.")),
 )
 
 
@@ -154,19 +149,19 @@ class PollDraft:
 def poll_form(draft: PollDraft | None = None) -> sl.forms.FormSpec:
     """Describe the poll's free-text input through the portable form API."""
     return sl.forms.FormSpec(
-        L("Create a poll"),
+        L(t"Create a poll"),
         (
             sl.forms.TextField(
                 key="question",
-                label=L("Question"),
+                label=L(t"Question"),
                 default="" if draft is None else draft.question,
                 maximum=300,
             ),
             sl.forms.TextAreaField(
                 key="options",
-                label=L("Options (one per line)"),
+                label=L(t"Options (one per line)"),
                 default="" if draft is None else draft.options_text,
-                placeholder=L("emoji | label (emoji may be omitted)"),
+                placeholder=L(t"emoji | label (emoji may be omitted)"),
                 minimum=3,
                 maximum=1000,
             ),
@@ -174,235 +169,145 @@ def poll_form(draft: PollDraft | None = None) -> sl.forms.FormSpec:
     )
 
 
-async def present_poll_form(
-    interaction: discord.Interaction[Any],
-    publisher: PollPublisher,
-    author_account_id: int,
-    *,
-    allow_network: bool = False,
-    draft: PollDraft | None = None,
-) -> None:
-    """Present the poll's initial form and open its semantic mount on submit."""
+type ResolveOptions = Callable[[tuple[str, ...]], Awaitable[tuple[VoteOption, ...]]]
+type PublishPoll = Callable[[PollDraft, tuple[VoteOption, ...]], Awaitable[str]]
 
-    async def submitted(form_interaction: discord.Interaction[Any], values: dict[str, object]) -> None:
-        invocation = await sd.Invocation.of(form_interaction)
-        if form_interaction.guild is None:
-            await sd.delivery.respond_text(form_interaction, invocation.t(L("Polls can only be created in a server.")))
-            return
-        current = draft or PollDraft(question="", options_text="")
-        edited = replace(
-            current,
-            question=cast(str, values["question"]),
-            options_text=cast(str, values["options"]),
-        )
-        try:
-            options = await publisher.resolve_options(form_interaction.guild.id, edited.option_lines)
-        except InvalidVoteConfigurationError as error:
-            await sd.delivery.respond_text(form_interaction, invocation.t(L(error.message, **error.message_params)))
-            return
-        await PollConfirmationComponent.show(
-            form_interaction,
-            publisher,
-            author_account_id,
-            edited,
-            options,
-            allow_network=allow_network,
-            wait=True,
-        )
 
-    invocation = await sd.Invocation.of(interaction)
-    modal = sd.modal.build_form_modal(
-        poll_form(draft),
-        on_submit=submitted,
-        localization=invocation.localization,
+def _settings_form(allow_network: bool) -> sl.forms.FormSpec:
+    fields: list[sl.forms.FormField[object]] = [
+        cast(
+            sl.forms.FormField[object],
+            sl.forms.ChoiceField(
+                key="visibility",
+                label=L(t"Visibility"),
+                default=VoteVisibility.ANONYMOUS_LIVE,
+                options=tuple(
+                    sl.forms.ChoiceOption(value.value, label, value, description)
+                    for value, label, description in VISIBILITY_CHOICES
+                ),
+            ),
+        ),
+        cast(
+            sl.forms.FormField[object],
+            sl.forms.DurationField(
+                key="duration",
+                label=L(t"Duration"),
+                default=24 * 3600,
+                placeholder=L(t"30m, 12h, 7d"),
+                maximum=MAX_POLL_DURATION_SECONDS,
+                minimum=MIN_POLL_DURATION_SECONDS,
+                parser=parse_poll_duration,
+            ),
+        ),
+    ]
+    if allow_network:
+        fields.append(
+            cast(
+                sl.forms.FormField[object],
+                sl.forms.ChoiceField(
+                    key="scope",
+                    label=L(t"Reach"),
+                    default=PollScope.GUILD,
+                    options=tuple(
+                        sl.forms.ChoiceOption(value.value, label, value, description)
+                        for value, label, description in SCOPE_CHOICES
+                    ),
+                ),
+            )
+        )
+    return sl.forms.FormSpec(L(t"Poll settings"), tuple(fields))
+
+
+def _poll_steps(allow_network: bool) -> tuple[sp.WizardStep[sl.ComponentsV2Target], ...]:
+    return (
+        sp.WizardStep("content", L(t"Question and options"), poll_form()),
+        sp.WizardStep("settings", L(t"Visibility and duration"), _settings_form(allow_network)),
     )
-    await interaction.response.send_modal(modal)
 
 
-class PollConfirmationComponent(sd.Screen):
-    """A semantic poll preview and publication workspace."""
+def _draft(answers: sp.WizardAnswers) -> PollDraft:
+    content = answers["content"]
+    settings = answers["settings"]
+    return PollDraft(
+        question=cast(str, content["question"]),
+        options_text=cast(str, content["options"]),
+        visibility=cast(VoteVisibility, settings["visibility"]),
+        duration_seconds=cast(int, settings["duration"]),
+        scope=cast(PollScope, settings.get("scope", PollScope.GUILD)),
+    )
 
-    session = "poll-wizard"
+
+def _review(answers: sp.WizardAnswers) -> sl.LayoutNode[sl.ComponentsV2Target]:
+    draft = _draft(answers)
+    options = "\n".join(f"- {line}" for line in draft.option_lines)
+    fields = [
+        sl.field(L(t"Visibility"), next(label for value, label, _ in VISIBILITY_CHOICES if value is draft.visibility)),
+        sl.field(L(t"Closes after"), format_duration(draft.duration_seconds)),
+    ]
+    if draft.scope is PollScope.NETWORK:
+        fields.append(sl.field(L(t"Reaches"), L(t"Every server")))
+    return sl.section(sl.heading(draft.question), sl.paragraph(options), sl.fields(*fields))
+
+
+class PollScreen(sd.Screen):
+    """A poll wizard that ends when published, cancelled, replaced, or timed out."""
+
+    session_name = "poll-wizard"
     scope = sd.ScopeKind.USER_GUILD
     timeout = 900
     expiry = sd.RenewEphemeral()
     follow_topics = True
 
-    published: bool = sl.state(default=False)
-    draft: PollDraft = sl.state(persist=False)
+    published_url: str | None = sl.state(None)
+    cancelled: bool = sl.state(default=False)
 
     def __init__(
         self,
-        publisher: PollPublisher,
-        author_account_id: int,
-        draft: PollDraft,
-        options: tuple[VoteOption, ...],
+        resolve_options: ResolveOptions,
+        publish: PublishPoll,
         *,
         allow_network: bool = False,
     ) -> None:
-        self.publisher = publisher
-        self.author_account_id = author_account_id
-        self.draft = draft
-        self.vote_options = options
-        self.allow_network = allow_network
+        self._resolve_options = resolve_options
+        self._publish = publish
+        wizard = sp.Wizard[sl.ComponentsV2Target](
+            L(t"Create a poll"),
+            _poll_steps(allow_network),
+            key="poll",
+            review=sp.WizardReview(label=L(t"Review poll"), summarize=_review),
+        )
+        self.wizard = wizard
+        self.driver = wizard.build_component(on_finish=self._finish)
 
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
-        if self.published:
-            return (sl.status(L("Poll published.")),)
-        preview = "\n".join(
-            [
-                f"## {self.draft.question}",
-                *(f"{option.emoji} {option.label}" for option in self.vote_options),
-            ]
-        )
-        fields = [
-            sl.field(L("Visibility"), self._visibility_label()),
-            sl.field(L("Closes after"), format_duration(self.draft.duration_seconds)),
-        ]
-        if self.allow_network:
-            fields.append(sl.field(L("Reaches"), self._scope_label()))
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
-            sl.section(sl.heading(preview), sl.fields(*fields)),
-            sl.choices(
-                *(
-                    sl.choice(label, key=value.value, description=description)
-                    for value, label, description in VISIBILITY_CHOICES
-                ),
-                key="visibility",
-                selection=sl.controlled((self.draft.visibility.value,), self._visibility_changed),
-            ),
-            sl.choices(
-                *(
-                    sl.choice(label, key=str(seconds))
-                    for label, seconds in (*DURATION_PRESETS, (L("Custom"), CUSTOM_DURATION))
-                ),
-                key="duration",
-                selection=sl.controlled((str(self.draft.duration_seconds),), self._duration_changed),
-            ),
-        ]
-        if self.allow_network:
-            nodes.append(
-                sl.choices(
-                    *(
-                        sl.choice(label, key=value.value, description=description)
-                        for value, label, description in SCOPE_CHOICES
-                    ),
-                    key="scope",
-                    selection=sl.controlled((self.draft.scope.value,), self._scope_changed),
-                )
-            )
-        nodes.append(
+        if self.published_url is not None:
+            published_url = self.published_url
+            return (sl.status(L(t"Poll published: {published_url}"), tone=sl.Tone.SUCCESS),)
+        if self.cancelled:
+            return (sl.status(L(t"Poll cancelled.")),)
+        return (
+            self.boundary(self.driver, key="wizard"),
             sl.action_controls(
-                sl.action_control(
-                    L("Publish"),
-                    self._publish,
-                    key="publish",
-                    tone=sl.Tone.SUCCESS,
-                ),
-                sl.action_control(L("Edit"), self._edit, key="edit"),
-                sl.action_control(
-                    L("Cancel"),
-                    self._cancel,
-                    key="cancel",
-                    tone=sl.Tone.DANGER,
-                ),
+                sl.action_control(L(t"Cancel"), self._cancel, key="cancel", tone=sl.Tone.DANGER),
                 key="poll-actions",
-            )
+            ),
         )
-        return tuple(nodes)
 
-    async def _visibility_changed(self, event: sl.ChoiceEvent) -> None:
-        self.draft = replace(self.draft, visibility=VoteVisibility(event.selected[0]))
-
-    async def _duration_changed(self, event: sl.ChoiceEvent) -> None:
-        chosen = event.selected[0]
-        if chosen == CUSTOM_DURATION:
-            await event.present_form(
-                sl.forms.FormSpec(
-                    L("Custom poll duration"),
-                    (
-                        sl.forms.DurationField(
-                            key="duration",
-                            label=L("Duration"),
-                            placeholder=L("30m, 12h, 7d"),
-                            maximum=MAX_POLL_DURATION_SECONDS,
-                            minimum=MIN_POLL_DURATION_SECONDS,
-                            parser=parse_poll_duration,
-                        ),
-                    ),
-                    prefill={"duration": self.draft.duration_seconds},
-                ),
-                key="custom-duration",
-                on_submit=self._custom_duration_submitted,
-            )
-            return
-        self.draft = replace(self.draft, duration_seconds=int(chosen))
-
-    async def _custom_duration_submitted(self, event: sl.SubmitEvent) -> None:
-        self.draft = replace(self.draft, duration_seconds=cast(int, event.values["duration"]))
-
-    async def _scope_changed(self, event: sl.ChoiceEvent) -> None:
-        self.draft = replace(self.draft, scope=PollScope(event.selected[0]))
-
-    async def _publish(self, event: sl.PressEvent) -> None:
-        interaction = sd.native(event)
-        if interaction.guild is None or interaction.channel is None:
-            await event.notice(L("Polls can only be published in a server."))
-            return
-        if self.draft.scope is PollScope.NETWORK and not (
-            isinstance(interaction.user, discord.Member) and await self.publisher.may_create_network(interaction.user)
-        ):
-            await event.notice(L("You may no longer publish a poll to every server."))
-            return
-        self.published = True
-        await event.acknowledge()
+    async def _finish(
+        self,
+        event: sp.TransitionEvent[sp.WizardState],
+        answers: sp.WizardAnswers,
+    ) -> None:
+        draft = _draft(answers)
         try:
-            message = await self.publisher.create_and_publish(
-                author_account_id=self.author_account_id,
-                channel=cast(GuildMessageable, interaction.channel),
-                question=self.draft.question,
-                visibility=self.draft.visibility,
-                duration_seconds=self.draft.duration_seconds,
-                options=self.vote_options,
-                scope=self.draft.scope,
-            )
+            options = await self._resolve_options(draft.option_lines)
+            self.published_url = await self._publish(draft, options)
         except InvalidVoteConfigurationError as error:
-            self.published = False
-            invocation = await sd.Invocation.of(interaction)
-            await event.notice(invocation.t(L(error.message, **error.message_params)))
+            self.driver.machine_state = replace(event.state, complete=False)
+            await event.source.notice(sl.text.Message(error.message, error.message_params))
             return
-        await event.notice(L("Published: {url}", url=message.jump_url))
-        await event.finish()
-
-    async def _edit(self, event: sl.PressEvent) -> None:
-        await event.present_form(poll_form(self.draft), key="poll-edit", on_submit=self._edited)
-
-    async def _edited(self, event: sl.SubmitEvent) -> None:
-        """Apply the portable poll form back to this mounted wizard."""
-        draft = replace(
-            self.draft,
-            question=cast(str, event.values["question"]),
-            options_text=cast(str, event.values["options"]),
-        )
-        interaction = sd.native(event)
-        if interaction.guild is None:
-            await event.notice(L("Polls can only be edited in a server."))
-            return
-        try:
-            options = await self.publisher.resolve_options(interaction.guild.id, draft.option_lines)
-        except InvalidVoteConfigurationError as error:
-            invocation = await sd.Invocation.of(interaction)
-            await event.notice(invocation.t(L(error.message, **error.message_params)))
-            return
-        self.draft = draft
-        self.vote_options = options
+        await event.source.finish()
 
     async def _cancel(self, event: sl.PressEvent) -> None:
-        await event.notice(L("Poll cancelled."))
+        self.cancelled = True
         await event.finish()
-
-    def _visibility_label(self) -> sl.TextLike:
-        return next(label for value, label, _ in VISIBILITY_CHOICES if value is self.draft.visibility)
-
-    def _scope_label(self) -> sl.TextLike:
-        return next(label for value, label, _ in SCOPE_CHOICES if value is self.draft.scope)

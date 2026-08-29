@@ -6,15 +6,16 @@ from unittest.mock import AsyncMock
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.submission.ui.views import SubmissionFormComponent, _submission_basics_form
+from squid.bot.submission.ui.views import SubmissionOutcome, SubmissionScreen, _submission_basics_form
 from squid.builds.application import BuildService
-from squid.builds.domain import BuildDraft
+from squid.builds.domain import BuildDraft, DoorBuild
+from squid_ui_discord.sessions import Reject
 from squid_ui_discord.testing import commit_render
 from tests.helpers.discord import invocation_scope, make_interaction, make_layout_bot
 
 
-def _component(**kwargs: Any) -> SubmissionFormComponent:
-    return SubmissionFormComponent(BuildDraft(**kwargs), cast(BuildService, object()))
+def _component(**kwargs: Any) -> SubmissionScreen:
+    return SubmissionScreen(BuildDraft(**kwargs), cast(BuildService, object()), on_submit=AsyncMock())
 
 
 def test_submission_form_uses_semantic_controls() -> None:
@@ -25,6 +26,12 @@ def test_submission_form_uses_semantic_controls() -> None:
     assert isinstance(nodes[0], sl.semantic.Section)
     assert any(isinstance(node, sl.semantic.Choices) for node in nodes)
     assert any(isinstance(node, sl.semantic.ActionControls) for node in nodes)
+
+
+def test_submission_screen_rejects_a_second_live_draft() -> None:
+    assert SubmissionScreen.session_name == "build-submission"
+    assert SubmissionScreen.timeout == 300
+    assert isinstance(SubmissionScreen.admission.collision, Reject)
 
 
 async def test_basics_form_describes_portable_fields() -> None:
@@ -56,5 +63,23 @@ async def test_cancel_closes_the_workspace() -> None:
 
     await component._cancel(cast(sl.PressEvent, event))
 
-    assert component.value is False
+    assert component.cancelled is True
     event.finish.assert_awaited_once()
+
+
+async def test_submission_persists_only_once_after_duplicate_finish() -> None:
+    outcome = SubmissionOutcome(DoorBuild(id=7), sl.status("submitted"))
+    persist = AsyncMock(return_value=outcome)
+    component = SubmissionScreen(
+        BuildDraft(door_orientation="Door", door_width=2, door_height=2),
+        cast(BuildService, object()),
+        on_submit=persist,
+    )
+    event = SimpleNamespace(acknowledge=AsyncMock(), finish=AsyncMock(), notice=AsyncMock())
+
+    await component._submit(cast(sl.PressEvent, event))
+    await component._submit(cast(sl.PressEvent, event))
+
+    persist.assert_awaited_once()
+    event.finish.assert_awaited_once()
+    event.notice.assert_awaited_once()

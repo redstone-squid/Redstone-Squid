@@ -209,7 +209,8 @@ class ReferenceEngine:
 
     def prepare_remote(self, update: bytes) -> PreparedReferenceUpdate:
         operations = self._decode_envelope(update, kind="update")
-        return PreparedReferenceUpdate(None, operations)
+        novel = tuple(operation for operation in operations if self._operations.get(operation.identity) != operation)
+        return PreparedReferenceUpdate(None, novel)
 
     def encode_token(self, operations: tuple[ReferenceOperation, ...]) -> bytes:
         """Encode one action's opaque change token for durable history tests."""

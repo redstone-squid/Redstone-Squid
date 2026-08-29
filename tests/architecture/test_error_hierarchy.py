@@ -28,6 +28,7 @@ HIERARCHIES = {
     "squid_ui": ("squid_ui", "SquidUiError"),
     "squid_ui_widgets": ("squid_ui", "SquidUiError"),
     "squid_ui_discord": ("squid_ui", "SquidUiError"),
+    "squid_ui_slack": ("squid_ui", "SquidUiError"),
     "squid_storage": ("squid_storage", "StorageError"),
     "squid_replication": ("squid_replication", "ReplicationError"),
 }
@@ -36,8 +37,10 @@ HIERARCHIES = {
 def _package_exceptions(package_name: str) -> list[type[BaseException]]:
     package = importlib.import_module(package_name)
     modules = [package]
-    for info in pkgutil.walk_packages(package.__path__, prefix=f"{package_name}."):
-        modules.append(importlib.import_module(info.name))
+    modules.extend(
+        importlib.import_module(info.name)
+        for info in pkgutil.walk_packages(package.__path__, prefix=f"{package_name}.")
+    )
     found: dict[str, type[BaseException]] = {}
     for module in modules:
         for value in vars(module).values():

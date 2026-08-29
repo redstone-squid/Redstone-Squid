@@ -5,13 +5,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
 
+from squid_ui.document import DocumentLike
 from squid_ui.factories import action_controls, choice, heading, stack, status
 from squid_ui.forms import Form, FormLike, FormSpec
-from squid_ui.runtime.component import RenderResult
 from squid_ui.semantic import ControlDisplay, FormTrigger, Tone
-from squid_ui.sources import Position
 from squid_ui.text import TextLike
-from squid_ui_widgets._paging import window
+from squid_ui_widgets._paging import PagePosition, window
 from squid_ui_widgets.drivers import ComponentDriver, MachineControls, TransitionEvent
 
 
@@ -113,6 +112,8 @@ class CollectionEditor:
                 return
             await on_change(event, tuple(self._mapping(entry) for entry in event.state.entries))
 
+        if initial is None:
+            return ComponentDriver(self, on_change=changed)
         return ComponentDriver(self, initial=initial, on_change=changed)
 
     def values(self, state: CollectionState) -> tuple[Mapping[str, object], ...]:
@@ -197,11 +198,11 @@ class CollectionEditor:
         form = self.edit(values)
         return form.spec() if isinstance(form, Form) else form
 
-    def render(self, state: CollectionState, controls: MachineControls[CollectionState]) -> RenderResult:
+    def render(self, state: CollectionState, controls: MachineControls[CollectionState]) -> DocumentLike:
         visible, position, pages = window(
             state.entries,
             key=self.key,
-            position=Position(offset=state.page),
+            position=PagePosition(state.page),
             per_page=self.window_size,
             chrome=controls.chrome,
             identity=lambda entry: entry.key,
@@ -273,13 +274,13 @@ class CollectionEditor:
                     controls.chrome.previous,
                     _Action.PREVIOUS.value,
                     key=f"{self.key}.previous",
-                    available=position.offset > 0,
+                    available=position.index > 0,
                 ),
                 controls.action_control(
                     controls.chrome.next,
                     _Action.NEXT.value,
                     key=f"{self.key}.next",
-                    available=position.offset < pages - 1,
+                    available=position.index < pages - 1,
                 ),
                 key=f"{self.key}.paging",
                 display=ControlDisplay.INDIVIDUAL,

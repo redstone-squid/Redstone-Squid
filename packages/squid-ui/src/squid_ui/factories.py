@@ -20,10 +20,10 @@ from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Se
 from datetime import datetime
 from string.templatelib import Template
 from types import UnionType
-from typing import TYPE_CHECKING, Literal, NoReturn, TypeAliasType, TypeIs, get_args, get_origin
+from typing import TYPE_CHECKING, Any, Literal, NoReturn, TypeAliasType, TypeIs, get_args, get_origin
 
 from squid_ui.assets import Asset
-from squid_ui.entity import ChannelType, EntityRef, EntityType
+from squid_ui.entity import ConversationType, EntityRef, EntityType
 from squid_ui.forms import FormLike, SubmitHandler, bind_form
 from squid_ui.grids import GridCell
 from squid_ui.guards import Guard
@@ -43,6 +43,7 @@ from squid_ui.semantic import (
     Article,
     Aside,
     Block,
+    BuiltinLayoutNode,
     Choice,
     ChoiceEvent,
     ChoiceOwnership,
@@ -51,7 +52,6 @@ from squid_ui.semantic import (
     Code,
     Column,
     Columns,
-    ConcreteLayoutNode,
     ControlDisplay,
     ControlGroup,
     Controlled,
@@ -90,6 +90,7 @@ from squid_ui.semantic import (
     NavOwnership,
     Note,
     Paragraph,
+    PortableNode,
     ProgressBar,
     Quote,
     Roster,
@@ -114,7 +115,7 @@ from squid_ui.semantic import (
     ZonedTimestamp,
 )
 from squid_ui.tallies import TallyOption
-from squid_ui.target_types import RenderTarget
+from squid_ui.target_types import Renderable, RenderTarget
 from squid_ui.temporal import ZonedDateTime
 from squid_ui.text import Message, ResolvedText, TextLike, md
 
@@ -149,7 +150,7 @@ def _node_types(annotation: object) -> Iterator[type]:
 
     The `get_origin` branch is not decoration: once the containers became generic in their
     dialect, `Stack[RenderTargetT]` stopped being a `type`, every container silently fell out of
-    `_NODE_TYPES`, and `is_layout_node(sl.stack(...))` went quietly False -- which reads at
+    `_BUILTIN_TYPES`, and `is_builtin_layout_node(sl.stack(...))` went quietly False -- which reads at
     runtime as "a stack is not content".
     """
     if isinstance(annotation, TypeAliasType):
@@ -161,21 +162,48 @@ def _node_types(annotation: object) -> Iterator[type]:
         yield annotation
     elif isinstance(origin := get_origin(annotation), type):
         yield origin
+    elif isinstance(origin, TypeAliasType):
+        # A subscripted alias like `SemanticNode[RenderTargetT]`: its origin is the alias
+        # itself, so recurse into it the same way an unsubscripted alias is flattened.
+        yield from _node_types(origin)
 
 
 # Derived from the union rather than hand-listed, so a new node type is accepted the moment
-# it joins `LayoutNode`.
-_NODE_TYPES: tuple[type, ...] = tuple(_node_types(ConcreteLayoutNode))
+# it joins `BuiltinLayoutNode`.
+_BUILTIN_TYPES: tuple[type, ...] = tuple(_node_types(BuiltinLayoutNode))
+_PORTABLE_TYPES: tuple[type, ...] = tuple(_node_types(PortableNode))
 
 
-def is_layout_node(value: object) -> TypeIs[ConcreteLayoutNode]:
+def is_layout_node(value: object) -> TypeIs[Renderable[Any]]:
     """True when `value` is already a layout node, rather than text or a component.
 
-    The public form of the derived `_NODE_TYPES` tuple: callers outside this module — the
-    pattern content normalizers above all — need the membership test, never the tuple, and
-    a predicate keeps the union's membership an implementation detail.
+    What the authoring surface asks, so it answers for the whole of `LayoutNode` — a
+    caller's own `Renderable` included. That is what the escape hatch is for: a frontend
+    may ship a node this package has never heard of, and a container factory has no
+    business refusing it.
+
+    Use :func:`is_builtin_layout_node` where the answer must be a node *this* package
+    ships, which is what the Discord lowering needs before it may match.
     """
-    return isinstance(value, _NODE_TYPES)
+    return isinstance(value, Renderable)
+
+
+def is_builtin_layout_node(value: object) -> TypeIs[BuiltinLayoutNode]:
+    """True when `value` is one of the layout nodes the framework itself ships.
+
+    The closed half of :func:`is_layout_node`, and the narrowing a traversal needs: a
+    `match` may only claim to have covered the vocabulary once the open arm is excluded.
+    """
+    return isinstance(value, _BUILTIN_TYPES)
+
+
+def is_portable_node(value: object) -> TypeIs[PortableNode[Any]]:
+    """True when `value` belongs to the closed portable vocabulary every planner answers for.
+
+    Distinguishes the portable union from the `Renderable` escape hatch: a Discord primitive
+    is a layout node but not a portable one.
+    """
+    return isinstance(value, _PORTABLE_TYPES)
 
 
 def _text(value: TextValue) -> TextLike:
@@ -192,7 +220,7 @@ def _reject(value: object, origin: str, index: int) -> NoReturn:
             "True is not content; `cond and node` evaluates to the node or to the condition, "
             "so only None and False can stand for an omitted child"
         )
-    elif isinstance(value, str | ResolvedText | Template):
+    elif isinstance(value, str | ResolvedText | Message | Template):
         # Only collection factories reject text; container children promote it to a Paragraph.
         detail = "text is not an entry here; build one with the matching factory"
     elif isinstance(value, Mapping):
@@ -214,16 +242,16 @@ def _is_component(value: object) -> bool:
     return isinstance(value, Component)
 
 
-def _children[RenderTargetT](
+def _children[RenderTargetT: RenderTarget](
     values: tuple[ChildLike[RenderTargetT], ...], origin: str
 ) -> tuple[LayoutNode[RenderTargetT], ...]:
     collected: list[LayoutNode[RenderTargetT]] = []
     for index, value in enumerate(values):
         if value is None or value is False:
             continue
-        if isinstance(value, str | ResolvedText | Template):
+        if isinstance(value, str | ResolvedText | Message | Template):
             collected.append(Paragraph(_text(value)))
-        elif isinstance(value, _NODE_TYPES):
+        elif is_layout_node(value):
             collected.append(value)
         else:
             _reject(value, origin, index)
@@ -782,7 +810,7 @@ def entities(
     selection: EntityOwnership = NO_ENTITIES,
     minimum: int = 1,
     maximum: int = 1,
-    channel_types: tuple[ChannelType, ...] = (),
+    conversation_types: tuple[ConversationType, ...] = (),
     placeholder: TextValue | None = None,
     flexibility: Flexibility = Flexibility.NORMAL,
 ) -> Entities:
@@ -794,7 +822,7 @@ def entities(
         selection,
         minimum,
         maximum,
-        channel_types,
+        conversation_types,
         _opt_text(placeholder),
         flexibility,
     )

@@ -1,14 +1,12 @@
 """Editable collections retain only route-serializable form-value mappings."""
 
-from collections.abc import Iterable, Mapping
-
-import discord
+from collections.abc import Mapping
 
 import squid_ui as sl
 import squid_ui_widgets as sp
-from squid_ui.semantic import ActionControls, RoutedActionControl, Stack
-from squid_ui_discord import Everyone, MessageRoot
-from squid_ui_discord.testing import commit_render, fake_interaction
+from squid_ui import testing as engine
+from squid_ui.semantic import ActionControl, Choices, FormTrigger, RoutedActionControl
+from squid_ui_widgets import testing as wt
 
 
 def _form() -> sl.forms.FormSpec:
@@ -26,45 +24,17 @@ def _editor(*, minimum: int = 0, maximum: int | None = None, window_size: int = 
     )
 
 
-def _walk(node: object) -> Iterable[object]:
-    yield node
-    if isinstance(node, Stack):
-        for child in node.children:
-            yield from _walk(child)
-    elif isinstance(node, ActionControls):
-        yield from node.items
-
-
-def _text_input(modal: discord.ui.Modal) -> discord.ui.TextInput:
-    label = modal.children[0]
-    assert isinstance(label, discord.ui.Label)
-    assert isinstance(label.component, discord.ui.TextInput)
-    return label.component
-
-
-async def _submit(message_root: MessageRoot, action: str, value: str) -> discord.ui.Modal:
-    opened = fake_interaction()
-    await message_root.dispatch(action, opened)
-    modal = opened.response.send_modal.await_args.args[0]
-    assert isinstance(modal, discord.ui.Modal)
-    _text_input(modal)._value = value  # pyrefly: ignore[missing-attribute]
-    await modal.on_submit(fake_interaction())
-    return modal
-
-
 async def test_add_appends_a_minted_entry_and_reports_the_full_ordered_collection() -> None:
     changes: list[tuple[Mapping[str, object], ...]] = []
 
     async def changed(_event: sp.TransitionEvent[sp.CollectionState], values: tuple[Mapping[str, object], ...]) -> None:
         changes.append(values)
 
-    component = _editor().build_component(on_change=changed)
-    message_root = MessageRoot(component, access=Everyone(), timeout=None)
-    commit_render(message_root)
+    harness = wt.driving(_editor().build_component(on_change=changed))
 
-    await _submit(message_root, "collection.add", "OpenAI")
+    await harness.submit("collection.add", {"name": "OpenAI"})
 
-    assert component.machine_state == sp.CollectionState((sp.CollectionEntry("1", (("name", "OpenAI"),)),), "1")
+    assert harness.state == sp.CollectionState((sp.CollectionEntry("1", (("name", "OpenAI"),)),), "1")
     assert tuple(dict(value) for value in changes[-1]) == ({"name": "OpenAI"},)
 
 
@@ -72,13 +42,14 @@ async def test_edit_prefills_and_retains_the_entry_identity() -> None:
     editor = _editor()
     component = editor.build_component(initial=editor.initial_from(({"name": "Old"},)))
     component.machine_state = editor.transition(component.machine_state, "select", values=("1",))
-    message_root = MessageRoot(component, access=Everyone(), timeout=None)
-    commit_render(message_root)
+    harness = wt.driving(component)
 
-    modal = await _submit(message_root, "collection.edit", "New")
+    prefill = engine.find(harness.nodes, FormTrigger, key="collection.edit").spec.prefill
 
-    assert _text_input(modal).default == "Old"
-    assert component.machine_state.entries == (sp.CollectionEntry("1", (("name", "New"),)),)
+    await harness.submit("collection.edit", {"name": "New"})
+
+    assert prefill == {"name": "Old"}, "the form opens on the selected entry's current values"
+    assert harness.state.entries == (sp.CollectionEntry("1", (("name", "New"),)),)
 
 
 def test_remove_and_add_are_gated_by_minimum_and_maximum() -> None:
@@ -90,17 +61,10 @@ def test_remove_and_add_are_gated_by_minimum_and_maximum() -> None:
     assert editor.transition(selected, "add", submitted={"name": "Extra"}) is selected
     assert editor.form_for(selected, "add") is None
 
-    rendered = editor.build_component(initial=selected).render()
-    add = next(
-        item for item in _walk(rendered) if isinstance(item, sl.semantic.ActionControl) and item.key == "collection.add"
-    )
-    remove = next(
-        item
-        for item in _walk(rendered)
-        if isinstance(item, sl.semantic.ActionControl) and item.key == "collection.remove"
-    )
-    assert not add.available
-    assert not remove.available
+    harness = wt.driving(editor.build_component(initial=selected))
+
+    assert not engine.find(harness.nodes, ActionControl, key="collection.add").available
+    assert not engine.find(harness.nodes, ActionControl, key="collection.remove").available
 
 
 def test_reorder_moves_the_selected_entry_up_and_down() -> None:
@@ -122,8 +86,9 @@ def test_window_pages_past_twenty_five_and_clamps_after_removal() -> None:
     second = editor.transition(state, "page:next")
 
     assert second.page == 1
-    rendered = editor.build_component(initial=second).render()
-    picker = next(item for item in _walk(rendered) if isinstance(item, sl.semantic.Choices))
+    harness = wt.driving(editor.build_component(initial=second))
+    picker = engine.find_all(harness.nodes, Choices)[0]
+
     assert [choice.label for choice in picker.choices] == ["Entry 25"]
 
 
@@ -144,14 +109,8 @@ def test_custom_identity_and_routed_form_parity() -> None:
     )
     state = editor.initial_from(({"name": "Docs"},))
     state = editor.transition(state, "select", values=("docs",))
-    routes: list[sp.TransitionRoute[sp.CollectionState]] = []
-
-    def route(request: sp.TransitionRoute[sp.CollectionState]) -> str:
-        routes.append(request)
-        return f"collection:{request.action}"
-
-    rendered = sp.RouteDriver(route).render(editor, state)
+    render = wt.routed(editor, state)
 
     assert editor.form_for(state, "edit") is not None
-    assert any(isinstance(item, RoutedActionControl) and item.key == "collection.edit" for item in _walk(rendered))
-    assert sp.TransitionRoute("edit", state, "input") in routes
+    assert isinstance(engine.find(render.nodes, RoutedActionControl, key="collection.edit"), RoutedActionControl)
+    assert render.route_for("edit") == sp.TransitionRoute("edit", state, "input")

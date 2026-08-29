@@ -7,12 +7,13 @@ things that live in [one repository](https://github.com/redstone-squid/Redstone-
 ## The Squid UI framework
 
 The reusable UI, reactivity, storage, and replication layers developed for the bot,
-published on PyPI as six packages. Application code writes semantic components; the planner
-produces an immutable, limits-checked scene; adapters draw it as Discord messages or native
-accessible HTML.
+published on PyPI as seven packages. Application code writes semantic components; the planner
+produces an immutable, limits-checked scene; adapters draw it as Discord messages, Slack Block Kit,
+or native accessible HTML.
 
 - [Suite overview](squid-ui.md) — the packages and where to start
 - [Discord quickstart](squid-ui-quickstart.md) — a first live screen
+- [Slack compile quickstart](squid-ui-slack-quickstart.md) — SDK-ready messages and views
 - [API map](squid-ui-api.md) — the supported entry point for each job
 - [Architecture](squid-ui-architecture.md) — planning, ownership, cancellation, durability
 - [Reference](reference/squid-ui.md) — every supported name, per package

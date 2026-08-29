@@ -36,7 +36,6 @@ __all__ = [
     "CardField",
     "CardSection",
     "L",
-    "PagedList",
     "card_node",
     "error_node",
     "info_node",
@@ -121,7 +120,7 @@ Run the command in a direct message, or allow direct messages and retry."""
     unsaved=L(t"Unsaved changes"),
     search=L(t"Search"),
     no_results=L(t"No results"),
-    decided=lambda label: L(t"You chose {label}.", label=label),
+    decided=lambda label: L(t"You chose {label}."),
     add=L(t"Add"),
     edit=L(t"Edit"),
     remove=L(t"Remove"),
@@ -207,52 +206,6 @@ which needs the session registry and the background runner -- is assembled by
 `sd.install` and reached back through `ClientRuntime.of`, so a panel built from a click
 gets the same wiring as one opened through `bot.mounts`.
 """
-
-
-class PagedList(ui.Component[ui.ComponentsV2Target]):
-    """A card holding one page of a pre-rendered list, plus the controls to walk it.
-
-    The reactive page primitive: `page_size` entries
-    per page is a deliberate UX pin, expressed as the engine's count-based `Paginate`.
-    Passing ``None`` lets the engine fill each page from the target's measured text budget.
-    The mount owns paging, its access policy, and expiry. It does not fetch — every caller
-    holds its whole list before rendering.
-    """
-
-    def __init__(
-        self,
-        title: str,
-        entries: Sequence[str],
-        *,
-        empty: str,
-        page_size: int | None = 10,
-        separator: str = "\n\n",
-        accent_colour: int = DISCORD_GREEN,
-    ) -> None:
-        self.title = title
-        self.entries = tuple(entries)
-        self.empty = empty
-        self.page_size = None if page_size is None else max(1, page_size)
-        self.separator = separator
-        self.accent_colour = accent_colour
-
-    def render(self) -> Sequence[ui.LayoutNode[ui.ComponentsV2Target]]:
-        # An entry list that fits on one page produces no pager, and so no controls: a row of
-        # two dead buttons reads as a broken control rather than as an absent one.
-        body: ui.primitives.Node = (
-            ui.primitives.Lines(
-                self.entries,
-                join=self.separator,
-                overflow=ui.primitives.Paginate(key="entries", per=self.page_size, footer=self._page_footer),
-            )
-            if self.entries
-            else ui.primitives.Text(self.empty)
-        )
-        return [ui.primitives.Panel(children=(ui.primitives.Heading(self.title), body), accent=self.accent_colour)]
-
-    def _page_footer(self, page: int, pages: int) -> ui.text.Message:
-        total = len(self.entries)
-        return L(t"Page {page} of {pages} · {total} in total")
 
 
 def _fields(fields: Sequence[CardField]) -> tuple[ui.semantic.Field, ...]:

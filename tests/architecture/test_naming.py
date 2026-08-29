@@ -4,7 +4,7 @@ Lifetime is carried by verbs, not by nouns. What nouns owe instead is consistenc
 needs no dictionary: one meaning per word, and one word per meaning.
 
 The rules here are denylists rather than allowlists, which is deliberate and measured. An
-allowlist of legal suffixes was considered and rejected on the numbers: the six packages
+allowlist of legal suffixes was considered and rejected on the suite measurement: the original six packages
 export 555 classes with 273 distinct last words, 179 of them used exactly once, and
 restricting to multi-word names only brings that to 173 and 102. A closed set would have to
 reject `MessageRoot`, `Chrome`, `Palette` and every authoring node -- `Heading`, `Paragraph`,
@@ -29,6 +29,7 @@ import squid_replication
 import squid_storage
 import squid_ui
 import squid_ui_discord
+import squid_ui_slack
 import squid_ui_widgets
 
 PACKAGE_SOURCE_ROOTS = (
@@ -37,6 +38,7 @@ PACKAGE_SOURCE_ROOTS = (
     Path("packages/squid-replication/src"),
     Path("packages/squid-storage/src"),
     Path("packages/squid-ui-discord/src"),
+    Path("packages/squid-ui-slack/src"),
     Path("packages/squid-ui-widgets/src"),
 )
 
@@ -82,7 +84,7 @@ RETIRED_IDENTIFIER_WORDS = frozenset({"feedback", "locator", "outcome", "protect
 """Unambiguous retired words forbidden in functions, attributes, parameters, and locals.
 
 Unlike `Summary`, `Strategy`, and `Policy`, these have no surviving second meaning in the
-six packages. Checking identifiers closes the gap left by the first class-and-method sweep.
+suite packages. Checking identifiers closes the gap left by the first class-and-method sweep.
 """
 
 RETIRED_IDENTIFIERS = frozenset({"summary_bytes", "summary_payload"})
@@ -178,6 +180,7 @@ AGENT_NOUNS = {
     "Converter": "convert",
     "Driver": "drive",
     "Editor": "edit",
+    "Holder": "hold",
     "Inspector": "inspect",
     "Loader": "load",
     "Manager": "manage",
@@ -211,15 +214,20 @@ NOT_AGENT_NOUNS = frozenset(
         "Author",
         "Cluster",
         "Counter",
+        "Divider",
         # Python's own protocol term: a descriptor is what the object *is*, not a doer.
         "Descriptor",
         "Error",
         "Footer",
+        "Header",
         "Ledger",
         "Never",
         "OpenContext",
         "Owner",
         "Pager",
+        # "One expanded render" is this codebase's own phrase for the noun (see
+        # `runtime.component.ComponentTree`); a Render does not render anything.
+        "Render",
         "Roster",
         "Separator",
         "Trigger",
@@ -238,6 +246,9 @@ SAME_CONCEPT_TWO_LAYERS = {
     # Parallel settled-state vocabularies for the two async primitives.
     "Failed",
     "Pending",
+    # Each transport's complete message kwargs. The package namespace selects the wire
+    # protocol; both values own the same role between drawing and host delivery.
+    "MessagePayload",
     # `sl.scene.X` is what `sl.X` lowers to. The `Scene` prefix that used to keep these
     # apart repeated the import path and said nothing else, so it was dropped; the pairing
     # is the whole point, and `sl.scene` is the namespace that disambiguates.
@@ -275,7 +286,15 @@ frontend and transactional classifications are `InteractionKind` and `ActionPurp
 def _exported_classes() -> dict[str, set[str]]:
     """Every class reachable through a package `__all__`, by short name to defining module."""
     found: dict[str, set[str]] = defaultdict(set)
-    for package in (squid_ui_discord, squid_ui, squid_ui_widgets, squid_reactivity, squid_replication, squid_storage):
+    for package in (
+        squid_ui_discord,
+        squid_ui_slack,
+        squid_ui,
+        squid_ui_widgets,
+        squid_reactivity,
+        squid_replication,
+        squid_storage,
+    ):
         modules: list[ModuleType] = [package]
         modules.extend(
             importlib.import_module(info.name)

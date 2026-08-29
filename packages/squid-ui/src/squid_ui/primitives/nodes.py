@@ -12,7 +12,8 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any, cast, overload
 
 from squid_ui.emoji import EmojiLike, normalize_emoji
-from squid_ui.entity import ChannelType, EntityRef, EntityType, supports_entity
+from squid_ui.entity import ConversationType, EntityRef, EntityType, supports_entity
+from squid_ui.extensions import ExtensionKind
 from squid_ui.forms import FormBinding
 from squid_ui.guards import Guard
 from squid_ui.interactions import (
@@ -25,7 +26,7 @@ from squid_ui.interactions import (
 )
 from squid_ui.primitives.constraints import Alt, Never, Overflow, Spill, Truncate
 from squid_ui.primitives.styles import ActionStyle, Color
-from squid_ui.target_types import ClassicTarget, ComponentsV2Target, DiscordTarget, Renderable
+from squid_ui.target_types import ClassicTarget, ComponentsV2Target, DiscordTarget, Renderable, RenderTarget
 from squid_ui.temporal import ZonedDateTime
 from squid_ui.text import TextLike
 
@@ -227,15 +228,15 @@ class EntitySelect(Renderable[DiscordTarget]):
     key: str
     placeholder: TextLike | None = None
     default_values: tuple[EntityRef, ...] = ()
-    channel_types: tuple[ChannelType, ...] = ()
+    conversation_types: tuple[ConversationType, ...] = ()
     min_values: int = 1
     max_values: int = 1
     disabled: bool = False
     mode: ActionMode = ActionMode.EXCLUSIVE
 
     def __post_init__(self) -> None:
-        if self.channel_types and self.entity_type is not EntityType.CHANNEL:
-            message = "channel_types is only valid for channel entity selects"
+        if self.conversation_types and self.entity_type is not EntityType.CONVERSATION:
+            message = "conversation_types is only valid for conversation entity selects"
             raise ValueError(message)
         if any(not supports_entity(self.entity_type, value.kind) for value in self.default_values):
             message = f"default value is incompatible with {self.entity_type.value} entity select"
@@ -267,12 +268,13 @@ class RawItem(Renderable[DiscordTarget]):
 
 
 @dataclass(frozen=True, slots=True)
-class Boundary(Renderable[DiscordTarget]):
+class Boundary(Renderable[RenderTarget]):
     """A keyed component boundary expanded before portable planning.
 
-    Named for what it is rather than what it draws to. It has never had anything to do with
-    a Discord embed, and a node called ``Embed`` in the same union as real embed rendering
-    is a trap for every future reader.
+    Named for what it is rather than what it draws to. The runtime removes it before planning,
+    so it is portable even when the child it protects is target-specific. The child component's
+    target parameter carries that restriction; assigning one to this transient marker as well
+    would erase it when the marker stores the component as an opaque object.
     """
 
     component: object
@@ -383,12 +385,12 @@ class Card(Renderable[ClassicTarget]):
 
 
 @dataclass(frozen=True, slots=True)
-class Extension[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
+class Extension[PayloadT = object, RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
     """Target extension with a mandatory portable fallback."""
 
-    kind: str
+    kind: ExtensionKind[PayloadT, Any]
     version: int
-    payload: object
+    payload: PayloadT
     fallback: Node
 
 
@@ -562,8 +564,8 @@ class Variants[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
     @overload
     def of[FirstT, SecondT](
         cls,
-        first: PrimitiveNode[FirstT] | Variant[FirstT],
-        second: PrimitiveNode[SecondT] | Variant[SecondT],
+        first: Renderable[FirstT] | Variant[FirstT],
+        second: Renderable[SecondT] | Variant[SecondT],
         /,
         *,
         priority: int = 0,
@@ -573,9 +575,9 @@ class Variants[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
     @overload
     def of[FirstT, SecondT, ThirdT](
         cls,
-        first: PrimitiveNode[FirstT] | Variant[FirstT],
-        second: PrimitiveNode[SecondT] | Variant[SecondT],
-        third: PrimitiveNode[ThirdT] | Variant[ThirdT],
+        first: Renderable[FirstT] | Variant[FirstT],
+        second: Renderable[SecondT] | Variant[SecondT],
+        third: Renderable[ThirdT] | Variant[ThirdT],
         /,
         *,
         priority: int = 0,
@@ -585,10 +587,10 @@ class Variants[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
     @overload
     def of[FirstT, SecondT, ThirdT, FourthT](
         cls,
-        first: PrimitiveNode[FirstT] | Variant[FirstT],
-        second: PrimitiveNode[SecondT] | Variant[SecondT],
-        third: PrimitiveNode[ThirdT] | Variant[ThirdT],
-        fourth: PrimitiveNode[FourthT] | Variant[FourthT],
+        first: Renderable[FirstT] | Variant[FirstT],
+        second: Renderable[SecondT] | Variant[SecondT],
+        third: Renderable[ThirdT] | Variant[ThirdT],
+        fourth: Renderable[FourthT] | Variant[FourthT],
         /,
         *,
         priority: int = 0,
@@ -598,11 +600,11 @@ class Variants[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
     @overload
     def of[FirstT, SecondT, ThirdT, FourthT, FifthT](
         cls,
-        first: PrimitiveNode[FirstT] | Variant[FirstT],
-        second: PrimitiveNode[SecondT] | Variant[SecondT],
-        third: PrimitiveNode[ThirdT] | Variant[ThirdT],
-        fourth: PrimitiveNode[FourthT] | Variant[FourthT],
-        fifth: PrimitiveNode[FifthT] | Variant[FifthT],
+        first: Renderable[FirstT] | Variant[FirstT],
+        second: Renderable[SecondT] | Variant[SecondT],
+        third: Renderable[ThirdT] | Variant[ThirdT],
+        fourth: Renderable[FourthT] | Variant[FourthT],
+        fifth: Renderable[FifthT] | Variant[FifthT],
         /,
         *,
         priority: int = 0,
@@ -610,10 +612,10 @@ class Variants[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
 
     @classmethod
     @overload
-    def of(cls, *rungs: PrimitiveNode[Any] | Variant[Any], priority: int = 0) -> Variants[Any]: ...
+    def of(cls, *rungs: Renderable[Any] | Variant[Any], priority: int = 0) -> Variants[Any]: ...
 
     @classmethod
-    def of(cls, *rungs: PrimitiveNode[Any] | Variant[Any], priority: int = 0) -> Variants[Any]:
+    def of(cls, *rungs: Renderable[Any] | Variant[Any], priority: int = 0) -> Variants[Any]:
         """Build a ladder from bare nodes, wrapping each in an exact, capability-free Variant."""
         return cls(
             tuple(rung if isinstance(rung, Variant) else Variant((cast(Node, rung),)) for rung in rungs),
@@ -654,8 +656,6 @@ type Node = (
     | Extension
     | Variants
 )
-
-type PrimitiveNode[RenderTargetT = DiscordTarget] = Renderable[RenderTargetT]
 
 
 def as_nodes(rendered: Node | Sequence[Node]) -> list[Node]:

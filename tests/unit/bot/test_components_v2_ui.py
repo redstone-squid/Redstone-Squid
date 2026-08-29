@@ -11,9 +11,8 @@ import pytest
 
 import squid_ui_discord as sd
 from squid.bot.submission.build_handler import BuildHandler
-from squid.bot.submission.search_view import SearchResultsView
-from squid.bot.submission.ui.components import get_text_input
-from squid.bot.submission.ui.views import BuildEditComponent
+from squid.bot.submission.search_view import SearchScreen
+from squid.bot.submission.ui.views import EDIT_FIELDS, BuildEditScreen
 from squid.builds.application import BuildService
 from squid.builds.domain import Build, BuildLink, DoorBuild, SourceMessage, Status
 from squid.search.application import SearchService
@@ -67,8 +66,15 @@ async def test_build_handler_renders_composable_v2_card(display_build: Build) ->
 
 
 async def test_build_editor_uses_semantic_state_and_forms(display_build: Build) -> None:
-    field = get_text_input(display_build, "version_spec")
-    component = BuildEditComponent(display_build, cast(BuildService, object()), [field])
+    field = next(spec for spec in EDIT_FIELDS if spec.patch_key == "version_spec").bind(display_build)
+    component = BuildEditScreen(
+        display_build,
+        cast(BuildService, object()),
+        [field],
+        authorize=AsyncMock(return_value=True),
+        render_build=AsyncMock(),
+        refresh_posts=AsyncMock(),
+    )
 
     # `projection` is an atomic resource, so reading its status aborts a discovery render
     # until it has settled. A mount settles it before rendering; calling `render()` straight
@@ -79,6 +85,12 @@ async def test_build_editor_uses_semantic_state_and_forms(display_build: Build) 
     assert component.max_pages == 1
     assert "Edit this section" in str(component.render())
     assert component._current()[0] is display_build
+
+
+def test_build_editor_declares_keyed_topic_following_policy() -> None:
+    assert BuildEditScreen.session_name == "build-edit"
+    assert BuildEditScreen.timeout == 900
+    assert BuildEditScreen.follow_topics is True
 
 
 @pytest.mark.asyncio
@@ -124,7 +136,7 @@ def test_search_results_use_named_selection_and_direct_build_action() -> None:
         next=None,
         prev=None,
     )
-    view = SearchResultsView(cast(SearchService, object()), SearchRequest("door"), page, author_id=123)
+    view = SearchScreen(cast(SearchService, object()), SearchRequest("door"), page)
 
     bot = make_layout_bot()
     message_root = bot.client_runtime.mount(view, access=sd.Owner(123), timeout=180)
@@ -148,7 +160,7 @@ def test_search_results_preserve_page_warnings_without_refetching_the_initial_pa
         prev=None,
         warnings=("Semantic fallback used",),
     )
-    view = SearchResultsView(cast(SearchService, service), SearchRequest("door"), page, author_id=123)
+    view = SearchScreen(cast(SearchService, service), SearchRequest("door"), page)
 
     bot = make_layout_bot()
     payload = commit_render(bot.client_runtime.mount(view, access=sd.Owner(123), timeout=180)).to_components()
@@ -160,7 +172,7 @@ def test_search_results_preserve_page_warnings_without_refetching_the_initial_pa
 @pytest.mark.asyncio
 async def test_search_timeout_disables_bound_controls() -> None:
     page = SearchPage((BuildSearchHit("8", "Fast door", "confirmed"),), total=1, next=None, prev=None)
-    view = SearchResultsView(cast(SearchService, object()), SearchRequest("door"), page, author_id=123)
+    view = SearchScreen(cast(SearchService, object()), SearchRequest("door"), page)
     bot = make_layout_bot()
     message_root = bot.client_runtime.mount(view, access=sd.Owner(123), timeout=180)
     message = fake_message()

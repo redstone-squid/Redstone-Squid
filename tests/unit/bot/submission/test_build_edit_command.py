@@ -9,7 +9,7 @@ import discord
 
 import squid_ui as sl
 from squid.bot.submission.edit import BuildEditCommands
-from squid.bot.submission.ui.views import BuildEditComponent
+from squid.bot.submission.ui.views import BuildEditScreen
 from squid.builds.domain import DoorBuild, OtherBuild, Status
 from squid.topics import resource_topic
 from tests.helpers.discord import make_layout_bot
@@ -102,7 +102,7 @@ def _cog(build: Any, *, allowed: bool = True, account_id: int | None = 1) -> Bui
 
 async def _run(cog: BuildEditCommands[Any], **kwargs: Any) -> discord.Interaction[Any]:
     interaction = _interaction(cog.bot)
-    await BuildEditCommands.edit_build.callback(cog, interaction, build_id=1, **kwargs)
+    await BuildEditCommands.edit_build(cog, interaction, build_id=1, **kwargs)
     return interaction
 
 
@@ -110,13 +110,13 @@ def _sent_view(interaction: discord.Interaction[Any]) -> Any:
     return cast(Any, interaction).followup.sent[-1]["view"]
 
 
-def _component(view: Any) -> BuildEditComponent | None:
+def _component(view: Any) -> BuildEditScreen | None:
     message_root = getattr(view, "_root", None)
     component = getattr(message_root, "component", None)
-    return component if isinstance(component, BuildEditComponent) else None
+    return component if isinstance(component, BuildEditScreen) else None
 
 
-def _staged(component: BuildEditComponent) -> dict[str, Any]:
+def _staged(component: BuildEditScreen) -> dict[str, Any]:
     return {item.attribute: item.actual_value for item in component.items if item.modified}
 
 

@@ -146,7 +146,7 @@ class _V2Converter:
                     action=self.bindings.action(node),
                     placeholder=resolved_optional_text(node.placeholder),
                     default_values=node.default_values,
-                    channel_types=node.channel_types,
+                    conversation_types=node.conversation_types,
                     min_values=node.min_values,
                     max_values=node.max_values,
                     disabled=node.disabled,
@@ -229,7 +229,7 @@ def _lower(
             case Budget(children=children) | Break(children=children):
                 lowered.append(replace(node, children=_lower(children, target, limits)))
             case Extension(kind=kind, version=version, payload=payload, fallback=fallback):
-                adapter = target.extensions.get(kind)
+                adapter = target.extensions.get(kind.name)
                 if adapter is None:
                     lowered.extend(_lower((fallback,), target, limits))
                     continue
@@ -237,7 +237,7 @@ def _lower(
                 component_cost = prepared.cost.get(Axis.COMPONENTS)
                 text_cost = prepared.cost.get(Axis.DISPLAY_TEXT)
                 if component_cost < 1 or text_cost < 0:
-                    message = f"extension adapter {kind!r} returned an invalid resource cost"
+                    message = f"extension adapter {kind.name!r} returned an invalid resource cost"
                     raise LayoutInvariantError(message)
                 resource = prepared.resource
                 lowered.append(
@@ -245,7 +245,7 @@ def _lower(
                         factory=lambda resource=resource: resource,
                         text_cost=text_cost,
                         component_cost=component_cost,
-                        kind=kind,
+                        kind=kind.name,
                         version=version,
                         payload=prepared.scene_payload,
                     )
@@ -379,7 +379,7 @@ class V2Dialect:
             Capability.ACTIONS_BUTTONS,
             Capability.ACTIONS_DISCORD_PREMIUM,
             Capability.ACTIONS_SELECT,
-            Capability.ACTIONS_DISCORD_ENTITY,
+            Capability.ACTIONS_ENTITY,
             Capability.FORMS_DISCORD_ENTITY,
             Capability.FORMS_DISCORD_FILE,
             Capability.FORMS_DISCORD_CHECKBOX_GROUP,

@@ -5,12 +5,10 @@ import logging
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
-import anyio
 import discord
 from discord import Message, app_commands
 from discord.ext.commands import Cog
 
-import squid_ui as sl
 import squid_ui_discord as sd
 from squid.accounts.domain import IdentityProvider
 from squid.bot.consent import ensure_consented_account
@@ -20,8 +18,7 @@ from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.ingestion import ingest_message_bundle
 from squid.bot.submission.media import CatboxMirror
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
-from squid.bot.submission.ui.components import EphemeralBuildEditButton
-from squid.bot.submission.ui.views import SubmissionFormComponent
+from squid.bot.submission.ui.views import SubmissionOutcome, SubmissionScreen
 from squid.bot.ui import error_node, text_node
 from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.bot.utils.permissions import enforce
@@ -69,14 +66,14 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         restrictions=suggests("approved_restrictions", multi=True),
         creators=suggests("creators", multi=True),
     )
-    @BuildCommandGroup.build_hybrid_group.app_command.command(name="submit")  # type: ignore
+    @BuildCommandGroup.build_group.command(name="submit")
     @app_commands.describe(
         door_size=app_commands.locale_str(_("The door opening, e.g. `2x2`. Width x height (x depth).")),
         door_type=app_commands.locale_str(_("Door, Skydoor, or Trapdoor.")),
         pattern=app_commands.locale_str(_("Pattern types, comma separated. For example: full lamp, funnel.")),
         build_size=app_commands.locale_str(_("The whole build, e.g. `5x7x4`. Width x height (x depth).")),
         versions=app_commands.locale_str(_("Versions the build works in, like `1.17 - 1.18.1, 1.20+`.")),
-        restrictions=app_commands.locale_str(_("Comma separated, e.g. `Seamless, Observerless`. See `/info docs`.")),
+        restrictions=app_commands.locale_str(_("Comma separated, e.g. `Seamless, Observerless`. See `/help`.")),
         creators=app_commands.locale_str(_("In-game names of the creator(s), comma separated.")),
         notes=app_commands.locale_str(_("Anything staff should know about the build.")),
         first_attachment=app_commands.locale_str(_("An image, video, or schematic; sorted out automatically.")),
@@ -178,78 +175,26 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             measured = analyses[0][1].analysis.metrics.dimensions
             draft.dimensions = (measured.width, measured.height, measured.length)
 
-        submitted: Build | None = None
-
-        async def persist_draft() -> None:
+        async def persist_draft() -> SubmissionOutcome:
             """Commit the draft from inside the form's submit button.
 
             Anything raised here leaves the workspace message alive and clickable, so the user
             retries from the draft they already filled in instead of rerunning the command.
             """
-            nonlocal submitted
             build = draft.finalize()
             self._note_dimension_mismatch(build, analyses)
             await self._note_schematic_duplicates(build, analyses)
             await self.builds.submit(build, submitter_account_id=uploader_account_id, ai_generated=False)
             await self._record_analyses(build, analyses, uploader_account_id=uploader_account_id)
-            submitted = build
+            node = await self.bot.for_build(build).render_node()
+            await self.bot.for_build(build).post_for_voting()
+            return SubmissionOutcome(build, node)
 
-        component = SubmissionFormComponent(
+        await SubmissionScreen(
             draft,
             self.builds,
-            author_id=interaction.user.id,
             on_submit=persist_draft,
-        )
-        message_root = invocation.runtime.mount(
-            component,
-            access=sd.Owner(interaction.user.id),
-            localization=invocation.localization,
-            timeout=300,
-        )
-        component._root = message_root
-        delivered = await message_root.send(invocation.destination("personal", wait=True))
-        # `wait=True` fetches the message back, and a delivery that produced none would have
-        # raised. The form edits this message three times below, so it needs the handle.
-        assert isinstance(delivered, sd.delivery.Delivered), "the interaction response cannot be abandoned"
-        workspace_message = delivered.result.message
-        assert workspace_message is not None, "a waited response always hands back its message"
-        await component.wait()
-        if component.value is None:
-            expired = invocation.render(text_node(t(locale, _("Submission expired. Nothing was saved."))))
-            await sd.delivery.handle_for(workspace_message, mode=expired.mode).write(expired)
-            return
-        if component.value is False:
-            cancelled = invocation.render(text_node(t(locale, _("Submission cancelled. Nothing was saved."))))
-            await sd.delivery.handle_for(workspace_message, mode=cancelled.mode).write(cancelled)
-            return
-
-        assert submitted is not None, "The form only reports success once the build is persisted."
-        build = submitted
-
-        heading = t(
-            locale,
-            _("## Submitted for review\nSubmission ID: `{id}`\nStaff can now review and vote on this build."),
-            id=build.id,
-        )
-        preview = invocation.render(
-            sl.primitives.Text(heading),
-            await self.bot.for_build(build).render_node(),
-            sl.primitives.Row(
-                (
-                    sl.primitives.RawItem(
-                        lambda: EphemeralBuildEditButton(build),
-                        kind="discord.item",
-                        version=1,
-                    ),
-                ),
-            ),
-        )
-        async with anyio.create_task_group() as tasks:
-            tasks.start_soon(
-                sd.delivery.handle_for(workspace_message, mode=preview.mode).write,
-                preview,
-            )
-            tasks.start_soon(self.bot.for_build(build).post_for_voting)
+        ).show(interaction, wait=True)
 
     async def _analyse_attachments(
         self, pending: Sequence[tuple[str, bytes]], *, uploader_account_id: int

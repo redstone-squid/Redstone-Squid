@@ -1,4 +1,10 @@
-"""Resource-backed domain entity lookup."""
+"""SearchPicker: a query resource loaded and paged through a live mount.
+
+Stays with the adapter for the same reason `test_source_ranked_list.py` does. What this widget
+is *about* is the loading pump -- a query settles, a window arrives, a stale completion is
+dropped -- and none of that runs until a mount is driving the resource. Reaching for
+`results._load()` from the widgets package would test the harness rather than the widget.
+"""
 
 from dataclasses import dataclass
 

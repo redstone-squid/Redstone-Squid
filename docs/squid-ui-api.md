@@ -12,6 +12,9 @@ composition and adapter contracts.
 | Encode a scene | `squid_ui.scene.Codec` |
 | Draw a native HTML scene | `squid_ui.html.Renderer` |
 | Preview Components V2 as HTML | `squid_ui.html.DiscordPreviewRenderer` |
+| Compile a Slack message | `squid_ui_slack.SLACK_MESSAGE_SDK343`, `MessageRenderer` |
+| Compile a Slack modal | `squid_ui_slack.SLACK_MODAL_SDK343`, `ModalRenderer` |
+| Compile an App Home view | `squid_ui_slack.SLACK_HOME_SDK343`, `HomeRenderer` |
 | Install a Discord host | `squid_ui_discord.install`, `ClientRuntime` |
 | Handle one Discord event | `squid_ui_discord.Invocation` |
 | Declare reusable opening policy | `squid_ui_discord.Screen` |
@@ -29,6 +32,7 @@ composition and adapter contracts.
 Each package has a curated reference page rendering every supported name:
 [squid-ui](reference/squid-ui.md), [squid-ui-widgets](reference/squid-ui-widgets.md),
 [squid-ui-discord](reference/squid-ui-discord.md),
+[squid-ui-slack](reference/squid-ui-slack.md),
 [squid-reactivity](reference/squid-reactivity.md),
 [squid-storage](reference/squid-storage.md), and
 [squid-replication](reference/squid-replication.md).
@@ -39,6 +43,21 @@ Names in each package's `__all__` are the supported alpha surface and are snapsh
 that is importable but absent from `__all__` is internal unless its documentation explicitly says
 otherwise. Scene protocol 1 has a published [JSON Schema](schema/scene-v1.schema.json); callbacks,
 native Discord objects, and expiring runtime authority never enter that protocol.
+
+## Slack Block Kit
+
+```python
+import squid_ui as sl
+import squid_ui_slack as ss
+
+planned = sl.planning.plan(sl.paragraph("Ready for review."), target=ss.SLACK_MESSAGE_SDK343)
+payload = ss.MessageRenderer().draw(planned.scene, plan=planned)
+await client.chat_postMessage(channel=channel_id, **payload.to_kwargs())
+```
+
+The Slack package ends at SDK models. The host owns the Slack client, acknowledgement deadlines,
+action and view-submission listeners, routing, retries, and delivery. Action IDs match keys in
+`planned.bindings`; modal callbacks and fields match `planned.form_bindings`.
 
 ## Native HTML
 

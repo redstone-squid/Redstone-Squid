@@ -9,7 +9,7 @@ from collections.abc import Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from typing import Any, assert_type
 
-from squid_ui import Component, resource, state
+from squid_ui import Component, ContextKey, paragraph, resource, state
 from squid_ui.runtime import (
     AtomicResource,
     AtomicResourceStatus,
@@ -23,6 +23,7 @@ from squid_ui.runtime import (
     addresses,
 )
 from squid_ui.runtime.topics import LocalTopicBus
+from squid_ui.semantic import Paragraph
 
 bus = LocalTopicBus()
 
@@ -71,6 +72,9 @@ class ResourceTypes(Component):
     async def visible(self) -> int:
         return 1
 
+    def render(self) -> Paragraph:
+        return paragraph("resources")
+
 
 assert_type(ResourceTypes().atomic, AtomicResource[int])
 assert_type(ResourceTypes().atomic.status, AtomicResourceStatus[int])
@@ -79,3 +83,12 @@ assert_type(ResourceTypes().visible.status, ResourceStatus[int])
 assert_type(Ready[int](1), Ready[int])
 assert_type(Failed[int](ValueError()), Failed[int])
 assert_type(Pending[int](), Pending[int])
+
+text_context = ContextKey[str]("text")
+
+
+class ContextTypes(Component):
+    def render(self):
+        assert_type(self.inject(text_context), str)
+        assert_type(self.inject(text_context, "fallback"), str)
+        return ()

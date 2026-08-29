@@ -98,7 +98,7 @@ from squid_ui_discord.message_payload import (
 )
 from squid_ui_discord.message_root import (
     MessageRoot,
-    current_message_root,
+    owner_message_root,
 )
 from squid_ui_discord.message_root_contracts import (
     DEFAULT_MESSAGE_ROOT_CONFIG,
@@ -150,7 +150,7 @@ from squid_ui_discord.runtime import (
     install,
 )
 from squid_ui_discord.screen import Screen
-from squid_ui_discord.session_specs import MessageRootOptionsResolver, OpenContext, ScopeKind, SessionSpec
+from squid_ui_discord.session_specs import OpenContext, ScopeKind, SessionOptions, SessionOptionsResolver, SessionSpec
 from squid_ui_discord.sessions import (
     SessionKey,
     SessionManager,
@@ -224,7 +224,6 @@ __all__ = [
     "MessageRootDefaults",
     "MessageRootFactory",
     "MessageRootOptions",
-    "MessageRootOptionsResolver",
     "MessageRootScheduler",
     "MessageRootSchedulerSnapshot",
     "OpenContext",
@@ -249,6 +248,8 @@ __all__ = [
     "Screen",
     "SessionKey",
     "SessionManager",
+    "SessionOptions",
+    "SessionOptionsResolver",
     "SessionSpec",
     "StackNavigator",
     "SuccessRenderer",
@@ -267,7 +268,6 @@ __all__ = [
     "conformance",
     "contribute",
     "current_invocation",
-    "current_message_root",
     "deliver_to",
     "delivery",
     "devtools",
@@ -291,6 +291,7 @@ __all__ = [
     "native",
     "navigation",
     "navigation_controls",
+    "owner_message_root",
     "render_item",
     "render_message",
     "render_static",

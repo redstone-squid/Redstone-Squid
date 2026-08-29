@@ -67,6 +67,7 @@ from squid_ui.runtime import (
 )
 from squid_ui.runtime.reactivity import _CURRENT
 from squid_ui.semantic import Paragraph
+from squid_ui.testing import text_component
 from squid_ui.text import Localization, Message
 from squid_ui_discord import (
     Everyone,
@@ -78,6 +79,7 @@ from squid_ui_discord import (
     Users,
     delivery,
 )
+from squid_ui_discord import testing as sd
 from squid_ui_discord.access import Allowed, Check, Denied
 from squid_ui_discord.message_root_candidates import _BusyPaint
 from squid_ui_discord.message_root_contracts import MessageRootStatus
@@ -434,18 +436,8 @@ class Panel(Component[sl.ComponentsV2Target]):
         self.show_child = True
 
 
-def _http_error() -> discord.HTTPException:
-    response = cast(Any, SimpleNamespace(status=500, reason="Internal Server Error"))
-    return discord.HTTPException(response, "edit refused")
-
-
-def _stale_http_error() -> discord.HTTPException:
-    response = cast(Any, SimpleNamespace(status=404, reason="Not Found"))
-    return discord.HTTPException(response, {"code": 10015, "message": "Unknown Webhook"})
-
-
 async def _refuse_edit(*args: Any, **kwargs: Any) -> None:
-    raise _http_error()
+    raise sd.http_error(message="edit refused")
 
 
 class _RefusingHandle:
@@ -459,7 +451,7 @@ class _RefusingHandle:
         return False
 
     async def write(self, *args: Any, **kwargs: Any) -> None:
-        raise _http_error()
+        raise sd.http_error(message="edit refused")
 
 
 def _refuse_handle(*args: Any, **kwargs: Any) -> _RefusingHandle:
@@ -721,7 +713,7 @@ class TestRenderAndWire:
         view = commit_render(message_root)
         button = _button(view)
         assert button.custom_id is not None and button.custom_id.startswith(f"ctl:{message_root.id}:1:inc")
-        assert "inc" in message_root._handlers
+        assert "inc" in message_root.snapshot().handler_keys
         assert_within_limits(view)
 
     def test_render_generations_have_distinct_control_ids(self):
@@ -1231,7 +1223,7 @@ class TestActionPolicy:
         component = Counter()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
         commit_render(message_root)
-        stale_generation = message_root._generation
+        stale_generation = message_root.generation
         commit_render(message_root)
         interaction = fake_interaction()
 
@@ -1259,7 +1251,7 @@ class TestActionPolicy:
         component = Rebased()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
         commit_render(message_root)
-        stale_generation = message_root._generation
+        stale_generation = message_root.generation
         component.current = True
         commit_render(message_root)
 
@@ -1672,7 +1664,7 @@ class TestActionMiddleware:
         await picker.dispatch("pick", fake_interaction(), ["a"])
 
         submit = AsyncMock()
-        form_root = MessageRoot(Component(), access=Everyone(), middleware=(middleware,), timeout=None)
+        form_root = MessageRoot(text_component(), access=Everyone(), middleware=(middleware,), timeout=None)
         spec = FormSpec("Rename", (TextField(key="name", label="Name"),))
         await form_root.dispatch_submit("rename", fake_interaction(), spec, {"name": "Ada"}, submit)
 
@@ -1710,7 +1702,7 @@ class TestErrors:
 
         spec = FormSpec("Broken", (Broken(key="broken", label="Broken"),))
         hook = AsyncMock()
-        message_root = MessageRoot(Component(), access=Everyone(), timeout=None, on_error=hook)
+        message_root = MessageRoot(text_component(), access=Everyone(), timeout=None, on_error=hook)
 
         await message_root.dispatch_submit("f", fake_interaction(), spec, {"broken": "x"}, AsyncMock())
 
@@ -1742,7 +1734,7 @@ class TestErrors:
 
         assert component.count == 0
         assert component.entries == ()
-        assert not message_root._dirty
+        assert not message_root.pending
 
 
 class TestSelect:
@@ -1869,8 +1861,8 @@ class TestDeliveryAtomicity:
 
         message_root._stage_view()
 
-        assert message_root._handlers == {}
-        assert message_root._generation == 0
+        assert message_root.snapshot().handler_keys == ()
+        assert message_root.generation == 0
         assert message_root._assets == ()
 
     async def test_failed_edit_keeps_the_visible_generation_live(self, monkeypatch):
@@ -1881,7 +1873,10 @@ class TestDeliveryAtomicity:
         await message_root.dispatch("__cursor_next.entries", fake_interaction())
         assert message_root.presentation.cursor("entries").position.offset == 1
 
-        live_generation = message_root._generation
+        live_generation = message_root.generation
+        # The private mapping, deliberately: the claim below is that a failed refresh left this
+        # very object in place, and `snapshot().handler_keys` builds a fresh tuple every call,
+        # so it can only ever say the keys are equal -- the weaker half of what is asserted.
         live_handlers = message_root._handlers
         live_strategies = dict(message_root.presentation.strategies)
         panel.entries = (*panel.entries, "entry 6")  # a new fingerprint: the staged render resets the cursor
@@ -1891,9 +1886,9 @@ class TestDeliveryAtomicity:
         with pytest.raises(discord.HTTPException):
             await message_root.refresh(fake_interaction())
 
-        assert message_root._generation == live_generation
+        assert message_root.generation == live_generation
         assert message_root._handlers is live_handlers
-        assert message_root._dirty
+        assert message_root.pending
         assert mounted == []
         assert message_root.presentation.cursor("entries").position.offset == 1
         # Planning only reads the session, so a discarded candidate leaves behind none of
@@ -1905,7 +1900,7 @@ class TestDeliveryAtomicity:
         panel = Panel(mounted)
         message_root = MessageRoot(panel, access=Everyone(), timeout=None)
         commit_render(message_root)
-        live_generation = message_root._generation
+        live_generation = message_root.generation
         panel.show_child = True
 
         monkeypatch.setattr(delivery, "handle_from", _refuse_handle)
@@ -1919,8 +1914,8 @@ class TestDeliveryAtomicity:
         await message_root.dispatch("add", interaction, generation=live_generation)
 
         assert panel.entries[-1] == "added"
-        assert message_root._generation > live_generation
-        assert not message_root._dirty
+        assert message_root.generation > live_generation
+        assert not message_root.pending
         assert mounted == ["child"]
         interaction.response.edit_message.assert_awaited_once()
 
@@ -1928,22 +1923,22 @@ class TestDeliveryAtomicity:
         component = Counter()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
         message: Any = fake_message()
-        message.edit = AsyncMock(side_effect=_http_error())
+        message.edit = AsyncMock(side_effect=sd.http_error(message="edit refused"))
         await message_root.send(delivered_to(message))
         component.count = 7
-        live_generation = message_root._generation
+        live_generation = message_root.generation
 
         with pytest.raises(discord.HTTPException):
             await message_root.refresh()
 
-        assert message_root._generation == live_generation
-        assert message_root._dirty
+        assert message_root.generation == live_generation
+        assert message_root.pending
 
         message.edit = AsyncMock(return_value=message)
         await message_root.refresh()
 
-        assert message_root._generation > live_generation
-        assert not message_root._dirty
+        assert message_root.generation > live_generation
+        assert not message_root.pending
 
     async def test_refresh_commit_preserves_invalidation_during_delivery(self):
         component = Counter()
@@ -2162,8 +2157,8 @@ class TestSend:
         assert isinstance(sent, delivery.Delivered)
         assert sent.settled
         assert sent.result.message is message
-        assert "inc" in message_root._handlers
-        assert message_root._generation == 1
+        assert "inc" in message_root.snapshot().handler_keys
+        assert message_root.generation == 1
         assert not message_root.pending
         assert message_root.handle is not None
         assert message_root.handle.permanent
@@ -2219,7 +2214,7 @@ class TestSend:
         # Delivered, so the render is live -- but nothing came back to write through.
         assert isinstance(sent, delivery.Delivered)
         assert sent.result.message is None
-        assert message_root._generation == 1
+        assert message_root.generation == 1
         assert not message_root.pending
         assert message_root.handle is None
 
@@ -2257,8 +2252,8 @@ class TestSend:
 
         # Nothing reached Discord, so nothing is live: no handlers, no handle, still dirty.
         assert isinstance(sent, delivery.Abandoned)
-        assert message_root._generation == 0
-        assert message_root._handlers == {}
+        assert message_root.generation == 0
+        assert message_root.snapshot().handler_keys == ()
         assert message_root.handle is None
         assert message_root.pending
 
@@ -2267,7 +2262,7 @@ class TestSend:
         assert isinstance(resent, delivery.Delivered)
         assert resent.result.message is message
         # Generation 2, not 1: the abandoned candidate does not hand its control ids on.
-        assert message_root._generation == 2
+        assert message_root.generation == 2
         assert not message_root.pending
 
     async def test_a_failed_delivery_propagates_and_the_next_send_recovers(self):
@@ -2277,17 +2272,17 @@ class TestSend:
         panel.show_child = True
 
         with pytest.raises(discord.HTTPException):
-            await message_root.send(_Destination(raises=_http_error()))
+            await message_root.send(_Destination(raises=sd.http_error(message="edit refused")))
 
-        assert message_root._generation == 0
-        assert message_root._handlers == {}
+        assert message_root.generation == 0
+        assert message_root.snapshot().handler_keys == ()
         assert message_root.pending
         # A candidate that was never delivered must not fire its lifecycle hooks.
         assert mounted == []
 
         await message_root.send(_Destination(fake_message()))
 
-        assert message_root._generation > 0
+        assert message_root.generation > 0
         assert not message_root.pending
         assert mounted == ["child"]
 
@@ -2329,7 +2324,7 @@ class TestSend:
         component = FreshHandler()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
         await message_root.send(_Destination(message))
-        generation = message_root._generation
+        generation = message_root.generation
         view = message_root._view
         component.version = 1
         message_root.invalidate()
@@ -2338,7 +2333,7 @@ class TestSend:
 
         assert result is PresentationStatus.UNCHANGED
         message.edit.assert_not_awaited()
-        assert message_root._generation == generation
+        assert message_root.generation == generation
         assert message_root._view is view
 
         await message_root.dispatch("same", fake_interaction(), generation=generation)
@@ -2390,7 +2385,7 @@ class TestSend:
         assert await message_root.refresh() is PresentationStatus.UNCHANGED
 
         interaction = fake_interaction()
-        await message_root.dispatch("same", interaction, generation=message_root._generation)
+        await message_root.dispatch("same", interaction, generation=message_root.generation)
 
         assert component.invoked == 0
         interaction.response.send_message.assert_awaited_once()
@@ -2430,9 +2425,9 @@ class TestStateDescriptor:
         component = Counter()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
         commit_render(message_root)
-        assert not message_root._dirty
+        assert not message_root.pending
         component.count = 3
-        assert message_root._dirty
+        assert message_root.pending
 
     def test_a_factory_runs_once_per_instance(self):
         class Collection(Component[sl.ComponentsV2Target]):
@@ -2447,7 +2442,7 @@ class TestStateDescriptor:
 
         first.entries = ("one",)
 
-        assert message_root._dirty
+        assert message_root.pending
         assert second.entries == ()
 
     def test_computed_values_cache_until_state_changes(self):
@@ -2786,7 +2781,7 @@ class TestEditHandles:
         # Not an error and not the end of the mount: the message is simply out of reach
         # until someone clicks it again.
         assert message_root.pending
-        assert not message_root._finished
+        assert not message_root.finished
 
         interaction = fake_interaction()
         await message_root.dispatch("inc", interaction)
@@ -2924,7 +2919,7 @@ class TestDestinations:
     async def test_stale_public_response_drops_then_renews_for_the_pending_render(self):
         interaction = fake_interaction()
         interaction.original_response.return_value = fake_message(ephemeral=False)
-        interaction.edit_original_response.side_effect = _stale_http_error()
+        interaction.edit_original_response.side_effect = sd.stale_http_error()
         component = Counter()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
         await message_root.send(delivery.respond_to(interaction, ephemeral=False, wait=True))
@@ -3446,7 +3441,7 @@ class TestResourceLoading:
 
         panel = VisibleResourcePanel(load)
         message: Any = fake_message()
-        message.edit.side_effect = _http_error()
+        message.edit.side_effect = sd.http_error(message="edit refused")
         message_root = MessageRoot(panel, access=Everyone(), timeout=None)
 
         await message_root.send(_Destination(message))
@@ -3721,7 +3716,7 @@ class TestLoading:
             await message_root.send(destination)
 
         assert destination.calls == []
-        assert message_root._generation == 0
+        assert message_root.generation == 0
 
         await message_root.send(destination)
 
@@ -3763,7 +3758,7 @@ class TestLoading:
         log: list[str] = []
         component = Leaf(log, "panel")
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
-        destination = _Destination(fake_message(), raises=_http_error())
+        destination = _Destination(fake_message(), raises=sd.http_error(message="edit refused"))
 
         with pytest.raises(discord.HTTPException):
             await message_root.send(destination)

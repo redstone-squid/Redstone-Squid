@@ -14,17 +14,13 @@ from squid_ui.primitives import Option, Panel, RoutedButton, RoutedSelect, Row
 from squid_ui.profiling import MemoryProfiler, OperationKind, TraceStatus
 from squid_ui.profiling.profiler import _MAX_NAME_LENGTH
 from squid_ui_discord import render_static
+from squid_ui_discord import testing as sd
 from squid_ui_discord.routing import Router, _dispatch_item
 from squid_ui_discord.testing import fake_interaction
 
 EDIT_BUILD = sl.routing.Route("edit:build:{build_id:int}")
 POLL_CLOSE = sl.routing.Route("poll:close")
 NAME_BUILD = sl.routing.Route("name:build:{slug}")
-
-
-def _static_view(*args, **kwargs) -> discord.ui.LayoutView:
-    """The drawn layout of a sessionless V2 document, for tests that only read components."""
-    return render_static(*args, **kwargs).layout
 
 
 class TestRouteFormats:
@@ -939,7 +935,7 @@ class TestDrawing:
             ),
         )
 
-        view = _static_view([document])
+        view = sd.static_view([document])
         buttons = [child for child in view.walk_children() if isinstance(child, discord.ui.Button)]
 
         assert [(button.custom_id, button.style) for button in buttons] == [("poll:close", discord.ButtonStyle.danger)]
@@ -947,7 +943,7 @@ class TestDrawing:
     def test_a_routed_button_places_exactly_where_a_primitive_asks(self) -> None:
         document = Panel((Row((RoutedButton("Edit", EDIT_BUILD.id(build_id=3)),)),))
 
-        view = _static_view([document])
+        view = sd.static_view([document])
         buttons = [child for child in view.walk_children() if isinstance(child, discord.ui.Button)]
 
         assert [button.custom_id for button in buttons] == ["edit:build:3"]
@@ -956,7 +952,7 @@ class TestDrawing:
         # Its only dispatch path must be the router's. A stored button would take a second,
         # no-op dispatch that resets the surrounding view's timeout expiry.
         document = Panel((Row((RoutedButton("Close", "poll:close"),)),))
-        view = _static_view(document)
+        view = sd.static_view(document)
 
         button = next(item for item in view.walk_children() if isinstance(item, discord.ui.Button))
         assert button.custom_id == "poll:close"
@@ -1031,7 +1027,7 @@ class TestDrawing:
         assert '"kind":"routed_select"' in payload
         assert sl.scene.Codec.loads(payload) == planned
 
-        view = _static_view(document)
+        view = sd.static_view(document)
         select = next(item for item in view.walk_children() if isinstance(item, discord.ui.Select))
         assert select.custom_id == "pick:build:3"
         assert [option.value for option in select.options] == ["one", "two"]

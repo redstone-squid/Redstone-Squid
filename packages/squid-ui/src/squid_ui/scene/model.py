@@ -6,12 +6,13 @@ from enum import StrEnum
 from typing import ClassVar
 
 from squid_ui.emoji import Emoji
-from squid_ui.entity import ChannelType, EntityRef, EntityType
+from squid_ui.entity import ConversationType, EntityRef, EntityType
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.forms import FormBinding
 from squid_ui.interactions import ActionBinding, ActionMode
 from squid_ui.primitives.styles import ActionStyle, Color
 from squid_ui.runtime.presentation_state import SessionUpdate
+from squid_ui.scene.slack import SlackHomeView, SlackMessage, SlackModalView
 from squid_ui.text import Markup
 
 
@@ -148,7 +149,7 @@ class EntitySelect:
     action: str
     placeholder: str | None = None
     default_values: tuple[EntityRef, ...] = ()
-    channel_types: tuple[ChannelType, ...] = ()
+    conversation_types: tuple[ConversationType, ...] = ()
     min_values: int = 1
     max_values: int = 1
     disabled: bool = False
@@ -342,7 +343,7 @@ class HtmlAttributeName(StrEnum):
     TIMEZONE = "timezone"
     TIME_STYLE = "time-style"
     ENTITY_TYPE = "entity-type"
-    CHANNEL_TYPES = "channel-types"
+    CONVERSATION_TYPES = "conversation-types"
 
 
 type HtmlAttributeValue = str | int | float | bool
@@ -566,7 +567,7 @@ class ClassicMessage:
     rows: tuple[ClassicRow, ...] = ()
 
 
-type Body = ComponentsV2 | ClassicMessage | HtmlBody
+type Body = ComponentsV2 | ClassicMessage | HtmlBody | SlackMessage | SlackModalView | SlackHomeView
 
 
 _KIND_OWNERS: dict[str, type] = {}
@@ -594,6 +595,9 @@ for _kind_cls in (
     ComponentsV2,
     ClassicMessage,
     HtmlBody,
+    SlackMessage,
+    SlackModalView,
+    SlackHomeView,
 ):
     if _kind_cls.KIND in _KIND_OWNERS:
         # A reused tag would let the codec's `match kind:` misroute an unrelated node type.

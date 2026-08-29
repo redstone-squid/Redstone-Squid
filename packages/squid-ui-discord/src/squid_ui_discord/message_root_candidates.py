@@ -21,6 +21,7 @@ from squid_ui.guards import Challenge
 from squid_ui.interactions import ActionBinding, BusySpec
 from squid_ui.palette import Palette
 from squid_ui.planning.navigation import NavFactory
+from squid_ui.planning.target import AnyTarget
 from squid_ui.profiling import (
     ActionStatus,
     DetachedSpanRecorder,
@@ -35,6 +36,7 @@ from squid_ui.profiling import (
 from squid_ui.runtime.component import ComponentTree
 from squid_ui.runtime.presentation_state import SessionUpdate
 from squid_ui.scene.model import PlanResult
+from squid_ui.target_types import DiscordTarget
 from squid_ui.text import Localization, TextLike
 from squid_ui_discord.message_payload import MessagePayload
 from squid_ui_discord.message_root_wiring import AnyMountedView
@@ -57,12 +59,12 @@ class _RenewalBinding(ActionBinding):
 
 
 @dataclass(slots=True)
-class _Candidate:
+class _Candidate[RenderTargetT: DiscordTarget]:
     """One staged render generation, which becomes the mount's state only when committed."""
 
     view: AnyMountedView
     rendered: RenderedMessage[Any]
-    tree: ComponentTree
+    tree: ComponentTree[RenderTargetT]
     handlers: dict[str, ActionBinding]
     form_bindings: Mapping[str, FormBinding]
     generation: int
@@ -95,11 +97,11 @@ class _Candidate:
 
 
 @dataclass(slots=True)
-class _PlannedCandidate:
+class _PlannedCandidate[RenderTargetT: DiscordTarget]:
     """A staged application render whose visible identity was checked before drawing."""
 
     plan: PlanResult
-    tree: ComponentTree
+    tree: ComponentTree[RenderTargetT]
     handlers: dict[str, ActionBinding]
     form_bindings: Mapping[str, FormBinding]
     revision: int
@@ -108,14 +110,14 @@ class _PlannedCandidate:
     settled: bool = False
 
 
-type _ApplicationCandidate = _Candidate | _PlannedCandidate
+type _ApplicationCandidate[RenderTargetT: DiscordTarget] = _Candidate[RenderTargetT] | _PlannedCandidate[RenderTargetT]
 
 
 @dataclass(frozen=True, slots=True)
 class _PlanEnvironment:
     """Every mutable owner input not carried by a component tree."""
 
-    target: object
+    target: AnyTarget
     chrome: Chrome
     localization: Localization
     palette: Palette
@@ -125,7 +127,9 @@ class _PlanEnvironment:
     presentation_revision: int
 
 
-def _drawn(candidate: _ApplicationCandidate) -> _Candidate:
+def _drawn[RenderTargetT: DiscordTarget](
+    candidate: _ApplicationCandidate[RenderTargetT],
+) -> _Candidate[RenderTargetT]:
     if not isinstance(candidate, _Candidate):
         message = "an undrawn preflight candidate did not match the live scene"
         raise LayoutInvariantError(message)

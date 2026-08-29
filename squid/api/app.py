@@ -21,6 +21,7 @@ from squid.api.contract import (
 )
 from squid.api.dependencies import Accounts
 from squid.api.errors import register_exception_handlers, responses
+from squid.api.i18n import LocaleContextMiddleware
 from squid.api.idempotency import IdempotencyResponseMiddleware, enforce_request_idempotency
 from squid.api.openapi import install_openapi_contract
 from squid.api.private_responses import PRIVATE_API_PATH_PREFIXES, PrivateResponseHeadersMiddleware
@@ -177,6 +178,7 @@ def create_api_app(
     # Added last of the unconditional stack so it is outermost: it stamps Request-Id onto rate-limit
     # rejections and idempotency replays alike, and its binding is visible to every inner layer.
     api.add_middleware(RequestContextMiddleware)
+    api.add_middleware(LocaleContextMiddleware)
     resolved_for_middleware = config
     cors_origins = (
         resolved_for_middleware.api.cors_origins if isinstance(resolved_for_middleware, ApiProcessConfig) else ()

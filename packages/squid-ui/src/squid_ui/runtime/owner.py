@@ -18,14 +18,15 @@ from squid_ui.runtime.context import ContextKey
 from squid_ui.runtime.presentation_state import PresentationState
 from squid_ui.runtime.resources import AsyncBinding, PendingMode
 from squid_ui.runtime.topics import Address
+from squid_ui.target_types import RenderTarget
 
 
-class ComponentRuntime:
+class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
     """Frontend-neutral owner of a reactive component tree and presentation session."""
 
     def __init__(
         self,
-        root: AnyComponent,
+        root: Component[RenderTargetT],
         *,
         presentation: PresentationState | None = None,
         on_invalidate: Callable[[], None] | None = None,
@@ -39,17 +40,17 @@ class ComponentRuntime:
         self.context = dict(context or {})
         self.plan_cache = plan_cache if plan_cache is not None else PlanCache(32)
         self.plan_memo = PlanMemo()
-        self.components: dict[str, Component] = {}
-        self._render_cache: dict[Component, _ComponentRender] = {}
-        self._subtree_cache: dict[str, _ExpandedSubtree] = {}
+        self.components: dict[str, AnyComponent] = {}
+        self._render_cache: dict[AnyComponent, _ComponentRender[RenderTargetT]] = {}
+        self._subtree_cache: dict[str, _ExpandedSubtree[RenderTargetT]] = {}
         self._dirty_components: set[AnyComponent] = set()
         self._forced_components: set[AnyComponent] = set()
         self._dirty_paths: set[str] = set()
-        self._component_paths: dict[Component, str] = {}
+        self._component_paths: dict[AnyComponent, str] = {}
         self._force_all = True
-        self._candidate_tree: ComponentTree | None = None
+        self._candidate_tree: ComponentTree[RenderTargetT] | None = None
         self._candidate_revision = -1
-        self._committed_tree: ComponentTree | None = None
+        self._committed_tree: ComponentTree[RenderTargetT] | None = None
         self.revision = 0
         """Which render inputs the next render would see; a render captures it and `commit`
         compares against it. Not component state alone -- anything a render reads and a later
@@ -134,7 +135,7 @@ class ComponentRuntime:
         *,
         defer: Callable[[AnyComponent], bool] | None = None,
         reuse_committed: bool = False,
-    ) -> ComponentTree:
+    ) -> ComponentTree[RenderTargetT]:
         """Render a candidate tree; call :meth:`commit` after planning and drawing succeed.
 
         ``defer`` renders for discovery only -- see :func:`render_component_tree`. Such a tree
@@ -152,7 +153,11 @@ class ComponentRuntime:
         if reuse_committed and not self.dirty and self._committed_tree is not None:
             return self._committed_tree
         if reuse_committed and self._backdated_to_committed():
-            return self._committed_tree  # pyrefly: ignore[bad-return]
+            committed = self._committed_tree
+            if committed is None:
+                message = "backdating succeeded without a committed tree"
+                raise AssertionError(message)
+            return committed
         tree = render_component_tree(
             self.root,
             runtime=self,
@@ -249,7 +254,7 @@ class ComponentRuntime:
         self._force_all = False
         self._dirty_paths.clear()
 
-    def commit(self, tree: ComponentTree, *, rendered_revision: int | None = None) -> None:
+    def commit(self, tree: ComponentTree[RenderTargetT], *, rendered_revision: int | None = None) -> None:
         """Publish one successfully planned tree and reconcile keyed lifecycle hooks.
 
         `rendered_revision` is what :attr:`revision` was when `tree` was rendered. Delivery

@@ -6,7 +6,15 @@ from dataclasses import dataclass
 import anyio
 import pytest
 
-from squid_ui.sources import CountPrecision, Direction, Position, SourceCapabilities, Window, WindowLoader
+from squid_ui.sources import (
+    CountPrecision,
+    Direction,
+    Position,
+    SourceCapabilities,
+    Window,
+    WindowLoader,
+    list_source,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,3 +168,22 @@ async def test_loader_rejects_results_that_contradict_capabilities() -> None:
 
     with pytest.raises(ValueError, match="beyond its total"):
         await WindowLoader(InvalidExactSource(), 2, lambda entry: entry.key).load(Position(offset=1))
+
+
+async def test_a_list_source_returns_exact_offset_windows_and_advertises_every_capability() -> None:
+    """An in-memory list is the one source that can honestly claim all four capabilities."""
+    source = list_source(("a", "b", "c"))
+
+    window = await source.fetch(Position(offset=1), 2)
+
+    assert window.items == ("b", "c")
+    assert window.position == Position(offset=1)
+    assert window.has_previous
+    assert not window.has_next
+    assert window.total == 3
+    assert source.capabilities == SourceCapabilities(
+        backward=True,
+        offsets=True,
+        jumpable=True,
+        count=CountPrecision.EXACT,
+    )

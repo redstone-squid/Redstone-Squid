@@ -9,10 +9,7 @@ from squid_ui import Document, scene, zoned_timestamp
 from squid_ui.document import Asset, InlineAsset
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_ui.planning import plan
-from squid_ui.planning.adapter import AdapterProfile
-from squid_ui.planning.discord import components_v2_target
-from squid_ui.planning.limits import V2Limits
-from squid_ui.planning.types import DiscordAdapter
+from squid_ui.planning.adapter import AdapterCapability
 from squid_ui.primitives import (
     Button,
     Code,
@@ -32,18 +29,9 @@ from squid_ui.sources import Position
 from squid_ui.temporal import ZonedDateTime
 from squid_ui.text import Localization, Message
 from squid_ui_discord import DISCORD_V2_DPY27
-from squid_ui_discord import V2_LIMITS as LIMITS
+from squid_ui_discord import testing as sd
 from squid_ui_discord.renderer import V2Renderer
 from squid_ui_discord.target import NativeItem
-
-
-def _target(name: str, *, capabilities: frozenset[str] = frozenset(), limits: V2Limits = LIMITS):
-    """A V2 target whose adapter supplies exactly `capabilities` and no extensions.
-
-    Capabilities that are not Discord protocol facts belong to the adapter axis, which is
-    what lets a test vary them without inventing a dialect.
-    """
-    return components_v2_target(AdapterProfile(DiscordAdapter, name, ">=1", capabilities=capabilities), limits=limits)
 
 
 async def _click(event) -> None: ...
@@ -233,12 +221,12 @@ def test_scene_reports_every_independent_pager() -> None:
 def test_a_ladder_selects_by_capability_before_budget_degradation() -> None:
     ladder = Variants(
         (
-            Variant((Text("rich"),), requires=frozenset({"rich-text"})),
+            Variant((Text("rich"),), requires=frozenset({AdapterCapability.RENDER_HTML})),
             Variant((Text("plain"),)),
         )
     )
-    basic = _target("test")
-    rich = _target("rich", capabilities=frozenset({"rich-text"}))
+    basic = sd.target_profile("test")
+    rich = sd.target_profile("rich", capabilities=frozenset({AdapterCapability.RENDER_HTML}))
 
     basic_scene = plan(ladder, target=basic).scene
     rich_scene = plan(ladder, target=rich).scene
@@ -265,7 +253,7 @@ def test_capability_filtering_shortens_the_ladder_the_solver_steps() -> None:
         )
         for index in range(9)
     ]
-    document = plan(ladders, target=_target("test")).scene
+    document = plan(ladders, target=sd.target_profile("test")).scene
     rendered = repr(document.components_v2.children)
 
     assert "n0.5" not in rendered  # the gated rung never reaches the solver
@@ -307,7 +295,7 @@ def test_unsupported_native_extension_uses_its_portable_fallback_without_buildin
         called = True
         return discord.ui.TextDisplay("native")
 
-    target = _target("portable.test")
+    target = sd.target_profile("portable.test")
     result = plan(NativeItem(factory, fallback=Text("portable")), target=target)
 
     assert result.scene.components_v2.children == (scene.Text("portable"),)

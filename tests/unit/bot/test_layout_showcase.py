@@ -39,14 +39,16 @@ def _texts(view: discord.ui.LayoutView) -> str:
     return "\n".join(item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay))
 
 
-def test_pagination_exhibit_uses_the_measured_budget() -> None:
+def test_pagination_exhibit_pages_a_list_nobody_measured_by_hand() -> None:
+    """A page a reader can take in, and a footer counted as part of it."""
     message_root = MessageRoot(
         LayoutShowcase(section="pagination", entries=200, locale="en"), access=Everyone(), timeout=None
     )
     view = commit_render(message_root)
 
-    assert "#011" in _texts(view)
-    assert "#200" not in _texts(view)
+    assert "#006" in _texts(view), "the asked-for page size"
+    assert "#007" not in _texts(view), "and not one entry more"
+    assert "Page 1 of 34 \N{MIDDLE DOT} 200 builds in total" in _texts(view)
     assert any(button.label == "Next" for button in _buttons(view))
     assert_within_limits(view)
 
@@ -63,7 +65,7 @@ def test_structural_exhibit_folds_the_oversized_action_surface() -> None:
         25,
         11,
     ]
-    assert not any(button.label == "Action 36" for button in _buttons(view))
+    assert not any(button.label == "Option 36" for button in _buttons(view))
     assert_within_limits(view)
 
 
@@ -71,32 +73,36 @@ def test_structural_exhibit_folds_the_oversized_action_surface() -> None:
     ("section", "source_marker"),
     [
         ("pagination", "sl.primitives.Paginate("),
-        ("adaptation", 'return sl.action_controls(*actions, key="showcase-actions")'),
-        ("degradation", "overflow=sl.primitives.Spill()"),
-        ("data", 'sl.table(columns, *rows, key="capability-table")'),
+        ("adaptation", 'return sl.action_controls(*choices, key="showcase-actions")'),
+        ("degradation", "sl.budget(sl.spill("),
+        ("data", 'sl.table(columns, *rows, key="builds-table")'),
         ("grid", 'return sl.grid(*cells, key="showcase-grid", columns=4, on_pick=self._pick_grid)'),
         ("ownership", "on=sl.controlled(self.subscribed, self._set_subscribed)"),
         ("forms", "class FeedbackForm(sl.forms.Form)"),
         ("composition", 'self.boundary(self.left, key="left")'),
         ("localization", 'mount.localize(localization_for("zh-CN"))'),
         ("history", "case sl.runtime.HistoryResultStatus.CONFLICT:"),
-        ("replication", 'document.counter("votes").increment(2)'),
+        ("replication", 'document.set("reviewers").add("you")'),
         ("effects", '@sl.operation(initial="queued")'),
     ],
 )
-def test_each_exhibit_shows_its_author_facing_declaration(section: str, source_marker: str) -> None:
-    view = commit_render(
-        MessageRoot(
-            LayoutShowcase(section=section, entries=20, locale="en"),  # type: ignore[arg-type]
-            access=Everyone(),
-            timeout=None,
-        )
+async def test_each_exhibit_keeps_its_declaration_one_press_away(section: str, source_marker: str) -> None:
+    """Collapsed, the listing costs a button; a reader who wants it presses once."""
+    message_root = MessageRoot(
+        LayoutShowcase(section=section, entries=20, locale="en"),  # type: ignore[arg-type]
+        access=Everyone(),
+        timeout=None,
     )
-    content = _texts(view)
+    collapsed = commit_render(message_root)
 
-    assert "Declaration source" in content
-    assert source_marker in content
-    assert_within_limits(view)
+    assert source_marker not in _texts(collapsed), "the listing is not in the message a reader is sent"
+    assert any(button.label == "Show the code behind this exhibit" for button in _buttons(collapsed))
+
+    await message_root.dispatch("source.toggle", fake_interaction())
+    expanded = commit_render(message_root)
+
+    assert source_marker in _texts(expanded)
+    assert_within_limits(expanded)
 
 
 def test_degradation_exhibit_makes_each_compromise_visible() -> None:
@@ -105,8 +111,8 @@ def test_degradation_exhibit_makes_each_compromise_visible() -> None:
     )
     view = commit_render(message_root)
 
-    assert "…and 15 more" in _texts(view)
-    assert "The report records every compromise" in _texts(view)
+    assert "…and 11 more" in _texts(view), "whole log lines go, and it says how many"
+    assert "Nothing here was shortened without telling you." in _texts(view), "the promise is never the cut"
     assert message_root.plan is not None
     assert len(message_root.plan.report.events) >= 2
     assert_within_limits(view)
@@ -117,12 +123,12 @@ def test_data_exhibit_formats_typed_nodes_rather_than_strings() -> None:
     view = commit_render(message_root)
     content = _texts(view)
 
-    assert "**Loaded samples:** 40 rows" in content
+    assert "**Sample builds:** 40" in content
     assert "░░░░░░░░░░ 0%" in content, "a proportion, drawn from the value and its maximum"
     assert "<t:" in content, "the instant reaches each reader in their own timezone"
     assert ":R>" in content, "and does so relative to when they read it"
-    assert "Adapts by" in content, "the table kept its tabular shape"
-    assert "Pickers of 25 and 11" in content, "with every declared row"
+    assert "Fastest" in content, "the table kept its tabular shape"
+    assert "Flush piston door" in content, "with every declared row"
     assert_within_limits(view)
 
 
@@ -138,7 +144,7 @@ async def test_grid_exhibit_keeps_spatial_rows_and_stable_selection_keys() -> No
 
     await message_root.dispatch("showcase-grid.cell-0", fake_interaction())
 
-    assert component.grid_pick == "Selected cell-0."
+    assert component.grid_pick == "You picked square 1."
 
 
 async def test_ownership_exhibit_separates_session_owned_and_component_owned_values() -> None:
@@ -156,7 +162,7 @@ async def test_ownership_exhibit_separates_session_owned_and_component_owned_val
     await message_root.dispatch("ownership.managed", fake_interaction())
     labels = [button.label for button in _buttons(commit_render(message_root))]
 
-    assert "Session-owned toggle: Session says on" in labels
+    assert "First switch: on" in labels
     assert message_root.presentation.toggles["ownership.managed"].on is True, "the session holds it, not the component"
     assert not hasattr(component, "managed"), "no component state backs the managed toggle"
 
@@ -196,7 +202,7 @@ async def test_localization_exhibit_escapes_values_and_relocalizes_the_same_root
     message_root = MessageRoot(component, access=Everyone(), timeout=None)
     first = commit_render(message_root)
 
-    assert "\\*operator input\\*" in _texts(first)
+    assert "\\*shouty title\\*" in _texts(first)
     assert "@\u200beveryone" in _texts(first)
 
     interaction = fake_interaction()
@@ -206,7 +212,7 @@ async def test_localization_exhibit_escapes_values_and_relocalizes_the_same_root
     assert message_root.localization.locale == "zh-CN"
     assert interaction.response.edit_message.await_count == 1
     edited_view = interaction.response.edit_message.await_args.kwargs["view"]
-    assert "延迟本地化与安全 Markdown" in _texts(edited_view)
+    assert "但不用重做这条消息" in _texts(edited_view), "the exhibit's own heading, redrawn"
 
 
 async def test_composed_children_keep_independent_state_and_keys() -> None:
@@ -231,24 +237,24 @@ async def test_history_exhibit_preserves_a_sibling_write_and_presents_rollback_c
 
     await message_root.dispatch("history.rename", fake_interaction())
     assert component.project_name == "Action Ledger"
-    assert component.outcome_result.startswith("COMMITTED · local sequence")
+    assert component.outcome_result.startswith("Finished cleanly, as change #")
 
     await message_root.dispatch("history.sibling", fake_interaction())
     await message_root.dispatch("history.undo", fake_interaction())
 
-    assert component.project_name == "Squid after a sibling edit"
-    assert component.history_result.startswith("Undo: CONFLICT; no state changed")
+    assert component.project_name == "Squid, renamed by somebody else"
+    assert component.history_result.startswith("Undo refused:")
     assert component.action_history.entries[0].state is sl.runtime.HistoryEntryState.CONFLICTED
 
     await message_root.dispatch("history.rollback", fake_interaction())
 
-    assert component.project_name == "Squid after a sibling edit", "the staged rollback value never published"
-    assert component.outcome_result.startswith("ROLLED BACK · handler_exception")
-    assert component.outcome_result.endswith("recovery is a fresh action")
+    assert component.project_name == "Squid, renamed by somebody else", "the staged name never published"
+    assert component.outcome_result.startswith("Failed and rolled back (handler_exception)")
+    assert component.outcome_result.endswith("written afterwards by a fresh action.")
 
     await message_root.dispatch("history.drop", fake_interaction())
     assert component.action_history.entries == ()
-    assert component.project_name == "Squid after a sibling edit", "dropping history is not a forced restore"
+    assert component.project_name == "Squid, renamed by somebody else", "dropping history is not a forced restore"
 
 
 async def test_replication_exhibit_selectively_undoes_only_the_local_contribution() -> None:
@@ -258,18 +264,18 @@ async def test_replication_exhibit_selectively_undoes_only_the_local_contributio
 
     await message_root.dispatch("replication.local", fake_interaction())
     assert component.local_document.counter("votes").value == 2
-    assert component.local_document.set("reviewers").value == frozenset({"mine"})
+    assert component.local_document.set("reviewers").value == frozenset({"you"})
 
     await message_root.dispatch("replication.peer", fake_interaction())
     assert component.local_document.counter("votes").value == 5
-    assert component.local_document.set("reviewers").value == frozenset({"mine", "peer"})
+    assert component.local_document.set("reviewers").value == frozenset({"you", "them"})
     assert component.peer_document.snapshot() == component.local_document.snapshot()
 
     await message_root.dispatch("replication.undo", fake_interaction())
 
-    assert component.local_document.counter("votes").value == 3
-    assert component.local_document.set("reviewers").value == frozenset({"peer"})
-    assert component.replication_result.startswith("Selective undo: APPLIED as action")
+    assert component.local_document.counter("votes").value == 3, "their three survive"
+    assert component.local_document.set("reviewers").value == frozenset({"them"})
+    assert component.replication_result == "Undo worked."
 
 
 async def test_effects_exhibit_retries_compensation_and_accepts_an_operation_result() -> None:
@@ -295,13 +301,13 @@ async def test_effects_exhibit_retries_compensation_and_accepts_an_operation_res
 
     assert component.channel_service.exists is True
     assert component.channel_present is True
-    assert component.compensation_result.startswith("Compensation: FAILED")
+    assert component.compensation_result.startswith("Undo failed")
 
     await message_root.dispatch("effects.undo", fake_interaction())
 
     assert component.channel_service.exists is False
     assert component.channel_present is False
-    assert component.compensation_result.startswith("Compensation: APPLIED as action")
+    assert component.compensation_result == "Undo worked."
 
 
 async def test_demo_command_and_controls_are_public() -> None:
@@ -433,7 +439,7 @@ class TestLobby:
             interaction=None,
             send=AsyncMock(return_value=fake_message(message_id=guild_id)),
         )
-        panel = await Lobby.show(cast(sd.InvocationSource, context), host_id)
+        panel = await Lobby(host_id).show(cast(sd.InvocationSource, context))
         assert panel is not None
         return bot, panel
 

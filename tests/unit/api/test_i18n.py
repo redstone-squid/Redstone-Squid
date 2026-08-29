@@ -1,9 +1,12 @@
 """REST API locale negotiation tests."""
 
 import httpx
+import pytest
 from starlette.requests import Request
+from starlette.types import Message, Receive, Scope, Send
 
-from squid.api.i18n import _parse_accept_language, locale_for_request
+from squid.api.i18n import LocaleContextMiddleware, _parse_accept_language, locale_for_request
+from squid_ui.text import current_localization
 
 
 def _request_with_header(header: str | None) -> Request:
@@ -38,6 +41,30 @@ def test_locale_for_request_negotiates_language_only_match() -> None:
 
 def test_locale_for_request_falls_back_for_unsupported_locale() -> None:
     assert locale_for_request(_request_with_header("fr-FR")) == "en"
+
+
+@pytest.mark.asyncio
+async def test_locale_middleware_binds_and_restores_the_request_localization() -> None:
+    seen: list[str | None] = []
+    original = current_localization()
+
+    async def app(scope: Scope, receive: Receive, send: Send) -> None:
+        del scope, receive, send
+        seen.append(current_localization().locale)
+
+    middleware = LocaleContextMiddleware(app)
+    scope = {"type": "http", "headers": [(b"accept-language", b"zh-CN")]}
+
+    async def receive() -> Message:
+        return {"type": "http.disconnect"}
+
+    async def send(message: Message) -> None:
+        del message
+
+    await middleware(scope, receive, send)  # type: ignore[arg-type]
+
+    assert seen == ["zh-CN"]
+    assert current_localization() is original
 
 
 def test_verify_endpoint_reflects_negotiated_content_language(client: httpx.Client) -> None:

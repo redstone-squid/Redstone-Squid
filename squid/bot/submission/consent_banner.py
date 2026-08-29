@@ -36,41 +36,41 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
         await invocation.reply(
             text_node(
                 L(
-                    "### Consent Already Granted\n"
-                    "Your account has already accepted the current privacy notice. Redstone Squid automatically "
-                    "indexes your submissions in build log channels.\n\n"
-                    "*Tip:* If you posted a build before your consent was recorded, right-click that message and "
-                    "select **Apps > Recalculate Build** to index it now."
+                    t"### Consent Already Granted\n"
+                    t"Your account has already accepted the current privacy notice. Redstone Squid automatically "
+                    t"indexes your submissions in build log channels.\n\n"
+                    t"*Tip:* If you posted a build before your consent was recorded, right-click that message and "
+                    t"select **Apps > Recalculate Build** to index it now."
                 )
             ),
             visibility="personal",
         )
         return
 
-    component = await ConsentPrompt.show(
-        invocation,
-        user_id=interaction.user.id,
-        title=L("Enable Automatic Build Ingestion"),
+    user_id = interaction.user.id
+    version = CURRENT_CONSENT_VERSION
+    component = await ConsentPrompt(
+        user_id=user_id,
+        title=L(t"Enable Automatic Build Ingestion"),
         summary=L(
-            "Redstone Squid automatically indexes redstone doors and builds posted in this channel. "
-            "Agreeing stores your Discord user ID and records this consent, allowing the bot to attribute "
-            "your builds, mirror media, and analyze attached schematics. Cancelling stores nothing and leaves "
-            "your posts ignored by automated ingestion."
+            t"Redstone Squid automatically indexes redstone doors and builds posted in this channel. "
+            t"Agreeing stores your Discord user ID and records this consent, allowing the bot to attribute "
+            t"your builds, mirror media, and analyze attached schematics. Cancelling stores nothing and leaves "
+            t"your posts ignored by automated ingestion."
         ),
         fields=(
             CardField(
-                L("Discord account"),
-                L("<@{user_id}> ({user_id})", user_id=interaction.user.id),
+                L(t"Discord account"),
+                L(t"<@{user_id}> ({user_id})"),
             ),
             CardField(
-                L("Consent recorded"),
-                L("Notice {version}, timed at the moment you agree.", version=CURRENT_CONSENT_VERSION),
+                L(t"Consent recorded"),
+                L(t"Notice {version}, timed at the moment you agree."),
             ),
         ),
-        accept_label=L("Agree & Enable Ingestion"),
+        accept_label=L(t"Agree & Enable Ingestion"),
         wait_timeout=120,
-        wait=True,
-    )
+    ).show(invocation, wait=True)
     if component is None:
         return
     await component.wait()
@@ -82,12 +82,11 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
         await invocation.reply(
             text_node(
                 L(
-                    "### Consent Recorded!\n"
-                    "Thank you! Your consent has been recorded under notice `{version}`. Your future builds "
-                    "posted in build-log channels will now be automatically ingested and submitted for voting.\n\n"
-                    "*Tip:* To ingest a build you posted recently, right-click your message and select "
-                    "**Apps > Recalculate Build**.",
-                    version=CURRENT_CONSENT_VERSION,
+                    t"### Consent Recorded!\n"
+                    t"Thank you! Your consent has been recorded under notice `{version}`. Your future builds "
+                    t"posted in build-log channels will now be automatically ingested and submitted for voting.\n\n"
+                    t"*Tip:* To ingest a build you posted recently, right-click your message and select "
+                    t"**Apps > Recalculate Build**.",
                 )
             ),
             visibility="personal",

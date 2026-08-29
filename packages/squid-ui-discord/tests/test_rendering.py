@@ -34,9 +34,19 @@ from squid_ui.runtime.component import render_component_tree
 from squid_ui.runtime.owner import ComponentRuntime
 from squid_ui.runtime.shared import SharedState
 from squid_ui.runtime.topics import CellAddress, LocalTopicBus
-from squid_ui.semantic import ActionControl, ActionControls, Choice, Choices, Controlled, Group, List, ListItem
+from squid_ui.semantic import (
+    ActionControl,
+    ActionControls,
+    Choice,
+    Choices,
+    Controlled,
+    Group,
+    LayoutNode,
+    List,
+    ListItem,
+)
 from squid_ui_discord import Everyone, MessageRoot
-from squid_ui_discord.testing import commit_render, fake_interaction
+from squid_ui_discord.testing import commit_render, fake_interaction, payload_texts
 
 
 class Counter(Component[sl.ComponentsV2Target]):
@@ -77,10 +87,6 @@ def _custom_ids(view: discord.ui.LayoutView) -> list[str]:
     return [item.custom_id or "" for item in view.walk_children() if isinstance(item, discord.ui.Button)]
 
 
-def _texts(view: discord.ui.LayoutView) -> list[str]:
-    return [item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)]
-
-
 class TestBoundaries:
     async def test_each_instance_answers_only_its_own_control(self):
         pair = Pair()
@@ -98,7 +104,7 @@ class TestBoundaries:
     def test_controls_are_namespaced_including_every_explicit_key(self):
         message_root = MessageRoot(Pair(), access=Everyone(), timeout=None)
         commit_render(message_root)
-        assert set(message_root._handlers) == {"left.inc", "left.help", "right.inc", "right.help"}
+        assert set(message_root.snapshot().handler_keys) == {"left.inc", "left.help", "right.inc", "right.help"}
 
     def test_a_childs_state_change_re_renders_the_root_message(self):
         pair = Pair()
@@ -107,8 +113,8 @@ class TestBoundaries:
 
         pair.right.count = 3
 
-        assert message_root._dirty
-        assert "right: 3" in _texts(commit_render(message_root))
+        assert message_root.pending
+        assert "right: 3" in payload_texts(commit_render(message_root))
 
     def test_components_do_not_expose_the_frontend_root(self):
         pair = Pair()
@@ -760,7 +766,7 @@ def test_nested_embeds_stay_addressable(depth):
     assert len(ids) == depth + 1
     assert len(set(ids)) == len(ids), "two controls in one message may not share a custom_id"
     assert all(len(custom_id) <= 100 for custom_id in ids)
-    assert len(message_root._handlers) == depth + 1
+    assert len(message_root.snapshot().handler_keys) == depth + 1
 
 
 class PagedChild(Component[sl.ComponentsV2Target]):
@@ -785,8 +791,8 @@ def test_embed_namespaces_pager_state_and_controls() -> None:
         "left.items": 0,
         "right.items": 0,
     }
-    assert "__cursor_next.left.items" in message_root._handlers
-    assert "__cursor_next.right.items" in message_root._handlers
+    assert "__cursor_next.left.items" in message_root.snapshot().handler_keys
+    assert "__cursor_next.right.items" in message_root.snapshot().handler_keys
 
 
 def test_duplicate_sibling_embed_keys_are_rejected() -> None:
@@ -875,7 +881,7 @@ def test_typed_context_flows_to_descendants_without_entering_component_state() -
 
     view = commit_render(MessageRoot(Parent(), access=Everyone(), timeout=None))
 
-    assert "hello from context" in _texts(view)
+    assert "hello from context" in payload_texts(view)
 
 
 def test_semantic_actions_are_namespaced_across_embedded_instances() -> None:
@@ -896,7 +902,7 @@ def test_semantic_actions_are_namespaced_across_embedded_instances() -> None:
     message_root = MessageRoot(Parent(), access=Everyone(), timeout=None)
     commit_render(message_root)
 
-    assert {"left.run", "right.run"} <= message_root._handlers.keys()
+    assert {"left.run", "right.run"} <= set(message_root.snapshot().handler_keys)
 
 
 def test_all_keyed_semantics_are_namespaced_through_semantic_containers() -> None:
@@ -931,9 +937,9 @@ def test_all_keyed_semantics_are_namespaced_through_semantic_containers() -> Non
     commit_render(message_root)
 
     assert {"left.entries", "right.entries"} <= message_root.presentation.cursors.keys()
-    assert {"left.choice", "right.choice"} <= message_root._handlers.keys()
-    assert "__cursor_next.left.entries" in message_root._handlers
-    assert "__cursor_next.right.entries" in message_root._handlers
+    assert {"left.choice", "right.choice"} <= set(message_root.snapshot().handler_keys)
+    assert "__cursor_next.left.entries" in message_root.snapshot().handler_keys
+    assert "__cursor_next.right.entries" in message_root.snapshot().handler_keys
 
 
 class TestRenderItem:
@@ -955,6 +961,9 @@ class TestRenderItem:
         assert len(host.children) == 1
         assert host.children[0]._view is host
 
-    def test_a_node_that_draws_nothing_is_refused_rather_than_indexed(self) -> None:
-        with pytest.raises(sd.MessageModeError, match="produced no item"):
-            sd.render_item(sl.group())
+    @pytest.mark.parametrize("node", [sl.group(), sl.group(sl.heading("First"), sl.heading("Second"))])
+    def test_a_node_that_does_not_draw_exactly_one_item_is_refused(
+        self, node: LayoutNode[sl.ComponentsV2Target]
+    ) -> None:
+        with pytest.raises(sd.MessageModeError, match="exactly one Discord item"):
+            sd.render_item(node)

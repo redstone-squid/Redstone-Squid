@@ -16,6 +16,7 @@ from squid_ui.interactions import ActionEvent
 from squid_ui.semantic import ActionControl, ActionControls, Heading, Paragraph
 from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, MessageRoot, Owner
 from squid_ui_discord.message_payload import MessageMode
+from squid_ui_discord.message_root import AnyMessageRoot
 from squid_ui_discord.message_root_wiring import ClassicMountedView, MountedView
 from squid_ui_discord.testing import (
     commit_classic_render,
@@ -42,7 +43,7 @@ class Screen(Component[sl.ClassicTarget]):
         ]
 
 
-def message_root_for(target, **options) -> MessageRoot:
+def message_root_for(target, **options) -> AnyMessageRoot:
     return MessageRoot(Screen(), target=target, access=Everyone(), **options)
 
 
@@ -51,7 +52,7 @@ def message_for(target) -> Any:
     return fake_message(components_v2=target is DISCORD_V2_DPY27)
 
 
-def render_for(target, message_root: MessageRoot):
+def render_for(target, message_root: AnyMessageRoot):
     """Commit a render through whichever helper this target's view type calls for."""
     return commit_render(message_root) if target is DISCORD_V2_DPY27 else commit_classic_render(message_root)
 
@@ -121,7 +122,7 @@ class TestSharedContracts:
         await message_root.send(delivered_to(message_for(target)))
         key = _control_ids(message_root._view)[0].rsplit(":", 1)[-1]
 
-        await message_root.dispatch(key, interaction_for(target), generation=message_root._generation)
+        await message_root.dispatch(key, interaction_for(target), generation=message_root.generation)
 
         assert _screen(message_root).presses == 1
 
@@ -130,7 +131,7 @@ class TestSharedContracts:
         await message_root.send(delivered_to(message_for(target)))
         key = _control_ids(message_root._view)[0].rsplit(":", 1)[-1]
 
-        await message_root.dispatch(key, interaction_for(target), generation=message_root._generation - 1)
+        await message_root.dispatch(key, interaction_for(target), generation=message_root.generation - 1)
 
         assert _screen(message_root).presses == 0
 
@@ -139,7 +140,7 @@ class TestSharedContracts:
         await message_root.send(delivered_to(message_for(target)))
         key = _control_ids(message_root._view)[0].rsplit(":", 1)[-1]
 
-        await message_root.dispatch(key, interaction_for(target, user_id=2), generation=message_root._generation)
+        await message_root.dispatch(key, interaction_for(target, user_id=2), generation=message_root.generation)
 
         assert _screen(message_root).presses == 0
 
@@ -157,7 +158,7 @@ class TestSharedContracts:
         assert view.is_finished() is False
 
 
-def _screen(message_root: MessageRoot) -> Screen:
+def _screen(message_root: AnyMessageRoot) -> Screen:
     component = message_root.component
     assert isinstance(component, Screen)
     return component

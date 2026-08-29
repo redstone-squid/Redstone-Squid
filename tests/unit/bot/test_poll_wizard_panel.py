@@ -1,30 +1,37 @@
-"""The mounted poll wizard, and which message its terminal edit lands on."""
+"""The Wizard-driven poll composition screen."""
 
 from types import SimpleNamespace
 from typing import Any, cast
+from unittest.mock import AsyncMock
 
 import discord
 
+import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.voting.poll_wizard import PollConfirmationComponent, PollDraft
-from squid_ui_discord.testing import fake_interaction, fake_message
+import squid_ui_widgets as sp
+from squid.bot.voting.poll_wizard import PollDraft, PollScreen
+from squid.voting.domain import PollScope, VoteVisibility
+from squid.voting.errors import InvalidVoteConfigurationError
+from squid_ui.testing import labels
+from squid_ui_discord.testing import fake_interaction
+from squid_ui_widgets import testing as wt
 from tests.helpers.discord import make_layout_bot
 from tests.helpers.voting import GENERIC_OPTIONS
 
 OWNER_ID = 11
 
 
-def make_wizard() -> PollConfirmationComponent:
-    publisher = SimpleNamespace(create_and_publish=None, may_create_network=None)
-    draft = PollDraft(question="Best door?", options_text="One\nTwo")
-    return PollConfirmationComponent(cast(Any, publisher), 42, draft, GENERIC_OPTIONS)
+def make_screen(*, failure: Exception | None = None) -> PollScreen:
+    resolve = AsyncMock(side_effect=failure, return_value=GENERIC_OPTIONS)
+    publish = AsyncMock(return_value="https://discord.invalid/channels/1/2/3")
+    return PollScreen(resolve, publish, allow_network=True)
 
 
-async def open_wizard(
-    wizard: PollConfirmationComponent,
+async def open_screen(
+    screen: PollScreen,
     *,
     message: discord.Message | None = None,
-) -> tuple[PollConfirmationComponent, sd.MessageRoot, Any]:
+) -> tuple[PollScreen, sd.MessageRoot, Any]:
     bot = make_layout_bot()
     interaction = fake_interaction(user_id=OWNER_ID)
     interaction.client = bot
@@ -33,62 +40,85 @@ async def open_wizard(
     interaction.locale = "en-US"
     if message is not None:
         interaction.original_response.return_value = message
-    shown = await PollConfirmationComponent.show(
-        interaction,
-        wizard.publisher,
-        wizard.author_account_id,
-        wizard.draft,
-        wizard.vote_options,
-        allow_network=wizard.allow_network,
-        wait=True,
-    )
+    shown = await screen.show(interaction, wait=True)
     assert shown is not None
     sessions = bot.sessions.get(sd.SessionKey.user_guild("poll-wizard", OWNER_ID, 7))
     assert len(sessions) == 1
     return shown, sessions[0].root, interaction
 
 
-async def test_scheduler_backed_wizard_renews_its_private_session() -> None:
-    _, message_root, _ = await open_wizard(make_wizard())
+async def complete_wizard(screen: PollScreen) -> wt.MachineHarness[sp.WizardState, sl.ComponentsV2Target]:
+    harness = wt.driving(screen.driver)
+    await harness.submit("poll.content", {"question": "Best door?", "options": "One\nTwo"})
+    await harness.submit(
+        "poll.settings",
+        {
+            "visibility": VoteVisibility.ANONYMOUS_LIVE,
+            "duration": 12 * 3600,
+            "scope": PollScope.GUILD,
+        },
+    )
+    assert harness.state.current == sp.REVIEW_STEP
+    return harness
 
+
+async def test_scheduler_backed_wizard_renews_its_private_session() -> None:
+    _, message_root, _ = await open_screen(make_screen())
+
+    assert PollScreen.timeout == 900
     assert message_root.scheduler is not None
     assert isinstance(message_root.expiry, sd.RenewEphemeral)
 
 
-async def test_cancelling_disables_the_wizard_and_leaves_the_notice_alone() -> None:
-    """`_cancel` answers with a notice before finishing, which spends the interaction.
+async def test_wizard_finishes_publication_once() -> None:
+    screen = make_screen()
+    harness = await complete_wizard(screen)
 
-    Finishing through it would have replaced the "Poll cancelled." reply with a disabled
-    wizard and left the real wizard clickable. The mount falls back to the message instead.
-    """
-    message = fake_message()
-    _, message_root, opening = await open_wizard(make_wizard(), message=message)
+    await harness.press("poll.finish")
+    await harness.press("poll.finish")
 
-    interaction = fake_interaction(user_id=OWNER_ID)
-    await message_root.dispatch("cancel", interaction)
+    cast(AsyncMock, screen._resolve_options).assert_awaited_once_with(("One", "Two"))
+    cast(AsyncMock, screen._publish).assert_awaited_once_with(
+        PollDraft(
+            question="Best door?",
+            options_text="One\nTwo",
+            visibility=VoteVisibility.ANONYMOUS_LIVE,
+            duration_seconds=12 * 3600,
+            scope=PollScope.GUILD,
+        ),
+        GENERIC_OPTIONS,
+    )
+    assert screen.published_url is not None
 
-    interaction.response.send_message.assert_awaited_once()
-    interaction.edit_original_response.assert_not_awaited()
-    message.edit.assert_not_awaited()
-    opening.edit_original_response.assert_awaited_once()
-    disabled = opening.edit_original_response.await_args.kwargs["view"]
-    assert all(getattr(item, "disabled", True) for item in disabled.walk_children())
+
+async def test_invalid_options_return_the_wizard_to_review() -> None:
+    screen = make_screen(failure=InvalidVoteConfigurationError("bad options"))
+    harness = await complete_wizard(screen)
+
+    await harness.press("poll.finish")
+
+    assert harness.state.current == sp.REVIEW_STEP
+    assert harness.state.complete is False
+    cast(AsyncMock, screen._publish).assert_not_awaited()
 
 
-async def test_custom_duration_submission_returns_through_the_message_root_funnel() -> None:
-    wizard, message_root, _ = await open_wizard(make_wizard())
-    opening = fake_interaction(user_id=OWNER_ID)
+def test_settings_step_uses_typed_portable_fields() -> None:
+    screen = make_screen()
+    settings = screen.wizard.live_steps(screen.wizard.initial_state)[1]
+    assert settings.form is not None
 
-    await message_root.dispatch("duration", opening, ["custom"])
+    fields = {field.key: field for field in settings.form.items if isinstance(field, sl.forms.FormField)}
 
-    modal = opening.response.send_modal.await_args.args[0]
-    label = modal.children[0]
-    assert isinstance(label, discord.ui.Label)
-    duration = label.component
-    assert isinstance(duration, discord.ui.TextInput)
-    duration._value = "12h"  # pyrefly: ignore[missing-attribute]
+    assert isinstance(fields["visibility"], sl.forms.ChoiceField)
+    assert isinstance(fields["duration"], sl.forms.DurationField)
+    assert isinstance(fields["scope"], sl.forms.ChoiceField)
+    assert fields["duration"].parse("12h") == 12 * 3600
 
-    await modal.on_submit(fake_interaction(user_id=OWNER_ID))
 
-    assert wizard.draft.duration_seconds == 12 * 3600
-    assert message_root.generation == 2
+async def test_cancelling_finishes_with_a_terminal_screen() -> None:
+    screen, message_root, _opening = await open_screen(make_screen())
+
+    await message_root.dispatch("cancel", fake_interaction(user_id=OWNER_ID))
+
+    assert screen.cancelled is True
+    assert labels(screen.render()) == []

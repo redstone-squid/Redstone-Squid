@@ -15,7 +15,7 @@ import squid_ui_discord
 from squid_ui.assets import Asset, InlineAsset, StoredAsset
 from squid_ui.document import Document
 from squid_ui.emoji import Emoji
-from squid_ui.entity import ChannelType, EntityKind, EntityRef, EntityType
+from squid_ui.entity import ConversationType, EntityKind, EntityRef, EntityType
 from squid_ui.primitives import (
     ActionStyle,
     Button,
@@ -318,9 +318,12 @@ async def test_a_channel_select_round_trips_types_and_defaults() -> None:
     node = cast(list[Node], adopt(view).render())[0]
 
     assert isinstance(node, EntitySelect)
-    assert node.entity_type is EntityType.CHANNEL
-    assert node.channel_types == (ChannelType.TEXT, ChannelType.ANNOUNCEMENT)
-    assert node.default_values == (EntityRef(EntityKind.CHANNEL, 77),)
+    assert node.entity_type is EntityType.CONVERSATION
+    assert node.conversation_types == (
+        ConversationType.GUILD_TEXT,
+        ConversationType.GUILD_ANNOUNCEMENT,
+    )
+    assert node.default_values == (EntityRef(EntityKind.CONVERSATION, 77),)
     assert node.max_values == 2
 
 
