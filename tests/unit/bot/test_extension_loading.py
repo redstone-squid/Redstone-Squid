@@ -144,10 +144,7 @@ async def test_the_help_directory_names_commands_that_exist(loaded_bot: commands
 
 
 async def test_message_context_menu_taxonomy(loaded_bot: commands.Bot) -> None:
-    names = {
-        command.name
-        for command in loaded_bot.tree.get_commands(type=discord.AppCommandType.message)
-    }
+    names = {command.name for command in loaded_bot.tree.get_commands(type=discord.AppCommandType.message)}
 
     assert names == {
         "Archive Message",
@@ -155,4 +152,30 @@ async def test_message_context_menu_taxonomy(loaded_bot: commands.Bot) -> None:
         "Recalculate Build",
         "Resync Redstoner",
         "Vote to Delete",
+    }
+
+
+async def test_production_chat_input_taxonomy(loaded_bot: commands.Bot) -> None:
+    """The breaking cutover leaves one app-only root per public workflow."""
+    names = {
+        command.name
+        for command in loaded_bot.tree.get_commands(type=discord.AppCommandType.chat_input)
+        if command.module != "squid.bot.layout_showcase"
+    }
+
+    assert names == {
+        "access",
+        "account",
+        "build",
+        "errors",
+        "help",
+        "notifications",
+        "poll",
+        "records",
+        "redstoner",
+        "search",
+        "settings",
+        "starboard",
+        "tags",
+        "versions",
     }
