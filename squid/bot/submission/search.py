@@ -22,7 +22,7 @@ from squid.bot.submission.consent_banner import BuildLogConsentStickyMessage
 from squid.bot.submission.edit import BuildEditCommands
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.schematics import BuildSchematicCommands
-from squid.bot.submission.search_view import SearchResultsView
+from squid.bot.submission.search_view import SearchScreen
 from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.ui import (
     PagedList,
@@ -175,7 +175,7 @@ class SearchCog[
             self.bot.tree.remove_command(menu.name, type=menu.type)
 
     @autocompletes(sort="search_sorts", query="search_query")
-    @commands.hybrid_command("search")
+    @app_commands.command(name="search", description="Search builds, records, and taxonomy metadata")
     @app_commands.describe(
         query=app_commands.locale_str(_("Search text and filters, e.g. `width:5`.")),
         scope=app_commands.locale_str(_("What to look through: records, builds, patterns, restrictions, or all.")),
@@ -184,7 +184,7 @@ class SearchCog[
     )
     async def search_records(
         self,
-        ctx: Context[BotT],
+        interaction: discord.Interaction[BotT],
         scope: SearchTarget = SearchTarget.records,
         sort: str | None = None,
         mode: SearchModeChoice = SearchModeChoice.keyword,
@@ -192,8 +192,19 @@ class SearchCog[
         query: str,
     ) -> None:
         """Search records, builds, patterns, and restrictions using text and field filters."""
-        await ctx.defer()
-        invocation = await sd.Invocation.of(ctx)
+        await interaction.response.defer()
+        await self._show_search(interaction, scope=scope, sort=sort, mode=mode, query=query)
+
+    async def _show_search(
+        self,
+        source: Context[BotT] | discord.Interaction[BotT],
+        *,
+        scope: SearchTarget = SearchTarget.records,
+        sort: str | None = None,
+        mode: SearchModeChoice = SearchModeChoice.keyword,
+        query: str,
+    ) -> None:
+        """Resolve and show one search from either the app command or mention fallback."""
         search_scope, targeted_query = _targeted(scope, query)
         request = SearchRequest(
             targeted_query,
@@ -205,15 +216,14 @@ class SearchCog[
         page = await self.search.search(request)
         queries = getattr(self, "queries", None)
         load_build = queries.get if queries is not None else None
-        view = SearchResultsView(
+        screen = SearchScreen(
             self.search,
             request,
             page,
-            author_id=ctx.author.id,
             load_build=load_build,
             render_build=lambda build: self.bot.for_build(build).render_node(),
         )
-        await invocation.mount(view, access=sd.Owner(ctx.author.id), timeout=180)
+        await screen.show(source)
 
     @commands.hybrid_group(name="restrictions")
     @requires(RESTRICTION_ALIAS_CREATE)
@@ -402,7 +412,8 @@ class SearchCog[
         try:
             build_id = int(trimmed_content)
         except ValueError:
-            await ctx.invoke(self.search_records, query=trimmed_content)
+            await ctx.defer()
+            await self._show_search(ctx, query=trimmed_content)
             return
         await ctx.invoke(self.view_build, build_id=build_id)
 

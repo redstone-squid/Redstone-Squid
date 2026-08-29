@@ -11,7 +11,7 @@ import pytest
 
 import squid_ui_discord as sd
 from squid.bot.submission.build_handler import BuildHandler
-from squid.bot.submission.search_view import SearchResultsView
+from squid.bot.submission.search_view import SearchScreen
 from squid.bot.submission.ui.views import EDIT_FIELDS, BuildEditScreen
 from squid.builds.application import BuildService
 from squid.builds.domain import Build, BuildLink, DoorBuild, SourceMessage, Status
@@ -136,7 +136,7 @@ def test_search_results_use_named_selection_and_direct_build_action() -> None:
         next=None,
         prev=None,
     )
-    view = SearchResultsView(cast(SearchService, object()), SearchRequest("door"), page, author_id=123)
+    view = SearchScreen(cast(SearchService, object()), SearchRequest("door"), page)
 
     bot = make_layout_bot()
     message_root = bot.client_runtime.mount(view, access=sd.Owner(123), timeout=180)
@@ -160,7 +160,7 @@ def test_search_results_preserve_page_warnings_without_refetching_the_initial_pa
         prev=None,
         warnings=("Semantic fallback used",),
     )
-    view = SearchResultsView(cast(SearchService, service), SearchRequest("door"), page, author_id=123)
+    view = SearchScreen(cast(SearchService, service), SearchRequest("door"), page)
 
     bot = make_layout_bot()
     payload = commit_render(bot.client_runtime.mount(view, access=sd.Owner(123), timeout=180)).to_components()
@@ -172,7 +172,7 @@ def test_search_results_preserve_page_warnings_without_refetching_the_initial_pa
 @pytest.mark.asyncio
 async def test_search_timeout_disables_bound_controls() -> None:
     page = SearchPage((BuildSearchHit("8", "Fast door", "confirmed"),), total=1, next=None, prev=None)
-    view = SearchResultsView(cast(SearchService, object()), SearchRequest("door"), page, author_id=123)
+    view = SearchScreen(cast(SearchService, object()), SearchRequest("door"), page)
     bot = make_layout_bot()
     message_root = bot.client_runtime.mount(view, access=sd.Owner(123), timeout=180)
     message = fake_message()
