@@ -12,18 +12,38 @@ from collections.abc import Sequence
 import discord
 
 import squid_ui as sl
+import squid_ui_discord as sd
 from squid.bot.ui import CHROME, L
 from squid.diagnostics.domain import ErrorReport
 
 SESSION_SECONDS = 300
 
 
-class ErrorReportBrowser(sl.Component[sl.ComponentsV2Target]):
-    """A list of recent reports, each openable in place and readable to its last line.
+def _traceback_footer(page: int, pages: int) -> sl.TextLike:
+    section = L(t"Traceback")
+    return L(t"{section} — page {page} of {pages} · the attachment has the whole report")
+
+
+ERROR_CHROME = dataclasses.replace(
+    CHROME,
+    not_yours=L(t"These error controls belong to someone else."),
+    previous=L(t"Earlier"),
+    next=L(t"Later"),
+    page_footer=_traceback_footer,
+)
+
+
+class ErrorReportScreen(sd.Screen):
+    """An error browser that ends when closed, replaced, or timed out.
 
     Holds the reports it was constructed with rather than a service: `recent` already fetches
     every row the select can offer, so opening one is a re-render, not a round trip.
     """
+
+    session_name = "errors"
+    timeout = SESSION_SECONDS
+    visibility = sd.Private(L(t"An error report names internal paths, so it is never posted in a channel."))
+    root_options = {"chrome": ERROR_CHROME}
 
     # Opaque: a stored report is a value this browser shows and never writes to, and its
     # redacted `context` mapping is a plain dict, which the state immutability check refuses.
@@ -49,18 +69,7 @@ class ErrorReportBrowser(sl.Component[sl.ComponentsV2Target]):
 
     def chrome(self) -> sl.chrome.Chrome:
         """This browser's chrome: temporal paging labels and a footer that names the attachment."""
-        return dataclasses.replace(
-            CHROME,
-            not_yours=L(t"These error controls belong to someone else."),
-            previous=L(t"Earlier"),
-            next=L(t"Later"),
-            page_footer=lambda page, pages: L(
-                "{section} — page {page} of {pages} · the attachment has the whole report",
-                section=L("Traceback"),
-                page=page,
-                pages=pages,
-            ),
-        )
+        return ERROR_CHROME
 
     def render(self) -> sl.Document[sl.ComponentsV2Target]:
         nodes = self._render_detail() if self.detail is not None else self._render_list()

@@ -7,7 +7,7 @@ from discord.ext.commands import Context
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.diagnostics_view import SESSION_SECONDS, ErrorReportBrowser
+from squid.bot.diagnostics_view import ErrorReportScreen
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.ui import info_node
 from squid.bot.utils.permissions import hide_unless, requires
@@ -34,7 +34,7 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         """Show the stored error behind a reference someone reported."""
         report, matches = await self.error_reports.lookup(reference)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        browser = ErrorReportBrowser(report=report, matches=matches)
+        browser = ErrorReportScreen(report=report, matches=matches)
         await self._deliver_browser(ctx, browser, locale)
 
     @error_group.command(name="recent")
@@ -47,7 +47,7 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         """
         reports = await self.error_reports.recent(limit=RECENT_LIMIT, work_lost_only=work_lost)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        await self._deliver_browser(ctx, ErrorReportBrowser(reports), locale)
+        await self._deliver_browser(ctx, ErrorReportScreen(reports), locale)
 
     @error_group.command(name="clear")
     @requires(DIAGNOSTICS_ERROR_CLEAR)
@@ -67,7 +67,7 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     async def _deliver_browser(
         self,
         ctx: Context[BotT],
-        browser: ErrorReportBrowser,
+        browser: ErrorReportScreen,
         locale: str | None,
     ) -> None:
         """MessageRoot the browser and answer where only the caller can read it.
@@ -76,16 +76,8 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         other surface withholds, which is the payload class `deliver_privately` exists for:
         ephemeral on the slash side, direct messages on the prefix side, never the channel.
         """
-        invocation = await sd.Invocation.of(ctx)
-        await invocation.mount(
-            browser,
-            access=sd.Owner(ctx.author.id),
-            visibility=sd.Private(
-                t(locale, _("An error report names internal paths, so it is never posted in a channel."))
-            ),
-            chrome=browser.chrome(),
-            timeout=SESSION_SECONDS,
-        )
+        del locale
+        await browser.show(ctx)
 
     async def _deliver(
         self,
