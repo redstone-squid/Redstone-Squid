@@ -450,7 +450,7 @@ SCHEMA: dict[str, Any] = {
         "entity_select": _node(
             EntitySelect.KIND,
             {
-                "entity_type": {"enum": ["user", "role", "channel", "mentionable"]},
+                "entity_type": {"enum": ["user", "role", "conversation", "mentionable"]},
                 "action": {"type": "string"},
                 "placeholder": {"type": ["string", "null"], "maxLength": 150},
                 "default_values": {
@@ -460,26 +460,35 @@ SCHEMA: dict[str, Any] = {
                         "type": "object",
                         "additionalProperties": False,
                         "properties": {
-                            "kind": {"enum": ["user", "role", "channel"]},
-                            "id": {"type": "integer", "minimum": 1},
+                            "kind": {"enum": ["user", "role", "conversation"]},
+                            "id": {
+                                "oneOf": [
+                                    {"type": "integer", "minimum": 1},
+                                    {"type": "string", "minLength": 1},
+                                ]
+                            },
                         },
                         "required": ["kind", "id"],
                     },
                 },
-                "channel_types": {
+                "conversation_types": {
                     "type": "array",
                     "items": {
                         "enum": [
-                            "text",
-                            "voice",
-                            "category",
-                            "announcement",
-                            "announcement_thread",
-                            "public_thread",
-                            "private_thread",
-                            "stage_voice",
-                            "forum",
-                            "media",
+                            "guild_text",
+                            "guild_voice",
+                            "guild_category",
+                            "guild_announcement",
+                            "guild_announcement_thread",
+                            "guild_public_thread",
+                            "guild_private_thread",
+                            "guild_stage_voice",
+                            "guild_forum",
+                            "guild_media",
+                            "workspace_public",
+                            "workspace_private",
+                            "direct",
+                            "group_direct",
                         ]
                     },
                 },
@@ -492,7 +501,7 @@ SCHEMA: dict[str, Any] = {
             "action",
             "placeholder",
             "default_values",
-            "channel_types",
+            "conversation_types",
             "min_values",
             "max_values",
             "disabled",

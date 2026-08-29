@@ -6,7 +6,7 @@ from enum import StrEnum
 from typing import ClassVar
 
 from squid_ui.emoji import Emoji
-from squid_ui.entity import ChannelType, EntityRef, EntityType
+from squid_ui.entity import ConversationType, EntityRef, EntityType
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.forms import FormBinding
 from squid_ui.interactions import ActionBinding, ActionMode
@@ -148,7 +148,7 @@ class EntitySelect:
     action: str
     placeholder: str | None = None
     default_values: tuple[EntityRef, ...] = ()
-    channel_types: tuple[ChannelType, ...] = ()
+    conversation_types: tuple[ConversationType, ...] = ()
     min_values: int = 1
     max_values: int = 1
     disabled: bool = False
@@ -342,7 +342,7 @@ class HtmlAttributeName(StrEnum):
     TIMEZONE = "timezone"
     TIME_STYLE = "time-style"
     ENTITY_TYPE = "entity-type"
-    CHANNEL_TYPES = "channel-types"
+    CONVERSATION_TYPES = "conversation-types"
 
 
 type HtmlAttributeValue = str | int | float | bool

@@ -1123,7 +1123,10 @@ class _Compiler:
         metadata = _attributes(
             (scene.HtmlAttributeName.NAME, node.key),
             (scene.HtmlAttributeName.ENTITY_TYPE, node.entity_type.value),
-            (scene.HtmlAttributeName.CHANNEL_TYPES, ",".join(value.value for value in node.channel_types)),
+            (
+                scene.HtmlAttributeName.CONVERSATION_TYPES,
+                ",".join(value.value for value in node.conversation_types),
+            ),
             (scene.HtmlAttributeName.SELECTION_MIN, node.minimum),
             (scene.HtmlAttributeName.SELECTION_MAX, node.maximum),
             (scene.HtmlAttributeName.ARIA_LABEL, self._optional_text(node.placeholder) or node.key),
