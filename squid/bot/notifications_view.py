@@ -6,7 +6,8 @@ to read off `list` and type back. A subscription is a thing you look at and then
 looking at it and removing it belong to the same message (audit C5's retyping half).
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
+from uuid import UUID
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -16,6 +17,7 @@ from squid.notifications import (
     NotificationSubscription,
     RecordSubscriptionFilter,
     SubscriptionKind,
+    TagPredicate,
 )
 
 if TYPE_CHECKING:
@@ -136,6 +138,46 @@ class NotificationScreen(sd.Screen):
                 ),
             )
         )
+        nodes.extend(
+            (
+                sl.form(
+                    L(t"Follow creator"),
+                    sl.forms.FormSpec(
+                        L(t"Follow a creator"),
+                        (
+                            sl.forms.TextField(
+                                key="creator",
+                                label=L(t"Creator profile ID"),
+                                maximum=36,
+                            ),
+                        ),
+                    ),
+                    key="follow-creator",
+                    on_submit=self._follow_creator,
+                ),
+                sl.form(
+                    L(t"Follow record"),
+                    sl.forms.FormSpec(
+                        L(t"Follow a record"),
+                        (
+                            sl.forms.TextField(
+                                key="competition",
+                                label=L(t"Record competition ID"),
+                                maximum=36,
+                            ),
+                        ),
+                    ),
+                    key="follow-record",
+                    on_submit=self._follow_record,
+                ),
+                sl.form(
+                    L(t"Follow matching records"),
+                    self._filter_form(),
+                    key="follow-filter",
+                    on_submit=self._follow_filter,
+                ),
+            )
+        )
         nodes.append(
             sl.action_controls(
                 sl.action_control(
@@ -181,6 +223,83 @@ class NotificationScreen(sd.Screen):
         await self._refresh()
         self.invalidate()
 
+    async def _follow_creator(self, event: sl.SubmitEvent) -> None:
+        creator = self._uuid(event.values["creator"])
+        if creator is None:
+            await event.notice(L(t"Enter a creator profile ID in UUID form."))
+            return
+        await self._notifications.subscribe(
+            self._account_id,
+            kind=SubscriptionKind.CREATOR,
+            subject_id=creator,
+        )
+        await self._followed(event, L(t"Following that creator."))
+
+    async def _follow_record(self, event: sl.SubmitEvent) -> None:
+        competition = self._uuid(event.values["competition"])
+        if competition is None:
+            await event.notice(L(t"Enter a record competition ID in UUID form."))
+            return
+        await self._notifications.subscribe(
+            self._account_id,
+            kind=SubscriptionKind.RECORD,
+            subject_id=competition,
+        )
+        await self._followed(event, L(t"Following that record."))
+
+    async def _follow_filter(self, event: sl.SubmitEvent) -> None:
+        build_kind = self._optional_text(event.values.get("build_kind"))
+        record_class = self._optional_text(event.values.get("record_class"))
+        version_scope = self._optional_text(event.values.get("version_scope"))
+        tag = event.values.get("tag")
+        tag_value = self._optional_text(event.values.get("tag_value"))
+        if not any((build_kind, record_class, version_scope, tag is not None)):
+            await event.notice(L(t"Choose at least one record filter."))
+            return
+        record_filter = RecordSubscriptionFilter(
+            build_kinds=frozenset({build_kind}) if build_kind else frozenset(),
+            record_classes=frozenset({record_class}) if record_class else frozenset(),
+            version_scopes=frozenset({version_scope}) if version_scope else frozenset(),
+            tags=()
+            if tag is None
+            else (TagPredicate(cast(int, tag), "present" if tag_value is None else "exact", tag_value),),
+        )
+        await self._notifications.subscribe(
+            self._account_id,
+            kind=SubscriptionKind.RECORD_FILTER,
+            record_filter=record_filter,
+        )
+        await self._followed(event, L(t"Following records matching that filter."))
+
+    async def _followed(self, event: sl.SubmitEvent, notice: sl.TextLike) -> None:
+        await self._refresh()
+        await event.notice(notice)
+
+    @staticmethod
+    def _uuid(value: object) -> UUID | None:
+        try:
+            return UUID(str(value))
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _optional_text(value: object) -> str | None:
+        text = str(value).strip() if value is not None else ""
+        return text or None
+
+    @staticmethod
+    def _filter_form() -> sl.forms.FormSpec:
+        return sl.forms.FormSpec(
+            L(t"Follow matching records"),
+            (
+                sl.forms.TextField(key="build_kind", label=L(t"Build kind"), required=False, maximum=100),
+                sl.forms.TextField(key="record_class", label=L(t"Record class"), required=False, maximum=100),
+                sl.forms.TextField(key="version_scope", label=L(t"Version scope"), required=False, maximum=100),
+                sl.forms.IntField(key="tag", label=L(t"Showcase tag ID"), required=False, minimum=1),
+                sl.forms.TextField(key="tag_value", label=L(t"Exact tag value"), required=False, maximum=100),
+            ),
+        )
+
     async def _close(self, event: sl.PressEvent) -> None:
         self.closed = True
         await event.finish()
@@ -196,7 +315,8 @@ class NotificationScreen(sd.Screen):
             lines.append(f"**{{{label}}}**\n{self.detail(subscription)}")
         hidden = len(self._subscriptions) - len(self.subscriptions)
         if hidden > 0:
-            params["remainder"] = L("…and {count} more.", count=hidden)
+            count = hidden
+            params["remainder"] = L(t"…and {count} more.")
             lines.append("{remainder}")
         return L("\n".join(lines), **params)
 
