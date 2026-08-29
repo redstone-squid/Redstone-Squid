@@ -9,6 +9,7 @@ looking at it and removing it belong to the same message (audit C5's retyping ha
 from typing import TYPE_CHECKING
 
 import squid_ui as sl
+import squid_ui_discord as sd
 from squid.bot.ui import L
 from squid.notifications import (
     NotificationPreferences,
@@ -36,8 +37,12 @@ def _kind_label(kind: SubscriptionKind) -> sl.TextLike:
             return L("Record filter")
 
 
-class NotificationPanel(sl.Component[sl.ComponentsV2Target]):
-    """A mounted notification workspace with semantic choices and actions."""
+class NotificationScreen(sd.Screen):
+    """A notification workspace that ends when closed, replaced, or timed out."""
+
+    session_name = "notifications"
+    timeout = SESSION_SECONDS
+    visibility = "personal"
 
     selected_ids: tuple[str, ...] = sl.state(())
     closed: bool = sl.state(default=False)
