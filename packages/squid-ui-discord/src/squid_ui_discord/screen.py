@@ -5,13 +5,13 @@ from typing import ClassVar, Self, cast
 
 from squid_ui.runtime.component import Component
 from squid_ui.target_types import ComponentsV2Target
-from squid_ui_discord.access import AccessPolicy, Owner
+from squid_ui_discord.access import AccessPolicy, Everyone, Owner
 from squid_ui_discord.invocation import Invocation, Private, Visibility
 from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_contracts import ExpiryPolicy, PauseUpdates, RenewEphemeral
 from squid_ui_discord.runtime import InvocationSource
 from squid_ui_discord.session_specs import ScopeKind, SessionOptions, SessionSpec
-from squid_ui_discord.sessions import DEFAULT_ADMISSION, AdmissionSpec
+from squid_ui_discord.sessions import DEFAULT_ADMISSION, AdmissionSpec, Reject
 
 _DEDICATED_ROOT_OPTIONS = frozenset({"expiry", "localization", "scheduler", "timeout"})
 """Options owned by named Screen policy or by the invocation."""
@@ -40,10 +40,16 @@ class Screen(Component[ComponentsV2Target]):
     expiry: ClassVar[ExpiryPolicy | None] = None
     follow_topics: ClassVar[bool] = False
     root_options: ClassVar[SessionOptions] = {}
+    _session_name_required: ClassVar[bool] = False
 
-    def __init_subclass__(cls, **kwargs: object) -> None:
+    def __init_subclass__(cls, *, _preset_base: bool = False, **kwargs: object) -> None:
         super().__init_subclass__(**kwargs)
-        cls._validate_policy()
+        inherited_requirement = any(base._session_name_required for base in cls.__bases__ if issubclass(base, Screen))
+        cls._session_name_required = _preset_base or inherited_requirement
+        cls._validate_policy(
+            require_session_name=cls._session_name_required and not _preset_base,
+            allow_unnamed_session_policy=_preset_base,
+        )
 
     @property
     def opening(self) -> Invocation:
@@ -148,7 +154,12 @@ class Screen(Component[ComponentsV2Target]):
             raise TypeError(message)
 
     @classmethod
-    def _validate_policy(cls) -> None:
+    def _validate_policy(
+        cls,
+        *,
+        require_session_name: bool = False,
+        allow_unnamed_session_policy: bool = False,
+    ) -> None:
         if cls.session_name is not None and (not isinstance(cls.session_name, str) or not cls.session_name):
             message = f"{cls.__name__}.session_name must be a non-empty string or None"
             raise TypeError(message)
@@ -165,6 +176,9 @@ class Screen(Component[ComponentsV2Target]):
             message = f"{cls.__name__}.domain must be a non-empty string or None"
             raise ValueError(message)
         if cls.session_name is None:
+            if require_session_name:
+                message = f"{cls.__name__}.session_name must be a non-empty string"
+                raise TypeError(message)
             session_policy = {
                 "scope": cls.scope is not ScopeKind.USER,
                 "admission": cls.admission != DEFAULT_ADMISSION,
@@ -173,7 +187,7 @@ class Screen(Component[ComponentsV2Target]):
                 "domain": cls.domain is not None,
             }
             unused = tuple(name for name, configured in session_policy.items() if configured)
-            if unused:
+            if unused and not allow_unnamed_session_policy:
                 message = (
                     f"{cls.__name__} declares no session_name, so its session policy cannot apply: {', '.join(unused)}"
                 )
@@ -192,4 +206,27 @@ class Screen(Component[ComponentsV2Target]):
             raise TypeError(message)
 
 
-__all__ = ["Screen"]
+class UserSessionScreen(Screen, _preset_base=True):
+    """An owner-only personal screen with one replaceable session per user."""
+
+    scope = ScopeKind.USER
+    admission = DEFAULT_ADMISSION
+
+
+class UserGuildSessionScreen(Screen, _preset_base=True):
+    """An owner-only personal screen with one replaceable session per user and guild."""
+
+    scope = ScopeKind.USER_GUILD
+    admission = DEFAULT_ADMISSION
+
+
+class SharedGuildSessionScreen(Screen, _preset_base=True):
+    """A public screen with one non-replaceable shared session per guild."""
+
+    scope = ScopeKind.GUILD
+    admission = AdmissionSpec(collision=Reject())
+    access = Everyone()
+    visibility = "public"
+
+
+__all__ = ["Screen", "SharedGuildSessionScreen", "UserGuildSessionScreen", "UserSessionScreen"]

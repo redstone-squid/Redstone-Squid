@@ -12,7 +12,7 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid_reactivity import LocalTopicBus
 from squid_ui.text import Message
-from squid_ui_discord.sessions import AdmissionSpec, Opened, Reject
+from squid_ui_discord.sessions import AdmissionSpec, Opened, Reject, ReplaceOldest
 from squid_ui_discord.testing import fake_interaction, fake_message
 
 
@@ -74,6 +74,50 @@ def test_a_direct_screen_rejects_session_only_policy_at_class_creation() -> None
 
             def render(self):
                 return sl.heading("Invalid")
+
+
+def test_session_presets_declare_the_common_policies() -> None:
+    class User(sd.UserSessionScreen):
+        session_name = "user"
+
+    class UserGuild(sd.UserGuildSessionScreen):
+        session_name = "user-guild"
+
+    class Guild(sd.SharedGuildSessionScreen):
+        session_name = "guild"
+
+    assert User.scope is sd.ScopeKind.USER
+    assert isinstance(User.admission.collision, ReplaceOldest)
+    assert User.access is None
+    assert User.visibility == "personal"
+    assert UserGuild.scope is sd.ScopeKind.USER_GUILD
+    assert Guild.scope is sd.ScopeKind.GUILD
+    assert isinstance(Guild.admission.collision, Reject)
+    assert Guild.access == sd.Everyone()
+    assert Guild.visibility == "public"
+
+
+def test_concrete_session_preset_requires_a_session_name() -> None:
+    with pytest.raises(TypeError, match=r"Missing\.session_name must be a non-empty string"):
+
+        class Missing(sd.UserSessionScreen):
+            pass
+
+
+def test_session_preset_policy_can_be_overridden() -> None:
+    policy = AdmissionSpec(limit=2, collision=Reject())
+
+    class Customized(sd.UserSessionScreen):
+        session_name = "customized"
+        scope = sd.ScopeKind.GLOBAL
+        admission = policy
+        access = sd.Everyone()
+        visibility = "public"
+
+    assert Customized.scope is sd.ScopeKind.GLOBAL
+    assert Customized.admission is policy
+    assert Customized.access == sd.Everyone()
+    assert Customized.visibility == "public"
 
 
 async def test_show_sets_opening_and_loads_before_the_first_render() -> None:
