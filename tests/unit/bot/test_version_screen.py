@@ -12,7 +12,9 @@ from squid_ui.testing import labels
 
 def make_screen(*, allowed: bool = True) -> VersionScreen:
     versions = SimpleNamespace(
-        list_display=AsyncMock(side_effect=lambda edition, **_kwargs: ["1.21", "1.20"] if edition == "Java" else ["1.21.90"]),
+        list_display=AsyncMock(
+            side_effect=lambda edition, **_kwargs: ["1.21", "1.20"] if edition == "Java" else ["1.21.90"]
+        ),
         add=AsyncMock(return_value=MinecraftVersion("Java", 1, 22, 0)),
     )
     return VersionScreen(

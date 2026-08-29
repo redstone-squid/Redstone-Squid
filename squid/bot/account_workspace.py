@@ -88,9 +88,7 @@ class AccountWorkspace(sd.Screen):
 
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self._merge_code is not None and self._merge_decision is not None:
-            return (
-                self.boundary(self._merge_decision, key="merge-decision"),
-            )
+            return (self.boundary(self._merge_decision, key="merge-decision"),)
         if self._tabs is None:
             return (sl.status(L(t"Loading account.")),)
         return (
