@@ -365,19 +365,23 @@
         "action": {
           "type": "string"
         },
-        "channel_types": {
+        "conversation_types": {
           "items": {
             "enum": [
-              "text",
-              "voice",
-              "category",
-              "announcement",
-              "announcement_thread",
-              "public_thread",
-              "private_thread",
-              "stage_voice",
-              "forum",
-              "media"
+              "guild_text",
+              "guild_voice",
+              "guild_category",
+              "guild_announcement",
+              "guild_announcement_thread",
+              "guild_public_thread",
+              "guild_private_thread",
+              "guild_stage_voice",
+              "guild_forum",
+              "guild_media",
+              "workspace_public",
+              "workspace_private",
+              "direct",
+              "group_direct"
             ]
           },
           "type": "array"
@@ -387,14 +391,22 @@
             "additionalProperties": false,
             "properties": {
               "id": {
-                "minimum": 1,
-                "type": "integer"
+                "oneOf": [
+                  {
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                ]
               },
               "kind": {
                 "enum": [
                   "user",
                   "role",
-                  "channel"
+                  "conversation"
                 ]
               }
             },
@@ -414,7 +426,7 @@
           "enum": [
             "user",
             "role",
-            "channel",
+            "conversation",
             "mentionable"
           ]
         },
@@ -453,7 +465,7 @@
         "action",
         "placeholder",
         "default_values",
-        "channel_types",
+        "conversation_types",
         "min_values",
         "max_values",
         "disabled",
@@ -620,7 +632,7 @@
             "timezone",
             "time-style",
             "entity-type",
-            "channel-types"
+            "conversation-types"
           ]
         },
         "value": {

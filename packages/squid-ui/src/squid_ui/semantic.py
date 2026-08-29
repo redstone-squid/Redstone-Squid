@@ -7,7 +7,7 @@ from enum import IntEnum, StrEnum
 from typing import TYPE_CHECKING, Any, Literal, overload
 
 from squid_ui.assets import Asset
-from squid_ui.entity import ChannelType, EntityRef, EntityType, supports_entity
+from squid_ui.entity import ConversationType, EntityRef, EntityType, supports_entity
 from squid_ui.forms import FormSpec, SubmitHandler
 from squid_ui.grids import GridCell, validate_grid
 from squid_ui.guards import Guard
@@ -602,13 +602,13 @@ class Entities:
     selection: EntityOwnership = NO_ENTITIES
     minimum: int = 1
     maximum: int = 1
-    channel_types: tuple[ChannelType, ...] = ()
+    conversation_types: tuple[ConversationType, ...] = ()
     placeholder: TextLike | None = None
     flexibility: Flexibility = Flexibility.NORMAL
 
     def __post_init__(self) -> None:
-        if self.channel_types and self.entity_type is not EntityType.CHANNEL:
-            message = "channel_types is only valid for channel entity pickers"
+        if self.conversation_types and self.entity_type is not EntityType.CONVERSATION:
+            message = "conversation_types is only valid for conversation entity pickers"
             raise ValueError(message)
         if any(not supports_entity(self.entity_type, choice.ref.kind) for choice in self.choices):
             message = f"fallback choice is incompatible with {self.entity_type.value} entity picker"
