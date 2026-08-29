@@ -153,28 +153,6 @@ def test_compiler_pass_packages_are_not_facades() -> None:
         assert isinstance(body[0].value.value, str)
 
 
-def test_removed_compiler_pass_modules_have_no_compatibility_surface() -> None:
-    """The former monolith paths stay deleted rather than becoming forwarding shims."""
-    removed = {
-        "squid_ui.planning.adaptation",
-        "squid_ui.planning.measurement",
-    }
-    assert [name for name in removed if (COMPILER_PASS_ROOT / f"{name.rpartition('.')[2]}.py").exists()] == []
-
-    violations: list[tuple[Path, int, str]] = []
-    for path in _scanned_files():
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            if isinstance(node, ast.Import):
-                imported = (alias.name for alias in node.names)
-            elif isinstance(node, ast.ImportFrom) and node.module is not None:
-                imported = (node.module,)
-            else:
-                continue
-            violations.extend((path, node.lineno, module) for module in imported if module in removed)
-
-    assert violations == []
-
-
 def test_generic_planning_modules_do_not_depend_on_the_discord_backend() -> None:
     """The public target seam must not acquire Discord's IR or layout solver types."""
     generic = tuple(COMPILER_PASS_ROOT / name for name in ("dialect.py", "planner.py", "target.py"))

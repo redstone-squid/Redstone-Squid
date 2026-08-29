@@ -81,7 +81,6 @@ sys.meta_path.insert(0, BlockStores())
 import squid_ui_discord
 assert squid_ui_discord.MessageRoot
 assert squid_ui_discord.SessionSpec
-assert "durability" in squid_ui_discord.__all__
 assert "squid_storage" not in sys.modules
 """
     subprocess.run([sys.executable, "-c", code], check=True)

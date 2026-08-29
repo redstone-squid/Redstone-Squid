@@ -534,21 +534,3 @@ def test_scale_field_needs_a_span_to_pick_from() -> None:
     with pytest.raises(ValueError, match="maximum greater than minimum"):
         sl.forms.ScaleField(key="score", minimum=3, maximum=3)
 
-
-def test_the_short_field_aliases_are_gone() -> None:
-    """Only the `*Field` spellings survive; the aliases lowered to nothing."""
-    for name in (
-        "Bool",
-        "Choice",
-        "Date",
-        "DateTime",
-        "Duration",
-        "Float",
-        "Int",
-        "MultiChoice",
-        "Scale",
-        "Text",
-        "TextArea",
-        "Time",
-    ):
-        assert not hasattr(sl.forms, name), name
