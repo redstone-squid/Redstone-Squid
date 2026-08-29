@@ -141,3 +141,18 @@ async def test_the_help_directory_names_commands_that_exist(loaded_bot: commands
 
     assert listed <= prefix_names | app_names
     assert "poll" not in prefix_names, "the directory would find `poll` anyway if it were not app-only"
+
+
+async def test_message_context_menu_taxonomy(loaded_bot: commands.Bot) -> None:
+    names = {
+        command.name
+        for command in loaded_bot.tree.get_commands(type=discord.AppCommandType.message)
+    }
+
+    assert names == {
+        "Archive Message",
+        "Edit Build",
+        "Recalculate Build",
+        "Resync Redstoner",
+        "Vote to Delete",
+    }

@@ -16,7 +16,7 @@ from squid.bot.operations import managed_result
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
 from squid.bot.ui import info_node, link_node, text_node
 from squid.bot.utils.autocomplete import autocompletes
-from squid.bot.utils.permissions import hide_unless, requires
+from squid.bot.utils.permissions import enforce, requires
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import (
     MESSAGE_ARCHIVE_CREATE,
@@ -40,10 +40,17 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         self.tags = bot.services.tags
         self._archive_header_pattern = re.compile(r"^<@!?(\d+)>.*wrote:")
         self.bot.reactions.subscribe(self)
+        self.archive_ctx_menu = app_commands.ContextMenu(
+            name="Archive Message",
+            callback=self.archive_message_context,
+        )
+        self.archive_ctx_menu.default_permissions = discord.Permissions(manage_messages=True)
+        self.bot.tree.add_command(self.archive_ctx_menu)
 
     @override
     async def cog_unload(self) -> None:
         self.bot.reactions.unsubscribe(self)
+        self.bot.tree.remove_command(self.archive_ctx_menu.name, type=self.archive_ctx_menu.type)
 
     @commands.hybrid_group(name="tag")
     async def tag_group(self, ctx: Context[BotT]) -> None:
@@ -182,11 +189,22 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             ),
         )
 
-    @commands.hybrid_command(name="archive")
-    @requires(MESSAGE_ARCHIVE_CREATE, guild_only=True)
-    @hide_unless(manage_messages=True)
-    async def archive_message(self, ctx: Context[BotT], message: discord.Message, delete_original: bool = True):
-        """Makes a copy of the message in the current channel."""
+    async def archive_message_context(
+        self,
+        interaction: discord.Interaction[BotT],
+        message: discord.Message,
+    ) -> None:
+        """Archive the message selected through Discord's Apps menu."""
+        await enforce(interaction, MESSAGE_ARCHIVE_CREATE)
+        if interaction.guild is None or message.guild != interaction.guild:
+            await interaction.response.send_message("That message is not from this server.", ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True)
+        await self._archive_message(message)
+        await interaction.followup.send("Message archived.", ephemeral=True)
+
+    async def _archive_message(self, message: discord.Message) -> None:
+        """Copy one message in place and remove the original."""
         if isinstance(message.author, discord.User):
             user = message.author
         else:
@@ -194,7 +212,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         username_description = f" (username: {user.name})" if user else ""
         reaction_count = sum(reaction.count for reaction in message.reactions)
 
-        sent_message = await ctx.send(
+        sent_message = await message.channel.send(
             content=(
                 f"{message.author.mention}{username_description} wrote:"
                 f"\nReactions: {reaction_count}"
@@ -209,8 +227,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             ),
         )
         await sent_message.add_reaction("❌")
-        if delete_original:
-            await message.delete()
+        await message.delete()
 
     async def on_reaction_add(self, event: ReactionEvent) -> None:
         payload = event.payload
