@@ -1,8 +1,5 @@
 """Engine pagination and ModalSpec tests."""
 
-from types import SimpleNamespace
-from typing import cast
-
 import discord
 import pytest
 from discord.state import ConnectionState
@@ -271,7 +268,7 @@ class TestMountPagination:
         first = commit_render(message_root)
         second = commit_render(message_root)
         message_id = 42
-        store = ViewStore(cast(ConnectionState, SimpleNamespace()))
+        store = ViewStore(object.__new__(ConnectionState))
 
         store.add_view(first, message_id)
         store.add_view(second, message_id)

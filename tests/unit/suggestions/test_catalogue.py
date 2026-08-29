@@ -4,8 +4,7 @@ The registry is a contract between three surfaces, so what it publishes is check
 than discovered when a Discord dropdown silently comes back empty.
 """
 
-from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -21,7 +20,7 @@ def registry(*, discord: bool = False) -> SuggestionRegistry:
     Sources are constructed eagerly but only query when asked, so the whole catalogue can be
     inspected without a database or any real service behind it.
     """
-    stub: Any = SimpleNamespace()
+    stub = cast(Any, object())
     extras: dict[str, Any] = (
         {"starboards": stub, "permission_roles": stub, "notifications": stub, "accounts": stub} if discord else {}
     )
