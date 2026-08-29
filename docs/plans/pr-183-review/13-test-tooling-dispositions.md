@@ -1,5 +1,10 @@
 # Test and tooling review: thread dispositions
 
+> These dispositions close the original PR #183 threads. The broader namespace, mock, snapshot,
+> duplication, and quarantine cleanup is tracked in
+> [the workspace test-suite audit](../test-suite-audit.md); its final disposition takes precedence
+> for tests retained here as historical follow-up.
+
 Every `tests/` comment `Glinte` left on [PR #183](https://github.com/redstone-squid/Redstone-Squid/pull/183)
 at or before the `5edfd3e` cutoff, with the disposition that closes it, plus the one developer-tooling
 thread on a source file that the original cluster split left unassigned (see
