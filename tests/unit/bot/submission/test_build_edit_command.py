@@ -102,7 +102,7 @@ def _cog(build: Any, *, allowed: bool = True, account_id: int | None = 1) -> Bui
 
 async def _run(cog: BuildEditCommands[Any], **kwargs: Any) -> discord.Interaction[Any]:
     interaction = _interaction(cog.bot)
-    await BuildEditCommands.edit_build.callback(cog, interaction, build_id=1, **kwargs)
+    await BuildEditCommands.edit_build(cog, interaction, build_id=1, **kwargs)
     return interaction
 
 

@@ -2,16 +2,14 @@
 
 from typing import TYPE_CHECKING
 
-from discord.ext.commands import Cog, Context, hybrid_group
+from discord import app_commands
+from discord.ext.commands import Cog
 
 if TYPE_CHECKING:
     import squid.bot.app
 
 
 class BuildCommandGroup[BotT: "squid.bot.app.RedstoneSquid"](Cog):
-    """Own the shared build command group."""
+    """Own the app-only build command group."""
 
-    @hybrid_group(name="build")
-    async def build_hybrid_group(self, ctx: Context[BotT]) -> None:
-        """Submit, view, edit, and review builds."""
-        await ctx.send_help("build")
+    build_group = app_commands.Group(name="build", description="Browse and submit redstone builds")
