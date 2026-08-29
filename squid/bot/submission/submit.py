@@ -20,9 +20,9 @@ from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.ingestion import ingest_message_bundle
 from squid.bot.submission.media import CatboxMirror
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
-from squid.bot.submission.ui.components import EphemeralBuildEditButton
+from squid.bot.submission.ui.controls import build_edit
 from squid.bot.submission.ui.views import SubmissionFormComponent
-from squid.bot.ui import error_node, text_node
+from squid.bot.ui import L, error_node, text_node
 from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.bot.utils.permissions import enforce
 from squid.bot.utils.sticky_message import StickyMessage
@@ -234,14 +234,9 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         preview = invocation.render(
             sl.primitives.Text(heading),
             await self.bot.for_build(build).render_node(),
-            sl.primitives.Row(
-                (
-                    sl.primitives.RawItem(
-                        lambda: EphemeralBuildEditButton(build),
-                        kind="discord.item",
-                        version=1,
-                    ),
-                ),
+            sl.primitives.Section(
+                (sl.primitives.Text(L("Edit this build."), priority=-10),),
+                sl.primitives.RoutedButton(L("Edit"), build_edit.id(build_id=build.id)),
             ),
         )
         async with anyio.create_task_group() as tasks:
