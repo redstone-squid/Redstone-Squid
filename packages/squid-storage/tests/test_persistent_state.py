@@ -140,7 +140,9 @@ async def test_a_commit_after_close_is_reported_rather_than_dropped(
     slot: Slot[str, Mapping[str, object]],
 ) -> None:
     errors: list[BaseException] = []
-    pool = PersistentStatePool(Preferences, LocalTopicBus(), store=MemoryScopedStore(), slot=slot, on_error=errors.append)
+    pool = PersistentStatePool(
+        Preferences, LocalTopicBus(), store=MemoryScopedStore(), slot=slot, on_error=errors.append
+    )
 
     async with anyio.create_task_group() as tasks:
         await tasks.start(pool.run)
