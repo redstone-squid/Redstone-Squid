@@ -15,7 +15,6 @@ from squid.accounts.domain import (
 from squid.bot.profile_render import own_profile_avatar, own_profile_fields, public_profile_fields
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
-LOCALE = "en"
 DISCORD = replace(AccountIdentity.discord(7), id=1, avatar_key="abc")
 JAVA = replace(AccountIdentity.java(JAVA_UUID, username="Notch"), id=2)
 
@@ -31,7 +30,7 @@ class TestOwnProfile:
     def test_links_render_as_markdown(self) -> None:
         profile = AccountProfile(account_id=1, links=(ProfileLink("Site", "https://example.com"),))
 
-        fields = own_profile_fields(profile, LOCALE)
+        fields = own_profile_fields(profile)
 
         assert _fields_named(fields, "Links") == "[Site](https://example.com)"
 
@@ -55,7 +54,7 @@ class TestPublicProfile:
             aliases=(CreditedAlias("Notch", build_count=3),),
         )
 
-        credit = _fields_named(public_profile_fields(profile, LOCALE), "Creator credit")
+        credit = _fields_named(public_profile_fields(profile), "Creator credit")
         assert credit is not None
         assert "Notch" in credit
         assert "3" in credit
@@ -67,7 +66,7 @@ class TestPublicProfile:
             aliases=(CreditedAlias("Notch", build_count=1),),
         )
 
-        fields = public_profile_fields(profile, LOCALE)
+        fields = public_profile_fields(profile)
 
         assert _fields_named(fields, "Creator credit") is not None
         assert _fields_named(fields, "Linked accounts") is None
@@ -80,7 +79,7 @@ class TestPublicProfile:
             identities=(PublicIdentity(IdentityProvider.DISCORD, "7", "squidder"),),
         )
 
-        listed = _fields_named(public_profile_fields(profile, LOCALE), "Linked accounts")
+        listed = _fields_named(public_profile_fields(profile), "Linked accounts")
         assert listed is not None
         assert "<@" not in listed
         assert "squidder" in listed

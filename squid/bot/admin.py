@@ -11,7 +11,6 @@ from discord.ext.commands import Context, Greedy
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.accounts.domain import IdentityProvider
-from squid.bot.i18n import resolve_locale
 from squid.bot.operations import managed_result
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
 from squid.bot.tags_view import TagsScreen
@@ -179,7 +178,6 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             else:
                 synced = await ctx.bot.tree.sync()
 
-            await resolve_locale(ctx, self.bot.services.settings)
             invocation = await sd.Invocation.of(ctx)
             scope = tr("globally") if spec is None else tr("to the current guild")
             await invocation.reply(
@@ -196,7 +194,6 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             else:
                 ret += 1
 
-        await resolve_locale(ctx, self.bot.services.settings)
         invocation = await sd.Invocation.of(ctx)
         await invocation.reply(
             text_node(tr("Synced the tree to {synced}/{total}.", synced=ret, total=len(guilds))),
@@ -207,7 +204,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     async def get_sheets_link(self, ctx: Context[BotT]):
         """Sends the google sheets link"""
         invocation = await sd.Invocation.of(ctx)
-        await resolve_locale(ctx, self.bot.services.settings)
+
         await invocation.reply(
             link_node(
                 tr("Build spreadsheet"),
@@ -221,7 +218,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     async def get_database_link(self, ctx: Context[BotT]):
         """Sends the database link"""
         invocation = await sd.Invocation.of(ctx)
-        await resolve_locale(ctx, self.bot.services.settings)
+
         await invocation.reply(
             link_node(
                 tr("Database"),

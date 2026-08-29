@@ -24,18 +24,18 @@ _PROVIDER_LABELS = {
 }
 
 
-def provider_label(provider: IdentityProvider, locale: str | None) -> str:
+def provider_label(provider: IdentityProvider) -> str:
     """Name a provider the way a player would."""
     return tr(_PROVIDER_LABELS[provider])
 
 
-def identity_label(identity: AccountIdentity, locale: str | None) -> str:
+def identity_label(identity: AccountIdentity) -> str:
     """Name one identity for a picker or a list.
 
     A Discord identity renders as a mention, which is the only handle a reader can click; every
     other provider has a stored display name worth showing, and falls back to the subject.
     """
-    provider = provider_label(identity.provider, locale)
+    provider = provider_label(identity.provider)
     if identity.provider is IdentityProvider.DISCORD and identity.discord_id is not None:
         return tr("{provider} — <@{subject}>", provider=provider, subject=identity.discord_id)
     return tr(
@@ -50,7 +50,7 @@ def render_links(links: tuple[ProfileLink, ...]) -> str:
     return "\n".join(f"[{link.label}]({link.url})" for link in links)
 
 
-def own_profile_fields(profile: AccountProfile, locale: str | None) -> list[CardField]:
+def own_profile_fields(profile: AccountProfile) -> list[CardField]:
     """Describe the free-text half of the caller's own profile.
 
     The linked accounts are not here, unlike in the public view: the panel that renders this lists
@@ -78,7 +78,7 @@ def own_profile_avatar(profile: AccountProfile, identities: tuple[AccountIdentit
     return () if url is None else (url,)
 
 
-def public_profile_fields(profile: PublicCreatorProfile, locale: str) -> list[CardField]:
+def public_profile_fields(profile: PublicCreatorProfile) -> list[CardField]:
     """Describe what a stranger may see.
 
     Takes an already-filtered `PublicCreatorProfile` rather than filtering here, so the bot and
@@ -96,7 +96,7 @@ def public_profile_fields(profile: PublicCreatorProfile, locale: str) -> list[Ca
                 "\n".join(
                     tr(
                         "{provider} — {name}",
-                        provider=provider_label(identity.provider, locale),
+                        provider=provider_label(identity.provider),
                         name=identity.display_name or identity.subject,
                     )
                     for identity in profile.identities
@@ -120,7 +120,7 @@ def public_profile_fields(profile: PublicCreatorProfile, locale: str) -> list[Ca
     return fields
 
 
-def present_claimant(claim: AliasClaim, locale: str | None = None, *, mention: bool = True) -> str:
+def present_claimant(claim: AliasClaim, *, mention: bool = True) -> str:
     """Name a claimant by the most recognisable identity loaded for them.
 
     One function for every surface that shows a claimant — the review queue, its select, an

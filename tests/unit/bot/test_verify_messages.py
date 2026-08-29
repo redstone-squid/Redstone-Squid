@@ -31,7 +31,6 @@ from squid.suggestions.infrastructure.providers.records import _claimant_descrip
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 OTHER_UUID = UUID("22222222-2222-2222-2222-222222222222")
 NOW = Instant.from_utc(2026, 8, 16)
-LOCALE = "en"
 
 
 def _refresh(**overrides: object) -> IdentityRefresh:
@@ -45,21 +44,21 @@ def _refresh(**overrides: object) -> IdentityRefresh:
 
 
 def test_unchanged_name_says_nothing_changed() -> None:
-    message = _refresh_message(_refresh(current_name="Steve", previous_name="Steve"), LOCALE)
+    message = _refresh_message(_refresh(current_name="Steve", previous_name="Steve"))
 
     assert "still **Steve**" in message
     assert "changed from" not in message
 
 
 def test_rename_names_both_the_old_and_new_name() -> None:
-    message = _refresh_message(_refresh(), LOCALE)
+    message = _refresh_message(_refresh())
 
     assert "**OldName**" in message
     assert "**NewName**" in message
 
 
 def test_a_claimed_credit_is_reported() -> None:
-    message = _refresh_message(_refresh(claimed_alias=CreatorAlias(5, "NewName", account_id=1)), LOCALE)
+    message = _refresh_message(_refresh(claimed_alias=CreatorAlias(5, "NewName", account_id=1)))
 
     assert "Build credits under **NewName**" in message
 
@@ -71,7 +70,6 @@ def test_a_contested_name_says_it_was_not_moved_and_names_the_claim() -> None:
             contested_alias=CreatorAlias(9, "Contested", account_id=2),
             opened_claim=AliasClaim(3, 9, "Contested", 1, ClaimStatus.PENDING, NOW),
         ),
-        LOCALE,
     )
 
     assert "**Contested**" in message
@@ -85,7 +83,6 @@ def test_retained_names_are_listed() -> None:
             claimed_alias=CreatorAlias(5, "NewName", account_id=1),
             retained_alias_names=("OldName", "OlderName"),
         ),
-        LOCALE,
     )
 
     assert "**OldName**" in message
@@ -93,7 +90,7 @@ def test_retained_names_are_listed() -> None:
 
 
 def test_a_link_names_the_account_it_linked() -> None:
-    message = _link_message(_refresh(current_name="Notch", previous_name=None), LOCALE)
+    message = _link_message(_refresh(current_name="Notch", previous_name=None))
 
     assert "linked to **Notch**" in message
     # Not the refresh headline: a first link never "changed" or "stayed the same".
@@ -104,7 +101,6 @@ def test_a_link_names_the_account_it_linked() -> None:
 def test_a_link_reports_the_credit_it_claimed() -> None:
     message = _link_message(
         _refresh(current_name="Notch", previous_name=None, claimed_alias=CreatorAlias(5, "Notch", account_id=1)),
-        LOCALE,
     )
 
     assert "Build credits under **Notch**" in message
@@ -123,7 +119,6 @@ def test_a_link_reports_a_contested_credit() -> None:
             contested_alias=CreatorAlias(9, "Notch", account_id=2),
             opened_claim=AliasClaim(3, 9, "Notch", 1, ClaimStatus.PENDING, NOW),
         ),
-        LOCALE,
     )
 
     assert "not moved" in message
@@ -134,11 +129,11 @@ def test_link_and_refresh_describe_a_credit_in_the_same_words() -> None:
     """One vocabulary for the reconciliation, which is the same operation in both commands."""
     refresh = _refresh(claimed_alias=CreatorAlias(5, "NewName", account_id=1), retained_alias_names=("OldName",))
 
-    shared = _reconciliation_lines(refresh, LOCALE)
+    shared = _reconciliation_lines(refresh)
 
     assert shared
-    assert all(line in _link_message(refresh, LOCALE) for line in shared)
-    assert all(line in _refresh_message(refresh, LOCALE) for line in shared)
+    assert all(line in _link_message(refresh) for line in shared)
+    assert all(line in _refresh_message(refresh) for line in shared)
 
 
 def _preview(*, held_elsewhere: bool = False) -> LinkPreview:
@@ -182,20 +177,20 @@ def test_a_claimant_with_discord_is_shown_as_a_mention() -> None:
     """The only handle a reviewer can click, and the only one Discord resolves for us."""
     claim = _claim(Account((AccountIdentity.discord(555),), None, 42, NOW))
 
-    assert present_claimant(claim, LOCALE) == "<@555>"
+    assert present_claimant(claim) == "<@555>"
 
 
 def test_a_claimant_without_discord_falls_back_to_the_java_name() -> None:
     claim = _claim(Account((AccountIdentity.java(JAVA_UUID, username="Notch"),), None, 42, NOW))
 
-    assert present_claimant(claim, LOCALE) == "Notch"
+    assert present_claimant(claim) == "Notch"
 
 
 def test_a_claimant_with_only_a_public_creator_is_named_by_it() -> None:
     creator = UUID("33333333-3333-3333-3333-333333333333")
     claim = _claim(Account((), None, 42, NOW, creator))
 
-    presented = present_claimant(claim, LOCALE)
+    presented = present_claimant(claim)
 
     assert str(creator) in presented
     assert "42" not in presented
@@ -203,7 +198,7 @@ def test_a_claimant_with_only_a_public_creator_is_named_by_it() -> None:
 
 def test_the_internal_id_is_last_and_labelled_as_a_diagnostic() -> None:
     """It identifies a row rather than a person, so it must not read like a name."""
-    presented = present_claimant(_claim(None), LOCALE)
+    presented = present_claimant(_claim(None))
 
     assert "42" in presented
     assert "unidentified" in presented
@@ -251,4 +246,4 @@ def test_the_autocomplete_description_respects_discords_limit() -> None:
 )
 def test_every_branch_renders_something(refresh: IdentityRefresh) -> None:
     """No combination may produce an empty message, which Discord rejects outright."""
-    assert _refresh_message(refresh, LOCALE).strip()
+    assert _refresh_message(refresh).strip()
