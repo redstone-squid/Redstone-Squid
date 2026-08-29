@@ -3,6 +3,8 @@
 import ast
 from pathlib import Path
 
+from tests.support.source_tree import source_tree
+
 BOT_ROOT = Path(__file__).parents[2] / "squid" / "bot"
 
 NATIVE_EVENT_ALLOWLIST = {
@@ -28,7 +30,7 @@ def _component_class(node: ast.ClassDef) -> bool:
 def test_application_code_defines_no_raw_discord_ui_subclasses_or_items() -> None:
     violations: list[str] = []
     for path in BOT_ROOT.rglob("*.py"):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = source_tree(path)
         for node in _classes(tree):
             for base in node.bases:
                 name = ast.unparse(base)
@@ -46,7 +48,7 @@ def test_application_code_defines_no_raw_discord_ui_subclasses_or_items() -> Non
 def test_application_components_do_not_own_message_roots_or_send_methods() -> None:
     violations: list[str] = []
     for path in BOT_ROOT.rglob("*.py"):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = source_tree(path)
         for component in filter(_component_class, _classes(tree)):
             for member in component.body:
                 if isinstance(member, ast.AnnAssign) and "MessageRoot" in ast.unparse(member.annotation):
@@ -61,7 +63,7 @@ def test_native_event_access_stays_inside_the_reviewed_transport_allowlist() -> 
     found: set[tuple[str, str]] = set()
     for path in BOT_ROOT.rglob("*.py"):
         relative = str(path.relative_to(BOT_ROOT))
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = source_tree(path)
         parents: dict[ast.AST, ast.AST] = {
             child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)
         }
@@ -87,7 +89,7 @@ def test_localized_ui_literals_use_template_strings() -> None:
     """Literal UI copy keeps interpolation in the t-string instead of keyword side channels."""
     violations: list[str] = []
     for path in BOT_ROOT.rglob("*.py"):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = source_tree(path)
         for node in ast.walk(tree):
             if (
                 not isinstance(node, ast.Call)

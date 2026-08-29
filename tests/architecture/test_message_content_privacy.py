@@ -9,6 +9,8 @@ from picking it up, so this asserts it.
 import ast
 from pathlib import Path
 
+from tests.support.source_tree import source_tree
+
 API_ROOT = Path(__file__).resolve().parents[2] / "squid" / "api"
 MESSAGE_MODULES = {"squid.messages", "squid.messages.application", "squid.messages.domain"}
 
@@ -17,7 +19,7 @@ def test_the_api_never_imports_the_message_context() -> None:
     """The one reliable guard: message facts have no business in a public serialiser."""
     offenders: list[str] = []
     for path in API_ROOT.rglob("*.py"):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = source_tree(path)
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and node.module is not None:
                 module = node.module
