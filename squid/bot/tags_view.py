@@ -92,12 +92,11 @@ class _ModerationActions(sl.Component[sl.ComponentsV2Target]):
         )
 
 
-class TagsScreen(sd.Screen):
+class TagsScreen(sd.UserSessionScreen):
     """A tag workspace that ends when closed, replaced, or timed out."""
 
     session_name = "tags"
     timeout = 300
-    visibility = "personal"
 
     def __init__(
         self,

@@ -278,3 +278,32 @@ messages after a process restart.
 See [Durable sessions](durable-message-roots.md) for recipes, recovery, storage, leases, and the durable
 open path. Durability preserves component and presentation state; consequential domain writes still
 belong in the application's authoritative service.
+
+## Alpha policy and exact-layout conveniences
+
+Replace repeated `Screen` policy declarations with the closest preset while retaining a stable name:
+
+```python
+class Settings(sd.UserGuildSessionScreen):
+    session_name = "settings"
+```
+
+`UserSessionScreen` and `UserGuildSessionScreen` are personal and owner-only. A
+`SharedGuildSessionScreen` is public, admits everyone, and rejects duplicate opens; migrating a shared
+guild screen therefore changes replacement into an explicit rejection.
+
+Use `sd.v2.panel(*children)` and `sd.classic.card(*children)` when exact Discord structure is needed.
+These factories promote bare text and omit `None`/`False`; primitive dataclass constructors are not
+deprecated.
+
+DevTools mutations are no longer enabled by default. Preserve the previous operational capability
+set explicitly:
+
+```python
+runtime = sd.devtools_runtime.DevToolsRuntime(
+    policy=sd.devtools_runtime.DevToolsPolicy.full_access(),
+)
+```
+
+The bundled Cog now exposes a hybrid `/dev ui` tree. A custom command can call
+`sd.open_devtools(ctx, runtime=runtime)` instead of installing that Cog.

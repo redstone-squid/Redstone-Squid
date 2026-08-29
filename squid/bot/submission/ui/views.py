@@ -163,13 +163,12 @@ class SubmissionOutcome:
     node: sl.LayoutNode[sl.ComponentsV2Target]
 
 
-class SubmissionScreen(sd.Screen):
+class SubmissionScreen(sd.UserSessionScreen):
     """A submission draft that ends when it is submitted, cancelled, or times out."""
 
     session_name = "build-submission"
     admission = AdmissionSpec(collision=Reject(notice=L(t"You already have a submission draft open.")))
     timeout = 300
-    visibility = "personal"
 
     validation_error: sl.TextLike | None = sl.state(None)
     submitting: bool = sl.state(default=False)
@@ -207,9 +206,9 @@ class SubmissionScreen(sd.Screen):
             return (
                 sl.status(L(t"Submitted for review. Submission ID: {build_id}.")),
                 self.outcome.node,
-                sl.primitives.Section(
-                    (sl.primitives.Text(L(t"Staff can now review and vote on this build."), priority=-10),),
-                    sl.primitives.RoutedButton(L(t"Edit"), build_edit.id(build_id=build_id)),
+                sd.v2.section(
+                    sd.v2.text(L(t"Staff can now review and vote on this build."), priority=-10),
+                    accessory=sd.v2.routed_button(L(t"Edit"), build_edit.id(build_id=build_id)),
                 ),
             )
         missing_door_type = self.build.door_orientation is None
@@ -412,12 +411,11 @@ def _edit_form(items: Sequence[BoundBuildField], page: int, invocation: sd.Invoc
     return sl.forms.FormSpec(invocation.t(L(t"Edit build, section {page}")), tuple(fields))
 
 
-class BuildEditScreen(sd.Screen):
+class BuildEditScreen(sd.UserSessionScreen):
     """A build editor that ends when saved, closed, replaced, or timed out."""
 
     session_name = "build-edit"
     timeout = 900
-    visibility = "personal"
     follow_topics = True
 
     page: int = sl.state(1)

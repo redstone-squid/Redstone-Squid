@@ -121,7 +121,7 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target]):
         self._build_node = await self._render_build(build)
 
 
-class SearchScreen(sd.Screen):
+class SearchScreen(sd.UserSessionScreen):
     """A resource-backed search workspace that ends when closed, replaced, or timed out."""
 
     session_name = "search"

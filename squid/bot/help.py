@@ -61,7 +61,7 @@ class HelpClient(Protocol):
     def user(self) -> discord.ClientUser | None: ...
 
 
-class HelpScreen(sd.Screen):
+class HelpScreen(sd.UserSessionScreen):
     """A command browser that ends when closed, replaced, or timed out."""
 
     session_name = "help"

@@ -16,12 +16,11 @@ from squid.permissions.domain import PermissionNode
 type ClaimAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
-class AccountWorkspace(sd.Screen):
+class AccountWorkspace(sd.UserSessionScreen):
     """An account workspace that ends when closed, replaced, or timed out."""
 
     session_name = "account"
     timeout = 300
-    visibility = "personal"
 
     def __init__(
         self,

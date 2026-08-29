@@ -53,13 +53,15 @@ Omit `access` for an owner-only screen. For a logical session, declare `session_
 alongside the common root policy:
 
 ```python
-class Lobby(sd.Screen):
+class Lobby(sd.SharedGuildSessionScreen):
     session_name = "lobby"
-    scope = sd.ScopeKind.GUILD
-    access = sd.Everyone()
-    visibility = "public"
     capacity = 8
 ```
+
+Use `UserSessionScreen` for one owner-only session per user and `UserGuildSessionScreen` when the
+same user may open one in each guild. `SharedGuildSessionScreen` is public, admits everyone, and
+rejects a duplicate guild session. Every preset subclass still declares its stable `session_name`;
+all policy fields remain overridable.
 
 Override `resolve_access(invocation)` when access depends on constructor state. Use `on_load()` for
 invocation-dependent loading before the first render; `opening` is available inside that hook.
@@ -77,6 +79,25 @@ that started the task.
 
 Use `sd.DISCORD_V2_DPY27` for Components V2. Classic-message rendering is explicitly separate under
 `sd.classic` and uses `sd.DISCORD_V1_DPY27`; there is no implicit target switch.
+
+For exact Discord structure without tuple-heavy primitive constructors, use mode-specific factories:
+
+```python
+v2_card = sd.v2.panel(
+    sd.v2.heading("Build"),
+    "Exact text is promoted automatically.",
+    sd.v2.row(sd.v2.link_button("Open", build_url)),
+    accent=0xE74C3C,
+)
+
+classic_card = sd.classic.card(
+    "Classic embed description",
+    title="Build",
+    fields=(sd.classic.card_field("Status", "Ready"),),
+)
+```
+
+The factories produce the existing primitive dataclasses; direct constructors remain available.
 
 Next, use the [API map](squid-ui-api.md) or read the complete
 [architecture and ownership guide](squid-ui-architecture.md).

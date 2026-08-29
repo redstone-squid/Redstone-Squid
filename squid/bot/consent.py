@@ -59,7 +59,7 @@ class _Answer:
     consent: AccountConsent | None = None
 
 
-class ConsentPrompt(sd.Screen):
+class ConsentPrompt(sd.UserSessionScreen):
     """A semantic consent prompt with a native-free waiting lifecycle."""
 
     session_name = "consent"

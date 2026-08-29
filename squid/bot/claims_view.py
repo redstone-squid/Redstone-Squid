@@ -1,9 +1,9 @@
 """The semantic review workspace for creator credit claims."""
 
 from collections.abc import Awaitable, Callable, Sequence
-from typing import cast
 
 import squid_ui as sl
+import squid_ui_discord as sd
 from squid.accounts.application import AccountService
 from squid.accounts.domain import AliasClaim, IdentityProvider
 from squid.accounts.errors import AliasAlreadyClaimedError
@@ -60,35 +60,32 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
                 ),
             )
         entries = tuple(_claim_entry(claim) for claim in self._claims)
-        body: sl.primitives.Node = (
-            sl.primitives.Lines(
-                entries,
+        body: sl.LayoutNode[sl.ComponentsV2Target] = (
+            sd.v2.lines(
+                *entries,
                 join="\n\n",
                 overflow=sl.primitives.Paginate(key="claims", footer=self._page_footer),
             )
             if entries
-            else sl.primitives.Text(L(t"No creator credit claims are awaiting review."))
+            else sd.v2.text(L(t"No creator credit claims are awaiting review."))
         )
-        choices: sl.primitives.Node | None = None
+        choices: sl.LayoutNode[sl.ComponentsV2Target] | None = None
         if self._claims:
-            choices = cast(
-                sl.primitives.Node,
-                sl.choices(
-                    *(
-                        sl.choice(
-                            _claim_label(claim),
-                            key=str(claim.id),
-                            description=_claimant(claim, mention=False),
-                        )
-                        for claim in self._claims
-                    ),
-                    key="claim",
-                    selection=sl.controlled(
-                        (str(self.selected_id),) if self.selected_id is not None else (), self._select_claim
-                    ),
-                    minimum=1,
-                    maximum=1,
+            choices = sl.choices(
+                *(
+                    sl.choice(
+                        _claim_label(claim),
+                        key=str(claim.id),
+                        description=_claimant(claim, mention=False),
+                    )
+                    for claim in self._claims
                 ),
+                key="claim",
+                selection=sl.controlled(
+                    (str(self.selected_id),) if self.selected_id is not None else (), self._select_claim
+                ),
+                minimum=1,
+                maximum=1,
             )
         buttons: list[sl.semantic.ActionControl] = []
         if self._can_approve:
@@ -114,12 +111,10 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
             )
         buttons.append(sl.action_control(L(t"Close"), self._close, key="close"))
         return (
-            sl.primitives.Panel(
-                (
-                    sl.primitives.Heading(L(t"Creator credit claims awaiting review")),
-                    body,
-                    *((choices,) if choices is not None else ()),
-                ),
+            sd.v2.panel(
+                sd.v2.heading(L(t"Creator credit claims awaiting review")),
+                body,
+                choices,
                 accent=DISCORD_BLUE,
             ),
             sl.action_controls(*buttons, key="claim-actions"),

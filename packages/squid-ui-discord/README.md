@@ -49,6 +49,14 @@ async def counter(interaction) -> None:
 or challenge flows, and `await runtime.close()` ends the installed runtime. Components V2 uses
 `sd.DISCORD_V2_DPY27`; classic messages use `sd.DISCORD_V1_DPY27` through `sd.classic`.
 
+Named sessions can use `sd.UserSessionScreen`, `sd.UserGuildSessionScreen`, or
+`sd.SharedGuildSessionScreen` for the common owner/scope/admission policies. Exact Discord layouts
+have concise factories under `sd.v2` and `sd.classic`; both still return the public primitive IR.
+
+Install the optional operational dashboard as a Cog for the default hybrid `/dev ui` command, or
+call `await sd.open_devtools(...)` from a host-owned command. `DevToolsPolicy()` is read-only;
+mutations require `DevToolsPolicy.full_access()` or an explicit `DevToolsPolicy.allow(...)` list.
+
 Storage stays optional. Importing `squid_ui_discord` without a durability extra does not import or
 require `squid-storage`.
 

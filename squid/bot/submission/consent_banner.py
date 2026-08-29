@@ -100,21 +100,19 @@ class BuildLogConsentStickyMessage(StickyMessage):
     async def render(self, channel: TextChannel) -> sd.message_payload.MessagePayload:
         return render_payload(
             [
-                sl.primitives.Text(
+                sd.v2.text(
                     "## \U0001f4cb Build Log Ingestion Consent\n"
                     "Redstone Squid automatically indexes and tracks redstone door and build submissions in this channel. "
                     "To attribute your builds, parse schematics, and record your scores, the bot requires your consent to store "
                     "your Discord user ID.\n\n"
                     "Messages from unconsented users are not ingested. Click below to review permissions and enable automated ingestion."
                 ),
-                sl.primitives.Row(
-                    (
-                        sl.primitives.RoutedButton(
-                            "Enable Build Ingestion",
-                            CONSENT_BUTTON_CUSTOM_ID,
-                            style=sl.primitives.ActionStyle.PRIMARY,
-                            emoji="\N{CLIPBOARD}",
-                        ),
+                sd.v2.row(
+                    sd.v2.routed_button(
+                        "Enable Build Ingestion",
+                        CONSENT_BUTTON_CUSTOM_ID,
+                        style=sl.primitives.ActionStyle.PRIMARY,
+                        emoji="\N{CLIPBOARD}",
                     )
                 ),
             ]

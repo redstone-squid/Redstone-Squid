@@ -21,15 +21,15 @@ def starboard_layout(
     heading = f"**{author_name}**"
     if config.ping_author:
         heading = f"{message.author.mention} · {heading}"
-    children: list[sl.primitives.Node] = [
-        sl.primitives.Section(
-            (sl.primitives.Text(f"{heading}\n{message.content or t(locale, _('-# (no text content)'))}"),),
-            sl.primitives.Thumbnail(avatar_url),
+    children: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
+        sd.v2.section(
+            f"{heading}\n{message.content or t(locale, _('-# (no text content)'))}",
+            accessory=sd.v2.thumbnail(avatar_url),
         )
     ]
     if config.replied_to and message.reference is not None and message.reference.message_id is not None:
         children.append(
-            sl.primitives.Text(
+            sd.v2.text(
                 t(
                     locale,
                     _("-# Replying to message \x60{message_id}\x60"),
@@ -40,16 +40,16 @@ def starboard_layout(
     if config.attachments_list:
         media = tuple(attachment.url for attachment in message.attachments[:10])
         if media:
-            children.append(sl.primitives.Gallery(media))
+            children.append(sd.v2.gallery(*media))
     if config.jump_to_message:
         children.append(
-            sl.primitives.Row((sl.primitives.LinkButton(t(locale, _("Original message")), message.jump_url),))
+            sd.v2.row(sd.v2.link_button(t(locale, _("Original message")), message.jump_url))
         )
     score = f"{config.display_emoji} {entry.score:g}"
     if entry.raw_count != entry.score:
         score += t(locale, _(" ({count} reactions)"), count=entry.raw_count)
-    children.append(sl.primitives.Footer(f"{score} · <#{message.channel.id}>"))
+    children.append(sd.v2.footer(f"{score} · <#{message.channel.id}>"))
     return render_payload(
-        [sl.primitives.Panel(tuple(children), accent=config.colour)],
+        [sd.v2.panel(*children, accent=config.colour)],
         localization=localization_for(locale),
     )

@@ -68,13 +68,18 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   Squid constructs every item it draws. `adopt()` raises on `view.is_dispatching()`, which is
   what makes this a narrowing and not a reversal — `View.message` is a convention bots follow by
   hand and discord.py never sets, so it is kept only as a secondary signal.
-- **Class-body operational policy** *(still rejected)* — (CascadeUI's `owner_only`, `instance_limit`,
+- **Class-body operational policy** *(narrowly amended 2026-08-29)* — (CascadeUI's `owner_only`, `instance_limit`,
   `instance_scope`, `instance_policy`, `participant_limit` as class attributes) — rejected
   2026-08-23 by [43](../completed/squid-layouts-redesign/43-mount-defaults.md). Every one of those values is an actor, a scope,
   or a host decision the same component is opened with differently (`ConsentPrompt` opens as
   a root under `Reject()` and as an attached child two lines apart). A class attribute would
   couple portable components to Discord session vocabulary, and 34 already declines to copy
   class-variable policy. The ergonomics go into a `MountDefaults` value instead.
+  The rejection continues to apply to portable `Component` classes. Application-level `Screen`
+  subclasses now have three typed policy presets: `UserSessionScreen`, `UserGuildSessionScreen`, and
+  `SharedGuildSessionScreen`. They name session ownership and scope without putting Discord policy on
+  reusable components, require a stable `session_name`, and remain fully overridable. This is the
+  narrow common-case repetition the earlier decision did not address.
 - **A separate application-layer package** *(still rejected as a package — a fourth layer above `sl.discord`; individual pieces landed elsewhere, including the reachability half in plan 70, see below)* — (`squid-ui`: a `UIRuntime` composition root, a
   `Screen` recipe, `Projection` objects for cross-screen reactivity, named policy presets
   like `private_panel`) — proposed externally 2026-08-23 and rejected as a *package*, though
