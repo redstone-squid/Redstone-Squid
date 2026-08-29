@@ -6,7 +6,6 @@ from pathlib import Path
 BOT_ROOT = Path(__file__).parents[2] / "squid" / "bot"
 
 NATIVE_EVENT_ALLOWLIST = {
-    ("claims_view.py", "_decide"),
     ("consent.py", "with_consented_account"),
     ("verify.py", "open_consent"),
 }
