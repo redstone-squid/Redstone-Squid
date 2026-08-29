@@ -7,7 +7,7 @@ from typing import Literal, assert_never, cast
 from squid_ui.capabilities import Capability
 from squid_ui.chrome import Chrome
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.factories import is_layout_node
+from squid_ui.factories import is_builtin_layout_node
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.cursors import CursorCoordinator
 from squid_ui.planning.limits import MessageLimits
@@ -240,7 +240,7 @@ def _panel_children(children: Sequence[LayoutNode], path: str, context: _Context
 
 
 def _node(node: AnyLayoutNode, path: str, context: _Context) -> list[Node]:
-    if not is_layout_node(node):
+    if not is_builtin_layout_node(node):
         message = f"{path}: {type(node).__name__} is neither a semantic node nor a Discord primitive"
         raise LayoutInvariantError(message)
     return _concrete(node, path, context)
