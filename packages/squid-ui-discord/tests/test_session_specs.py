@@ -1,7 +1,6 @@
 """Reusable per-open Discord session recipe."""
 
 from collections.abc import Callable
-from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock
 
@@ -22,7 +21,7 @@ from squid_ui_discord import (
     SessionSpec,
 )
 from squid_ui_discord.sessions import AdmissionSpec, Opened, Reject, Rejected, RejectionReason
-from squid_ui_discord.testing import interaction_harness, message_harness
+from squid_ui_discord.testing import ContextHarness, interaction_harness, message_harness
 
 
 class Panel(sl.Component[sl.ComponentsV2Target]):
@@ -59,14 +58,15 @@ def test_open_context_reads_an_interaction_and_a_command_context_alike() -> None
     """`Replyable` and `discord.Interaction` never meet, and session recipe does not care."""
     interaction = interaction_harness(user_id=7)
     interaction.guild_id = 42
-    context = SimpleNamespace(author=SimpleNamespace(id=7), guild=SimpleNamespace(id=42), send=AsyncMock())
+    context = ContextHarness(message=message_harness(guild_id=42), user_id=7)
+    context.guild = context.message.guild
 
     assert OpenContext.of(interaction) == OpenContext(7, 42)
     assert OpenContext.of(cast(Any, context)) == OpenContext(7, 42)
 
 
 def test_open_context_reads_a_command_context_in_a_dm_as_guildless() -> None:
-    context = SimpleNamespace(author=SimpleNamespace(id=7), guild=None, send=AsyncMock())
+    context = ContextHarness(message=message_harness(guild_id=None), user_id=7)
 
     assert OpenContext.of(cast(Any, context)) == OpenContext(7, None)
 
