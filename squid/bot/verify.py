@@ -20,7 +20,6 @@ from squid.accounts.domain import (
 )
 from squid.bot.account_workspace import AccountWorkspace
 from squid.bot.consent import request_consent
-from squid.bot.i18n import resolve_locale
 from squid.bot.profile_render import (
     public_profile_fields,
 )
@@ -48,9 +47,8 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         self, interaction: discord.Interaction[BotT], user: discord.Member | discord.User | None = None
     ) -> None:
         """Show your account, or somebody else's creator page."""
-        locale = await resolve_locale(interaction, self.bot.services.settings)
         if user is not None and user.id != interaction.user.id:
-            await self._show_creator_page(interaction, user, locale)
+            await self._show_creator_page(interaction, user)
             return
 
         account = await self.account_service.get_account_by_identity(
@@ -96,7 +94,6 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         self,
         interaction: discord.Interaction[BotT],
         user: discord.Member | discord.User,
-        locale: str,
     ) -> None:
         """Show somebody else's page, which is shared content and answers where the channel sees it."""
         invocation = await sd.Invocation.of(interaction)
@@ -107,10 +104,10 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
                 visibility="personal",
             )
             return
-        node = await self._public_profile_card(account.public_creator_id, user.display_name, locale)
+        node = await self._public_profile_card(account.public_creator_id, user.display_name)
         await invocation.reply(node)
 
-    async def _public_profile_card(self, public_id: UUID, fallback_name: str, locale: str):
+    async def _public_profile_card(self, public_id: UUID, fallback_name: str):
         """Render somebody else's page from the same filtered view the API serves."""
         public = await self.account_service.get_public_profile(public_id)
         if public is None:
@@ -119,12 +116,12 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             return card_node(
                 tr("Hidden creator page"),
                 tr("This creator has hidden their page. Their build credit is still listed."),
-                fields=public_profile_fields(public, locale),
+                fields=public_profile_fields(public),
             )
         return card_node(
             public.display_name or fallback_name,
             public.bio,
-            fields=public_profile_fields(public, locale),
+            fields=public_profile_fields(public),
             media=() if public.avatar_url is None else (public.avatar_url,),
         )
 
@@ -166,7 +163,7 @@ def _link_conflict(preview: LinkPreview, existing_java: AccountIdentity | None) 
     return None
 
 
-def _link_message(refresh: IdentityRefresh, locale: str) -> str:
+def _link_message(refresh: IdentityRefresh) -> str:
     """Render the outcome of a link in the same words a refresh uses.
 
     Linking used to report only the alias it claimed, which cannot express the contested case at all:
@@ -180,11 +177,11 @@ def _link_message(refresh: IdentityRefresh, locale: str) -> str:
             name=refresh.current_name,
         )
     ]
-    lines.extend(_reconciliation_lines(refresh, locale))
+    lines.extend(_reconciliation_lines(refresh))
     return "\n".join(lines)
 
 
-def _refresh_message(refresh: IdentityRefresh, locale: str) -> str:
+def _refresh_message(refresh: IdentityRefresh) -> str:
     """Render every branch of a refresh, including the one where nothing changed."""
     if not refresh.renamed:
         lines = [tr("Your Minecraft name is still **{name}**. Nothing changed.", name=refresh.current_name)]
@@ -196,11 +193,11 @@ def _refresh_message(refresh: IdentityRefresh, locale: str) -> str:
                 new=refresh.current_name,
             )
         ]
-    lines.extend(_reconciliation_lines(refresh, locale))
+    lines.extend(_reconciliation_lines(refresh))
     return "\n".join(lines)
 
 
-def _reconciliation_lines(refresh: IdentityRefresh, locale: str) -> list[str]:
+def _reconciliation_lines(refresh: IdentityRefresh) -> list[str]:
     """Describe what happened to the creator credit, shared by linking and refreshing."""
     lines: list[str] = []
     if refresh.claimed_alias is not None:

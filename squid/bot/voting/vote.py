@@ -12,7 +12,7 @@ import squid_ui_discord as sd
 from squid.accounts.domain import IdentityProvider
 from squid.bot._types import GuildMessageable
 from squid.bot.consent import ensure_consented_account
-from squid.bot.i18n import resolve_locale
+from squid.bot.i18n import localization_for, resolve_locale
 from squid.bot.operations import run_command_operation
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
 from squid.bot.ui import error_node, info_node, render_payload, text_node
@@ -24,6 +24,7 @@ from squid.core.i18n import tr
 from squid.runtime import JobHandle
 from squid.voting.domain import PollScope, VoteActor, VoteKind, VoteOption, VoteRejection
 from squid.voting.errors import InvalidVoteConfigurationError
+from squid_ui.text import localization_scope
 from squid_ui_discord import send_to
 
 if TYPE_CHECKING:
@@ -188,14 +189,16 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         if rejection in _QUIET_REJECTIONS:
             return
         locale = await resolve_locale(message, self.bot.services.settings)
+        with localization_scope(localization_for(locale)):
+            payload = render_payload([text_node(describe_rejection(rejection))])
         with contextlib.suppress(discord.Forbidden, discord.NotFound):
-            await send_to(message.channel)(render_payload([text_node(describe_rejection(locale, rejection))]))
+            await send_to(message.channel)(payload)
 
     @app_commands.command(name="poll")
     @app_commands.guild_only()
     async def poll(self, interaction: discord.Interaction[BotT]) -> None:
         """Create a multi-option poll through an ephemeral preview wizard."""
-        await resolve_locale(interaction, self.bot.services.settings)
+
         # A modal has to open on an unspent interaction, and showing the notice spends this one,
         # so an unconsented author is asked here and re-runs to get the editor.
         account = await self.bot.services.accounts.get_account_by_identity(
@@ -248,7 +251,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         """
         await interaction.response.defer(ephemeral=True)
         invocation = await sd.Invocation.of(interaction)
-        await resolve_locale(interaction, self.bot.services.settings)
+
         if interaction.guild is None or message.guild != interaction.guild:
             await invocation.reply(
                 error_node(
@@ -313,20 +316,20 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         gap it closes.
         """
         await self._remove_reaction(message, emoji, user)
-        await resolve_locale(message, self.bot.services.settings)
-        with contextlib.suppress(discord.HTTPException):
-            await send_to(message.channel, delete_after=30)(
-                render_payload(
-                    [
-                        text_node(
-                            tr(
-                                "{user}, voting stores your Discord user ID. Run `/account consent` first.",
-                                user=user.mention,
-                            )
+        locale = await resolve_locale(message, self.bot.services.settings)
+        with localization_scope(localization_for(locale)):
+            payload = render_payload(
+                [
+                    text_node(
+                        tr(
+                            "{user}, voting stores your Discord user ID. Run `/account consent` first.",
+                            user=user.mention,
                         )
-                    ]
-                )
+                    )
+                ]
             )
+        with contextlib.suppress(discord.HTTPException):
+            await send_to(message.channel, delete_after=30)(payload)
 
     async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
         """Resolve current member facts for a service-level weight refresh.

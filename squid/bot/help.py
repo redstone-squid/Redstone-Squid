@@ -12,7 +12,6 @@ from discord.ext.commands import Cog, Command, Group
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
-from squid.bot.i18n import resolve_locale
 from squid.bot.ui import CardField, CardSection, card_node, error_node, render_payload, tr
 from squid.config import BuildConfig
 from squid.suggestions.application import candidate, rank
@@ -146,7 +145,7 @@ class HelpScreen(sd.Screen):
         await event.finish()
 
 
-def _summary(command: AnyCommand, locale: str | None) -> str:
+def _summary(command: AnyCommand) -> str:
     """One line about a command, from wherever that surface keeps it.
 
     A prefix command carries `short_doc`, an app command a `description`. The directory
@@ -160,12 +159,11 @@ def _summary(command: AnyCommand, locale: str | None) -> str:
 def _command_section(
     title: str,
     commands_: Sequence[AnyCommand],
-    locale: str | None,
 ) -> CardSection:
     """Render a compact command category for the slash-help directory."""
     return CardSection(
         title,
-        tuple(CardField(f"/{command.qualified_name}", _summary(command, locale)) for command in commands_),
+        tuple(CardField(f"/{command.qualified_name}", _summary(command)) for command in commands_),
     )
 
 
@@ -248,7 +246,6 @@ class Help(commands.MinimalHelpCommand):
     # !help
     @override
     async def send_bot_help(self, mapping: Mapping[Cog | None, list[Command[Any, ..., Any]]], /) -> None:
-        locale = await resolve_locale(self.context, self._bot.services.settings)
         commands_ = list(self.context.bot.commands)
 
         # We do not filter commands here, because it is too slow.
@@ -258,7 +255,7 @@ class Help(commands.MinimalHelpCommand):
             tr(
                 "{description}\n\nCommands:{commands}\n\n{more_information}\n",
                 description=self.context.bot.description,
-                commands=self.get_commands_brief_details(commands_, locale=locale),
+                commands=self.get_commands_brief_details(commands_),
                 more_information=tr(MORE_INFORMATION),
             )
         )
@@ -275,7 +272,6 @@ class Help(commands.MinimalHelpCommand):
     # !help <command>
     @override
     async def send_command_help(self, command: Command[Any, ..., Any], /) -> None:
-        await resolve_locale(self.context, self._bot.services.settings)
         await send_to(self.get_destination())(
             render_payload(
                 [
@@ -289,7 +285,7 @@ class Help(commands.MinimalHelpCommand):
 
     @staticmethod
     def get_commands_brief_details(
-        commands_: Sequence[Command[Any, Any, Any]], return_as_list: bool = False, locale: str | None = None
+        commands_: Sequence[Command[Any, Any, Any]], return_as_list: bool = False
     ) -> list[str] | str:
         """
         Formats the prefix, command name and signature, and short doc for an iterable of commands.
@@ -306,9 +302,7 @@ class Help(commands.MinimalHelpCommand):
         return "".join(details)
 
     @staticmethod
-    def get_cog_brief_details(
-        cogs: Sequence[Cog], return_as_list: bool = False, locale: str | None = None
-    ) -> list[str] | str:
+    def get_cog_brief_details(cogs: Sequence[Cog], return_as_list: bool = False) -> list[str] | str:
         no_details = tr("No details provided")
         details: list[str] = [f"\n`{cog.qualified_name}` - {cog.description or no_details}" for cog in cogs]
         if return_as_list:
@@ -328,8 +322,7 @@ class Help(commands.MinimalHelpCommand):
             # noinspection PyTypeChecker
             return await self.send_command_help(group)
 
-        locale = await resolve_locale(self.context, self._bot.services.settings)
-        command_details = self.get_commands_brief_details(list(commands_), locale=locale)
+        command_details = self.get_commands_brief_details(list(commands_))
         desc = tr(
             "{description}\n\nUsable Subcommands: {commands}\n\n{more_information}",
             description=group.cog.description,
@@ -343,9 +336,8 @@ class Help(commands.MinimalHelpCommand):
     @override
     async def send_cog_help(self, cog: Cog, /) -> None:
         """Sends help for a cog."""
-        locale = await resolve_locale(self.context, self._bot.services.settings)
         commands_ = cog.walk_commands()
-        command_details = self.get_commands_brief_details(list(commands_), locale=locale)
+        command_details = self.get_commands_brief_details(list(commands_))
         desc = tr(
             "{description}\n\nUsable Subcommands:{commands}\n\n{more_information}",
             description=cog.description,
@@ -356,7 +348,6 @@ class Help(commands.MinimalHelpCommand):
 
     @override
     async def command_not_found(self, string: str, /) -> str:  # type: ignore  # overriding a sync method
-        await resolve_locale(self.context, self._bot.services.settings)
         return tr(
             "Unable to find command `{name}`. Use /help to get a list of available commands.",
             name=string,
@@ -365,7 +356,6 @@ class Help(commands.MinimalHelpCommand):
     @override
     async def send_error_message(self, error: str, /) -> None:  # type: ignore  # overriding a sync method
         # TODO: error can be a custom Error too
-        await resolve_locale(self.context, self._bot.services.settings)
         await send_to(self.get_destination())(render_payload([error_node(tr("Error."), error)]))
 
 

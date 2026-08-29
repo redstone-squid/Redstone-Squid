@@ -21,7 +21,6 @@ import discord
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.i18n import resolve_locale
 from squid.bot.routes._root import _feature_group, _feature_route
 from squid.bot.ui import text_node
 from squid.bot.voting.actors import describe_rejection, resolve_actor
@@ -52,12 +51,12 @@ async def close_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSqui
     authorized = await _authorize(interaction)
     if authorized is None:
         return
-    locale, _snapshot, actor = authorized
+    _snapshot, actor = authorized
     bot = interaction.client
     assert interaction.message is not None
     result = await bot.services.votes.close(interaction.message.id, actor)
     if result.rejection is not None or result.session is None:
-        await _refuse(interaction, locale, result.rejection or VoteRejection.NOT_FOUND)
+        await _refuse(interaction, result.rejection or VoteRejection.NOT_FOUND)
         return
     await bot.refresh_posts("vote_session", str(result.session.id))
     invocation = await sd.Invocation.of(interaction)
@@ -70,7 +69,7 @@ async def refresh_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSq
     authorized = await _authorize(interaction)
     if authorized is None:
         return
-    _locale, _snapshot, _actor = authorized
+    _snapshot, _actor = authorized
     bot = interaction.client
     assert interaction.message is not None
     result = await bot.services.votes.refresh(interaction.message.id)
@@ -89,33 +88,32 @@ async def refresh_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSq
 
 async def _authorize(
     interaction: discord.Interaction[squid.bot.app.RedstoneSquid],
-) -> tuple[str | None, VoteSessionSnapshot, VoteActor] | None:
+) -> tuple[VoteSessionSnapshot, VoteActor] | None:
     """The session and actor behind a click, or `None` once the click has been refused.
 
     Refreshing recomputes the weights a close would act on, so both controls are gated by
     the session's own `can_close` rather than by a second copy of the rule.
     """
     bot = interaction.client
-    locale = await resolve_locale(interaction, bot.services.settings)
     message = interaction.message
     if message is None or not isinstance(interaction.user, discord.Member):
-        await _refuse(interaction, locale, VoteRejection.WRONG_GUILD)
+        await _refuse(interaction, VoteRejection.WRONG_GUILD)
         return None
 
     snapshot = await bot.services.votes.get_session(message.id)
     if snapshot is None:
-        await _refuse(interaction, locale, VoteRejection.NOT_FOUND)
+        await _refuse(interaction, VoteRejection.NOT_FOUND)
         return None
 
     account_id = await bot.account_ids.resolve(bot.services.accounts, interaction.user.id)
     actor = await resolve_actor(bot, interaction.user, account_id=account_id or 0)
     rejection = snapshot.can_close(actor)
     if rejection is not None:
-        await _refuse(interaction, locale, rejection)
+        await _refuse(interaction, rejection)
         return None
-    return locale, snapshot, actor
+    return snapshot, actor
 
 
-async def _refuse(interaction: discord.Interaction[Any], locale: str | None, rejection: VoteRejection) -> None:
+async def _refuse(interaction: discord.Interaction[Any], rejection: VoteRejection) -> None:
     invocation = await sd.Invocation.of(interaction)
-    await invocation.reply(text_node(describe_rejection(locale, rejection)), visibility="personal")
+    await invocation.reply(text_node(describe_rejection(rejection)), visibility="personal")

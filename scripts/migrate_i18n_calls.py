@@ -27,9 +27,10 @@ def _character_column(line: str, byte_column: int) -> int:
     return len(line.encode("utf-8")[:byte_column].decode("utf-8"))
 
 
-def _span(node: ast.AST, source: str, offsets: list[int]) -> tuple[int, int]:
-    if not hasattr(node, "end_lineno") or node.end_lineno is None or node.end_col_offset is None:
-        raise ValueError("AST node has no source span")
+def _span(node: ast.expr | ast.stmt, source: str, offsets: list[int]) -> tuple[int, int]:
+    if node.end_lineno is None or node.end_col_offset is None:
+        detail = "AST node has no source span"
+        raise ValueError(detail)
     lines = source.splitlines(keepends=True)
     start_column = _character_column(lines[node.lineno - 1], node.col_offset)
     end_column = _character_column(lines[node.end_lineno - 1], node.end_col_offset)
@@ -93,7 +94,8 @@ class CallRewriter(ast.NodeVisitor):
             if literal is not None:
                 literal_source = ast.get_source_segment(self.source, literal)
                 if literal_source is None:
-                    raise ValueError(f"cannot read literal at {self.path}:{node.lineno}")
+                    detail = f"cannot read literal at {self.path}:{node.lineno}"
+                    raise ValueError(detail)
                 arguments = [literal_source]
                 arguments.extend(ast.get_source_segment(self.source, argument) or "" for argument in node.args[2:])
                 arguments.extend(
@@ -113,11 +115,14 @@ class CallRewriter(ast.NodeVisitor):
                 return
             literal_source = ast.get_source_segment(self.source, literal)
             if literal_source is None:
-                raise ValueError(f"cannot read literal at {self.path}:{node.lineno}")
+                detail = f"cannot read literal at {self.path}:{node.lineno}"
+                raise ValueError(detail)
+            literal_value = literal.value
+            assert isinstance(literal_value, str)
             parent = self.parents[-2] if len(self.parents) > 1 else None
             if isinstance(parent, ast.Call) and _name(parent) == "locale_str":
                 replacement = literal_source
-            elif "{" not in literal.value:
+            elif "{" not in literal_value:
                 replacement = f"tr({_template_source(literal_source)})"
             else:
                 self.ambiguous.append((node.lineno, "parameterized or concatenated marker needs review"))
@@ -145,6 +150,18 @@ class CallRewriter(ast.NodeVisitor):
         replacement = f"from {node.module} import {imported}" if imported else ""
         start, end = _span(node, self.source, self.offsets)
         self.replacements.append(Replacement(start, end, replacement))
+
+    def visit_Expr(self, node: ast.Expr) -> None:
+        value = node.value
+        if (
+            isinstance(value, ast.Await)
+            and isinstance(value.value, ast.Call)
+            and _name(value.value) == "resolve_locale"
+        ):
+            start, end = _span(node, self.source, self.offsets)
+            self.replacements.append(Replacement(start, end, ""))
+            return
+        self.generic_visit(node)
 
 
 def rewrite(path: Path, *, write: bool) -> tuple[int, list[tuple[int, str]]]:
