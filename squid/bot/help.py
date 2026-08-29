@@ -28,17 +28,19 @@ MORE_INFORMATION = _("Use `/help <command>` to get more information.")
 DIRECTORY_CATEGORIES: tuple[tuple[Any, frozenset[str]], ...] = (
     (_("Build"), frozenset({"build"})),
     (_("Discover"), frozenset({"search", "tags"})),
-    (_("Account"), frozenset({"account", "notifications", "redstoner"})),
+    (_("Account"), frozenset({"account", "notifications"})),
     (_("Community"), frozenset({"poll"})),
-    (_("Administration & setup"), frozenset({"access", "records", "settings", "versions"})),
+    (
+        _("Administration & setup"),
+        frozenset({"access", "errors", "records", "redstoner", "settings", "starboard", "versions"}),
+    ),
     (_("Information"), frozenset({"help"})),
 )
 """How the directory groups top-level commands, by command name.
 
 Out here rather than inline so a name that no longer exists is a failing test instead of a
 silently empty category — `patterns` and `vote` both outlived their commands in this map.
-Staff groups are deliberately absent: they are hidden from non-staff pickers anyway, and a
-directory that lists what most readers cannot run is the surface phase 5 is shrinking.
+Staff groups remain listed because the help screen already respects Discord's command visibility.
 """
 
 
