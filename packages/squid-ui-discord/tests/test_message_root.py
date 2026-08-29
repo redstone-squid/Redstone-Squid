@@ -6,7 +6,6 @@ import math
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock
 
@@ -85,12 +84,72 @@ from squid_ui_discord.message_root_candidates import _BusyPaint
 from squid_ui_discord.message_root_contracts import MessageRootStatus
 from squid_ui_discord.message_root_wiring import _custom_id
 from squid_ui_discord.testing import (
+    AsyncCallRecorder,
+    ContextHarness,
     assert_within_limits,
     commit_render,
     delivered_to,
     interaction_harness,
     message_harness,
 )
+
+
+@dataclass(slots=True)
+class _InteractionMessageState:
+    _interaction: Any
+
+
+@dataclass(slots=True)
+class _InteractionMessageSource:
+    _state: _InteractionMessageState
+    delete: AsyncCallRecorder
+
+
+@dataclass(slots=True)
+class _WebhookEndpoint:
+    edit_message: AsyncCallRecorder
+
+
+@dataclass(slots=True)
+class _WebhookMessageState:
+    _webhook: _WebhookEndpoint
+    _thread: Any = discord.utils.MISSING
+
+
+@dataclass(slots=True)
+class _WebhookMessageSource:
+    id: int
+    _state: _WebhookMessageState
+
+
+@dataclass(slots=True)
+class _WebhookAdapter:
+    execute_webhook: AsyncCallRecorder
+
+
+@dataclass(slots=True)
+class _WebhookState:
+    allowed_mentions: Any = None
+
+
+@dataclass(slots=True)
+class _WebhookSource:
+    type: discord.WebhookType
+    token: str
+    id: int
+    _state: _WebhookState
+    session: object
+    proxy: None
+    proxy_auth: None
+    _create_message: Callable[..., object]
+
+
+@dataclass(slots=True)
+class _AcknowledgementRecorder:
+    sources: list[str]
+
+    def acknowledge(self, source: str) -> None:
+        self.sources.append(source)
 
 
 class Counter(Component[sl.ComponentsV2Target]):
@@ -2632,10 +2691,11 @@ class TestEditHandles:
 
     async def test_interaction_message_edit_is_pinned_to_the_original_response_endpoint(self):
         expected = object()
-        interaction = SimpleNamespace(edit_original_response=AsyncMock(return_value=expected))
+        interaction = interaction_harness()
+        interaction.edit_original_response.result = expected
         subject = cast(
             discord.InteractionMessage,
-            SimpleNamespace(_state=SimpleNamespace(_interaction=interaction), delete=AsyncMock()),
+            _InteractionMessageSource(_InteractionMessageState(interaction), AsyncCallRecorder()),
         )
 
         edited = await discord.InteractionMessage.edit(subject, content="updated")
@@ -2653,13 +2713,10 @@ class TestEditHandles:
 
     async def test_webhook_message_edit_is_pinned_to_the_webhook_message_endpoint(self):
         expected = object()
-        webhook = SimpleNamespace(edit_message=AsyncMock(return_value=expected))
+        webhook = _WebhookEndpoint(AsyncCallRecorder(result=expected))
         subject = cast(
             discord.WebhookMessage,
-            SimpleNamespace(
-                id=42,
-                _state=SimpleNamespace(_webhook=webhook, _thread=discord.utils.MISSING),
-            ),
+            _WebhookMessageSource(42, _WebhookMessageState(webhook)),
         )
 
         edited = await discord.WebhookMessage.edit(subject, content="updated")
@@ -2678,18 +2735,18 @@ class TestEditHandles:
 
     async def test_application_webhook_followups_force_wait_and_return_the_message(self):
         expected = object()
-        adapter = SimpleNamespace(execute_webhook=AsyncMock(return_value={}))
+        adapter = _WebhookAdapter(AsyncCallRecorder(result={}))
         subject = cast(
             discord.Webhook,
-            SimpleNamespace(
-                type=discord.WebhookType.application,
-                token="interaction-token",
-                id=42,
-                _state=SimpleNamespace(allowed_mentions=None),
-                session=object(),
-                proxy=None,
-                proxy_auth=None,
-                _create_message=lambda data, *, thread: expected,
+            _WebhookSource(
+                discord.WebhookType.application,
+                "interaction-token",
+                42,
+                _WebhookState(),
+                object(),
+                None,
+                None,
+                lambda data, *, thread: expected,
             ),
         )
         token = async_context.set(cast(AsyncWebhookAdapter, adapter))
@@ -2892,24 +2949,22 @@ class TestDestinations:
 
     async def test_plain_command_reply_keeps_permanent_channel_authority(self):
         message = message_harness()
-        ctx = cast(delivery.Replyable, SimpleNamespace(send=AsyncMock(return_value=message)))
+        ctx = ContextHarness(message=message)
         message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
 
-        await message_root.send(delivery.reply_to(ctx))
+        await message_root.send(delivery.reply_to(cast(delivery.Replyable, ctx.source)))
 
         assert message_root.handle is not None and message_root.handle.permanent
 
     async def test_interaction_backed_context_reply_keeps_original_response_authority(self):
         interaction = interaction_harness()
         message = message_harness()
-        ctx = cast(
-            delivery.Replyable,
-            SimpleNamespace(interaction=interaction, send=AsyncMock(return_value=message)),
-        )
+        ctx = ContextHarness(message=message)
+        ctx.interaction = interaction
         component = Counter()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
 
-        await message_root.send(delivery.reply_to(ctx))
+        await message_root.send(delivery.reply_to(cast(delivery.Replyable, ctx.source)))
 
         assert message_root.handle is not None and not message_root.handle.permanent
         component.count += 1
@@ -4253,7 +4308,7 @@ class TestBusyFeedback:
         commit_render(message_root)
         interaction = interaction_harness()
         busy = _BusyPaint(message_root, "go", sl.interactions.BusySpec(), interaction)
-        profile = SimpleNamespace(acknowledge=lambda source: None)
+        profile = _AcknowledgementRecorder([])
 
         assert await busy.close() is False
         await busy.show(cast(Any, profile))
