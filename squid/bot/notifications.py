@@ -11,7 +11,7 @@ from discord.ext import commands
 import squid_ui_discord as sd
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.notifications_view import NotificationPanel
+from squid.bot.notifications_view import NotificationScreen
 from squid.bot.ui import error_node, info_node
 from squid.bot.utils.autocomplete import autocompletes
 from squid.core.i18n import _
@@ -52,21 +52,14 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
     @app_commands.command(name="show", description="Open your notification channels and subscriptions")
     async def show(self, interaction: discord.Interaction) -> None:
         """Open the panel that `status`, `channels`, `list` and `unfollow` used to be."""
-        invocation = await sd.Invocation.of(interaction)
         account_id = await self._account_id(interaction)
         if account_id is None:
             return
-        component = NotificationPanel(
+        await NotificationScreen(
             notifications=self.bot.services.notifications,
             account_id=account_id,
             author_id=interaction.user.id,
-        )
-        await invocation.mount(
-            component,
-            access=sd.Owner(interaction.user.id),
-            visibility="personal",
-            timeout=300,
-        )
+        ).show(interaction)
 
     @autocompletes(
         creator="creator_profiles",
