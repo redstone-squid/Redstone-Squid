@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.submission.ui.components import build_edit
+from squid.bot.submission.ui.controls import build_edit
 from squid.bot.ui import L
 from squid.topics import resource_topic
 

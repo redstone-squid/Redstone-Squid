@@ -12,8 +12,7 @@ import pytest
 import squid_ui_discord as sd
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.submission.search_view import SearchResultsView
-from squid.bot.submission.ui.components import get_text_input
-from squid.bot.submission.ui.views import BuildEditComponent
+from squid.bot.submission.ui.views import EDIT_FIELDS, BuildEditComponent
 from squid.builds.application import BuildService
 from squid.builds.domain import Build, BuildLink, DoorBuild, SourceMessage, Status
 from squid.search.application import SearchService
@@ -67,7 +66,7 @@ async def test_build_handler_renders_composable_v2_card(display_build: Build) ->
 
 
 async def test_build_editor_uses_semantic_state_and_forms(display_build: Build) -> None:
-    field = get_text_input(display_build, "version_spec")
+    field = next(spec for spec in EDIT_FIELDS if spec.patch_key == "version_spec").bind(display_build)
     component = BuildEditComponent(display_build, cast(BuildService, object()), [field])
 
     # `projection` is an atomic resource, so reading its status aborts a discovery render
