@@ -26,6 +26,7 @@ from squid.voting.domain import (
     validate_thresholds,
 )
 from squid.voting.errors import InvalidVoteConfigurationError
+from squid_ui.text import NEUTRAL, resolve_text
 from tests.helpers.voting import GENERIC_OPTIONS, build_snapshot, poll_snapshot
 
 STAFF = frozenset({VOTE_WEIGHT_STAFF.name})
@@ -231,7 +232,7 @@ def test_poll_duration_parser_rejects_out_of_range_values(value: str) -> None:
     [(3600, "1 hour"), (86400, "24 hours"), (7 * 86400, "7 days"), (1800, "30 minutes"), (2 * 86400, "2 days")],
 )
 def test_duration_labels_match_the_presets_where_one_exists(seconds: int, expected: str) -> None:
-    assert format_duration(seconds) == expected
+    assert resolve_text(format_duration(seconds), NEUTRAL).content == expected
 
 
 def test_option_lines_fall_back_to_the_guild_palette_for_missing_emojis() -> None:
