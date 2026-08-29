@@ -2,22 +2,20 @@
 
 import contextlib
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Literal, override
+from typing import TYPE_CHECKING, override
 
 import discord
 from discord import app_commands
 from discord.ext import commands
-from discord.ext.commands import Context, guild_only, hybrid_group
 from whenever import Instant
 
-import squid_ui_discord as sd
-from squid.bot.i18n import resolve_locale, t
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
 from squid.bot.starboard.debounce import EntryDebouncer, EntryKey
-from squid.bot.ui import text_node
-from squid.bot.utils.autocomplete import autocompletes, guild_context, suggests
-from squid.bot.utils.permissions import hide_unless, requires
+from squid.bot.starboard.screen import StarboardScreen
+from squid.bot.utils.permissions import allows, enforce, hide_unless
+from squid.core.errors import ValidationError
 from squid.core.i18n import _
+from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     STARBOARD_BOARD_CREATE,
     STARBOARD_BOARD_DELETE,
@@ -29,12 +27,7 @@ from squid.permissions.domain.catalogue import (
 )
 from squid.posts.domain import starboard_entry_key
 from squid.reactions.domain import ReactionActor
-from squid.starboard.domain import (
-    EDITABLE_SETTINGS,
-    OriginMessage,
-    StarboardConfig,
-    StarboardEmoji,
-)
+from squid.starboard.domain import OriginMessage, StarboardConfig
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -151,212 +144,39 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         starboard_id, origin_message_id = key
         await self.bot.refresh_posts("starboard_entry", starboard_entry_key(starboard_id, origin_message_id))
 
-    @hybrid_group(name="starboard")
-    @guild_only()
-    @requires(*STARBOARD_CAPABILITIES, mode="any")
+    @app_commands.command(name="starboard", description="Configure this server's starboards")
+    @app_commands.guild_only()
     @hide_unless(manage_guild=True)
-    async def starboard_group(self, ctx: Context[BotT]) -> None:
-        """Configure weighted message starboards."""
-        await ctx.send_help("starboard")
+    async def starboard(self, interaction: discord.Interaction[BotT]) -> None:
+        """Open capability-aware starboard configuration."""
+        await enforce(interaction, *STARBOARD_CAPABILITIES, mode="any")
+        guild = interaction.guild
+        assert guild is not None
 
-    @starboard_group.command(name="create")
-    @requires(STARBOARD_BOARD_CREATE)
-    @app_commands.describe(channel=app_commands.locale_str(_("The channel that receives starred messages.")))
-    async def create_starboard(self, ctx: Context[BotT], channel: discord.TextChannel, name: str = "main") -> None:
-        assert ctx.guild is not None
-        permissions = channel.permissions_for(ctx.guild.me)
-        if not (permissions.view_channel and permissions.send_messages and permissions.read_message_history):
-            await self._reply(ctx, _("I need View Channel, Send Messages, and Read Message History there."))
-            return
-        config = await self.service.create_starboard(ctx.guild.id, channel.id, name)
-        await self._reply(
-            ctx, _("Created starboard **{name}** in {channel}."), name=config.name, channel=channel.mention
-        )
+        async def authorize(node: PermissionNode) -> bool:
+            return await allows(interaction, node)
 
-    @autocompletes(name=suggests("starboard_names", context=guild_context))
-    @starboard_group.command(name="delete")
-    @requires(STARBOARD_BOARD_DELETE)
-    async def delete_starboard(self, ctx: Context[BotT], name: str) -> None:
-        assert ctx.guild is not None
-        deleted = await self.service.delete_starboard(ctx.guild.id, name)
-        await self._reply(ctx, _("Starboard deleted.") if deleted else _("No starboard with that name exists."))
+        granted: set[PermissionNode] = set()
+        for node in STARBOARD_CAPABILITIES:
+            if await authorize(node):
+                granted.add(node)
 
-    @starboard_group.command(name="list")
-    @requires(STARBOARD_BOARD_VIEW)
-    async def list_starboards(self, ctx: Context[BotT]) -> None:
-        assert ctx.guild is not None
-        configs = await self.service.list_for_guild(ctx.guild.id)
-        lines = [f"**{item.name}** · <#{item.channel_id}> · {item.required:g}" for item in configs]
-        await self._reply(ctx, "\n".join(lines) or _("No starboards are configured."))
+        async def create_board(channel_id: int, name: str, required: float) -> StarboardConfig:
+            channel = guild.get_channel(channel_id)
+            if not isinstance(channel, discord.TextChannel):
+                raise ValidationError(_("That destination is not a text channel in this server."))
+            permissions = channel.permissions_for(guild.me)
+            if not (permissions.view_channel and permissions.send_messages and permissions.read_message_history):
+                raise ValidationError(_("I need View Channel, Send Messages, and Read Message History there."))
+            return await self.service.create_starboard(guild.id, channel.id, name, required=required)
 
-    @autocompletes(name=suggests("starboard_names", context=guild_context))
-    @starboard_group.command(name="show")
-    @requires(STARBOARD_BOARD_VIEW)
-    async def show_starboard(self, ctx: Context[BotT], name: str) -> None:
-        assert ctx.guild is not None
-        config = await self.service.get(ctx.guild.id, name)
-        if config is None:
-            await self._reply(ctx, _("No starboard with that name exists."))
-            return
-        emojis = " ".join(f"{item.emoji} ({item.direction}, {item.multiplier:g}x)" for item in config.emojis)
-        await self._reply(
-            ctx,
-            _("**{name}** · <#{channel}>\nPost: {required:g} · Remove: {remove:g}\nEmojis: {emojis}"),
-            name=config.name,
-            channel=config.channel_id,
-            required=config.required,
-            remove=config.required_remove,
-            emojis=emojis,
-        )
-
-    @autocompletes(
-        name=suggests("starboard_names", context=guild_context),
-        setting="starboard_settings",
-    )
-    @starboard_group.command(name="edit")
-    @requires(STARBOARD_BOARD_EDIT)
-    async def edit_starboard(self, ctx: Context[BotT], name: str, setting: str, value: str) -> None:
-        assert ctx.guild is not None
-        try:
-            parsed = self._parse_setting(setting, value)
-        except ValueError as error:
-            await self._reply(ctx, str(error))
-            return
-        config = await self.service.update_settings(ctx.guild.id, name, **{setting: parsed})
-        await self._reply(ctx, _("Starboard updated.") if config else _("No starboard with that name exists."))
-
-    @starboard_group.group(name="emoji")
-    @requires(STARBOARD_BOARD_VIEW, STARBOARD_EMOJI_EDIT, mode="any")
-    async def emoji_group(self, ctx: Context[BotT]) -> None:
-        """Configure starboard reaction aliases."""
-        await ctx.send_help("starboard emoji")
-
-    @autocompletes(name=suggests("starboard_names", context=guild_context))
-    @emoji_group.command(name="add")
-    @requires(STARBOARD_EMOJI_EDIT)
-    async def emoji_add(
-        self,
-        ctx: Context[BotT],
-        name: str,
-        emoji: str,
-        direction: Literal["up", "down"] = "up",
-        multiplier: float = 1.0,
-    ) -> None:
-        config = await self._named(ctx, name)
-        if config is None:
-            return
-        aliases = (
-            *(item for item in config.emojis if item.emoji != emoji),
-            StarboardEmoji(emoji, direction, multiplier, len(config.emojis)),
-        )
-        await self.service.set_emojis(config, aliases)
-        await self._reply(ctx, _("Starboard emoji added."))
-
-    @autocompletes(name=suggests("starboard_names", context=guild_context))
-    @emoji_group.command(name="remove")
-    @requires(STARBOARD_EMOJI_EDIT)
-    async def emoji_remove(self, ctx: Context[BotT], name: str, emoji: str) -> None:
-        config = await self._named(ctx, name)
-        if config is None:
-            return
-        await self.service.set_emojis(config, tuple(item for item in config.emojis if item.emoji != emoji))
-        await self._reply(ctx, _("Starboard emoji removed."))
-
-    @autocompletes(name=suggests("starboard_names", context=guild_context))
-    @emoji_group.command(name="list")
-    @requires(STARBOARD_BOARD_VIEW)
-    async def emoji_list(self, ctx: Context[BotT], name: str) -> None:
-        config = await self._named(ctx, name)
-        if config is not None:
-            await self._reply(
-                ctx, "\n".join(f"{item.emoji}: {item.direction} {item.multiplier:g}x" for item in config.emojis)
-            )
-
-    @starboard_group.group(name="weight")
-    @requires(STARBOARD_BOARD_VIEW, STARBOARD_WEIGHT_EDIT, mode="any")
-    async def weight_group(self, ctx: Context[BotT]) -> None:
-        """Configure role multipliers."""
-        await ctx.send_help("starboard weight")
-
-    @autocompletes(name=suggests("starboard_names", context=guild_context))
-    @weight_group.command(name="set")
-    @requires(STARBOARD_WEIGHT_EDIT)
-    async def weight_set(self, ctx: Context[BotT], name: str, role: discord.Role, multiplier: float) -> None:
-        config = await self._named(ctx, name)
-        if config is not None:
-            await self.service.set_role_multiplier(config, role.id, multiplier)
-            await self._reply(ctx, _("Starboard role weight updated."))
-
-    @autocompletes(name=suggests("starboard_names", context=guild_context))
-    @weight_group.command(name="remove")
-    @requires(STARBOARD_WEIGHT_EDIT)
-    async def weight_remove(self, ctx: Context[BotT], name: str, role: discord.Role) -> None:
-        config = await self._named(ctx, name)
-        if config is not None:
-            await self.service.set_role_multiplier(config, role.id, None)
-            await self._reply(ctx, _("Starboard role weight removed."))
-
-    @autocompletes(name=suggests("starboard_names", context=guild_context))
-    @weight_group.command(name="list")
-    @requires(STARBOARD_BOARD_VIEW)
-    async def weight_list(self, ctx: Context[BotT], name: str) -> None:
-        config = await self._named(ctx, name)
-        if config is None:
-            return
-        values = await self.service.get_role_multipliers(config)
-        await self._reply(
-            ctx, "\n".join(f"<@&{role_id}>: {value:g}x" for role_id, value in values.items()) or _("None")
-        )
-
-    @starboard_group.command(name="recount")
-    @requires(STARBOARD_BOARD_RECOUNT)
-    @commands.cooldown(1, 30, commands.BucketType.guild)
-    async def recount(self, ctx: Context[BotT], message: discord.Message) -> None:
-        reactions: list[tuple[ReactionActor, str]] = []
-        for reaction in message.reactions:
-            reactions.extend(
-                [
-                    (
-                        ReactionActor(user.id, user.guild.id, frozenset(role.id for role in user.roles)),
-                        str(reaction.emoji),
-                    )
-                    async for user in reaction.users()
-                    if isinstance(user, discord.Member) and not user.bot
-                ]
-            )
-        self._schedule(await self.service.recount(self._origin(message), tuple(reactions)), force=True)
-        await self._reply(ctx, _("Starboard votes recounted."))
-
-    async def _named(self, ctx: Context[BotT], name: str) -> StarboardConfig | None:
-        assert ctx.guild is not None
-        config = await self.service.get(ctx.guild.id, name)
-        if config is None:
-            await self._reply(ctx, _("No starboard with that name exists."))
-        return config
-
-    async def _reply(self, ctx: Context[BotT], message: str, **params: object) -> None:
-        invocation = await sd.Invocation.of(ctx)
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        await invocation.reply(text_node(t(locale, message, **params)), visibility="personal")
-
-    @staticmethod
-    def _parse_setting(setting: str, value: str) -> object:
-        match EDITABLE_SETTINGS.get(setting):
-            case "boolean":
-                normalized = value.lower()
-                if normalized not in {"true", "false", "on", "off", "yes", "no"}:
-                    msg = "Boolean settings accept true or false."
-                    raise ValueError(msg)
-                return normalized in {"true", "on", "yes"}
-            case "threshold":
-                return float(value)
-            case "integer":
-                return int(value, 0)
-            case "text":
-                return value
-            case _:
-                msg = f"Unknown starboard setting: {setting}"
-                raise ValueError(msg)
+        await StarboardScreen(
+            self.service,
+            guild_id=guild.id,
+            capabilities=frozenset(granted),
+            authorize=authorize,
+            create_board=create_board,
+        ).show(interaction)
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
