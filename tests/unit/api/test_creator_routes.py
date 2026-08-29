@@ -1,13 +1,11 @@
 """Public creator route contracts."""
 
-from types import SimpleNamespace
-from typing import Any, cast
-from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
 from whenever import Instant
 
+from squid.accounts.application import AccountService
 from squid.accounts.domain import (
     CreditedAlias,
     IdentityProvider,
@@ -23,8 +21,16 @@ CANONICAL_ID = UUID("22222222-2222-4222-8222-222222222222")
 JOINED = Instant.from_utc(2026, 1, 1)
 
 
-def _accounts(profile: PublicCreatorProfile | None) -> Any:
-    return cast(Any, SimpleNamespace(get_public_profile=AsyncMock(return_value=profile)))
+class AccountReader(AccountService):
+    def __init__(self, profile: PublicCreatorProfile | None) -> None:
+        self.profile = profile
+
+    async def get_public_profile(self, public_id: UUID) -> PublicCreatorProfile | None:
+        return self.profile
+
+
+def _accounts(profile: PublicCreatorProfile | None) -> AccountService:
+    return AccountReader(profile)
 
 
 async def test_a_visible_profile_serves_everything_it_publishes() -> None:
