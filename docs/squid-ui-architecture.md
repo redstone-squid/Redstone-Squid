@@ -255,6 +255,39 @@ Planning internals that walk any document take `AnyLayoutNode`, which is the del
 opt-out: they rewrite whatever they are handed and leave the dialect judgement to the
 target's dialect.
 
+### Renderable is a capability; Node is a stage
+
+Two words for nodes run through the package, on different axes, and keeping them apart is
+what keeps the vocabulary readable.
+
+`Renderable[RenderTargetT]` is a **capability**: the class claims to be drawable, and its
+parameter says in which dialects. It is what a class inherits, including one a frontend
+writes itself, and it is the only arm `LayoutNode` has.
+
+`Node` is a **stage**. There are three, and each has its own name:
+
+| Stage | Type | What it is |
+|---|---|---|
+| Authored | `LayoutNode[T]` | what `render` returns; exactly `Renderable[T]` |
+| Lowered | `Node` | the closed primitive IR the Discord planner rewrites |
+| Planned | `scene.Node` | the serializable scene a renderer draws |
+
+`LayoutNode` is an alias for `Renderable` and keeps its own name because a field or a
+parameter wants to say *which stage* a value is at, not that it happens to be drawable.
+
+Two closed unions sit beside the open one, each for a job `Renderable` cannot do:
+
+- `PortableNode` — the semantic vocabulary every backend must answer for. A traversal that
+  matches over it is provably exhaustive, which is why `html_planner` excludes the open arm
+  with `is_portable_node` before its `match`.
+- `BuiltinLayoutNode` — every node class this package ships, flattened into a tuple an
+  `isinstance` can test. Behind `is_builtin_layout_node`.
+
+So the two predicates answer different questions, on purpose. `is_layout_node` is open: a
+caller's own `Renderable` is a layout node, and a container factory accepts it. Lowering
+asks `is_builtin_layout_node`, because it cannot draw a node it has never heard of and has
+to say so by name.
+
 ## Patterns: one state machine, two shells
 
 Reusable interaction patterns are authored as pure `state -> tree` state machines. Control and
