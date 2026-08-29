@@ -10,7 +10,7 @@ import squid_ui_discord as sd
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.bot.consent import ConsentPrompt
 from squid.bot.routes._root import _feature_group, _feature_route
-from squid.bot.ui import CardField, L, render_payload, text_node
+from squid.bot.ui import CardField, render_payload, text_node, tr
 from squid.bot.utils.sticky_message import StickyMessage
 
 if TYPE_CHECKING:
@@ -35,7 +35,7 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
     if account is not None and account.id is not None and not account.needs_consent_refresh:
         await invocation.reply(
             text_node(
-                L(
+                tr(
                     t"### Consent Already Granted\n"
                     t"Your account has already accepted the current privacy notice. Redstone Squid automatically "
                     t"indexes your submissions in build log channels.\n\n"
@@ -51,8 +51,8 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
     version = CURRENT_CONSENT_VERSION
     component = await ConsentPrompt(
         user_id=user_id,
-        title=L(t"Enable Automatic Build Ingestion"),
-        summary=L(
+        title=tr(t"Enable Automatic Build Ingestion"),
+        summary=tr(
             t"Redstone Squid automatically indexes redstone doors and builds posted in this channel. "
             t"Agreeing stores your Discord user ID and records this consent, allowing the bot to attribute "
             t"your builds, mirror media, and analyze attached schematics. Cancelling stores nothing and leaves "
@@ -60,15 +60,15 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
         ),
         fields=(
             CardField(
-                L(t"Discord account"),
-                L(t"<@{user_id}> ({user_id})"),
+                tr(t"Discord account"),
+                tr(t"<@{user_id}> ({user_id})"),
             ),
             CardField(
-                L(t"Consent recorded"),
-                L(t"Notice {version}, timed at the moment you agree."),
+                tr(t"Consent recorded"),
+                tr(t"Notice {version}, timed at the moment you agree."),
             ),
         ),
-        accept_label=L(t"Agree & Enable Ingestion"),
+        accept_label=tr(t"Agree & Enable Ingestion"),
         wait_timeout=120,
     ).show(invocation, wait=True)
     if component is None:
@@ -81,7 +81,7 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
         )
         await invocation.reply(
             text_node(
-                L(
+                tr(
                     t"### Consent Recorded!\n"
                     t"Thank you! Your consent has been recorded under notice `{version}`. Your future builds "
                     t"posted in build-log channels will now be automatically ingested and submitted for voting.\n\n"

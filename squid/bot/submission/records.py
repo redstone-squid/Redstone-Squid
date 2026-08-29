@@ -10,7 +10,7 @@ from discord.ext.commands import Cog
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
-from squid.bot.ui import L
+from squid.bot.ui import tr
 from squid.bot.utils.permissions import allows, enforce, hide_unless
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
@@ -94,13 +94,13 @@ class RecordsScreen(sd.Screen):
             label=lambda gap: gap.title,
             summary=lambda gap: f"{gap.title} · missing {', '.join(gap.fields)}",
             detail=lambda gap: sl.fields(
-                sl.field(L(t"Definition"), str(gap.definition_id)),
-                sl.field(L(t"Builds"), ", ".join(map(str, gap.build_ids))),
-                sl.field(L(t"Missing evidence"), ", ".join(gap.fields)),
+                sl.field(tr(t"Definition"), str(gap.definition_id)),
+                sl.field(tr(t"Builds"), ", ".join(map(str, gap.build_ids))),
+                sl.field(tr(t"Missing evidence"), ", ".join(gap.fields)),
             ),
             page_size=15,
-            title=L(t"Record evidence gaps"),
-            empty=L(t"No unresolved active record categories."),
+            title=tr(t"Record evidence gaps"),
+            empty=tr(t"No unresolved active record categories."),
         )
         self._titles = sp.Browser(
             sl.sources.list_source(titles),
@@ -109,15 +109,15 @@ class RecordsScreen(sd.Screen):
             label=lambda gap: gap.title,
             summary=lambda gap: gap.title,
             detail=lambda gap: sl.fields(
-                sl.field(L(t"Definition"), str(gap.definition_id)),
+                sl.field(tr(t"Definition"), str(gap.definition_id)),
                 sl.field(
-                    L(t"Diagnostics"),
+                    tr(t"Diagnostics"),
                     ", ".join(str(item.get("code", "unknown")) for item in gap.diagnostics),
                 ),
             ),
             page_size=15,
-            title=L(t"Record title diagnostics"),
-            empty=L(t"No active record titles require taxonomy review."),
+            title=tr(t"Record title diagnostics"),
+            empty=tr(t"No active record titles require taxonomy review."),
         )
 
     def _build_tabs(self) -> None:
@@ -125,34 +125,34 @@ class RecordsScreen(sd.Screen):
         if self._gaps is not None and self._titles is not None:
             tabs.extend(
                 (
-                    sp.Tab("gaps", L(t"Evidence gaps"), self._gaps),
-                    sp.Tab("titles", L(t"Title issues"), self._titles),
+                    sp.Tab("gaps", tr(t"Evidence gaps"), self._gaps),
+                    sp.Tab("titles", tr(t"Title issues"), self._titles),
                 )
             )
-        tabs.append(sp.Tab("maintenance", L(t"Lookup and rebuild"), self._maintenance_nodes()))
-        self._tabs = sp.Tabs(tabs, key="records-tabs", title=L(t"Records")).build_component()
+        tabs.append(sp.Tab("maintenance", tr(t"Lookup and rebuild"), self._maintenance_nodes()))
+        self._tabs = sp.Tabs(tabs, key="records-tabs", title=tr(t"Records")).build_component()
 
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self._tabs is None:
-            return (sl.status(L(t"Loading record diagnostics.")),)
+            return (sl.status(tr(t"Loading record diagnostics.")),)
         return (
             self.boundary(self._tabs, key="tabs"),
-            sl.action_controls(sl.action_control(L(t"Close"), self._close, key="close"), key="record-actions"),
+            sl.action_controls(sl.action_control(tr(t"Close"), self._close, key="close"), key="record-actions"),
         )
 
     def _maintenance_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = []
         if self._can_inspect:
-            nodes.append(sl.form(L(t"Lookup category"), self._lookup_form(), key="lookup", on_submit=self._lookup))
+            nodes.append(sl.form(tr(t"Lookup category"), self._lookup_form(), key="lookup", on_submit=self._lookup))
         if self._can_rebuild:
-            nodes.append(sl.form(L(t"Rebuild records"), self._rebuild_form(), key="rebuild", on_submit=self._rebuild))
-        return tuple(nodes) or (sl.note(L(t"No maintenance actions are available.")),)
+            nodes.append(sl.form(tr(t"Rebuild records"), self._rebuild_form(), key="rebuild", on_submit=self._rebuild))
+        return tuple(nodes) or (sl.note(tr(t"No maintenance actions are available.")),)
 
     @staticmethod
     def _kind_field(*, required: bool = True) -> sl.forms.ChoiceField[BuildKind]:
         return sl.forms.ChoiceField(
             key="kind",
-            label=L(t"Build kind"),
+            label=tr(t"Build kind"),
             required=required,
             options=tuple(sl.forms.ChoiceOption(kind.value, kind.value.title(), kind) for kind in BuildKind),
         )
@@ -160,27 +160,27 @@ class RecordsScreen(sd.Screen):
     @classmethod
     def _lookup_form(cls) -> sl.forms.FormSpec:
         return sl.forms.FormSpec(
-            L(t"Lookup record category"),
+            tr(t"Lookup record category"),
             (
                 cls._kind_field(),
-                sl.forms.TextField(key="base_key", label=L(t"Definition ID or base key"), maximum=300),
+                sl.forms.TextField(key="base_key", label=tr(t"Definition ID or base key"), maximum=300),
                 sl.forms.TextField(
                     key="restrictions",
-                    label=L(t"Restriction IDs, comma separated"),
+                    label=tr(t"Restriction IDs, comma separated"),
                     required=False,
                     maximum=300,
                 ),
-                sl.forms.IntField(key="version_id", label=L(t"Pinned version ID"), required=False, minimum=1),
+                sl.forms.IntField(key="version_id", label=tr(t"Pinned version ID"), required=False, minimum=1),
             ),
         )
 
     @classmethod
     def _rebuild_form(cls) -> sl.forms.FormSpec:
         return sl.forms.FormSpec(
-            L(t"Rebuild records"),
+            tr(t"Rebuild records"),
             (
                 cls._kind_field(required=False),
-                sl.forms.IntField(key="version_id", label=L(t"Current version ID"), required=False, minimum=1),
+                sl.forms.IntField(key="version_id", label=tr(t"Current version ID"), required=False, minimum=1),
             ),
         )
 
@@ -194,11 +194,11 @@ class RecordsScreen(sd.Screen):
         try:
             restrictions = frozenset(int(value.strip()) for value in raw_restrictions.split(",") if value.strip())
         except ValueError:
-            await event.notice(L(t"Restriction IDs must be whole numbers separated by commas."))
+            await event.notice(tr(t"Restriction IDs must be whole numbers separated by commas."))
             return
         if selected.isdigit():
             if restrictions:
-                await event.notice(L(t"Restrictions can only be combined with a hand-typed base key."))
+                await event.notice(tr(t"Restrictions can only be combined with a hand-typed base key."))
                 return
             summary = await self._records.materialize_definition(int(selected), kind=kind, version_id=version_id)
         else:
@@ -209,7 +209,7 @@ class RecordsScreen(sd.Screen):
         self._build_tabs()
         definitions = summary.definitions
         resolved = summary.resolved
-        await event.notice(L(t"Recomputed {definitions} definitions; {resolved} resolved."))
+        await event.notice(tr(t"Recomputed {definitions} definitions; {resolved} resolved."))
 
     async def _rebuild(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, RECORD_ENTRY_REBUILD):
@@ -225,13 +225,13 @@ class RecordsScreen(sd.Screen):
         resolved = summary.resolved
         unresolved = summary.unresolved
         await event.notice(
-            L(t"Rebuilt {definitions} definitions; {resolved} resolved; {unresolved} awaiting evidence.")
+            tr(t"Rebuilt {definitions} definitions; {resolved} resolved; {unresolved} awaiting evidence.")
         )
 
     async def _may(self, event: sl.ActionEvent, node: PermissionNode) -> bool:
         if await self._authorize(node):
             return True
-        await event.notice(L(t"You are no longer allowed to perform this records operation."))
+        await event.notice(tr(t"You are no longer allowed to perform this records operation."))
         return False
 
     async def _close(self, event: sl.PressEvent) -> None:

@@ -6,7 +6,7 @@ import discord
 
 import squid_ui_discord as sd
 from squid.bot.submission.ui.views import BuildEditScreen
-from squid.bot.ui import L, error_node
+from squid.bot.ui import error_node, tr
 from squid.bot.utils.permissions import allows
 from squid.builds.application import BuildService
 from squid.builds.domain import Build, Status
@@ -62,8 +62,8 @@ async def show_build_editor(
         invocation = await sd.Invocation.of(interaction)
         await invocation.reply(
             error_node(
-                L(t"Cannot edit this build"),
-                L(t"Only the pending build's submitter or a trusted staff member can edit it."),
+                tr(t"Cannot edit this build"),
+                tr(t"Only the pending build's submitter or a trusted staff member can edit it."),
             ),
             visibility="personal",
         )
