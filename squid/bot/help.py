@@ -27,10 +27,10 @@ MORE_INFORMATION = _("Use `/help <command>` to get more information.")
 
 DIRECTORY_CATEGORIES: tuple[tuple[Any, frozenset[str]], ...] = (
     (_("Build"), frozenset({"build"})),
-    (_("Discover"), frozenset({"search", "restrictions"})),
+    (_("Discover"), frozenset({"search", "tags"})),
     (_("Account"), frozenset({"account", "notifications", "redstoner"})),
     (_("Community"), frozenset({"poll"})),
-    (_("Administration & setup"), frozenset({"records", "settings", "tag", "versions"})),
+    (_("Administration & setup"), frozenset({"records", "settings", "versions"})),
     (_("Information"), frozenset({"help"})),
 )
 """How the directory groups top-level commands, by command name.
