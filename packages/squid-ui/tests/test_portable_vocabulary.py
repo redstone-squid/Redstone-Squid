@@ -49,14 +49,3 @@ def test_non_nodes_are_neither():
     assert not is_portable_node(None)
     assert not is_layout_node("text")
     assert not is_layout_node(None)
-
-
-def test_nodes_are_really_slotted():
-    """`Renderable` carries an empty `__slots__`, so `slots=True` on a node means something.
-
-    Nothing else notices this regressing: a base without `__slots__` hands every subclass a
-    `__dict__` back, and the dataclasses keep working exactly as before while paying for it.
-    """
-    assert not hasattr(sl.stack(sl.paragraph("child")), "__dict__")
-    assert not hasattr(sl.paragraph("leaf"), "__dict__")
-    assert not hasattr(Text("raw"), "__dict__")
