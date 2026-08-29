@@ -33,7 +33,7 @@ flowchart TB
     subgraph authoring[Application and portable authoring]
         host[Host application<br/>domain facts and services]
         widgets[Reusable components<br/><code>squid-ui-widgets</code>]
-        component[Component or Screen<br/>declared state and synchronous <code>render()</code>]
+        component["Component or Screen<br/>declared state and synchronous <code>render()</code>"]
         reactive[Reactive model<br/><code>state · computed · resource · operation</code>]
         shared[Cross-root view state<br/><code>SharedState · SharedStatePool · TopicBus</code>]
         actions[Portable actions and form handlers<br/>events · guards · history]
