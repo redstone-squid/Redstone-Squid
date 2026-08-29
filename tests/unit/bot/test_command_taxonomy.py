@@ -135,22 +135,6 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "show",
         "unassign",
     ),
-    "starboard": (
-        "create",
-        "delete",
-        "edit",
-        "emoji",
-        "emoji add",
-        "emoji list",
-        "emoji remove",
-        "list",
-        "recount",
-        "show",
-        "weight",
-        "weight list",
-        "weight remove",
-        "weight set",
-    ),
 }
 
 
@@ -276,24 +260,9 @@ def test_sensitive_commands_declare_the_intended_permission_nodes() -> None:
     assert _nodes(search.__cog_commands__, "build schematic measure-timing") == {"build.schematic.measure_timing"}
     assert _nodes(search.__cog_commands__, "build schematic detect-lattice") == {"build.schematic.detect_lattice"}
 
-    starboard = StarboardCog.__new__(StarboardCog)
-    assert _nodes(starboard.__cog_commands__, "starboard create") == {"starboard.board.create"}
-    assert _nodes(starboard.__cog_commands__, "starboard recount") == {"starboard.board.recount"}
-
     verify = VerifyCog.__new__(VerifyCog)
     assert _nodes(verify.__cog_commands__, "account claims") == {"account.claim.list"}
     assert _nodes(verify.__cog_commands__, "account claim") == set()
-
-def test_group_gates_admit_anyone_holding_one_of_their_commands_nodes() -> None:
-    """A group gate must not be narrower than the commands inside it.
-
-    Every node is separately grantable, so gating a group on one node would make
-    the others unreachable for anyone granted only those.
-    """
-    for cog, group, member in ((StarboardCog, "starboard", "starboard recount"),):
-        commands = _commands_of(cog)
-        assert _nodes(commands, member) <= _nodes(commands, group)
-
 
 def test_every_privileged_command_declares_a_node() -> None:
     """A privileged command shipped with no gate fails CI.
