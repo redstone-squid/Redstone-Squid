@@ -5,13 +5,13 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Literal, cast
-from unittest.mock import AsyncMock
 
 import discord
 
 from squid.accounts.application import AccountService
 from squid.permissions.application import PermissionService
 from squid.permissions.domain import Decision, PermissionNode, Reason, Subject
+from squid_ui_discord.testing import AsyncCallRecorder
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -39,7 +39,7 @@ class _FollowupResult:
 @dataclass(frozen=True, slots=True)
 class _ResponseSource:
     done: bool
-    send_message: AsyncMock
+    send_message: AsyncCallRecorder
 
     def is_done(self) -> bool:
         return self.done
@@ -47,8 +47,8 @@ class _ResponseSource:
 
 @dataclass(frozen=True, slots=True)
 class _FollowupSource:
-    send: AsyncMock
-    delete_message: AsyncMock
+    send: AsyncCallRecorder
+    delete_message: AsyncCallRecorder
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,7 +66,7 @@ class _InteractionSource:
     channel_id: int
     expires_at: datetime
     command: None = None
-    delete_original_response: AsyncMock = field(default_factory=AsyncMock)
+    delete_original_response: AsyncCallRecorder = field(default_factory=AsyncCallRecorder)
 
     def is_expired(self) -> bool:
         return False
@@ -77,8 +77,8 @@ class InteractionHarness:
     """An interaction together with its observable response methods."""
 
     interaction: discord.Interaction[discord.Client]
-    send_initial: AsyncMock
-    send_followup: AsyncMock
+    send_initial: AsyncCallRecorder
+    send_followup: AsyncCallRecorder
 
 
 def make_interaction(
@@ -94,15 +94,15 @@ def make_interaction(
     The client carries the installed layout host a real interaction always names. It has no
     services by default; pass `error_reports` to assert that a failure was captured.
     """
-    send_initial = AsyncMock(return_value=_InitialResponseResult())
-    send_followup = AsyncMock(return_value=_FollowupResult())
+    send_initial = AsyncCallRecorder(result=_InitialResponseResult())
+    send_followup = AsyncCallRecorder(result=_FollowupResult())
     services = _ErrorServices(error_reports) if error_reports is not None else None
     client = make_layout_bot(services=services)
     interaction = cast(
         discord.Interaction[discord.Client],
         _InteractionSource(
             response=_ResponseSource(response_done, send_initial),
-            followup=_FollowupSource(send_followup, AsyncMock()),
+            followup=_FollowupSource(send_followup, AsyncCallRecorder()),
             client=client,
             user=_Identity(user_id),
             guild_id=guild_id,
@@ -219,7 +219,7 @@ class MessageHarness:
     """A message together with its observable edit method."""
 
     message: discord.Message
-    edit: AsyncMock
+    edit: AsyncCallRecorder
 
 
 @dataclass(frozen=True, slots=True)
@@ -229,7 +229,7 @@ class _MessageFlags:
 
 @dataclass(frozen=True, slots=True)
 class _MessageSource:
-    edit: AsyncMock
+    edit: AsyncCallRecorder
     channel: _Identity
     id: int
     flags: _MessageFlags
@@ -237,7 +237,7 @@ class _MessageSource:
 
 def make_message(*, channel_id: int = 2, message_id: int = 3, components_v2: bool = False) -> MessageHarness:
     """Create the minimal message contract used by shared error handling."""
-    edit = AsyncMock()
+    edit = AsyncCallRecorder()
     message = cast(
         discord.Message,
         _MessageSource(
@@ -282,13 +282,13 @@ class ReactionBotHarness:
     """A bot stand-in exposing only what reaction dispatch calls, plus its observable fetch."""
 
     bot: squid.bot.app.RedstoneSquid
-    get_or_fetch_message: AsyncMock
+    get_or_fetch_message: AsyncCallRecorder
 
 
 @dataclass(frozen=True, slots=True)
 class _ReactionBotSource:
     guild: discord.Guild | None
-    get_or_fetch_message: AsyncMock
+    get_or_fetch_message: AsyncCallRecorder
 
     def get_guild(self, guild_id: int) -> discord.Guild | None:
         del guild_id
@@ -303,7 +303,7 @@ def make_reaction_bot(
     Keeping the cast here rather than at each call site means the tests state what they
     need from the bot once, instead of repeating an `arg-type` suppression per test.
     """
-    get_or_fetch_message = AsyncMock(return_value=message)
+    get_or_fetch_message = AsyncCallRecorder(result=message)
     bot = cast(
         "squid.bot.app.RedstoneSquid",
         _ReactionBotSource(guild, get_or_fetch_message),
