@@ -679,9 +679,7 @@ def render_component_tree[RenderTargetT: RenderTarget](
 def _splice_dirty_subtrees[RenderTargetT: RenderTarget](
     root: Component[RenderTargetT],
     incremental: IncrementalRender[RenderTargetT],
-    expand: Callable[
-        [Component[RenderTargetT], str, dict[ContextKey[Any], object]], list[LayoutNode[RenderTargetT]]
-    ],
+    expand: Callable[[Component[RenderTargetT], str, dict[ContextKey[Any], object]], list[LayoutNode[RenderTargetT]]],
     attempted: set[AnyComponent],
 ) -> _SpliceResult[RenderTargetT] | None:
     """Patch independently dirty cached subtrees through their structural parent routes."""
