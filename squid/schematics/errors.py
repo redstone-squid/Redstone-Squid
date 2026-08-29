@@ -12,6 +12,7 @@ from squid.core.errors import (
 )
 from squid.core.i18n import tr
 from squid.schematics.domain.models import Vector3
+from squid_ui.text import Message
 
 
 class InvalidSchematicError(ValidationError):
@@ -119,7 +120,7 @@ class SchematicRenderRefusedError(ConflictError):
     default_code = ErrorCode.SCHEMATIC_RENDER_REFUSED
     default_resource = "schematic"
 
-    def __init__(self, reason: str, description: str) -> None:
+    def __init__(self, reason: str, description: str | Message) -> None:
         super().__init__(description, context={"reason": reason}, public_context={"reason": reason})
         self.reason = reason
 
