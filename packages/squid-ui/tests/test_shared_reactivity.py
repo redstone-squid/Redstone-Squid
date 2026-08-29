@@ -197,6 +197,9 @@ def test_addresses_sees_through_a_computed(preferences: Preferences) -> None:
         def label(self) -> str:
             return preferences.locale.upper()
 
+        def render(self):
+            return Text(self.label)
+
     component = Derived()
     assert addresses(lambda: component.label) == (address(preferences, "locale"),)
 
@@ -204,6 +207,9 @@ def test_addresses_sees_through_a_computed(preferences: Preferences) -> None:
 def test_addresses_refuses_a_thunk_that_reaches_no_shared_cell() -> None:
     class Local(Component[DiscordTarget]):
         count: int = state(0)
+
+        def render(self) -> Text:
+            return Text(str(self.count))
 
     local = Local()
     with pytest.raises(ValueError, match="read no shared state"):

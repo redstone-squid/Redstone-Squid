@@ -10,6 +10,7 @@ child class can appear in one message without their controls or pagers cross-wir
 root component is attached to a MessageRoot; children reach it through their parent.
 """
 
+from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
@@ -211,8 +212,13 @@ class _SpliceResult[RenderTargetT: RenderTarget]:
     added: tuple[tuple[str, AnyComponent], ...]
 
 
-class Component(StateOwner, Generic[RenderTargetT]):
-    """Base class for mounted, stateful views."""
+class Component(StateOwner, ABC, Generic[RenderTargetT]):
+    """Base class for mounted, stateful views.
+
+    Abstract in :meth:`render`, so a subclass that does not describe a message cannot be
+    mounted. An intermediate base that leaves `render` to *its* subclasses is abstract in
+    turn and needs no annotation to say so.
+    """
 
     _runtime: RuntimeOwner | None = None
     _parent: AnyComponent | None = None
@@ -221,11 +227,6 @@ class Component(StateOwner, Generic[RenderTargetT]):
     _reactive_internal_attributes = frozenset(
         {"_runtime", "_parent", "_loaded", "_state_revision", "_dependency_invalidation"}
     )
-    _reactive_require_state = False
-
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        cls._reactive_require_state = cls.render is not Component.render
-        super().__init_subclass__(**kwargs)
 
     def _state_changed(self, names: frozenset[str]) -> None:
         """React to committed writes to these state slots.
@@ -244,9 +245,9 @@ class Component(StateOwner, Generic[RenderTargetT]):
     def on_state_rollback(self) -> None:
         self.__dict__["_state_revision"] = self.__dict__.get("_state_revision", 0) + 1
 
+    @abstractmethod
     def render(self) -> DocumentLike[RenderTargetT]:
         """Describe the message for the current state. Pure and synchronous."""
-        raise NotImplementedError
 
     def boundary(self, child: Component[RenderTargetT], *, key: str) -> Boundary:
         """Place child in this render tree under a stable key and namespace.
