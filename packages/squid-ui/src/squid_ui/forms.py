@@ -12,7 +12,7 @@ from datetime import datetime as DateTimeValue
 from datetime import time as TimeValue
 from enum import StrEnum
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, Self, overload
+from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, Self, cast, overload
 
 from squid_ui.emoji import EmojiLike, normalize_emoji
 from squid_ui.errors import LayoutInvariantError, SquidUiError
@@ -79,6 +79,31 @@ def _invalid(message: str) -> NoReturn:
     raise FormValueError(message)
 
 
+type PrefillValue = str | tuple[str, ...] | bool | int | float | None
+"""What a field hands an adapter to seed its control with.
+
+`format` used to return `object`, which pushed the question to every consumer: the Discord
+modal wraps one result in `str()` and calls `set()` on another, the latter type-checking
+only because `MultiChoiceField` happens to narrow. This is the set those consumers can
+actually accept.
+"""
+
+
+def _prefill(value: object) -> PrefillValue:
+    """One stored value as a prefill, or None when nothing usable can stand for it.
+
+    The fallthrough every override shares. Prefills arrive from untyped stores and
+    round-tripped payloads, so the field narrows what it recognizes and this decides the
+    rest: what a JSON round-trip yields is kept, and an object no control could be seeded
+    with becomes no prefill at all.
+    """
+    if value is None or isinstance(value, str | bool | int | float):
+        return value
+    if isinstance(value, tuple) and all(isinstance(item, str) for item in value):
+        return cast(tuple[str, ...], value)
+    return None
+
+
 @dataclass(frozen=True, slots=True)
 class FormField[ValueT](ABC):
     """One typed value in a portable form schema.
@@ -127,14 +152,14 @@ class FormField[ValueT](ABC):
         exception is a programmer error and is left to propagate.
         """
 
-    def format(self, value: object) -> object:
+    def format(self, value: object) -> PrefillValue:
         """Convert a stored value back to an adapter-neutral prefill value.
 
         Takes `object` rather than `ValueT | None` because prefills reach this from untyped
         stores and round-tripped payloads; every override narrows with `isinstance` before
-        touching the value and passes anything else straight back.
+        touching the value and leaves the rest to `_prefill`.
         """
-        return value
+        return _prefill(value)
 
     def _missing(self, raw: object) -> bool:
         return raw is None or raw == "" or raw == () or raw == []
@@ -258,9 +283,9 @@ class DurationField(FormField[int]):
             _invalid(f"Enter a duration no longer than {self.maximum} seconds.")
         return value
 
-    def format(self, value: object) -> object:
+    def format(self, value: object) -> PrefillValue:
         if not isinstance(value, int):
-            return value
+            return _prefill(value)
         for suffix, unit in (("w", 604800), ("d", 86400), ("h", 3600), ("m", 60)):
             if value % unit == 0:
                 return f"{value // unit}{suffix}"
@@ -288,8 +313,8 @@ class DateField(FormField[date]):
             _invalid(f"Enter a date on or before {self.maximum.isoformat()}.")
         return value
 
-    def format(self, value: object) -> object:
-        return value.isoformat() if isinstance(value, date) else value
+    def format(self, value: object) -> PrefillValue:
+        return value.isoformat() if isinstance(value, date) else _prefill(value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -313,8 +338,8 @@ class TimeField(FormField[TimeValue]):
             _invalid(f"Enter a time at or before {self.maximum.isoformat()}.")
         return value
 
-    def format(self, value: object) -> object:
-        return value.isoformat() if isinstance(value, TimeValue) else value
+    def format(self, value: object) -> PrefillValue:
+        return value.isoformat() if isinstance(value, TimeValue) else _prefill(value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -368,8 +393,8 @@ class DateTimeField(FormField[DateTimeValue]):
             _invalid(f"Enter a date and time on or before {self.maximum.isoformat()}.")
         return value
 
-    def format(self, value: object) -> object:
-        return value.isoformat() if isinstance(value, DateTimeValue) else value
+    def format(self, value: object) -> PrefillValue:
+        return value.isoformat() if isinstance(value, DateTimeValue) else _prefill(value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -426,9 +451,9 @@ class ZonedDateTimeField(FormField[ZonedDateTime]):
             _invalid(f"Enter a date and time on or before {self.maximum.isoformat()}.")
         return value
 
-    def format(self, value: object) -> object:
+    def format(self, value: object) -> PrefillValue:
         if not isinstance(value, ZonedDateTime):
-            return value
+            return _prefill(value)
         return value.instant.astimezone(timezone_from_name(self.timezone)).isoformat()
 
 
@@ -471,7 +496,7 @@ class ScaleField(FormField[int]):
             _invalid(f"Choose a value from {self.minimum} to {self.maximum}.")
         return value
 
-    def format(self, value: object) -> object:
+    def format(self, value: object) -> str | None:
         # A string either way: it is the radio option's value and the text input's default.
         return None if value is None else str(value)
 
@@ -511,9 +536,9 @@ class ChoiceField[ValueT](FormField[ValueT]):
             _invalid("Choose one of the available options.")
         return option.value
 
-    def format(self, value: object) -> object:
+    def format(self, value: object) -> PrefillValue:
         option = next((option for option in self.options if option.value == value or option.key == value), None)
-        return option.key if option is not None else value
+        return option.key if option is not None else _prefill(value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -669,7 +694,7 @@ class FormSpec:
             errors.extend(issues)
         return FormResult(MappingProxyType(values), raw, tuple(errors))
 
-    def prefill_for(self, field: FormField[Any]) -> object:
+    def prefill_for(self, field: FormField[Any]) -> PrefillValue:
         """Return the serialized prefill for one field."""
         value = self.prefill.get(field.key, field.default)
         return field.format(value)
@@ -837,6 +862,7 @@ __all__ = [
     "IntField",
     "MultiChoiceField",
     "NonexistentTimeMode",
+    "PrefillValue",
     "ScaleField",
     "SubmitHandler",
     "TextAreaField",
