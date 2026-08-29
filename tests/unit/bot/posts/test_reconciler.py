@@ -8,7 +8,6 @@ partial failure missed, and removing posts a resource no longer wants.
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from types import SimpleNamespace
 from typing import Any, cast
 
 import discord
@@ -21,6 +20,17 @@ from squid.bot.posts.renderer import DesiredPost
 from squid.posts.domain import DiscordPost, ResourceKind, Surface
 
 GUILD = 500
+
+
+@dataclass(frozen=True)
+class MessageFlags:
+    components_v2: bool = True
+
+
+@dataclass(frozen=True)
+class HttpResponse:
+    status: int
+    reason: str
 
 
 @dataclass
@@ -43,7 +53,7 @@ class FakeMessage:
         return _Identified(999)
 
     content: str = ""
-    flags: Any = field(default_factory=lambda: SimpleNamespace(components_v2=True))
+    flags: MessageFlags = field(default_factory=MessageFlags)
 
     async def edit(self, **kwargs: object) -> FakeMessage:
         self.edits.append(kwargs.get("view"))
@@ -89,7 +99,7 @@ class FakeChannel:
             return self.messages[message_id]
         except KeyError:
             # discord.py only reads `status` and `reason` off the response here.
-            response = cast(Any, SimpleNamespace(status=404, reason="Not Found"))
+            response = cast(Any, HttpResponse(status=404, reason="Not Found"))
             raise discord.NotFound(response, "Unknown Message") from None
 
 
