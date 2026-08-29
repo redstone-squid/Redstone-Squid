@@ -6,7 +6,6 @@ import pytest
 
 import squid_layouts as sl
 from squid_layouts.discord import Everyone, SessionKey, SessionRegistry
-from squid_layouts.discord.sessions import Opened
 from squid_layouts.discord.durability import PurgeResult
 from squid_layouts.discord.operations import (
     ActionDisabled,
@@ -15,6 +14,7 @@ from squid_layouts.discord.operations import (
     DevToolsPolicy,
     DevToolsRuntime,
 )
+from squid_layouts.discord.sessions import Opened
 from squid_layouts.discord.testing import delivered_to, fake_message
 from squid_layouts.profiling import MemoryProfiler, OperationKind
 

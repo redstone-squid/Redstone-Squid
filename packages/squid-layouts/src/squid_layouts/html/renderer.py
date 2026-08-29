@@ -206,7 +206,9 @@ class Renderer:
                 icon = f'<span class="squid-button__emoji">{escape(emoji.name)}</span> ' if emoji else ""
                 safe = _url(url)
                 if safe is None or disabled:
-                    return f'<span class="squid-button squid-link" aria-disabled="true">{icon}{escape(label or "")}</span>'
+                    return (
+                        f'<span class="squid-button squid-link" aria-disabled="true">{icon}{escape(label or "")}</span>'
+                    )
                 return (
                     f'<a class="squid-button squid-link" href="{_attribute(safe)}" '
                     f'rel="noopener noreferrer">{icon}{escape(label or "")}</a>'
@@ -277,7 +279,7 @@ class Renderer:
             case SceneGallery(items=items):
                 images = "".join(
                     f'<img class="{"squid-spoiler" if item.spoiler else ""}" src="{_attribute(safe)}" '
-                    f'alt="{_attribute(item.description or "")}"{" tabindex=\"0\"" if item.spoiler else ""}>'
+                    f'alt="{_attribute(item.description or "")}"{' tabindex="0"' if item.spoiler else ""}>'
                     for item in items
                     if (safe := _url(item.url)) is not None
                 )

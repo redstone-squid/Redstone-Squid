@@ -170,8 +170,8 @@ def localize_chrome(chrome: Chrome, localization: Localization) -> Chrome:
 
 __all__ = [
     "CHROME_CONTEXT",
-    "Chrome",
     "DEFAULT_CHROME",
     "LOCALIZATION_CONTEXT",
+    "Chrome",
     "localize_chrome",
 ]

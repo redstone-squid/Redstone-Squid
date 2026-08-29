@@ -110,7 +110,9 @@ class ErrorReportBrowser(sl.Component):
             )
         children.append(sl.fields(*_summary_fields(report, self.matches)))
         children.append(
-            sl.download(L(t"Full report"), report_asset(report), key="full-report", emphasis=sl.semantic.Emphasis.STRONG)
+            sl.download(
+                L(t"Full report"), report_asset(report), key="full-report", emphasis=sl.semantic.Emphasis.STRONG
+            )
         )
         controls: list[sl.primitives.Button] = []
         if self._reports:

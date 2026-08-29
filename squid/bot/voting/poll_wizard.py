@@ -489,7 +489,8 @@ class PollConfirmationComponent(sl.Component):
             sl.semantic.Choices(
                 key="visibility",
                 choices=tuple(
-                    sl.semantic.Choice(value.value, label, description) for value, label, description in VISIBILITY_CHOICES
+                    sl.semantic.Choice(value.value, label, description)
+                    for value, label, description in VISIBILITY_CHOICES
                 ),
                 selection=sl.controlled((self.draft.visibility.value,), self._visibility_changed),
             ),
@@ -507,7 +508,8 @@ class PollConfirmationComponent(sl.Component):
                 sl.semantic.Choices(
                     key="scope",
                     choices=tuple(
-                        sl.semantic.Choice(value.value, label, description) for value, label, description in SCOPE_CHOICES
+                        sl.semantic.Choice(value.value, label, description)
+                        for value, label, description in SCOPE_CHOICES
                     ),
                     selection=sl.controlled((self.draft.scope.value,), self._scope_changed),
                 )

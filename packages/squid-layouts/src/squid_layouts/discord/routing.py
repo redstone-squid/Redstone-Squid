@@ -47,9 +47,9 @@ import discord
 from squid_layouts.discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
 from squid_layouts.discord.mount import ErrorHook
 from squid_layouts.planning.adapter import ADAPTER_DISPATCH, AdapterProfile
-from squid_layouts.target_types import DiscordPyAdapter
 from squid_layouts.profiling import NoOpProfiler, OperationKind, OperationRecorder, Profiler, TraceOutcome, TraceResult
 from squid_layouts.routing import Route
+from squid_layouts.target_types import DiscordPyAdapter
 
 logger = logging.getLogger(__name__)
 _NOOP_PROFILER = NoOpProfiler()

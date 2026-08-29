@@ -52,6 +52,7 @@ from squid_layouts.runtime.resources import (
     observe_resources,
     unique_resources,
 )
+from squid_layouts.runtime.topics import Address
 from squid_layouts.semantic import (
     Action as SemanticAction,
 )
@@ -132,7 +133,6 @@ from squid_layouts.semantic import (
     Truncated as SemanticTruncated,
 )
 from squid_layouts.semantic import Unbreakable as SemanticUnbreakable
-from squid_layouts.runtime.topics import Address
 
 type RenderNode[ModeT = Any] = LayoutNode[ModeT]
 type RenderResult[ModeT = Any] = Document[ModeT] | LayoutNode[ModeT] | Sequence[LayoutNode[ModeT]]

@@ -25,7 +25,9 @@ def test_zoned_datetime_normalizes_aware_instant_to_utc() -> None:
 def test_zoned_datetime_identity_includes_timezone() -> None:
     instant = datetime(2026, 8, 22, 14, 30, tzinfo=UTC)
 
-    assert sl.temporal.ZonedDateTime(instant, "America/New_York") != sl.temporal.ZonedDateTime(instant, "America/Toronto")
+    assert sl.temporal.ZonedDateTime(instant, "America/New_York") != sl.temporal.ZonedDateTime(
+        instant, "America/Toronto"
+    )
 
 
 def test_zoned_datetime_rejects_naive_instants_and_unknown_zones() -> None:

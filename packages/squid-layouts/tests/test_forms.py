@@ -40,7 +40,9 @@ def test_descriptor_form_compiles_keys_labels_and_prefill() -> None:
     assert spec.prefill == {"name": "Ada", "age": 36, "public": False}
 
 
-def _multi_choice(*, required: bool = True, minimum: int = 0, maximum: int | None = None) -> sl.forms.MultiChoiceField[int]:
+def _multi_choice(
+    *, required: bool = True, minimum: int = 0, maximum: int | None = None
+) -> sl.forms.MultiChoiceField[int]:
     return sl.forms.MultiChoiceField(
         key="values",
         label="Values",
@@ -345,7 +347,9 @@ def test_multi_choice_prefill_round_trips_typed_values_and_keys() -> None:
 
 def test_multi_choice_rejects_duplicate_option_keys() -> None:
     with pytest.raises(ValueError, match="option keys must be unique"):
-        sl.forms.MultiChoiceField(options=(sl.forms.ChoiceOption("same", "One", 1), sl.forms.ChoiceOption("same", "Two", 2)))
+        sl.forms.MultiChoiceField(
+            options=(sl.forms.ChoiceOption("same", "One", 1), sl.forms.ChoiceOption("same", "Two", 2))
+        )
 
 
 async def _submitted(event: sl.SubmitEvent) -> None: ...

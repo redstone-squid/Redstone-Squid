@@ -240,7 +240,9 @@ class SettingsPanel(sl.Component):
             ),
             sl.semantic.Choices(
                 key="vote-kind",
-                choices=tuple(sl.semantic.Choice(kind.value, L(label), available=True) for kind, label in KIND_LABELS.items()),
+                choices=tuple(
+                    sl.semantic.Choice(kind.value, L(label), available=True) for kind, label in KIND_LABELS.items()
+                ),
                 selection=sl.controlled((self.kind.value,), self._kind_changed),
             ),
         ]

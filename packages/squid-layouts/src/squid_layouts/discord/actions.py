@@ -5,10 +5,10 @@ from typing import TYPE_CHECKING, Any
 
 import discord
 
-from squid_layouts.interactions import ActionEvent, ActionPolicy, Visibility
 from squid_layouts.discord import delivery as deliver
 from squid_layouts.discord.modal import ModalSpec, build_form_modal, build_modal
 from squid_layouts.forms import FieldError, FormField, FormIssue, FormLike, FormSpec, SubmitHandler, bind_form
+from squid_layouts.interactions import ActionEvent, ActionPolicy, Visibility
 from squid_layouts.text import TextLike, resolve_text
 
 if TYPE_CHECKING:

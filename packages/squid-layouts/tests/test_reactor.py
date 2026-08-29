@@ -11,10 +11,10 @@ import anyio
 import pytest
 
 from squid_layouts import Component
-from squid_layouts.runtime import Topic, TopicBus
 from squid_layouts.discord import Everyone, Mount, PauseUpdates, Reactor, RenewEphemeral, delivery
 from squid_layouts.discord.testing import delivered_to, fake_interaction, fake_message
 from squid_layouts.profiling import MemoryProfiler, OperationKind, TraceLink
+from squid_layouts.runtime import Topic, TopicBus
 
 
 class Empty(Component):

@@ -5,9 +5,9 @@ from dataclasses import replace
 import discord
 import pytest
 
-from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.discord import V2_TARGET, classic, render_static
 from squid_layouts.emoji import Emoji
+from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.html import Renderer as HtmlRenderer
 from squid_layouts.planning import plan
 from squid_layouts.primitives import (
