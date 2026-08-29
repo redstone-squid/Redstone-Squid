@@ -126,9 +126,6 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "nodes",
         "revoke",
     ),
-    # `admin` held nothing but record tooling, so every member repeated the group name it
-    # actually wanted (docs/plans/command-redesign/05-condensation.md).
-    "records": ("gaps", "lookup", "rebuild", "title-issues"),
     "redstoner": ("panel", "resync"),
     "restrictions": ("add-alias",),
     "role": (
@@ -301,10 +298,6 @@ def test_sensitive_commands_declare_the_intended_permission_nodes() -> None:
     assert _nodes(admin.__cog_commands__, "tag approve") == {"tag.proposal.approve"}
     assert _nodes(admin.__cog_commands__, "archive") == {"message.archive.create"}
 
-    records = RecordCog.__new__(RecordCog)
-    assert _nodes(records.__cog_commands__, "records rebuild") == {"record.entry.rebuild"}
-    assert _nodes(records.__cog_commands__, "records lookup") == {"record.entry.inspect"}
-
     verify = VerifyCog.__new__(VerifyCog)
     assert _nodes(verify.__cog_commands__, "account claims") == {"account.claim.list"}
     assert _nodes(verify.__cog_commands__, "account claim") == set()
@@ -321,7 +314,6 @@ def test_group_gates_admit_anyone_holding_one_of_their_commands_nodes() -> None:
     """
     for cog, group, member in (
         (StarboardCog, "starboard", "starboard recount"),
-        (RecordCog, "records", "records rebuild"),
         (SearchCog, "restrictions", "restrictions add-alias"),
     ):
         commands = _commands_of(cog)

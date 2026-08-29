@@ -1,206 +1,270 @@
-"""Discord commands for querying and managing computed records."""
+"""Discord workspace for querying and maintaining computed records."""
 
-from typing import TYPE_CHECKING, Any
+from collections.abc import Awaitable, Callable, Sequence
+from typing import TYPE_CHECKING, Protocol, cast
 
+import discord
 from discord import app_commands
-from discord.ext import commands
-from discord.ext.commands import Cog, Context, hybrid_group
+from discord.ext.commands import Cog
 
+import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.i18n import resolve_locale, t
-from squid.bot.ui import DISCORD_BLUE, PagedList, info_node
-from squid.bot.utils.autocomplete import autocompletes, suggests
-from squid.bot.utils.permissions import hide_unless, requires
-from squid.core.i18n import _
+import squid_ui_widgets as sp
+from squid.bot.ui import L
+from squid.bot.utils.permissions import allows, enforce, hide_unless
+from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
-from squid.records.application import RecordLookupRequest
+from squid.records.application import RebuildSummary, RecordGap, RecordLookupRequest, TitleDiagnosticGap
 from squid.records.domain import BuildKind
 
 if TYPE_CHECKING:
     import squid.bot.app
 
-DIAGNOSTICS_PER_PAGE = 15
-"""Findings per page. Each is one long line, so a page is a screenful rather than a wall."""
+
+class RecordOperations(Protocol):
+    """Record diagnostics and exact lookup operations."""
+
+    async def gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordGap]: ...
+
+    async def title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[TitleDiagnosticGap]: ...
+
+    async def materialize_definition(
+        self,
+        definition_id: int,
+        *,
+        kind: BuildKind,
+        version_id: int | None = None,
+    ) -> RebuildSummary: ...
+
+    async def lookup_or_materialize(self, request: RecordLookupRequest) -> RebuildSummary: ...
+
+
+class RecordComputationOperations(Protocol):
+    """Record rebuild operation exposed by the maintenance tab."""
+
+    async def rebuild(
+        self,
+        *,
+        current_version_id: int | None,
+        kinds: Sequence[BuildKind],
+    ) -> RebuildSummary: ...
+
+
+type RecordAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
+
+
+class RecordsScreen(sd.Screen):
+    """A records workspace that ends when closed, replaced, or timed out."""
+
+    session_name = "records"
+    scope = sd.ScopeKind.USER_GUILD
+    timeout = 300
+    visibility = "personal"
+
+    def __init__(
+        self,
+        records: RecordOperations,
+        computation: RecordComputationOperations,
+        *,
+        can_inspect: bool,
+        can_rebuild: bool,
+        authorize: RecordAuthorizer,
+    ) -> None:
+        self._records = records
+        self._computation = computation
+        self._can_inspect = can_inspect
+        self._can_rebuild = can_rebuild
+        self._authorize = authorize
+        self._gaps: sp.Browser[RecordGap, sl.ComponentsV2Target] | None = None
+        self._titles: sp.Browser[TitleDiagnosticGap, sl.ComponentsV2Target] | None = None
+        self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target] | None = None
+
+    async def on_load(self) -> None:
+        if self._can_inspect:
+            await self._refresh_diagnostics()
+        self._build_tabs()
+
+    async def _refresh_diagnostics(self) -> None:
+        gaps = tuple(await self._records.gaps())
+        titles = tuple(await self._records.title_gaps())
+        self._gaps = sp.Browser(
+            sl.sources.list_source(gaps),
+            key="evidence-gaps",
+            identity=lambda gap: str(gap.definition_id),
+            label=lambda gap: gap.title,
+            summary=lambda gap: f"{gap.title} · missing {', '.join(gap.fields)}",
+            detail=lambda gap: sl.fields(
+                sl.field(L(t"Definition"), str(gap.definition_id)),
+                sl.field(L(t"Builds"), ", ".join(map(str, gap.build_ids))),
+                sl.field(L(t"Missing evidence"), ", ".join(gap.fields)),
+            ),
+            page_size=15,
+            title=L(t"Record evidence gaps"),
+            empty=L(t"No unresolved active record categories."),
+        )
+        self._titles = sp.Browser(
+            sl.sources.list_source(titles),
+            key="title-issues",
+            identity=lambda gap: str(gap.definition_id),
+            label=lambda gap: gap.title,
+            summary=lambda gap: gap.title,
+            detail=lambda gap: sl.fields(
+                sl.field(L(t"Definition"), str(gap.definition_id)),
+                sl.field(
+                    L(t"Diagnostics"),
+                    ", ".join(str(item.get("code", "unknown")) for item in gap.diagnostics),
+                ),
+            ),
+            page_size=15,
+            title=L(t"Record title diagnostics"),
+            empty=L(t"No active record titles require taxonomy review."),
+        )
+
+    def _build_tabs(self) -> None:
+        tabs: list[sp.Tab[sl.ComponentsV2Target]] = []
+        if self._gaps is not None and self._titles is not None:
+            tabs.extend(
+                (
+                    sp.Tab("gaps", L(t"Evidence gaps"), self._gaps),
+                    sp.Tab("titles", L(t"Title issues"), self._titles),
+                )
+            )
+        tabs.append(sp.Tab("maintenance", L(t"Lookup and rebuild"), self._maintenance_nodes()))
+        self._tabs = sp.Tabs(tabs, key="records-tabs", title=L(t"Records")).build_component()
+
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+        if self._tabs is None:
+            return (sl.status(L(t"Loading record diagnostics.")),)
+        return (
+            self.boundary(self._tabs, key="tabs"),
+            sl.action_controls(sl.action_control(L(t"Close"), self._close, key="close"), key="record-actions"),
+        )
+
+    def _maintenance_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = []
+        if self._can_inspect:
+            nodes.append(sl.form(L(t"Lookup category"), self._lookup_form(), key="lookup", on_submit=self._lookup))
+        if self._can_rebuild:
+            nodes.append(sl.form(L(t"Rebuild records"), self._rebuild_form(), key="rebuild", on_submit=self._rebuild))
+        return tuple(nodes) or (sl.note(L(t"No maintenance actions are available.")),)
+
+    @staticmethod
+    def _kind_field(*, required: bool = True) -> sl.forms.ChoiceField[BuildKind]:
+        return sl.forms.ChoiceField(
+            key="kind",
+            label=L(t"Build kind"),
+            required=required,
+            options=tuple(sl.forms.ChoiceOption(kind.value, kind.value.title(), kind) for kind in BuildKind),
+        )
+
+    @classmethod
+    def _lookup_form(cls) -> sl.forms.FormSpec:
+        return sl.forms.FormSpec(
+            L(t"Lookup record category"),
+            (
+                cls._kind_field(),
+                sl.forms.TextField(key="base_key", label=L(t"Definition ID or base key"), maximum=300),
+                sl.forms.TextField(
+                    key="restrictions",
+                    label=L(t"Restriction IDs, comma separated"),
+                    required=False,
+                    maximum=300,
+                ),
+                sl.forms.IntField(key="version_id", label=L(t"Pinned version ID"), required=False, minimum=1),
+            ),
+        )
+
+    @classmethod
+    def _rebuild_form(cls) -> sl.forms.FormSpec:
+        return sl.forms.FormSpec(
+            L(t"Rebuild records"),
+            (
+                cls._kind_field(required=False),
+                sl.forms.IntField(key="version_id", label=L(t"Current version ID"), required=False, minimum=1),
+            ),
+        )
+
+    async def _lookup(self, event: sl.SubmitEvent) -> None:
+        if not await self._may(event, RECORD_ENTRY_INSPECT):
+            return
+        kind = cast(BuildKind, event.values["kind"])
+        selected = cast(str, event.values["base_key"]).strip()
+        version_id = cast(int | None, event.values.get("version_id"))
+        raw_restrictions = cast(str | None, event.values.get("restrictions")) or ""
+        try:
+            restrictions = frozenset(int(value.strip()) for value in raw_restrictions.split(",") if value.strip())
+        except ValueError:
+            await event.notice(L(t"Restriction IDs must be whole numbers separated by commas."))
+            return
+        if selected.isdigit():
+            if restrictions:
+                await event.notice(L(t"Restrictions can only be combined with a hand-typed base key."))
+                return
+            summary = await self._records.materialize_definition(int(selected), kind=kind, version_id=version_id)
+        else:
+            summary = await self._records.lookup_or_materialize(
+                RecordLookupRequest(kind, selected, restrictions, version_id=version_id)
+            )
+        await self._refresh_diagnostics()
+        self._build_tabs()
+        definitions = summary.definitions
+        resolved = summary.resolved
+        await event.notice(L(t"Recomputed {definitions} definitions; {resolved} resolved."))
+
+    async def _rebuild(self, event: sl.SubmitEvent) -> None:
+        if not await self._may(event, RECORD_ENTRY_REBUILD):
+            return
+        kind = cast(BuildKind | None, event.values.get("kind"))
+        version_id = cast(int | None, event.values.get("version_id"))
+        kinds = (kind,) if kind is not None else (BuildKind.DOOR, BuildKind.EXTENDER)
+        summary = await self._computation.rebuild(current_version_id=version_id, kinds=kinds)
+        if self._can_inspect:
+            await self._refresh_diagnostics()
+            self._build_tabs()
+        definitions = summary.definitions
+        resolved = summary.resolved
+        unresolved = summary.unresolved
+        await event.notice(
+            L(t"Rebuilt {definitions} definitions; {resolved} resolved; {unresolved} awaiting evidence.")
+        )
+
+    async def _may(self, event: sl.ActionEvent, node: PermissionNode) -> bool:
+        if await self._authorize(node):
+            return True
+        await event.notice(L(t"You are no longer allowed to perform this records operation."))
+        return False
+
+    async def _close(self, event: sl.PressEvent) -> None:
+        await event.finish()
 
 
 class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
-    """Query and maintain server-computed record categories."""
+    """Open the record diagnostics and maintenance workspace."""
 
     def __init__(self, bot: BotT) -> None:
         self.bot = bot
         self.records = bot.services.records
         self.computation = bot.services.record_computation
 
-    @hybrid_group(name="records")
-    @requires(RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD, mode="any")
+    @app_commands.command(name="records", description="Inspect and maintain computed records")
+    @app_commands.guild_only()
     @hide_unless(manage_guild=True)
-    async def records_group(self, ctx: Context[BotT]) -> None:
-        """Inspect and maintain computed record categories."""
-        await ctx.send_help("records")
+    async def records_workspace(self, interaction: discord.Interaction[BotT]) -> None:
+        """Open capability-aware diagnostics, lookup, and rebuild tools."""
+        await enforce(interaction, RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD, mode="any")
 
-    @records_group.command(name="gaps")
-    @requires(RECORD_ENTRY_INSPECT)
-    @app_commands.describe(kind=app_commands.locale_str(_("Optionally limit gaps to one build kind.")))
-    async def gaps(self, ctx: Context[BotT], kind: BuildKind | None = None) -> None:
-        """List categories whose winner needs more factual evidence."""
-        invocation = await sd.Invocation.of(ctx)
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        gaps = await self.records.gaps(kind=kind)
-        paginator = _diagnostic_list(
-            ctx,
-            t(locale, _("Record evidence gaps")),
-            [
-                f"`{gap.definition_id}` **{gap.title}** — builds {', '.join(map(str, gap.build_ids))}; "
-                f"missing {', '.join(gap.fields)}"
-                for gap in gaps
-            ],
-            empty=t(locale, _("No unresolved active record categories.")),
-            locale=locale,
-        )
-        await invocation.mount(paginator, access=sd.Owner(invocation.user.id), visibility="personal")
+        async def authorize(node: PermissionNode) -> bool:
+            return await allows(interaction, node)
 
-    @records_group.command(name="title-issues")
-    @requires(RECORD_ENTRY_INSPECT)
-    @app_commands.describe(kind=app_commands.locale_str(_("Optionally limit title diagnostics to one build kind.")))
-    async def title_gaps(self, ctx: Context[BotT], kind: BuildKind | None = None) -> None:
-        """List canonical titles containing unknown or contradictory taxonomy."""
-        invocation = await sd.Invocation.of(ctx)
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        gaps = await self.records.title_gaps(kind=kind)
-        paginator = _diagnostic_list(
-            ctx,
-            t(locale, _("Record title diagnostics")),
-            [
-                f"`{gap.definition_id}` **{gap.title}** — "
-                + ", ".join(str(diagnostic.get("code", "unknown")) for diagnostic in gap.diagnostics)
-                for gap in gaps
-            ],
-            empty=t(locale, _("No active record titles require taxonomy review.")),
-            locale=locale,
-        )
-        await invocation.mount(paginator, access=sd.Owner(invocation.user.id), visibility="personal")
-
-    @autocompletes(current_version_id="version_ids")
-    @records_group.command(name="rebuild")
-    @requires(RECORD_ENTRY_REBUILD)
-    @app_commands.describe(
-        current_version_id=app_commands.locale_str(
-            _("Optional database ID to also compute the pinned current-version records.")
-        ),
-        kind=app_commands.locale_str(_("Optionally rebuild just doors or extenders.")),
-    )
-    async def rebuild(
-        self,
-        ctx: Context[BotT],
-        current_version_id: int | None = None,
-        kind: BuildKind | None = None,
-    ) -> None:
-        """Recompute records from confirmed build facts."""
-        await ctx.defer(ephemeral=ctx.interaction is not None)
-        invocation = await sd.Invocation.of(ctx)
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        kinds = (kind,) if kind is not None else (BuildKind.DOOR, BuildKind.EXTENDER)
-        summary = await self.computation.rebuild(current_version_id=current_version_id, kinds=kinds)
-        await invocation.reply(
-            info_node(
-                t(locale, _("Records rebuilt")),
-                t(
-                    locale,
-                    _("{definitions} definitions; {resolved} resolved; {unresolved} awaiting evidence."),
-                    definitions=summary.definitions,
-                    resolved=summary.resolved,
-                    unresolved=summary.unresolved,
-                ),
-            ),
-            visibility="personal",
-        )
-
-    @autocompletes(
-        base_key="record_definitions",
-        version_id="version_ids",
-        restrictions=suggests("restriction_ids", multi=True),
-    )
-    @records_group.command(name="lookup")
-    @requires(RECORD_ENTRY_INSPECT)
-    @commands.cooldown(2, 60, commands.BucketType.user)
-    @app_commands.describe(
-        kind=app_commands.locale_str(_("The typed record family.")),
-        base_key=app_commands.locale_str(_("Pick a record category, or paste a raw base key.")),
-        restrictions=app_commands.locale_str(
-            _("Pick restrictions from the list; large exact categories are saved for reuse.")
-        ),
-        version_id=app_commands.locale_str(_("Optional pinned version database ID.")),
-    )
-    async def lookup(
-        self,
-        ctx: Context[BotT],
-        kind: BuildKind,
-        base_key: str,
-        restrictions: str = "",
-        version_id: int | None = None,
-    ) -> None:
-        """Materialize and compute an arbitrary exact restriction category."""
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        invocation = await sd.Invocation.of(ctx)
-        try:
-            restriction_ids = frozenset(int(value.strip()) for value in restrictions.split(",") if value.strip())
-        except ValueError as error:
-            msg = t(locale, _("Pick restrictions from the suggestions rather than typing them."))
-            raise commands.BadArgument(msg) from error
-        # An autocomplete pick submits a definition id; a raw base key always contains "|".
-        selected = base_key.strip()
-        if selected.isdigit():
-            if restriction_ids:
-                msg = t(locale, _("Restrictions can only be combined with a hand-typed base key."))
-                raise commands.BadArgument(msg)
-            await ctx.defer()
-            summary = await self.records.materialize_definition(int(selected), kind=kind, version_id=version_id)
-        else:
-            await ctx.defer()
-            summary = await self.records.lookup_or_materialize(
-                RecordLookupRequest(
-                    kind=kind,
-                    base_key=selected,
-                    restriction_ids=restriction_ids,
-                    version_id=version_id,
-                )
-            )
-        await invocation.reply(
-            info_node(
-                t(locale, _("Record category materialized")),
-                t(
-                    locale,
-                    _("Recomputed {definitions} definitions; {resolved} resolved."),
-                    definitions=summary.definitions,
-                    resolved=summary.resolved,
-                ),
-            ),
-            # Staff maintenance, like `records rebuild` beside it: the two answered differently
-            # for no reason anybody recorded, which is the pair audit C2 pointed at.
-            visibility="personal",
-        )
+        await RecordsScreen(
+            self.records,
+            self.computation,
+            can_inspect=await authorize(RECORD_ENTRY_INSPECT),
+            can_rebuild=await authorize(RECORD_ENTRY_REBUILD),
+            authorize=authorize,
+        ).show(interaction)
 
 
-def _diagnostic_list(
-    ctx: Context[Any],
-    title: str,
-    entries: list[str],
-    *,
-    empty: str,
-    locale: str | None,
-) -> PagedList:
-    """A page of one-line findings.
-
-    Both diagnostics used to print the first 30 findings and count the rest, which is the
-    cap the reader hits exactly when the maintenance backlog is worth reading (audit C6).
-    One line per finding, so the entries are joined by a newline rather than by the blank
-    line multi-line entries want.
-    """
-    return PagedList(
-        title,
-        entries,
-        empty=empty,
-        page_size=DIAGNOSTICS_PER_PAGE,
-        separator="\n",
-        accent_colour=DISCORD_BLUE,
-    )
+async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
+    """Load the records workspace cog."""
+    await bot.add_cog(RecordCog(bot))
