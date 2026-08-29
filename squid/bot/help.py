@@ -52,8 +52,11 @@ PROJECT_URL = "https://github.com/redstone-squid/Redstone-Squid"
 class HelpClient(Protocol):
     """Bot facts rendered by the help screen."""
 
-    source_code_url: str | None
-    user: discord.ClientUser | None
+    @property
+    def source_code_url(self) -> str | None: ...
+
+    @property
+    def user(self) -> discord.ClientUser | None: ...
 
 
 class HelpScreen(sd.Screen):
@@ -97,7 +100,12 @@ class HelpScreen(sd.Screen):
         return sl.section(
             sl.heading(heading),
             sl.truncate(sl.paragraph(description)),
-            sl.bullets(*(sl.bullet(f"/{child.qualified_name}") for child in children)) if children else None,
+            sl.bullets(
+                *(sl.bullet(f"/{child.qualified_name}") for child in children),
+                key="subcommands",
+            )
+            if children
+            else None,
         )
 
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
