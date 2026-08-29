@@ -2,16 +2,18 @@
 
 from collections.abc import Mapping, Sequence
 from textwrap import dedent
-from typing import TYPE_CHECKING, Any, cast, override
+from typing import TYPE_CHECKING, Any, Protocol, cast, override
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Command, Group
 
+import squid_ui as sl
 import squid_ui_discord as sd
+import squid_ui_widgets as sp
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.ui import CardField, CardSection, card_node, error_node, render_payload
+from squid.bot.ui import CardField, CardSection, L, card_node, error_node, render_payload
 from squid.config import BuildConfig
 from squid.core.i18n import _
 from squid.suggestions.application import candidate, rank
@@ -29,7 +31,7 @@ DIRECTORY_CATEGORIES: tuple[tuple[Any, frozenset[str]], ...] = (
     (_("Account"), frozenset({"account", "notifications", "redstoner"})),
     (_("Community"), frozenset({"poll", "archive"})),
     (_("Administration & setup"), frozenset({"records", "settings", "tag", "version"})),
-    (_("Information"), frozenset({"help", "info"})),
+    (_("Information"), frozenset({"help"})),
 )
 """How the directory groups top-level commands, by command name.
 
@@ -41,6 +43,98 @@ directory that lists what most readers cannot run is the surface phase 5 is shri
 
 
 type AnyCommand = Command[Any, ..., Any] | app_commands.Command[Any, ..., Any] | app_commands.Group
+
+SUBMISSION_FORM_URL = "https://forms.gle/i9Nf6apGgPGTUohr9"
+REGULATIONS_URL = "https://docs.google.com/document/d/1kDNXIvQ8uAMU5qRFXIk6nLxbVliIjcMu1MjHjLJrRH4/edit"
+PROJECT_URL = "https://github.com/redstone-squid/Redstone-Squid"
+
+
+class HelpClient(Protocol):
+    """Bot facts rendered by the help screen."""
+
+    source_code_url: str | None
+    user: discord.ClientUser | None
+
+
+class HelpScreen(sd.Screen):
+    """A command browser that ends when closed, replaced, or timed out."""
+
+    session_name = "help"
+    timeout = 300
+    visibility = "public"
+
+    def __init__(self, bot: HelpClient, commands_: Sequence[AnyCommand], command: str | None) -> None:
+        self._bot = bot
+        self._commands = tuple(commands_)
+        self._needle = command
+        self._focused = self._find(command) if command is not None else None
+        self._browser = sp.Browser(
+            sl.sources.list_source(self._commands),
+            key="commands",
+            identity=lambda item: item.qualified_name,
+            label=lambda item: f"/{item.qualified_name}",
+            summary=lambda item: getattr(item, "short_doc", None) or getattr(item, "description", ""),
+            detail=self._detail,
+            page_size=10,
+            title=L("Redstone Squid help"),
+            empty=L("No commands are available."),
+        )
+
+    def _find(self, needle: str | None) -> AnyCommand | None:
+        if needle is None:
+            return None
+        folded = needle.casefold().removeprefix("/")
+        return next((item for item in self._commands if item.qualified_name.casefold() == folded), None)
+
+    def _detail(self, command: AnyCommand) -> sl.LayoutNode[sl.ComponentsV2Target]:
+        signature = getattr(command, "signature", "")
+        qualified_name = command.qualified_name
+        heading = f"/{qualified_name}{f' {signature}' if signature else ''}"
+        description = getattr(command, "help", None) or getattr(command, "description", None) or L(
+            "No details provided"
+        )
+        children = tuple(getattr(command, "commands", ()))
+        return sl.section(
+            sl.heading(heading),
+            sl.truncate(sl.paragraph(description)),
+            sl.bullets(*(sl.bullet(f"/{child.qualified_name}") for child in children)) if children else None,
+        )
+
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+        if self._needle is not None and self._focused is None:
+            needle = self._needle
+            body: sl.LayoutNode[sl.ComponentsV2Target] = sl.section(
+                sl.heading(L("Command not found")),
+                sl.paragraph(L(t"No command named `{needle}` is available.")),
+            )
+        elif self._focused is not None:
+            body = self._detail(self._focused)
+        else:
+            body = self.boundary(self._browser, key="browser")
+        project_url = self._bot.source_code_url or PROJECT_URL
+        links: list[sl.semantic.Link] = [
+            sl.link(L("Source"), project_url, key="source"),
+            sl.link(L("Submission form"), SUBMISSION_FORM_URL, key="form"),
+            sl.link(L("Documentation"), f"{project_url}/tree/master/docs", key="docs"),
+            sl.link(L("Regulations"), REGULATIONS_URL, key="regulations"),
+        ]
+        if self._bot.user is not None:
+            links.insert(
+                0,
+                sl.link(
+                    L("Invite"),
+                    f"https://discordapp.com/oauth2/authorize?client_id={self._bot.user.id}&scope=bot&permissions=8",
+                    key="invite",
+                ),
+            )
+        return (
+            body,
+            sl.action_controls(*links, key="help-links"),
+            sl.action_controls(sl.action_control(L("Close"), self._close, key="close"), key="help-actions"),
+        )
+
+    async def _close(self, event: sl.PressEvent) -> None:
+        await event.finish()
 
 
 def _summary(command: AnyCommand, locale: str | None) -> str:
@@ -78,54 +172,19 @@ class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     @app_commands.describe(command=app_commands.locale_str(_("The command to get help for.")))
     async def help(self, interaction: discord.Interaction[BotT], command: str | None):
         """Show a grouped command directory or focused command details."""
-        invocation = await sd.Invocation.of(interaction)
-        locale = await resolve_locale(interaction, interaction.client.services.settings)
-        if command is not None:
-            target = self.bot.get_command(command)
-            if target is None:
-                cog = next(
-                    (item for item in self.bot.cogs.values() if item.qualified_name.casefold() == command.casefold()),
-                    None,
-                )
-                candidates = list(cog.walk_commands()) if cog is not None else []
-                if not candidates:
-                    await invocation.reply(
-                        error_node(
-                            t(locale, _("Command not found")),
-                            t(locale, _("No command named `{name}` is available."), name=command),
-                        ),
-                        visibility="personal",
-                    )
-                    return
-                assert cog is not None
-                node = card_node(
-                    t(locale, _("{name} commands"), name=cog.qualified_name),
-                    cog.description or t(locale, _("Commands in this area.")),
-                    sections=(_command_section(t(locale, _("Commands")), candidates, locale),),
-                    footer=t(locale, MORE_INFORMATION),
-                )
-            else:
-                children = list(target.commands) if isinstance(target, Group) else []
-                signature = f" {target.signature}" if target.signature else ""
-                node = card_node(
-                    f"/{target.qualified_name}{signature}",
-                    target.help or t(locale, _("No details provided")),
-                    sections=(_command_section(t(locale, _("Subcommands")), children, locale),) if children else (),
-                    footer=t(locale, _("Command names and options also autocomplete in Discord.")),
-                )
-        else:
-            root_commands = self._root_commands()
-            sections = tuple(
-                _command_section(t(locale, title), [item for item in root_commands if item.name in names], locale)
-                for title, names in DIRECTORY_CATEGORIES
-            )
-            node = card_node(
-                t(locale, _("Redstone Squid help")),
-                t(locale, _("Choose a workflow, then use `/help command` for syntax and details.")),
-                sections=sections,
-                footer=t(locale, MORE_INFORMATION),
-            )
-        await invocation.reply(node)
+        await HelpScreen(self.bot, self._all_commands(), command).show(interaction)
+
+    def _all_commands(self) -> list[AnyCommand]:
+        """Every command in either public tree, de-duplicated by qualified name."""
+        commands_: list[AnyCommand] = list(self.bot.walk_commands())
+        known = {item.qualified_name for item in commands_}
+        for root in self.bot.tree.get_commands(type=discord.AppCommandType.chat_input):
+            app_commands_ = (root, *root.walk_commands()) if isinstance(root, app_commands.Group) else (root,)
+            for item in app_commands_:
+                if item.qualified_name not in known:
+                    commands_.append(item)
+                    known.add(item.qualified_name)
+        return commands_
 
     def _root_commands(self) -> list[AnyCommand]:
         """Every top-level command a user could run, prefix tree and app tree alike.
