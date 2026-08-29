@@ -57,6 +57,15 @@ class SlackRouteRef:
 
 
 @dataclass(frozen=True, slots=True)
+class SlackAssetRef:
+    """Reference to one delivery asset requiring a public URL at draw time."""
+
+    key: str
+    name: str
+    media_type: str
+
+
+@dataclass(frozen=True, slots=True)
 class SlackButton:
     """A Slack action or URL button."""
 
@@ -64,13 +73,14 @@ class SlackButton:
     action: SlackActionRef | None = None
     route: SlackRouteRef | None = None
     url: str | None = None
+    asset: SlackAssetRef | None = None
     value: str | None = None
     style: SlackButtonStyle = SlackButtonStyle.DEFAULT
 
     def __post_init__(self) -> None:
-        destinations = sum(value is not None for value in (self.action, self.route, self.url))
+        destinations = sum(value is not None for value in (self.action, self.route, self.url, self.asset))
         if destinations != 1:
-            message = "Slack buttons require exactly one action, route, or URL"
+            message = "Slack buttons require exactly one action, route, URL, or asset"
             raise ValueError(message)
 
 
@@ -88,6 +98,7 @@ class SlackSelect:
 
     action: SlackActionRef | None = None
     route: SlackRouteRef | None = None
+    action_id: str | None = None
     kind: SlackSelectKind = SlackSelectKind.STATIC
     placeholder: SlackText | None = None
     options: tuple[SlackOption, ...] = ()
@@ -97,8 +108,9 @@ class SlackSelect:
     maximum: int = 1
 
     def __post_init__(self) -> None:
-        if (self.action is None) == (self.route is None):
-            message = "Slack selectors require exactly one action or route"
+        sources = sum(value is not None for value in (self.action, self.route, self.action_id))
+        if sources != 1:
+            message = "Slack selectors require exactly one action, route, or form action id"
             raise ValueError(message)
         if self.kind is not SlackSelectKind.STATIC and self.options:
             message = "native Slack selectors cannot carry static options"
@@ -344,6 +356,7 @@ __all__ = [
     "SlackActions",
     "SlackAlert",
     "SlackAlertStyle",
+    "SlackAssetRef",
     "SlackBlock",
     "SlackBody",
     "SlackButton",

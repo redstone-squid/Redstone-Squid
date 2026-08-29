@@ -199,9 +199,7 @@ SCHEMA: dict[str, Any] = {
             "properties": {
                 "label": {"$ref": "#/$defs/slack_text"},
                 "value": {"type": "string", "maxLength": 150},
-                "description": {
-                    "oneOf": [{"type": "null"}, {"$ref": "#/$defs/slack_text"}]
-                },
+                "description": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/slack_text"}]},
             },
             "required": ["label", "value", "description"],
         },
@@ -235,6 +233,16 @@ SCHEMA: dict[str, Any] = {
                 "action": {"$ref": "#/$defs/slack_action"},
                 "route": {"$ref": "#/$defs/slack_route"},
                 "url": {"type": ["string", "null"], "maxLength": 3000},
+                "asset": _nullable(
+                    {
+                        "key": {"type": "string"},
+                        "name": {"type": "string"},
+                        "media_type": {"type": "string"},
+                    },
+                    "key",
+                    "name",
+                    "media_type",
+                ),
                 "value": {"type": ["string", "null"], "maxLength": 2000},
                 "style": {"enum": ["default", "primary", "danger"]},
             },
@@ -242,6 +250,7 @@ SCHEMA: dict[str, Any] = {
             "action",
             "route",
             "url",
+            "asset",
             "value",
             "style",
         ),
@@ -250,6 +259,7 @@ SCHEMA: dict[str, Any] = {
             {
                 "action": {"$ref": "#/$defs/slack_action"},
                 "route": {"$ref": "#/$defs/slack_route"},
+                "action_id": {"type": ["string", "null"], "maxLength": 255},
                 "select_kind": {"enum": ["static", "users", "conversations"]},
                 "placeholder": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/slack_text"}]},
                 "options": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/slack_option"}},
@@ -263,6 +273,7 @@ SCHEMA: dict[str, Any] = {
             },
             "action",
             "route",
+            "action_id",
             "select_kind",
             "placeholder",
             "options",

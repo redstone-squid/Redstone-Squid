@@ -21,7 +21,7 @@ from squid_ui.interactions import ActionEvent, SelectionEvent, SubmitEvent
 from squid_ui.palette import Palette
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.discord import classic_target, components_v2_target
-from squid_ui.planning.types import DiscordAdapter
+from squid_ui.planning.types import DiscordAdapter, SlackAdapter
 from squid_ui.rosters import RosterEntry, RosterSlot, place_roster
 from squid_ui.semantic import PortableNode
 from squid_ui.temporal import ZonedDateTime
@@ -129,6 +129,10 @@ _TARGETS: dict[str, Callable[[], Any]] = {
     "html": lambda: sl.html.target(),
     "discord-v2": lambda: components_v2_target(AdapterProfile(DiscordAdapter, "conformance", ">=1")),
     "discord-classic": lambda: classic_target(AdapterProfile(DiscordAdapter, "conformance", ">=1")),
+    "slack-message": lambda: sl.slack.message_target(
+        adapter=AdapterProfile(SlackAdapter, "conformance", ">=1")
+    ),
+    "slack-home": lambda: sl.slack.home_target(adapter=AdapterProfile(SlackAdapter, "conformance", ">=1")),
 }
 
 # A pair a target refuses documents its refusal here, message and all; a pair with no
@@ -176,6 +180,10 @@ def _non_trivial(body: object) -> bool:
             return bool(children)
         case scene.ClassicMessage(content=content, embeds=embeds, rows=rows):
             return bool(content or embeds or rows)
+        case scene.SlackMessage(text=text, blocks=blocks):
+            return bool(text or blocks)
+        case scene.SlackHomeView(blocks=blocks):
+            return bool(blocks)
         case _:
             message = f"unknown scene body {type(body).__name__}"
             raise AssertionError(message)

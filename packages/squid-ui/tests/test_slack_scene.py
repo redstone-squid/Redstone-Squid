@@ -91,7 +91,7 @@ def test_slack_modal_and_home_scenes_round_trip() -> None:
 def test_slack_scene_rejects_invalid_element_unions() -> None:
     with pytest.raises(ValueError, match="exactly one"):
         scene.SlackButton(scene.SlackText("Broken", scene.SlackTextKind.PLAIN))
-    with pytest.raises(ValueError, match="action or route"):
+    with pytest.raises(ValueError, match="action, route, or form action"):
         scene.SlackSelect(kind=scene.SlackSelectKind.USERS)
     with pytest.raises(ValueError, match="conversation_types"):
         scene.SlackSelect(
