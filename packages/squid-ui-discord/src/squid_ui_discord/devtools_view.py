@@ -29,7 +29,7 @@ import squid_ui_discord
 from squid_reactivity.actions import ActionLedger
 from squid_ui.profiling import RuntimeSnapshot, RuntimeTrace
 from squid_ui.runtime.topics import BusSnapshot
-from squid_ui_discord.devtools_runtime import DevToolsAction, DevToolsRuntime
+from squid_ui_discord.devtools_runtime import DevToolsAction, DevToolsRuntime, DurableRecordInspection
 
 if TYPE_CHECKING:
     # Annotations only; see the note in operations.py about the `durable` extra.
@@ -241,6 +241,7 @@ class OperationalInspector(sl.Component):
     notice: str | None = sl.state(None)
     confirming_session: str | None = sl.state(None)
     confirming_action: str | None = sl.state(None)
+    selected_records: tuple[str, ...] = sl.state(())
 
     def __init__(
         self,
@@ -252,6 +253,11 @@ class OperationalInspector(sl.Component):
         self._devtools_runtime = runtime
         self._client = client
         self._action_ledger = action_ledger
+
+    @sl.resource(pending=sl.resources.PendingMode.EXPLICIT)
+    async def persistence_records(self) -> tuple[DurableRecordInspection, ...]:
+        """Load persisted record metadata while the persistence section exists."""
+        return await self._devtools_runtime.records()
 
     def render(self) -> Sequence[sl.LayoutNode]:
         snapshot = self._devtools_runtime.snapshot()
@@ -500,6 +506,7 @@ class OperationalInspector(sl.Component):
 
     def _persistence(self, snapshot: squid_ui_discord.devtools_runtime.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         durable = snapshot.durable
+        record_nodes: list[sl.LayoutNode] = []
         if durable is None:
             body = "No durable session runtime is configured."
         else:
@@ -511,7 +518,39 @@ class OperationalInspector(sl.Component):
                     f"recovery {_recovery_summary(durable.last_recovery)}",
                 )
             )
-        nodes: list[sl.LayoutNode] = [sl.section(sl.heading("Persistence"), sl.code(body))]
+            record_state = self.persistence_records.status
+            previous = record_state.previous if isinstance(record_state, sl.resources.Pending | sl.resources.Failed) else None
+            if isinstance(record_state, sl.resources.Ready):
+                records = record_state.value
+            elif previous is not None:
+                records = previous.value
+            else:
+                records = ()
+            if isinstance(record_state, sl.resources.Pending) and previous is None:
+                record_nodes.append(sl.status("Loading persisted records."))
+            elif isinstance(record_state, sl.resources.Failed) and previous is None:
+                record_nodes.append(sl.status(f"Record load failed: {record_state.error}", tone=sl.Tone.WARNING))
+            else:
+                record_lines = (
+                    "No persisted records."
+                    if not records
+                    else "\n".join(
+                        f"{record.key} scope={record.scope} snapshot={record.snapshot_bytes}B record={record.record_bytes}B"
+                        for record in records
+                    )
+                )
+                record_nodes.append(sl.section(sl.heading("Persisted records"), sl.code(record_lines)))
+                if records and self._devtools_runtime.policy.permits(DevToolsAction.PURGE_PERSISTENCE):
+                    record_nodes.append(
+                        sl.choices(
+                            *(sl.choice(record.key, key=record.key, description=record.scope) for record in records[:25]),
+                            key="purge-records",
+                            selection=sl.controlled(self.selected_records, self._select_records),
+                            minimum=0,
+                            maximum=min(25, len(records)),
+                        )
+                    )
+        nodes: list[sl.LayoutNode] = [sl.section(sl.heading("Persistence"), sl.code(body)), *record_nodes]
         actions: list[sl.semantic.ActionControl] = []
         if durable is not None and self._devtools_runtime.policy.permits(DevToolsAction.FLUSH_PERSISTENCE):
             actions.append(sl.action_control("Flush", self._flush_persistence, key="flush"))
@@ -525,6 +564,20 @@ class OperationalInspector(sl.Component):
                 )
             else:
                 actions.append(sl.action_control("Recover", self._request_recovery, key="recover"))
+        if (
+            durable is not None
+            and self.selected_records
+            and self._devtools_runtime.policy.permits(DevToolsAction.PURGE_PERSISTENCE)
+        ):
+            if self.confirming_action == DevToolsAction.PURGE_PERSISTENCE:
+                actions.extend(
+                    (
+                        sl.action_control("Confirm purge", self._confirm_purge, key="confirm-purge"),
+                        sl.action_control("Cancel", self._cancel_action, key="cancel-purge"),
+                    )
+                )
+            else:
+                actions.append(sl.action_control("Purge selected", self._request_purge, key="purge"))
         if actions:
             nodes.append(sl.action_controls(*actions, key="persistence-actions"))
         return (*nodes, self._controls(back=True))
@@ -608,12 +661,18 @@ class OperationalInspector(sl.Component):
         self.section = event.selected[0]
         self.message_root_id = None
         self.session_id = None
+        self.selected_records = ()
+        self.confirming_action = None
 
     async def _open_root(self, event: sl.ChoiceEvent) -> None:
         self.message_root_id = event.selected[0]
 
     async def _open_session(self, event: sl.ChoiceEvent) -> None:
         self.session_id = event.selected[0]
+
+    async def _select_records(self, event: sl.ChoiceEvent) -> None:
+        self.selected_records = event.selected
+        self.confirming_action = None
 
     async def _request_close_session(self, event: sl.ActionEvent) -> None:
         self.confirming_session = self.session_id
@@ -690,14 +749,36 @@ class OperationalInspector(sl.Component):
         finally:
             self.confirming_action = None
 
+    async def _request_purge(self, event: sl.ActionEvent) -> None:
+        del event
+        self.confirming_action = DevToolsAction.PURGE_PERSISTENCE
+
+    async def _confirm_purge(self, event: sl.ActionEvent) -> None:
+        del event
+        try:
+            results = await self._devtools_runtime.purge_persistence(self.selected_records, confirmed=True)
+            deleted = sum(result.deleted for result in results)
+            self.notice = f"Persistence purge completed; deleted={deleted}."
+            self.selected_records = ()
+            await self.persistence_records.reload()
+            self.revision += 1
+        except Exception as error:
+            self.notice = f"Purge failed: {type(error).__name__}: {error}"
+        finally:
+            self.confirming_action = None
+
     async def _back(self, event: sl.ActionEvent) -> None:
         self.message_root_id = None
         self.session_id = None
         self.confirming_session = None
         self.confirming_action = None
+        self.selected_records = ()
         self.section = DevToolsSection.OVERVIEW
 
     async def _refresh(self, event: sl.ActionEvent) -> None:
+        del event
+        if self.section == DevToolsSection.PERSISTENCE and self._devtools_runtime.durable is not None:
+            await self.persistence_records.reload()
         self.revision += 1
 
     async def _close(self, event: sl.ActionEvent) -> None:

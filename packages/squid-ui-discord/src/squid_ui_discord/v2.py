@@ -6,8 +6,10 @@ from squid_ui.assets import Asset
 from squid_ui.primitives.nodes import (
     Button,
     File,
+    Footer,
     Gallery,
     GalleryItem,
+    Heading,
     LinkButton,
     MediaCollection,
     Node,
@@ -42,7 +44,7 @@ from squid_ui_discord._exact_factories import (
 )
 
 type Child = Renderable[ComponentsV2Target] | TextLike | None | Literal[False]
-type SectionText = Text | TextLike | None | Literal[False]
+type SectionText = Text | Heading | Footer | TextLike | None | Literal[False]
 
 
 def file(asset: Asset, *, spoiler: bool = False) -> File:
@@ -104,14 +106,14 @@ def panel(*children: Child, accent: Color | None = None, spoiler: bool = False) 
     return Panel(tuple(normalized), accent, spoiler)
 
 
-def _text_child(value: SectionText, origin: str, index: int) -> Text:
+def _text_child(value: SectionText, origin: str, index: int) -> Text | Heading | Footer:
     if value is None or value is False:
         message = f"{origin} argument {index}: omitted content reached normalization"
         raise TypeError(message)
     if value is True:
         message = f"{origin} argument {index}: True is not content"
         raise TypeError(message)
-    return value if isinstance(value, Text) else Text(value)
+    return value if isinstance(value, Text | Heading | Footer) else Text(value)
 
 
 __all__ = [

@@ -21,6 +21,7 @@ from squid_ui.primitives import (
     File,
     Gallery,
     GalleryItem,
+    Heading,
     Panel,
     Row,
     Section,
@@ -36,8 +37,8 @@ def test_v2_factories_build_the_exact_primitive_ir() -> None:
     accessory = sd.v2.thumbnail("https://example.com/thumb.png", description="Preview")
 
     assert press == Button("Open", handler, "open", ActionStyle.PRIMARY)
-    assert sd.v2.section("Title", None, False, accessory=accessory) == Section(
-        (Text("Title"),),
+    assert sd.v2.section(sd.v2.heading("Title"), "Body", None, False, accessory=accessory) == Section(
+        (Heading("Title"), Text("Body")),
         Thumbnail("https://example.com/thumb.png", "Preview"),
     )
     assert sd.v2.panel("Body", None, False, press, accent=0x123456) == Panel(
