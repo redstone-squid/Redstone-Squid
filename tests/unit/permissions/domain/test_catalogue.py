@@ -47,23 +47,23 @@ def test_unknown_nodes_raise_rather_than_deny() -> None:
 class TestBuilder:
     def test_rejects_duplicate_names(self) -> None:
         builder = CatalogueBuilder()
-        builder.node("a.b.c", NodeScope.GUILD, "first")
+        builder.node("a.b.c", NodeScope.GUILD, tr(t"first"))
 
         with pytest.raises(CatalogueError, match="Duplicate"):
-            builder.node("a.b.c", NodeScope.GUILD, "second")
+            builder.node("a.b.c", NodeScope.GUILD, tr(t"second"))
 
     @pytest.mark.parametrize("name", ["a.**", "a.*.c", "@destructive"])
     def test_rejects_patterns_as_node_names(self, name: str) -> None:
         builder = CatalogueBuilder()
 
         with pytest.raises(CatalogueError, match="concrete name"):
-            builder.node(name, NodeScope.GUILD, "nope")
+            builder.node(name, NodeScope.GUILD, tr(t"nope"))
 
     def test_rejects_a_node_that_is_also_a_namespace(self) -> None:
         """`a.b` alongside `a.b.c` would make `a.b.**` ambiguous."""
         builder = CatalogueBuilder()
-        builder.node("a.b", NodeScope.GUILD, "interior")
-        builder.node("a.b.c", NodeScope.GUILD, "leaf")
+        builder.node("a.b", NodeScope.GUILD, tr(t"interior"))
+        builder.node("a.b.c", NodeScope.GUILD, tr(t"leaf"))
 
         with pytest.raises(CatalogueError, match="also a namespace"):
             builder.build()

@@ -73,7 +73,7 @@ async def test_somebody_elses_creator_page_uses_the_public_profile_projection() 
         SimpleNamespace(get_public_profile=AsyncMock(return_value=PublicCreatorProfile(public_id=page, hidden=False))),
     )
 
-    card = await cog._public_profile_card(page, "Someone", "en-US")
+    card = await cog._public_profile_card(page, "Someone")
 
     assert "Someone" in str(card)
 
