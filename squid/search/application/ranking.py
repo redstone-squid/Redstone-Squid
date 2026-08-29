@@ -7,7 +7,7 @@ from enum import StrEnum
 from typing import Literal
 
 from squid.core.errors import ValidationError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 
 
 class RankingBranch(StrEnum):
@@ -55,18 +55,16 @@ def reciprocal_rank_fusion(
 ) -> tuple[RankedCandidate, ...]:
     """Fuse ranked candidate branches with deterministic tie-breaking."""
     if k <= 0:
-        msg = _("k must be positive")
-        raise ValidationError(msg)
+        raise ValidationError(tr(t"k must be positive"))
     if branch_limit <= 0:
-        msg = _("branch_limit must be positive")
-        raise ValidationError(msg)
+        raise ValidationError(tr(t"branch_limit must be positive"))
     scores: defaultdict[tuple[str, str], float] = defaultdict(float)
     documents: dict[tuple[str, str], RankedCandidate] = {}
     for branch, candidates in branches.items():
         weight = weights.get(branch, 0)
         if weight < 0:
-            msg = _("weight for {branch} cannot be negative")
-            raise ValidationError(msg, message_params={"branch": branch.value})
+            branch_name = branch.value
+            raise ValidationError(tr(t"weight for {branch_name} cannot be negative"))
         seen: set[tuple[str, str]] = set()
         rank = 0
         for candidate in candidates[:branch_limit]:

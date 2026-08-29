@@ -9,7 +9,6 @@ import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.bot.ui import tr
-from squid.core.i18n import _
 from squid.voting.domain import (
     MAX_POLL_DURATION_SECONDS,
     MIN_POLL_DURATION_SECONDS,
@@ -56,12 +55,10 @@ def parse_poll_duration(value: str) -> int:
     """Parse a compact duration and return seconds within the supported range."""
     match = _DURATION.fullmatch(value.strip())
     if match is None:
-        msg = _("Duration must look like `30m`, `12h`, or `7d`.")
-        raise InvalidVoteConfigurationError(msg)
+        raise InvalidVoteConfigurationError(tr(t"Duration must look like `30m`, `12h`, or `7d`."))
     seconds = int(match.group(1)) * _DURATION_UNITS[match.group(2).lower()]
     if not MIN_POLL_DURATION_SECONDS <= seconds <= MAX_POLL_DURATION_SECONDS:
-        msg = _("Poll duration must be between 1 minute and 30 days.")
-        raise InvalidVoteConfigurationError(msg)
+        raise InvalidVoteConfigurationError(tr(t"Poll duration must be between 1 minute and 30 days."))
     return seconds
 
 
@@ -90,25 +87,21 @@ def parse_option_lines(
     """Validate ``emoji | label`` lines, filling missing aliases from the guild palette."""
     cleaned = [line.strip() for line in lines if line.strip()]
     if not 2 <= len(cleaned) <= 10:
-        msg = _("Enter between 2 and 10 option lines.")
-        raise InvalidVoteConfigurationError(msg)
+        raise InvalidVoteConfigurationError(tr(t"Enter between 2 and 10 option lines."))
     options: list[VoteOption] = []
     for index, line in enumerate(cleaned):
         if "|" in line:
             emoji, label = (part.strip() for part in line.split("|", 1))
         else:
             if index >= len(palette):
-                msg = _("The configured generic emoji palette does not have enough entries for these options.")
-                raise InvalidVoteConfigurationError(msg)
+                raise InvalidVoteConfigurationError(
+                    tr(t"The configured generic emoji palette does not have enough entries for these options.")
+                )
             emoji, label = palette[index].emoji, line
         if not emoji or not label:
-            msg = _("Each option needs a non-empty emoji and label.")
-            raise InvalidVoteConfigurationError(msg)
+            raise InvalidVoteConfigurationError(tr(t"Each option needs a non-empty emoji and label."))
         if not emoji_is_usable(emoji):
-            raise InvalidVoteConfigurationError(
-                _("The custom emoji {emoji} is not accessible to this bot."),
-                message_params={"emoji": emoji},
-            )
+            raise InvalidVoteConfigurationError(tr(t"The custom emoji {emoji} is not accessible to this bot."))
         options.append(
             VoteOption(
                 emoji,
@@ -120,8 +113,7 @@ def parse_option_lines(
             )
         )
     if len({option.emoji for option in options}) != len(options):
-        msg = _("Poll option emojis must be unique.")
-        raise InvalidVoteConfigurationError(msg)
+        raise InvalidVoteConfigurationError(tr(t"Poll option emojis must be unique."))
     return tuple(options)
 
 
@@ -304,7 +296,7 @@ class PollScreen(sd.Screen):
             self.published_url = await self._publish(draft, options)
         except InvalidVoteConfigurationError as error:
             self.driver.machine_state = replace(event.state, complete=False)
-            await event.source.notice(sl.text.Message(error.message, error.message_params))
+            await event.source.notice(error.message)
             return
         await event.source.finish()
 

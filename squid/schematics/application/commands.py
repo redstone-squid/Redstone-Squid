@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from squid.core.errors import ValidationError
-from squid.core.i18n import _
+from squid.core.i18n import _, tr
 from squid.schematics.domain.models import SchematicFormat, Vector3
 
 
@@ -56,11 +56,9 @@ class RenderRequest:
     def __post_init__(self) -> None:
         for axis, extent in (("width", self.width), ("height", self.height)):
             if not MIN_RENDER_EXTENT <= extent <= MAX_RENDER_EXTENT:
-                msg = _("Render {axis} must be between {minimum} and {maximum} pixels.")
-                raise ValidationError(
-                    msg,
-                    message_params={"axis": axis, "minimum": MIN_RENDER_EXTENT, "maximum": MAX_RENDER_EXTENT},
-                )
+                minimum = MIN_RENDER_EXTENT
+                maximum = MAX_RENDER_EXTENT
+                raise ValidationError(tr(t"Render {axis} must be between {minimum} and {maximum} pixels."))
         if self.zoom is not None and self.zoom <= 0:
             msg = _("Render zoom must be positive.")
             raise ValidationError(msg)

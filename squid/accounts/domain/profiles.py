@@ -18,7 +18,7 @@ from whenever import Instant
 
 from squid.accounts.domain.models import AccountIdentity, IdentityProvider
 from squid.core.errors import ValidationError
-from squid.core.i18n import _
+from squid.core.i18n import _, tr
 
 MAX_PROFILE_LINKS: Final = 10
 """Links per profile. A profile is an introduction, not a link tree."""
@@ -56,8 +56,8 @@ def _reject_control_characters(value: str, *, field_name: str, allow_newlines: b
         if character in "\n\r" and allow_newlines:
             continue
         if unicodedata.category(character) in {"Cc", "Cf"}:
-            msg = _("{field} may not contain control characters.")
-            raise ValidationError(msg, message_params={"field": field_name})
+            field = field_name
+            raise ValidationError(tr(t"{field} may not contain control characters."))
 
 
 def _normalize_text(value: str | None, *, field_name: str, limit: int, allow_newlines: bool = False) -> str | None:
@@ -72,8 +72,9 @@ def _normalize_text(value: str | None, *, field_name: str, limit: int, allow_new
     if not normalized:
         return None
     if len(normalized) > limit:
-        msg = _("{field} may be at most {limit} characters, got {length}.")
-        raise ValidationError(msg, message_params={"field": field_name, "limit": limit, "length": len(normalized)})
+        field = field_name
+        length = len(normalized)
+        raise ValidationError(tr(t"{field} may be at most {limit} characters, got {length}."))
     _reject_control_characters(normalized, field_name=field_name, allow_newlines=allow_newlines)
     return normalized
 
@@ -95,13 +96,13 @@ class ProfileLink:
         if not clean_url:
             raise ValidationError(_("Every link needs a URL."))
         if len(clean_url) > MAX_LINK_URL_LENGTH:
-            msg = _("Link URLs may be at most {limit} characters.")
-            raise ValidationError(msg, message_params={"limit": MAX_LINK_URL_LENGTH})
+            limit = MAX_LINK_URL_LENGTH
+            raise ValidationError(tr(t"Link URLs may be at most {limit} characters."))
         _reject_control_characters(clean_url, field_name=_("Link URL"))
         parts = urlsplit(clean_url)
         if parts.scheme not in PROFILE_LINK_SCHEMES:
-            msg = _("Links must be https URLs, got {scheme!r}.")
-            raise ValidationError(msg, message_params={"scheme": parts.scheme or ""})
+            scheme = parts.scheme or ""
+            raise ValidationError(tr(t"Links must be https URLs, got {scheme!r}."))
         if not parts.hostname:
             raise ValidationError(_("Links must include a hostname."))
         if "@" in parts.netloc:
@@ -187,8 +188,9 @@ class ProfileUpdate:
         if not isinstance(self.links, _Unset):
             links = tuple(self.links)
             if len(links) > MAX_PROFILE_LINKS:
-                msg = _("A profile may have at most {limit} links, got {count}.")
-                raise ValidationError(msg, message_params={"limit": MAX_PROFILE_LINKS, "count": len(links)})
+                limit = MAX_PROFILE_LINKS
+                count = len(links)
+                raise ValidationError(tr(t"A profile may have at most {limit} links, got {count}."))
             changes["links"] = tuple(ProfileLink.parse(link.label, link.url) for link in links)
         return replace(self, **changes)  # type: ignore[arg-type]
 

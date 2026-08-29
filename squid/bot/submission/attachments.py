@@ -16,7 +16,7 @@ import mimetypes
 from dataclasses import dataclass
 from typing import Literal
 
-from squid.core.i18n import _
+from squid.core.i18n import tr
 from squid.schematics.domain.formats import SCHEMATIC_EXTENSIONS
 from squid.schematics.errors import InvalidSchematicError, SchematicTooLargeError
 
@@ -70,12 +70,11 @@ def classify_attachment(filename: str, content_type: str | None, size: int, *, m
     # `application/octet-stream` reaches here only without a schematic extension, i.e. an
     # opaque blob we have no reason to accept.
     raise InvalidSchematicError(
-        _("`{filename}` is not a file type this command accepts."),
-        message_params={"filename": filename},
+        tr(t"`{filename}` is not a file type this command accepts."),
         context={"filename": filename, "content_type": content_type},
         public_context={"filename": filename, "accepted_extensions": list(ACCEPTED_EXTENSIONS)},
         # The accepted extensions are carried in the public context rather than interpolated
         # here: `end_user_action` is translated without parameters, so a formatted list would
         # come back with its placeholder intact in every locale but English.
-        end_user_action=_("Attach an image, a video, or a Minecraft schematic file."),
+        end_user_action=tr(t"Attach an image, a video, or a Minecraft schematic file."),
     )

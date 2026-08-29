@@ -10,7 +10,7 @@ from enum import StrEnum
 from uuid import UUID
 
 from squid.core.errors import ConflictError, JSONValue, ValidationError
-from squid.core.i18n import _
+from squid.core.i18n import _, tr
 
 _FIELD_ID = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _CLIENT_ID = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
@@ -64,8 +64,8 @@ class FieldOperation:
 
     def __post_init__(self) -> None:
         if _FIELD_ID.fullmatch(self.field_id) is None:
-            msg = _("invalid draft field ID: {field_id}")
-            raise ValidationError(msg, message_params={"field_id": self.field_id})
+            field_id = self.field_id
+            raise ValidationError(tr(t"invalid draft field ID: {field_id}"))
         if self.kind is FieldOperationKind.UNSET and self.value is not None:
             msg = _("unset operations cannot carry a value")
             raise ValidationError(msg)
@@ -100,8 +100,8 @@ class DraftChange:
             msg = _("draft changes require at least one operation")
             raise ValidationError(msg)
         if len(self.operations) > MAX_DRAFT_OPERATIONS:
-            msg = _("draft changes cannot exceed {limit} operations")
-            raise ValidationError(msg, message_params={"limit": MAX_DRAFT_OPERATIONS})
+            limit = MAX_DRAFT_OPERATIONS
+            raise ValidationError(tr(t"draft changes cannot exceed {limit} operations"))
         operation_ids = [operation.operation_id for operation in self.operations]
         if len(operation_ids) != len(set(operation_ids)):
             msg = _("operation IDs must be unique within a draft change")
@@ -142,12 +142,11 @@ class DraftSnapshot:
     def apply(self, change: DraftChange) -> DraftSnapshot:
         """Apply an atomic edit or reject it when the client is stale."""
         if self.status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
-            msg = _("drafts in {status} state cannot be edited")
+            current_status = self.status.value
             raise ValidationError(
-                msg,
+                tr(t"drafts in {current_status} state cannot be edited"),
                 resource="submission_draft",
                 public_context={"status": self.status.value},
-                message_params={"status": self.status.value},
             )
         if change.base_revision != self.revision:
             raise DraftRevisionConflictError(expected=change.base_revision, actual=self.revision)
@@ -184,11 +183,11 @@ class DraftSnapshot:
             DraftStatus.EXPIRED: frozenset(),
         }
         if status not in allowed[self.status]:
-            msg = _("draft cannot transition from {current} to {next}")
+            current = self.status.value
+            next_status = status.value
             raise ValidationError(
-                msg,
+                tr(t"draft cannot transition from {current} to {next_status}"),
                 resource="submission_draft",
-                message_params={"current": self.status.value, "next": status.value},
             )
         return replace(self, status=status)
 

@@ -23,7 +23,7 @@ from whenever import Instant
 from squid.artifacts import ArtifactStore
 from squid.core.concurrency import run_all
 from squid.core.errors import InvalidStateError, SquidError, ValidationError
-from squid.core.i18n import _
+from squid.core.i18n import _, tr
 from squid.media.application.commands import MediaNormalizationRequest
 from squid.media.application.services import MediaNormalizationService
 from squid.media.domain import (
@@ -341,8 +341,8 @@ class MediaNormalizationJobService:
     async def submit(self, submission: MediaUploadSubmission) -> UUID:
         """Stage a raw object and idempotently enqueue its immutable metadata."""
         if len(submission.source) > self._limits.max_source_bytes:
-            msg = _("Media upload exceeds the {limit}-byte source limit.")
-            raise ValidationError(msg, message_params={"limit": self._limits.max_source_bytes})
+            limit = self._limits.max_source_bytes
+            raise ValidationError(tr(t"Media upload exceeds the {limit}-byte source limit."))
         digest = hashlib.sha256(submission.source).hexdigest()
         upload_id = submission.upload_id or uuid4()
         object_key = f"media/raw/{upload_id}/{digest}"
@@ -435,8 +435,8 @@ class MediaNormalizationJobService:
 
     async def claim(self, *, limit: int = 8) -> Sequence[ClaimedMediaJob]:
         if not 1 <= limit <= MAX_MEDIA_JOB_CLAIM:
-            msg = _("Media job claim limit must be between 1 and {maximum}.")
-            raise InvalidStateError(msg, message_params={"maximum": MAX_MEDIA_JOB_CLAIM})
+            maximum = MAX_MEDIA_JOB_CLAIM
+            raise InvalidStateError(tr(t"Media job claim limit must be between 1 and {maximum}."))
         return await self._repository.claim(limit=limit)
 
     async def heartbeat(self, job: ClaimedMediaJob) -> bool:
@@ -467,8 +467,8 @@ class MediaNormalizationJobService:
 
     async def terminal_sources(self, *, limit: int = 100) -> Sequence[TerminalMediaSource]:
         if not 1 <= limit <= MAX_MEDIA_JOB_CLEANUP:
-            msg = _("Media source cleanup limit must be between 1 and {maximum}.")
-            raise InvalidStateError(msg, message_params={"maximum": MAX_MEDIA_JOB_CLEANUP})
+            maximum = MAX_MEDIA_JOB_CLEANUP
+            raise InvalidStateError(tr(t"Media source cleanup limit must be between 1 and {maximum}."))
         return await self._repository.terminal_sources(limit=limit)
 
     async def mark_source_deleted(self, source: TerminalMediaSource) -> bool:
@@ -493,8 +493,8 @@ class MediaNormalizationJobService:
     async def cleanup_artifacts(self, *, limit: int = 100) -> MediaArtifactCleanupOutcome:
         """Delete due unreferenced artifacts through the durable repository fence."""
         if not 1 <= limit <= MAX_MEDIA_JOB_CLEANUP:
-            msg = _("Media artifact cleanup limit must be between 1 and {maximum}.")
-            raise InvalidStateError(msg, message_params={"maximum": MAX_MEDIA_JOB_CLEANUP})
+            maximum = MAX_MEDIA_JOB_CLEANUP
+            raise InvalidStateError(tr(t"Media artifact cleanup limit must be between 1 and {maximum}."))
         return await self._repository.cleanup_artifacts(self._artifacts.delete, limit=limit)
 
 
@@ -800,8 +800,8 @@ def _staged_source_metadata(path: Path, max_bytes: int) -> tuple[int, str]:
             msg = _("Media uploads cannot be empty.")
             raise ValidationError(msg)
         if initial.st_size > max_bytes:
-            msg = _("Media upload exceeds the {limit}-byte source limit.")
-            raise ValidationError(msg, message_params={"limit": max_bytes})
+            limit = max_bytes
+            raise ValidationError(tr(t"Media upload exceeds the {limit}-byte source limit."))
         digest = hashlib.sha256()
         with os.fdopen(descriptor, "rb") as stream:
             descriptor = -1

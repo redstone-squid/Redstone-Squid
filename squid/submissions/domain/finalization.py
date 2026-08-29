@@ -8,7 +8,7 @@ from enum import StrEnum
 from uuid import UUID
 
 from squid.core.errors import JSONValue, ValidationError
-from squid.core.i18n import _
+from squid.core.i18n import _, tr
 from squid.sponsors import PublicSponsor
 from squid.submissions.domain.forms import SubmissionOrigin
 
@@ -113,8 +113,8 @@ class SubmissionAttentionIssue:
 
     def __post_init__(self) -> None:
         if _STABLE_KEY.fullmatch(self.field_id) is None:
-            msg = _("invalid submission attention field ID: {field_id}")
-            raise ValidationError(msg, message_params={"field_id": self.field_id})
+            field_id = self.field_id
+            raise ValidationError(tr(t"invalid submission attention field ID: {field_id}"))
 
 
 @dataclass(frozen=True, slots=True)
@@ -310,8 +310,8 @@ class NormalizedSubmission:
             )
         )
         if not compatible:
-            msg = _("{category} submission has incompatible category details")
-            raise ValidationError(msg, message_params={"category": self.category.value})
+            category = self.category.value
+            raise ValidationError(tr(t"{category} submission has incompatible category details"))
         if self.origin is not SubmissionOrigin.PAPER and self.source_installation_id is not None:
             msg = _("Only Paper submissions may retain an installation provenance ID.")
             raise ValidationError(msg)
@@ -346,11 +346,9 @@ class SubmissionTargetResult:
 
 def _require_stable_keys(values: tuple[str, ...], label: str) -> None:
     if len(values) != len(set(values)):
-        msg = _("{label} keys must be unique")
-        raise ValidationError(msg, message_params={"label": label})
+        raise ValidationError(tr(t"{label} keys must be unique"))
     if any(_STABLE_KEY.fullmatch(value) is None for value in values):
-        msg = _("{label} keys must be stable lowercase identifiers")
-        raise ValidationError(msg, message_params={"label": label})
+        raise ValidationError(tr(t"{label} keys must be stable lowercase identifiers"))
 
 
 def _require_nonnegative_optional(values: tuple[int | None, ...]) -> None:

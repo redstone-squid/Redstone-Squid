@@ -10,7 +10,7 @@ from uuid import UUID, uuid5
 from whenever import Instant
 
 from squid.core.errors import DataIntegrityError, InvalidStateError, JSONValue, ValidationError
-from squid.core.i18n import _
+from squid.core.i18n import _, tr
 from squid.sponsors import PublicSponsor
 from squid.submissions.application.drafts import DEFAULT_DRAFT_RETENTION_DAYS, StoredDraft, SubmissionDraftService
 from squid.submissions.domain import DraftStatus, SubmissionOrigin
@@ -353,8 +353,8 @@ class SubmissionFinalizationWorker:
     async def process_batch(self, *, limit: int = 8, now: Instant | None = None) -> None:
         """Claim and process at most ``limit`` jobs sequentially."""
         if not 1 <= limit <= MAX_FINALIZATION_JOB_CLAIM:
-            msg = _("finalization claim limit must be between 1 and {maximum}")
-            raise InvalidStateError(msg, message_params={"maximum": MAX_FINALIZATION_JOB_CLAIM})
+            maximum = MAX_FINALIZATION_JOB_CLAIM
+            raise InvalidStateError(tr(t"finalization claim limit must be between 1 and {maximum}"))
         claimed_at = now or Instant.now()
         for job in await self._jobs.claim(now=claimed_at, limit=limit):
             await self._process(job, now=claimed_at)
@@ -582,8 +582,7 @@ def _sponsor_unavailable() -> SubmissionAttentionIssue:
 def _required_str(answers: Mapping[str, JSONValue], field_id: str) -> str:
     value = answers.get(field_id)
     if not isinstance(value, str):
-        msg = _("validated field {field_id} is not a string")
-        raise InvalidStateError(msg, message_params={"field_id": field_id})
+        raise InvalidStateError(tr(t"validated field {field_id} is not a string"))
     return value
 
 
@@ -592,8 +591,7 @@ def _optional_str(answers: Mapping[str, JSONValue], field_id: str) -> str | None
     if value is None:
         return None
     if not isinstance(value, str):
-        msg = _("validated field {field_id} is not a string")
-        raise InvalidStateError(msg, message_params={"field_id": field_id})
+        raise InvalidStateError(tr(t"validated field {field_id} is not a string"))
     return value
 
 
@@ -608,8 +606,7 @@ def _optional_nonblank_str(answers: Mapping[str, JSONValue], field_id: str) -> s
 def _required_int(answers: Mapping[str, JSONValue], field_id: str) -> int:
     value = answers.get(field_id)
     if not isinstance(value, int) or isinstance(value, bool):
-        msg = _("validated field {field_id} is not an integer")
-        raise InvalidStateError(msg, message_params={"field_id": field_id})
+        raise InvalidStateError(tr(t"validated field {field_id} is not an integer"))
     return value
 
 
@@ -618,16 +615,14 @@ def _optional_int(answers: Mapping[str, JSONValue], field_id: str) -> int | None
     if value is None:
         return None
     if not isinstance(value, int) or isinstance(value, bool):
-        msg = _("validated field {field_id} is not an integer")
-        raise InvalidStateError(msg, message_params={"field_id": field_id})
+        raise InvalidStateError(tr(t"validated field {field_id} is not an integer"))
     return value
 
 
 def _required_bool(answers: Mapping[str, JSONValue], field_id: str) -> bool:
     value = answers.get(field_id)
     if not isinstance(value, bool):
-        msg = _("validated field {field_id} is not a boolean")
-        raise InvalidStateError(msg, message_params={"field_id": field_id})
+        raise InvalidStateError(tr(t"validated field {field_id} is not a boolean"))
     return value
 
 
@@ -638,8 +633,7 @@ def _string_tuple(answers: Mapping[str, JSONValue], field_id: str) -> tuple[str,
         or isinstance(value, str | bytes)
         or not all(isinstance(item, str) for item in value)
     ):
-        msg = _("validated field {field_id} is not a string list")
-        raise InvalidStateError(msg, message_params={"field_id": field_id})
+        raise InvalidStateError(tr(t"validated field {field_id} is not a string list"))
     return tuple(cast(Sequence[str], value))
 
 
