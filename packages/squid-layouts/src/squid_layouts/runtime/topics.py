@@ -9,28 +9,191 @@ import asyncio
 import contextvars
 import logging
 import time
-from collections.abc import Awaitable, Callable, Hashable
+from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
+from typing import Protocol, overload
+from weakref import WeakValueDictionary
 
 from squid_layouts.profiling import NoOpProfiler, OperationKind, Profiler, TraceLink, TraceOutcome, TraceResult
 
+# Imported from the module rather than the `runtime` package: `runtime/__init__` pulls in
+# `shared.py`, which imports this module.
+from squid_layouts.runtime.reactivity import _Cell
+
 logger = logging.getLogger(__name__)
 
-type Topic = Hashable
-type Subscriber = Callable[[Topic], Awaitable[None]]
+
+@dataclass(frozen=True, slots=True)
+class Topic:
+    """One named address a host publishes and a render watches.
+
+    Equal by value, so two publishers agree without sharing a constructor, and encodable in
+    full, which is what makes it the only address able to cross a process boundary. Keys are
+    text on purpose: `Topic("build", 123)` is a type error rather than a topic nobody else
+    ever addresses.
+    """
+
+    kind: str
+    key: str
+
+    def __str__(self) -> str:
+        return f"{self.kind}:{self.key}"
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class CellAddress:
+    """A shared cell's identity, which lives and dies with this process.
+
+    Handed out by `Observation.addresses()` and `Mount.observed`, never constructed by a
+    host. It names an object rather than a value, so nothing can put it on a wire and a
+    bridge does not have to decide whether to try.
+    """
+
+    owner: object
+    name: str
+
+    def __eq__(self, other: object) -> bool:
+        # Identity on the namespace rather than equality: a `Shared` subclass that defines
+        # `__eq__` must not be able to make two live namespaces share one address.
+        if not isinstance(other, CellAddress):
+            return NotImplemented
+        return other.owner is self.owner and other.name == self.name
+
+    def __hash__(self) -> int:
+        return hash((id(self.owner), self.name))
+
+
+type Address = Topic | CellAddress
+"""Everything the bus carries: a host's named topic, or a shared cell's local identity."""
+
+type Subscriber = Callable[[Address], Awaitable[None]]
+
+
+class _TopicCell(_Cell):
+    """A cell with an address and a version, and deliberately no value.
+
+    Reading state is how this package declares a dependency, and a topic has no state to
+    read -- it says only that something behind it moved. So the cell carries the version
+    alone, and :func:`watch` is the read.
+    """
+
+    # `_Cell` defines `__slots__` without one, and the registry below holds cells weakly.
+    __slots__ = ("__weakref__",)
+
+
+_TOPIC_CELLS: WeakValueDictionary[Topic, _TopicCell] = WeakValueDictionary()
+"""Every topic something is currently watching.
+
+Weak on purpose: a cell lives exactly as long as some resource's `sources` or some live
+`Observation` holds it, so a topic nobody watches costs nothing. A fresh cell at version 0
+can only appear once nobody was left comparing against the old one.
+
+Process-global rather than per-bus, matching `_EPOCH`. Two buses in one process therefore
+share versions, which costs at most one redundant re-fetch -- the over-subscribe direction a
+mount's follow reconciliation already takes.
+"""
+
+
+def _topic_cell(topic: Topic) -> _TopicCell:
+    cell = _TOPIC_CELLS.get(topic)
+    if cell is None:
+        cell = _TopicCell(address=topic)
+        _TOPIC_CELLS[topic] = cell
+    return cell
+
+
+def watch(*topics: Topic) -> None:
+    """Depend on `topics`, so publishing one reloads this value and refreshes the mounts showing it.
+
+    Call it inside a `sl.resource` loader, alongside the read it makes authoritative::
+
+        @sl.resource(delivery=sl.ResourceDelivery.ATOMIC)
+        async def build(self) -> Build:
+            sl.watch(sl.Topic("build", self.build_id))
+            return await self.queries.get(self.build_id)
+
+    The watch is a tracked read like any other, so the resource re-pends when the topic is
+    published, the render that used its value follows the topic, and a render that stops
+    reading it stops following. Nothing is registered by hand and nothing has to be
+    unregistered.
+
+    A publish that lands while the loader is still awaiting is not lost: it moves the
+    version the load is being compared against, so the value it produces is already stale
+    and settles again.
+
+    Not in `on_load`, which runs once per instance and under no consumer: a watch there is
+    untracked and could never reload anything.
+    """
+    for topic in topics:
+        cell = _topic_cell(topic)
+        # `track(settle())`, not `read()`: `read` installs a lost-update precondition on an
+        # addressed cell, which is right for a shared cell an action wrote and wrong for a
+        # topic, which no action writes.
+        cell.track(cell.settle())
+
+
+def _invalidate(topic: Topic) -> None:
+    """Move the version every watcher of `topic` is comparing against."""
+    cell = _TOPIC_CELLS.get(topic)
+    if cell is not None:
+        cell.touch()
+
 
 _SELF_PUBLISH_WARNING_THRESHOLD = 100
 _NO_TOPIC = object()
-_current_topic: contextvars.ContextVar[Topic | object] = contextvars.ContextVar("topic_bus_topic", default=_NO_TOPIC)
+_current_topic: contextvars.ContextVar[Address | object] = contextvars.ContextVar("topic_bus_topic", default=_NO_TOPIC)
 _NOOP_PROFILER = NoOpProfiler()
+
+
+class TopicCodec(Protocol):
+    """Translate a topic to and from the text an external transport can carry.
+
+    A host needs one of these only to speak a wire format someone else already defined;
+    :class:`KindKeyCodec` is the default and is total on :class:`Topic`. `encode` returns
+    `None` for a topic this codec does not claim, and the bridge keeps it local rather than
+    inventing a name for it. `decode` returns `None` for text this process does not
+    recognise, which is what a rolling deployment looks like from the older side.
+
+    Only a :class:`Topic` ever reaches a codec. A :class:`CellAddress` names a live object
+    rather than a value, so it cannot be encoded at all and the type says so.
+    """
+
+    def encode(self, topic: Topic) -> str | None: ...
+
+    def decode(self, text: str) -> Topic | None: ...
+
+
+class KindKeyCodec:
+    """The default wire form, ``kind:key``.
+
+    Total on :class:`Topic` unless a kind contains the separator, which would make the split
+    ambiguous. A key may contain it freely, because only the first occurrence divides.
+    """
+
+    def __init__(self, separator: str = ":") -> None:
+        if not separator:
+            message = "topic codec separator must be a non-empty string"
+            raise ValueError(message)
+        self.separator = separator
+
+    def encode(self, topic: Topic) -> str | None:
+        if not topic.kind or not topic.key or self.separator in topic.kind:
+            return None
+        return f"{topic.kind}{self.separator}{topic.key}"
+
+    def decode(self, text: str) -> Topic | None:
+        kind, separator, key = text.partition(self.separator)
+        if not separator or not kind or not key:
+            return None
+        return Topic(kind, key)
 
 
 @dataclass(frozen=True, slots=True)
 class TopicSnapshot:
     """Diagnostic state for one topic known to a bus."""
 
-    topic: Topic
+    topic: Address
     subscribers: int
     labels: tuple[str, ...]
     queued: bool
@@ -102,11 +265,11 @@ class TopicBus:
     deliberately unspecified. A topic's subscribers run sequentially in registration order,
     and at most one delivery for a topic is in flight at once.
 
-    Topics use exact hash/equality matching. Prefer a single host-side constructor for each
-    tuple vocabulary: ``("build", 123)`` and ``("build", "123")`` are different topics.
-    Subscriptions are process-local; bridge an external change feed into :meth:`publish` when
-    multiple processes need to refresh one another. Calls must originate on the event-loop
-    thread; worker threads can use ``loop.call_soon_threadsafe(bus.publish, topic)``.
+    Addresses match by value, so two publishers that build the same :class:`Topic` agree
+    without sharing a constructor. Subscriptions are process-local; bridge an external change
+    feed into :meth:`publish` when multiple processes need to refresh one another. Calls must
+    originate on the event-loop thread; worker threads can use
+    ``loop.call_soon_threadsafe(bus.publish, topic)``.
 
     Args:
         concurrency: Maximum number of different topics delivered concurrently.
@@ -133,13 +296,33 @@ class TopicBus:
         self.profiler = profiler
         self.max_causal_links = max_causal_links
         self._clock = clock
-        self._queue: asyncio.Queue[Topic] = asyncio.Queue()
-        self._topics: dict[Topic, _TopicState] = {}
+        self._queue: asyncio.Queue[Address] = asyncio.Queue()
+        self._topics: dict[Address, _TopicState] = {}
         self._running = False
 
+    @overload
     def subscribe(
         self,
         topic: Topic,
+        callback: Callable[[Topic], Awaitable[None]],
+        *,
+        label: str = "",
+        profile_label: str | None = None,
+    ) -> Callable[[], None]: ...
+
+    @overload
+    def subscribe(
+        self,
+        topic: CellAddress,
+        callback: Callable[[CellAddress], Awaitable[None]],
+        *,
+        label: str = "",
+        profile_label: str | None = None,
+    ) -> Callable[[], None]: ...
+
+    def subscribe(
+        self,
+        topic: Address,
         callback: Subscriber,
         *,
         label: str = "",
@@ -166,12 +349,16 @@ class TopicBus:
 
         return unsubscribe
 
-    def publish(self, *topics: Topic) -> None:
+    def publish(self, *topics: Address) -> None:
         """Synchronously enqueue change notifications for all currently subscribed topics."""
         current = _current_topic.get()
         triggered = self._clock()
         link = self.profiler.capture_link()
         for topic in topics:
+            if isinstance(topic, Topic):
+                # Before the skip below: a mount with no reactor still has to re-fetch on its
+                # next click, and that only works if the version moved.
+                _invalidate(topic)
             state = self._topics.get(topic)
             if state is None or not state.subscriptions:
                 continue
@@ -226,6 +413,13 @@ class TopicBus:
                         break
                     tasks.create_task(self._deliver(topic))
 
+    async def wait_idle(self) -> None:
+        """Wait for queued topic deliveries to settle under the bus's current owner."""
+        if not self._running:
+            await self.drain()
+            return
+        await self._queue.join()
+
     def snapshot(self) -> BusSnapshot:
         """Return subscriber, queue, in-flight, and callback outcome diagnostics."""
         topics = tuple(
@@ -252,7 +446,7 @@ class TopicBus:
         while True:
             await self._deliver(await self._queue.get())
 
-    async def _deliver(self, topic: Topic) -> None:
+    async def _deliver(self, topic: Address) -> None:
         state = self._topics.get(topic)
         if state is None:
             self._queue.task_done()
@@ -324,7 +518,7 @@ class TopicBus:
             self._forget_if_idle(topic, state)
             self._queue.task_done()
 
-    def _forget_if_idle(self, topic: Topic, state: _TopicState) -> None:
+    def _forget_if_idle(self, topic: Address, state: _TopicState) -> None:
         if not state.subscriptions and not state.queued and not state.in_flight:
             self._topics.pop(topic, None)
 
@@ -333,3 +527,17 @@ def _callback_name(callback: Subscriber) -> str:
     module = getattr(callback, "__module__", type(callback).__module__)
     qualified = getattr(callback, "__qualname__", type(callback).__qualname__)
     return f"{module}.{qualified}"
+
+
+__all__ = [
+    "Address",
+    "BusSnapshot",
+    "CellAddress",
+    "KindKeyCodec",
+    "Subscriber",
+    "Topic",
+    "TopicBus",
+    "TopicCodec",
+    "TopicSnapshot",
+    "watch",
+]

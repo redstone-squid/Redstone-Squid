@@ -5,10 +5,10 @@ from typing import TYPE_CHECKING, Any
 
 import discord
 
-from squid_layouts.actions import ActionEvent, ActionPolicy, Visibility
 from squid_layouts.discord import delivery as deliver
 from squid_layouts.discord.modal import ModalSpec, build_form_modal, build_modal
-from squid_layouts.forms import FieldError, FormIssue, FormLike, FormSpec, SubmitHandler, bind_form
+from squid_layouts.forms import FieldError, FormField, FormIssue, FormLike, FormSpec, SubmitHandler, bind_form
+from squid_layouts.interactions import ActionEvent, ActionPolicy, Visibility
 from squid_layouts.text import TextLike, resolve_text
 
 if TYPE_CHECKING:
@@ -18,9 +18,15 @@ if TYPE_CHECKING:
 class ActionResponder:
     """Translate portable response intents onto one Discord interaction."""
 
-    def __init__(self, interaction: discord.Interaction, mount: Mount) -> None:
+    def __init__(
+        self,
+        interaction: discord.Interaction,
+        mount: Mount,
+        selected_entities: tuple[object, ...] = (),
+    ) -> None:
         self.interaction = interaction
         self.mount = mount
+        self.selected_entities = selected_entities
 
     async def acknowledge(self) -> None:
         if not self.interaction.response.is_done():
@@ -99,7 +105,7 @@ class ActionResponder:
     ) -> None:
         """Render validation errors with a button that reopens the attempted form."""
         lines: list[str] = []
-        labels = {field.key: field.label or field.key for field in spec.fields}
+        labels = {field.key: field.label or field.key for field in spec.items if isinstance(field, FormField)}
         for error in errors:
             if isinstance(error, FieldError):
                 label = resolve_text(labels.get(error.key, error.key), self.mount.localization).content
@@ -166,10 +172,19 @@ def native(event: ActionEvent) -> discord.Interaction[Any]:
     `responder(event).send_modal()`. A hand-rolled `defer()` survives only because
     `Mount.flush` falls back to editing through the followup.
 
+    The one sanctioned driver is `sl.discord.adopt`'s interaction proxy, which exists to put
+    a legacy `interaction.response.edit_message(view=self)` back under mount ownership by
+    performing no HTTP at all.
+
     Raises:
         LookupError: The event came from a frontend other than Discord.
     """
     return responder(event).interaction
+
+
+def selected_entities(event: ActionEvent) -> tuple[object, ...]:
+    """Return the Discord objects resolved for an entity-selection event."""
+    return responder(event).selected_entities
 
 
 class _RetryButton(discord.ui.Button[discord.ui.LayoutView]):

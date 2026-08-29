@@ -1,76 +1,16 @@
 """Target descriptions used by the frontend-neutral planner."""
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
-from typing import Protocol
+from typing import Any, Self, cast
 
 from squid_layouts.errors import LayoutInvariantError
-
-
-@dataclass(frozen=True, slots=True)
-class ResourceCost:
-    """Named resource consumption measured against a target's message-wide budgets.
-
-    One vocabulary for everything a message spends: text on each of its text pools,
-    components, embeds, rows, controls, attachments. The planner reads caps through the
-    same names a host reservation withholds against, so no stage can price a document in
-    units another stage does not recognise.
-
-    Zero axes are dropped and the rest are stored in name order, so two costs that spend
-    the same thing compare and fingerprint the same however they were built.
-    """
-
-    values: Mapping[str, int] = field(default_factory=dict)
-
-    def __post_init__(self) -> None:
-        negative = sorted(name for name, value in self.values.items() if value < 0)
-        if negative:
-            message = f"resource {negative[0]!r} cannot cost {self.values[negative[0]]}"
-            raise LayoutInvariantError(message)
-        object.__setattr__(self, "values", dict(sorted((n, v) for n, v in self.values.items() if v)))
-
-    def get(self, name: str) -> int:
-        return self.values.get(name, 0)
-
-    @property
-    def axes(self) -> tuple[str, ...]:
-        """Every axis this cost actually spends on, in name order."""
-        return tuple(self.values)
-
-    def __add__(self, other: ResourceCost) -> ResourceCost:
-        """Combine two reservations, summing every axis either one names."""
-        if not isinstance(other, ResourceCost):
-            return NotImplemented
-        merged = dict(self.values)
-        for name, value in other.values.items():
-            merged[name] = merged.get(name, 0) + value
-        return ResourceCost(merged)
-
-    def within(self, capacities: Mapping[str, int]) -> bool:
-        """True when no named axis exceeds its capacity. Unknown axes are unconstrained."""
-        return not any(self.over(capacities))
-
-    def over(self, capacities: Mapping[str, int]) -> Iterator[tuple[str, int, int]]:
-        """Every axis over its capacity as (axis, spent, capacity), in name order.
-
-        All of them, not the first: a document that blows two budgets at once should be
-        told about both rather than sent round the loop to discover the second.
-        """
-        for name, capacity in sorted(capacities.items()):
-            spent = self.get(name)
-            if spent > capacity:
-                yield name, spent, capacity
-
-    def cheaper_anywhere(self, other: ResourceCost) -> bool:
-        """True when some axis costs strictly less here than there.
-
-        The Pareto test. A candidate that is no better on any axis and no better on
-        fidelity cannot lead anywhere the other cannot already reach.
-        """
-        return any(self.get(name) < other.get(name) for name in {*self.values, *other.values})
-
-
-EMPTY_COST = ResourceCost()
+from squid_layouts.planning.adapter import (
+    AdapterProfile,
+    ExtensionAdapter,
+    ResourceCost,
+)
+from squid_layouts.target_types import DiscordTarget
 
 
 def _limit_values(limits: object) -> tuple[tuple[str, object], ...]:
@@ -84,22 +24,7 @@ def _limit_values(limits: object) -> tuple[tuple[str, object], ...]:
 
 
 @dataclass(frozen=True, slots=True)
-class PreparedExtension:
-    """One target extension prepared and measured exactly once."""
-
-    cost: ResourceCost
-    scene_payload: Mapping[str, object]
-    resource: object
-
-
-class ExtensionAdapter(Protocol):
-    """Prepare a logical extension payload for target planning and drawing."""
-
-    def prepare(self, payload: object) -> PreparedExtension: ...
-
-
-@dataclass(frozen=True, slots=True)
-class TargetProfile:
+class TargetProfile[ModeT = DiscordTarget, AdapterT = Any, BodyT = Any]:
     """Stable target identity, capabilities, limits, and extension adapters."""
 
     id: str
@@ -119,6 +44,35 @@ class TargetProfile:
     Only whole-message budgets belong here. Local caps describe the target's shape rather
     than the remaining room, and reducing one would change what a legal document is.
     """
+    mode: type[ModeT] | None = None
+    adapter: AdapterProfile[AdapterT] | None = None
+    body_type: type[BodyT] | None = None
+    selected_adapter_capabilities: frozenset[str] | None = None
+
+    @property
+    def adapter_capabilities(self) -> frozenset[str]:
+        """Adapter behaviors and extensions selected for this effective target."""
+        if self.selected_adapter_capabilities is not None:
+            return self.selected_adapter_capabilities
+        if self.adapter is None:
+            return frozenset()
+        extensions = frozenset(f"extension.{kind}" for kind in self.extensions)
+        return self.adapter.capabilities | extensions
+
+    def restrict_adapter_capabilities(self, capabilities: frozenset[str]) -> Self:
+        """Freeze planning to a recorded subset supplied by the current adapter."""
+        if capabilities == self.adapter_capabilities:
+            return self
+        protocol = self.capabilities - self.adapter_capabilities
+        extensions = {
+            kind: extension for kind, extension in self.extensions.items() if f"extension.{kind}" in capabilities
+        }
+        return replace(
+            self,
+            capabilities=protocol | capabilities,
+            extensions=extensions,
+            selected_adapter_capabilities=capabilities,
+        )
 
     @property
     def budgets(self) -> Mapping[str, str]:
@@ -160,7 +114,7 @@ class TargetProfile:
         """Every axis this cost overspends, as (axis, spent, capacity)."""
         return tuple(cost.over(self.capacities))
 
-    def reserve(self, cost: ResourceCost) -> TargetProfile:
+    def reserve(self, cost: ResourceCost) -> Self:
         """Return this profile with every reserved resource withheld from its budget.
 
         A reservation is a smaller target, not a parameter threaded beside one: planning,
@@ -185,12 +139,4 @@ class TargetProfile:
         }
         if not reductions:
             return self
-        return TargetProfile(
-            id=self.id,
-            version=self.version,
-            capabilities=self.capabilities,
-            limits=replace(limits, **reductions),
-            extensions=self.extensions,
-            dialect=self.dialect,
-            resources=self.resources,
-        )
+        return replace(self, limits=replace(cast(Any, limits), **reductions))

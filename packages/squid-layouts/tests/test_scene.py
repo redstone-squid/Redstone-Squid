@@ -6,9 +6,10 @@ from datetime import UTC, datetime, timedelta, timezone
 import jsonschema
 import pytest
 
-from squid_layouts.actions import ActionPolicy
 from squid_layouts.document import Asset, Document, InlineAsset, as_document
+from squid_layouts.emoji import Emoji
 from squid_layouts.errors import LayoutInvariantError
+from squid_layouts.interactions import ActionPolicy
 from squid_layouts.primitives.nodes import Text
 from squid_layouts.primitives.styles import ActionStyle
 from squid_layouts.scene.codec import SceneCodec, SceneCodecError
@@ -27,6 +28,7 @@ from squid_layouts.scene.model import (
     SceneLink,
     SceneOption,
     ScenePanel,
+    ScenePremiumButton,
     SceneRow,
     SceneSelect,
     SceneText,
@@ -76,6 +78,53 @@ def test_scene_json_is_canonical_and_round_trips() -> None:
     assert encoded == SceneCodec.dumps(SceneCodec.loads(encoded))
     assert json.loads(encoded)["body"]["kind"] == "components_v2"
     assert json.loads(encoded)["body"]["children"][0]["kind"] == "panel"
+
+
+def test_new_component_metadata_round_trips_on_protocol_one() -> None:
+    scene = SceneDocument(
+        protocol=1,
+        target="discord.components-v2",
+        target_version=1,
+        body=SceneComponentsV2(
+            (
+                ScenePanel(
+                    (
+                        SceneRow(
+                            (
+                                ScenePremiumButton(42),
+                                SceneLink(
+                                    None,
+                                    "https://example.invalid",
+                                    Emoji("wave", 7, animated=True),
+                                    disabled=True,
+                                ),
+                            )
+                        ),
+                        SceneSelect((SceneOption("One", "1", emoji=Emoji("1️⃣")),), "pick"),
+                    ),
+                    spoiler=True,
+                ),
+            )
+        ),
+    )
+
+    assert SceneCodec.loads(SceneCodec.dumps(scene)) == scene
+    jsonschema.validate(SceneCodec.to_dict(scene), SceneCodec.schema())
+
+
+def test_protocol_one_decodes_payloads_without_new_optional_fields() -> None:
+    raw = SceneCodec.to_dict(_scene())
+    panel = raw["body"]["children"][0]
+    panel.pop("spoiler")
+    link = panel["children"][3]["items"][1]
+    link.pop("emoji")
+    link.pop("disabled")
+    option = panel["children"][4]["options"][0]
+    option.pop("emoji")
+
+    decoded = SceneCodec.from_dict(raw)
+
+    assert decoded.components_v2.children[0].spoiler is False  # type: ignore[union-attr]
 
 
 def test_scene_fingerprint_is_stable_and_content_sensitive() -> None:

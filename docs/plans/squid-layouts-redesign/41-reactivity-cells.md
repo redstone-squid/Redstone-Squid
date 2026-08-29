@@ -1,4 +1,4 @@
-# 41 — Reactivity: pull-based cells, tracked reads, immutable values
+# 41 — Reactivity: pull-based cells, tracked reads, replaced values
 
 ## Problem
 
@@ -78,27 +78,61 @@ does not already give, and costs debuggability and type-checker support.
 
 ## Design
 
-> A cell holds an immutable value and a version. A read is tracked. A computed recomputes
+> A cell holds a value that is replaced, never mutated, and a version. A read is tracked. A computed recomputes
 > when a version it read has moved. Nothing is pushed.
 
-### 1. Values are immutable, and the check is `hash()`
+### 1. Values are replaced, never mutated, and the type checker holds the line
 
 ```python
 class Panel(sl.Component):
-    filters: Filters = sl.state(Filters())        # frozen dataclass of immutable fields
-    rows: tuple[str, ...] = sl.state(())
+    filters: Filters = sl.state(Filters())                 # frozen dataclass
+    rows: Sequence[str] = sl.state([])                     # a list in, a Sequence out
+    channels: Mapping[str, int | None] = sl.state({})
 
-panel.rows = [1, 2]          # MutableStateError
-panel.rows = (1, [2])        # MutableStateError -- an annotation check cannot see this
+panel.rows = (*panel.rows, "a")                            # replacement
+panel.channels = {**panel.channels, "log": 1}
 panel.filters = replace(panel.filters, limit=25)
+
+panel.rows.append("a")                                     # pyrefly: Sequence has no append
+bad: list[str] = sl.state([])                              # pyrefly: Sequence is not a list
 ```
 
-Hashability is the test, applied at write. It is not a perfect immutability oracle — a
-plain mutable object hashes by identity — but it is **deep**, which is the property that
-matters and the property the annotation check [40](40-shared-state.md) used to carry did
-not have. `(1, [2])` and a frozen dataclass with a `list` field both fail, and those are
-the cases that actually bite. One `hash()` per write, on values that are almost always
-already hashed elsewhere.
+Nothing in the cell machinery needs a value to be immutable. A write bumps a version,
+rollback holds the previous reference, the settle short-circuit uses `==`. What the design
+needs is that a held value is never **mutated in place**, because an in-place change moves
+no version. That is a discipline, and the question is only who enforces it.
+
+This plan first shipped with runtime enforcement — `hash()` at every write, which is deep
+and unconditional, and which Python makes expensive in exactly one place: there is no
+literal for a frozen mapping, so every mapping write site paid an `sl.FrozenMapping(...)`
+wrapper (see *Rejected alternatives*). It now enforces it statically. `state()` is overloaded
+so that a `dict[K, V]` default or factory declares `Mapping[K, V]`, a `list[T]` declares
+`Sequence[T]`, a `set[T]` declares `AbstractSet[T]`, and anything else declares `T` as
+before. Two things follow. A concrete annotation — `rows: list[str]` — is a type error at the
+declaration, because a `Sequence` is not assignable to a `list`. And every mutating method
+is a type error at the use. The stored value is the one assigned: no wrapper, no copy, no
+freezing at the boundary, so the declared type is the real value's read-only view and
+`self.channels["log"]` stays plain attribute access.
+
+Coverage is honest. The three builtins and their subclasses are enforced at the declaration.
+A custom class or a dataclass with a `list` field falls through to `T`, where the checker
+enforces whatever that type's own annotations say. A user without a type checker has no
+guard, which is the contract every typed Python library offers, and the population it
+guards against is measured in *Problem*: two in-place mutations in the tree, both in tests.
+
+**Nested updates are a local.** `{**m, k: v}` covers a one-key replacement, and every
+in-tree write is one. For more than that, copy into a local, mutate it, assign it back:
+
+```python
+channels = dict(self.channels)
+channels["log"] = 1
+del channels["audit"]
+self.channels = channels
+```
+
+Typed end to end — the local is a `dict`, the field a `Mapping` — and the last line is the
+ordinary write. A `draft()` context manager was built and deleted: it saved that one line and
+cost a string naming the field so the framework could do the assignment.
 
 **`opaque=True` replaces `copy="ref"`.** A service, a guild, a `_WindowRequest` — a
 collaborator the component holds and does not mutate — is declared for what it is:
@@ -107,17 +141,22 @@ collaborator the component holds and does not mutate — is declared for what it
 _request: _WindowRequest = sl.state(_WindowRequest(), persist=False, opaque=True)
 ```
 
-The check is skipped for it and the promise sits at the declaration where a reader will
-see it. The concept survives the rename because it is now the only escape hatch there is;
-what it stops meaning is a copying strategy, since no snapshot copies anything any more.
+It settles on identity rather than `==`, because `==` on a collaborator is the author's
+code, and it is never persisted. The promise sits at the declaration where a reader will
+see it; what it stops meaning is a copying strategy, since no snapshot copies anything any
+more.
 
-**A mapping needs a container the check accepts.** `MappingProxyType` is the package's
-existing immutable-mapping idiom and it is read-only rather than immutable: it hashes not at
-all, and whoever still holds the dict underneath can rewrite it. `sl.FrozenMapping`
-(`frozen.py`) is a `Mapping` that copies its entries once and caches its own hash, so a
-mapping can be state. `Editor`'s committed section values and the bot's channel-settings
-field are the in-tree cases; both were mappings in state already, one behind a proxy and one
-mutated in place.
+A collaborator is the one thing that legitimately changes in place, and `mutated` is how the
+component says so. It takes the object, not a field name: identity finds the field, which is
+how an opaque field settles anyway, so the call is typed and there is no string to drift.
+
+```python
+self.build.door_orientation = event.selected[0]
+self.mutated(self.build)          # version moves, computeds over `build` recompute, draw
+```
+
+It refuses a non-opaque value, because a replaced value is never mutated, and an object two
+opaque fields hold, rather than guess.
 
 ### 2. Reads are tracked
 
@@ -210,7 +249,7 @@ component state is what lets a large amount of the current transaction go:
 | Today | Under staging |
 |---|---|
 | `_Snapshot`, `_Transaction.record` (`:159-172`), `_restore` | The overlay holds the previous value. Rollback is dropping it. |
-| `_plain` deep copy on first write per cell (`:61-68`) | Immutable values make a snapshot a reference. |
+| `_plain` deep copy on first write per cell (`:61-68`) | A value that is never mutated makes a snapshot a reference. |
 | `CopyMode` / `copy=` | Nothing copies, so there is no strategy to choose. `opaque=` carries what was left of the meaning. |
 | `_Transaction.delta()` reading after-values from `__dict__` (`:203-226`) | The overlay knows both halves without touching `__dict__`, which is the `contribute()` seam 40 §5a already adds. |
 
@@ -275,7 +314,7 @@ _Cell           value, version; staged through the transaction; read-tracked
   owned by a Shared      -> a write publishes (owner, descriptor) on the bus
 ```
 
-Everything else — immutability, tracking, staging, the delta — is the same code. The
+Everything else — replacement, tracking, staging, the delta — is the same code. The
 consequences are worth naming:
 
 - **A computed can depend on shared state.** `self.workspace.selected` read inside a
@@ -301,7 +340,7 @@ Small, because the counts in *Problem* say it is.
   enforce, and a cycle is reported where it runs rather than where it is declared.
 - **In-place mutations become replacement.** `tests/test_mount.py` (148, 1304, 1894),
   `tests/test_durability.py:167`, and -- missed by the original count, which read only the
-  package -- `squid/bot/settings_view.py:398`, which becomes a `FrozenMapping` replacement.
+  package -- `squid/bot/settings_view.py:398`, which becomes a `{**m, k: v}` replacement.
 - **14 `copy="ref"` sites** become `opaque=True`: 5 in `patterns/`, 5 in `squid/bot/`, 4 in
   the tests.
 - **3 mutable state declarations** become tuples: `tests/test_mount.py` (132, 1297, 1885) and
@@ -317,7 +356,7 @@ Small, because the counts in *Problem* say it is.
 
 | # | Deliverable | Exit criteria |
 |---|---|---|
-| 1 | `_Cell` with value and version; immutability check; `opaque=`; delete the proxy subsystem. **Shipped.** | `MutableStateError` on a list, on `(1, [2])`, on a frozen dataclass with a list field; an `opaque=` field accepting a service; `ReactiveList`/`Dict`/`Set`/`_ReactiveMixin`/`_observe` gone and the two test call sites migrated. |
+| 1 | `_Cell` with value and version; `state()` overloads narrowing `dict`/`list`/`set` to their read-only ABCs; `opaque=`; `mutated(obj)`; delete the proxy subsystem. **Shipped** (first with a runtime `hash()` check and `sl.FrozenMapping`, then amended to static enforcement). | A concrete `list`/`dict`/`set` annotation and a mutating method both type errors, pinned by a typing fixture; a `dict` default stored as-is and shared; `mutated(obj)` moving the holding field's version, refusing a non-opaque value and an object held twice; an `opaque=` field accepting a service; `ReactiveList`/`Dict`/`Set`/`_ReactiveMixin`/`_observe` gone. |
 | 2 | Read tracking, `untracked()`; computed without `depends=`; versions, settle, the write epoch. **Shipped.** | A computed never stale; a conditional dependency recomputing nothing when the unread branch's input changes; a diamond recomputing the shared node once; a computed whose value settles unchanged not propagating; a computed nobody reads never evaluated; a dropped reader collected while its source lives. |
 | 3 | Cells stage through the transaction; delete `_Snapshot`, `_plain`, `_restore`, `CopyMode`; undeclared writes always raise and `strict_state` is deleted. **Shipped.** | Rollback by dropping the overlay; read-your-writes; the delta built from the overlay; `export_state`/`restore_state` round-tripping without `_plain`; an undeclared write raising with no transaction flag set *and* leaving the attribute unwritten; a component built mid-action still assigning freely; `block_writes` and `readonly_transaction` unchanged. |
 | 4 | Rewrite 40 §2, §4 and §5 onto `_Cell`. **Shipped, as doc work only:** 40 has no code yet, so unifying `sl.cell()` onto `_Cell` is 40's phase 1 to build, not this plan's to migrate. The runtime half that could be tested here — a computed recomputing when a *different owner* writes state it read — is covered in `tests/test_computed.py`. | 40 §2 and §4 describing one cell type rather than two similar ones; 40's bus publication and §5b value guard unchanged; 40's phase table naming what it still owns. |
@@ -325,8 +364,10 @@ Small, because the counts in *Problem* say it is.
 
 ## Verification
 
-- `tests/test_reactivity.py`: the immutability check across the three shapes; `opaque=`;
+- `tests/test_reactivity.py`: a builtin container stored as assigned; `mutated(obj)`; `opaque=`;
   version bumps only on a real change; the equality short-circuit.
+- `tests/typing_state.py`: the `state()` overloads, pinned with `assert_type` under
+  `just typecheck`. Pyrefly does not report an unused ignore, so a negative pin would be silent.
 - `tests/test_computed.py` (new): tracking without `depends=`; conditional dependencies;
   the diamond; the settle cut-off; laziness; `untracked()`; a raising computed failing at
   read rather than at commit; a dropped reader collected.
@@ -388,12 +429,36 @@ promoted into the package.
   does not pay here. A Discord message is rendered whole, planned, diffed and sent as one
   edit, so knowing that exactly one node changed saves a render that costs microseconds
   against a round trip that costs tens of milliseconds. Whole-component invalidation stays.
-- **An annotation-based immutability check.** [40](40-shared-state.md) carried one and this
-  plan does not revive it. It is shallow where `hash()` is deep — `(1, [2])` and a frozen
-  dataclass with a `list` field both pass it — and `__set_name__` receives no annotations,
-  so reading them during class creation forces PEP 649 evaluation of names the module may
-  not have defined yet, in a package that bans quoted forward references to rely on that
-  laziness.
+- **A runtime immutability check via `hash()`.** What phase 1 first shipped. Deep and
+  unconditional, and it earned neither: nothing in the machinery needs hashability, so the
+  check was a lint, and the lint's price fell on the one container Python has no frozen
+  literal for. Every mapping write site became
+  `sl.FrozenMapping({**self._channels, setting: channel_id})`, and `FrozenMapping` spread
+  into `forms.py` and three patterns to keep their return values assignable. The static
+  overloads catch the same in-tree cases at the declaration instead of the write, and the
+  wrapper, its module, its export and its tests are deleted.
+- **A runtime annotation-based check.** [40](40-shared-state.md) carried one. It is shallow
+  — `(1, [2])` and a frozen dataclass with a `list` field both pass it — and `__set_name__`
+  receives no annotations, so reading them during class creation forces PEP 649 evaluation
+  of names the module may not have defined yet. The *static* check has neither problem: the
+  checker follows the types, so it is deep, and nothing is read at runtime.
+- **Freezing at the boundary.** `__set__` converting a `dict` to a frozen mapping and a
+  `list` to a tuple. It removes the wrapper from the write sites but replaces it with a
+  value that silently changes type between assignment and read, in a subsystem whose magic
+  was the complaint.
+- **An `Immutable[T]` wrapper.** `state()` returning a handle with `.unwrap()`, so that a
+  read has to go through the framework. As a pure typing trick it makes the value unusable —
+  a union with an empty marker rejects every read, not only the writes — and as a runtime
+  object it is the explicit-signals design above under another name. Counted: 597 reads and
+  184 writes of state across the package and bot, against 46 declarations. The wrapper
+  taxes the 597 to guard the 184, and `unwrap()` still has to be overloaded per builtin to
+  return a read-only view, which is the same three overloads moved from the declaration to
+  every read.
+- **A `draft()` context manager.** `with sl.draft(self, "channels") as c:` — a shallow copy
+  assigned back on exit. Built, then deleted: the only thing it saved over a local variable
+  was the assignment line, and it paid for that with a string naming the field. Every typed
+  spelling — a selector lambda resolved against a recording proxy, a descriptor handle — is
+  longer than the three-line idiom it wraps.
 - **Keeping `depends=` as an optional override.** A second way to express the same fact,
   which can disagree with the first. The tracked set is what the code actually read; a
   declared set that differs from it is either redundant or wrong.

@@ -12,13 +12,13 @@ class _OwnerGuildClient(Protocol):
     owner_server_id: int
 
 
-class OwnerGuildOnly[BotT: discord.Client](sl.discord.Middleware[BotT]):
+class OwnerGuildOnly[BotT: discord.Client](sl.discord.routing.Middleware[BotT]):
     """Silently ignore durable role controls outside the configured owner guild."""
 
     async def dispatch(
         self,
-        request: sl.discord.RouteRequest[BotT],
-        proceed: sl.discord.RouteProceed,
+        request: sl.discord.routing.RouteRequest[BotT],
+        proceed: sl.discord.routing.RouteProceed,
     ) -> None:
         interaction = request.interaction
         client = cast(_OwnerGuildClient, interaction.client)

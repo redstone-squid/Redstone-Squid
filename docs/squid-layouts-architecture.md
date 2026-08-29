@@ -64,12 +64,12 @@ The package root is semantic-first. Structural nodes are `Group`, `Stack`, `Clus
 `Choices`, `Items`, and `Navigation`. These say what the information means and preserve
 stable string keys, not which Discord widget must appear.
 
-Author them through the lowercase factories — `sl.section(*children, heading=...)`,
-`sl.actions(*entries, key=...)`, `sl.action(label, handler, key=...)`. Content is positional,
-identity and configuration are keyword-only, `None`/`False` children are skipped so
-`cond and node` composes, and bare strings or t-strings in a child position become a
-`Paragraph`. Collections are unpacked by the caller. The dataclasses remain the IR and remain
-public; the factories only normalize what authors write.
+Author them through the lowercase factories — `sl.section(sl.heading(...), *children)`,
+`sl.actions(*entries, key=...)`, `sl.action(label, handler, key=...)`. Semantic identity comes
+first in reading order; runtime identity and configuration are keyword-only. `None`/`False`
+children are skipped so `cond and node` composes, and bare strings or t-strings in a child
+position become a `Paragraph`. Collections are unpacked by the caller. The dataclasses remain
+the IR and remain public; the factories only normalize what authors write.
 
 `Choices`, `Items`, `Details`, and `Navigation` each hold a value, and one rule says who
 owns it. Every one of them takes an `Ownership`: `sl.controlled(value, on_change)` means the
@@ -195,23 +195,27 @@ policy behind pattern state.
 
 ## Components and Vue-inspired reactivity
 
-Components render synchronously from state. A state field holds an **immutable** value and
-is replaced rather than mutated; every assignment is checked with `hash()`, which is deep, so
-`(1, [2])` and a frozen dataclass with a `list` field are both refused. Reach for
-`state(factory=...)` when the initial value must be *computed* per instance, since the
-declaration itself runs once, at class-body time; a plain default needs no copy and is shared:
+Components render synchronously from state. A state field is **replaced, never mutated in
+place** -- an in-place change moves no version, so nothing would notice it. The type checker
+holds that line rather than the runtime: `sl.state()` is overloaded so a `dict` default
+declares `Mapping`, a `list` declares `Sequence` and a `set` declares `AbstractSet`, which
+makes a concrete annotation and every mutating method a type error while the stored value
+stays the one assigned. Reach for `state(factory=...)` when the initial value must be
+*computed* per instance, since the declaration itself runs once, at class-body time; a plain
+default needs no copy and is shared:
 
     class Search(sl.Component):
         query: str = sl.state("")
-        results: tuple[str, ...] = sl.state(())
+        results: Sequence[str] = sl.state([])
+        channels: Mapping[str, int | None] = sl.state({})
         opened_at: Instant = sl.state(factory=Instant.now)
 
         @sl.computed
         def title(self) -> str:
             return f"{len(self.results)} results for {self.query}"
 
-A mapping in state needs a container the check accepts: `sl.FrozenMapping` is a `Mapping`
-that copies its entries once and hashes, where `MappingProxyType` is read-only but neither.
+`{**self.channels, "log": 1}` replaces one key. For more than that, copy into a local `dict`,
+mutate it, and assign it back; the last line is the ordinary write.
 
 `computed` records what its body read and recomputes when one of those values moves --
 nothing is declared, so a conditional dependency is exact. It is lazy: one nobody renders is
@@ -225,6 +229,7 @@ That guarantee reaches declared state, and only declared state:
 |---|---|---|
 | `sl.state(...)` | yes | yes |
 | `sl.state(opaque=True)` | on assignment, or on `mutated()` | to the previous reference |
+| `sl.state(...)` on an `sl.runtime.Shared` | every mount that rendered it, through the bus | yes |
 | a plain attribute | no | it cannot be written inside an action at all |
 | anything written by `on_load` | it is what the first render reads | n/a -- no transaction is open |
 
@@ -232,6 +237,36 @@ A write inside an action **stages**: it lands in the transaction's overlay and b
 when the action commits. The action reads its own writes, and so do the computeds downstream
 of them; another task reading the same component across an `await` sees the committed value
 until then. Rolling back is dropping the overlay.
+
+## Shared state across mounts
+
+`sl.state()` is per-component and per-mount. When two live panels must agree on something the
+*view* owns -- a filter, a selection, a theme -- declare an `sl.runtime.Shared` namespace instead:
+
+    class Appearance(sl.runtime.Shared[int]):
+        accent: int = sl.state(DISCORD_BLUE)
+        density: str = sl.state("comfortable")
+
+    appearance = Appearance(bot.topic_bus, user.id)
+
+State on a namespace is `sl.state()` one level out and is literally the same storage, so replacement,
+the equality no-op, `opaque=`, staging and rollback all behave identically. Two differences:
+a write publishes the cell's `(handle, descriptor)` address on the bus instead of invalidating
+one component, and a cell an action both **read and wrote** carries the value it read as a
+commit precondition -- if someone else moved it meanwhile the action raises
+`sl.runtime.SharedStateConflictError` and publishes nothing. `Chrome.changed_elsewhere` is the wording
+for that, shown through `handle_error` or an `ActionMiddleware`.
+
+There is no store and no lookup: two panels converge because something handed them the same
+object, by constructor injection or `ContextKey`. That also settles lifetime -- the handle *is*
+the state, so panels holding it means it dies with the last panel, and a cog or session holding
+it means it survives every panel opening and closing. A mount subscribes to exactly the cells
+its latest render read, reconciled at stage time, and `sl.runtime.addresses(lambda: appearance.accent)`
+names an address by hand for a host that wants to follow one itself. A mount repaints its own
+writes inside the interaction that made them -- `Mount.observed` is what it rendered,
+`Mount.followed` what it managed to subscribe to -- so a missing reactor costs live updates
+from *other* mounts and nothing else. Nothing durable belongs
+here; anything the application would still want with nobody looking at it is a service.
 
 `sl.resource` is a descriptor-owned, runtime-only state machine rather than snapshot state:
 
@@ -244,9 +279,9 @@ until then. Rolling back is dropping the overlay.
 
         def render(self):
             match self.results.state:
-                case sl.Pending(previous=previous): ...
-                case sl.Failed(error=error, previous=previous): ...
-                case sl.Ready(value=results): ...
+                case sl.runtime.Pending(previous=previous): ...
+                case sl.runtime.Failed(error=error, previous=previous): ...
+                case sl.runtime.Ready(value=results): ...
 
 The loader's reads are tracked the way a computed's are, so the state it consults is its
 dependency set and a committed write to any of it re-pends the resource at the next read. A
@@ -268,22 +303,23 @@ action started from and such a component had no state then. Handlers are free to
 The rule is birth, not mounting: a component built earlier and not currently in the tree is
 still covered, since it may be about to go back in.
 
-A state value is immutable, so the only field whose contents can change behind the
-framework's back is an `opaque=True` one -- setting an attribute on the collaborator it holds.
-Neither rollback nor invalidation reaches that, so say it explicitly:
+A state value is never mutated in place, so the only field whose contents can change behind
+the framework's back is an `opaque=True` one -- setting an attribute on the collaborator it
+holds. Neither rollback nor invalidation reaches that, so say it explicitly:
 
     async def _door_changed(self, event: sl.ChoiceEvent) -> None:
         self.build.door_orientation = event.selected[0]
-        self.mutated("build")
+        self.mutated(self.build)
 
-`mutated` only schedules the draw; the change is still outside the transaction. Naming the
-field is the point — the call fails if that field stops being declared state, so the manual
-signal cannot drift away from the declaration it depends on.
+`mutated` moves the holding field's version and schedules the draw; the change is still
+outside the transaction. It takes the object rather than a field name -- identity finds the
+field, which is how an opaque field settles anyway -- so the call is typed, and it fails if
+no opaque field holds the object, so the manual signal cannot drift from the declaration.
 
 state(persist=False) marks runtime-only data that durable snapshots omit. Persistent state
 must be JSON-safe. `sl.state(opaque=True)` covers the opposite case, a collaborator the
-component holds and never mutates -- a service, a guild, a session. The immutability check is
-skipped for it, it settles on identity rather than equality, and it is never persisted:
+component holds and never mutates -- a service, a guild, a session. It settles on identity
+rather than equality, and it is never persisted:
 
     class Panel(sl.Component):
         page: str = sl.state("server")
@@ -362,7 +398,7 @@ which is the one place webhook tokens and response shapes are understood. When n
 live the render waits in `Mount.pending` for the next interaction — `refresh()` has always
 promised the next opportunity rather than the current instant.
 
-Cross-mount refresh uses a payload-free `sl.TopicBus`: a topic is an exact hashable address,
+Cross-mount refresh uses a payload-free `sl.runtime.TopicBus`: a topic is an exact hashable address,
 not state. Subscribers re-read application services before asking their mount to refresh, so the
 data layer remains the only source of truth. Publishes coalesce per topic, reactor scheduling
 coalesces per mount, and different mounts refresh concurrently without one mount rendering over
@@ -372,8 +408,18 @@ the deterministic no-background-task seam for subscriber tests.
 Publish from the existing committed-change funnel or durable change-feed drain. Never attach the
 bus to a message already owned by a durable reconciliation loop: that creates a second writer. In
 this bot, build panels follow `("build", str(build_id))`, while posted build cards remain solely
-owned by the Discord reconciliation queue. The same queue drain publishes locally after a
-successful reconciliation, which carries database changes from other processes into live panels.
+owned by the Discord reconciliation queue. The same queue drain publishes after a successful
+reconciliation.
+
+The bus is process-local, so a write made in another process reaches it through a host-owned
+bridge rather than a subscription. `sl.discord.durability.PostgresTopicBridge` is that bridge over
+`LISTEN`/`NOTIFY`: it takes a host `sl.runtime.TopicCodec`, publishes an encoded address and never state,
+drops its own notifications by process origin, and calls `TopicBus.publish` for everything it
+receives — so it composes with the bus contract instead of relaying it, and an address the codec
+cannot name stays local. In this bot the vocabulary is `squid.topics.ResourceTopicCodec`, and the
+worker publishes a build's topic when its schematic render lands, so a panel repaints without a
+click. Delivery is a latency hint exactly like a local publish: the reconciler's poll is still
+what makes the projection converge.
 
 A followed mount with expiring interaction credentials is swept before its handle dies. Its final
 reachable render includes “Live updates paused — press any control to resume”; an accepted click
@@ -486,7 +532,7 @@ objects, or dynamic import instructions. Restore recipes inject dependencies and
 Component and adapter versions are independent; missing sequential component migrations retain the record as
 incompatible for operator action.
 
-`DurableSessionRuntime.run()` owns recovery, claim renewal, visible-commit checkpointing, bounded retries, expiry,
+`DurableSessionRuntime.run()` owns recovery, claim renewal, runtime-commit checkpointing, bounded retries, expiry,
 and shutdown release under a host-owned anyio task group. `DiscordFrontend` promotes public interaction delivery
 to permanent bot-token authority and reconnects a complete graph before registering it for dispatch. Fenced
 admission publishes the newcomer and retires selected durable victims atomically, while stale claim tokens cannot
@@ -524,6 +570,9 @@ followups completed, and it never invents private thinking or modal semantics. E
 is the single framework boundary outside the whole user onion.
 
 ## Library binding: discord.py, not Discord alone
+
+For an ownership-first path from existing views and persistent controls into these adapter
+boundaries, see [Migrating an existing discord.py bot](../packages/squid-layouts/docs/migrating.md).
 
 The portable seam is the scene. Everything above it — semantic vocabulary, planner,
 `measure()`, `CursorCoordinator`, components — binds to Discord's *shape* (budgets, option windows,

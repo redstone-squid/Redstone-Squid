@@ -3,9 +3,9 @@
 from collections.abc import Awaitable, Callable
 
 import squid_layouts as sl
-from squid_layouts.actions import ActionPolicy, Actor, PressEvent, Visibility
 from squid_layouts.discord import V2_TARGET
 from squid_layouts.forms import FormLike, SubmitHandler
+from squid_layouts.interactions import ActionPolicy, Actor, PressEvent, Visibility
 from squid_layouts.primitives.styles import ActionStyle
 from squid_layouts.runtime import PresentationSession
 from squid_layouts.runtime.component import render_component_tree
@@ -43,7 +43,7 @@ def _event(responder: _Responder | None = None) -> PressEvent:
     return PressEvent(Actor("7"), responder or _Responder())
 
 
-def _button(result: sl.PlanResult) -> SceneButton:
+def _button(result: sl.scene.PlanResult) -> SceneButton:
     row = next(node for node in result.scene.components_v2.children if isinstance(node, SceneRow))
     button = row.items[0]
     assert isinstance(button, SceneButton)
@@ -62,7 +62,7 @@ def _recorder[EventT]() -> tuple[list[EventT], Callable[[EventT], Awaitable[None
 def test_factory_builds_one_boolean_node() -> None:
     ownership = sl.managed(initial=True)
 
-    assert sl.toggle("Notifications", key="notices", on=ownership, tone=sl.Tone.SUCCESS) == sl.Toggle(
+    assert sl.toggle("Notifications", key="notices", on=ownership, tone=sl.Tone.SUCCESS) == sl.semantic.Toggle(
         "notices", "Notifications", ownership, tone=sl.Tone.SUCCESS
     )
 
@@ -72,7 +72,7 @@ async def test_managed_toggle_flips_session_state_and_invalidates() -> None:
     responder = _Responder()
     node = sl.toggle("Notifications", key="notices")
 
-    initial = sl.plan(node, target=V2_TARGET, session=session)
+    initial = sl.planning.plan(node, target=V2_TARGET, session=session)
     assert _button(initial).label == "Notifications: Off"
 
     await initial.bindings["notices"].handler(_event(responder))
@@ -80,7 +80,7 @@ async def test_managed_toggle_flips_session_state_and_invalidates() -> None:
     assert session.toggle("notices").on
     assert responder.acknowledged
     assert responder.invalidated
-    assert _button(sl.plan(node, target=V2_TARGET, session=session)).label == "Notifications: On"
+    assert _button(sl.planning.plan(node, target=V2_TARGET, session=session)).label == "Notifications: On"
 
 
 async def test_controlled_toggle_reports_flipped_value_without_writing_session() -> None:
@@ -90,7 +90,7 @@ async def test_controlled_toggle_reports_flipped_value_without_writing_session()
     seen, record = _recorder()
     node = sl.toggle("Notifications", key="notices", on=sl.controlled(value=False, on_change=record))
 
-    result = sl.plan(node, target=V2_TARGET, session=session)
+    result = sl.planning.plan(node, target=V2_TARGET, session=session)
     await result.bindings["notices"].handler(_event())
 
     assert _button(result).label == "Notifications: Off"
@@ -99,7 +99,7 @@ async def test_controlled_toggle_reports_flipped_value_without_writing_session()
 
 
 def test_toggle_lowering_uses_one_toned_button_and_custom_labels() -> None:
-    result = sl.plan(
+    result = sl.planning.plan(
         sl.toggle(
             "Web",
             key="web",
@@ -132,5 +132,5 @@ def test_toggle_key_is_prefixed_through_embed() -> None:
 
     tree = render_component_tree(Parent())
 
-    assert isinstance(tree.nodes[0], sl.Toggle)
+    assert isinstance(tree.nodes[0], sl.semantic.Toggle)
     assert tree.nodes[0].key == "settings.web"

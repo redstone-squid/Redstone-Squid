@@ -1,26 +1,26 @@
 """How each semantic node reaches a classic message. One test per row of the mapping."""
 
-from squid_layouts import (
+from squid_layouts import Tone
+from squid_layouts.discord import CLASSIC_TARGET
+from squid_layouts.document import Asset, InlineAsset
+from squid_layouts.planning import plan
+from squid_layouts.scene.model import SceneClassicMessage
+from squid_layouts.semantic import (
     Article,
     Aside,
-    Asset,
     Column,
+    Columns,
     Download,
     Field,
     Fields,
     Figure,
     Heading,
-    InlineAsset,
     MediaItem,
     Note,
     Paragraph,
     Table,
     TableRow,
-    Tone,
-    plan,
 )
-from squid_layouts.discord import CLASSIC_TARGET
-from squid_layouts.scene.model import SceneClassicMessage
 
 
 def message(document, **kwargs) -> SceneClassicMessage:
@@ -60,8 +60,8 @@ class TestRegions:
     def test_an_article_becomes_one_card_carrying_every_slot_it_names(self) -> None:
         body = message(
             Article(
+                Heading("Door"),
                 (Paragraph("body"), Fields((Field("w", "Width", "2"),))),
-                heading="Door",
                 thumbnail="https://example.invalid/t.png",
             )
         )
@@ -79,7 +79,7 @@ class TestRegions:
 
     def test_two_adjacent_regions_stay_two_cards(self) -> None:
         """Merging them would change the author's grouping rather than express it."""
-        body = message([Article((Paragraph("one"),), heading="A"), Article((Paragraph("two"),), heading="B")])
+        body = message([Article(Heading("A"), (Paragraph("one"),)), Article(Heading("B"), (Paragraph("two"),))])
 
         assert [embed.title for embed in body.embeds] == ["A", "B"]
 
@@ -131,7 +131,7 @@ class TestTables:
     def test_a_table_stays_an_aligned_code_block_while_it_fits(self) -> None:
         body = message(
             Table(
-                (Column("a", "Name"), Column("b", "Size")),
+                Columns((Column("a", "Name"), Column("b", "Size"))),
                 (TableRow("r", ("door", "2x2")),),
                 key="t",
             )

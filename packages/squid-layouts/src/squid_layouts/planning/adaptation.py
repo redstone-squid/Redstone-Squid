@@ -3,22 +3,22 @@
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 
-from squid_layouts.actions import ActionBinding, ActionEvent, PressEvent, SelectionEvent
 from squid_layouts.assets import Asset
 from squid_layouts.chrome import Chrome
+from squid_layouts.entity import EntityRef
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.forms import FormBinding
+from squid_layouts.interactions import ActionBinding, ActionEvent, EntitySelectionEvent, PressEvent, SelectionEvent
 from squid_layouts.palette import DEFAULT_PALETTE, AccentDefault, Palette
 from squid_layouts.planning.breaking import BreakItem, balanced_breaks
 from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursorRequest, content_fingerprint
 from squid_layouts.planning.identity import stable_fingerprint
 from squid_layouts.planning.limits import COMPONENTS, V2Limits
-from squid_layouts.planning.measure import measure_nodes, split_text_node, text_total
+from squid_layouts.planning.measurement import measure_nodes, split_text_node, text_total
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET, StrategyAxis, StrategyCandidate, choose_strategy
 from squid_layouts.primitives.constraints import (
     Alt,
     Condense,
-    Drop,
     Never,
     Overflow,
     Paginate,
@@ -37,10 +37,12 @@ from squid_layouts.primitives.nodes import (
     CardField,
     CardFooter,
     CardMedia,
+    EntitySelect,
     Fidelity,
     Footer,
     FormButton,
     Gallery,
+    GalleryItem,
     Lines,
     LinkButton,
     Node,
@@ -86,7 +88,9 @@ from squid_layouts.semantic import (
     Article,
     Aside,
     BestEffort,
+    Block,
     Budgeted,
+    Choice,
     ChoiceEvent,
     Choices,
     Cluster,
@@ -95,6 +99,8 @@ from squid_layouts.semantic import (
     Details,
     Download,
     Emphasis,
+    Entities,
+    EntityEvent,
     FallbackContent,
     Field,
     Fields,
@@ -187,12 +193,14 @@ class _Context:
 
 @dataclass(frozen=True, slots=True)
 class FallbackAxis:
-    """One `FallbackContent` occurrence and how many branches it can offer."""
+    """One semantic loss decision and the branches it can offer."""
 
     path: str
     branches: int
     branch_paths: tuple[str, ...]
     """One stable path per branch; decisions inside a branch are named under it."""
+    priority: int = 0
+    optional: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -228,7 +236,6 @@ def nominate_decisions(
             case (
                 Truncated(node=child)
                 | Spilled(node=child)
-                | OptionalContent(node=child)
                 | BestEffort(node=child)
                 | Budgeted(node=child)
                 | Unbreakable(node=child)
@@ -236,6 +243,10 @@ def nominate_decisions(
                 | Paged(node=child)
             ):
                 walk(child, path)
+            case OptionalContent(node=child, importance=importance):
+                occurrences.append(FallbackAxis(path, 2, _branch_paths(path, 2), int(importance), optional=True))
+                if _fallback_rung(path, 2, selected_rungs) == 0:
+                    walk(child, f"{path}.primary")
             case FallbackContent(primary=primary, alternates=alternates):
                 branches = (primary, *alternates)
                 rung = _fallback_rung(path, len(branches), selected_rungs)
@@ -263,6 +274,7 @@ def nominate_decisions(
             case (
                 Section(children=children)
                 | Article(children=children)
+                | Block(children=children)
                 | Aside(children=children)
                 | Themed(children=children)
                 | Panel(children=children)
@@ -355,7 +367,7 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
         case Spilled(node=child):
             return [_with_overflow(item, Spill()) for item in _node(child, path, context)]
         case OptionalContent(node=child):
-            return [_with_overflow(item, Drop()) for item in _node(child, path, context)]
+            return _node(child, f"{path}.primary", context) if _fallback_rung(path, 2, context.fallbacks) == 0 else []
         case BestEffort(node=child):
             policy: Overflow = Spill() if isinstance(child, List | Fields) else Truncate()
             return [_with_best_effort(_with_overflow(item, policy)) for item in _node(child, path, context)]
@@ -401,10 +413,16 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
                 context.palette = previous
         case Group(children=children) | Stack(children=children) | Cluster(children=children):
             return _children(children, path, context)
+        case Block(children=children, accent=accent):
+            resolved_accent = context.palette.brand if accent is AccentDefault.INHERIT else accent
+            if _cards(context):
+                return [_region(Card(accent=resolved_accent), _children(children, path, context), context)]
+            return [Panel(tuple(_children(children, path, context)), accent=resolved_accent)]
         case (
             Section(children=children, heading=heading, accent=accent, thumbnail=thumbnail)
             | Article(children=children, heading=heading, accent=accent, thumbnail=thumbnail)
         ):
+            resolved_heading = _resolve(heading.content, context)
             resolved_accent = context.palette.brand if accent is AccentDefault.INHERIT else accent
             if _cards(context):
                 # One semantic region, one card: its heading is the embed title, its accent is
@@ -413,7 +431,7 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
                 return [
                     _region(
                         Card(
-                            title=None if heading is None else _resolve(heading, context),
+                            title=Text(resolved_heading, overflow=Never(), priority=int(heading.importance)),
                             thumbnail=None if not thumbnail else CardMedia(thumbnail),
                             accent=resolved_accent,
                         ),
@@ -422,15 +440,15 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
                     )
                 ]
             contents: list[Node] = []
-            if heading is not None:
-                title = PrimitiveHeading(_resolve(heading, context), overflow=Never())
-                # The lead image sits beside the title and nothing else: picking "the body"
-                # out of an arbitrary children tuple would be a guess.
-                contents.append(
-                    PrimitiveSection(texts=(title,), accessory=Thumbnail(thumbnail)) if thumbnail else title
-                )
-            elif thumbnail:
-                contents.append(Gallery((thumbnail,)))
+            title = PrimitiveHeading(
+                resolved_heading,
+                level=heading.level,
+                overflow=Never(),
+                priority=int(heading.importance),
+            )
+            # The lead image sits beside the title and nothing else: picking "the body"
+            # out of an arbitrary children tuple would be a guess.
+            contents.append(PrimitiveSection(texts=(title,), accessory=Thumbnail(thumbnail)) if thumbnail else title)
             contents.extend(_children(children, path, context))
             return [Panel(tuple(contents), accent=resolved_accent)]
         case Aside(children=children, tone=tone):
@@ -438,15 +456,20 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             if _cards(context):
                 return [_region(Card(accent=accent), _children(children, path, context), context)]
             return [Panel(tuple(_children(children, path, context)), accent=accent)]
-        case Heading(content=content, level=level):
-            return [PrimitiveHeading(_resolve(content, context), level=level, overflow=Never())]
-        case Paragraph(content=content):
-            return [Text(_resolve(content, context), overflow=Never())]
-        case Note(content=content):
-            return [Footer(_resolve(content, context), overflow=Never())]
+        case Heading(content=content, level=level, importance=importance):
+            return [
+                PrimitiveHeading(_resolve(content, context), level=level, overflow=Never(), priority=int(importance))
+            ]
+        case Paragraph(content=content, importance=importance):
+            return [Text(_resolve(content, context), overflow=Never(), priority=int(importance))]
+        case Note(content=content, importance=importance):
+            return [Footer(_resolve(content, context), overflow=Never(), priority=int(importance))]
         case List(items=items, key=key, ordered=ordered, page_size=page_size):
             marker = (lambda index: f"{index + 1}.") if ordered else (lambda _index: "•")
-            lines = tuple(f"{marker(index)} {_resolve(item.content, context)}" for index, item in enumerate(items))
+            lines = tuple(
+                Alt(f"{marker(index)} {_resolve(item.content, context)}", priority=int(item.importance))
+                for index, item in enumerate(items)
+            )
             return [Lines(lines, overflow=Paginate(key=key, per=page_size))]
         case Fields(fields=fields):
             if "layout.embed_fields" in context.capabilities:
@@ -467,6 +490,11 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
         case Code(content=content, language=language):
             return [PrimitiveCode(content, language, overflow=Never())]
         case Figure(media=media, caption=caption):
+            if media.spoiler and _cards(context):
+                message = (
+                    f"{path}: classic targets cannot preserve media spoilers; provide an explicit Variants fallback"
+                )
+                raise LayoutInvariantError(message)
             if _cards(context):
                 # The description rides along even where Discord will not show it: it is the
                 # author's alternative text, and a scene that dropped it could not restore it.
@@ -476,7 +504,7 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
                         footer=None if caption is None else CardFooter(_resolve(caption, context)),
                     )
                 ]
-            children: list[Node] = [Gallery((media.url,))]
+            children: list[Node] = [Gallery((GalleryItem(media.url, media.description, media.spoiler),))]
             if caption is not None:
                 children.append(Footer(_resolve(caption, context)))
             return children
@@ -486,7 +514,7 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             return _details(node, path, context)
         case Toggle():
             return _toggle(node, context)
-        case Download(label=label, asset=asset, description=description, emphasis=emphasis):
+        case Download(label=label, asset=asset, description=description, emphasis=emphasis, spoiler=spoiler):
             context.assets.append(asset)
             resolved_label = _resolve(context.chrome.download if label is None else label, context)
             if emphasis is Emphasis.STRONG:
@@ -497,6 +525,11 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             if description is not None:
                 text += f"\n{_resolve(description, context)}"
             if _cards(context):
+                if spoiler:
+                    message = (
+                        f"{path}: classic targets cannot preserve file spoilers; provide an explicit Variants fallback"
+                    )
+                    raise LayoutInvariantError(message)
                 # No file *component* exists outside Components V2. The asset still uploads and
                 # the label and description still show; what is lost is the dedicated
                 # affordance, which the report says out loud rather than leaving to be noticed.
@@ -509,7 +542,7 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
                     )
                 )
                 return [Text(text, overflow=Never())]
-            return [Text(text, overflow=Never()), PrimitiveFile(asset.key, asset.name, asset.media_type)]
+            return [Text(text, overflow=Never()), PrimitiveFile(asset.key, asset.name, asset.media_type, spoiler)]
         case Status(content=content, tone=tone):
             prefix = {
                 Tone.INFO: "\N{INFORMATION SOURCE}\N{VARIATION SELECTOR-16} ",
@@ -536,6 +569,8 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             return _form(node, context)
         case Choices():
             return _choices(node, path, context)
+        case Entities():
+            return _entities(node, path, context)
         case RoutedChoices():
             return _routed_choices(node, path, context)
         case Items():
@@ -681,14 +716,14 @@ def _as_fragment(node: Node, open_card: _Fragment | None) -> _Fragment | None:
         # A trailing note is what the footer slot is for. One anywhere else stays subtle
         # description text, because an embed has exactly one footer.
         if open_card is not None and open_card.footer is None:
-            return _Fragment(footer=CardFooter(node.content))
+            return _Fragment(footer=CardFooter(Text(node.content, overflow=node.overflow, priority=node.priority)))
         return _Fragment(children=(node,))
     if isinstance(node, PrimitiveHeading):
         # "Suitable" means it can actually be a title: it has to come before any body text,
         # or the description would read as though it began mid-sentence.
         leading = open_card is None or (open_card.title is None and not open_card.children)
         if leading:
-            return _Fragment(title=Text(node.content, overflow=node.overflow))
+            return _Fragment(title=Text(node.content, overflow=node.overflow, priority=node.priority))
         return _Fragment(children=(node,))
     if isinstance(node, Text | PrimitiveCode | Lines | Time | ZonedTime):
         return _Fragment(children=(node,))
@@ -743,7 +778,13 @@ def _close(card: _Fragment, context: _Context) -> Node:
     # one of them but reformats the block, so the solver is told which is which rather than
     # inferring loss from a rung number.
     lines = Lines(
-        tuple(f"**{_slot_text(field.name)}:** {_slot_text(field.value)}" for field in card.fields),
+        tuple(
+            Alt(
+                f"**{_slot_text(field.name)}:** {_slot_text(field.value)}",
+                priority=card_text(field.value).priority,
+            )
+            for field in card.fields
+        ),
         overflow=Condense(),
     )
     reformatted = replace(plain, fields=(), children=(*plain.children, lines))
@@ -804,7 +845,12 @@ def _card_fields(fields: Sequence[Field], context: _Context) -> list[CardField]:
         # author-written rungs before anything is trimmed mid-string.
         rungs = [rung for fallback in field.fallbacks if len(rung := _resolve(fallback, context)) <= len(value)]
         policy: Overflow = alts(*rungs) if rungs else Never()
-        entries.append(CardField(name=_resolve(field.label, context), value=Text(value, overflow=policy)))
+        entries.append(
+            CardField(
+                name=_resolve(field.label, context),
+                value=Text(value, overflow=policy, priority=int(field.importance)),
+            )
+        )
     return entries
 
 
@@ -826,7 +872,7 @@ def _primitive(node: Node, context: _Context) -> Node:
                 overflow = replace(overflow, footer=localized)
             return replace(node, lines=resolved_lines, overflow=overflow)
         case Button(label=label) | LinkButton(label=label) | RoutedButton(label=label):
-            return replace(node, label=_resolve(label, context))
+            return replace(node, label=None if label is None else _resolve(label, context))
         case Row(items=items) | PrimitiveActionGroup(items=items):
             return replace(node, items=tuple(_primitive(item, context) for item in items))
         case (
@@ -845,6 +891,8 @@ def _primitive(node: Node, context: _Context) -> Node:
                 ),
                 placeholder=_resolve(placeholder, context) if placeholder is not None else None,
             )
+        case EntitySelect(placeholder=placeholder):
+            return replace(node, placeholder=_resolve(placeholder, context) if placeholder is not None else None)
         case Thumbnail(description=description):
             return replace(node, description=_resolve(description, context) if description is not None else None)
         case PrimitiveSection(texts=texts, accessory=accessory):
@@ -877,7 +925,7 @@ def _field_entry(field: Field, context: _Context) -> str | Alt:
         if len(rung) <= ceiling:
             kept.append(rung)
             ceiling = len(rung)
-    return Alt(primary, tuple(kept)) if kept else primary
+    return Alt(primary, tuple(kept), priority=int(field.importance))
 
 
 def _children(children: Sequence[LayoutNode], path: str, context: _Context) -> list[Node]:
@@ -1172,6 +1220,81 @@ def _choices(node: Choices, path: str, context: _Context) -> list[Node]:
     return result
 
 
+def _entity_key(ref: EntityRef) -> str:
+    return f"{ref.kind.value}:{ref.id}"
+
+
+def _entities(node: Entities, path: str, context: _Context) -> list[Node]:
+    match node.selection:
+        case Controlled(value=value):
+            previous = tuple(value)
+        case Managed(initial=initial):
+            initial_keys = tuple(_entity_key(value) for value in initial)
+            stored = context.session.selection(node.key, initial=initial_keys).selected
+            by_key = {_entity_key(choice.ref): choice.ref for choice in node.choices}
+            by_key.update({_entity_key(value): value for value in initial})
+            previous = tuple(by_key[key] for key in stored if key in by_key)
+
+    async def commit(event: ActionEvent, selected: tuple[EntityRef, ...]) -> None:
+        match node.selection:
+            case Controlled(on_change=on_change):
+                await on_change(
+                    EntityEvent(
+                        event.actor,
+                        event.responder,
+                        event.locale,
+                        event.context,
+                        selected,
+                        tuple(value for value in selected if value not in previous),
+                        tuple(value for value in previous if value not in selected),
+                    )
+                )
+            case Managed():
+                await event.acknowledge()
+                context.session.select(node.key, tuple(_entity_key(value) for value in selected))
+                event.invalidate()
+
+    if "actions.discord.entity" in context.capabilities:
+
+        async def select_entities(event: EntitySelectionEvent) -> None:
+            await commit(event, event.values)
+
+        return [
+            EntitySelect(
+                node.entity_type,
+                select_entities,
+                node.key,
+                placeholder=_resolve(node.placeholder, context) if node.placeholder is not None else None,
+                default_values=previous,
+                channel_types=node.channel_types,
+                min_values=node.minimum,
+                max_values=node.maximum,
+            )
+        ]
+    if not node.choices:
+        message = f"{path}: Entities requires actions.discord.entity or enumerated fallback choices"
+        raise LayoutInvariantError(message)
+
+    available = tuple(choice for choice in node.choices if choice.available)
+    by_key = {_entity_key(choice.ref): choice.ref for choice in available}
+
+    async def choose_fallback(event: ChoiceEvent) -> None:
+        await commit(event, tuple(by_key[key] for key in event.selected if key in by_key))
+
+    fallback = Choices(
+        key=node.key,
+        choices=tuple(
+            Choice(_entity_key(choice.ref), choice.label, choice.description, choice.available)
+            for choice in node.choices
+        ),
+        selection=Controlled(tuple(_entity_key(value) for value in previous), choose_fallback),
+        minimum=node.minimum,
+        maximum=node.maximum,
+        flexibility=node.flexibility,
+    )
+    return _choices(fallback, path, context)
+
+
 def _routed_choices(node: RoutedChoices, path: str, context: _Context) -> list[Node]:
     """Lower an explicitly stateless picker without inventing mount-owned pagination."""
     available = tuple(choice for choice in node.choices if choice.available)
@@ -1267,7 +1390,7 @@ def _items(node: Items, path: str, context: _Context) -> list[Node]:
             await open_(event, None)
 
         return [
-            PrimitiveHeading(_resolve(item.label, context), level=3, overflow=Never()),
+            PrimitiveHeading(_resolve(item.label.content, context), level=3, overflow=Never()),
             *_children(item.children, f"{path}.{item.key}", context),
             Row((Button(context.chrome.back, back, f"{node.key}.back"),)),
         ]
@@ -1278,14 +1401,14 @@ def _items(node: Items, path: str, context: _Context) -> list[Node]:
     page_key = f"{node.key}.items"
     visible, page, pages = _page_items(node.items, page_key, context, identity=lambda item: item.key)
     summaries = tuple(
-        f"**{_resolve(item.label, context)}**"
+        f"**{_resolve(item.label.content, context)}**"
         + (f" — {_resolve(item.summary, context)}" if item.summary is not None else "")
         for item in visible
     )
     result: list[Node] = [
         Lines(summaries, overflow=Never()),
         SelectMenu(
-            tuple(Option(_resolve(item.label, context), item.key) for item in visible),
+            tuple(Option(_resolve(item.label.content, context), item.key) for item in visible),
             focus,
             f"{node.key}.focus",
             placeholder="Choose an item",
@@ -1412,7 +1535,7 @@ def _details(node: Details, path: str, context: _Context) -> list[Node]:
                 context.session.disclose(node.key, not context.session.disclosure(node.key, initial=seed).open)
                 event.invalidate()
 
-    result: list[Node] = [Row((Button(_resolve(node.summary, context), toggle, f"{node.key}.toggle"),))]
+    result: list[Node] = [Row((Button(_resolve(node.summary.content, context), toggle, f"{node.key}.toggle"),))]
     if open_:
         result.extend(_children(node.children, path, context))
     return result
@@ -1450,7 +1573,7 @@ def _toggle(node: Toggle, context: _Context) -> list[Node]:
 
 
 def _table_axis(node: Table, path: str, session: PresentationSession) -> StrategyAxis:
-    preferred = "tabular" if node.display is not TableDisplay.RECORDS and len(node.columns) <= 4 else "records"
+    preferred = "tabular" if node.display is not TableDisplay.RECORDS and len(node.columns.columns) <= 4 else "records"
     return _strategy_axis(
         path=path,
         key=node.key,
@@ -1465,9 +1588,10 @@ def _table_axis(node: Table, path: str, session: PresentationSession) -> Strateg
 
 
 def _table(node: Table, path: str, context: _Context) -> list[Node]:
+    columns = node.columns.columns
     strategy = _select_strategy(_table_axis(node, path, context.session), context)
     if strategy == "tabular":
-        headings = [_resolve(column.heading, context) for column in node.columns]
+        headings = [_resolve(column.heading, context) for column in columns]
         widths = [
             max([len(heading), *(len(_resolve(row.cells[index], context)) for row in node.rows)])
             for index, heading in enumerate(headings)
@@ -1482,7 +1606,7 @@ def _table(node: Table, path: str, context: _Context) -> list[Node]:
     records = tuple(
         "\n".join(
             f"**{_resolve(column.heading, context)}:** {_resolve(cell, context)}"
-            for column, cell in zip(node.columns, row.cells, strict=True)
+            for column, cell in zip(columns, row.cells, strict=True)
         )
         for row in node.rows
     )
@@ -1510,12 +1634,23 @@ def _media(node: Media, path: str, context: _Context) -> list[Node]:
         return []
     if strategy == "featured":
         first = node.items[0]
-        result: list[Node] = [Gallery((first.url,))]
+        if first.spoiler and _cards(context):
+            message = f"{path}: classic targets cannot preserve media spoilers; provide an explicit Variants fallback"
+            raise LayoutInvariantError(message)
+        result: list[Node] = [Gallery((GalleryItem(first.url, first.description, first.spoiler),))]
         if first.description is not None:
             result.append(Footer(_resolve(first.description, context), overflow=Never()))
         return result
+    if _cards(context) and any(item.spoiler for item in node.items):
+        message = f"{path}: classic targets cannot preserve media spoilers; provide an explicit Variants fallback"
+        raise LayoutInvariantError(message)
     return [
-        Gallery(tuple(item.url for item in node.items[start : start + context.limits.gallery_items]))
+        Gallery(
+            tuple(
+                GalleryItem(item.url, item.description, item.spoiler)
+                for item in node.items[start : start + context.limits.gallery_items]
+            )
+        )
         for start in range(0, len(node.items), context.limits.gallery_items)
     ]
 
@@ -1685,7 +1820,14 @@ def _page_items[T](
 
 def _picker(actions: Sequence[Action], key: str, label: str | None, context: _Context) -> SelectMenu:
     routes = {
-        action.key: ActionBinding(action.key, action.on_trigger, action.policy, guard=action.guard)
+        action.key: ActionBinding(
+            action.key,
+            action.on_trigger,
+            action.policy,
+            guard=action.guard,
+            label=_resolve(action.label, context),
+            record=action.record,
+        )
         for action in actions
     }
 
@@ -1731,4 +1873,5 @@ def _button(action: Action, context: _Context) -> Button:
         policy=action.policy,
         guard=action.guard,
         feedback=action.feedback,
+        record=action.record,
     )

@@ -6,6 +6,7 @@ from squid.artifacts import ArtifactStore
 from squid.diagnostics.log_capture import work_lost
 from squid.schematics.application import SchematicRenderJobService, SchematicService
 from squid.schematics.application.queries import CachedRender, FreshRender, SkippedRender
+from squid.topics import TopicPublisher, resource_topic
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +22,14 @@ class SchematicRenderProjector:
         public_base_url: str | None,
         *,
         enabled: bool,
+        topics: TopicPublisher | None = None,
     ) -> None:
         self._jobs = jobs
         self._schematics = schematics
         self._artifacts = artifacts
         self._public_base_url = public_base_url.rstrip("/") if public_base_url is not None else None
         self._enabled = enabled
+        self._topics = topics
 
     async def process_batch(self) -> None:
         """Process one bounded batch and retain exhausted work as dead letters."""
@@ -58,10 +61,15 @@ class SchematicRenderProjector:
                     "Skipped a schematic render projection",
                     extra={"squid.build.id": build_id, "squid.schematic.render_skip_reason": reason.value},
                 )
+                return
             case CachedRender() as cached:
                 await self._schematics.project_render(cached)
             case FreshRender() as fresh:
                 await self._publish(fresh)
+        if self._topics is not None:
+            # Panels showing this build re-read instead of waiting for a click; a render
+            # that turned out to be superseded costs one no-op refresh.
+            self._topics.publish(resource_topic("build", str(build_id)))
 
     async def _publish(self, render: FreshRender) -> None:
         """Upload a fresh preview and project the URL it is now reachable at."""

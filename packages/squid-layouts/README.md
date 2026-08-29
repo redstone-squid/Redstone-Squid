@@ -4,7 +4,7 @@ A declarative, limits-aware UI engine with Discord Components V2, classic-messag
 
 Discord rejects any message that exceeds one of its many hard limits (4000 display characters,
 40 components, 25 select options, 45-char modal titles, …) with an opaque HTTP 50035. This
-package makes those failures unrepresentable: views describe *intent*, and the engine measures
+package prevents known target-limit violations before delivery: views describe *intent*, and the engine measures
 every markdown prefix and code fence exactly, allocates the shared budgets by priority, and
 degrades content the way its author said it should degrade.
 
@@ -16,9 +16,9 @@ class Counter(sl.Component):
 
     def render(self):
         return sl.section(
+            sl.heading("Counter"),
             t"Count: {self.count}",
             sl.actions(sl.action("+1", self.increment, key="increment"), key="counter-actions"),
-            heading="Counter",
         )
 
     async def increment(self, event: sl.PressEvent) -> None:
@@ -55,16 +55,24 @@ and action rows, from the same semantic document.
 `sl.discord.compose()` is the Discord convenience pipeline, with `reservation` for callers whose
 message carries content the engine cannot see — `sl.discord.measure(view)` and `sl.discord.cost(item)`
 produce one without hand-counting. It always creates a renderer-owned view;
-adopting an arbitrary existing `discord.py` view is intentionally unsupported.
+adopting a *live* `discord.py` view — one already sent, which will edit its own message — is
+intentionally unsupported, because two writers on one message make measurement unsound.
 
-There are three ways to adopt the package, and they can be mixed in one bot:
+There are four ways to adopt the package, and they can be mixed in one bot:
 
 1. **A new screen.** Use `sl.discord.Mount` for one command while everything else stays as it is.
 2. **A region of an existing V2 screen.** `sl.discord.contribute(document, to=view, followed_by=...)`
    measures the host, plans into what is left, and places the result — the host keeps sending,
    editing, timeouts, callbacks and error policy. The contributed region is stateless: link and
    routed controls only, since no mount exists to wire a component-local callback.
-3. **The whole message.** Hand it to `Mount` when component state or callbacks move into Squid.
+3. **An unsent classic view.** `sl.discord.adopt(view)` turns a never-sent `discord.ui.View`
+   into a `Component`: Squid builds its own controls from `view.children`, owns the message,
+   and dispatches to the legacy callbacks unchanged. The mount owns the timeout, and anything
+   that would make the legacy object a second writer raises `AdoptionError`.
+4. **The whole message.** Hand it to `Mount` when component state or callbacks move into Squid.
+
+See [Migrating an existing discord.py bot](docs/migrating.md) for an incremental path covering
+V2 and classic contributions, persistent routes, mounts, sessions, forms, and durability.
 
 A fragment is not a miniature mount. If two independently stateful regions need to edit one
 message, give them a single parent component, or keep the legacy view as the sole owner and make
@@ -88,26 +96,108 @@ path for reconciler-managed posts. `sl.discord.build_modal`/`sl.discord.conform_
 whose string lengths discord.py does not validate at all. `sl.scene.Codec` transports plans to
 other processes; `sl.discord.durability.DurableSessionRuntime` provides opt-in, whole-session recovery.
 
-Presentation colours are an immutable `sl.Palette`, supplied to `sl.plan`, `sl.discord.compose`,
+Presentation colours are an immutable `sl.Palette`, supplied to `sl.planning.plan`, `sl.discord.compose`,
 `sl.discord.render_static`, or `sl.discord.Mount`. An omitted section or article accent inherits
 `Palette.brand`; `accent=None` explicitly opts out and an integer remains an exact data override.
 Semantic tones resolve through the palette. `sl.themed(palette, *children)` scopes an override to a
 subtree, so a component may select a palette from reactive state while the final scene still contains
 only exact colours. Discord buttons retain Discord's platform-owned style colours.
 
+### Discord component parity
+
+Discord modals may interleave static text and fields in declaration order. Native checkbox groups
+remain Discord-specific and declare their portable fallback explicitly:
+
+```python
+choices = (
+    sl.forms.ChoiceOption("alerts", "Alerts", "alerts", emoji="🔔"),
+    sl.forms.ChoiceOption("reports", "Reports", "reports"),
+)
+field = sl.discord.CheckboxGroupField(
+    key="subscriptions",
+    label="Subscriptions",
+    options=choices,
+    required=False,
+    fallback=sl.forms.MultiChoiceField(options=choices, required=False),
+)
+form = sl.forms.FormSpec(
+    "Preferences",
+    (sl.forms.FormText("Choose every update you want to receive."), field),
+)
+```
+
+The exact primitive API exposes Discord-only controls and complete media metadata. A premium
+button must have a positive SKU and no interactive or link fields; link and interactive buttons
+may omit their label when they have an emoji. Custom emoji use `sl.emoji.Emoji(name, id, animated=...)`.
+
+```python
+from squid_layouts.emoji import Emoji
+from squid_layouts.primitives import Gallery, GalleryItem, LinkButton, PremiumButton, Row
+
+document = (
+    Row(
+        (
+            PremiumButton(sku_id=123456789),
+            LinkButton(None, "https://example.com", emoji=Emoji("docs", 987654321), disabled=True),
+        )
+    ),
+    Gallery((GalleryItem("https://example.com/preview.png", "Build preview", spoiler=True),)),
+)
+```
+
+Premium controls are supported by both Discord message targets. Other targets require a
+`Variants` rung with an explicit fallback. Components V2 preserves media descriptions and spoiler
+state; classic Discord and other targets reject V2-only media structures rather than silently
+discarding that content.
+
 ### Live updates across mounts
 
 `TopicBus` is a payload-free, process-local latency projection. Publishing says only that an
 address changed; every subscriber re-reads the application's source of truth. It is not durable,
-and queued topics disappear with the process. Exact matching means hosts should construct every
-topic through one vocabulary function rather than mixing values such as `("build", 123)` and
-`("build", "123")`.
+and queued topics disappear with the process.
+
+An address is either a `sl.runtime.Topic(kind, key)` -- a value a host writes, equal by value so two
+publishers agree without sharing a constructor -- or a `sl.runtime.CellAddress`, which is a `Shared` cell's
+identity and is only ever received, never built. `sl.runtime.Address` is the union the bus carries. Keys
+are text on purpose: `sl.runtime.Topic("build", 123)` is a type error rather than a topic nobody else ever
+addresses.
+
+Watch a topic where you read the thing it names, and the mount follows it for you:
 
 ```python
-bus = sl.TopicBus()
+class BuildPanel(sl.Component):
+    def __init__(self, build_id: str) -> None:
+        self.build_id = build_id
+
+    @sl.resource(delivery=sl.runtime.ResourceDelivery.ATOMIC)
+    async def build(self) -> Build:
+        sl.runtime.watch(sl.runtime.Topic("build", self.build_id))
+        return await queries.get_build(self.build_id)
+
+    def render(self):
+        return sl.Text(self.build.value.name)
+```
+
+`sl.runtime.watch` is a tracked read like any other, so the render that used the resource's value
+follows the topic, a render that stops reading it stops following, and `bus.publish` re-pends
+the resource before the mount redraws. Nothing is subscribed by hand, so nothing has to be
+unsubscribed -- and the initial load is just the resource's first settle. Prefer
+`ResourceDelivery.ATOMIC` for live data: the default `VISIBLE` would flash a pending paint on
+every external change.
+
+Because the topic carries a version, a publish landing *during* the load is not lost: it moves
+what the load is being compared against, so the value it produced is already stale and settles
+again. There is no "subscribe before the first read" rule to get wrong. `sl.runtime.watch` belongs in a
+resource, never in `on_load`, which runs once and under no consumer.
+
+`reactor.follow` remains for a dependency no render-time read can express, and `bus.subscribe`
+for a subscriber that is not a mount:
+
+```python
+bus = sl.runtime.TopicBus()
 reactor = sl.discord.Reactor(bus)
 mount = sl.discord.Mount(panel, access=sl.discord.Owner(interaction.user.id), scheduler=reactor)
-reactor.follow(mount, ("build", "123"))  # subscribe before the first read/send
+reactor.follow(mount, sl.runtime.Topic("build", "123"))  # subscribe before the first read/send
 await mount.send(sl.discord.respond_to(interaction))
 
 # The host visibly owns both long-running coroutines.
@@ -124,6 +214,64 @@ call `publish()`, then `await bus.drain()` and assert without starting backgroun
 Expiry and idle-time tests can inject UTC and monotonic clocks through `Reactor(clock=...)` and
 `Mount(clock=...)`; production callers normally keep their defaults.
 
+When the change happens in another process -- a worker that finished a render, a second shard --
+the host bridges it in. `PostgresTopicBridge` is that bridge for a deployment that already runs
+PostgreSQL: it publishes through the bus rather than relaying it, so nothing loops, and the
+payload is an encoded *address*, never state.
+
+```python
+bridge = sl.discord.durability.PostgresTopicBridge(pool, bus)
+tasks.start_soon(bridge.run)   # LISTEN, plus the outbound sender
+bridge.publish(sl.runtime.Topic("build", "123"))  # local subscribers now, other processes shortly after
+```
+
+The default wire form is `sl.runtime.KindKeyCodec`, which writes `kind:key` and is total on `Topic`, so
+most hosts pass no codec at all. A `CellAddress` cannot reach a codec -- it names a live object
+rather than a value -- so shared cells stay process-local by type rather than by convention. Pass
+`codec=` only to speak a format someone else already defined:
+
+```python
+bridge = sl.discord.durability.PostgresTopicBridge(pool, bus, LegacyCodec())
+```
+
+Every process that takes part runs the bridge, including one that only publishes. Delivery is
+exactly as durable as the bus: NOTIFY reaches whoever is listening at commit time, so a restart
+or a dropped connection costs latency, not correctness -- keep the reconciler or poll that already
+makes the projection converge. A reconnect calls the optional `on_resync()` for hosts that want to
+republish their coarse topics; payloads must stay under 8000 bytes.
+
+`publish()` is immediate on this process and queues a remote notification. When the change belongs
+inside an application-owned PostgreSQL transaction, use `publish_in()` instead:
+
+```python
+async with connection.transaction():
+    await save_change(connection)
+    await bridge.publish_in(connection, sl.runtime.Topic("build", "123"))
+```
+
+`publish_in()` does not commit the transaction. PostgreSQL holds its notification until commit,
+then the bridge listener publishes it locally and in other processes. The bridge must be running
+before calling it; unlike `publish()`, it rejects topics that cannot be encoded or fit under the
+NOTIFY payload limit.
+
+Every delivered mount using a reactor is observed for edit-authority expiry, even when it follows
+no topics. `PauseUpdates(warning=60)` is the default pre-expiry status policy. A long-lived
+ephemeral panel can opt into an explicit, non-mutating handoff instead:
+
+```python
+mount = sl.discord.Mount(
+    panel,
+    access=sl.discord.Owner(user_id),
+    scheduler=reactor,
+    expiry=sl.discord.RenewEphemeral(warning=90),
+)
+```
+
+The renewal screen preserves the mount and hidden application state, then restores the latest
+render on the same message when its owner clicks **Continue Session**. Pass `expiry=None` to
+disable pre-expiry UI. `RenewEphemeral` requires a reactor-backed scheduler so timed arming cannot
+silently be missed.
+
 ### Runtime profiling
 
 Runtime profiling is opt-in, bounded, and synchronous. One `MemoryProfiler` can cover the whole
@@ -133,7 +281,7 @@ same collector directly.
 
 ```python
 profiler = sl.profiling.MemoryProfiler(sample_rate=0.1)
-bus = sl.TopicBus(profiler=profiler)
+bus = sl.runtime.TopicBus(profiler=profiler)
 reactor = sl.discord.Reactor(bus)
 
 mount = sl.discord.Mount(panel, access=sl.discord.Everyone(), scheduler=reactor)
@@ -160,8 +308,8 @@ They do not choose between in-memory callbacks and restart-surviving routes. Ins
 that control construction:
 
 ```python
-tabs = sl.Tabs(
-    (sl.Tab("summary", "Summary", summary), sl.Tab("history", "History", history)),
+tabs = sl.patterns.Tabs(
+    (sl.patterns.Tab("summary", "Summary", summary), sl.patterns.Tab("history", "History", history)),
     key="build-tabs",
 )
 
@@ -169,16 +317,16 @@ tabs = sl.Tabs(
 mount = sl.discord.Mount(tabs.component(), access=sl.discord.Everyone())
 
 # A restart-surviving message: state is decoded from and encoded into route parameters.
-shell = sl.RouterShell(
+shell = sl.patterns.RouterShell(
     lambda request: BUILD_TAB.id(build_id=build.id, tab=request.state.selected),
 )
-document = shell.render(tabs, sl.TabsState(selected=tab))
+document = shell.render(tabs, sl.patterns.TabsState(selected=tab))
 ```
 
 Mounted actions accept application-wide middleware directly on the mount:
 
 ```python
-class TraceActions(sl.ActionMiddleware):
+class TraceActions(sl.interactions.ActionMiddleware):
     async def dispatch(self, request, proceed) -> None:
         with tracer.span("ui.action", action=request.key, rebased=request.rebased):
             await proceed()
@@ -196,7 +344,16 @@ still lets the mount acknowledge and flush; `proceed()` is one-shot and expires 
 middleware call returns. Middleware runs after mount admission and stale-generation handling.
 Its `ActionRequest.rebased` flag is generation metadata, not a completion result. Handler state
 rolls back before an exception reaches outer middleware, and Discord rendering/delivery remains
-outside the onion.
+outside the onion. The onion itself is outside the handler transaction so it can catch commit-time
+shared-state conflicts. Component state written by middleware is consequently independent and does
+not roll back with handler state; middleware is a policy surface unless that independence is
+intentional.
+
+`Mount.on_committed()` and `Mount.on_presented()` observers are synchronous. Committed observers run
+whenever application runtime state advances, including when an identical presentation suppresses the
+Discord edit. Presented observers run only at delivered-generation commit points. Both run under the
+mount's render lock and must not await or call lock-taking mount operations. External hosts migrating
+an async observer should enqueue its work or start it through an owned task supervisor.
 
 Every mount states who may interact. `Owner`, `Users`, and `Everyone` cover static policy;
 `Check` accepts an asynchronous application policy. Visibility stays a destination concern,
@@ -259,15 +416,47 @@ short-circuit cannot produce Discord's generic interaction failure.
 
 ### State values
 
-`sl.state` holds an immutable value and is replaced rather than mutated. Every assignment is
-checked with `hash()`, which reaches all the way down: `(1, [2])` and a frozen dataclass with a
-`list` field are both refused, and `sl.FrozenMapping` is the container to reach for when a
-mapping has to be state. `sl.state(..., opaque=True)` is the escape hatch for a collaborator the
-component holds and never mutates — a service, a guild, a session.
+`sl.state` holds a value that is replaced, never mutated in place. The type checker enforces
+it: a `dict`, `list` or `set` default declares the field as `Mapping`, `Sequence` or
+`AbstractSet`, so `self.rows.append(x)` and `rows: list[str] = sl.state([])` are both type
+errors, while the stored value is exactly the one assigned. `{**m, k: v}` replaces a key; for more
+than that, copy into a local and assign it back.
+`sl.state(..., opaque=True)` declares a collaborator the component holds and never mutates — a
+service, a guild, a session — which settles on identity and is never persisted.
 
 Inside an action a write stages into the transaction's overlay and becomes visible at commit.
 The action reads its own writes; another task reading the same field across an `await` sees the
 committed value until then, and a rollback is dropping the overlay.
+
+### Shared state
+
+`sl.runtime.Shared` is a namespace of view state several live mounts agree on. Subclass it, declare
+state with `sl.state()`, and hand the same instance to whoever should see the same values:
+
+```python
+class Workspace(sl.runtime.Shared[GuildId]):
+    selected: int | None = sl.state(None)
+    filters: tuple[str, ...] = sl.state(())
+
+workspace = Workspace(bus, guild.id)
+```
+
+It is the same `sl.state()` a component declares, and literally the same storage, so
+replacement, `opaque=`, staging and rollback are identical. What differs is who is told when it
+changes, and that is decided by what holds it rather than by how it is declared: a component's
+state invalidates its one owner, while a namespace's publishes an address on the `TopicBus`.
+Every mount whose render read that field refreshes; a mount subscribes to exactly what it
+rendered, reconciled each time it stages one. The mount that *made* the write repaints in the
+click itself rather than waiting for the bus, so a panel writing shared state feels no
+different from one writing local state — and needs no reactor to do it. A field an action both read and
+wrote carries the value it read as a commit precondition, so a lost update raises
+`sl.runtime.SharedStateConflictError` rather than overwriting — derived from what the handler did, with
+no `compare_and_set` to remember. `sl.runtime.history` covers shared writes in the same entry as local
+ones and restores them blindly.
+
+There is no store: two panels converge because something gave them the same object, so the
+handle is the state and its lifetime is whoever holds it. Keep domain truth in your data layer;
+a namespace is for what only the screen wants.
 
 ### Computed values
 
@@ -287,7 +476,7 @@ class SearchResults(sl.Component):
 A computed may read another component's state, or another computed. It is lazy — one nobody
 renders is never evaluated — and one that raises fails where its value is used rather than at
 commit. Values form selector boundaries: downstream computed values recompute only when the
-refreshed value compares unequal. `sl.untracked()` reads state without subscribing to it.
+refreshed value compares unequal. `sl.runtime.untracked()` reads state without subscribing to it.
 
 ### Reactive async resources
 
@@ -304,13 +493,13 @@ class VotingPanel(sl.Component):
 
     def render(self):
         match self.configuration.state:
-            case sl.Pending(previous=None):
+            case sl.runtime.Pending(previous=None):
                 return sl.note("Loading…")
-            case sl.Pending(previous=sl.Ready(value=config)):
+            case sl.runtime.Pending(previous=sl.runtime.Ready(value=config)):
                 return refreshing_panel(config)
-            case sl.Failed(error=error, previous=previous):
+            case sl.runtime.Failed(error=error, previous=previous):
                 return failed_panel(error, previous)
-            case sl.Ready(value=config):
+            case sl.runtime.Ready(value=config):
                 return voting_panel(config)
 ```
 
@@ -322,9 +511,11 @@ value when available, while request tokens prevent stale completions from publis
 
 Visible delivery is the default: Discord commits the pending render, settles observed sibling
 resources concurrently, then edits to the settled render. Use
-`@sl.resource(delivery=sl.ResourceDelivery.ATOMIC)` when pending should remain an internal state and
-the first delivery must already be settled. Both policies use the same state machine and neither
-starts detached background work.
+`@sl.resource(delivery=sl.runtime.ResourceDelivery.ATOMIC)` when pending should remain an internal state and
+the first delivery must already be settled. Its `.state` is typed as `Ready[T] | Failed[T]`:
+refreshes expose the previous `Ready` value while loading, and an initial pending read is retried
+by the mount. Both policies use the same internal state machine and neither starts detached
+background work.
 
 `await panel.configuration.reload()` is the caller-owned, awaited form. `invalidate()` requests a
 new value without immediately loading it, and `replace(value)` publishes an authoritative local
@@ -337,13 +528,13 @@ only what it can prove and fetches one window at a time:
 
 ```python
 class BuildSource:
-    capabilities = sl.SourceCapabilities(backward=True)
+    capabilities = sl.sources.SourceCapabilities(backward=True)
 
-    async def fetch(self, position: sl.Position, extent: int) -> sl.Window[Build]:
+    async def fetch(self, position: sl.sources.Position, extent: int) -> sl.sources.Window[Build]:
         resolved, rows, has_previous, has_more = await builds.window(position, extent)
-        return sl.Window(resolved, tuple(rows), has_previous, has_more)
+        return sl.sources.Window(resolved, tuple(rows), has_previous, has_more)
 
-ranking = sl.SourceRankedList(
+ranking = sl.patterns.SourceRankedList(
     BuildSource(),
     key="builds",
     label=lambda build: build.title,
@@ -369,7 +560,7 @@ outside planning and cannot run in `RouterShell.render()`.
 ## Host integration rules
 
 - The base package has no dependencies. Install the `discord` extra for discord.py and anyio. The
-  adapter never starts background work on its own — start `sl.TopicBus.run()` and
+  adapter never starts background work on its own — start `sl.runtime.TopicBus.run()` and
   `sl.discord.Reactor.run()` under your own supervisor.
 - Factories take content positionally and everything else by keyword. `None` and `False`
   children are skipped, so `cond and node` is the way to include something conditionally;

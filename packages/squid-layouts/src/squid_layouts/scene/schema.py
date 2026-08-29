@@ -80,10 +80,12 @@ SCENE_SCHEMA: dict[str, Any] = {
                     "items": {
                         "oneOf": [
                             {"$ref": "#/$defs/link"},
+                            {"$ref": "#/$defs/premium_button"},
                             {"$ref": "#/$defs/button"},
                             {"$ref": "#/$defs/routed_button"},
                             {"$ref": "#/$defs/select"},
                             {"$ref": "#/$defs/routed_select"},
+                            {"$ref": "#/$defs/entity_select"},
                             {"$ref": "#/$defs/extension"},
                         ]
                     },
@@ -176,8 +178,10 @@ SCENE_SCHEMA: dict[str, Any] = {
                     "link",
                     "button",
                     "routed_button",
+                    "premium_button",
                     "select",
                     "routed_select",
+                    "entity_select",
                     "row",
                     "thumbnail",
                     "gallery",
@@ -221,6 +225,7 @@ SCENE_SCHEMA: dict[str, Any] = {
                 "asset_key": {"type": "string"},
                 "name": {"type": "string"},
                 "media_type": {"type": "string"},
+                "spoiler": {"type": "boolean"},
             },
             "asset_key",
             "name",
@@ -234,17 +239,27 @@ SCENE_SCHEMA: dict[str, Any] = {
         ),
         "link": _node(
             "link",
-            {"label": {"type": "string"}, "url": {"type": "string"}},
+            {
+                "label": {"type": ["string", "null"]},
+                "url": {"type": "string", "maxLength": 512},
+                "emoji": {"$ref": "#/$defs/emoji"},
+                "disabled": {"type": "boolean"},
+            },
             "label",
             "url",
+        ),
+        "premium_button": _node(
+            "premium_button",
+            {"sku_id": {"type": "integer", "minimum": 1}},
+            "sku_id",
         ),
         "button": _node(
             "button",
             {
-                "label": {"type": "string"},
+                "label": {"type": ["string", "null"]},
                 "action": {"type": "string"},
                 "style": {"enum": ["primary", "secondary", "success", "danger"]},
-                "emoji": {"type": ["string", "null"]},
+                "emoji": {"$ref": "#/$defs/emoji"},
                 "disabled": {"type": "boolean"},
                 "policy": {"enum": ["exclusive", "rebase", "parallel_read", "immediate"]},
             },
@@ -258,10 +273,10 @@ SCENE_SCHEMA: dict[str, Any] = {
         "routed_button": _node(
             "routed_button",
             {
-                "label": {"type": "string"},
+                "label": {"type": ["string", "null"]},
                 "route_id": {"type": "string", "maxLength": 100},
                 "style": {"enum": ["primary", "secondary", "success", "danger"]},
-                "emoji": {"type": ["string", "null"]},
+                "emoji": {"$ref": "#/$defs/emoji"},
                 "disabled": {"type": "boolean"},
             },
             "label",
@@ -306,6 +321,57 @@ SCENE_SCHEMA: dict[str, Any] = {
             "max_values",
             "disabled",
         ),
+        "entity_select": _node(
+            "entity_select",
+            {
+                "entity_type": {"enum": ["user", "role", "channel", "mentionable"]},
+                "action": {"type": "string"},
+                "placeholder": {"type": ["string", "null"], "maxLength": 150},
+                "default_values": {
+                    "type": "array",
+                    "maxItems": 25,
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "kind": {"enum": ["user", "role", "channel"]},
+                            "id": {"type": "integer", "minimum": 1},
+                        },
+                        "required": ["kind", "id"],
+                    },
+                },
+                "channel_types": {
+                    "type": "array",
+                    "items": {
+                        "enum": [
+                            "text",
+                            "voice",
+                            "category",
+                            "announcement",
+                            "announcement_thread",
+                            "public_thread",
+                            "private_thread",
+                            "stage_voice",
+                            "forum",
+                            "media",
+                        ]
+                    },
+                },
+                "min_values": {"type": "integer", "minimum": 0, "maximum": 25},
+                "max_values": {"type": "integer", "minimum": 0, "maximum": 25},
+                "disabled": {"type": "boolean"},
+                "policy": {"enum": ["exclusive", "rebase", "parallel_read", "immediate"]},
+            },
+            "entity_type",
+            "action",
+            "placeholder",
+            "default_values",
+            "channel_types",
+            "min_values",
+            "max_values",
+            "disabled",
+            "policy",
+        ),
         "option": {
             "type": "object",
             "additionalProperties": False,
@@ -314,6 +380,7 @@ SCENE_SCHEMA: dict[str, Any] = {
                 "value": {"type": "string"},
                 "description": {"type": ["string", "null"]},
                 "default": {"type": "boolean"},
+                "emoji": {"$ref": "#/$defs/emoji"},
             },
             "required": ["label", "value", "description", "default"],
         },
@@ -325,6 +392,7 @@ SCENE_SCHEMA: dict[str, Any] = {
                     "items": {
                         "oneOf": [
                             {"$ref": "#/$defs/link"},
+                            {"$ref": "#/$defs/premium_button"},
                             {"$ref": "#/$defs/button"},
                             {"$ref": "#/$defs/routed_button"},
                             {"$ref": "#/$defs/extension"},
@@ -336,7 +404,11 @@ SCENE_SCHEMA: dict[str, Any] = {
         ),
         "thumbnail": _node(
             "thumbnail",
-            {"url": {"type": "string"}, "description": {"type": ["string", "null"]}},
+            {
+                "url": {"type": "string"},
+                "description": {"type": ["string", "null"]},
+                "spoiler": {"type": "boolean"},
+            },
             "url",
             "description",
         ),
@@ -351,6 +423,7 @@ SCENE_SCHEMA: dict[str, Any] = {
             "properties": {
                 "url": {"type": "string"},
                 "description": {"type": ["string", "null"]},
+                "spoiler": {"type": "boolean"},
             },
             "required": ["url", "description"],
         },
@@ -362,6 +435,7 @@ SCENE_SCHEMA: dict[str, Any] = {
                     "oneOf": [
                         {"$ref": "#/$defs/thumbnail"},
                         {"$ref": "#/$defs/link"},
+                        {"$ref": "#/$defs/premium_button"},
                         {"$ref": "#/$defs/button"},
                         {"$ref": "#/$defs/routed_button"},
                         {"$ref": "#/$defs/extension"},
@@ -376,6 +450,7 @@ SCENE_SCHEMA: dict[str, Any] = {
             {
                 "children": {"type": "array", "items": {"$ref": "#/$defs/node"}},
                 "accent": {"type": ["integer", "null"], "minimum": 0, "maximum": 16777215},
+                "spoiler": {"type": "boolean"},
             },
             "children",
             "accent",
@@ -391,5 +466,21 @@ SCENE_SCHEMA: dict[str, Any] = {
             "version",
             "payload",
         ),
+        "emoji": {
+            "oneOf": [
+                {"type": "null"},
+                {"type": "string"},
+                {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "name": {"type": "string", "minLength": 1},
+                        "id": {"type": ["integer", "null"], "minimum": 1},
+                        "animated": {"type": "boolean"},
+                    },
+                    "required": ["name", "id", "animated"],
+                },
+            ]
+        },
     },
 }

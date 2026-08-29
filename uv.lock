@@ -2314,7 +2314,7 @@ requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.12.3" },
     { name = "boto3", specifier = ">=1.43.48,<2" },
     { name = "cryptography", specifier = ">=50,<51" },
-    { name = "discord-py", extras = ["speed"], specifier = ">=2.6.0,<3" },
+    { name = "discord-py", extras = ["speed"], specifier = ">=2.7,<3" },
     { name = "fastapi", specifier = ">=0.115.6" },
     { name = "gspread", specifier = ">=6.1.4" },
     { name = "httpx", specifier = ">=0.28,<1" },
@@ -2655,6 +2655,7 @@ source = { editable = "packages/squid-layouts" }
 discord = [
     { name = "anyio" },
     { name = "discord-py" },
+    { name = "packaging" },
 ]
 postgres = [
     { name = "asyncpg" },
@@ -2665,6 +2666,7 @@ requires-dist = [
     { name = "anyio", marker = "extra == 'discord'", specifier = ">=4.14,<5" },
     { name = "asyncpg", marker = "extra == 'postgres'", specifier = ">=0.31,<1" },
     { name = "discord-py", marker = "extra == 'discord'", specifier = ">=2.7,<3" },
+    { name = "packaging", marker = "extra == 'discord'", specifier = ">=24,<27" },
 ]
 provides-extras = ["discord", "postgres"]
 

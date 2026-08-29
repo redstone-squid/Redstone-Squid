@@ -4,9 +4,11 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from squid_layouts.actions import ActionBinding, ActionPolicy
+from squid_layouts.emoji import Emoji
+from squid_layouts.entity import ChannelType, EntityRef, EntityType
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import FormBinding
+from squid_layouts.interactions import ActionBinding, ActionPolicy
 from squid_layouts.primitives.styles import ActionStyle, Color
 from squid_layouts.runtime.presentation import SessionUpdate
 from squid_layouts.text import TextDialect
@@ -37,6 +39,7 @@ class SceneFile:
     asset_key: str
     name: str
     media_type: str
+    spoiler: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,16 +50,23 @@ class SceneSeparator:
 
 @dataclass(frozen=True, slots=True)
 class SceneLink:
-    label: str
+    label: str | None
     url: str
+    emoji: Emoji | None = None
+    disabled: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class ScenePremiumButton:
+    sku_id: int
 
 
 @dataclass(frozen=True, slots=True)
 class SceneButton:
-    label: str
+    label: str | None
     action: str
     style: ActionStyle = ActionStyle.SECONDARY
-    emoji: str | None = None
+    emoji: Emoji | None = None
     disabled: bool = False
     policy: ActionPolicy = ActionPolicy.EXCLUSIVE
 
@@ -70,10 +80,10 @@ class SceneRoutedButton:
     which a process-local handler could never be.
     """
 
-    label: str
+    label: str | None
     route_id: str
     style: ActionStyle = ActionStyle.SECONDARY
-    emoji: str | None = None
+    emoji: Emoji | None = None
     disabled: bool = False
 
 
@@ -83,6 +93,7 @@ class SceneOption:
     value: str
     description: str | None = None
     default: bool = False
+    emoji: Emoji | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,20 +118,35 @@ class SceneRoutedSelect:
 
 
 @dataclass(frozen=True, slots=True)
+class SceneEntitySelect:
+    entity_type: EntityType
+    action: str
+    placeholder: str | None = None
+    default_values: tuple[EntityRef, ...] = ()
+    channel_types: tuple[ChannelType, ...] = ()
+    min_values: int = 1
+    max_values: int = 1
+    disabled: bool = False
+    policy: ActionPolicy = ActionPolicy.EXCLUSIVE
+
+
+@dataclass(frozen=True, slots=True)
 class SceneRow:
-    items: tuple[SceneLink | SceneButton | SceneRoutedButton | SceneExtension, ...]
+    items: tuple[SceneLink | ScenePremiumButton | SceneButton | SceneRoutedButton | SceneExtension, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class SceneThumbnail:
     url: str
     description: str | None = None
+    spoiler: bool = False
 
 
 @dataclass(frozen=True, slots=True)
 class SceneGalleryItem:
     url: str
     description: str | None = None
+    spoiler: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,13 +157,14 @@ class SceneGallery:
 @dataclass(frozen=True, slots=True)
 class SceneSection:
     texts: tuple[SceneText, ...]
-    accessory: SceneThumbnail | SceneLink | SceneButton | SceneRoutedButton | SceneExtension
+    accessory: SceneThumbnail | SceneLink | ScenePremiumButton | SceneButton | SceneRoutedButton | SceneExtension
 
 
 @dataclass(frozen=True, slots=True)
 class ScenePanel:
     children: tuple[SceneNode, ...]
     accent: Color | None = None
+    spoiler: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -158,7 +185,9 @@ type SceneNode = (
     | SceneRow
     | SceneSelect
     | SceneRoutedSelect
+    | SceneEntitySelect
     | SceneRoutedButton
+    | ScenePremiumButton
     | SceneThumbnail
     | SceneGallery
     | SceneSection
@@ -233,7 +262,16 @@ class SceneEmbed:
     """An ISO-8601 instant, or None. Stored as text so the scene stays plain data."""
 
 
-type SceneControl = SceneLink | SceneButton | SceneRoutedButton | SceneSelect | SceneRoutedSelect | SceneExtension
+type SceneControl = (
+    SceneLink
+    | ScenePremiumButton
+    | SceneButton
+    | SceneRoutedButton
+    | SceneSelect
+    | SceneRoutedSelect
+    | SceneEntitySelect
+    | SceneExtension
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -271,13 +309,13 @@ class ScenePager:
 
 
 @dataclass(frozen=True, slots=True)
-class SceneDocument:
+class SceneDocument[BodyT = SceneBody]:
     """A target-resolved scene with no callbacks or native frontend objects."""
 
     protocol: int
     target: str
     target_version: int
-    body: SceneBody
+    body: BodyT
     assets: tuple[SceneAsset, ...] = ()
     pagers: tuple[ScenePager, ...] = ()
 
@@ -290,6 +328,15 @@ class SceneDocument:
         """
         if not isinstance(self.body, SceneComponentsV2):
             message = f"scene for target {self.target!r} has a {type(self.body).__name__} body, not Components V2"
+            raise LayoutInvariantError(message)
+        return self.body
+
+    def expect_body[ExpectedT](self, body_type: type[ExpectedT]) -> ExpectedT:
+        """Narrow a broadly decoded scene at an explicit frontend boundary."""
+        if not isinstance(self.body, body_type):
+            message = (
+                f"scene for target {self.target!r} has a {type(self.body).__name__} body, not {body_type.__name__}"
+            )
             raise LayoutInvariantError(message)
         return self.body
 
@@ -328,8 +375,8 @@ class PlanMetrics:
 
 
 @dataclass(frozen=True, slots=True)
-class PlanResult:
-    scene: SceneDocument
+class PlanResult[BodyT = SceneBody]:
+    scene: SceneDocument[BodyT]
     bindings: Mapping[str, ActionBinding]
     report: PlanReport
     form_bindings: Mapping[str, FormBinding] = field(default_factory=dict)

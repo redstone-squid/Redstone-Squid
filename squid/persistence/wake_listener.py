@@ -22,7 +22,7 @@ class PostgresWakeListener:
     """Own one direct PostgreSQL connection used only for wake hints on a channel."""
 
     def __init__(self, url: SecretStr, *, channel: str, reconnect_seconds: float = 5) -> None:
-        self._url = _asyncpg_url(url.get_secret_value())
+        self._url = asyncpg_dsn(url)
         self._channel = channel
         self._reconnect_seconds = reconnect_seconds
 
@@ -73,6 +73,6 @@ class PostgresWakeListener:
                         await connection.close()
 
 
-def _asyncpg_url(raw_url: str) -> str:
-    url = make_url(raw_url)
-    return url.set(drivername="postgresql").render_as_string(hide_password=False)
+def asyncpg_dsn(url: SecretStr) -> str:
+    """Render a SQLAlchemy database URL as the plain DSN asyncpg connects with."""
+    return make_url(url.get_secret_value()).set(drivername="postgresql").render_as_string(hide_password=False)

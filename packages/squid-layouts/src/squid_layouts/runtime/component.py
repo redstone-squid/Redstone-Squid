@@ -38,8 +38,21 @@ from squid_layouts.primitives.nodes import (
     Variants,
 )
 from squid_layouts.runtime.context import ContextKey
-from squid_layouts.runtime.reactivity import _CURRENT, _Computed, _State, report_undeclared_write
-from squid_layouts.runtime.resources import Resource, observe_resources, unique_resources
+from squid_layouts.runtime.reactivity import (
+    _CURRENT,
+    _Computed,
+    _State,
+    observe_render,
+    report_undeclared_write,
+    untracked,
+)
+from squid_layouts.runtime.resources import (
+    Resource,
+    _AtomicResourcePending,
+    observe_resources,
+    unique_resources,
+)
+from squid_layouts.runtime.topics import Address
 from squid_layouts.semantic import (
     Action as SemanticAction,
 )
@@ -58,6 +71,7 @@ from squid_layouts.semantic import (
 from squid_layouts.semantic import (
     BestEffort as SemanticBestEffort,
 )
+from squid_layouts.semantic import Block as SemanticBlock
 from squid_layouts.semantic import Budgeted as SemanticBudgeted
 from squid_layouts.semantic import (
     Choices as SemanticChoices,
@@ -120,8 +134,8 @@ from squid_layouts.semantic import (
 )
 from squid_layouts.semantic import Unbreakable as SemanticUnbreakable
 
-type RenderNode = LayoutNode
-type RenderResult = Document | LayoutNode | Sequence[LayoutNode]
+type RenderNode[ModeT = Any] = LayoutNode[ModeT]
+type RenderResult[ModeT = Any] = Document[ModeT] | LayoutNode[ModeT] | Sequence[LayoutNode[ModeT]]
 
 
 class RuntimeOwner(Protocol):
@@ -186,9 +200,17 @@ class ComponentTree:
     Such a tree is missing whole subtrees, so it describes what to load next and nothing else:
     never plan it, draw it, or commit it.
     """
+    observations: tuple[Address, ...] = ()
+    """The bus addresses of every shared cell this render read, deduplicated.
+
+    A frontend reconciles its subscriptions against this so a panel follows exactly what it
+    currently looks at. Over-subscribing is the safe direction: a staged render that is later
+    discarded costs at most one spurious refresh, while a missed subscription is a stale panel
+    until someone clicks it.
+    """
 
 
-class Component:
+class Component[ModeT = Any]:
     """Base class for mounted, stateful views."""
 
     _runtime: RuntimeOwner | None = None
@@ -197,6 +219,8 @@ class Component:
     """Whether this instance's :meth:`on_load` has completed. Owned by the frontend."""
     _state_names: ClassVar[frozenset[str]] = frozenset()
     _state_descriptors: ClassVar[dict[str, _State]] = {}
+    _opaque_state: ClassVar[tuple[tuple[str, _State], ...]] = ()
+    """The `opaque=True` subset of `_state_descriptors`, fixed at class creation for `mutated`."""
     _computed_descriptors: ClassVar[dict[str, _Computed]] = {}
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
@@ -209,6 +233,7 @@ class Component:
         }
         cls._state_names = frozenset(declared)
         cls._state_descriptors = declared
+        cls._opaque_state = tuple((name, descriptor) for name, descriptor in declared.items() if descriptor.opaque)
         cls._computed_descriptors = {
             name: descriptor
             for klass in reversed(cls.__mro__)
@@ -248,7 +273,7 @@ class Component:
     def _state_rolled_back(self) -> None:
         self.__dict__["_state_revision"] = self.__dict__.get("_state_revision", 0) + 1
 
-    def render(self) -> RenderResult:
+    def render(self) -> RenderResult[ModeT]:
         """Describe the message for the current state. Pure and synchronous."""
         raise NotImplementedError
 
@@ -267,6 +292,10 @@ class Component:
         A raise leaves the instance eligible to retry on the next delivery attempt, and
         nothing is delivered in the meantime. Data the component can degrade without belongs
         in declared state with a render branch, refreshed by a handler, not here.
+
+        Data that has to stay live belongs in a `sl.resource` instead. Because this runs once
+        and under no consumer, its reads are untracked: `sl.watch()` here would follow
+        nothing, and there would be no second run to reload it anyway.
         """
 
     def on_mount(self) -> None:
@@ -275,18 +304,30 @@ class Component:
     def on_unmount(self) -> None:
         """Run after this component leaves a successfully drawn tree."""
 
-    def mutated(self, name: str) -> None:
-        """Re-render because declared state changed in place where nothing observed it.
+    def mutated(self, collaborator: object) -> None:
+        """Re-render because an ``opaque=True`` field's value changed in place.
 
-        Assignment is observed already, and a state value is immutable, so the only field
-        whose *contents* can change behind the framework's back is an ``opaque=True`` one --
-        a collaborator the component holds. It schedules the draw; it cannot roll the change
-        back, and naming the field keeps the call tied to the declaration it depends on.
+        Assignment is observed already, and a state value is replaced rather than mutated, so
+        the only field whose *contents* can change behind the framework's back is an opaque
+        one -- a collaborator the component holds by reference. Passing the object rather than
+        a field name keeps the call typed; identity finds the field, since that is how an
+        opaque field settles anyway. It moves the cell's version so a computed that read the
+        field recomputes, and schedules the draw; it cannot roll the change back.
         """
-        if name not in type(self)._state_names:
-            message = f"{type(self).__name__}.{name} is not declared state, so it cannot have changed in place"
+        with untracked():
+            holders = [
+                (name, descriptor)
+                for name, descriptor in type(self)._opaque_state
+                if descriptor.is_set(self) and descriptor.__get__(self) is collaborator
+            ]
+        if not holders:
+            message = f"no opaque state on {type(self).__name__} holds {collaborator!r}"
             raise TypeError(message)
-        descriptor = type(self)._state_descriptors[name]
+        if len(holders) > 1:
+            names = ", ".join(name for name, _ in holders)
+            message = f"{type(self).__name__} holds {collaborator!r} in more than one field ({names})"
+            raise TypeError(message)
+        _, descriptor = holders[0]
         descriptor.mutated(self)
         self._state_changed(frozenset((descriptor._name,)))
 
@@ -400,6 +441,7 @@ def render_component_tree(
                     | SemanticStack(children=children)
                     | SemanticCluster(children=children)
                     | SemanticThemed(children=children)
+                    | SemanticBlock(children=children)
                     | SemanticSection(children=children)
                     | SemanticArticle(children=children)
                     | SemanticAside(children=children)
@@ -480,9 +522,23 @@ def render_component_tree(
             _CURRENT_CONTEXT.reset(token)
             active.remove(identity)
 
-    with observe_resources() as observed:
-        nodes = tuple(expand(root, "$", context or {}))
-    return ComponentTree(nodes, components, tuple(assets), document_key, tuple(deferred), unique_resources(observed))
+    with observe_render() as observation, observe_resources() as observed:
+        try:
+            nodes = tuple(expand(root, "$", context or {}))
+        except _AtomicResourcePending as pending:
+            # Atomic state is never rendered while pending. Keep the resource observation from
+            # the aborted discovery pass so the frontend can settle it before retrying.
+            observed.append(pending.resource)
+            nodes = ()
+    return ComponentTree(
+        nodes,
+        components,
+        tuple(assets),
+        document_key,
+        tuple(deferred),
+        unique_resources(observed),
+        observation.addresses(),
+    )
 
 
 def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
@@ -533,6 +589,7 @@ def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
             case (
                 SemanticSection(children=children)
                 | SemanticArticle(children=children)
+                | SemanticBlock(children=children)
                 | SemanticAside(children=children)
             ):
                 return replace(node, children=tuple(rewrite(child) for child in children))

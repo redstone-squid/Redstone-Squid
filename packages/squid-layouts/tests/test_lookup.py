@@ -23,12 +23,12 @@ def _lookup(
     picked: tuple[Entry, ...] = (),
     minimum: int = 0,
     maximum: int = 2,
-) -> sl.Lookup[Entry]:
+) -> sl.patterns.Lookup[Entry]:
     async def committed(_event: sl.ActionEvent, values: tuple[Entry, ...]) -> None:
         commits.append(values)
 
-    return sl.Lookup(
-        lambda query: sl.list_source(tuple(item for item in items if query.lower() in item.label.lower())),
+    return sl.patterns.Lookup(
+        lambda query: sl.sources.list_source(tuple(item for item in items if query.lower() in item.label.lower())),
         identity=lambda item: item.key,
         label=lambda item: item.label,
         description=lambda item: f"ID {item.key}",
@@ -40,8 +40,8 @@ def _lookup(
     )
 
 
-async def _search(mount: Mount, lookup: sl.Lookup[Entry], query: str) -> None:
-    spec = sl.FormSpec("Search", (sl.TextField(key="query", label="Search"),))
+async def _search(mount: Mount, lookup: sl.patterns.Lookup[Entry], query: str) -> None:
+    spec = sl.forms.FormSpec("Search", (sl.forms.TextField(key="query", label="Search"),))
     await mount.dispatch_submit(
         "lookup.search",
         fake_interaction(),
@@ -58,7 +58,7 @@ async def test_lookup_searches_picks_resolved_items_and_removes_them() -> None:
 
     await _search(mount, lookup, "a")
 
-    assert isinstance(lookup.results.state, sl.Ready)
+    assert isinstance(lookup.results.state, sl.runtime.Ready)
     commit_render(mount)
     await mount.dispatch("lookup.results.a", fake_interaction())
     assert lookup.picked == (Entry("a", "Alpha"),)
@@ -100,7 +100,7 @@ async def test_lookup_pages_with_the_query_source_and_renders_no_results() -> No
     await _search(mount, lookup, "a")
     commit_render(mount)
     await mount.dispatch("lookup.next", fake_interaction())
-    assert isinstance(lookup.results.state, sl.Ready)
+    assert isinstance(lookup.results.state, sl.runtime.Ready)
     assert lookup.results.value.loaded.window.items == (Entry("c", "Gamma"),)
 
     await _search(mount, lookup, "missing")
@@ -113,20 +113,20 @@ async def test_lookup_drops_a_stale_query_completion() -> None:
     new_settled = anyio.Event()
 
     class DelayedSource:
-        capabilities = sl.SourceCapabilities(
+        capabilities = sl.sources.SourceCapabilities(
             backward=True,
             offsets=True,
             jumpable=True,
-            count=sl.CountPrecision.EXACT,
+            count=sl.sources.CountPrecision.EXACT,
         )
 
         def __init__(self, query: str) -> None:
             self.query = query
 
-        async def fetch(self, position: sl.Position, _extent: int) -> sl.Window[Entry]:
+        async def fetch(self, position: sl.sources.Position, _extent: int) -> sl.sources.Window[Entry]:
             entered[self.query].set()
             await release[self.query].wait()
-            return sl.Window(
+            return sl.sources.Window(
                 position,
                 (Entry(self.query, self.query),),
                 has_previous=False,
@@ -137,7 +137,7 @@ async def test_lookup_drops_a_stale_query_completion() -> None:
     async def committed(_event: sl.ActionEvent, _picked: tuple[Entry, ...]) -> None:
         pass
 
-    lookup = sl.Lookup(
+    lookup = sl.patterns.Lookup(
         DelayedSource,
         identity=lambda item: item.key,
         label=lambda item: item.label,
@@ -145,12 +145,12 @@ async def test_lookup_drops_a_stale_query_completion() -> None:
     )
 
     async def settle_new() -> None:
-        await lookup.results._settle()
+        await lookup.results._load()
         new_settled.set()
 
     lookup.query = "old"
     async with anyio.create_task_group() as tasks:
-        tasks.start_soon(lookup.results._settle)
+        tasks.start_soon(lookup.results._load)
         await entered["old"].wait()
         lookup.query = "new"
         tasks.start_soon(settle_new)
@@ -159,6 +159,6 @@ async def test_lookup_drops_a_stale_query_completion() -> None:
         await new_settled.wait()
         release["old"].set()
 
-    assert isinstance(lookup.results.state, sl.Ready)
+    assert isinstance(lookup.results.state, sl.runtime.Ready)
     assert lookup.results.value.query == "new"
     assert lookup.results.value.loaded.window.items == (Entry("new", "new"),)

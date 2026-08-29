@@ -206,7 +206,7 @@ class PollModal(ErrorHandledModal):
         # turning a second wizard away would turn away the edit. One live wizard per user per
         # guild, and it is always the one they last submitted.
         await interaction.client.mounts.open(
-            component.mount(),
+            component.mount(reactor=getattr(interaction.client, "layout_reactor", None)),
             sl.discord.respond_to(interaction, ephemeral=True, wait=True),
             key=SessionKey.user_guild("poll-wizard", interaction.user.id, interaction.guild.id),
             actor_id=interaction.user.id,
@@ -485,18 +485,19 @@ class PollConfirmationComponent(sl.Component):
         nodes: list[sl.LayoutNode] = [
             # `preview` already opens with its own "## question" line, so this renders a
             # double "##". Pre-existing, and fixing rendering is out of scope here.
-            sl.section(sl.fields(*fields), heading=preview),
-            sl.Choices(
+            sl.section(sl.heading(preview), sl.fields(*fields)),
+            sl.semantic.Choices(
                 key="visibility",
                 choices=tuple(
-                    sl.Choice(value.value, label, description) for value, label, description in VISIBILITY_CHOICES
+                    sl.semantic.Choice(value.value, label, description)
+                    for value, label, description in VISIBILITY_CHOICES
                 ),
                 selection=sl.controlled((self.draft.visibility.value,), self._visibility_changed),
             ),
-            sl.Choices(
+            sl.semantic.Choices(
                 key="duration",
                 choices=tuple(
-                    sl.Choice(str(seconds), label)
+                    sl.semantic.Choice(str(seconds), label)
                     for label, seconds in (*DURATION_PRESETS, ("Custom…", CUSTOM_DURATION))
                 ),
                 selection=sl.controlled((str(self.draft.duration_seconds),), self._duration_changed),
@@ -504,10 +505,11 @@ class PollConfirmationComponent(sl.Component):
         ]
         if self.allow_network:
             nodes.append(
-                sl.Choices(
+                sl.semantic.Choices(
                     key="scope",
                     choices=tuple(
-                        sl.Choice(value.value, label, description) for value, label, description in SCOPE_CHOICES
+                        sl.semantic.Choice(value.value, label, description)
+                        for value, label, description in SCOPE_CHOICES
                     ),
                     selection=sl.controlled((self.draft.scope.value,), self._scope_changed),
                 )
@@ -540,10 +542,10 @@ class PollConfirmationComponent(sl.Component):
         chosen = event.selected[0]
         if chosen == CUSTOM_DURATION:
             await event.present_form(
-                sl.FormSpec(
+                sl.forms.FormSpec(
                     "Custom poll duration",
                     (
-                        sl.DurationField(
+                        sl.forms.DurationField(
                             key="duration",
                             label="Duration",
                             placeholder="30m, 12h, 7d",
@@ -615,6 +617,12 @@ class PollConfirmationComponent(sl.Component):
     def _scope_label(self) -> str:
         return next(label for value, label, _ in SCOPE_CHOICES if value is self.draft.scope)
 
-    def mount(self) -> sl.discord.Mount:
-        self._mount = create_mount(self, access=sl.discord.Owner(self.owner_id), timeout=self._timeout)
+    def mount(self, *, reactor: sl.discord.Reactor | None = None) -> sl.discord.Mount:
+        self._mount = create_mount(
+            self,
+            access=sl.discord.Owner(self.owner_id),
+            timeout=self._timeout,
+            reactor=reactor,
+            expiry=sl.discord.RenewEphemeral() if reactor is not None else sl.discord.PauseUpdates(),
+        )
         return self._mount

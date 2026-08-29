@@ -7,17 +7,17 @@ import discord
 import pytest
 
 import squid_layouts as sl
-from squid_layouts.discord import Router, render_static
-from squid_layouts.discord.routing import _dispatch_item
+from squid_layouts.discord import render_static
+from squid_layouts.discord.routing import Router, _dispatch_item
 from squid_layouts.discord.testing import fake_interaction
 from squid_layouts.errors import DrawInvariantError, LayoutInvariantError
 from squid_layouts.primitives import Option, Panel, RoutedButton, RoutedSelect, Row
 from squid_layouts.profiling import MemoryProfiler, OperationKind, TraceOutcome
 from squid_layouts.scene.model import SceneRoutedButton, SceneRoutedSelect, SceneRow
 
-EDIT_BUILD = sl.Route("edit:build:{build_id:int}")
-POLL_CLOSE = sl.Route("poll:close")
-NAME_BUILD = sl.Route("name:build:{slug}")
+EDIT_BUILD = sl.routing.Route("edit:build:{build_id:int}")
+POLL_CLOSE = sl.routing.Route("poll:close")
+NAME_BUILD = sl.routing.Route("name:build:{slug}")
 
 
 def _static_view(*args, **kwargs) -> discord.ui.LayoutView:
@@ -37,7 +37,7 @@ class TestRouteFormats:
         assert POLL_CLOSE.match("poll:close") == {}
 
     def test_aliases_match_but_ids_remain_canonical(self) -> None:
-        route = sl.Route("r:builds:{build_id:int}:edit", aliases=("edit:build:{build_id:int}",))
+        route = sl.routing.Route("r:builds:{build_id:int}:edit", aliases=("edit:build:{build_id:int}",))
 
         assert route.id(build_id=5) == "r:builds:5:edit"
         assert route.match("r:builds:5:edit") == {"build_id": 5}
@@ -49,11 +49,11 @@ class TestRouteFormats:
     )
     def test_aliases_keep_the_canonical_parameter_contract(self, alias: str) -> None:
         with pytest.raises(ValueError, match="same parameters and converters"):
-            sl.Route("r:builds:{build_id:int}:edit", aliases=(alias,))
+            sl.routing.Route("r:builds:{build_id:int}:edit", aliases=(alias,))
 
     def test_aliases_with_an_internal_overlap_are_rejected(self) -> None:
         with pytest.raises(ValueError, match="could decode through both"):
-            sl.Route("r:{value}:fixed", aliases=("r:fixed:{value}",))
+            sl.routing.Route("r:{value}:fixed", aliases=("r:fixed:{value}",))
 
     def test_a_converter_narrows_the_pattern_and_types_the_value(self) -> None:
         # The regression this closes: `edit:build:(\d+)` became `[^:]+` when the hand-rolled
@@ -99,7 +99,7 @@ class TestRouteFormats:
     )
     def test_unusable_formats_are_rejected(self, fmt: str, match: str) -> None:
         with pytest.raises(ValueError, match=match):
-            sl.Route(fmt)
+            sl.routing.Route(fmt)
 
 
 class TestRouter:
@@ -147,7 +147,7 @@ class TestRouter:
         await router.dispatch(
             fake_interaction(),
             "edit:build:42",
-            component=sl.discord.RouteComponent.SELECT,
+            component=sl.discord.routing.RouteComponent.SELECT,
             values=("one", "two"),
         )  # type: ignore[arg-type]
         assert seen == [(("one", "two"), 42)]
@@ -176,7 +176,7 @@ class TestRouter:
         await router.dispatch(
             fake_interaction(),
             "poll:close",
-            component=sl.discord.RouteComponent.SELECT,
+            component=sl.discord.routing.RouteComponent.SELECT,
             values=("now",),
         )  # type: ignore[arg-type]
 
@@ -189,8 +189,8 @@ class TestRouter:
         async def edit(_interaction, _values: tuple[str, ...], build_id: int) -> None: ...
 
         assert router.describe() == (
-            sl.discord.RouteDescription(
-                component=sl.discord.RouteComponent.SELECT,
+            sl.discord.routing.RouteDescription(
+                component=sl.discord.routing.RouteComponent.SELECT,
                 format=EDIT_BUILD.format,
                 params=(("build_id", "int"),),
                 aliases=EDIT_BUILD.aliases,
@@ -252,18 +252,18 @@ class TestRouter:
         with pytest.raises(ValueError, match="must live under"):
             router.add(POLL_CLOSE, _noop)
         with pytest.raises(ValueError, match="must live under"):
-            router.add(sl.Route("{prefix:int}:poll:close"), _noop)
+            router.add(sl.routing.Route("{prefix:int}:poll:close"), _noop)
 
-        router.add(sl.Route("r:polls:close", aliases=("poll:close",)), _noop)
+        router.add(sl.routing.Route("r:polls:close", aliases=("poll:close",)), _noop)
 
     @pytest.mark.parametrize("route", ["ctl:fixed:route", "{prefix}:fixed:route"])
     def test_routes_cannot_enter_the_mount_namespace(self, route: str) -> None:
         with pytest.raises(ValueError, match="mount namespace"):
-            Router().add(sl.Route(route), _noop)
+            Router().add(sl.routing.Route(route), _noop)
 
     def test_aliases_cannot_enter_the_mount_namespace(self) -> None:
         with pytest.raises(ValueError, match="mount namespace"):
-            Router().add(sl.Route("new:{value}", aliases=("ctl:{value}",)), _noop)
+            Router().add(sl.routing.Route("new:{value}", aliases=("ctl:{value}",)), _noop)
 
     async def test_a_failing_handler_reaches_the_error_hook(self) -> None:
         seen: list[str] = []
@@ -295,7 +295,7 @@ class TestRouter:
         async def gone(_interaction) -> None: ...
 
         router = Router(namespace="r", on_gone=gone)
-        router.add(sl.Route("r:polls:close", aliases=("poll:close",)), _noop)
+        router.add(sl.routing.Route("r:polls:close", aliases=("poll:close",)), _noop)
 
         template = router.template()
         assert template.fullmatch("r:polls:close")
@@ -324,22 +324,24 @@ class TestRouter:
     )
     def test_routes_that_share_any_id_are_rejected(self, first: str, second: str) -> None:
         router = Router()
-        router.add(sl.Route(first), _noop)
+        router.add(sl.routing.Route(first), _noop)
 
         with pytest.raises(ValueError, match="overlaps"):
-            router.add(sl.Route(second), _noop)
+            router.add(sl.routing.Route(second), _noop)
 
     @pytest.mark.parametrize(
         ("first", "second"),
         [
             (
-                sl.Route("new:one:{value}", aliases=("legacy:{value}:one",)),
-                sl.Route("new:two:{other}", aliases=("legacy:fixed:{other}",)),
+                sl.routing.Route("new:one:{value}", aliases=("legacy:{value}:one",)),
+                sl.routing.Route("new:two:{other}", aliases=("legacy:fixed:{other}",)),
             ),
-            (sl.Route("new:one:{value}", aliases=("old:{value}:one",)), sl.Route("old:fixed:{other}")),
+            (sl.routing.Route("new:one:{value}", aliases=("old:{value}:one",)), sl.routing.Route("old:fixed:{other}")),
         ],
     )
-    def test_aliases_participate_in_exact_overlap_detection(self, first: sl.Route, second: sl.Route) -> None:
+    def test_aliases_participate_in_exact_overlap_detection(
+        self, first: sl.routing.Route, second: sl.routing.Route
+    ) -> None:
         router = Router()
         router.add(first, _noop)
 
@@ -357,8 +359,8 @@ class TestRouter:
     )
     def test_disjoint_routes_coexist(self, first: str, second: str) -> None:
         router = Router()
-        router.add(sl.Route(first), _noop)
-        router.add(sl.Route(second), _noop)
+        router.add(sl.routing.Route(first), _noop)
+        router.add(sl.routing.Route(second), _noop)
 
         assert len(router._routes) == 2
 
@@ -367,7 +369,7 @@ class TestRouter:
         router.add(POLL_CLOSE, _noop)
 
         with pytest.raises(ValueError, match="overlaps"):
-            router.add(sl.Route("poll:{action}"), _noop)
+            router.add(sl.routing.Route("poll:{action}"), _noop)
 
     async def test_re_registering_a_route_replaces_its_handler(self) -> None:
         # Loading an extension re-executes its module, so a reload registers again.
@@ -378,7 +380,7 @@ class TestRouter:
         async def replacement(_interaction) -> None:
             seen.append("replacement")
 
-        router.add(sl.Route("poll:close"), replacement)
+        router.add(sl.routing.Route("poll:close"), replacement)
         await router.dispatch(fake_interaction(), "poll:close")
 
         assert seen == ["replacement"]
@@ -389,19 +391,19 @@ class TestRouter:
         router.add(POLL_CLOSE, _noop)
         router._registered = True
 
-        router.add(sl.Route("poll:close"), _noop)  # a reload leaves the template unchanged
+        router.add(sl.routing.Route("poll:close"), _noop)  # a reload leaves the template unchanged
         with pytest.raises(RuntimeError, match="cannot change aliases"):
-            router.add(sl.Route("poll:close", aliases=("poll:end",)), _noop)
+            router.add(sl.routing.Route("poll:close", aliases=("poll:end",)), _noop)
         with pytest.raises(RuntimeError, match=r"before Router\.register"):
             router.add(EDIT_BUILD, _noop)
 
     def test_a_replacement_with_new_aliases_is_checked_against_other_routes(self) -> None:
         router = Router()
-        router.add(sl.Route("new:one:{value}"), _noop)
-        router.add(sl.Route("legacy:fixed:{other}"), _noop)
+        router.add(sl.routing.Route("new:one:{value}"), _noop)
+        router.add(sl.routing.Route("legacy:fixed:{other}"), _noop)
 
         with pytest.raises(ValueError, match="overlaps"):
-            router.add(sl.Route("new:one:{value}", aliases=("legacy:{value}:one",)), _noop)
+            router.add(sl.routing.Route("new:one:{value}", aliases=("legacy:{value}:one",)), _noop)
 
     def test_the_generated_dispatch_item_accepts_its_own_ids(self) -> None:
         router = Router()
@@ -433,7 +435,7 @@ class TestRouter:
 
 class TestRouteGroups:
     async def test_child_groups_build_stable_routes_and_dispatch_them(self) -> None:
-        root = sl.discord.RouteGroup("r")
+        root = sl.discord.routing.RouteGroup("r")
         polls = root.group("polls")
         close = polls.define("close", aliases=("poll:close",))
         seen: list[str] = []
@@ -451,7 +453,7 @@ class TestRouteGroups:
         assert router.template().fullmatch("r:polls:close")
 
     def test_a_namespace_group_is_an_ordinary_one_segment_group(self) -> None:
-        nested = sl.discord.RouteGroup("r", "polls")
+        nested = sl.discord.routing.RouteGroup("r", "polls")
 
         with pytest.raises(ValueError, match="exactly one prefix segment"):
             Router(namespace=nested, on_gone=_noop)
@@ -459,10 +461,10 @@ class TestRouteGroups:
     @pytest.mark.parametrize("prefix", [(), ("{kind}",), ("bad:prefix",)])
     def test_group_prefixes_are_nonempty_literal_segments(self, prefix: tuple[str, ...]) -> None:
         with pytest.raises(ValueError, match=r"route group|literal segment"):
-            sl.discord.RouteGroup(*prefix)
+            sl.discord.routing.RouteGroup(*prefix)
 
     def test_sibling_groups_are_checked_for_identity_overlap(self) -> None:
-        root = sl.discord.RouteGroup("r")
+        root = sl.discord.routing.RouteGroup("r")
         first = root.group("polls")
         second = root.group("polls")
         first.define("{action}")
@@ -473,13 +475,13 @@ class TestRouteGroups:
 
     def test_a_group_from_another_namespace_is_rejected(self) -> None:
         router = Router(namespace="r", on_gone=_noop)
-        foreign = sl.discord.RouteGroup("other")
+        foreign = sl.discord.routing.RouteGroup("other")
 
         with pytest.raises(ValueError, match="does not belong"):
             router.include(foreign)
 
     def test_including_an_existing_descendant_is_a_no_op(self) -> None:
-        root = sl.discord.RouteGroup("r")
+        root = sl.discord.routing.RouteGroup("r")
         polls = root.group("polls")
         route = polls.define("close")
         polls.add(route, _noop)
@@ -491,7 +493,7 @@ class TestRouteGroups:
         assert router.describe()[0].group_prefix == "r:polls"
 
     def test_every_defined_identity_needs_a_handler_before_registration(self) -> None:
-        root = sl.discord.RouteGroup("r")
+        root = sl.discord.routing.RouteGroup("r")
         root.group("polls").define("close")
         router = Router(namespace=root, on_gone=_noop)
 
@@ -499,7 +501,7 @@ class TestRouteGroups:
             router.register(_FakeClient())  # type: ignore[arg-type]
 
     def test_identity_and_group_structure_freeze_at_registration(self) -> None:
-        root = sl.discord.RouteGroup("r")
+        root = sl.discord.routing.RouteGroup("r")
         polls = root.group("polls")
         route = polls.define("close")
         polls.add(route, _noop)
@@ -512,7 +514,7 @@ class TestRouteGroups:
             root.group("builds")
 
     async def test_a_frozen_group_accepts_same_identity_handler_replacement(self) -> None:
-        root = sl.discord.RouteGroup("r")
+        root = sl.discord.routing.RouteGroup("r")
         polls = root.group("polls")
         route = polls.define("close")
         polls.add(route, _noop)
@@ -532,12 +534,12 @@ class TestRouteGroups:
 class TestMiddleware:
     def test_the_base_class_requires_dispatch(self) -> None:
         with pytest.raises(TypeError, match="abstract"):
-            cast(Any, sl.discord.Middleware)()
+            cast(Any, sl.discord.routing.Middleware)()
 
     async def test_router_and_group_middleware_compose_outermost_first(self) -> None:
         seen: list[str] = []
 
-        class Record(sl.discord.Middleware[discord.Client]):
+        class Record(sl.discord.routing.Middleware[discord.Client]):
             def __init__(self, name: str) -> None:
                 self.name = name
 
@@ -546,7 +548,7 @@ class TestMiddleware:
                 await proceed()
                 seen.append(f"{self.name}:after")
 
-        root = sl.discord.RouteGroup[discord.Client]("r")
+        root = sl.discord.routing.RouteGroup[discord.Client]("r")
         polls = root.group("polls")
         close = polls.define("close")
         router = Router(namespace=root, on_gone=_noop)
@@ -573,7 +575,7 @@ class TestMiddleware:
     async def test_returning_without_calling_next_short_circuits_and_still_acknowledges(self) -> None:
         seen: list[str] = []
 
-        class Stop(sl.discord.Middleware[discord.Client]):
+        class Stop(sl.discord.routing.Middleware[discord.Client]):
             async def dispatch(self, request, proceed) -> None:
                 seen.append("stopped")
 
@@ -596,7 +598,7 @@ class TestMiddleware:
         async def on_error(interaction, error: Exception, source: str) -> None:
             seen.append("router-error")
 
-        class Catch(sl.discord.Middleware[discord.Client]):
+        class Catch(sl.discord.routing.Middleware[discord.Client]):
             async def dispatch(self, request, proceed) -> None:
                 try:
                     await proceed()
@@ -620,7 +622,7 @@ class TestMiddleware:
         async def on_error(interaction, error: Exception, source: str) -> None:
             seen.append("router-error")
 
-        class Observe(sl.discord.Middleware[discord.Client]):
+        class Observe(sl.discord.routing.Middleware[discord.Client]):
             async def dispatch(self, request, proceed) -> None:
                 seen.append("before")
                 try:
@@ -645,7 +647,7 @@ class TestMiddleware:
         async def on_error(interaction, error: Exception, source: str) -> None:
             errors.append(error)
 
-        class Twice(sl.discord.Middleware[discord.Client]):
+        class Twice(sl.discord.routing.Middleware[discord.Client]):
             async def dispatch(self, request, proceed) -> None:
                 await proceed()
                 await proceed()
@@ -660,9 +662,9 @@ class TestMiddleware:
         assert "only be called once" in str(errors[0])
 
     async def test_proceed_expires_when_middleware_returns(self) -> None:
-        saved: list[sl.discord.RouteProceed] = []
+        saved: list[sl.discord.routing.RouteProceed] = []
 
-        class Save(sl.discord.Middleware[discord.Client]):
+        class Save(sl.discord.routing.Middleware[discord.Client]):
             async def dispatch(self, request, proceed) -> None:
                 saved.append(proceed)
 
@@ -677,7 +679,7 @@ class TestMiddleware:
     async def test_instances_are_idempotent_only_by_identity(self) -> None:
         seen: list[str] = []
 
-        class Record(sl.discord.Middleware[discord.Client]):
+        class Record(sl.discord.routing.Middleware[discord.Client]):
             async def dispatch(self, request, proceed) -> None:
                 seen.append("middleware")
                 await proceed()
@@ -694,14 +696,14 @@ class TestMiddleware:
         assert seen == ["middleware", "middleware"]
 
     async def test_request_facts_are_immutable_and_distinguish_aliases(self) -> None:
-        requests: list[sl.discord.RouteRequest[discord.Client]] = []
+        requests: list[sl.discord.routing.RouteRequest[discord.Client]] = []
 
-        class Capture(sl.discord.Middleware[discord.Client]):
+        class Capture(sl.discord.routing.Middleware[discord.Client]):
             async def dispatch(self, request, proceed) -> None:
                 requests.append(request)
                 await proceed()
 
-        root = sl.discord.RouteGroup[discord.Client]("r")
+        root = sl.discord.routing.RouteGroup[discord.Client]("r")
         builds = root.group("builds")
         edit = builds.define("{build_id:int}:edit", aliases=("edit:build:{build_id:int}",))
         builds.add(edit, _noop)
@@ -724,15 +726,15 @@ class TestMiddleware:
         assert not gone.matched_alias
 
     def test_descriptions_include_effective_middleware_provenance(self) -> None:
-        class RouterPolicy(sl.discord.Middleware[discord.Client]):
+        class RouterPolicy(sl.discord.routing.Middleware[discord.Client]):
             async def dispatch(self, request, proceed) -> None:
                 await proceed()
 
-        class GroupPolicy(sl.discord.Middleware[discord.Client]):
+        class GroupPolicy(sl.discord.routing.Middleware[discord.Client]):
             async def dispatch(self, request, proceed) -> None:
                 await proceed()
 
-        root = sl.discord.RouteGroup[discord.Client]("r")
+        root = sl.discord.routing.RouteGroup[discord.Client]("r")
         polls = root.group("polls")
         close = polls.define("close")
         polls.add(close, _noop)
@@ -746,11 +748,11 @@ class TestMiddleware:
         )
 
     def test_middleware_freezes_at_registration(self) -> None:
-        class Policy(sl.discord.Middleware[discord.Client]):
+        class Policy(sl.discord.routing.Middleware[discord.Client]):
             async def dispatch(self, request, proceed) -> None:
                 await proceed()
 
-        root = sl.discord.RouteGroup[discord.Client]("r")
+        root = sl.discord.routing.RouteGroup[discord.Client]("r")
         polls = root.group("polls")
         close = polls.define("close")
         polls.add(close, _noop)
@@ -836,7 +838,7 @@ class TestAcknowledgement:
 
 class TestProfiling:
     async def test_route_trace_profiles_middleware_handler_and_acknowledgement(self) -> None:
-        class Continue(sl.discord.Middleware[discord.Client]):
+        class Continue(sl.discord.routing.Middleware[discord.Client]):
             async def dispatch(self, request, proceed) -> None:
                 await proceed()
 
@@ -864,7 +866,7 @@ class TestProfiling:
         )
 
     async def test_short_circuit_and_caught_failure_remain_distinct(self) -> None:
-        class Stop(sl.discord.Middleware[discord.Client]):
+        class Stop(sl.discord.routing.Middleware[discord.Client]):
             async def dispatch(self, request, proceed) -> None:
                 pass
 
@@ -901,8 +903,8 @@ class TestProfiling:
 class TestDrawing:
     def test_a_sessionless_document_may_carry_a_routed_control(self) -> None:
         document = sl.section(
+            sl.heading("Poll"),
             sl.actions(sl.routed_action("Close poll", POLL_CLOSE.id(), key="close", tone=sl.Tone.DANGER), key="c"),
-            heading="Poll",
         )
 
         view = _static_view([document])
@@ -943,9 +945,9 @@ class TestDrawing:
             render_static([document])
 
     def test_a_routed_scene_round_trips_through_the_codec(self) -> None:
-        document = sl.section(sl.actions(sl.routed_action("Edit", EDIT_BUILD.id(build_id=3), key="e"), key="c"))
+        document = sl.block(sl.actions(sl.routed_action("Edit", EDIT_BUILD.id(build_id=3), key="e"), key="c"))
 
-        scene = sl.plan(document, target=sl.discord.V2_TARGET).scene
+        scene = sl.planning.plan(document, target=sl.discord.V2_TARGET).scene
         payload = sl.scene.Codec.dumps(scene)
 
         assert "routed_button" in sl.scene.Codec.schema()["$defs"]
@@ -958,7 +960,7 @@ class TestDrawing:
 
     def test_the_old_scene_custom_id_field_is_not_accepted(self) -> None:
         document = sl.actions(sl.routed_action("Close", POLL_CLOSE.id(), key="close"), key="c")
-        payload = sl.scene.Codec.to_dict(sl.plan(document, target=sl.discord.V2_TARGET).scene)
+        payload = sl.scene.Codec.to_dict(sl.planning.plan(document, target=sl.discord.V2_TARGET).scene)
         routed = payload["body"]["children"][0]["items"][0]
         routed["custom_id"] = routed.pop("route_id")
 
@@ -968,7 +970,7 @@ class TestDrawing:
     def test_the_html_preview_emits_the_route(self) -> None:
         document = sl.actions(sl.routed_action("Close", POLL_CLOSE.id(), key="close"), key="c")
 
-        html = sl.html.Renderer().draw(sl.plan(document, target=sl.discord.V2_TARGET).scene)
+        html = sl.html.Renderer().draw(sl.planning.plan(document, target=sl.discord.V2_TARGET).scene)
 
         assert 'data-route-id="poll:close"' in html
 
@@ -981,7 +983,7 @@ class TestDrawing:
             placeholder="Choose",
         )
 
-        scene = sl.plan(document, target=sl.discord.V2_TARGET).scene
+        scene = sl.planning.plan(document, target=sl.discord.V2_TARGET).scene
         assert scene.components_v2.children == (
             SceneRoutedSelect(
                 (sl.scene.SceneOption("One", "one", "First"), sl.scene.SceneOption("Two", "two")),
@@ -1018,7 +1020,7 @@ class TestDrawing:
         )
 
         with pytest.raises(LayoutInvariantError, match="split the routed picker"):
-            sl.plan(document, target=sl.discord.V2_TARGET)
+            sl.planning.plan(document, target=sl.discord.V2_TARGET)
 
     def test_routed_choices_need_an_available_option(self) -> None:
         document = sl.routed_choices(
@@ -1028,7 +1030,7 @@ class TestDrawing:
         )
 
         with pytest.raises(LayoutInvariantError, match="at least one available"):
-            sl.plan(document, target=sl.discord.V2_TARGET)
+            sl.planning.plan(document, target=sl.discord.V2_TARGET)
 
 
 class _FakeClient:
@@ -1084,7 +1086,7 @@ class TestClientRegistration:
         first.register(client)  # type: ignore[arg-type]
         second.register(client)  # type: ignore[arg-type]
 
-        assert sl.discord.routers(client) == (first, second)  # type: ignore[arg-type]
+        assert sl.discord.routing.routers(client) == (first, second)  # type: ignore[arg-type]
 
     def test_registering_the_same_pair_again_is_a_no_op(self) -> None:
         client = _FakeClient()
@@ -1120,7 +1122,7 @@ class TestClientRegistration:
     def test_a_second_router_with_an_overlapping_route_is_rejected(self) -> None:
         client = _FakeClient()
         first, second = Router(), Router()
-        first.add(sl.Route("poll:{action}"), _noop)
+        first.add(sl.routing.Route("poll:{action}"), _noop)
         second.add(POLL_CLOSE, _noop)
         first.register(client)  # type: ignore[arg-type]
 
@@ -1133,9 +1135,9 @@ class TestClientRegistration:
         # plain router's clicks would also wake the namespaced router's gone hook.
         client = _FakeClient()
         namespaced = Router(namespace="vote", on_gone=_noop)
-        namespaced.add(sl.Route("vote:close:{poll_id:int}"), _noop)
+        namespaced.add(sl.routing.Route("vote:close:{poll_id:int}"), _noop)
         plain = Router()
-        plain.add(sl.Route("vote:up:{build_id:int}"), _noop)
+        plain.add(sl.routing.Route("vote:up:{build_id:int}"), _noop)
         namespaced.register(client)  # type: ignore[arg-type]
 
         with pytest.raises(ValueError, match="reserved namespace 'vote'"):

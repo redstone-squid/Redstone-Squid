@@ -97,12 +97,24 @@ told when it changes; where a write goes while an action is in flight is now the
 |---|---|
 | `handle.cell` | Read. Inside an action: this transaction's staged value if it has one, else the latest committed value, and the value read is remembered (§5b). Inside a render: also records a render dependency (§7). Outside both: a plain read. |
 | `handle.cell = value` | Write. Staged inside an action, committed immediately outside one. |
-| `del handle.cell` | Reset to the declared default. A write, and never a read, so never guarded. |
-| `handle.topic(Cls.cell)` | The cell's bus address, for a host that wants to follow it by hand (§7). |
 | `handle.scope` | The label this namespace was constructed with, typed (§2). |
 
-That is the whole surface. There is no `get`, `set`, `watch`, `update`, `expect` or
-`compare_and_set`; *Rejected alternatives* records why each is absent.
+That is the whole surface. There is no `get`, `set`, `watch`, `update`, `expect`,
+`compare_and_set` or `del`; *Rejected alternatives* records why each is absent.
+
+**Naming a cell without reading it is `sl.addresses(thunk)`**, not a method on the handle:
+
+```python
+reactor.follow(mount, *sl.addresses(lambda: preferences.theme))
+bus.subscribe(sl.addresses(lambda: (preferences.theme, workspace.selected))[0], ...)
+```
+
+It runs the thunk under the same tracking consumer §7 uses and returns the addresses it
+read, so the only way to name a cell is the way everything else names one — by reading it.
+The lambda is ordinary typed code, no class name is repeated, and reading a computed yields
+the cells behind it. A thunk that reaches no shared cell raises, so a typo cannot quietly
+follow nothing. The name is `addresses` rather than `topics` because `squid_layouts.topics`
+is a module and `sl.topics` is where it hangs.
 
 **A namespace is a real type.** A component that wants preferences asks for `Preferences`,
 `sl.ContextKey[Preferences]` says which binding it means, and reading a workspace cell off
@@ -128,9 +140,14 @@ _Cell           value, version; staged through the transaction; read-tracked
   owned by a Shared      -> a write publishes (owner, descriptor) on the bus
 ```
 
-Everything else — immutability, tracking, staging, rollback, `StateChange`, `StateDelta`,
+Everything else — replacement, tracking, staging, rollback, `StateChange`, `StateDelta`,
 the undeclared-write report — is the same code, and the only thing a namespace declares is
 what a write does after it lands.
+
+In the tree that is literal: `sl.cell()` returns a `_State` subclass, and the address is a
+field on the cell rather than a second kind of cell. Everything downstream keys off whether
+that field is set — the commit precondition (§5b) and the render collector (§7) both — so
+neither the transaction nor the tracker has to know what a namespace is.
 
 **A computed may depend on a shared cell.** `self.workspace.selected` read inside an
 `@sl.computed` records that cell as a source and recomputes when another panel writes it.
@@ -161,8 +178,9 @@ What the label buys is diagnostics. `Preferences(Member(1, 2)).theme` in a devto
 conflict message or a history label is worth the four lines of dataclass, and it is worth
 them only there.
 
-**A few attribute names are reserved** — `topic`, `scope`, `bus`, and anything beginning
-with an underscore. Declaring a cell with one of those raises at class creation.
+**A few attribute names are reserved** — `scope`, `bus`, and anything beginning with an
+underscore. Declaring a cell with one of those raises at class creation, and so does
+declaring one with `sl.state()`, or declaring component state with `sl.cell()`.
 
 ### 3. Lifetime: the handle is the state
 
@@ -199,27 +217,30 @@ obvious line in host code rather than a lifetime rule inside the package.
 
 `workspace.filters = (*workspace.filters, tag)`, and other mounts see it.
 
-This section has been rewritten twice and the principle survived both times: **a shared cell
-behaves like component state, whatever that turns out to mean.** The first draft required
-cells to be declared immutable while `sl.state()` proxied, so the same line was a real write
-on one and a silent no-op on the other; the second draft reversed itself and reused the
-proxies for exactly that reason. [41](41-reactivity-cells.md) removed the proxies, so parity
-now points back the other way — and this time it costs nothing, because both sides move
-together rather than one side being asked to carry a rule the other does not.
+This section has been rewritten three times and the principle survived each time: **a
+shared cell behaves like component state, whatever that turns out to mean.** The first draft
+required cells to be declared immutable while `sl.state()` proxied, so the same line was a
+real write on one and a silent no-op on the other; the second reused the proxies for exactly
+that reason; the third followed [41](41-reactivity-cells.md) into a runtime `hash()` check.
+41 §1 now enforces replacement statically, and parity costs nothing because both sides move
+together rather than one being asked to carry a rule the other does not.
 
-So: a cell value is immutable, checked with `hash()` at the write, and `opaque=True` is the
-escape hatch for a collaborator the namespace holds and never mutates. A mapping that has to
-be a cell is an `sl.FrozenMapping`.
+So: a cell value is replaced, never mutated in place, and the type checker holds the line.
+`sl.cell()` carries the same overloads as `sl.state()` — a `dict` default declares
+`Mapping`, a `list` declares `Sequence`, a `set` declares `AbstractSet` — so a concrete
+annotation and every mutating method are type errors, and the stored value is the one
+assigned.
+`opaque=True` is the escape hatch for a collaborator the namespace holds and never mutates.
 
 **Nothing copies.** The copy-on-read the proxy version needed — materialising a deep copy
 into the overlay so that rollback stayed "drop the overlay" and §5b's guard still compared
-against an untouched committed value — has nothing to do. An immutable value *is* its own
-snapshot: the overlay holds a reference to the committed value and a reference to the staged
-one, and both properties hold by construction.
+against an untouched committed value — has nothing to do. A value nobody mutates *is* its
+own snapshot: the overlay holds a reference to the committed value and a reference to the
+staged one, and both properties hold by construction.
 
-**Mutating during a render is not a case any more.** There is nothing to mutate. A write
-during a render is still wrong for the reason the proxy rule gave — it would publish
-halfway through producing a tree — and `__set__` is where that is caught, not a proxy.
+**Mutating during a render is not a case any more.** Nothing is mutated. A write during a
+render is still wrong for the reason the proxy rule gave — it would publish halfway through
+producing a tree — and `__set__` is where that is caught, not a proxy.
 
 **Equality short-circuit.** Assigning an equal value is a no-op: no publish, no history
 change. "Equal" means `is`, then `==` inside a `try` that treats a raising or non-boolean
@@ -229,8 +250,9 @@ code rather than a cheap settled-value check.
 
 ### 5. Actions: staging, one commit
 
-Writes inside an action stage into a per-namespace overlay and become visible together, or
-not at all. Outside an action they commit synchronously.
+Writes inside an action stage into the transaction's overlay and become visible together, or
+not at all. Outside an action they commit synchronously. One overlay, not one per namespace:
+41 got there first, and there was nothing left for a namespace to keep of its own.
 
 The overlay was the one thing a namespace could not inherit from `_State`, which wrote
 through and relied on a snapshot to undo it. That was safe only because nothing else can
@@ -248,52 +270,68 @@ Guarantees, in the vocabulary the reader already has:
 - **Atomic publication.** One action's shared writes appear together, with its local state
   writes, at one commit.
 
-#### 5a. The transaction participant seam
+#### 5a. The commit sequence
 
-Phase 0 shipped this, and it is worth reading `_Transaction.commit`
-(`runtime/reactivity.py:228-252`) before the rest of this section. It also closed a real
-bug: `commit()` used to run outside the `try`, so anything raising inside it — a commit
-hook, and `History._push` invalidates its owner from one — propagated with no rollback,
-leaving the action's writes standing and no owner notified.
+Phase 0 shipped the fallible commit, and it is worth reading `_Transaction.commit` before
+the rest of this section. It also closed a real bug: `commit()` used to run outside the
+`try`, so anything raising inside it — a commit hook, and `History._push` invalidates its
+owner from one — propagated with no rollback, leaving the action's writes standing and no
+owner notified.
 
-The sequence, with participants:
+The sequence:
 
 ```text
 ACTION
-  local sl.state writes           -> the transaction's snapshots, unchanged
-  shared writes                   -> a per-namespace overlay, enlisted with join_action()
+  local and shared writes alike   -> the transaction's one overlay
 
 COMMIT  -- fallible half, nothing visible yet
-  1. PREPARE each participant      validate the read-and-write guards; freeze the
-                                   prepared writes
-  2. CONTRIBUTE each participant   the StateChange tuple describing what it will publish
-  3. BUILD the state delta         local snapshots plus every contribution
-     any failure above             abort every participant, restore local state,
-                                   raise (SharedStateConflictError, for a namespace)
+  1. CHECK PRECONDITIONS           every cell this action both read and wrote still holds
+                                   what it read, else SharedStateConflictError
+  2. PUBLISH                       the overlay's values become the cells'
+  3. PREPARE each participant      validate against the state the action actually left
+     any failure above             abort every participant, restore, raise
 COMMIT  -- published; the action has happened
-  4. APPLY each participant        synchronous, no awaits, no failure paths left
-  5. NOTIFY owners                 _state_changed, as today -- for a namespace, publish
-  6. FINALIZE each participant
-  7. RUN commit hooks              recorders, i.e. sl.history
+  4. BUILD the state delta         from the overlay, which knows both halves
+  5. APPLY each participant        synchronous, no awaits, no failure paths left
+  6. NOTIFY owners                 _state_changed -- invalidate for a component, publish
+                                   the changed cells' addresses for a namespace
+  7. FINALIZE each participant
+  8. RUN commit hooks              recorders, i.e. sl.history
 ```
 
-Two orderings are load-bearing.
+Three orderings are load-bearing.
 
-**Everything fallible happens before step 4.** That is the whole reason prepare exists, and
+**The precondition check runs before publication**, because it compares against the value
+another action left in the cell and publishing would overwrite it with this action's own.
+That is why the guard is the transaction's and not a participant's: a participant prepares
+after publication, by 41's design, which is too late to see what it needs to see.
+
+**Rollback before publication writes nothing.** The overlay never left, so there is nothing
+to put back — and writing `before` anyway would revert a value someone else committed while
+this action was staging, which is a cell this action never even observed. Only a failure
+*after* publication restores cells, and that is the one path a participant's rejection takes.
+
+**Everything fallible happens before step 5.** That is the whole reason prepare exists, and
 it is what lets `transaction()` roll an action back after its handler returned cleanly.
 
 **Commit hooks run last, after publication.** A recorder's effect leaves the transaction —
 `sl.history` pushes an entry onto a stack that outlives it — so a hook must not run
 anywhere a later failure could still roll the action back.
 
-`contribute()` is the one addition to the shipped `ActionParticipant` protocol
-(`runtime/reactivity.py:24-50`), and it defaults to `()` so it does not break an existing
-implementation. §8 is the reason it exists.
+**`contribute()` was never built, because 41 removed the reason for it.** It existed so a
+participant holding its own overlay could put its changes into the delta, which
+`_Transaction.delta()` could not see because it read after-values out of `owner.__dict__`.
+[41](41-reactivity-cells.md) §4 moved *component* state onto the same overlay, so the delta
+is built from the overlay for everyone and a shared cell is already in it. A namespace is
+therefore not a participant at all: it stages in the transaction's own `writes`, and the
+only thing left that is specific to it is §5b's guard, which the transaction checks itself
+before publishing.
 
-The seam is public: `sl.ActionParticipant` and `sl.join_action(key, factory)`, alongside
-the `sl.on_action_commit` it sits next to. A namespace enlists itself under `key=self`, the
-way `History` already does at `runtime/history.py:123`, so one action writing three
-namespaces has three participants and gets prepare-all-then-apply-all across them for free.
+The participant seam stays public and unchanged — `sl.ActionParticipant`,
+`sl.join_action(key, factory)`, `sl.on_action_commit` — for subsystems that really do hold
+state outside the cell graph, which is what `History` uses it for. Prepare-all-then-apply-all
+across three namespaces still holds, for the simpler reason that three namespaces are one
+overlay and one commit.
 
 #### 5b. Conflicts: one rule, derived from what the action did
 
@@ -351,8 +389,9 @@ prepare runs when the `with` block exits — after the handler body has returned
 
 A conflict therefore travels the ordinary failed-handler path: the transaction rolls back,
 nothing is published, and the mount's `handle_error` shows what it shows for any raising
-handler. `Chrome` gains `changed_elsewhere` so the default message says something true
-about the cause.
+handler. `Chrome` gains `changed_elsewhere` — "Someone else changed this while you were
+working. Try again." — so a host that wants to say something true about the cause has the
+wording to hand, localized with the rest.
 
 An application that wants more has the seam it already has for application-wide action
 policy — `sl.ActionMiddleware`, which wraps the transaction rather than sitting inside it:
@@ -378,8 +417,8 @@ it was constructed with.**
 1. A cell's address is the `(handle, descriptor)` pair. `topics.py:20` declares
    `type Topic = Hashable` and both halves hash by identity, so nothing has to be encoded
    into a string — no canonical form to get wrong, no collision surface invented on the way
-   to the bus. `handle.topic(Preferences.theme)` is the one constructor, for a host that
-   wants `reactor.follow(mount, preferences.topic(Preferences.theme))` by hand.
+   to the bus. A host that wants one by hand asks for it the way everything else does, by
+   reading the cell: `reactor.follow(mount, *sl.addresses(lambda: preferences.theme))`.
 2. During render, a cell read records its address into a render-observation collector.
    [41](41-reactivity-cells.md) made tracked reads the package's one mechanism, so this is
    that mechanism with a render as the consumer rather than a new one. This is why there is
@@ -391,17 +430,55 @@ it was constructed with.**
    `Shared._state_changed`. Coalescing, at-most-one-drain-per-topic and the delivery
    contract are the bus's, already tested.
 
-**Reconcile at stage time, not after delivery.** `Reactor.follow`'s own docstring
-(`discord/reactor.py:158`) gives the reason: a write landing between a mount's read and its
-subscription is lost, and the bus is not durable, so that panel is stale until someone
-clicks it. A staged render that is later discarded leaves a subscription the next
-successful render removes, and the worst case is one spurious refresh. Over-subscribe;
-never under-subscribe.
+**Acquire at stage time; retire only after delivery.** `Reactor.follow`'s own docstring
+(`discord/reactor.py:158`) gives the reason for the first half: a write landing between a
+mount's read and its subscription is lost, and the bus is not durable, so that panel is
+stale until someone clicks it. The other half follows candidate atomicity. A staged render
+may stop reading a cell the visible generation still displays; dropping that subscription
+before Discord accepts the candidate makes a failed delivery permanently stale. `_watched`
+therefore accumulates the committed reads and every provisionally staged read, while
+`_ensure_follows` only adds. A successful commit publishes its observations and
+`_prune_follows` retires everything else. A rollback deliberately prunes nothing. The worst
+case is a spurious refresh until the next successful delivery: over-subscribe, never
+under-subscribe.
+
+**A cached computed is walked, not re-run.** A render that used a settled computed's value
+did not read its sources again, so the collector recovers them from the node's recorded
+source set. Without that, the second render of a panel whose only shared read is behind a
+computed would drop the follow and go quietly stale — the exact failure mode a separate
+`watch()` would have introduced, arriving by another door.
 
 **Where the halves live.** The descriptor, the collector, the address and the publish call
 are portable core and import no Discord. The reconciliation is not: `Reactor`
 (`discord/reactor.py:155`) and `Mount` (`discord/mount.py:445`) are both Discord-side, and
 so is the code in step 3. Phase 3 lands in two packages and its tests do too.
+
+**A mount notices its own commit; the bus is for everyone else.** This first shipped without
+the distinction — a panel that wrote a cell it also rendered learned about it the way a
+sibling did, after the bus drained. That read as a deliberate one-mechanism trade and was
+not one. `_flush` gates on `_dirty`, which a shared write never set, so the click was
+answered by a deferral and the repaint arrived an edit later; and for an action carrying
+`Feedback` it was worse than slow, because `busy.restore()` fired on the `NO_CHANGE` flush
+and `_repaint` deliberately redraws the *committed* plan. The reader saw "Working…", then
+the **old** scene, then the new one.
+
+The fix is not a second notification mechanism. §7's rule forbids a subscriber index — a
+back-reference from cell to reader, which [41](41-reactivity-cells.md) rejected because it
+keeps per-message components alive. Noticing one's own action needs neither: the mount
+registers `sl.on_action_commit` around every handler and intersects `StateDelta.addresses()`
+with `_watched`. It invalidates the runtime's render-input revision rather than setting a
+mount boolean directly, so an older candidate completing delivery cannot clear the signal.
+A candidate that newly reads a cell is covered too: a write racing its delivery leaves that
+candidate committed but dirty. A sibling still hears through the bus, and this mount hears
+through it too — the second delivery repaints nothing the reader can see, so the cost moved
+from before the update to after it.
+
+**What a mount reads, watches and subscribes to are three sets.** `Mount.observed` is what
+the committed generation read. Private `_watched` is committed observations union everything
+staged since the last successful commit. `Mount.followed` is what a capable scheduler actually
+subscribed to. `Mount` takes a `Scheduler`, and only a `Reactor` with a bus can subscribe, so
+a mount without one logs that once — but `_watched` still lets it repaint on *its own* writes.
+Live updates from another mount are what a missing reactor costs, and nothing else.
 
 **One constraint, stated rather than sold.** An identity-keyed address cannot be
 serialised, so it cannot be published from another process — `topics.py:107` contemplates
@@ -444,24 +521,20 @@ recently. That panel re-renders and sees it, which is what shared state means in
 other case — and §3 forbids anything durable living here, so what is lost is a filter or a
 selection that its owner can set again.
 
-**The mechanism.** A namespace is a `ReactiveOwner`, so `StateChange` and
-`StateDelta._apply` (`runtime/reactivity.py:120-131`) already work on one unmodified:
-`_restore` writes the `__dict__`, `_after` marks it changed, and `_state_changed` publishes.
-Undo therefore reaches other panels for free.
-
-What was missing is the way in. `_Transaction.delta()` (`:203-226`) builds from local
-snapshots and reads after-values out of `owner.__dict__`, which — with staging — still hold
-the old values when the delta is built. So the participant supplies its own changes
-instead: `contribute()` returns them, built from the overlay, which knows both halves
-without touching `__dict__`. `StateDelta` itself is unchanged.
+**The mechanism turned out to be nothing at all.** A namespace is a `ReactiveOwner`, so
+`StateChange` and `StateDelta._apply` already work on one unmodified: `_apply` writes the
+cell through the ordinary path, and `_state_changed` publishes. What the draft thought was
+missing — a way for the delta to see writes the transaction could not — went away when
+[41](41-reactivity-cells.md) §4 built the delta from the overlay for everyone. Phase 4 shipped
+with no code of its own; it is a phase of tests.
 
 Two details worth writing down:
 
-- `History.undo` restores synchronously, after its `await inverse()` returns
-  (`runtime/history.py:130-132`). The restore bypasses the overlay and writes through, but
-  there is no await inside it, so it opens no dirty-read window.
-- It restores inside a `transaction()`, so the restore is itself rollback-safe and its
+- `History.undo` restores inside its own `transaction()`, after `await inverse()` returns
+  (`runtime/history.py:130-132`), so the restore stages, is itself rollback-safe, and its
   publishes coalesce at that transaction's commit.
+- The restore reads nothing, so it enters no read set and carries no precondition. That is
+  §5b applied rather than an exception carved out for undo.
 
 **`History._reverse` ordering is unchanged**, and now uncomplicated. It runs the author's
 world inverse first so a failed one leaves the reader's view alone. The first draft needed
@@ -479,7 +552,12 @@ because something handed them the same object.
   dependency mechanism and a shared handle is a dependency; a second context system would
   be the actual mistake.
 - Nearest-provider shadowing already gives a preview or sandbox subtree its own binding.
-- Render-time `inject()` semantics do not change here.
+- Render-time `inject()` semantics do not change here — **and that is a real constraint the
+  worked example found.** `inject()` is only available while rendering, so a handler on an
+  injected namespace cannot look it up again; the render captures the handle and the handler
+  closes over it (`partial(self._cycle, appearance=appearance)`). A namespace is a dependency
+  and follows the dependency rule, which is the answer, but it is one line of ceremony at
+  every injected leaf and it is worth knowing before writing one.
 - A host that wants get-or-create per member keeps a dict of handles. That dict is §3's
   retention policy written down, and it belongs to the host that knows the lifetime.
 
@@ -500,34 +578,47 @@ The context key is typed by the namespace class, so `inject(PREFERENCES)` return
 | # | Deliverable | Exit criteria |
 |---|---|---|
 | 0 | Restructure `transaction()` around a fallible commit; add `ActionParticipant`/`join_action`. | Two participants both prepare before either applies; a rejected prepare applies nothing, aborts every participant and restores local state, notifying no owner; a raising hook leaves the action committed and reported. **Shipped.** |
-| 1 | `Shared[ScopeT]`, `sl.cell` over 41's `_Cell`; `__setattr__` reporting; attribute read/write/`del`; immediate-outside-an-action behaviour. | Descriptor identity; defaults; two namespaces with same-named cells not colliding; equal-value no-op; reserved names raising at class creation; an unhashable, mutable and absent scope all accepted; a mutable cell value refused and an `opaque=` one accepted; an undeclared write raising. |
-| 2 | `contribute()`, prepare/apply, `SharedStateConflictError`. Staging and read tracking come from 41. | A raising handler leaks no staged value; read-and-write conflicts raise, read-only actions and staged-value reads do not; a later write does not clear the guard; A→B→A does **not** conflict; one action across three namespaces prepares all before applying any; a `@sl.computed` over a shared cell recomputing when another owner writes it. |
-| 3 | Render observation, `topic()`, stage-time follow reconciliation, publication on commit. Core and Discord halves. | Two mounts react to one commit, once each; a dropped conditional read stops refreshing; no follow outlives its mount; a write during a render raising. |
-| 4 | Shared changes in `StateDelta`; blind undo and redo. | One entry undoes local plus multi-namespace shared state in one press; a sibling panel's intervening write does not disable the control and does not fail the press; undo publishes to the sibling; an entry with an external inverse whose inverse raises restores nothing. |
-| 5 | Docs, conflict diagnostics, devtools namespace/cell inspection, the worked example. | Examples cover deep injection, provider shadowing, and both retention shapes from §3; a namespace dropped by its last holder is collected. |
+| 1 | `Shared[ScopeT]`, `sl.cell` over 41's `_Cell`; `__setattr__` reporting; attribute read/write; immediate-outside-an-action behaviour. | Descriptor identity; defaults; two namespaces with same-named cells not colliding; equal-value no-op; reserved names raising at class creation; an unhashable, mutable and absent scope all accepted; `sl.cell()` narrowing a builtin default to its read-only ABC under `just typecheck`; an `opaque=` cell settling by identity; an undeclared write raising. **Shipped.** |
+| 2 | Prepare/apply, `SharedStateConflictError`. Staging and read tracking come from 41; `contribute()` is not built, because 41 §4 removed the reason for it (§5a). | A raising handler leaks no staged value; read-and-write conflicts raise, read-only actions and staged-value reads do not; a later write does not clear the guard; A→B→A does **not** conflict; one action across three namespaces publishes all or none; a `@sl.computed` over a shared cell recomputing when another owner writes it. **Shipped.** |
+| 3 | Render observation, `sl.addresses()`, stage-time follow acquisition, delivery-time pruning, publication on commit, and render-revision fencing for self-writes. Core and Discord halves. | Two mounts react to one commit, once each; a failed A→B candidate retains A while a delivered one retires it; a dropped conditional read stops refreshing; a cached computed still reports its shared sources; no follow outlives its mount; a write during a render raises; a self-write racing an in-flight candidate survives its commit, including a cell read only by that candidate; no reactor is needed and no stale `Feedback` flash occurs. **Shipped; candidate-atomicity correction recorded in [43](43-candidate-atomicity.md).** |
+| 4 | Shared changes in `StateDelta`; blind undo and redo. | One entry undoes local plus multi-namespace shared state in one press; a sibling panel's intervening write does not disable the control and does not fail the press; undo publishes to the sibling; an entry with an external inverse whose inverse raises restores nothing. **Shipped**, with no code of its own: a shared cell is in the transaction's overlay, so the delta and `StateDelta._apply` already covered it. |
+| 5 | Docs, conflict diagnostics, devtools namespace/cell inspection, the worked example. | Examples cover deep injection, provider shadowing, and both retention shapes from §3; a namespace dropped by its last holder is collected. **Shipped**, as `/layout shared` in the bot's showcase. |
 
 ## Verification
 
-- `packages/squid-layouts/tests/test_transactions.py`: `contribute()` reaching the delta;
-  the default `()` leaving an existing participant unaffected; contribution failure
-  aborting before publication.
-- `packages/squid-layouts/tests/test_shared_state.py` (new): descriptor identity; defaults
-  and `del`; the equality no-op; reserved names raising at class creation; scopes that are
-  unhashable, mutable and absent all working; immediate writes outside an action; staging,
-  read-your-writes and rollback inside one; in-place mutation of a `list` cell publishing,
-  and rolling back; a read-and-write conflict; A→B→A **not** conflicting; a read-only
-  action not conflicting; a read of a staged value not entering the read set; guard
-  stickiness after a later write; one action spanning three namespaces; a namespace with no
-  live holder collected after its last mount finishes.
+- `packages/squid-layouts/tests/test_transactions.py`: a pre-publication rollback writing
+  nothing, so a value committed while the action staged survives it; a participant rejecting
+  after publication still restoring.
+- `packages/squid-layouts/tests/test_shared_state.py` (new): descriptor identity; defaults;
+  the equality no-op; reserved names, misplaced `sl.state()` and misplaced `sl.cell()` all
+  raising at class creation; scopes that are unhashable, mutable and absent all working;
+  immediate writes outside an action; staging, read-your-writes and rollback inside one; a
+  read-and-write conflict; A→B→A **not** conflicting; a read-only action not conflicting; a
+  read of a staged value not entering the read set; guard stickiness after a later write; one
+  action spanning three namespaces; a namespace with no live holder collected.
 - `packages/squid-layouts/tests/test_shared_reactivity.py` (new, core half): a read outside
-  a render records no dependency; observation reconciliation across renders; a mutation
-  during render raising; publication through a real bus and `drain()`.
-- `packages/squid-layouts/tests/discord/test_shared_follow.py` (new, Discord half): two
-  mounts refreshed once each by one commit; a discarded staged render leaves no permanent
-  follow.
+  a render records no dependency; observation reconciliation across renders; a cached
+  computed still reporting its sources; `sl.addresses()` naming, seeing through a computed,
+  and refusing a thunk that reads none; a write during render raising; publication through a
+  real bus and `drain()`.
+- `packages/squid-layouts/tests/test_shared_follow.py` (new, Discord half; flat, since the
+  suite has no `tests/discord/`): two mounts refreshed once each by one commit; a dropped
+  conditional read unsubscribing; failed A→B staging retaining A and successful delivery
+  retiring it; a discarded staged render leaving no permanent follow; no follow outliving
+  its mount; a scheduler that cannot follow warning once. `TestSelfWrites`
+  covers the writing mount: it edits in its own interaction rather than deferring, does so
+  with no reactor at all, does not repaint for a cell it wrote but does not render, does not
+  flash the stale scene under `Feedback`, is left clean by a rolled-back action, and preserves
+  invalidation when a self-write races a candidate delivery or touches a cell read only by
+  that candidate. The ordinary self-write cases fail if `_note_shared_writes` is stubbed out;
+  the race cases fail if it bypasses the runtime revision fence or consults only `_observed`.
 - `packages/squid-layouts/tests/test_history.py`: one entry spanning local and two
   namespaces; a sibling's intervening write leaving `can_undo` true and the press
-  succeeding; undo publishing to the sibling mount; guard-free undo → redo → undo.
+  succeeding; undo publishing to the sibling mount; guard-free undo → redo → undo; an
+  inverse refused a shared write like a local one.
+- `tests/unit/bot/test_layout_showcase.py`: the worked example — what the reading panel
+  follows, a press on one panel scheduling the other, an injected namespace reaching a leaf
+  and undo covering it, and the two retention shapes collected and kept respectively.
 - `test_public_api.py`: the new exports, and the no-discord import check extends to the
   shared-state module — it is portable core.
 - `just typecheck` (compare against a pre-change run; the tree is not at zero) and
@@ -573,21 +664,20 @@ wait for a consumer.
   explicit precondition either. CAS had a third problem: inside a transaction its `True`
   would mean "valid right now, may still raise at commit", which is not what CAS means
   anywhere else.
-- **Requiring immutable cell declarations *by annotation*.** The previous shape of §4:
-  `list`, `dict` and `set` annotations rejected at class creation. The conclusion was right
-  and [41](41-reactivity-cells.md) adopted it; the mechanism was not, and 41 rejects it for
-  the reasons this plan already found. `__set_name__` does not receive annotations, and
-  reaching `owner.__annotations__` during class creation forces PEP 649 evaluation of names
-  the module may not have defined yet, in a package that bans quoted forward references
-  precisely to rely on that laziness. And the argument it used against freezing reads ("only
-  ever partial: a dataclass whose field is a list sails straight through") applied to itself
-  unchanged. `hash()` at the write is deep where an annotation is shallow, and it is what
-  ships.
-- **Freezing reads, or validating every write.** Still rejected, and these were always the
-  better half of the old §4's case. Coercing `list` → `tuple` on the way out makes the
-  declared type a lie, since there is no way to spell "frozen `T`". An immutability
-  predicate at write time pays a pass over the value on the hot path to reject what the
-  declaration already described.
+- **Rejecting `list`, `dict` and `set` annotations at runtime.** The previous shape of §4.
+  The conclusion was right and the mechanism was not: `__set_name__` does not receive
+  annotations, and reaching `owner.__annotations__` during class creation forces PEP 649
+  evaluation of names the module may not have defined yet, in a package that bans quoted
+  forward references precisely to rely on that laziness. It was also shallow — a dataclass
+  whose field is a list sailed straight through. 41 §1 gets the same rejection from the type
+  checker, where it is deep and reads nothing at runtime.
+- **A runtime `hash()` check at the write.** What 41 shipped first and this plan adopted for a
+  revision. Deep, but nothing in the machinery needs hashability, so it was a lint whose price
+  fell on mappings: there is no frozen-mapping literal, so every mapping write site paid an
+  `sl.FrozenMapping(...)` wrapper. 41's *Rejected alternatives* has the full account.
+- **Freezing reads.** Coercing `list` → `tuple` on the way out or in makes the declared type a
+  lie, since the value changes type between assignment and read, in a subsystem whose magic
+  was the complaint.
 - **Per-cell revisions.** A monotonic counter would make §5b's guard O(1) instead of a
   possibly-deep `==`, and would catch A→B→A. Neither earns it. The equality is the same
   conservative comparison `_Computed.refresh_for` runs on every computed refresh today, and
@@ -603,9 +693,24 @@ wait for a consumer.
   keys off the context the read happens in, which is information the runtime already has. A
   second reader would have let a render read a cell without recording a dependency — silent
   staleness, and the mistake nobody would find.
-- **A `handle.topics.cell` attribute namespace.** A proxy object, an unknown-name error path
-  and a second place cell names appear, to save naming the class once. `handle.topic(
-  Preferences.theme)` passes the descriptor, which is already the identity §2 keys on.
+- **`handle.topic(Cls.cell)`, and a `handle.topics.cell` attribute namespace.** Two shapes of
+  the same mistake, and `sl.addresses(lambda: handle.cell)` replaced both. The method named
+  the handle *and* the class to say one thing, and it could not be typed: `Preferences.theme`
+  at class level is typed as `Theme` — the `-> ValueT` lie `state()` and `cell()` both tell —
+  so the parameter had to be `object` and `handle.topic(42)` typechecked. It also spent a
+  reserved attribute name on every namespace. The attribute namespace added a proxy object,
+  an unknown-name error path and a second place cell names appear. The thunk is ordinary typed
+  code the checker follows, it reuses §7's collector rather than inventing a constructor
+  beside it, and reading a computed inside it yields the computed's shared sources, which is
+  the right answer and one nobody would have thought to ask a method for.
+- **`del handle.cell` as a reset.** In the surface table until it was read carefully. `del`
+  means removal in Python and the attribute is still there afterwards — `del handle.theme;
+  handle.theme` returns the default — so it is a reset wearing deletion's syntax. It also
+  broke the parity §4 insists on, since `sl.state()` has no `__delete__` and `del self.page`
+  on a component is an `AttributeError`. It existed only to avoid naming the default, which
+  is three lines up in the class body: `handle.theme = Theme.SYSTEM` is the reset. The tell
+  was the table's own "a write, and never a read, so never guarded" — a special case that
+  existed only because the operation did.
 - **A weak subscriber index inside the namespace.** A second copy of `TopicBus`'s coalescing
   and delivery contract, with a second set of failure modes. The namespace publishes; the
   bus delivers.

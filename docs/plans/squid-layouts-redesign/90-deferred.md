@@ -42,6 +42,41 @@ are not re-derived or accidentally adopted later.
   is [35](35-discord-v2-fragments.md), and is the supported incremental boundary.
   `sl.discord.contribute(document, to=view)` is the shipped spelling; `into=` remains
   rejected because it names the wrong relationship.
+  **Revisited again 2026-08-23**: [53](53-view-adoption.md) splits the surviving half on one
+  fact — whether the view has been *sent*. A live view owns a message and will edit it, and
+  that case stays rejected exactly as written above. An unsent view owns nothing: it is items
+  and callbacks that have not met Discord, so Squid can translate them into its own exact
+  primitives, become the sole writer, and leave the legacy object as a model plus handlers.
+  Renderer ownership, the property this entry protects, is preserved rather than traded away —
+  Squid constructs every item it draws. `adopt()` raises on `view.is_dispatching()`, which is
+  what makes this a narrowing and not a reversal — `View.message` is a convention bots follow by
+  hand and discord.py never sets, so it is kept only as a secondary signal.
+- **Class-body operational policy** (CascadeUI's `owner_only`, `instance_limit`,
+  `instance_scope`, `instance_policy`, `participant_limit` as class attributes) — rejected
+  2026-08-23 by [43](43-mount-defaults.md). Every one of those values is an actor, a scope,
+  or a host decision the same component is opened with differently (`ConsentPrompt` opens as
+  a root under `Reject()` and as an attached child two lines apart). A class attribute would
+  couple portable components to Discord session vocabulary, and 34 already declines to copy
+  class-variable policy. The ergonomics go into a `MountDefaults` value instead.
+- **A separate application-layer package** (`squid-ui`: a `UIRuntime` composition root, a
+  `Screen` recipe, `Projection` objects for cross-screen reactivity, named policy presets
+  like `private_panel`) — proposed externally 2026-08-23 and rejected as a *package*, though
+  one of its three ideas survived as [51](51-screens.md). Recorded because the proposal was
+  written from the README and re-derived, under new names, three things this series had
+  already settled:
+  `UIRuntime` is [43](43-mount-defaults.md)'s `MountDefaults` plus a host facade — 43 quotes
+  the same motivating snippet;
+  `Projection` is [47](47-topic-values.md) phase 2's `sl.watch`, reaching the same conclusion
+  ("give the engine a reactive address, do not cache domain state") by a worse route, since
+  tracked reads mean the dependency graph is not maintained by hand at all — and it
+  contradicted itself, forbidding a store and then proposing a keyed loader-plus-cache with
+  wrapped mutations;
+  the policy presets are the class-body surface 43 rejected, for the reason 43 gives (the same
+  component opens under different policies two lines apart, `squid/bot/consent.py:528-539`).
+  The package boundary itself runs against the productization decision: plans 24–28 moved
+  host-side helpers *into* `sl.discord` rather than out of it, and a fourth layer would
+  re-split what that round deliberately joined. What was worth keeping — that per-open session
+  policy is spread across call sites — is 51, landing in `sl.discord` as a value.
 - **Context-manager render DSL** (dominate-style) — fights `render()`-returns-a-value
   purity; the factory layer (plan 03) is the chosen ergonomics fix.
 - **Python 3.10 backport / PyPI packaging** — irrelevant to this repo (3.14 target).

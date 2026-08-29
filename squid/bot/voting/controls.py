@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     import squid.bot.app
 
 
-def poll_controls() -> sl.Actions:
+def poll_controls() -> sl.semantic.Actions:
     """The control row an open poll's card ends with."""
     return sl.actions(
         sl.routed_action("Close poll", poll_close.id(), key="close", tone=sl.Tone.DANGER),

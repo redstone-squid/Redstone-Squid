@@ -11,6 +11,7 @@ import squid_layouts as sl
 from squid.bot.submission.edit import BuildEditCommands
 from squid.bot.submission.ui.views import BuildEditComponent
 from squid.builds.domain import DoorBuild, OtherBuild, Status
+from squid.topics import resource_topic
 from squid_layouts.discord import SessionRegistry
 
 
@@ -80,7 +81,7 @@ class StubBuilds:
 def _cog(build: Any, *, allowed: bool = True, account_id: int | None = 1) -> BuildEditCommands[Any]:
     cog = BuildEditCommands.__new__(BuildEditCommands)
     cog.builds = cast(Any, StubBuilds(build))
-    topic_bus = sl.TopicBus()
+    topic_bus = sl.runtime.TopicBus()
     layout_reactor = sl.discord.Reactor(topic_bus)
     cog.bot = cast(
         Any,
@@ -159,12 +160,21 @@ async def test_nothing_typed_still_opens_the_workspace() -> None:
     assert _component(_sent_view(await _run(cog))) is not None
 
 
-async def test_stored_editor_rereads_after_its_topic_subscription_is_live() -> None:
+async def test_a_stored_editor_follows_its_build_without_rereading_it() -> None:
+    """The editor's resource is seeded with the build the command already fetched.
+
+    It still declares the dependency, so the mount follows the topic -- but the follow costs
+    a `sl.runtime.watch` line inside the loader rather than a second query to prime it.
+    """
     cog = _cog(_door())
 
-    await _run(cog)
+    interaction = await _run(cog)
 
-    assert cast(StubBuilds, cog.builds).gets == 2
+    assert cast(StubBuilds, cog.builds).gets == 1
+    component = _component(_sent_view(interaction))
+    assert component is not None
+    mount = cast(Any, _sent_view(interaction))._mount
+    assert mount.followed == (resource_topic("build", "1"),)
 
 
 async def test_a_field_the_build_does_not_have_is_refused_not_dropped() -> None:

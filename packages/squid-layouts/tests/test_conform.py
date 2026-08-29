@@ -6,15 +6,10 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from squid_layouts.discord import (
-    ELLIPSIS,
-    LimitViolationError,
-    conform,
-    conform_modal,
-    trim,
-)
-from squid_layouts.discord import (
     V2_LIMITS as LIMITS,
 )
+from squid_layouts.discord import LimitViolationError, conform
+from squid_layouts.discord.conformance import ELLIPSIS, conform_modal, trim
 from squid_layouts.discord.testing import assert_within_limits, payload_problems
 
 
@@ -166,7 +161,9 @@ def views(draw) -> discord.ui.LayoutView:
         view.add_item(discord.ui.TextDisplay(content))
     button_labels = draw(_labels)
     if button_labels:
-        view.add_item(_row(*(discord.ui.Button(label=label or None) for label in button_labels)))
+        view.add_item(
+            _row(*(discord.ui.Button(label=label or None, emoji=None if label else "x") for label in button_labels))
+        )
     option_specs = draw(_options)
     if option_specs:
         select = discord.ui.Select(placeholder=draw(st.one_of(st.none(), st.text(max_size=300))))

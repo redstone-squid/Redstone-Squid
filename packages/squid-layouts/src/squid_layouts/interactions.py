@@ -6,11 +6,13 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Protocol
 
+from squid_layouts.entity import EntityRef
 from squid_layouts.text import TextLike
 
 if TYPE_CHECKING:
     from squid_layouts.forms import FormIssue, FormLike, SubmitHandler
     from squid_layouts.guards import Guard
+    from squid_layouts.runtime.histories import History
 
 
 class ActionPolicy(StrEnum):
@@ -144,6 +146,13 @@ class SelectionEvent(ActionEvent):
 
 
 @dataclass(frozen=True, slots=True)
+class EntitySelectionEvent(ActionEvent):
+    """An entity selection submitted portable concrete references."""
+
+    values: tuple[EntityRef, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class SubmitEvent(ActionEvent):
     """A portable form was submitted."""
 
@@ -174,7 +183,14 @@ type ActionProceed = Callable[[], Awaitable[None]]
 
 
 class ActionMiddleware(ABC):
-    """Application-wide policy around an admitted mounted action."""
+    """Application-wide policy around an admitted mounted action.
+
+    The middleware onion surrounds the handler's state transaction so it can observe and
+    catch commit-time failures such as shared-state conflicts. State a middleware writes
+    itself is therefore independent of the handler transaction and does not roll back with
+    it. Middleware is a policy surface, not a component-state mutation surface, unless that
+    independence is deliberate.
+    """
 
     @abstractmethod
     async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None:
@@ -184,6 +200,7 @@ class ActionMiddleware(ABC):
 type ActionHandler = Callable[[ActionEvent], Awaitable[None]]
 type PressHandler = Callable[[PressEvent], Awaitable[None]]
 type SelectionHandler = Callable[[SelectionEvent], Awaitable[None]]
+type EntitySelectionHandler = Callable[[EntitySelectionEvent], Awaitable[None]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -198,6 +215,10 @@ class ActionBinding:
     """Admission checked by the frontend after the concurrency gate, before the handler."""
     feedback: Feedback | None = None
     """Busy feedback policy for a handler slow enough to need it."""
+    label: TextLike = ""
+    """What the pressed control says, which is what a framework-written entry is called."""
+    record: History | None = None
+    """History this action enters itself into, under `label`, before the handler runs."""
 
     def routed(self, values: tuple[str, ...]) -> ActionBinding | None:
         """Resolve a grouped control to its logical action binding."""
@@ -206,3 +227,26 @@ class ActionBinding:
         if len(values) != 1:
             return None
         return self.routes.get(values[0])
+
+
+__all__ = [
+    "ActionBinding",
+    "ActionEvent",
+    "ActionHandler",
+    "ActionKind",
+    "ActionMiddleware",
+    "ActionPolicy",
+    "ActionProceed",
+    "ActionRequest",
+    "ActionResponder",
+    "Actor",
+    "EntitySelectionEvent",
+    "EntitySelectionHandler",
+    "Feedback",
+    "PressEvent",
+    "PressHandler",
+    "SelectionEvent",
+    "SelectionHandler",
+    "SubmitEvent",
+    "Visibility",
+]

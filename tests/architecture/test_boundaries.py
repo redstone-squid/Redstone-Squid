@@ -91,6 +91,9 @@ def test_static_layout_rendering_stays_behind_the_host_wrapper() -> None:
             if not isinstance(target, ast.Name):
                 continue
             resolved = ".".join((aliases.get(target.id, target.id), *reversed(parts)))
+            # These are dotted *call* targets (package attribute -> function), not module
+            # paths: squid_layouts.discord.composition defines compose(), so a call resolves
+            # to "squid_layouts.discord.compose" regardless of which file compose() lives in.
             if resolved in {"squid_layouts.discord.compose", "squid_layouts.discord.render_static"}:
                 violations.append(f"{path}:{node.lineno}")
 

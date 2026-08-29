@@ -5,8 +5,9 @@ import weakref
 
 import pytest
 
-from squid_layouts import Component, computed, state, untracked
+from squid_layouts import Component, computed, state
 from squid_layouts.primitives import Text
+from squid_layouts.runtime import ReactiveCycleError, untracked
 
 
 class Counter(Component):
@@ -233,7 +234,7 @@ class TestFailure:
             def loop(self) -> int:
                 return self.loop
 
-        with pytest.raises(RuntimeError, match=r"Panel\.loop reads itself"):
+        with pytest.raises(ReactiveCycleError, match=r"cycle: Panel\.loop -> Panel\.loop"):
             _ = Panel().loop
 
 

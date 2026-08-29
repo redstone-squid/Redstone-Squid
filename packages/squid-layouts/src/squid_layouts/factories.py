@@ -4,11 +4,12 @@ The frozen dataclasses in :mod:`squid_layouts.semantic` remain the IR and remain
 these factories are sugar over them, normalizing what render code actually writes:
 conditional children (``cond and node``), bare strings and t-strings.
 
-Every factory has one shape: **content is positional, identity and configuration are
-keyword-only**. ``key`` is required exactly where the runtime reads it back — on nodes that
-own session state or custom ids. Records whose key no target reads today (`Field`, `Column`,
-`TableRow`, `MediaItem`, `ListItem`) default it to ``""`` rather than making authors invent
-identities that nothing consumes.
+Factories follow reading order: a semantic identity such as a heading, summary, item label,
+table columns, or form label comes before the content it introduces. Runtime identity and
+configuration remain keyword-only. ``key`` is required exactly where the runtime reads it
+back — on nodes that own session state or custom ids. Records whose key no target reads today
+(`Field`, `Column`, `TableRow`, `MediaItem`, `ListItem`) default it to ``""`` rather than
+making authors invent identities that nothing consumes.
 
 Collections are unpacked by the caller (``sl.section(*(sl.field(k, v) for k, v in rows))``).
 Factories deliberately do not flatten a list argument: ``*`` already says it, says it at the
@@ -19,16 +20,18 @@ from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping
 from datetime import datetime
 from string.templatelib import Template
 from types import UnionType
-from typing import Literal, NoReturn, TypeAliasType, get_args
+from typing import TYPE_CHECKING, Literal, NoReturn, TypeAliasType, get_args
 
-from squid_layouts.actions import ActionEvent, ActionPolicy, Feedback
 from squid_layouts.assets import Asset
+from squid_layouts.entity import ChannelType, EntityRef, EntityType
 from squid_layouts.forms import FormLike, SubmitHandler, bind_form
 from squid_layouts.guards import Guard
+from squid_layouts.interactions import ActionEvent, ActionPolicy, Feedback
 from squid_layouts.palette import INHERIT, Accent, Palette
 from squid_layouts.semantic import (
     CLOSED,
     FIRST_DESTINATION,
+    NO_ENTITIES,
     OFF,
     UNOPENED,
     UNRATED,
@@ -39,6 +42,7 @@ from squid_layouts.semantic import (
     Actions,
     Article,
     Aside,
+    Block,
     Choice,
     ChoiceEvent,
     ChoiceOwnership,
@@ -46,12 +50,17 @@ from squid_layouts.semantic import (
     Cluster,
     Code,
     Column,
+    Columns,
+    ConcreteLayoutNode,
     Controlled,
     Destination,
     Details,
     DisclosureOwnership,
     Download,
     Emphasis,
+    Entities,
+    EntityChoice,
+    EntityOwnership,
     Field,
     Fields,
     Figure,
@@ -62,6 +71,7 @@ from squid_layouts.semantic import (
     Importance,
     Item,
     ItemDisplay,
+    ItemLabel,
     ItemOwnership,
     Items,
     LayoutNode,
@@ -87,6 +97,7 @@ from squid_layouts.semantic import (
     Section,
     Stack,
     Status,
+    Summary,
     Table,
     TableDisplay,
     TableRow,
@@ -100,6 +111,9 @@ from squid_layouts.semantic import (
 )
 from squid_layouts.temporal import ZonedDateTime
 from squid_layouts.text import ResolvedText, TextLike, md
+
+if TYPE_CHECKING:
+    from squid_layouts.runtime.histories import History
 
 type TextValue = TextLike | Template
 """Author text: trusted Markdown, already-resolved text, or a t-string to interpolate."""
@@ -130,7 +144,7 @@ def _node_types(annotation: object) -> Iterator[type]:
 
 # Derived from the union rather than hand-listed, so a new node type is accepted the moment
 # it joins `LayoutNode`.
-_NODE_TYPES: tuple[type, ...] = tuple(_node_types(LayoutNode))
+_NODE_TYPES: tuple[type, ...] = tuple(_node_types(ConcreteLayoutNode))
 
 
 def _text(value: TextValue) -> TextLike:
@@ -220,24 +234,29 @@ def themed(palette: Palette, *children: ChildLike) -> Themed:
     return Themed(_children(children, "sl.themed()"), palette)
 
 
+def block(*children: ChildLike, accent: Accent = INHERIT) -> Block:
+    """An untitled region; ``accent`` is a house-colour override."""
+    return Block(_children(children, "sl.block()"), accent)
+
+
 def section(
+    heading: Heading,
     *children: ChildLike,
-    heading: TextValue | None = None,
     accent: Accent = INHERIT,
     thumbnail: str | None = None,
 ) -> Section:
     """A titled block of related content; ``accent`` is a house-colour override."""
-    return Section(_children(children, "sl.section()"), _opt_text(heading), accent, thumbnail)
+    return Section(heading, _children(children, "sl.section()"), accent, thumbnail)
 
 
 def article(
+    heading: Heading,
     *children: ChildLike,
-    heading: TextValue | None = None,
     accent: Accent = INHERIT,
     thumbnail: str | None = None,
 ) -> Article:
     """A self-contained block that stands on its own."""
-    return Article(_children(children, "sl.article()"), _opt_text(heading), accent, thumbnail)
+    return Article(heading, _children(children, "sl.article()"), accent, thumbnail)
 
 
 def aside(*children: ChildLike, tone: Tone = Tone.NEUTRAL) -> Aside:
@@ -259,20 +278,25 @@ def managed[ValueT](initial: ValueT) -> Managed[ValueT]:
 
 
 def details(
+    summary: Summary,
     *children: ChildLike,
     key: str,
-    summary: TextValue,
     open: DisclosureOwnership = CLOSED,
 ) -> Details:
     """Content the reader expands; ``key`` carries its disclosure state."""
-    return Details(key, _text(summary), _children(children, "sl.details()"), open)
+    return Details(key, summary, _children(children, "sl.details()"), open)
+
+
+def summary(content: TextValue) -> Summary:
+    """The control text that identifies a `details` region."""
+    return Summary(_text(content))
 
 
 def form(
+    label: TextValue,
     spec: FormLike,
     *,
     key: str,
-    label: TextValue = "Open form",
     on_submit: SubmitHandler | None = None,
     policy: ActionPolicy | None = None,
     tone: Tone = Tone.NEUTRAL,
@@ -288,9 +312,14 @@ def form(
     return FormTrigger(key, _text(label), resolved, handler, policy or default_policy, tone, emphasis, guard)
 
 
-def item(*children: ChildLike, key: str, label: TextValue, summary: TextValue | None = None) -> Item:
+def item(label: ItemLabel, *children: ChildLike, key: str, summary: TextValue | None = None) -> Item:
     """One entry of an `items` collection."""
-    return Item(key, _text(label), _children(children, "sl.item()"), _opt_text(summary))
+    return Item(key, label, _children(children, "sl.item()"), _opt_text(summary))
+
+
+def item_label(content: TextValue) -> ItemLabel:
+    """The identity shown for one `items` entry."""
+    return ItemLabel(_text(content))
 
 
 def items(
@@ -412,9 +441,18 @@ def bullets(
     )
 
 
-def column(heading: TextValue, *, key: str = "", importance: Importance = Importance.NORMAL) -> Column:
+def column(heading: TextValue, *, key: str = "") -> Column:
     """One column of a `table`."""
-    return Column(key, _text(heading), importance)
+    return Column(key, _text(heading))
+
+
+def columns(*entries: Conditional[Column]) -> Columns:
+    """The ordered schema that precedes a `table`'s rows."""
+    collected = _collect(entries, (Column,), "sl.columns()")
+    if not collected:
+        message = "sl.columns() needs at least one column"
+        raise ValueError(message)
+    return Columns(collected)
 
 
 def table_row(*cells: TextValue, key: str = "") -> TableRow:
@@ -423,15 +461,15 @@ def table_row(*cells: TextValue, key: str = "") -> TableRow:
 
 
 def table(
+    columns: Columns,
     *rows: Conditional[TableRow],
-    columns: Iterable[Conditional[Column]],
     key: str,
     display: TableDisplay = TableDisplay.AUTO,
     flexibility: Flexibility = Flexibility.NORMAL,
 ) -> Table:
     """Tabular data; ``key`` carries the chosen representation and page."""
     return Table(
-        _collect(columns, (Column,), "sl.table(columns=)"),
+        columns,
         _collect(rows, (TableRow,), "sl.table()"),
         key,
         display,
@@ -475,13 +513,24 @@ def action(
     policy: ActionPolicy = ActionPolicy.EXCLUSIVE,
     guard: Guard | None = None,
     feedback: Feedback | None = None,
+    record: History | None = None,
 ) -> Action:
     """A control that runs ``on_trigger``; ``key`` namespaces its custom id.
 
     ``guard`` decides whether a press may execute now; ``available`` decides whether the
     control is offered at all. A cooldown wants both.
+
+    ``record`` opens the entry for this press, under ``label``, before the handler runs: an
+    action whose whole delta is component state needs no `History.record` of its own. One
+    that touched the world still calls it, for the ``undo=`` only the handler can write --
+    and doing so under ``record=`` raises `HistoryError` rather than making two entries.
     """
-    return Action(key, _text(label), on_trigger, tone, emphasis, available, allow_grouping, policy, guard, feedback)
+    if record is not None and policy is ActionPolicy.PARALLEL_READ:
+        message = "a parallel-read action changes nothing, so it has nothing to record"
+        raise ValueError(message)
+    return Action(
+        key, _text(label), on_trigger, tone, emphasis, available, allow_grouping, policy, guard, feedback, record
+    )
 
 
 def toggle(
@@ -571,6 +620,42 @@ def choices(
         selection,
         minimum,
         maximum,
+        flexibility,
+    )
+
+
+def entity_choice(
+    ref: EntityRef,
+    label: TextValue,
+    *,
+    description: TextValue | None = None,
+    available: bool = True,
+) -> EntityChoice:
+    """One enumerated fallback for an entity picker."""
+    return EntityChoice(ref, _text(label), _opt_text(description), available)
+
+
+def entities(
+    *entries: Conditional[EntityChoice],
+    key: str,
+    entity_type: EntityType,
+    selection: EntityOwnership = NO_ENTITIES,
+    minimum: int = 1,
+    maximum: int = 1,
+    channel_types: tuple[ChannelType, ...] = (),
+    placeholder: TextValue | None = None,
+    flexibility: Flexibility = Flexibility.NORMAL,
+) -> Entities:
+    """Select frontend-resolved entities, optionally with an enumerated fallback."""
+    return Entities(
+        key,
+        entity_type,
+        _collect(entries, (EntityChoice,), "sl.entities()"),
+        selection,
+        minimum,
+        maximum,
+        channel_types,
+        _opt_text(placeholder),
         flexibility,
     )
 
@@ -670,3 +755,62 @@ def navigation(
         display,
         flexibility,
     )
+
+
+__all__ = [
+    "ChildLike",
+    "Conditional",
+    "TextValue",
+    "action",
+    "action_group",
+    "actions",
+    "article",
+    "aside",
+    "block",
+    "bullet",
+    "bullets",
+    "choice",
+    "choices",
+    "cluster",
+    "code",
+    "column",
+    "columns",
+    "controlled",
+    "destination",
+    "details",
+    "download",
+    "entities",
+    "entity_choice",
+    "field",
+    "fields",
+    "figure",
+    "form",
+    "group",
+    "heading",
+    "item",
+    "item_label",
+    "items",
+    "link",
+    "managed",
+    "measure",
+    "media",
+    "media_item",
+    "navigation",
+    "note",
+    "paragraph",
+    "progress",
+    "quote",
+    "rating",
+    "routed_action",
+    "routed_choices",
+    "section",
+    "stack",
+    "status",
+    "summary",
+    "table",
+    "table_row",
+    "themed",
+    "timestamp",
+    "toggle",
+    "zoned_timestamp",
+]

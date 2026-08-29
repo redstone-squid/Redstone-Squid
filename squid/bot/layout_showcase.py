@@ -1,6 +1,7 @@
 """Public interactive showcase for the squid-layouts engine."""
 
 from collections.abc import Sequence
+from functools import partial
 from typing import TYPE_CHECKING, Literal
 
 from discord import app_commands
@@ -27,9 +28,9 @@ _SOURCE_EXAMPLES = {
     def render(self):
         # Assigning declared state invalidates the owning mount.
         return sl.section(
+            sl.heading("Counter"),
             sl.paragraph(L("Count: {count}", count=self.count)),
             sl.actions(sl.action("+1", self.increment, key="add"), key="counter"),
-            heading="Counter",
         )
 
     async def increment(self, event: sl.PressEvent) -> None:
@@ -44,7 +45,7 @@ _SOURCE_EXAMPLES = {
 )
 
 # No page size: the solver fills Discord's actual text budget.
-return sl.section(lines, heading="Measured pagination")""",
+return sl.section(sl.heading("Measured pagination"), lines)""",
     "adaptation": """actions = tuple(
     sl.action(
         L("Action {number}", number=number),
@@ -142,7 +143,7 @@ class LayoutShowcase(sl.Component):
         self.right = DemoCounter(L(t"Right child"))
 
     @sl.computed
-    def status(self) -> sl.Message:
+    def status(self) -> sl.text.Message:
         return L("Section: {section} · reactive clicks: {clicks}", section=self.section, clicks=self.clicks)
 
     def render(self) -> Sequence[sl.LayoutNode]:
@@ -197,6 +198,7 @@ class LayoutShowcase(sl.Component):
     def _tour(self) -> Sequence[sl.LayoutNode]:
         return (
             sl.section(
+                sl.heading(L(t"What this message is doing")),
                 # The body is the card's shock absorber: truncate lets it give up characters
                 # under pressure before a field or the footer loses any.
                 sl.truncate(
@@ -220,7 +222,6 @@ class LayoutShowcase(sl.Component):
                     ),
                 ),
                 sl.note(L(t"Use the selector above to switch exhibits in place.")),
-                heading=L(t"What this message is doing"),
             ),
         )
 
@@ -247,11 +248,12 @@ class LayoutShowcase(sl.Component):
 
     def _adaptation(self) -> Sequence[sl.LayoutNode]:
         actions = tuple(
-            sl.Action(f"action.{index}", L("Action {number}", number=index), self._action_notice)
+            sl.semantic.Action(f"action.{index}", L("Action {number}", number=index), self._action_notice)
             for index in range(1, 37)
         )
         return (
             sl.section(
+                sl.heading(L(t"Structural adaptation")),
                 sl.truncate(
                     sl.paragraph(
                         L(
@@ -261,10 +263,9 @@ class LayoutShowcase(sl.Component):
                         )
                     )
                 ),
-                heading=L(t"Structural adaptation"),
                 accent=DISCORD_YELLOW,
             ),
-            sl.Actions(actions, key="showcase-actions"),
+            sl.semantic.Actions(actions, key="showcase-actions"),
         )
 
     def _degradation(self) -> Sequence[sl.LayoutNode]:
@@ -294,6 +295,7 @@ class LayoutShowcase(sl.Component):
     def _composition(self) -> Sequence[sl.LayoutNode]:
         return (
             sl.section(
+                sl.heading(L(t"Keyed component composition")),
                 sl.truncate(
                     sl.paragraph(
                         L(
@@ -302,7 +304,6 @@ class LayoutShowcase(sl.Component):
                         )
                     )
                 ),
-                heading=L(t"Keyed component composition"),
             ),
             self.boundary(self.left, key="left"),
             self.boundary(self.right, key="right"),
@@ -312,6 +313,7 @@ class LayoutShowcase(sl.Component):
         unsafe = "*operator input* @everyone [not a link](https://example.com)"
         return (
             sl.section(
+                sl.heading(L(t"Deferred localization and safe Markdown")),
                 sl.paragraph(
                     L(t"Messages retain their catalogue key and interpolation values until this mount plans a frame.")
                 ),
@@ -320,7 +322,6 @@ class LayoutShowcase(sl.Component):
                     sl.field(L(t"Escaped interpolation"), L(t"Rendered safely: {unsafe}")),
                 ),
                 sl.note(L(t"Switching language invalidates this same mount; no component is rebuilt or replaced.")),
-                heading=L(t"Deferred localization and safe Markdown"),
                 accent=DISCORD_BLUE,
             ),
             sl.actions(
@@ -329,13 +330,15 @@ class LayoutShowcase(sl.Component):
             ),
         )
 
-    def _source_example(self) -> sl.Section:
-        return sl.Section(
+    def _source_example(self) -> sl.semantic.Section:
+        return sl.semantic.Section(
+            sl.semantic.Heading(L(t"Declaration source")),
             (
-                sl.Paragraph(L(t"This is the author-facing declaration; planning chooses the legal Discord shape.")),
-                sl.Code(_SOURCE_EXAMPLES.get(self.section, _SOURCE_EXAMPLES["tour"]), language="python"),
+                sl.semantic.Paragraph(
+                    L(t"This is the author-facing declaration; planning chooses the legal Discord shape.")
+                ),
+                sl.semantic.Code(_SOURCE_EXAMPLES.get(self.section, _SOURCE_EXAMPLES["tour"]), language="python"),
             ),
-            heading=L(t"Declaration source"),
         )
 
     def _sections(self) -> tuple[tuple[str, sl.TextLike, sl.TextLike], ...]:
@@ -372,7 +375,7 @@ class LayoutShowcase(sl.Component):
         detail = " ".join(["adaptive layout sample"] * (1 + index % 4))
         return f"**#{index:03d}** · {detail}"
 
-    def _page_footer(self, page: int, pages: int) -> sl.Message:
+    def _page_footer(self, page: int, pages: int) -> sl.text.Message:
         total = len(self.entries)
         return L(t"Measured page {page} of {pages} · {total} samples")
 
@@ -393,11 +396,142 @@ class LayoutShowcase(sl.Component):
         await event.notice(L(t"The semantic action kept its own callback after adaptation."))
 
 
+# --- Shared state ---------------------------------------------------------------------------
+
+
+class Appearance(sl.runtime.Shared[int]):
+    """View state two live panels agree on, scoped to one reader.
+
+    Nothing outside the screen wants a theme name, so it is not a service and not a row: it
+    is a namespace the panels hold. Writes join the action's transaction, and a change
+    reaches the other panel through the bot's topic bus with nothing declared for it.
+    """
+
+    accent: int = sl.state(DISCORD_BLUE)
+    density: str = sl.state("comfortable")
+
+
+class Session(sl.runtime.Shared[int]):
+    """What one invocation's two panels are looking at, and only for as long as they are."""
+
+    focus: str = sl.state("overview")
+
+
+APPEARANCE = sl.ContextKey[Appearance]("showcase.appearance")
+
+_DENSITIES = ("comfortable", "compact")
+
+
+class AppearanceControls(sl.Component):
+    """A leaf that never receives the namespace as an argument -- it injects it.
+
+    `inject` is render-time, so the handlers close over the handle the render found rather
+    than looking it up again. That is the same rule every injected dependency follows here,
+    and a namespace is a dependency.
+    """
+
+    history: sl.runtime.History = sl.runtime.history(limit=5)
+
+    def render(self) -> sl.LayoutNode:
+        appearance = self.inject(APPEARANCE)
+        return sl.primitives.ActionGroup(
+            (
+                sl.primitives.Button(
+                    L(t"Cycle accent"),
+                    partial(self._cycle, appearance=appearance),
+                    "accent",
+                    record=self.history,
+                ),
+                sl.primitives.Button(
+                    L("Density: {density}", density=appearance.density),
+                    partial(self._toggle_density, appearance=appearance),
+                    "density",
+                ),
+                sl.primitives.Button(
+                    L(t"Undo appearance change"),
+                    self._undo,
+                    "undo",
+                    style=sl.primitives.ActionStyle.SECONDARY,
+                ),
+            )
+        )
+
+    async def _cycle(self, event: sl.PressEvent, *, appearance: Appearance) -> None:
+        # A read and a write of the same cell, so this carries a commit precondition: if the
+        # other panel moved the accent while this handler ran, the press fails rather than
+        # writing a value computed from something that is no longer there.
+        current = _ACCENTS.index(appearance.accent) if appearance.accent in _ACCENTS else 0
+        appearance.accent = _ACCENTS[(current + 1) % len(_ACCENTS)]
+
+    async def _toggle_density(self, event: sl.PressEvent, *, appearance: Appearance) -> None:
+        # Records by hand, unlike the accent button: this control's label names the density
+        # it is showing, which would make a confusing name for the entry that changes it.
+        appearance.density = _DENSITIES[(_DENSITIES.index(appearance.density) + 1) % len(_DENSITIES)]
+        self.history.record(L(t"Change density"))
+
+    async def _undo(self, event: sl.PressEvent) -> None:
+        await self.history.undo()
+
+
+class AppearancePanel(sl.Component):
+    """The panel that writes. It provides the namespace rather than passing it down."""
+
+    def __init__(self, appearance: Appearance, session: Session) -> None:
+        self.appearance = appearance
+        self.session = session
+        self.controls = AppearanceControls()
+
+    def render(self) -> sl.LayoutNode:
+        self.provide(APPEARANCE, self.appearance)
+        return sl.primitives.Panel(
+            (
+                sl.primitives.Heading(L(t"Appearance")),
+                sl.primitives.Text(L("Focus: {focus}", focus=self.session.focus)),
+                self.boundary(self.controls, key="controls"),
+                sl.primitives.Row(
+                    (sl.primitives.Button(L(t"Look at details"), self._focus_details, "focus"),),
+                ),
+            ),
+            accent=self.appearance.accent,
+        )
+
+    async def _focus_details(self, event: sl.PressEvent) -> None:
+        self.session.focus = "details" if self.session.focus == "overview" else "overview"
+
+
+class PreviewPanel(sl.Component):
+    """The panel that only reads. It declares no dependency and follows both cells anyway."""
+
+    def __init__(self, appearance: Appearance, session: Session) -> None:
+        self.appearance = appearance
+        self.session = session
+
+    def render(self) -> sl.LayoutNode:
+        return sl.primitives.Panel(
+            (
+                sl.primitives.Heading(L(t"Preview")),
+                sl.primitives.Text(
+                    L(
+                        "This panel re-renders because it read the cells the other one wrote. "
+                        "Density: {density} · focus: {focus}",
+                        density=self.appearance.density,
+                        focus=self.session.focus,
+                    )
+                ),
+            ),
+            accent=self.appearance.accent,
+        )
+
+
 class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     """Public commands demonstrating the layout engine."""
 
     def __init__(self, bot: BotT) -> None:
         self.bot = bot
+        # Retention state, per §3 of the shared-state plan: the cog outlives every panel, so
+        # a reader's accent survives closing and reopening the demo. The dict is the retention
+        # policy, written down where the lifetime is known.
+        self._appearance: dict[int, Appearance] = {}
 
     @commands.hybrid_group(name="layout")
     async def layout_group(self, ctx: Context[BotT]) -> None:
@@ -423,6 +557,26 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             access=sl.discord.Everyone(),
             locale=locale,
         )
+
+    @layout_group.command(name="shared")
+    async def shared(self, ctx: Context[BotT]) -> None:
+        """Open two live panels that share one namespace of view state."""
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        appearance = self._appearance.setdefault(ctx.author.id, Appearance(self.bot.topic_bus, ctx.author.id))
+        # Co-existence state: only the two panels hold it, so it is collected when the second
+        # of them finishes. Nothing was looking at it, and that is the correct lifetime.
+        session = Session(self.bot.topic_bus, ctx.author.id)
+        for component in (
+            AppearancePanel(appearance, session),
+            PreviewPanel(appearance, session),
+        ):
+            await send_component(
+                ctx,
+                component,
+                access=sl.discord.Owner(ctx.author.id),
+                locale=locale,
+                reactor=self.bot.layout_reactor,
+            )
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:

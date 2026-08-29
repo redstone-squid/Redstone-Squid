@@ -9,7 +9,7 @@ from discord.utils import escape_markdown
 
 import squid_layouts as sl
 from squid.bot._types import GuildMessageable
-from squid.bot.ui import render_item, render_static, truncate_display_text
+from squid.bot.ui import render_item, render_presentation, render_static, truncate_display_text
 from squid.bot.utils.components import (
     DISCORD_GREEN,
     DISCORD_RED,
@@ -98,6 +98,10 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         """Render a standalone Components V2 layout for the build."""
         return render_static([await self.render_node()])
 
+    async def render_presentation(self) -> sl.discord.DiscordPresentation:
+        """Render the complete presentation used by post delivery."""
+        return render_presentation([await self.render_node()])
+
     async def render_container(
         self, *, reservation: sl.discord.ResourceCost = sl.discord.EMPTY_RESERVATION
     ) -> discord.ui.Container[discord.ui.LayoutView]:
@@ -150,7 +154,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
                 for name, value in metadata.items()
                 if name in names
             )
-            return sl.section(sl.fields(*entries), heading=title) if entries else None
+            return sl.section(sl.heading(title), sl.fields(*entries)) if entries else None
 
         status_colours: dict[Status | None, int] = {
             Status.PENDING: DISCORD_YELLOW,
@@ -167,6 +171,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         media = await self._get_media_urls()
         extra_media = media[1:]
         return sl.section(
+            sl.heading(format_build_display_title(build, markdown=True, current_version=current_java_version)),
             # The body is the card's shock absorber: truncate lets it give up characters
             # under pressure before a field group, media, or the footer loses any.
             description and sl.truncate(sl.paragraph(description)),
@@ -178,7 +183,6 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
             bool(extra_media) and sl.media(*extra_media, key="media"),
             sl.note(footer),
             *rows,
-            heading=format_build_display_title(build, markdown=True, current_version=current_java_version),
             accent=status_colours.get(build.submission_status, DISCORD_GREEN),
             thumbnail=media[0] if media else None,
         )

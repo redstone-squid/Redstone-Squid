@@ -83,6 +83,26 @@ class RecoveryReport:
     claimed_elsewhere: tuple[RecoveryItem, ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class DurableRuntimeSnapshot:
+    """Operational state retained by a supervised durable runtime."""
+
+    running: bool
+    shutting_down: bool
+    active: tuple[tuple[str, DurabilityHealth, int], ...]
+    dirty: tuple[str, ...]
+    last_recovery: RecoveryReport | None
+
+
+@dataclass(frozen=True, slots=True)
+class PurgeResult:
+    """Outcome of one explicitly requested durable-record purge."""
+
+    record_key: str
+    deleted: bool
+    reason: str
+
+
 @dataclass(slots=True)
 class _RecoveryReportBuilder:
     restored: list[RecoveryItem] = field(default_factory=list)
@@ -187,8 +207,54 @@ class DurableSessionRuntime:
         self._by_session: dict[DurableSession, str] = {}
         self._dirty: set[str] = set()
         self._wake = asyncio.Event()
+        self._maintenance_lock = asyncio.Lock()
         self._running = False
         self._shutting_down = False
+        self._last_recovery: RecoveryReport | None = None
+
+    def snapshot(self) -> DurableRuntimeSnapshot:
+        """Return durable supervision and checkpoint state for diagnostics."""
+        active = tuple(
+            (record_id, current.session.health, len(current.session.mounts))
+            for record_id, current in sorted(self._active.items())
+        )
+        return DurableRuntimeSnapshot(
+            self._running,
+            self._shutting_down,
+            active,
+            tuple(sorted(self._dirty)),
+            self._last_recovery,
+        )
+
+    async def flush(self) -> None:
+        """Renew claims and checkpoint every dirty durable session now."""
+        self._require_running()
+        await self._maintain()
+
+    async def purge(self, record_keys: Sequence[str]) -> tuple[PurgeResult, ...]:
+        """Delete explicitly selected inactive records through a fresh fenced claim."""
+        self._require_running()
+        async with self._maintenance_lock:
+            return await self._purge(record_keys)
+
+    async def _purge(self, record_keys: Sequence[str]) -> tuple[PurgeResult, ...]:
+        results: list[PurgeResult] = []
+        for record_key in dict.fromkeys(record_keys):
+            if record_key in self._active:
+                results.append(PurgeResult(record_key=record_key, deleted=False, reason="active in this runtime"))
+                continue
+            token = await self.store.claim(record_key, self.owner, self.lease_seconds)
+            if token is None:
+                results.append(PurgeResult(record_key=record_key, deleted=False, reason="missing or claimed elsewhere"))
+                continue
+            deleted = False
+            try:
+                deleted = await self.store.delete(token)
+                results.append(PurgeResult(record_key, deleted, "deleted" if deleted else "claim expired"))
+            finally:
+                if not deleted:
+                    await self.store.release(token)
+        return tuple(results)
 
     async def open(
         self,
@@ -323,9 +389,12 @@ class DurableSessionRuntime:
 
     async def recover(self) -> RecoveryReport:
         """Claim and independently reconnect every available durable session record."""
-        if not self._running:
-            message = "recovery must run under DurableSessionRuntime.run() supervision"
-            raise RuntimeError(message)
+        self._require_running()
+        async with self._maintenance_lock:
+            return await self._recover()
+
+    async def _recover(self) -> RecoveryReport:
+        """Run recovery while the caller owns the maintenance lock."""
         report = _RecoveryReportBuilder()
         for listed in await self.store.list_records():
             item = _item_from_stored(listed, "")
@@ -416,7 +485,9 @@ class DurableSessionRuntime:
                 await _finish_mounts(mounts)
                 logger.exception("could not recover durable session %s", listed.key)
                 report.failed.append(_with_reason(item, error))
-        return report.freeze()
+        frozen = report.freeze()
+        self._last_recovery = frozen
+        return frozen
 
     def health_for(self, session: DurableSession) -> DurabilityHealth:
         record_id = self._by_session.get(session)
@@ -479,7 +550,7 @@ class DurableSessionRuntime:
             self._observe(active, mount)
 
     def _observe(self, active: _ActiveSession, mount: Mount) -> None:
-        async def presented(_: Mount) -> None:
+        def committed(_: Mount) -> None:
             self._request_checkpoint(active.token.key)
 
         async def finished(finished_mount: Mount) -> None:
@@ -491,7 +562,7 @@ class DurableSessionRuntime:
             active.locators.pop(finished_mount, None)
             self._request_checkpoint(active.token.key)
 
-        mount.on_presented(presented)
+        mount.on_committed(committed)
         mount.on_finish(finished)
 
     def _request_checkpoint(self, record_id: str) -> None:
@@ -502,21 +573,22 @@ class DurableSessionRuntime:
         self._wake.set()
 
     async def _maintain(self) -> None:
-        for record_id, active in tuple(self._active.items()):
-            if active.expires_at is not None and active.expires_at <= self.clock():
-                await active.session.finish()
-                continue
-            try:
-                renewed = await self.store.renew(active.token, self.lease_seconds)
-            except Exception:
-                logger.exception("could not renew durable session claim %s", record_id)
-                renewed = False
-            if not renewed:
-                await self._lose_claim(record_id)
-        for record_id in tuple(sorted(self._dirty)):
-            self._dirty.discard(record_id)
-            if (active := self._active.get(record_id)) is not None:
-                await self._checkpoint(active)
+        async with self._maintenance_lock:
+            for record_id, active in tuple(self._active.items()):
+                if active.expires_at is not None and active.expires_at <= self.clock():
+                    await active.session.finish()
+                    continue
+                try:
+                    renewed = await self.store.renew(active.token, self.lease_seconds)
+                except Exception:
+                    logger.exception("could not renew durable session claim %s", record_id)
+                    renewed = False
+                if not renewed:
+                    await self._lose_claim(record_id)
+            for record_id in tuple(sorted(self._dirty)):
+                self._dirty.discard(record_id)
+                if (active := self._active.get(record_id)) is not None:
+                    await self._checkpoint(active)
 
     async def _checkpoint(self, active: _ActiveSession) -> bool:
         try:

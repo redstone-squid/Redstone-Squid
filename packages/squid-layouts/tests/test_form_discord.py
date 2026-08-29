@@ -7,8 +7,11 @@ import discord
 import pytest
 
 import squid_layouts as sl
-from squid_layouts.discord import EntityField, EntityType, Everyone, FileField, Mount, build_form_modal
+from squid_layouts.discord import Everyone, Mount
+from squid_layouts.discord.modal import CheckboxGroupField
+from squid_layouts.discord.modals import EntityField, EntityType, FileField, build_form_modal
 from squid_layouts.discord.testing import commit_render, fake_interaction
+from squid_layouts.forms import FormText
 
 
 async def _ignore_raw(interaction, values) -> None: ...
@@ -20,49 +23,82 @@ def _component(modal: discord.ui.Modal) -> discord.ui.Item:
     return label.component
 
 
+def test_form_items_preserve_static_text_order() -> None:
+    spec = sl.forms.FormSpec(
+        "Ordered",
+        (FormText("Before"), sl.forms.TextField(key="name", label="Name"), FormText("After")),
+    )
+
+    modal = build_form_modal(spec, on_submit=_ignore_raw)
+
+    assert isinstance(modal.children[0], discord.ui.TextDisplay)
+    assert isinstance(modal.children[1], discord.ui.Label)
+    assert isinstance(modal.children[2], discord.ui.TextDisplay)
+
+
+def test_checkbox_group_uses_native_component_and_typed_declaration_order() -> None:
+    fallback = sl.forms.MultiChoiceField(
+        options=(sl.forms.ChoiceOption("a", "A", 1), sl.forms.ChoiceOption("b", "B", 2)),
+        required=False,
+    )
+    field = CheckboxGroupField(
+        key="checks",
+        label="Checks",
+        options=fallback.options,
+        required=False,
+        fallback=fallback,
+    )
+
+    modal = build_form_modal(sl.forms.FormSpec("Checks", (field,)), on_submit=_ignore_raw)
+
+    assert isinstance(_component(modal), discord.ui.CheckboxGroup)
+    assert field.parse(["b", "a"]) == (1, 2)
+    assert field.parse([]) == ()
+
+
 @pytest.mark.parametrize(
     ("field", "component_type"),
     [
-        (sl.TextField(key="value", label="Value"), discord.ui.TextInput),
-        (sl.TextAreaField(key="value", label="Value"), discord.ui.TextInput),
-        (sl.IntField(key="value", label="Value"), discord.ui.TextInput),
-        (sl.FloatField(key="value", label="Value"), discord.ui.TextInput),
-        (sl.DurationField(key="value", label="Value"), discord.ui.TextInput),
-        (sl.DateField(key="value", label="Value"), discord.ui.TextInput),
-        (sl.TimeField(key="value", label="Value"), discord.ui.TextInput),
-        (sl.DateTimeField(key="value", label="Value"), discord.ui.TextInput),
-        (sl.ZonedDateTimeField(key="value", label="Value"), discord.ui.TextInput),
+        (sl.forms.TextField(key="value", label="Value"), discord.ui.TextInput),
+        (sl.forms.TextAreaField(key="value", label="Value"), discord.ui.TextInput),
+        (sl.forms.IntField(key="value", label="Value"), discord.ui.TextInput),
+        (sl.forms.FloatField(key="value", label="Value"), discord.ui.TextInput),
+        (sl.forms.DurationField(key="value", label="Value"), discord.ui.TextInput),
+        (sl.forms.DateField(key="value", label="Value"), discord.ui.TextInput),
+        (sl.forms.TimeField(key="value", label="Value"), discord.ui.TextInput),
+        (sl.forms.DateTimeField(key="value", label="Value"), discord.ui.TextInput),
+        (sl.forms.ZonedDateTimeField(key="value", label="Value"), discord.ui.TextInput),
         (
-            sl.ChoiceField(
+            sl.forms.ChoiceField(
                 key="value",
                 label="Value",
-                options=(sl.ChoiceOption("a", "A", "a"), sl.ChoiceOption("b", "B", "b")),
+                options=(sl.forms.ChoiceOption("a", "A", "a"), sl.forms.ChoiceOption("b", "B", "b")),
             ),
             discord.ui.RadioGroup,
         ),
         (
-            sl.MultiChoiceField(
+            sl.forms.MultiChoiceField(
                 key="value",
                 label="Value",
-                options=(sl.ChoiceOption("a", "A", "a"), sl.ChoiceOption("b", "B", "b")),
+                options=(sl.forms.ChoiceOption("a", "A", "a"), sl.forms.ChoiceOption("b", "B", "b")),
             ),
             discord.ui.Select,
         ),
-        (sl.BoolField(key="value", label="Value"), discord.ui.Checkbox),
+        (sl.forms.BoolField(key="value", label="Value"), discord.ui.Checkbox),
         (EntityField(key="value", label="Value", entity_type=EntityType.ROLE), discord.ui.RoleSelect),
         (FileField(key="value", label="Value"), discord.ui.FileUpload),
     ],
 )
 def test_portable_and_discord_fields_build_native_modal_components(field, component_type) -> None:
-    modal = build_form_modal(sl.FormSpec("Fields", (field,)), on_submit=_ignore_raw)
+    modal = build_form_modal(sl.forms.FormSpec("Fields", (field,)), on_submit=_ignore_raw)
 
     assert isinstance(_component(modal), component_type)
 
 
 def test_zoned_datetime_field_exposes_configured_timezone_as_description_fallback() -> None:
-    field = sl.ZonedDateTimeField(key="value", label="Value", timezone="America/New_York")
+    field = sl.forms.ZonedDateTimeField(key="value", label="Value", timezone="America/New_York")
 
-    modal = build_form_modal(sl.FormSpec("Zoned", (field,)), on_submit=_ignore_raw)
+    modal = build_form_modal(sl.forms.FormSpec("Zoned", (field,)), on_submit=_ignore_raw)
 
     label = modal.children[0]
     assert isinstance(label, discord.ui.Label)
@@ -112,25 +148,25 @@ def test_discordpy_modal_component_inventory_serializes_through_labels(
 
 
 def test_modal_budget_rejects_implicit_chunking() -> None:
-    spec = sl.FormSpec(
+    spec = sl.forms.FormSpec(
         "Too large",
-        tuple(sl.TextField(key=f"field-{index}", label=f"Field {index}") for index in range(6)),
+        tuple(sl.forms.TextField(key=f"field-{index}", label=f"Field {index}") for index in range(6)),
     )
 
-    with pytest.raises(sl.LayoutInvariantError, match="1-5"):
+    with pytest.raises(sl.errors.LayoutInvariantError, match="1-5"):
         build_form_modal(spec, on_submit=_ignore_raw)
 
 
 def test_multi_choice_builds_select_cardinality_and_defaults() -> None:
-    field = sl.MultiChoiceField(
+    field = sl.forms.MultiChoiceField(
         key="values",
         label="Values",
         required=False,
-        options=tuple(sl.ChoiceOption(str(index), f"Choice {index}", index) for index in range(4)),
+        options=tuple(sl.forms.ChoiceOption(str(index), f"Choice {index}", index) for index in range(4)),
         minimum=1,
         maximum=3,
     )
-    modal = build_form_modal(sl.FormSpec("Many", (field,), prefill={"values": (1, "3")}), on_submit=_ignore_raw)
+    modal = build_form_modal(sl.forms.FormSpec("Many", (field,), prefill={"values": (1, "3")}), on_submit=_ignore_raw)
 
     component = _component(modal)
     assert isinstance(component, discord.ui.Select)
@@ -140,14 +176,14 @@ def test_multi_choice_builds_select_cardinality_and_defaults() -> None:
 
 
 def test_multi_choice_rejects_more_than_twenty_five_options() -> None:
-    field = sl.MultiChoiceField(
+    field = sl.forms.MultiChoiceField(
         key="values",
         label="Values",
-        options=tuple(sl.ChoiceOption(str(index), f"Choice {index}", index) for index in range(26)),
+        options=tuple(sl.forms.ChoiceOption(str(index), f"Choice {index}", index) for index in range(26)),
     )
 
-    with pytest.raises(sl.LayoutInvariantError, match="1-25"):
-        build_form_modal(sl.FormSpec("Many", (field,)), on_submit=_ignore_raw)
+    with pytest.raises(sl.errors.LayoutInvariantError, match="1-25"):
+        build_form_modal(sl.forms.FormSpec("Many", (field,)), on_submit=_ignore_raw)
 
 
 async def test_file_reader_wraps_discord_attachments_in_portable_values() -> None:
@@ -156,7 +192,7 @@ async def test_file_reader_wraps_discord_attachments_in_portable_values() -> Non
     async def capture(_interaction, values: dict[str, object]) -> None:
         submitted.update(values)
 
-    modal = build_form_modal(sl.FormSpec("Upload", (FileField(key="file", label="File"),)), on_submit=capture)
+    modal = build_form_modal(sl.forms.FormSpec("Upload", (FileField(key="file", label="File"),)), on_submit=capture)
     component = _component(modal)
     assert isinstance(component, discord.ui.FileUpload)
     attachment = Mock(spec=discord.Attachment)
@@ -169,7 +205,7 @@ async def test_file_reader_wraps_discord_attachments_in_portable_values() -> Non
 
     await modal.on_submit(fake_interaction())
 
-    uploaded = cast(tuple[sl.UploadedFile, ...], submitted["file"])[0]
+    uploaded = cast(tuple[sl.forms.UploadedFile, ...], submitted["file"])[0]
     assert (uploaded.name, uploaded.media_type, uploaded.size, uploaded.url) == (
         "build.litematic",
         "application/octet-stream",
@@ -180,9 +216,9 @@ async def test_file_reader_wraps_discord_attachments_in_portable_values() -> Non
 
 
 def test_file_field_rejects_more_than_ten_uploads() -> None:
-    with pytest.raises(sl.LayoutInvariantError, match="0-10"):
+    with pytest.raises(sl.errors.LayoutInvariantError, match="0-10"):
         build_form_modal(
-            sl.FormSpec("Upload", (FileField(key="file", label="File", maximum=11),)),
+            sl.forms.FormSpec("Upload", (FileField(key="file", label="File", maximum=11),)),
             on_submit=_ignore_raw,
         )
 
@@ -190,16 +226,18 @@ def test_file_field_rejects_more_than_ten_uploads() -> None:
 class DurationPanel(sl.Component):
     seconds: int = sl.state(0)
 
-    def __init__(self, *, validation_policy: sl.FormValidationPolicy = sl.FormValidationPolicy.RETRY) -> None:
+    def __init__(
+        self, *, validation_policy: sl.forms.FormValidationPolicy = sl.forms.FormValidationPolicy.RETRY
+    ) -> None:
         self.events: list[sl.SubmitEvent] = []
-        self.spec = sl.FormSpec(
+        self.spec = sl.forms.FormSpec(
             "Duration",
-            (sl.DurationField(key="duration", label="Duration"),),
+            (sl.forms.DurationField(key="duration", label="Duration"),),
             validation_policy=validation_policy,
         )
 
     def render(self) -> sl.LayoutNode:
-        return sl.form(self.spec, key="duration", label="Duration", on_submit=self.submitted)
+        return sl.form("Duration", self.spec, key="duration", on_submit=self.submitted)
 
     async def submitted(self, event: sl.SubmitEvent) -> None:
         self.events.append(event)
@@ -278,7 +316,7 @@ async def test_exclusive_submission_from_a_stale_generation_is_ignored() -> None
 
 
 async def test_accept_and_mark_delivers_parse_errors_to_the_handler() -> None:
-    panel = DurationPanel(validation_policy=sl.FormValidationPolicy.ACCEPT_AND_MARK)
+    panel = DurationPanel(validation_policy=sl.forms.FormValidationPolicy.ACCEPT_AND_MARK)
     mount = Mount(panel, access=Everyone(), timeout=None)
     commit_render(mount)
     modal = await _open_form(panel, mount)
@@ -287,12 +325,12 @@ async def test_accept_and_mark_delivers_parse_errors_to_the_handler() -> None:
     await modal.on_submit(fake_interaction())
 
     assert len(panel.events) == 1
-    assert panel.events[0].errors == (sl.FieldError("duration", "Enter a duration such as 30m, 12h, or 7d."),)
+    assert panel.events[0].errors == (sl.forms.FieldError("duration", "Enter a duration such as 30m, 12h, or 7d."),)
 
 
 def test_scale_field_renders_a_radio_group_within_the_radio_span() -> None:
-    field = sl.ScaleField(key="score", label="Score", labels={1: "Poor", 5: "Excellent"})
-    modal = build_form_modal(sl.FormSpec("Rate", (field,), prefill={"score": 4}), on_submit=_ignore_raw)
+    field = sl.forms.ScaleField(key="score", label="Score", labels={1: "Poor", 5: "Excellent"})
+    modal = build_form_modal(sl.forms.FormSpec("Rate", (field,), prefill={"score": 4}), on_submit=_ignore_raw)
 
     component = _component(modal)
     assert isinstance(component, discord.ui.RadioGroup)
@@ -302,8 +340,8 @@ def test_scale_field_renders_a_radio_group_within_the_radio_span() -> None:
 
 
 def test_a_wide_scale_falls_back_to_a_parsed_text_input() -> None:
-    field = sl.ScaleField(key="score", label="Score", minimum=0, maximum=100)
-    modal = build_form_modal(sl.FormSpec("Rate", (field,), prefill={"score": 42}), on_submit=_ignore_raw)
+    field = sl.forms.ScaleField(key="score", label="Score", minimum=0, maximum=100)
+    modal = build_form_modal(sl.forms.FormSpec("Rate", (field,), prefill={"score": 42}), on_submit=_ignore_raw)
 
     component = _component(modal)
     assert isinstance(component, discord.ui.TextInput)

@@ -1,14 +1,23 @@
 """A recovered mount is rebuilt against the exact target its render was fitted to."""
 
+import json
 import re
 
 import pytest
 
 import squid_layouts as sl
-from squid_layouts.discord import CLASSIC_TARGET, V2_TARGET, Everyone, Mount, Target, TargetRegistry
+from squid_layouts.discord import CLASSIC_TARGET, V2_TARGET, Everyone, Mount, Target
+from squid_layouts.discord.adapter import discord_py_adapter_profile
 from squid_layouts.discord.durability import DEFAULT_TARGETS, ComponentRegistry, SnapshotCodec
+from squid_layouts.discord.targets import TargetRegistry
 from squid_layouts.discord.testing import commit_classic_render, commit_render
 from squid_layouts.errors import LayoutInvariantError
+from squid_layouts.planning.adapter import (
+    ADAPTER_DISPATCH,
+    ADAPTER_INTERACTION_DELIVERY,
+    ADAPTER_MODAL_FORMS,
+    ADAPTER_RENDER_CLASSIC,
+)
 from squid_layouts.planning.limits import ClassicLimits
 
 
@@ -61,6 +70,7 @@ class TestSnapshot:
         assert snapshot.target_id == target.id
         assert snapshot.target_version == target.version
         assert snapshot.target_fingerprint == target.fingerprint
+        assert snapshot.target_adapter_capabilities == tuple(sorted(target.adapter_capabilities))
 
     @pytest.mark.parametrize("target", [V2_TARGET, CLASSIC_TARGET])
     def test_the_target_survives_the_canonical_codec(self, target) -> None:
@@ -70,12 +80,20 @@ class TestSnapshot:
 
         assert restored == snapshot
 
-    def test_a_protocol_one_record_is_refused_rather_than_assumed_to_be_v2(self) -> None:
-        """It has no way to say which mode it was planned for."""
+    def test_the_former_protocol_two_shape_is_refused(self) -> None:
         _components, snapshot = captured(V2_TARGET)
-        payload = SnapshotCodec.dumps(snapshot).replace('"protocol":2', '"protocol":1', 1)
+        payload = SnapshotCodec.dumps(snapshot).replace('"protocol":1', '"protocol":2', 1)
 
-        with pytest.raises(sl.discord.durability.SnapshotError, match="unsupported mount snapshot protocol 1"):
+        with pytest.raises(sl.discord.durability.SnapshotError, match="unsupported mount snapshot protocol 2"):
+            SnapshotCodec.loads(payload)
+
+    def test_the_former_protocol_one_shape_without_adapter_capabilities_is_refused(self) -> None:
+        _components, snapshot = captured(V2_TARGET)
+        raw = json.loads(SnapshotCodec.dumps(snapshot))
+        raw["target"].pop("adapter_capabilities")
+        payload = json.dumps(raw)
+
+        with pytest.raises(sl.discord.durability.SnapshotError, match="adapter_capabilities"):
             SnapshotCodec.loads(payload)
 
 
@@ -114,6 +132,37 @@ class TestRecovery:
         restored = components.restore(snapshot, targets=targets, access=Everyone())
 
         assert restored.target is custom
+
+    def test_a_superset_adapter_recovers_with_the_recorded_planning_capabilities(self) -> None:
+        mount_capabilities = frozenset({ADAPTER_RENDER_CLASSIC, ADAPTER_DISPATCH, ADAPTER_INTERACTION_DELIVERY})
+        old_profile = discord_py_adapter_profile("old", ">=2.7,<3", capabilities=mount_capabilities)
+        current_profile = discord_py_adapter_profile(
+            "current",
+            ">=2.7,<3",
+            capabilities=mount_capabilities | {ADAPTER_MODAL_FORMS},
+        )
+        old_target = Target.classic(adapter=old_profile)
+        components, snapshot = captured(old_target)
+        targets = TargetRegistry(Target.classic(adapter=current_profile), builtins=False)
+
+        restored = components.restore(snapshot, targets=targets, access=Everyone())
+
+        assert restored.target.adapter_capabilities == mount_capabilities
+        assert ADAPTER_MODAL_FORMS not in restored.target.capabilities
+
+    def test_recovery_rejects_a_missing_recorded_adapter_capability(self) -> None:
+        mount_capabilities = frozenset({ADAPTER_RENDER_CLASSIC, ADAPTER_DISPATCH, ADAPTER_INTERACTION_DELIVERY})
+        old_profile = discord_py_adapter_profile(
+            "old",
+            ">=2.7,<3",
+            capabilities=mount_capabilities | {ADAPTER_MODAL_FORMS},
+        )
+        current_profile = discord_py_adapter_profile("current", ">=2.7,<3", capabilities=mount_capabilities)
+        components, snapshot = captured(Target.classic(adapter=old_profile))
+        targets = TargetRegistry(Target.classic(adapter=current_profile), builtins=False)
+
+        with pytest.raises(LayoutInvariantError, match=ADAPTER_MODAL_FORMS):
+            components.restore(snapshot, targets=targets, access=Everyone())
 
     def test_the_built_in_targets_need_no_registration(self) -> None:
         assert V2_TARGET.id in DEFAULT_TARGETS

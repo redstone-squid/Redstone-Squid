@@ -8,14 +8,14 @@ from discord import Interaction, TextChannel
 
 import squid_layouts as sl
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
-from squid.bot.consent import ConsentPrompt, ConsentPromptView
+from squid.bot.consent import CONSENT_SCREEN, ConsentPrompt, ConsentPromptView
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.routes.build_log_consents import build_log_consent, build_log_consents
-from squid.bot.ui import CardField, render_static
+from squid.bot.ui import CardField, localization_for, render_static
 from squid.bot.utils.components import no_mentions, reply_layout, text_layout
 from squid.bot.utils.sticky_message import StickyMessage
 from squid.core.i18n import _
-from squid_layouts.discord import Opened, Reject, Rejected, SessionKey, SessionPolicy
+from squid_layouts.discord.sessions import Opened, Opener, Rejected
 
 if TYPE_CHECKING:
     # importing this causes a circular import at runtime
@@ -78,19 +78,13 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
         locale=locale,
         timeout=120,
     )
-    mount = component.mount()
-    mount.on_finish(component.abandon)
-    # The same key `prompt_for_consent` uses, so the banner button and the account panel share
-    # one prompt between them rather than each opening their own. The button is on a public
-    # sticky message with nothing guarding a double click.
     registry = interaction.client.mounts
-    key = SessionKey.user("consent", interaction.user.id)
-    opened = await registry.open(
-        mount,
+    opened = await CONSENT_SCREEN.open(
+        registry,
+        component,
         sl.discord.respond_to(interaction, ephemeral=True, wait=True),
-        key=key,
-        policy=SessionPolicy(collision=Reject()),
-        actor_id=interaction.user.id,
+        opener=Opener.of(interaction),
+        localization=localization_for(locale),
     )
     if isinstance(opened, Rejected):
         await interaction.followup.send(

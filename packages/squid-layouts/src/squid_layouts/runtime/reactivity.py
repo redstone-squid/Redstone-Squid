@@ -11,7 +11,8 @@ collected while the state it read lives on.
 """
 
 import logging
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Set as AbstractSet
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -68,30 +69,28 @@ class UndeclaredStateError(RuntimeError):
     """An attribute that is not declared state was written inside a transaction."""
 
 
-class MutableStateError(TypeError):
-    """A state field was assigned a value that cannot be treated as a snapshot."""
+class ReactiveCycleError(RuntimeError):
+    """A derived value depends, through some chain, on itself.
 
-
-def _reject(label: str, value: Any, error: TypeError) -> None:
-    message = (
-        f"{label} was assigned {type(value).__name__}, which is mutable. State is replaced, not "
-        f"mutated: use a tuple, a frozenset, or a frozen dataclass. A collaborator this component "
-        f"holds but never mutates is declared sl.state(..., opaque=True). ({error})"
-    )
-    raise MutableStateError(message) from error
-
-
-def _check_value(label: str, value: Any) -> None:
-    """Reject a state value that is not deeply immutable.
-
-    Hashability is the test. It is not a perfect oracle -- a plain mutable object hashes by
-    identity -- but it is *deep*, which is the property that matters: ``(1, [2])`` and a frozen
-    dataclass with a ``list`` field both fail, and those are the cases that actually bite.
+    Raised for a computed that reads itself and for a resource whose loader awaits one
+    waiting on it -- the same mistake, and a chain can cross both kinds, so it is one error.
+    Carries the whole ring rather than the node that closed it, because `a` needing `b` is
+    usually fine and `b` needing `a` is usually fine, and only the pair is wrong.
     """
-    try:
-        hash(value)
-    except TypeError as error:
-        _reject(label, value, error)
+
+    def __init__(self, path: Sequence[str]) -> None:
+        self.path = tuple(path)
+        joined = " -> ".join(self.path)
+        message = f"cycle: {joined}. Nothing in that ring can settle, because each waits on the next."
+        super().__init__(message)
+
+
+class SharedStateConflictError(RuntimeError):
+    """An action read a shared cell, wrote it, and someone else moved it in between.
+
+    Nothing was published: the action rolls back whole and travels the ordinary failed-handler
+    path. A handler cannot catch this, because the check runs when its transaction exits.
+    """
 
 
 def _equal(left: Any, right: Any) -> bool:
@@ -105,11 +104,10 @@ def _equal(left: Any, right: Any) -> bool:
 
 
 def _frozen(value: Any) -> Any:
-    """Return a restored snapshot value in the immutable shape it was exported from.
+    """Return a restored snapshot value in the shape it was exported from.
 
-    JSON has one sequence type, so an exported tuple comes back as a list. Nothing else needs
-    a case: a value still unhashable after this could not have been state to begin with, and
-    the assignment says so.
+    JSON has one sequence type, so an exported tuple comes back as a list. A field declared
+    `Sequence` reads either; one declared `tuple[...]` needs the tuple back.
     """
     if isinstance(value, list | tuple):
         return tuple(_frozen(item) for item in value)
@@ -120,13 +118,21 @@ _CURRENT: ContextVar[_Transaction | None] = ContextVar("squid_layouts_transactio
 
 
 class _Cell:
-    """One state field's storage: an immutable value, and the version that dates it."""
+    """One state field's storage: an immutable value, and the version that dates it.
 
-    __slots__ = ("value", "version")
+    `address` is what an addressed cell publishes under: a ``CellAddress`` for a shared cell
+    from :mod:`squid_layouts.runtime.shared`, or a ``Topic`` for the valueless cell behind
+    ``sl.watch()``. A component's cell has none, and the two behaviours an address adds --
+    the commit precondition below, and being followed by a render -- both key off its
+    presence rather than off a second cell type.
+    """
 
-    def __init__(self, value: Any = _MISSING, version: int = 0) -> None:
+    __slots__ = ("address", "value", "version")
+
+    def __init__(self, value: Any = _MISSING, version: int = 0, address: Any = None) -> None:
         self.value = value
         self.version = version
+        self.address = address
 
     def settle(self) -> int:
         """Return the version a reader should compare against. A cell is always settled."""
@@ -149,8 +155,12 @@ class _Cell:
         if current is not None:
             entry = current.staged(self)
             if entry is not None:
+                # Reading back what this action staged answers "what did I just write", not
+                # "what is the world", so it is not an observation and carries no precondition.
                 self.track(entry.version)
                 return entry.value
+            if self.address is not None:
+                current.observe(self)
         self.track(self.version)
         return self.value
 
@@ -192,6 +202,58 @@ class _Consumer(Protocol):
 
 
 _CONSUMER: ContextVar[_Consumer | None] = ContextVar("squid_layouts_consumer", default=None)
+
+_SETTLING: ContextVar[tuple[Any, ...]] = ContextVar("squid_layouts_settling", default=())
+"""The derived nodes currently producing a value on this task, outermost first.
+
+Task-local rather than global: two independent values settled concurrently each copy the
+context, so one cannot be mistaken for the other's dependency. A computed and a resource share
+one stack because a chain can run through both, and a cycle should be named whole.
+"""
+
+
+def cycle_path(node: Any) -> tuple[str, ...] | None:
+    """The ring `node` closes if it is already producing a value on this task, else `None`.
+
+    Reported from the first time `node` appears, so the answer is the ring itself and not the
+    run-up to it: naming a caller that merely reached the cycle sends the reader to the wrong
+    line. `node` needs a `_label`.
+    """
+    stack = _SETTLING.get()
+    for index, entered in enumerate(stack):
+        if entered is node:
+            return (*(held._label for held in stack[index:]), node._label)
+    return None
+
+
+@contextmanager
+def settling(node: Any) -> Iterator[None]:
+    """Mark `node` as producing a value, and refuse to enter a ring twice.
+
+    The check precedes the push, so the error is raised before whatever would otherwise
+    deadlock or recurse.
+    """
+    path = cycle_path(node)
+    if path is not None:
+        raise ReactiveCycleError(path)
+    token = _SETTLING.set((*_SETTLING.get(), node))
+    try:
+        yield
+    finally:
+        _SETTLING.reset(token)
+
+
+_OBSERVING: ContextVar[bool] = ContextVar("squid_layouts_observing_render", default=False)
+
+
+def rendering() -> bool:
+    """Whether a render is in progress on this task.
+
+    A render produces a tree from state and must not change the state it is reading, so a
+    shared write here would publish halfway through building the thing that reads it.
+    """
+    return _OBSERVING.get()
+
 
 _EPOCH = 0
 """Bumped by every write anywhere.
@@ -260,6 +322,23 @@ class StateDelta:
 
     changes: tuple[StateChange, ...] = ()
 
+    def addresses(self) -> tuple[Any, ...]:
+        """Every shared cell address this action wrote, deduplicated, in write order.
+
+        What a frontend needs to answer "did this action change anything I am looking at",
+        which is a question about its own commit rather than about the bus. A component's
+        cell has no address and does not appear.
+        """
+        found: list[Any] = []
+        seen: set[int] = set()
+        for change in self.changes:
+            address = _cell_for(change.owner, change.name).address
+            if address is None or id(address) in seen:
+                continue
+            seen.add(id(address))
+            found.append(address)
+        return tuple(found)
+
     def restore_before(self) -> None:
         """Return every attribute to the value the action found."""
         self._apply(before=True)
@@ -309,12 +388,24 @@ def _write(owner: ReactiveOwner, name: str, cell: _Cell, value: Any) -> None:
 class _Transaction:
     readonly: bool = False
     writes: dict[_Cell, _Staged] = field(default_factory=dict)
+    observed: dict[_Cell, Any] = field(default_factory=dict)
+    """Committed values this action read out of addressed cells, first read per cell.
+
+    Only shared cells are recorded, because only they can move under a running action.
+    """
     changed: dict[int, ReactiveOwner] = field(default_factory=dict)
     changed_names: dict[int, set[str]] = field(default_factory=dict)
     # Held by strong reference, so an id cannot be recycled while this transaction runs.
     born: dict[int, object] = field(default_factory=dict)
     hooks: list[tuple[object | None, Callable[[StateDelta], None]]] = field(default_factory=list)
     participants: dict[object, ActionParticipant] = field(default_factory=dict)
+    applied: bool = False
+    """Whether `publish` has put the staged values into the cells.
+
+    Rollback before this point must not write: the cells were never touched, and a shared
+    cell may hold a value someone else committed while this action was staging. Restoring
+    `before` over that would revert a write this action never saw.
+    """
     published: bool = False
     """Whether the commit reached the point where this action's writes became visible."""
     write_block: str | None = None
@@ -335,6 +426,33 @@ class _Transaction:
     def staged(self, cell: _Cell) -> _Staged | None:
         """This action's pending write to `cell`, if it has made one."""
         return self.writes.get(cell)
+
+    def observe(self, cell: _Cell) -> None:
+        """Note that this action looked at a shared cell's committed value.
+
+        The first read is the one kept: a later write does not clear it, because the action
+        has already branched on what it saw.
+        """
+        if cell not in self.observed:
+            self.observed[cell] = cell.value
+
+    def check_preconditions(self) -> None:
+        """Reject the action if a cell it both read and wrote no longer holds what it read.
+
+        Compare-and-set, derived from what the handler did rather than declared beside it.
+        A cell that was only written carries no precondition, and last commit wins; a cell
+        that was only read carries none either, because nothing was lost by looking.
+        """
+        for cell, seen in self.observed.items():
+            if cell not in self.writes or _equal(cell.value, seen):
+                continue
+            address = cell.address
+            message = (
+                f"{address.owner!r}.{address.name} changed while this action was running: it "
+                f"was read and then written, and the value it read is no longer there. Nothing "
+                f"was published."
+            )
+            raise SharedStateConflictError(message)
 
     def stage(self, owner: ReactiveOwner, name: str, cell: _Cell, value: Any) -> None:
         """Hold a write until this action commits, so nothing else can read it meanwhile."""
@@ -361,13 +479,25 @@ class _Transaction:
         for entry in self.writes.values():
             entry.cell.value = entry.value
             entry.cell.version = entry.version
+        self.applied = True
         _bump_epoch()
 
     def restore(self) -> None:
-        """Put every written cell back where the action found it."""
+        """Put every written cell back where the action found it.
+
+        Only if the values ever left the overlay. An action that fails before publication --
+        every handler failure, and every rejected commit precondition -- never touched a cell,
+        so there is nothing to put back and writing anyway would clobber whoever did.
+        """
         for entry in reversed(tuple(self.writes.values())):
-            entry.cell.restore(entry.before, entry.before_version)
+            if self.applied:
+                entry.cell.restore(entry.before, entry.before_version)
             entry.owner._state_rolled_back()
+        if self.writes:
+            # Even when nothing was written back: a computed that read a staged version is
+            # settled against a version that has just stopped existing, and only the epoch
+            # tells it to look again.
+            _bump_epoch()
 
     def enlist[ParticipantT: ActionParticipant](self, key: object, factory: Callable[[], ParticipantT]) -> ParticipantT:
         """Return this action's participant for `key`, creating it on first use.
@@ -415,6 +545,9 @@ class _Transaction:
         transaction -- `sl.history` pushes an entry -- and an entry describing an action
         that a later failure rolled back would be worse than a missing one.
         """
+        # Before publication, because the guard compares against the value another action
+        # left in the cell, and publishing would overwrite it with this action's own.
+        self.check_preconditions()
         # Published before prepare, so a participant validates against the state the action
         # actually left. Nothing awaits between here and `published`, so no other task can
         # observe the window, and a failed prepare still rolls the whole action back.
@@ -568,6 +701,16 @@ def join_action[ParticipantT: ActionParticipant](
     return current.enlist(key, factory)
 
 
+def action_participant(key: object) -> ActionParticipant | None:
+    """`key`'s participant in the action in flight, without enlisting one.
+
+    The read half of :func:`join_action`, for a subsystem that has to answer "what did this
+    action stage" on a path where staging itself would be wrong -- a read, or a render.
+    """
+    current = _CURRENT.get()
+    return None if current is None else current.participants.get(key)
+
+
 def has_action_hook(key: object) -> bool:
     """Whether `key` already registered a commit hook for the action in flight."""
     current = _CURRENT.get()
@@ -615,12 +758,16 @@ class _State:
         self.public_name = ""
         self.opaque = opaque
         self.persist = (not opaque) if persist is None else persist
+        self.persist_declared = persist is not None
+        """Whether the author asked for persistence, as opposed to taking the default.
+
+        An owner that cannot persist anything needs to tell the difference, so it can refuse
+        `persist=True` without refusing every field that merely defaulted to it.
+        """
 
     def __set_name__(self, owner: type, name: str) -> None:
         self._name = f"__state_{name}"
         self.public_name = name
-        if not self.opaque and self._default is not _MISSING:
-            _check_value(f"{owner.__name__}.{name}", self._default)
 
     @property
     def has_initial(self) -> bool:
@@ -628,16 +775,27 @@ class _State:
 
     def _initial(self, instance: ReactiveOwner) -> Any:
         if self._factory is None:
-            # No copy: the default is immutable, so every instance may share the one object.
+            # No copy: a state value is replaced, never mutated, so instances may share it.
             return self._default
-        value = self._factory()
-        if not self.opaque:
-            _check_value(f"{type(instance).__name__}.{self.public_name}", value)
-        return value
+        return self._factory()
+
+    def address(self, instance: ReactiveOwner) -> Any:
+        """What a write to this field publishes under, or `None` if nobody outside can see it.
+
+        Asked of the *instance*, not declared at the field: whether state is private to one
+        owner or shared with every mount holding it is what kind of object holds it, and the
+        object already knows. A namespace answers with an address; a component has no hook and
+        so has no address.
+        """
+        binding = getattr(instance, "_state_binding", None)
+        return None if binding is None else binding(self.public_name)
 
     def cell(self, instance: ReactiveOwner) -> _Cell:
         """Return this field's storage on `instance`, empty until something assigns it."""
-        return _cell_for(instance, self._name)
+        cell = instance.__dict__.get(self._name)
+        if cell is None:
+            cell = instance.__dict__[self._name] = _Cell(address=self.address(instance))
+        return cell
 
     def is_set(self, instance: ReactiveOwner) -> bool:
         """Whether this field currently holds a value of its own rather than its default."""
@@ -658,18 +816,21 @@ class _State:
             message = f"{type(instance).__name__}.{self.public_name} was never assigned"
             raise AttributeError(message)
         # Materializing a default is not a write: no version bump, no invalidation.
-        if cell is None:
-            cell = instance.__dict__[self._name] = _Cell(self._initial(instance))
-        else:
-            cell.value = self._initial(instance)
+        cell = self.cell(instance)
+        cell.value = self._initial(instance)
         return cell.read()
 
     def __set__(self, instance: ReactiveOwner, value: Any) -> None:
-        if not self.opaque:
-            try:
-                hash(value)
-            except TypeError as error:
-                _reject(f"{type(instance).__name__}.{self.public_name}", value, error)
+        if rendering() and self.address(instance) is not None:
+            # Only for shared state, and the asymmetry is the point: a render that writes its
+            # own component is merely confused, while one that writes state other mounts are
+            # reading has published a change halfway through building the thing that reads it.
+            message = (
+                f"{instance!r}.{self.public_name} was written while a render was reading it. A "
+                f"render turns state into a tree and may not change the state it is reading; "
+                f"write shared state from an action handler."
+            )
+            raise ReactiveWriteError(message)
         cell = instance.__dict__.get(self._name)
         if cell is not None:
             held = _staged_value(cell)
@@ -683,12 +844,66 @@ class _State:
 
 
 @overload
+def state[KeyT, ValueT](
+    default: dict[KeyT, ValueT],
+    *,
+    persist: bool | None = None,
+    opaque: bool = False,
+) -> Mapping[KeyT, ValueT]: ...
+
+
+@overload
+def state[ValueT](
+    default: list[ValueT],
+    *,
+    persist: bool | None = None,
+    opaque: bool = False,
+) -> Sequence[ValueT]: ...
+
+
+@overload
+def state[ValueT](
+    default: set[ValueT],
+    *,
+    persist: bool | None = None,
+    opaque: bool = False,
+) -> AbstractSet[ValueT]: ...
+
+
+@overload
 def state[ValueT](
     default: ValueT,
     *,
     persist: bool | None = None,
     opaque: bool = False,
 ) -> ValueT: ...
+
+
+@overload
+def state[KeyT, ValueT](
+    *,
+    factory: Callable[[], dict[KeyT, ValueT]],
+    persist: bool | None = None,
+    opaque: bool = False,
+) -> Mapping[KeyT, ValueT]: ...
+
+
+@overload
+def state[ValueT](
+    *,
+    factory: Callable[[], list[ValueT]],
+    persist: bool | None = None,
+    opaque: bool = False,
+) -> Sequence[ValueT]: ...
+
+
+@overload
+def state[ValueT](
+    *,
+    factory: Callable[[], set[ValueT]],
+    persist: bool | None = None,
+    opaque: bool = False,
+) -> AbstractSet[ValueT]: ...
 
 
 @overload
@@ -714,9 +929,12 @@ def state(
     """Declare observed component state.
 
     Pass a default or a factory for a field the class owns, or neither for one ``__init__``
-    assigns. Values are immutable and replaced rather than mutated, which every assignment
-    checks. ``opaque=True`` declares a collaborator the component holds and never mutates --
-    a service, a guild, a session -- and skips that check for it.
+    assigns. A value is replaced, never mutated in place: an in-place change moves no version.
+    The type checker holds that line -- a ``dict``, ``list`` or ``set`` default declares the
+    field as ``Mapping``, ``Sequence`` or ``AbstractSet``, so a concrete annotation and every
+    mutating method are type errors. The stored value is the one assigned. ``opaque=True``
+    declares a collaborator the component holds -- a service, a guild, a session -- which
+    settles on identity rather than ``==`` and is never persisted.
     """
     return _State(default, factory=factory, persist=persist, opaque=opaque)
 
@@ -825,7 +1043,7 @@ class _Derived:
     alive; a version comparison at read time answers the same question with no back-edge.
     """
 
-    __slots__ = ("_epoch", "_function", "_label", "_running", "_settled", "owner", "sources", "value", "version")
+    __slots__ = ("_epoch", "_function", "_label", "_settled", "owner", "sources", "value", "version")
 
     def __init__(self, function: Callable[[Any], Any], owner: ReactiveOwner, label: str) -> None:
         self._function = function
@@ -835,7 +1053,6 @@ class _Derived:
         self.value: Any = None
         self.version = 0
         self._settled = False
-        self._running = False
         self._epoch = -1
 
     def settle(self) -> int:
@@ -845,21 +1062,17 @@ class _Derived:
         if self._settled and all(source.settle() == seen for source, seen in self.sources.items()):
             self._epoch = _EPOCH
             return self.version
-        if self._running:
-            message = f"{self._label} reads itself, so it can never settle"
-            raise RuntimeError(message)
         # Cleared before the run, not after: a body that raises must leave the node asking to
         # be recomputed rather than holding a value nothing verified.
         self._settled = False
         self._epoch = -1
         self.sources = {}
-        self._running = True
         token = _CONSUMER.set(self)
         try:
-            value = self._function(self.owner)
+            with settling(self):
+                value = self._function(self.owner)
         finally:
             _CONSUMER.reset(token)
-            self._running = False
         self._settled = True
         # Recomputing is not a write, so the epoch stays put: nothing downstream can be stale
         # from it, and bumping would make every settled node in the process walk its sources.
@@ -915,3 +1128,81 @@ def computed[ValueT](function: Callable[[Any], ValueT]) -> ValueT:
     reads is never evaluated, and one that raises does so where its value is used.
     """
     return _Computed(function)  # pyrefly: ignore[bad-return]
+
+
+@dataclass(slots=True)
+class Observation:
+    """What one run read, so its shared cells can be turned into bus addresses.
+
+    A plain :class:`_Consumer`: the same tracked read a computed records is what a render
+    records, and the context the read happens in is the only difference between them. For a
+    shared cell that is the whole story -- there is no separate ``watch()`` to forget to
+    call. ``sl.watch()`` exists only for a named topic, which has no value to read.
+    """
+
+    sources: dict[Any, int] = field(default_factory=dict)
+
+    def addresses(self) -> tuple[Any, ...]:
+        """Every addressed cell this run reached, deduplicated, in read order.
+
+        Anything with sources of its own is walked rather than re-run -- a cached computed, a
+        settled resource. It did not read its sources again, but a reader that used its value
+        still depends on every one of them, so a topic watched two loaders down is still this
+        render's dependency. One that carries an address of its own contributes that too.
+        """
+        found: list[Any] = []
+        seen: set[int] = set()
+
+        def walk(sources: dict[Any, int]) -> None:
+            for source in sources:
+                identity = id(source)
+                if identity in seen:
+                    continue
+                seen.add(identity)
+                if isinstance(source, _Cell):
+                    if source.address is not None:
+                        found.append(source.address)
+                elif (nested := getattr(source, "sources", None)) is not None:
+                    # An addressed source is followed *and* walked. A resource on a namespace
+                    # publishes its own address when it reloads, but it can also be re-pended
+                    # by a cell its loader read, and a reader depends on both routes.
+                    address = getattr(source, "address", None)
+                    if address is not None:
+                        found.append(address)
+                    walk(nested)
+
+        walk(self.sources)
+        return tuple(found)
+
+
+@contextmanager
+def observe_render() -> Iterator[Observation]:
+    """Collect the shared cells one component render read, and forbid writing them."""
+    observation = Observation()
+    consumer = _CONSUMER.set(observation)
+    observing = _OBSERVING.set(True)
+    try:
+        yield observation
+    finally:
+        _OBSERVING.reset(observing)
+        _CONSUMER.reset(consumer)
+
+
+def addresses(read: Callable[[], object]) -> tuple[Any, ...]:
+    """The bus addresses of the shared cells `read` touches, for following them by hand.
+
+    ``sl.addresses(lambda: preferences.theme)`` names a cell the way the rest of the package
+    does -- by reading it -- so the thunk is ordinary typed code with no class name repeated
+    and no string to drift. Reading a computed yields the shared cells behind it. Raises if
+    the thunk reaches no shared cell at all, so a typo cannot quietly follow nothing.
+    """
+    with observe_render() as observation:
+        read()
+    found = observation.addresses()
+    if not found:
+        message = (
+            "addresses() read no shared state: the callable must read at least one sl.state() "
+            "off a namespace, directly or through a computed. Component state has no address."
+        )
+        raise ValueError(message)
+    return found
