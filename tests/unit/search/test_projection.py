@@ -1,37 +1,35 @@
 """Tests for search projection normalization and typed facets."""
 
 from decimal import Decimal
-from types import SimpleNamespace
-from typing import cast
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
 from squid.search.infrastructure.projection import (
     ProjectionFacet,
+    RecordProjectionSource,
     SearchProjection,
-    SearchProjectionLoader,
+    TagProjectionSource,
     build_facet_models,
+    build_record_projection,
+    build_tag_projection,
     normalize_search_text,
+    parse_projection_key,
     projection_source_hash,
 )
 
 
-@pytest.mark.asyncio
-async def test_loader_rejects_retired_legacy_record_keys() -> None:
-    session = AsyncMock(spec=AsyncSession)
-    loader = SearchProjectionLoader(cast(AsyncSession, session))
-
-    assert await loader.load("record", "legacy-smallest:1") is None
-    session.scalar.assert_not_awaited()
+def test_loader_rejects_retired_legacy_record_keys() -> None:
+    assert parse_projection_key("record", "legacy-smallest:1") is None
 
 
-@pytest.mark.asyncio
-async def test_record_documents_carry_titles_not_category_keys() -> None:
-    definition = SimpleNamespace(
-        id=7,
+def test_record_documents_carry_titles_not_category_keys() -> None:
+    source = RecordProjectionSource(
+        result_id=3,
+        definition_id=7,
+        status="unresolved",
+        history_complete=True,
+        gap_reasons={},
         record_class="fastest",
         build_kind="door",
         version_scope="all_time",
@@ -39,24 +37,14 @@ async def test_record_documents_carry_titles_not_category_keys() -> None:
         title="Fastest 2x2 Door",
         subtitle="All-time",
     )
-    result = SimpleNamespace(id=3, status="unresolved", history_complete=True, gap_reasons={})
-    session = AsyncMock(spec=AsyncSession)
-    execute_result = MagicMock()
-    execute_result.one_or_none.return_value = (result, definition)
-    session.execute.return_value = execute_result
-    scalars_result = MagicMock()
-    scalars_result.all.return_value = []
-    session.scalars.return_value = scalars_result
-    loader = SearchProjectionLoader(cast(AsyncSession, session))
 
-    projection = await loader.load("record", "result:3")
+    projection = build_record_projection(source)
 
-    assert projection is not None
     # With no holder, the definition's formatted title is the fallback, never the raw key.
     assert projection.title == "Fastest 2x2 Door"
     assert projection.subtitle == "All-time"
     assert projection.tags == ("fastest", "door", "all_time")
-    assert projection.document_data["category_key"] == definition.category_key
+    assert projection.document_data["category_key"] == source.category_key
 
 
 def test_normalize_collapses_case_and_whitespace() -> None:
@@ -97,58 +85,41 @@ def test_facet_models_assign_per_field_ordinals_and_typed_columns() -> None:
     assert models[4].boolean_value is True
 
 
-def _session_holding_tag(**attributes: object) -> AsyncMock:
-    definition = SimpleNamespace(
-        **{
-            "moderation_status": "approved",
-            "authority": "official",
-            "value_type": "none",
-            "query_name": None,
-            **attributes,
-        }
+def _tag_source(*, semantic_kind: str = "pattern", moderation_status: str = "approved") -> TagProjectionSource:
+    return TagProjectionSource(
+        tag_id=5,
+        display_name="Full Lacing",
+        semantic_kind=semantic_kind,
+        moderation_status=moderation_status,
+        authority="official",
+        value_type="none",
+        query_name=None,
+        aliases=("seamless",),
     )
-    session = AsyncMock(spec=AsyncSession)
-    session.get.return_value = definition
-    # `scalars` is awaited and its result is not, so the result must be a plain object:
-    # an AsyncMock child would hand back a coroutine from `.all()`.
-    session.scalars.return_value = SimpleNamespace(all=lambda: ["seamless"])
-    return session
 
 
 @pytest.mark.parametrize("semantic_kind", ["restriction", "pattern", "showcase"])
-@pytest.mark.asyncio
-async def test_a_tag_document_says_which_kind_of_tag_it_is(semantic_kind: str) -> None:
+def test_a_tag_document_says_which_kind_of_tag_it_is(semantic_kind: str) -> None:
     """Every approved tag used to index as `kind = tag`, whatever it actually was.
 
     That is why asking for patterns needed its own command: the one question the index
     could answer about a tag was that it was a tag.
     """
-    session = _session_holding_tag(display_name="Full Lacing", semantic_kind=semantic_kind)
-    loader = SearchProjectionLoader(cast(AsyncSession, session))
-
-    projection = await loader.load("metadata", "tag:5")
+    projection = build_tag_projection(_tag_source(semantic_kind=semantic_kind))
 
     assert projection is not None
     assert projection.document_data["metadata_kind"] == semantic_kind
     assert (semantic_kind, "Full Lacing") in [(facet.field_name, facet.value) for facet in projection.facets]
 
 
-@pytest.mark.asyncio
-async def test_a_tag_document_still_answers_the_question_it_used_to() -> None:
+def test_a_tag_document_still_answers_the_question_it_used_to() -> None:
     """`kind:tag` was the only taxonomy query there was, so it keeps working."""
-    session = _session_holding_tag(display_name="Full Lacing", semantic_kind="pattern")
-    loader = SearchProjectionLoader(cast(AsyncSession, session))
-
-    projection = await loader.load("metadata", "tag:5")
+    projection = build_tag_projection(_tag_source(semantic_kind="pattern"))
 
     assert projection is not None
     kinds = {facet.value for facet in projection.facets if facet.field_name == "kind"}
     assert kinds == {"tag", "pattern"}
 
 
-@pytest.mark.asyncio
-async def test_an_unapproved_tag_is_not_indexed() -> None:
-    session = _session_holding_tag(display_name="Full Lacing", semantic_kind="pattern", moderation_status="pending")
-    loader = SearchProjectionLoader(cast(AsyncSession, session))
-
-    assert await loader.load("metadata", "tag:5") is None
+def test_an_unapproved_tag_is_not_indexed() -> None:
+    assert build_tag_projection(_tag_source(semantic_kind="pattern", moderation_status="pending")) is None
