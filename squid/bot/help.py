@@ -30,7 +30,7 @@ DIRECTORY_CATEGORIES: tuple[tuple[Any, frozenset[str]], ...] = (
     (_("Discover"), frozenset({"search", "restrictions"})),
     (_("Account"), frozenset({"account", "notifications", "redstoner"})),
     (_("Community"), frozenset({"poll", "archive"})),
-    (_("Administration & setup"), frozenset({"records", "settings", "tag", "version"})),
+    (_("Administration & setup"), frozenset({"records", "settings", "tag", "versions"})),
     (_("Information"), frozenset({"help"})),
 )
 """How the directory groups top-level commands, by command name.
