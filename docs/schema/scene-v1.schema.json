@@ -10,6 +10,15 @@
         },
         {
           "$ref": "#/$defs/html"
+        },
+        {
+          "$ref": "#/$defs/slack_message"
+        },
+        {
+          "$ref": "#/$defs/slack_modal"
+        },
+        {
+          "$ref": "#/$defs/slack_home"
         }
       ]
     },
@@ -1349,6 +1358,997 @@
         "kind",
         "large",
         "visible"
+      ],
+      "type": "object"
+    },
+    "slack_action": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "maxLength": 255,
+              "type": "string"
+            },
+            "mode": {
+              "enum": [
+                "exclusive",
+                "rebase",
+                "parallel_read",
+                "immediate"
+              ]
+            }
+          },
+          "required": [
+            "action",
+            "mode"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "slack_actions": {
+      "additionalProperties": false,
+      "properties": {
+        "block_id": {
+          "maxLength": 255,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "elements": {
+          "items": {
+            "$ref": "#/$defs/slack_element"
+          },
+          "maxItems": 25,
+          "type": "array"
+        },
+        "kind": {
+          "const": "actions"
+        }
+      },
+      "required": [
+        "kind",
+        "elements",
+        "block_id"
+      ],
+      "type": "object"
+    },
+    "slack_alert": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "alert"
+        },
+        "style": {
+          "enum": [
+            "info",
+            "success",
+            "warning",
+            "error"
+          ]
+        },
+        "text": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/slack_text"
+            }
+          ]
+        },
+        "title": {
+          "$ref": "#/$defs/slack_text"
+        }
+      },
+      "required": [
+        "kind",
+        "title",
+        "text",
+        "style"
+      ],
+      "type": "object"
+    },
+    "slack_block": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/slack_section"
+        },
+        {
+          "$ref": "#/$defs/slack_header"
+        },
+        {
+          "$ref": "#/$defs/slack_context"
+        },
+        {
+          "$ref": "#/$defs/slack_divider"
+        },
+        {
+          "$ref": "#/$defs/slack_image"
+        },
+        {
+          "$ref": "#/$defs/slack_actions"
+        },
+        {
+          "$ref": "#/$defs/slack_input"
+        },
+        {
+          "$ref": "#/$defs/slack_table"
+        },
+        {
+          "$ref": "#/$defs/slack_card"
+        },
+        {
+          "$ref": "#/$defs/slack_carousel"
+        },
+        {
+          "$ref": "#/$defs/slack_alert"
+        }
+      ]
+    },
+    "slack_button": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/slack_action"
+        },
+        "kind": {
+          "const": "button"
+        },
+        "label": {
+          "$ref": "#/$defs/slack_text"
+        },
+        "route": {
+          "$ref": "#/$defs/slack_route"
+        },
+        "style": {
+          "enum": [
+            "default",
+            "primary",
+            "danger"
+          ]
+        },
+        "url": {
+          "maxLength": 3000,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "value": {
+          "maxLength": 2000,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "label",
+        "action",
+        "route",
+        "url",
+        "value",
+        "style"
+      ],
+      "type": "object"
+    },
+    "slack_card": {
+      "additionalProperties": false,
+      "properties": {
+        "actions": {
+          "items": {
+            "$ref": "#/$defs/slack_button"
+          },
+          "type": "array"
+        },
+        "description": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/slack_text"
+            }
+          ]
+        },
+        "image_url": {
+          "maxLength": 3000,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "const": "card"
+        },
+        "title": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/slack_text"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "title",
+        "description",
+        "image_url",
+        "actions"
+      ],
+      "type": "object"
+    },
+    "slack_carousel": {
+      "additionalProperties": false,
+      "properties": {
+        "cards": {
+          "items": {
+            "$ref": "#/$defs/slack_card"
+          },
+          "maxItems": 10,
+          "type": "array"
+        },
+        "kind": {
+          "const": "carousel"
+        }
+      },
+      "required": [
+        "kind",
+        "cards"
+      ],
+      "type": "object"
+    },
+    "slack_checkboxes": {
+      "additionalProperties": false,
+      "properties": {
+        "action_id": {
+          "maxLength": 255,
+          "type": "string"
+        },
+        "initial_values": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "const": "checkboxes"
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/slack_option"
+          },
+          "maxItems": 10,
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "action_id",
+        "options",
+        "initial_values"
+      ],
+      "type": "object"
+    },
+    "slack_context": {
+      "additionalProperties": false,
+      "properties": {
+        "elements": {
+          "items": {
+            "$ref": "#/$defs/slack_text"
+          },
+          "maxItems": 10,
+          "type": "array"
+        },
+        "kind": {
+          "const": "context"
+        }
+      },
+      "required": [
+        "kind",
+        "elements"
+      ],
+      "type": "object"
+    },
+    "slack_date_picker": {
+      "additionalProperties": false,
+      "properties": {
+        "action_id": {
+          "maxLength": 255,
+          "type": "string"
+        },
+        "initial_date": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "const": "date_picker"
+        },
+        "placeholder": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/slack_text"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "action_id",
+        "initial_date",
+        "placeholder"
+      ],
+      "type": "object"
+    },
+    "slack_divider": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "divider"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "slack_element": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/slack_button"
+        },
+        {
+          "$ref": "#/$defs/slack_select"
+        },
+        {
+          "$ref": "#/$defs/slack_text_input"
+        },
+        {
+          "$ref": "#/$defs/slack_number_input"
+        },
+        {
+          "$ref": "#/$defs/slack_date_picker"
+        },
+        {
+          "$ref": "#/$defs/slack_time_picker"
+        },
+        {
+          "$ref": "#/$defs/slack_checkboxes"
+        },
+        {
+          "$ref": "#/$defs/slack_radio_buttons"
+        }
+      ]
+    },
+    "slack_header": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "header"
+        },
+        "text": {
+          "$ref": "#/$defs/slack_text"
+        }
+      },
+      "required": [
+        "kind",
+        "text"
+      ],
+      "type": "object"
+    },
+    "slack_home": {
+      "additionalProperties": false,
+      "properties": {
+        "blocks": {
+          "items": {
+            "$ref": "#/$defs/slack_block"
+          },
+          "maxItems": 100,
+          "type": "array"
+        },
+        "callback_id": {
+          "maxLength": 255,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "const": "slack_home"
+        },
+        "private_metadata": {
+          "maxLength": 3000,
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "blocks",
+        "callback_id",
+        "private_metadata"
+      ],
+      "type": "object"
+    },
+    "slack_image": {
+      "additionalProperties": false,
+      "properties": {
+        "alt_text": {
+          "maxLength": 2000,
+          "type": "string"
+        },
+        "image_url": {
+          "maxLength": 3000,
+          "type": "string"
+        },
+        "kind": {
+          "const": "image"
+        },
+        "title": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/slack_text"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "image_url",
+        "alt_text",
+        "title"
+      ],
+      "type": "object"
+    },
+    "slack_input": {
+      "additionalProperties": false,
+      "properties": {
+        "block_id": {
+          "maxLength": 255,
+          "type": "string"
+        },
+        "element": {
+          "$ref": "#/$defs/slack_input_element"
+        },
+        "hint": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/slack_text"
+            }
+          ]
+        },
+        "kind": {
+          "const": "input"
+        },
+        "label": {
+          "$ref": "#/$defs/slack_text"
+        },
+        "optional": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "block_id",
+        "label",
+        "element",
+        "optional",
+        "hint"
+      ],
+      "type": "object"
+    },
+    "slack_input_element": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/slack_select"
+        },
+        {
+          "$ref": "#/$defs/slack_text_input"
+        },
+        {
+          "$ref": "#/$defs/slack_number_input"
+        },
+        {
+          "$ref": "#/$defs/slack_date_picker"
+        },
+        {
+          "$ref": "#/$defs/slack_time_picker"
+        },
+        {
+          "$ref": "#/$defs/slack_checkboxes"
+        },
+        {
+          "$ref": "#/$defs/slack_radio_buttons"
+        }
+      ]
+    },
+    "slack_message": {
+      "additionalProperties": false,
+      "properties": {
+        "blocks": {
+          "items": {
+            "$ref": "#/$defs/slack_block"
+          },
+          "maxItems": 50,
+          "type": "array"
+        },
+        "kind": {
+          "const": "slack_message"
+        },
+        "text": {
+          "maxLength": 40000,
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "text",
+        "blocks"
+      ],
+      "type": "object"
+    },
+    "slack_modal": {
+      "additionalProperties": false,
+      "properties": {
+        "blocks": {
+          "items": {
+            "$ref": "#/$defs/slack_block"
+          },
+          "maxItems": 100,
+          "type": "array"
+        },
+        "callback_id": {
+          "maxLength": 255,
+          "type": "string"
+        },
+        "close": {
+          "$ref": "#/$defs/slack_text"
+        },
+        "kind": {
+          "const": "slack_modal"
+        },
+        "private_metadata": {
+          "maxLength": 3000,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "submit": {
+          "$ref": "#/$defs/slack_text"
+        },
+        "title": {
+          "$ref": "#/$defs/slack_text"
+        }
+      },
+      "required": [
+        "kind",
+        "callback_id",
+        "title",
+        "submit",
+        "close",
+        "blocks",
+        "private_metadata"
+      ],
+      "type": "object"
+    },
+    "slack_number_input": {
+      "additionalProperties": false,
+      "properties": {
+        "action_id": {
+          "maxLength": 255,
+          "type": "string"
+        },
+        "decimal_allowed": {
+          "type": "boolean"
+        },
+        "initial_value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "const": "number_input"
+        },
+        "maximum": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "minimum": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "action_id",
+        "initial_value",
+        "decimal_allowed",
+        "minimum",
+        "maximum"
+      ],
+      "type": "object"
+    },
+    "slack_option": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/slack_text"
+            }
+          ]
+        },
+        "label": {
+          "$ref": "#/$defs/slack_text"
+        },
+        "value": {
+          "maxLength": 150,
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "value",
+        "description"
+      ],
+      "type": "object"
+    },
+    "slack_radio_buttons": {
+      "additionalProperties": false,
+      "properties": {
+        "action_id": {
+          "maxLength": 255,
+          "type": "string"
+        },
+        "initial_value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "const": "radio_buttons"
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/slack_option"
+          },
+          "maxItems": 10,
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "action_id",
+        "options",
+        "initial_value"
+      ],
+      "type": "object"
+    },
+    "slack_route": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "route_id": {
+              "maxLength": 255,
+              "type": "string"
+            }
+          },
+          "required": [
+            "route_id"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "slack_section": {
+      "additionalProperties": false,
+      "properties": {
+        "accessory": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/slack_element"
+            }
+          ]
+        },
+        "fields": {
+          "items": {
+            "$ref": "#/$defs/slack_text"
+          },
+          "maxItems": 10,
+          "type": "array"
+        },
+        "kind": {
+          "const": "section"
+        },
+        "text": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/slack_text"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "text",
+        "fields",
+        "accessory"
+      ],
+      "type": "object"
+    },
+    "slack_select": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/slack_action"
+        },
+        "conversation_types": {
+          "items": {
+            "enum": [
+              "guild_text",
+              "guild_voice",
+              "guild_category",
+              "guild_announcement",
+              "guild_announcement_thread",
+              "guild_public_thread",
+              "guild_private_thread",
+              "guild_stage_voice",
+              "guild_forum",
+              "guild_media",
+              "workspace_public",
+              "workspace_private",
+              "direct",
+              "group_direct"
+            ]
+          },
+          "type": "array"
+        },
+        "initial_values": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "const": "select"
+        },
+        "maximum": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "minimum": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/slack_option"
+          },
+          "maxItems": 100,
+          "type": "array"
+        },
+        "placeholder": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/slack_text"
+            }
+          ]
+        },
+        "route": {
+          "$ref": "#/$defs/slack_route"
+        },
+        "select_kind": {
+          "enum": [
+            "static",
+            "users",
+            "conversations"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "action",
+        "route",
+        "select_kind",
+        "placeholder",
+        "options",
+        "initial_values",
+        "conversation_types",
+        "minimum",
+        "maximum"
+      ],
+      "type": "object"
+    },
+    "slack_table": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "table"
+        },
+        "rows": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/slack_text"
+            },
+            "maxItems": 20,
+            "type": "array"
+          },
+          "maxItems": 100,
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "rows"
+      ],
+      "type": "object"
+    },
+    "slack_text": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "emoji": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "kind": {
+          "enum": [
+            "plain_text",
+            "mrkdwn"
+          ]
+        },
+        "verbatim": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "content",
+        "kind",
+        "emoji",
+        "verbatim"
+      ],
+      "type": "object"
+    },
+    "slack_text_input": {
+      "additionalProperties": false,
+      "properties": {
+        "action_id": {
+          "maxLength": 255,
+          "type": "string"
+        },
+        "initial_value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "const": "text_input"
+        },
+        "maximum_length": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "minimum_length": {
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "multiline": {
+          "type": "boolean"
+        },
+        "placeholder": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/slack_text"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "action_id",
+        "initial_value",
+        "placeholder",
+        "multiline",
+        "minimum_length",
+        "maximum_length"
+      ],
+      "type": "object"
+    },
+    "slack_time_picker": {
+      "additionalProperties": false,
+      "properties": {
+        "action_id": {
+          "maxLength": 255,
+          "type": "string"
+        },
+        "initial_time": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "const": "time_picker"
+        },
+        "placeholder": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/slack_text"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "action_id",
+        "initial_time",
+        "placeholder"
       ],
       "type": "object"
     },

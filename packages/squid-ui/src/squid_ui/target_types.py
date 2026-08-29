@@ -21,6 +21,22 @@ class HtmlTarget(RenderTarget):
     """Marker for native semantic HTML renderables."""
 
 
+class SlackTarget(RenderTarget):
+    """Marker for values renderable to any Slack Block Kit surface."""
+
+
+class SlackMessageTarget(SlackTarget):
+    """Marker for Slack message renderables."""
+
+
+class SlackModalTarget(SlackTarget):
+    """Marker for Slack modal renderables."""
+
+
+class SlackHomeTarget(SlackTarget):
+    """Marker for Slack App Home renderables."""
+
+
 class DiscordAdapter:
     """Marker for any adapter capable of realizing a Discord target."""
 
@@ -35,6 +51,18 @@ class DiscordPy27Adapter(DiscordPyAdapter):
 
 class HtmlAdapter:
     """Marker for adapters that mechanically draw semantic HTML scenes."""
+
+
+class SlackAdapter:
+    """Marker for adapters capable of realizing Slack Block Kit targets."""
+
+
+class SlackSdkAdapter(SlackAdapter):
+    """Marker for adapters implemented with the Slack Python SDK."""
+
+
+class SlackSdk343Adapter(SlackSdkAdapter):
+    """Marker for Squid's verified Slack Python SDK 3.43 adapter."""
 
 
 class Renderable[RenderTargetT = RenderTarget]:
