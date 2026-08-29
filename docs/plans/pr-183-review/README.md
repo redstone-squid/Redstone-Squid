@@ -38,6 +38,13 @@ shared reaction routing (8).
 13. [Test and tooling cleanup](13-test-tooling-cleanup.md) —
     [thread dispositions](13-test-tooling-dispositions.md)
 
+## Review inventories
+
+- [Comments from `2605367` through `aa85f68`](14-review-comment-inventory.md) records the later
+  pending review batch: 104 comments grouped by primary concern. It excludes the CLI, web
+  frontend, and Minecraft plugin by their `cli/`, `web/`, and `minecraft/` paths, while retaining
+  comments on shared backend code under `squid/` regardless of commit-subject prefix.
+
 ## Status
 
 As of `56369af4` (2026-08-18). Each plan's own Findings section already audits current HEAD, so this
