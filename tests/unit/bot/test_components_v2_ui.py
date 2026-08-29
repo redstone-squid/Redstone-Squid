@@ -1,8 +1,7 @@
 """Structural tests for the bot's semantic Components V2 workflows."""
 
-from dataclasses import replace
-from types import SimpleNamespace
-from typing import TYPE_CHECKING, cast
+from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import AsyncMock
 from uuid import UUID
 
@@ -18,11 +17,50 @@ from squid.builds.domain import Build, BuildLink, DoorBuild, SourceMessage, Stat
 from squid.search.application import SearchService
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
 from squid.sponsors import PublicSponsor
+from squid.versions.application import VersionService
+from squid.versions.domain import Edition
 from squid_ui_discord.testing import commit_render, delivered_to, message_harness
 from tests.support.discord import make_layout_bot
 
 if TYPE_CHECKING:
     import squid.bot.app
+
+
+class VersionRecorder(VersionService):
+    def __init__(self) -> None:
+        pass
+
+    async def newest(self, edition: Edition) -> str:
+        assert edition == "Java"
+        return "Java 1.20"
+
+
+class SearchRecorder(SearchService):
+    def __init__(self) -> None:
+        self.calls: list[SearchRequest] = []
+
+    async def search(self, request: SearchRequest) -> SearchPage:
+        self.calls.append(request)
+        raise AssertionError("the seeded first page must not be fetched again")
+
+
+class BuildRecorder(BuildService):
+    def __init__(self) -> None:
+        pass
+
+
+@dataclass(frozen=True)
+class HandlerServices:
+    versions: VersionService
+
+
+@dataclass(frozen=True)
+class HandlerBot:
+    services: HandlerServices
+
+
+def handler_bot() -> Any:
+    return HandlerBot(HandlerServices(VersionRecorder()))
 
 
 @pytest.fixture
@@ -50,9 +88,7 @@ def display_build() -> Build:
 
 @pytest.mark.asyncio
 async def test_build_handler_renders_composable_v2_card(display_build: Build) -> None:
-    versions = SimpleNamespace(newest=AsyncMock(return_value="Java 1.20"))
-    bot = SimpleNamespace(services=SimpleNamespace(versions=versions))
-    handler = BuildHandler(cast("squid.bot.app.RedstoneSquid", bot), display_build)
+    handler = BuildHandler(cast("squid.bot.app.RedstoneSquid", handler_bot()), display_build)
 
     presentation = await handler.render_payload()
     payload = presentation.layout.to_components()
@@ -69,7 +105,7 @@ async def test_build_editor_uses_semantic_state_and_forms(display_build: Build) 
     field = next(spec for spec in EDIT_FIELDS if spec.patch_key == "version_spec").bind(display_build)
     component = BuildEditScreen(
         display_build,
-        cast(BuildService, object()),
+        BuildRecorder(),
         [field],
         authorize=AsyncMock(return_value=True),
         render_build=AsyncMock(),
@@ -95,9 +131,7 @@ def test_build_editor_declares_keyed_topic_following_policy() -> None:
 
 @pytest.mark.asyncio
 async def test_build_handler_does_not_repeat_headline_component_restrictions(display_build: Build) -> None:
-    versions = SimpleNamespace(newest=AsyncMock(return_value="Java 1.20"))
-    bot = SimpleNamespace(services=SimpleNamespace(versions=versions))
-    handler = BuildHandler(cast("squid.bot.app.RedstoneSquid", bot), display_build)
+    handler = BuildHandler(cast("squid.bot.app.RedstoneSquid", handler_bot()), display_build)
 
     assert await handler.get_description() is None
 
@@ -136,7 +170,7 @@ def test_search_results_use_named_selection_and_direct_build_action() -> None:
         next=None,
         prev=None,
     )
-    view = SearchScreen(cast(SearchService, object()), SearchRequest("door"), page)
+    view = SearchScreen(SearchRecorder(), SearchRequest("door"), page)
 
     bot = make_layout_bot()
     message_root = bot.client_runtime.mount(view, access=sd.Owner(123), timeout=180)
@@ -152,7 +186,7 @@ def test_search_results_use_named_selection_and_direct_build_action() -> None:
 
 
 def test_search_results_preserve_page_warnings_without_refetching_the_initial_page() -> None:
-    service = SimpleNamespace(search=AsyncMock())
+    service = SearchRecorder()
     page = SearchPage(
         (BuildSearchHit("8", "Fast door", "confirmed"),),
         total=1,
@@ -160,19 +194,19 @@ def test_search_results_preserve_page_warnings_without_refetching_the_initial_pa
         prev=None,
         warnings=("Semantic fallback used",),
     )
-    view = SearchScreen(cast(SearchService, service), SearchRequest("door"), page)
+    view = SearchScreen(service, SearchRequest("door"), page)
 
     bot = make_layout_bot()
     payload = commit_render(bot.client_runtime.mount(view, access=sd.Owner(123), timeout=180)).to_components()
 
-    service.search.assert_not_awaited()
+    assert service.calls == []
     assert "Semantic fallback used" in str(payload)
 
 
 @pytest.mark.asyncio
 async def test_search_timeout_disables_bound_controls() -> None:
     page = SearchPage((BuildSearchHit("8", "Fast door", "confirmed"),), total=1, next=None, prev=None)
-    view = SearchScreen(cast(SearchService, object()), SearchRequest("door"), page)
+    view = SearchScreen(SearchRecorder(), SearchRequest("door"), page)
     bot = make_layout_bot()
     message_root = bot.client_runtime.mount(view, access=sd.Owner(123), timeout=180)
     message = message_harness()
