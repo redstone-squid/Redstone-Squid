@@ -95,11 +95,15 @@ one. `inv.t(...)` is only for strings leaving the layout system, such as autocom
 modal API; layout nodes retain `TextLike` values and resolve them when their message root renders.
 
 `Screen` is the declarative application layer over `Invocation`. A subclass places stable policy in
-class variables: `session`, `scope`, `admission`, `capacity`, `quota`, `domain`, `visibility`,
-`timeout`, `expiry`, `follow_topics`, and root `options`. `show()` constructs the instance, records
-its opening invocation, awaits `prepare()`, and then mounts or opens it. A rejected session returns
-`None` only after its deferred policy notice has already been answered. Override cached `spec()`
-only when the derived `SessionSpec` cannot express the screen.
+class variables. Root policy — `access`, `visibility`, `timeout`, `expiry`, `follow_topics`, and
+`root_options` — applies to both direct and session openings. Setting `session_name` enables session
+policy through `scope`, `admission`, `capacity`, `quota`, and `domain`; those fields are rejected on
+a direct screen instead of being ignored. A fixed `access` policy defaults to the opener, while an
+instance can override `resolve_access(invocation)` when constructor state or invocation context
+decides access. `show()` claims one instance for one opening attempt and records its `opening`
+invocation before delivery. Invocation-dependent loading uses the ordinary component `on_load()`
+hook and therefore runs only when the screen reaches its first render. A rejected session returns
+`None` only after its deferred policy notice has already been answered.
 
 `SessionSpec` remains the composition recipe for dynamic policy: `scope` picks the collision key,
 `admission` decides what happens on collision, `capacity` and `quota` bound membership, and `access`

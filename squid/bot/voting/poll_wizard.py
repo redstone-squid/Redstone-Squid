@@ -220,7 +220,7 @@ async def present_poll_form(
 class PollConfirmationComponent(sd.Screen):
     """A semantic poll preview and publication workspace."""
 
-    session = "poll-wizard"
+    session_name = "poll-wizard"
     scope = sd.ScopeKind.USER_GUILD
     timeout = 900
     expiry = sd.RenewEphemeral()

@@ -62,7 +62,7 @@ class _Answer:
 class ConsentPrompt(sd.Screen):
     """A semantic consent prompt with a native-free waiting lifecycle."""
 
-    session = "consent"
+    session_name = "consent"
     admission = AdmissionSpec(
         collision=Reject(notice=L("You already have a consent prompt open. Please answer that one."))
     )
