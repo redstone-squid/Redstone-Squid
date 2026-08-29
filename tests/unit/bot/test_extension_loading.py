@@ -105,21 +105,17 @@ async def test_no_two_cogs_claim_the_same_command_name(loaded_bot: commands.Bot)
     assert not collisions, "; ".join(collisions)
 
 
-async def test_the_error_group_is_the_lookup_command(loaded_bot: commands.Bot) -> None:
-    """`error` belongs to report lookup; the owner's deliberate failure kept its `e` alias.
-
-    Pinned because the two are easy to swap back by accident, and swapping them would make
-    `!error <reference>` raise a test exception at whoever is trying to read a report.
-    """
-    lookup = loaded_bot.get_command("error")
+async def test_the_error_browser_is_app_only(loaded_bot: commands.Bot) -> None:
+    """Diagnostics use one private app-command screen; the deliberate owner failure stays hidden."""
+    lookup = loaded_bot.tree.get_command("errors")
     raiser = loaded_bot.get_command("raise-error")
 
     assert lookup is not None
     assert raiser is not None
-    assert type(lookup.cog).__name__ == "Diagnostics"
+    assert lookup.module == "squid.bot.diagnostics"
     assert type(raiser.cog).__name__ == "Admin"
     assert loaded_bot.get_command("e") is raiser
-    assert loaded_bot.get_command("error recent") is not None
+    assert loaded_bot.get_command("error") is None
 
 
 def test_extension_list_has_no_duplicates() -> None:
