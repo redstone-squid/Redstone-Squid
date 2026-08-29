@@ -1,43 +1,52 @@
-"""Session policy: instance limits per key, and parent/child lifetime.
-
-Stub mounts throughout -- the registry never touches Discord, which is the point of keeping
-rejection wording at the call sites.
-"""
+"""Session identity, structured outcomes, cardinality, and attachment lifetime."""
 
 from typing import Any
+from unittest.mock import AsyncMock
 
 import anyio
-import discord
 import pytest
 
 import squid_layouts as sl
-from squid_layouts.discord import MountRegistry, SessionKey, WhenOpen
-from squid_layouts.discord.testing import fake_message
+from squid_layouts.discord import (
+    Abandoned,
+    Everyone,
+    Opened,
+    Owner,
+    ProtectCrossUserAttachments,
+    Reject,
+    Rejected,
+    RejectionReason,
+    Replace,
+    SessionKey,
+    SessionPolicy,
+    SessionRegistry,
+    Unprotected,
+    open_personal,
+)
+from squid_layouts.discord.sessions import OpeningRequest
+from squid_layouts.discord.testing import fake_interaction, fake_message
 from squid_layouts.primitives import Button, Heading, Row
 
 
 class Panel(sl.Component):
-    """The smallest thing with a control on it."""
-
     def render(self):
-        return [Heading("Panel"), Row((Button(label="+1", on_click=self._noop, key="go"),))]
+        return [Heading("Panel"), Row((Button(label="Go", on_click=self._noop, key="go"),))]
 
     async def _noop(self, event: sl.PressEvent) -> None:
         return None
 
 
 def a_mount() -> sl.discord.Mount:
-    return sl.discord.Mount(Panel(), access=sl.discord.Everyone(), timeout=None)
+    return sl.discord.Mount(Panel(), access=Everyone(), timeout=None)
 
 
 _DEFAULT_MESSAGE = object()
 
 
 def to_message(message: Any = _DEFAULT_MESSAGE) -> sl.discord.Destination:
-    """A destination that delivers and hands back credentials, with no Discord in it."""
     delivered = fake_message() if message is _DEFAULT_MESSAGE else message
 
-    async def send(view: discord.ui.LayoutView, files: list[discord.File]):
+    async def send(presentation: sl.discord.DiscordPresentation) -> sl.discord.DeliveryReceipt:
         handle = None if delivered is None else sl.discord.delivery.handle_for(delivered)
         return sl.discord.DeliveryReceipt(delivered, handle)
 
@@ -45,9 +54,7 @@ def to_message(message: Any = _DEFAULT_MESSAGE) -> sl.discord.Destination:
 
 
 def slowly() -> sl.discord.Destination:
-    """A destination with a checkpoint in it, so two opens genuinely interleave."""
-
-    async def send(view: discord.ui.LayoutView, files: list[discord.File]):
+    async def send(presentation: sl.discord.DiscordPresentation) -> sl.discord.DeliveryReceipt:
         await anyio.sleep(0)
         message = fake_message()
         return sl.discord.DeliveryReceipt(message, sl.discord.delivery.handle_for(message))
@@ -56,260 +63,329 @@ def slowly() -> sl.discord.Destination:
 
 
 def abandoning() -> sl.discord.Destination:
-    """A destination that deliberately delivers nothing, as a closed DM does."""
-
-    async def send(view: discord.ui.LayoutView, files: list[discord.File]):
+    async def send(presentation: sl.discord.DiscordPresentation) -> sl.discord.DeliveryReceipt:
         raise sl.discord.DeliveryAbandoned
 
     return send
 
 
 def failing(error: Exception) -> sl.discord.Destination:
-    async def send(view: discord.ui.LayoutView, files: list[discord.File]):
+    async def send(presentation: sl.discord.DiscordPresentation) -> sl.discord.DeliveryReceipt:
         raise error
 
     return send
 
 
-KEY = SessionKey("panel", user_id=7, scope=42)
+KEY = SessionKey.user_guild("panel", 7, 42)
+
+
+def test_session_keys_use_typed_frozen_scopes() -> None:
+    assert SessionKey.user("account", 7).scope == sl.discord.UserScope(7)
+    assert SessionKey.guild("roles", 42).scope == sl.discord.GuildScope(42)
+    assert SessionKey.user_guild("settings", 7, 42).scope == sl.discord.UserGuildScope(7, 42)
+    assert SessionKey.global_("status").scope == sl.discord.GlobalScope()
+    assert SessionKey.custom("edit", (7, 99)).scope == sl.discord.CustomScope((7, 99))
+    assert len({SessionKey.global_("status"), SessionKey.global_("status")}) == 1
 
 
 async def test_any_hashable_key_can_name_a_session() -> None:
-    registry = MountRegistry()
+    registry = SessionRegistry()
     key = ("panel", "team-red", 42)
-    mount = a_mount()
 
-    await registry.open(mount, to_message(), key=key)
+    result = await registry.open(a_mount(), to_message(), key=key)
 
-    assert registry.get(key) is mount
+    assert isinstance(result, Opened)
+    assert registry.get(key) == (result.session,)
 
 
-class TestReplace:
-    async def test_the_incumbent_is_finished_and_the_newcomer_holds_the_key(self):
-        registry = MountRegistry()
-        first, second = a_mount(), a_mount()
-
-        await registry.open(first, to_message(), key=KEY)
-        await registry.open(second, to_message(), key=KEY)
-
-        assert first.finished
-        assert not second.finished
-        assert registry.get(KEY) is second
-
-    async def test_the_incumbent_survives_a_failed_send(self):
-        registry = MountRegistry()
-        first, second = a_mount(), a_mount()
-        await registry.open(first, to_message(), key=KEY)
-
-        with pytest.raises(RuntimeError):
-            await registry.open(second, failing(RuntimeError("gateway is down")), key=KEY)
-
-        assert not first.finished
-        assert registry.get(KEY) is first
-
-    async def test_the_incumbent_survives_an_abandoned_send(self):
-        """`Mount.send` swallows `DeliveryAbandoned` and returns `None`, which is also what a
-        successful handle-less delivery returns. Reading the wrong one costs the user both
-        panels and leaves no message explaining why."""
-        registry = MountRegistry()
-        first, second = a_mount(), a_mount()
-        await registry.open(first, to_message(), key=KEY)
-
-        opened = await registry.open(second, abandoning(), key=KEY)
-
-        assert opened is None
-        assert not first.finished
-        assert registry.get(KEY) is first
-
-    async def test_a_handle_less_delivery_still_replaces(self):
-        """The other `None`: delivered, but no credentials came back."""
-        registry = MountRegistry()
-        first, second = a_mount(), a_mount()
-        await registry.open(first, to_message(), key=KEY)
-
-        opened = await registry.open(second, to_message(message=None), key=KEY)
-
-        assert opened is second
-        assert first.finished
-        assert registry.get(KEY) is second
-
-    async def test_cleanup_is_identity_checked(self):
-        """The incumbent's own hook fires against a key the newcomer already owns."""
-        registry = MountRegistry()
-        first, second = a_mount(), a_mount()
-
-        await registry.open(first, to_message(), key=KEY)
-        await registry.open(second, to_message(), key=KEY)
-
-        assert registry.get(KEY) is second
-
-    async def test_the_last_session_leaves_no_entry_behind(self):
-        registry = MountRegistry()
+class TestOutcomes:
+    async def test_opened_carries_the_logical_session(self) -> None:
         mount = a_mount()
-        await registry.open(mount, to_message(), key=KEY)
 
-        await mount.finish()
+        result = await SessionRegistry().open(mount, to_message(), key=KEY)
 
-        assert registry.get(KEY) is None
+        assert isinstance(result, Opened)
+        assert result.session.root is mount
+        assert result.session.mounts == (mount,)
 
+    async def test_rejected_carries_occupants_and_reason_without_delivering(self) -> None:
+        registry = SessionRegistry()
+        first = await registry.open(a_mount(), to_message(), key=KEY)
+        destination = AsyncMock()
 
-class TestReject:
-    async def test_a_second_open_delivers_nothing(self):
-        registry = MountRegistry()
-        first, second = a_mount(), a_mount()
-        await registry.open(first, to_message(), key=KEY, policy=WhenOpen.REJECT)
+        result = await registry.open(
+            a_mount(),
+            destination,
+            key=KEY,
+            policy=SessionPolicy(collision=Reject()),
+        )
 
-        opened = await registry.open(second, to_message(), key=KEY, policy=WhenOpen.REJECT)
+        assert isinstance(first, Opened)
+        assert result == Rejected((first.session.summary,), RejectionReason.COLLISION)
+        destination.assert_not_awaited()
 
-        assert opened is None
-        assert not first.finished
-        assert not second.finished
-        assert registry.get(KEY) is first
+    async def test_abandoned_is_distinct_from_rejection_and_delivery(self) -> None:
+        result = await SessionRegistry().open(a_mount(), abandoning(), key=KEY)
 
-    async def test_the_key_frees_up_once_the_incumbent_finishes(self):
-        registry = MountRegistry()
-        first, second = a_mount(), a_mount()
-        await registry.open(first, to_message(), key=KEY, policy=WhenOpen.REJECT)
-        await first.finish()
+        assert isinstance(result, Abandoned)
 
-        opened = await registry.open(second, to_message(), key=KEY, policy=WhenOpen.REJECT)
+    async def test_handleless_delivery_is_still_opened(self) -> None:
+        result = await SessionRegistry().open(a_mount(), to_message(None), key=KEY)
 
-        assert opened is second
-
-    async def test_a_stale_finished_entry_does_not_lock_the_key_forever(self):
-        """Defence in depth: `on_finish` should have cleared it, and a REJECT lockout would
-        otherwise last the life of the process."""
-        registry = MountRegistry()
-        first, second = a_mount(), a_mount()
-        await registry.open(first, to_message(), key=KEY, policy=WhenOpen.REJECT)
-        first._finished = True  # finished without its hooks running
-
-        opened = await registry.open(second, to_message(), key=KEY, policy=WhenOpen.REJECT)
-
-        assert opened is second
+        assert isinstance(result, Opened)
 
 
-class TestRacingOpens:
-    async def test_two_concurrent_opens_leave_one_survivor(self):
-        registry = MountRegistry()
-        mounts = [a_mount() for _ in range(2)]
+class TestReplacement:
+    async def test_same_actor_replaces_the_oldest_incumbent(self) -> None:
+        registry = SessionRegistry()
+        first_mount, second_mount = a_mount(), a_mount()
+        first = await registry.open(first_mount, to_message(), key=KEY, actor_id=7)
 
-        # The destination yields, so both opens are inside `open` before either registers --
-        # without the per-key lock both would see no incumbent and both would survive.
-        async with anyio.create_task_group() as tasks:
-            for mount in mounts:
-                tasks.start_soon(lambda m=mount: registry.open(m, slowly(), key=KEY))
+        second = await registry.open(second_mount, to_message(), key=KEY, actor_id=7)
 
-        assert sum(not mount.finished for mount in mounts) == 1
-        survivor = registry.get(KEY)
-        assert survivor is not None
-        assert not survivor.finished
+        assert isinstance(first, Opened) and isinstance(second, Opened)
+        assert first_mount.finished
+        assert registry.get(KEY) == (second.session,)
 
-    async def test_the_lock_map_empties_once_the_key_goes_idle(self):
-        registry = MountRegistry()
+    async def test_incumbent_survives_a_failed_send(self) -> None:
+        registry = SessionRegistry()
+        first = await registry.open(a_mount(), to_message(), key=KEY)
 
+        with pytest.raises(RuntimeError, match="gateway"):
+            await registry.open(a_mount(), failing(RuntimeError("gateway is down")), key=KEY)
+
+        assert isinstance(first, Opened)
+        assert not first.session.root.finished
+        assert registry.get(KEY) == (first.session,)
+
+    async def test_incumbent_survives_an_abandoned_send(self) -> None:
+        registry = SessionRegistry()
+        first = await registry.open(a_mount(), to_message(), key=KEY)
+
+        result = await registry.open(a_mount(), abandoning(), key=KEY)
+
+        assert isinstance(first, Opened) and isinstance(result, Abandoned)
+        assert not first.session.root.finished
+        assert registry.get(KEY) == (first.session,)
+
+    async def test_cross_user_replacement_is_protected_by_default(self) -> None:
+        registry = SessionRegistry()
+        first = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+
+        result = await registry.open(a_mount(), to_message(), key=KEY, actor_id=8)
+
+        assert isinstance(first, Opened)
+        assert result == Rejected((first.session.summary,), RejectionReason.PROTECTED)
+
+    async def test_unprotected_policy_explicitly_allows_cross_user_replacement(self) -> None:
+        registry = SessionRegistry()
+        first = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+
+        result = await registry.open(
+            a_mount(),
+            to_message(),
+            key=KEY,
+            actor_id=8,
+            policy=SessionPolicy(protect=Unprotected()),
+        )
+
+        assert isinstance(first, Opened) and isinstance(result, Opened)
+        assert first.session.root.finished
+
+
+class TestCardinality:
+    async def test_limit_greater_than_one_replaces_only_the_oldest_needed_session(self) -> None:
+        registry = SessionRegistry()
+        policy = SessionPolicy(limit=2, protect=Unprotected())
+        mounts = [a_mount() for _ in range(3)]
+        results = [await registry.open(mount, to_message(), key=KEY, policy=policy) for mount in mounts]
+
+        assert all(isinstance(result, Opened) for result in results)
+        assert mounts[0].finished
+        assert not mounts[1].finished and not mounts[2].finished
+        assert tuple(session.root for session in registry.get(KEY)) == tuple(mounts[1:])
+
+    async def test_unlimited_policy_keeps_every_session(self) -> None:
+        registry = SessionRegistry()
+        mounts = [a_mount() for _ in range(3)]
+        for mount in mounts:
+            await registry.open(mount, to_message(), key=KEY, policy=SessionPolicy(limit=None))
+
+        assert tuple(session.root for session in registry.get(KEY)) == tuple(mounts)
+
+    def test_non_positive_limits_are_invalid(self) -> None:
+        with pytest.raises(ValueError, match="positive"):
+            SessionPolicy(limit=0)
+
+    async def test_a_custom_collision_policy_selects_exact_victims(self) -> None:
+        class ReplaceNewest:
+            async def select(self, request: OpeningRequest, occupants: tuple[sl.discord.SessionSummary, ...]):
+                return Replace(occupants[-request.required_victims :])
+
+        registry = SessionRegistry()
+        initial = SessionPolicy(limit=2, protect=Unprotected())
+        first, second, third = a_mount(), a_mount(), a_mount()
+        await registry.open(first, to_message(), key=KEY, policy=initial)
+        await registry.open(second, to_message(), key=KEY, policy=initial)
+
+        await registry.open(
+            third,
+            to_message(),
+            key=KEY,
+            policy=SessionPolicy(limit=2, collision=ReplaceNewest(), protect=Unprotected()),
+        )
+
+        assert not first.finished and second.finished and not third.finished
+
+    async def test_a_custom_policy_must_select_the_exact_required_victims(self) -> None:
+        class SelectNobody:
+            async def select(self, request: OpeningRequest, occupants: tuple[sl.discord.SessionSummary, ...]):
+                return Replace(())
+
+        registry = SessionRegistry()
         await registry.open(a_mount(), to_message(), key=KEY)
 
-        assert registry._locks == {}
-        assert registry._waiting == {}
+        with pytest.raises(ValueError, match="exact required occupants"):
+            await registry.open(
+                a_mount(),
+                to_message(),
+                key=KEY,
+                policy=SessionPolicy(collision=SelectNobody(), protect=Unprotected()),
+            )
 
 
-class TestCascade:
-    async def test_a_child_dies_with_its_parent(self):
-        registry = MountRegistry()
-        parent, child = a_mount(), a_mount()
-        await registry.open(parent, to_message(), key=KEY)
-        await registry.open(child, to_message(), parent=parent)
+class TestAttachments:
+    async def test_finish_is_depth_first_across_the_attachment_tree(self) -> None:
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY)
+        assert isinstance(opened, Opened)
+        session = opened.session
+        child, grandchild = a_mount(), a_mount()
+        await session.attach(child, to_message())
+        await session.attach(grandchild, to_message(), parent=child)
+        order: list[str] = []
+        grandchild.on_finish(lambda _: _note(order, "grandchild"))
+        child.on_finish(lambda _: _note(order, "child"))
+        session.root.on_finish(lambda _: _note(order, "root"))
 
-        await parent.finish()
+        await session.finish()
 
-        assert child.finished
+        assert order == ["grandchild", "child", "root"]
+        assert registry.get(KEY) == ()
 
-    async def test_a_grandchild_dies_too(self):
-        registry = MountRegistry()
-        parent, child, grandchild = a_mount(), a_mount(), a_mount()
-        await registry.open(parent, to_message())
-        await registry.open(child, to_message(), parent=parent)
-        await registry.open(grandchild, to_message(), parent=child)
+    async def test_direct_root_finish_cascades_to_every_attachment(self) -> None:
+        opened = await SessionRegistry().open(a_mount(), to_message(), key=KEY)
+        assert isinstance(opened, Opened)
+        child, sibling = a_mount(), a_mount()
+        await opened.session.attach(child, to_message())
+        await opened.session.attach(sibling, to_message())
 
-        await parent.finish()
+        await opened.session.root.finish()
 
-        assert child.finished
+        assert child.finished and sibling.finished
+
+    async def test_direct_child_finish_detaches_its_branch_only(self) -> None:
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY)
+        assert isinstance(opened, Opened)
+        child, grandchild, sibling = a_mount(), a_mount(), a_mount()
+        await opened.session.attach(child, to_message())
+        await opened.session.attach(grandchild, to_message(), parent=child)
+        await opened.session.attach(sibling, to_message())
+
+        await child.finish()
+
         assert grandchild.finished
+        assert not opened.session.root.finished and not sibling.finished
+        assert opened.session.mounts == (opened.session.root, sibling)
+        assert registry.session_for(child) is None
 
-    async def test_an_unregistered_parent_still_cascades(self):
-        """A panel not yet migrated to the registry is still a perfectly good parent."""
-        registry = MountRegistry()
-        parent, child = a_mount(), a_mount()
-        await registry.open(child, to_message(), parent=parent)
+    async def test_abandoned_attachment_is_not_registered(self) -> None:
+        opened = await SessionRegistry().open(a_mount(), to_message(), key=KEY)
+        assert isinstance(opened, Opened)
+        child = a_mount()
 
-        await parent.finish()
+        result = await opened.session.attach(child, abandoning())
 
-        assert child.finished
+        assert isinstance(result, Abandoned)
+        assert opened.session.mounts == (opened.session.root,)
 
-    async def test_a_child_of_an_already_finished_parent_is_finished_at_once(self):
-        registry = MountRegistry()
-        parent, child = a_mount(), a_mount()
-        await parent.finish()
+    async def test_foreign_attachment_actor_protects_replacement(self) -> None:
+        registry = SessionRegistry()
+        first = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        assert isinstance(first, Opened)
+        await first.session.attach(a_mount(), to_message(), actor_id=8)
 
-        await registry.open(child, to_message(), parent=parent)
+        result = await registry.open(
+            a_mount(),
+            to_message(),
+            key=KEY,
+            actor_id=7,
+            policy=SessionPolicy(protect=ProtectCrossUserAttachments()),
+        )
 
-        assert child.finished
+        assert result == Rejected((first.session.summary,), RejectionReason.PROTECTED)
 
-    async def test_a_timing_out_parent_cascades(self):
-        registry = MountRegistry()
-        parent, child = a_mount(), a_mount()
-        await registry.open(child, to_message(), parent=parent)
+    async def test_one_unreachable_sibling_does_not_strand_the_rest(self) -> None:
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY)
+        assert isinstance(opened, Opened)
+        doomed, sibling = a_mount(), a_mount()
+        await opened.session.attach(doomed, to_message())
+        await opened.session.attach(sibling, to_message())
+        doomed.finish = AsyncMock(side_effect=RuntimeError("message is gone"))  # type: ignore[method-assign]
 
-        await parent.handle_timeout()
+        await opened.session.finish()
 
-        assert child.finished
-
-    async def test_one_unreachable_child_does_not_strand_its_siblings(self):
-        registry = MountRegistry()
-        parent, doomed, sibling = a_mount(), a_mount(), a_mount()
-        await registry.open(doomed, to_message(), parent=parent)
-        await registry.open(sibling, to_message(), parent=parent)
-
-        async def explode(mount: sl.discord.Mount) -> None:
-            raise RuntimeError("message is gone")
-
-        doomed.on_finish(explode)
-
-        await parent.finish()
-
-        assert sibling.finished
+        assert sibling.finished and opened.session.root.finished
+        assert registry.get(KEY) == ()
 
 
-class TestCloseAll:
-    async def test_every_session_is_finished(self):
-        registry = MountRegistry()
-        keyed, parented = a_mount(), a_mount()
-        parent = a_mount()
-        await registry.open(keyed, to_message(), key=KEY)
-        await registry.open(parented, to_message(), parent=parent)
+class TestRacesAndCleanup:
+    async def test_racing_opens_leave_one_survivor(self) -> None:
+        registry = SessionRegistry()
+        mounts = [a_mount() for _ in range(2)]
+
+        async with anyio.create_task_group() as tasks:
+            for mount in mounts:
+                tasks.start_soon(lambda candidate=mount: registry.open(candidate, slowly(), key=KEY))
+
+        assert sum(not mount.finished for mount in mounts) == 1
+        assert len(registry.get(KEY)) == 1
+        assert registry._locks == {} and registry._waiting == {}
+
+    async def test_direct_finish_cleans_up_by_session_identity(self) -> None:
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY)
+        assert isinstance(opened, Opened)
+
+        await opened.session.root.finish()
+
+        assert registry.get(KEY) == ()
+
+    async def test_close_all_finishes_keyed_and_keyless_sessions(self) -> None:
+        registry = SessionRegistry()
+        keyed = await registry.open(a_mount(), to_message(), key=KEY)
+        keyless = await registry.open(a_mount(), to_message())
+        assert isinstance(keyed, Opened) and isinstance(keyless, Opened)
 
         await registry.close_all()
 
-        assert keyed.finished
-        assert parented.finished
-        assert registry.get(KEY) is None
+        assert keyed.session.root.finished and keyless.session.root.finished
+        assert tuple(registry.active()) == ()
 
-    async def test_close_finishes_one_key(self):
-        registry = MountRegistry()
-        mount = a_mount()
-        await registry.open(mount, to_message(), key=KEY)
 
-        await registry.close(KEY)
+async def test_open_personal_owns_access_audience_and_registration() -> None:
+    registry = SessionRegistry()
+    interaction = fake_interaction(user_id=7)
 
-        assert mount.finished
+    result = await open_personal(registry, Panel(), interaction, key=SessionKey.user("panel", 7), timeout=None)
 
-    async def test_close_on_an_empty_key_is_a_no_op(self):
-        await MountRegistry().close(KEY)
+    assert isinstance(result, Opened)
+    assert result.session.participants == frozenset({7})
+    assert result.session.root.access == Owner(7)
+    assert interaction.response.send_message.await_args.kwargs["ephemeral"] is True
 
-    async def test_active_reports_a_mount_once_even_when_keyed_and_parented(self):
-        registry = MountRegistry()
-        parent, mount = a_mount(), a_mount()
-        await registry.open(mount, to_message(), key=KEY, parent=parent)
 
-        assert [key for key, _ in registry.active()] == [KEY]
+async def _note(order: list[str], label: str) -> None:
+    order.append(label)

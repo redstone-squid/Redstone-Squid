@@ -3,8 +3,8 @@
 import pytest
 
 import squid_layouts as sl
-from squid_layouts.discord import DEFAULT_TARGET
-from squid_layouts.planning import solve
+from squid_layouts.discord import V2_TARGET
+from squid_layouts.planning import measure
 from squid_layouts.planning.limits import V2Limits
 from squid_layouts.primitives import Paginate, Text
 from squid_layouts.scene.model import ScenePanel, SceneText
@@ -24,7 +24,7 @@ class TestBudgetContract:
     def test_content_inside_the_stretch_band_stays_whole(self) -> None:
         body = "a" * 519 + "\n" + "b" * 520
 
-        solved = solve(
+        solved = measure(
             [
                 sl.primitives.Budget(
                     (Text(body, overflow=Paginate(key="body")),),
@@ -41,7 +41,7 @@ class TestBudgetContract:
     def test_over_band_pagination_balances_at_boundaries(self) -> None:
         body = "a" * 519 + "\n" + "b" * 520
 
-        solved = solve(
+        solved = measure(
             [
                 sl.primitives.Budget(
                     (Text(body, overflow=Paginate(key="body")),),
@@ -58,7 +58,7 @@ class TestBudgetContract:
     def test_over_band_pagination_can_snap_into_the_stretch_band(self) -> None:
         body = "a" * 1040 + "\n" + "b" * 160
 
-        solved = solve(
+        solved = measure(
             [
                 sl.primitives.Budget(
                     (Text(body, overflow=Paginate(key="body")),),
@@ -77,7 +77,7 @@ class TestBudgetContract:
             sl.budget(sl.paragraph("a" * 100), min=80, prefer=100),
             sl.budget(sl.paragraph("b" * 100), min=80, prefer=100),
         )
-        target = sl.planning.TargetProfile("small", 1, DEFAULT_TARGET.capabilities, V2Limits(total_text=100))
+        target = sl.planning.TargetProfile("small", 1, V2_TARGET.capabilities, V2Limits(total_text=100))
 
         with pytest.raises(sl.UnsolvableLayoutError, match="Budget floors need"):
             sl.plan(document, target=target)
@@ -87,7 +87,7 @@ class TestBudgetContract:
             sl.budget(sl.best_effort(sl.paragraph("a" * 100)), min=80, prefer=100),
             sl.best_effort(sl.budget(sl.paragraph("b" * 100), min=80, prefer=100)),
         )
-        target = sl.planning.TargetProfile("small", 1, DEFAULT_TARGET.capabilities, V2Limits(total_text=100))
+        target = sl.planning.TargetProfile("small", 1, V2_TARGET.capabilities, V2Limits(total_text=100))
 
         result = sl.plan(document, target=target)
 
@@ -105,7 +105,7 @@ class TestPaginateBreakPreferences:
 class TestRegionPagination:
     @staticmethod
     def _texts(result: sl.PlanResult) -> list[str]:
-        panel = result.scene.children[0]
+        panel = result.scene.components_v2.children[0]
         assert isinstance(panel, ScenePanel)
         return [child.content for child in panel.children if isinstance(child, SceneText)]
 
@@ -120,10 +120,10 @@ class TestRegionPagination:
     def test_break_annotations_are_transparent_without_a_paged_region(self) -> None:
         result = sl.plan(
             sl.group(sl.unbreakable(sl.paragraph("first")), sl.keep_with_next(sl.paragraph("second"))),
-            target=DEFAULT_TARGET,
+            target=V2_TARGET,
         )
 
-        assert [child.content for child in result.scene.children if isinstance(child, SceneText)] == [
+        assert [child.content for child in result.scene.components_v2.children if isinstance(child, SceneText)] == [
             "first",
             "second",
         ]
@@ -135,8 +135,8 @@ class TestRegionPagination:
             chars=80,
         )
 
-        first = sl.plan(document, target=DEFAULT_TARGET)
-        second = sl.plan(document, target=DEFAULT_TARGET, positions={"report": sl.Position(offset=1)})
+        first = sl.plan(document, target=V2_TARGET)
+        second = sl.plan(document, target=V2_TARGET, positions={"report": sl.Position(offset=1)})
 
         assert first.scene.pagers[0].pages == 3
         assert self._texts(first)[:3] == ["## Report", "0: " + "x" * 30, "1: " + "x" * 30]
@@ -154,8 +154,8 @@ class TestRegionPagination:
             chars=50,
         )
 
-        first = sl.plan(document, target=DEFAULT_TARGET)
-        second = sl.plan(document, target=DEFAULT_TARGET, positions={"chapters": sl.Position(offset=1)})
+        first = sl.plan(document, target=V2_TARGET)
+        second = sl.plan(document, target=V2_TARGET, positions={"chapters": sl.Position(offset=1)})
 
         assert "## Next" not in self._texts(first)
         assert self._texts(second)[:2] == ["## Next", "b" * 35]
@@ -168,14 +168,13 @@ class TestRegionPagination:
         )
 
         with pytest.raises(sl.UnsolvableLayoutError, match="unbreakable region child"):
-            sl.plan(document, target=DEFAULT_TARGET)
+            sl.plan(document, target=V2_TARGET)
 
     def test_an_oversized_text_child_splits_losslessly(self) -> None:
         document = sl.paged(sl.section(sl.paragraph("x" * 120)), key="prose", chars=50)
 
         pages = [
-            sl.plan(document, target=DEFAULT_TARGET, positions={"prose": sl.Position(offset=index)})
-            for index in range(3)
+            sl.plan(document, target=V2_TARGET, positions={"prose": sl.Position(offset=index)}) for index in range(3)
         ]
 
         assert pages[0].scene.pagers[0].pages == 3
@@ -190,7 +189,7 @@ class TestRegionPagination:
             widows=3,
         )
 
-        last = sl.plan(document, target=DEFAULT_TARGET, positions={"widows": sl.Position(offset=1)})
+        last = sl.plan(document, target=V2_TARGET, positions={"widows": sl.Position(offset=1)})
 
         assert self._texts(last)[:3] == ["2" * 20, "3" * 20, "4" * 20]
 
@@ -201,7 +200,7 @@ class TestRegionPagination:
             chars=100,
         )
 
-        first = sl.plan(document, target=DEFAULT_TARGET)
+        first = sl.plan(document, target=V2_TARGET)
 
         assert first.scene.pagers[0].pages == 10
         assert self._texts(first)[:10] == ["x" * 10] * 10

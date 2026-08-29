@@ -1,6 +1,6 @@
 # squid-layouts
 
-A declarative, limits-aware UI engine with Discord Components V2 and HTML renderers.
+A declarative, limits-aware UI engine with Discord Components V2, classic-message, and HTML renderers.
 
 Discord rejects any message that exceeds one of its many hard limits (4000 display characters,
 40 components, 25 select options, 45-char modal titles, …) with an opaque HTTP 50035. This
@@ -26,7 +26,9 @@ class Counter(sl.Component):
 ```
 
 See [the architecture and API interaction guide](../../docs/squid-layouts-architecture.md)
-for component composition, planning, renderers, action policies, and durable mounts.
+for component composition, planning, renderers, action policies, and durable mounts, and
+[Classic Discord messages](docs/classic-messages.md) for the second target: content, embeds,
+and action rows, from the same semantic document.
 
 ## The layers
 
@@ -35,7 +37,9 @@ for component composition, planning, renderers, action policies, and durable mou
    Authors may express a display preference and flexibility, but never an exact Discord shape.
    The lowercase factories (`sl.section`, `sl.actions`, `sl.field`, …) are the recommended
    authoring surface; the uppercase dataclasses are the IR they build and stay fully public.
-2. **Target adapters** select lossless representations. For example, 36 semantic actions become
+2. **Target adapters** select lossless representations, per target: one document becomes a
+   `LayoutView` under `V2_TARGET` and content, embeds, and action rows under `CLASSIC_TARGET`.
+   For example, 36 semantic actions become
    two pickers containing 25 and 11 options; explicit action groups never merge. Strategy state
    supplies hysteresis, so small data changes do not reshuffle a familiar UI.
 3. **Exact primitives** live under `squid_layouts.primitives`. `Row`, `SelectMenu`, `Panel`,
@@ -48,9 +52,23 @@ for component composition, planning, renderers, action policies, and durable mou
 6. **Renderers** mechanically draw a scene. Discord produces Components V2 and audits it with
    `sl.discord.conform(strict=True)`; HTML produces escaped Discord-like preview markup from the same scene.
 
-`sl.discord.compose()` is the Discord convenience pipeline, with `reserved_text` for callers whose
-message carries content the engine cannot see. It always creates a renderer-owned view;
-adopting an arbitrary existing `discord.py` view is intentionally unsupported. Components nest through explicit
+`sl.discord.compose()` is the Discord convenience pipeline, with `reservation` for callers whose
+message carries content the engine cannot see — `sl.discord.measure(view)` and `sl.discord.cost(item)`
+produce one without hand-counting. It always creates a renderer-owned view;
+adopting an arbitrary existing `discord.py` view is intentionally unsupported.
+
+There are three ways to adopt the package, and they can be mixed in one bot:
+
+1. **A new screen.** Use `sl.discord.Mount` for one command while everything else stays as it is.
+2. **A region of an existing V2 screen.** `sl.discord.contribute(document, to=view, followed_by=...)`
+   measures the host, plans into what is left, and places the result — the host keeps sending,
+   editing, timeouts, callbacks and error policy. The contributed region is stateless: link and
+   routed controls only, since no mount exists to wire a component-local callback.
+3. **The whole message.** Hand it to `Mount` when component state or callbacks move into Squid.
+
+A fragment is not a miniature mount. If two independently stateful regions need to edit one
+message, give them a single parent component, or keep the legacy view as the sole owner and make
+the Squid region stateless. Components nest through explicit
 `self.embed(child, key=...)` boundaries, so actions and pagers never cross-wire. `sl.discord.Mount`
 binds a component tree to a message: every
 interaction funnels through it (author lock, error hook, re-render/edit), timeouts disable
@@ -68,7 +86,14 @@ text and option pagination.
 `sl.discord.render_static` is the sessionless
 path for reconciler-managed posts. `sl.discord.build_modal`/`sl.discord.conform_modal` do the same for modals,
 whose string lengths discord.py does not validate at all. `sl.scene.Codec` transports plans to
-other processes; `sl.discord.durability.MountManager` provides opt-in versioned state checkpoints.
+other processes; `sl.discord.durability.DurableSessionRuntime` provides opt-in, whole-session recovery.
+
+Presentation colours are an immutable `sl.Palette`, supplied to `sl.plan`, `sl.discord.compose`,
+`sl.discord.render_static`, or `sl.discord.Mount`. An omitted section or article accent inherits
+`Palette.brand`; `accent=None` explicitly opts out and an integer remains an exact data override.
+Semantic tones resolve through the palette. `sl.themed(palette, *children)` scopes an override to a
+subtree, so a component may select a palette from reactive state while the final scene still contains
+only exact colours. Discord buttons retain Discord's platform-owned style colours.
 
 ### Live updates across mounts
 
@@ -81,7 +106,7 @@ topic through one vocabulary function rather than mixing values such as `("build
 ```python
 bus = sl.TopicBus()
 reactor = sl.discord.Reactor(bus)
-mount = sl.discord.Mount(panel, scheduler=reactor)
+mount = sl.discord.Mount(panel, access=sl.discord.Owner(interaction.user.id), scheduler=reactor)
 reactor.follow(mount, ("build", "123"))  # subscribe before the first read/send
 await mount.send(sl.discord.respond_to(interaction))
 
@@ -99,6 +124,35 @@ call `publish()`, then `await bus.drain()` and assert without starting backgroun
 Expiry and idle-time tests can inject UTC and monotonic clocks through `Reactor(clock=...)` and
 `Mount(clock=...)`; production callers normally keep their defaults.
 
+### Runtime profiling
+
+Runtime profiling is opt-in, bounded, and synchronous. One `MemoryProfiler` can cover the whole
+live-update chain: `Reactor` inherits its bus's profiler, and a `Mount` inherits its scheduler's
+profiler unless explicitly overridden. Routers are independent ownership roots and accept the
+same collector directly.
+
+```python
+profiler = sl.profiling.MemoryProfiler(sample_rate=0.1)
+bus = sl.TopicBus(profiler=profiler)
+reactor = sl.discord.Reactor(bus)
+
+mount = sl.discord.Mount(panel, access=sl.discord.Everyone(), scheduler=reactor)
+router = sl.discord.Router(profiler=profiler)
+devtools = sl.discord.devtools.DevTools(reactor=reactor)
+```
+
+Completed operations contribute to lifetime and rolling histograms and event counters even when
+their detailed trace is sampled out. Slow, failed, cancelled, and acknowledgement-deadline traces
+have dedicated bounded retention. `profiler.snapshot()` returns frozen data, and
+`sl.profiling.snapshot_json(snapshot)` exports schema-versioned JSON without consulting live
+objects. The profiler starts no tasks and performs no I/O; keep exporters under the host's own
+supervisor.
+
+The owner-only devtools cog adds `dev profile actions`, `dev profile queues`,
+`dev ui profile <mount-id>`, and `dev profile export`. Trace attributes may retain a mount ID in
+these bounded buffers, but mount IDs, topics, users, message IDs, route values, and form payloads
+never become aggregate keys.
+
 ## Interaction patterns and two shells
 
 `Tabs`, `Menu`, materialized `RankedList`, `Wizard`, and `MultiChoicePanel` are pure state machines.
@@ -112,7 +166,7 @@ tabs = sl.Tabs(
 )
 
 # A mounted message: state lives in sl.state and controls use sl.action closures.
-mount = sl.discord.Mount(tabs.component())
+mount = sl.discord.Mount(tabs.component(), access=sl.discord.Everyone())
 
 # A restart-surviving message: state is decoded from and encoded into route parameters.
 shell = sl.RouterShell(
@@ -120,6 +174,43 @@ shell = sl.RouterShell(
 )
 document = shell.render(tabs, sl.TabsState(selected=tab))
 ```
+
+Mounted actions accept application-wide middleware directly on the mount:
+
+```python
+class TraceActions(sl.ActionMiddleware):
+    async def dispatch(self, request, proceed) -> None:
+        with tracer.span("ui.action", action=request.key, rebased=request.rebased):
+            await proceed()
+
+
+mount = sl.discord.Mount(
+    panel,
+    access=sl.discord.Everyone(),
+    middleware=(TraceActions(),),
+)
+```
+
+The first middleware is outermost. Returning without `proceed()` short-circuits the handler but
+still lets the mount acknowledge and flush; `proceed()` is one-shot and expires when that
+middleware call returns. Middleware runs after mount admission and stale-generation handling.
+Its `ActionRequest.rebased` flag is generation metadata, not a completion result. Handler state
+rolls back before an exception reaches outer middleware, and Discord rendering/delivery remains
+outside the onion.
+
+Every mount states who may interact. `Owner`, `Users`, and `Everyone` cover static policy;
+`Check` accepts an asynchronous application policy. Visibility stays a destination concern,
+so owner access does not by itself make a channel message private.
+
+`SessionRegistry` groups a root mount and its attached children under one operational lifetime.
+Typed `SessionKey.user`, `guild`, `user_guild`, `global_`, and `custom` constructors name scoped
+cardinality, while `SessionPolicy` composes a limit, collision selection, and replacement
+protection. Opens return `Opened`, `Rejected`, or `Abandoned`; no preflight `get()` is needed to
+explain a collision.
+
+Stateful drafts that must survive restarts open through `DurableSessionRuntime`, which coordinates
+fenced admission, recoverable Discord bindings, whole-session checkpoints, and lease supervision.
+See [Durable sessions](docs/durable-mounts.md) for the imperative and `DurableBot` startup paths.
 
 `PatternRoute.phase` is `next` for deterministic buttons: its state is already the state the next
 document should render. Selects and forms use `input`, because their values arrive in the
@@ -166,16 +257,48 @@ short-circuits; calling it twice or after `dispatch` returns is an error. The ro
 initial interaction acknowledgement deadline outside this chain, so a slow handler or deliberate
 short-circuit cannot produce Discord's generic interaction failure.
 
+### State values
+
+`sl.state` holds an immutable value and is replaced rather than mutated. Every assignment is
+checked with `hash()`, which reaches all the way down: `(1, [2])` and a frozen dataclass with a
+`list` field are both refused, and `sl.FrozenMapping` is the container to reach for when a
+mapping has to be state. `sl.state(..., opaque=True)` is the escape hatch for a collaborator the
+component holds and never mutates — a service, a guild, a session.
+
+Inside an action a write stages into the transaction's overlay and becomes visible at commit.
+The action reads its own writes; another task reading the same field across an `await` sees the
+committed value until then, and a rollback is dropping the overlay.
+
+### Computed values
+
+`sl.computed` caches a synchronous derived value against whatever state its body read. Nothing
+is declared, so a conditional dependency is exactly the branch that ran:
+
+```python
+class SearchResults(sl.Component):
+    query: str = sl.state("")
+    filters: frozenset[str] = sl.state(frozenset())
+
+    @sl.computed
+    def visible_results(self) -> tuple[Result, ...]:
+        return apply_filters(search(self.query), self.filters)
+```
+
+A computed may read another component's state, or another computed. It is lazy — one nobody
+renders is never evaluated — and one that raises fails where its value is used rather than at
+commit. Values form selector boundaries: downstream computed values recompute only when the
+refreshed value compares unequal. `sl.untracked()` reads state without subscribing to it.
+
 ### Reactive async resources
 
-`sl.resource` keeps async data in a synchronous, renderable state machine. Dependencies are the
-actual `sl.state` descriptors declared earlier in the same class:
+`sl.resource` keeps async data in a synchronous, renderable state machine. Its dependencies are
+whatever its loader read, tracked the same way a computed's are:
 
 ```python
 class VotingPanel(sl.Component):
     kind: VoteKind = sl.state(VoteKind.BUILD)
 
-    @sl.resource(depends=(kind,))
+    @sl.resource
     async def configuration(self) -> VoteConfiguration:
         return await votes.configuration(self.kind)
 
@@ -191,7 +314,9 @@ class VotingPanel(sl.Component):
                 return voting_panel(config)
 ```
 
-A committed dependency change synchronously invalidates the resource. Hidden branches remain lazy:
+A committed write to state the loader read re-pends the resource at the next read. A loader
+that reads something only in one branch must hoist that read, or a run that skipped the branch
+will not subscribe to it. Hidden branches remain lazy:
 only resources observed during rendering are loaded. `Pending` and `Failed` retain the last `Ready`
 value when available, while request tokens prevent stale completions from publishing.
 

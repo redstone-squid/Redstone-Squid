@@ -249,9 +249,9 @@ than guessed at from Cascade's API.
 
 ### 1. Replace dual managers with one coordinator
 
-Retain `ComponentRegistry`, codecs, and the store protocols, but replace public `MountManager`
-with `DurableSessionRuntime`. It composes a `SessionRegistry`, a component registry, a leased
-store, and a frontend adapter:
+Retain `ComponentRegistry` and the codecs, but replace public `MountManager` with
+`DurableSessionRuntime`. It composes a `SessionRegistry`, registered restore recipes, a fenced
+session store, and a frontend adapter:
 
 ```python
 runtime = sl.discord.durability.DurableSessionRuntime(
@@ -261,29 +261,38 @@ runtime = sl.discord.durability.DurableSessionRuntime(
     frontend=DiscordFrontend(bot),
 )
 
-report = await runtime.recover()
-
 async with anyio.create_task_group() as tasks:
-    tasks.start_soon(runtime.run)
-    await bot.start(token)
+    await bot.login(token)
+    report = await tasks.start(runtime.run)
+    await bot.connect()
 ```
 
-The runtime never starts its own task. `run()` owns lease renewal, coalesced checkpoint retries,
-and expiry pruning under the host's anyio task group. The low-level stores remain usable without
-it.
+`run()` owns recovery, lease renewal, coalesced checkpoint retries, and expiry pruning under the
+host's anyio task group. Its task-start handshake returns `RecoveryReport` only after supervision
+and recovery are ready. `DurableBot` supplies the same ordering for the common `commands.Bot`
+path; the imperative runtime remains the foundational API.
 
-Opening a durable session is one operation. It claims or reserves the durable key before
-delivery, opens through `SessionRegistry`, derives the Discord locator from the committed
-delivery receipt, and writes the first snapshot. Abandonment or failure releases the reservation.
-Ephemeral or otherwise temporary edit authority is rejected before a durable record is accepted:
-an ephemeral message has no recoverable permanent identity.
+Opening a durable session is one operation. It reserves the encoded `SessionKey`, admits against
+immutable local and stored `SessionSummary` values, delivers through the registry transaction,
+promotes the receipt to a recoverable frontend binding, and atomically publishes the first record
+while retiring selected victims. Abandonment or failure releases the reservation without costing
+the incumbent. Temporary interaction authority is acceptable when the frontend can reacquire
+bot-token authority for a public message; ephemeral or unaddressable delivery returns
+`NotDurable` and is torn down before a record is accepted.
+
+The admission reservation is a short lease, not a database transaction held across Discord I/O.
+Collision and protection protocols are asynchronous and receive immutable summaries rather than
+live `Session` objects, so one policy vocabulary works for local and distributed occupants. The
+runtime evaluates policy in Python; the store only fences reservation, publish, and retirement.
 
 ### 2. Checkpoint at visible commit boundaries
 
 Add an asynchronous mount-presented observer fired after a candidate has been successfully
 delivered and committed. `DurableSessionRuntime` registers one observer for every mount in a
-durable session and checkpoints the whole session's UI-local state after visible commits. State
-mutations and failed renders never reach storage merely because they happened in memory.
+`DurableSession` and checkpoints the whole session graph after visible commits. Its record contains
+every mount snapshot and locator plus parent and actor attribution. Durable attachment therefore
+requires a registered recipe key. State mutations and failed renders never reach storage merely
+because they happened in memory.
 
 Discord and the database cannot share a transaction. The contract is therefore explicit:
 
@@ -298,25 +307,27 @@ Normal `Session.finish()` deletes the durable record and releases its claim afte
 Replacement transfers ownership through the registry/runtime operation rather than relying on
 two unrelated finish calls. Shutdown releases leases without deleting records.
 
-### 3. Frontend recovery is supplied
+### 3. Frontend binding and recovery are supplied
 
-Replace the reachability-only resolver with a frontend protocol that returns an actionable
-binding:
+Replace the reachability-only resolver with promotion for new deliveries and graph reconnection
+for recovery:
 
 ```python
 class DurableFrontend(Protocol):
-    async def resolve(self, locator: MountLocator) -> Reachable | Missing | Unreachable: ...
-    async def reconnect(self, mount: Mount, binding: Reachable) -> None: ...
+    async def promote(self, mount: Mount, receipt: DeliveryReceipt) -> Promoted | NotDurable: ...
+    async def reconnect(self, mounts: Sequence[RecoveredBinding]) -> Reconnected | Missing | Unreachable: ...
 ```
 
-`DiscordFrontend` ships in the Discord extra. It fetches the channel and message, distinguishes
-definitive 404 from temporary inability, edits a reachable message with the restored mount's new
-render and control IDs, retains a permanent edit handle, and only then registers the session as
-live. Recovery does not depend on stale process-local mount IDs or generations.
+`DiscordFrontend` ships in the Discord extra. Promotion distinguishes ephemeral delivery from a
+public interaction response whose temporary handle can be traded for permanent channel-message
+authority. Recovery resolves every locator in a session before editing any message, distinguishes
+definitive 404 from temporary inability, edits reachable messages with new render and control IDs,
+retains permanent handles, and only then registers the session as live. Recovery does not depend
+on stale process-local mount IDs or generations.
 
-Confirmed missing messages delete their records. Unreachable messages retain and release their
-records for a later pass. Reconnection failures are isolated per record, not raised out of the
-whole sweep.
+A missing root deletes its record. Missing child branches are pruned and the remaining graph is
+checkpointed. Unreachable messages retain and release their complete records for a later pass.
+Reconnection failures are isolated per record, not raised out of the whole sweep.
 
 `recover()` returns a structured `RecoveryReport` with at least:
 
@@ -333,15 +344,18 @@ payload or moved component cannot prevent unrelated panels from returning.
 
 ### 4. Migration and fencing
 
-`ComponentRegistry.register` accepts a sequential snapshot migration chain. A migration receives
-the decoded raw snapshot for version N and must return version N+1; the registry validates and
-re-encodes after every step. Factories still construct known types—there are no dynamic imports.
-Missing migrations put the record in `incompatible` and retain it for operator action.
+`ComponentRegistry.register` accepts a restore recipe and a sequential snapshot migration chain.
+The recipe constructs the complete mount, including dependencies, explicit access policy, timeout,
+chrome, and localization, from a typed restore context. A migration receives the decoded raw
+snapshot for version N and must return version N+1; the registry validates and re-encodes after
+every step. Recipes still construct known types—there are no dynamic imports. Missing migrations
+put the record in `incompatible` and retain it for operator action.
 
-Leases become fenced ownership, not advisory timestamps:
+Leases and admission reservations become fenced ownership, not advisory timestamps:
 
 - `claim` returns an opaque, monotonically changing claim token.
 - `save`, `renew`, and `delete` for an owned record compare that token atomically.
+- Admission reservation and atomic publish/retire compare a separate scope token.
 - Newly opened durable sessions claim before their first record is published, just like recovered
   sessions.
 - Postgres lease expiry uses database time so host clock skew cannot create two owners. SQLite
@@ -411,3 +425,17 @@ Each commit is independently valid and reviewable:
 ## Status
 
 Proposed 2026-08-22.
+
+Phases A and B implemented 2026-08-22. Mount access is explicit and asynchronous; delivery
+and session opening return structured outcomes; typed scopes, logical sessions, attachment
+cascade, limits, collision policies, and cross-user replacement protection ship under the
+new names. Participant join/leave indexes remain deferred to implementation step 7: no
+lobby/game consumer and race suite exists yet, so `SessionPolicy` deliberately does not
+expose `participant_limit`.
+
+Phase C implemented 2026-08-22. `DurableSessionRuntime` now owns fenced distributed admission,
+Discord promotion and graph reconnection, whole-session records, recovery reporting, lease and
+checkpoint supervision, expiry, and finish/delete integration. `DurableBot` wires both ordinary
+`start()` and explicit `login(); connect()` startup through the same recovery-before-gateway
+boundary. The old `MountManager`, advisory lease API, and reachability-only resolver are removed;
+the durability guide and architecture reference describe the shipped coordinator.

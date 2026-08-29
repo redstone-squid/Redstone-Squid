@@ -1,10 +1,11 @@
 """Stateful components: render() is a pure function of state; mutating state re-renders.
 
-A component describes *what the message should say now*. Interaction callbacks just mutate
-declared state; assignments and in-place list, dict, or set mutations schedule the mount to
-re-render. Components never touch discord.py objects directly.
+A component describes *what the message should say now*. Interaction callbacks assign
+declared state, and every assignment schedules the mount to re-render. State values are
+immutable and replaced rather than mutated. Components never touch discord.py objects
+directly.
 
-Components compose through explicit keyed Embed boundaries, so two instances of the same
+Components compose through explicit keyed Boundary nodes, so two instances of the same
 child class can appear in one message without their controls or pagers cross-wiring. Only the
 root component is attached to a Mount; children reach it through their parent.
 """
@@ -20,9 +21,9 @@ from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.primitives.constraints import Paginate
 from squid_layouts.primitives.nodes import (
     ActionGroup,
+    Boundary,
     Button,
     Code,
-    Embed,
     Extension,
     Footer,
     Heading,
@@ -37,8 +38,8 @@ from squid_layouts.primitives.nodes import (
     Variants,
 )
 from squid_layouts.runtime.context import ContextKey
-from squid_layouts.runtime.reactivity import _CURRENT, _State, report_undeclared_write
-from squid_layouts.runtime.resources import Resource, _ResourceDescriptor, observe_resources, unique_resources
+from squid_layouts.runtime.reactivity import _CURRENT, _Computed, _State, report_undeclared_write
+from squid_layouts.runtime.resources import Resource, observe_resources, unique_resources
 from squid_layouts.semantic import (
     Action as SemanticAction,
 )
@@ -112,6 +113,7 @@ from squid_layouts.semantic import (
 from squid_layouts.semantic import (
     Table as SemanticTable,
 )
+from squid_layouts.semantic import Themed as SemanticThemed
 from squid_layouts.semantic import Toggle as SemanticToggle
 from squid_layouts.semantic import (
     Truncated as SemanticTruncated,
@@ -149,7 +151,7 @@ def _is_abstract(cls: type) -> bool:
 
 def _checked_init(
     original: Callable[..., None],
-    required: tuple[tuple[str, str], ...],
+    required: tuple[tuple[str, _State], ...],
 ) -> Callable[..., None]:
     """Wrap ``__init__`` so state declared without an initial value must be assigned."""
 
@@ -160,7 +162,7 @@ def _checked_init(
         # otherwise trip the base's wrapper before it had finished assigning.
         if type(self).__init__ is not __init__:
             return
-        missing = sorted(name for name, slot in required if slot not in self.__dict__)
+        missing = sorted(name for name, descriptor in required if not descriptor.is_set(self))
         if missing:
             message = f"{type(self).__name__}.__init__ left declared state unassigned: {', '.join(missing)}"
             raise TypeError(message)
@@ -195,7 +197,7 @@ class Component:
     """Whether this instance's :meth:`on_load` has completed. Owned by the frontend."""
     _state_names: ClassVar[frozenset[str]] = frozenset()
     _state_descriptors: ClassVar[dict[str, _State]] = {}
-    _resource_dependencies: ClassVar[dict[str, tuple[_ResourceDescriptor[Any, Any], ...]]] = {}
+    _computed_descriptors: ClassVar[dict[str, _Computed]] = {}
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -207,31 +209,13 @@ class Component:
         }
         cls._state_names = frozenset(declared)
         cls._state_descriptors = declared
-        declared_resources = {
+        cls._computed_descriptors = {
             name: descriptor
             for klass in reversed(cls.__mro__)
             for name, descriptor in vars(klass).items()
-            if isinstance(descriptor, _ResourceDescriptor)
+            if isinstance(descriptor, _Computed)
         }
-        dependency_map: dict[str, list[_ResourceDescriptor[Any, Any]]] = {}
-        for resource_name, descriptor in declared_resources.items():
-            for dependency in descriptor.depends:
-                state_descriptor = next(
-                    (candidate for candidate in declared.values() if candidate is dependency),
-                    None,
-                )
-                if state_descriptor is None:
-                    message = (
-                        f"{cls.__name__}.{resource_name} dependency must be an sl.state() field on the same component"
-                    )
-                    raise TypeError(message)
-                dependents = dependency_map.setdefault(state_descriptor._name, [])
-                if descriptor not in dependents:
-                    dependents.append(descriptor)
-        cls._resource_dependencies = {name: tuple(value) for name, value in dependency_map.items()}
-        required = tuple(
-            (name, descriptor._name) for name, descriptor in declared.items() if not descriptor.has_initial
-        )
+        required = tuple((name, descriptor) for name, descriptor in declared.items() if not descriptor.has_initial)
         if required and not _is_abstract(cls):
             # Wrap even an inherited __init__, so adding a required field to a subclass that
             # defines no constructor of its own is still checked.
@@ -252,9 +236,13 @@ class Component:
         object.__setattr__(self, name, value)
 
     def _state_changed(self, names: frozenset[str]) -> None:
-        for name in names:
-            for descriptor in type(self)._resource_dependencies.get(name, ()):
-                descriptor.invalidate_for(self)
+        """React to committed writes to these state slots.
+
+        Nothing is refreshed here. A computed and a resource each record what they read and
+        re-check it when something asks for the value, so a commit only has to say the tree
+        needs drawing again. `names` is for a subclass that wants to know which fields moved.
+        """
+        del names
         self.invalidate()
 
     def _state_rolled_back(self) -> None:
@@ -264,9 +252,9 @@ class Component:
         """Describe the message for the current state. Pure and synchronous."""
         raise NotImplementedError
 
-    def embed(self, child: Component, *, key: str) -> Embed:
+    def boundary(self, child: Component, *, key: str) -> Boundary:
         """Place child in this render tree under a stable key and namespace."""
-        return Embed(child, key)
+        return Boundary(child, key)
 
     async def on_load(self) -> None:
         """Fetch what this component cannot render without, before its first render.
@@ -290,15 +278,16 @@ class Component:
     def mutated(self, name: str) -> None:
         """Re-render because declared state changed in place where nothing observed it.
 
-        Assignment and list, dict, and set mutation are observed already. Reach for this only
-        when a field's *contents* changed some other way, such as setting an attribute on the
-        object a ``copy="ref"`` field holds. It schedules the draw; it cannot roll the change
+        Assignment is observed already, and a state value is immutable, so the only field
+        whose *contents* can change behind the framework's back is an ``opaque=True`` one --
+        a collaborator the component holds. It schedules the draw; it cannot roll the change
         back, and naming the field keeps the call tied to the declaration it depends on.
         """
         if name not in type(self)._state_names:
             message = f"{type(self).__name__}.{name} is not declared state, so it cannot have changed in place"
             raise TypeError(message)
         descriptor = type(self)._state_descriptors[name]
+        descriptor.mutated(self)
         self._state_changed(frozenset((descriptor._name,)))
 
     def invalidate(self) -> None:
@@ -389,13 +378,13 @@ def render_component_tree(
         token = _CURRENT_CONTEXT.set(context)
 
         def expand_item(item: RenderNode, item_path: str) -> list[LayoutNode]:
-            if isinstance(item, Embed):
+            if isinstance(item, Boundary):
                 if item.key in embed_keys:
-                    message = f"{item_path}: duplicate Embed key {item.key!r}"
+                    message = f"{item_path}: duplicate Boundary key {item.key!r}"
                     raise LayoutInvariantError(message)
                 embed_keys.add(item.key)
                 if not isinstance(item.component, Component):
-                    message = f"{item_path}: Embed does not contain a Component"
+                    message = f"{item_path}: Boundary does not contain a Component"
                     raise LayoutInvariantError(message)
                 # Before the defer check: a deferred child still reaches the mount through
                 # its parent when its on_load writes state.
@@ -410,6 +399,7 @@ def render_component_tree(
                     SemanticGroup(children=children)
                     | SemanticStack(children=children)
                     | SemanticCluster(children=children)
+                    | SemanticThemed(children=children)
                     | SemanticSection(children=children)
                     | SemanticArticle(children=children)
                     | SemanticAside(children=children)
@@ -467,7 +457,7 @@ def render_component_tree(
                         expanded_rung: list[Node] = []
                         for child_index, child in enumerate(variant.nodes):
                             expanded_rung.extend(expand_item(child, f"{item_path}.variant.{index}.{child_index}"))  # pyrefly: ignore
-                        rungs.append(Variant(tuple(expanded_rung), variant.requires))
+                        rungs.append(Variant(tuple(expanded_rung), variant.requires, variant.fidelity))
                     return [Variants(tuple(rungs), priority)]
                 case Extension(kind=kind, version=version, payload=payload, fallback=fallback):
                     expanded = expand_item(fallback, f"{item_path}.fallback")
@@ -534,7 +524,10 @@ def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
                     items=tuple(rewrite_semantic_action(item) for item in items),
                 )
             case (
-                SemanticGroup(children=children) | SemanticStack(children=children) | SemanticCluster(children=children)
+                SemanticGroup(children=children)
+                | SemanticStack(children=children)
+                | SemanticCluster(children=children)
+                | SemanticThemed(children=children)
             ):
                 return replace(node, children=tuple(rewrite(child) for child in children))
             case (
@@ -603,7 +596,7 @@ def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
             case Variants(variants=variants, priority=priority):
                 return Variants(
                     variants=tuple(
-                        Variant(tuple(rewrite(child) for child in variant.nodes), variant.requires)
+                        Variant(tuple(rewrite(child) for child in variant.nodes), variant.requires, variant.fidelity)
                         for variant in variants
                     ),
                     priority=priority,

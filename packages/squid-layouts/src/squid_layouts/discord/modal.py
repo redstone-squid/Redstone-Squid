@@ -28,10 +28,12 @@ from squid_layouts.forms import (
     FormValueError,
     IntField,
     MultiChoiceField,
+    ScaleField,
     TextAreaField,
     TextField,
     TimeField,
     UploadedFile,
+    ZonedDateTimeField,
 )
 from squid_layouts.planning.limits import LIMITS, V2Limits
 from squid_layouts.text import NEUTRAL, Localization, TextLike, resolve_text
@@ -165,6 +167,8 @@ class _FormModal(discord.ui.Modal):
             component, reader = _form_component(field, spec.prefill_for(field), localization)
             label = _resolve(field.label, localization) if field.label is not None else field.key
             description = _resolve(field.description, localization) if field.description is not None else None
+            if description is None and isinstance(field, ZonedDateTimeField):
+                description = field.timezone
             self._readers[field.key] = reader
             self.add_item(discord.ui.Label(text=label, description=description, component=component))
 
@@ -177,7 +181,14 @@ def _resolve(value: TextLike, localization: Localization) -> str:
 
 
 def _text_input(
-    field: TextField | IntField | FloatField | DurationField | DateField | TimeField | DateTimeField,
+    field: TextField
+    | IntField
+    | FloatField
+    | DurationField
+    | DateField
+    | TimeField
+    | DateTimeField
+    | ZonedDateTimeField,
     prefill: object,
     localization: Localization,
 ) -> discord.ui.TextInput:
@@ -199,8 +210,38 @@ def _form_component(
     prefill: object,
     localization: Localization,
 ) -> tuple[discord.ui.Item[Any], Callable[[], object]]:
-    if isinstance(field, TextField | IntField | FloatField | DurationField | DateField | TimeField | DateTimeField):
+    if isinstance(
+        field,
+        TextField | IntField | FloatField | DurationField | DateField | TimeField | DateTimeField | ZonedDateTimeField,
+    ):
         component = _text_input(field, prefill, localization)
+        return component, lambda: component.value
+    if isinstance(field, ScaleField):
+        points = field.points
+        prefilled = None if prefill is None else str(field.format_prefill(prefill))
+        if len(points) <= 10:
+            component = discord.ui.RadioGroup(
+                custom_id=field.key,
+                required=field.required,
+                options=[
+                    discord.RadioGroupOption(
+                        label=_resolve(field.label_for(point), localization),
+                        value=str(point),
+                        default=str(point) == prefilled,
+                    )
+                    for point in points
+                ],
+            )
+            return component, lambda: component.value
+        # Wider than Discord's radio group allows, so the honest fallback is the number
+        # itself; `ScaleField.parse` reads the typed value exactly as it reads a picked one.
+        component = discord.ui.TextInput(
+            custom_id=field.key,
+            style=discord.TextStyle.short,
+            default=prefilled,
+            placeholder=f"{field.minimum}\N{EN DASH}{field.maximum}",
+            required=field.required,
+        )
         return component, lambda: component.value
     if isinstance(field, ChoiceField):
         if not 2 <= len(field.options) <= 10:

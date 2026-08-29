@@ -44,47 +44,64 @@ alternatives lose:
 | Revert staged to committed | Rejected. Destroys the gesture invisibly — a select echoes server state on the next render with no explanation. |
 | Raise | Rejected. User input is never a bug. |
 
-The `on_apply`-fires-only-when-`committed`-changed contract in `component()` is untouched;
-routing immediate commit through `committed` is precisely what makes the same handler
-correct under both policies. Plan [90](90-deferred.md)'s rejection of engine-side `Managed`
-merging stands: this changes when the pattern commits, not who merges.
+The component callback is named `on_commit` and fires only when `committed` changed; routing
+immediate commit through that field is precisely what makes the same handler correct under
+both policies. The pre-0.1 `on_apply` spelling is removed rather than aliased. Plan
+[90](90-deferred.md)'s rejection of engine-side `Managed` merging stands: this changes when
+the pattern commits, not who merges.
 
 Consumers: `NotificationPanel` subscription kinds (`squid/bot/notifications_view.py`,
 whose selection handler is immediate by nature today) and build tag/restriction editing.
 
 ## 3. Editor
 
-`Editor` is a pure dual-shell pattern generalizing the settings-panel shape: named
-sections of forms, an optional live preview, and a commit policy. The panel every
-composer converges on — Zira's giveaway flow, poll builders, application configuration —
-is preview → edit one section → validate → publish. `SettingsPanel` is
-`Editor(commit=IMMEDIATE, preview=None)`; a draft composer is
-`Editor(commit=EXPLICIT, preview=...)`. The library ships `Editor`; `SettingsPanel`
-becomes a consumer, not a component.
+`Editor` is a pure dual-shell pattern for named form and nested-pattern sections, an
+optional live preview, and a commit policy. A form section owns one mapping. A nested
+section adapts another pure `Pattern` through explicit load/dump callbacks, so Editor can
+distinguish that pattern's interaction state (selection and pagination) from the value it
+will commit (for example, a `CollectionEditor`'s ordered entries).
 
 ```python
-@dataclass(frozen=True, slots=True, init=False)
-class EditSection:
-    key: str
-    label: TextLike
-    form: FormSpec | None
-    content: tuple[ContentItem, ...]
+class EditorSection[StateT, ValueT]:
+    @classmethod
+    def form(cls, key: str, label: TextLike, form: FormLike, ...) -> EditorSection[..., Mapping[str, object]]: ...
 
-    def __init__(self, key: str, label: TextLike, body: FormLike | ContentLike) -> None: ...
+    @classmethod
+    def pattern(
+        cls,
+        key: str,
+        label: TextLike,
+        pattern: Pattern[StateT],
+        *,
+        load: Callable[[ValueT], StateT],
+        dump: Callable[[StateT], ValueT],
+        summary: Callable[[ValueT], TextLike],
+        issues: Callable[[StateT], Iterable[FormIssue]] | None = None,
+    ) -> EditorSection[StateT, ValueT]: ...
+
+    def value(self, state: EditorState) -> ValueT: ...
+
+@dataclass(frozen=True, slots=True)
+class EditorSectionState:
+    key: str
+    state: object
+    committed: object
 
 @dataclass(frozen=True, slots=True)
 class EditorState:
-    values: tuple[WizardAnswer, ...] = ()
-    committed: tuple[WizardAnswer, ...] = ()
+    sections: tuple[EditorSectionState, ...]
+    editing: str | None = None
 
-type EditorValues = Mapping[str, Mapping[str, object]]
-type EditorCommitHandler = Callable[[PatternEvent[EditorState], EditorValues], Awaitable[None]]
+type EditorValues = Mapping[str, object]
+type EditorCommitHandler = Callable[
+    [PatternEvent[EditorState], EditorValues, frozenset[str]], Awaitable[None]
+]
 
 class Editor:
     def __init__(
         self,
         title: TextLike,
-        sections: Iterable[EditSection],
+        sections: Iterable[EditorSection[object, object]],
         *,
         key: str = "editor",
         preview: Callable[[EditorValues], ContentLike] | None = None,
@@ -104,30 +121,30 @@ class Editor:
     def form_for(self, state: EditorState, action: str) -> FormSpec | None: ...
 ```
 
-`EditSection` mirrors `WizardStep` exactly, and `EditorState` reuses `WizardAnswer`, so
-the state is route-serializable and the router shell works unchanged. The sketch
+Wizard's vocabulary stays inside Wizard: `WizardStep` and `WizardAnswer` are not reused by
+Editor. `EditorSection` is individually generic in its interaction-state and value types;
+the heterogeneous aggregate erases them to `object`, while `section.value(editor_state)`
+recovers the precise `ValueT`. A `TypeVarTuple` does not help here because Python cannot map
+each member of a variadic tuple into a keyed `EditorSection` wrapper. The sketch
 `Editor(commit="Post")` conflated the policy with its label; the policy is `commit` and the
 label is `commit_label`, defaulting to `chrome.save`.
 
 Rendering: title; `preview(values)` placed as-is (degradation wrapping is the author's
-choice, not the pattern's); one row per section — label, a one-line value summary derived
-from each field's `format_prefill`, and a prefilled Edit form trigger. Under `EXPLICIT`
-the commit row appears when the editor is dirty (`values != committed`) and `validate`
-passes; violations render as `status` lines. Under `IMMEDIATE` there is no commit row:
-each `submit:<section>` commits that section's delta in the same transition and
-`on_commit` receives only the changed section.
+choice, not the pattern's); one row per section with its label and summary. Form sections
+open a prefilled form. Pattern sections open a namespaced child workspace with Back chrome.
+Under `EXPLICIT` the commit row appears when dumped values differ from committed values and
+validation passes. Under `IMMEDIATE` there is no commit row: a value-changing transition
+commits every dirty section once the aggregate is valid. `on_commit` always receives the
+complete committed mapping and the set of section keys changed by that commit.
 
-`CollectionEditor` composes as an `EditSection` whose body is content containing the
-collection shell — plan [29](29-control-vocabulary.md) §5 deliberately left its commit
-boundary outside itself so this pattern owns it unchanged. Under `IMMEDIATE`, section
-commits are the natural `record()` sites for plan [28](28-history.md) undo; the
-`SettingsPanel` inverse table there transfers as-is rather than being redesigned here.
+`CollectionEditor` composes through `EditorSection.pattern`: `load` calls
+`initial_from`, `dump` calls the new `values(state)` projection, and selection/paging do not
+make Editor dirty. Under `IMMEDIATE`, dumped-value commits are natural `record()` sites for
+plan [28](28-history.md) undo.
 
-Consumers: `SettingsPanel` (`squid/bot/settings_view.py` — channels, locale, and weights
-sections under `IMMEDIATE`), `PollConfirmationComponent` (`squid/bot/voting/poll_wizard.py`
-— preview plus details/options/deadline sections under `EXPLICIT`, the exact
-publish/edit/cancel flow it hand-rolls today), and `AccountPanel` profile editing
-(`squid/bot/account_view.py`).
+Proving consumer: `AccountPanel` profile editing, with a profile form plus a nested links
+collection under `EXPLICIT`. `SettingsPanel`'s inline choices/toggles and the poll composer's
+async option resolution are not forced through a form-section abstraction in this batch.
 
 ## 4. Browser
 
@@ -141,8 +158,7 @@ as `SourceRankedList`, and post-33 it follows that migration's shape:
 
 ```python
 class Browser[ItemT](Component):
-    position: Position = state(ORIGIN)
-    opened: str | None = state(None, persist=False)
+    opened: ItemT | None = state(None, persist=False)
 
     @resource(depends=(position,))
     async def window(self) -> LoadedWindow[ItemT]: ...
@@ -157,8 +173,9 @@ class Browser[ItemT](Component):
         detail: Callable[[ItemT], ContentLike | Component],
         summary: Callable[[ItemT], TextLike] | None = None,
         entry_actions: Callable[[ItemT], Sequence[Action | Link]] | None = None,
+        overview: Callable[[LoadedWindow[ItemT]], ContentLike] | None = None,
         page_size: int = 10,
-        on_open: Callable[[SelectionEvent], Awaitable[None]] | None = None,
+        on_open: Callable[[ActionEvent, ItemT], Awaitable[None]] | None = None,
     ) -> None: ...
 
     async def refresh(self) -> None: ...   # window.invalidate() around the visible anchor
@@ -173,14 +190,14 @@ hand-rolled cursor.
 The overview renders `label(item)` (or `summary`) lines plus a select to open. The detail
 view renders `chrome.back`, `detail(item)`, `entry_actions(item)`, and previous/next
 within the loaded window. A `Component` returned by `detail` is embedded under
-`f"detail-{identity(item)}"`, so per-entry keys never collide; embedded details are
-rebuilt per open. `opened` stays internal state with an `on_open` callback in v1 — a full
-ownership field waits for a consumer that needs authoritative external control of the
-selection.
+`f"detail-{identity(item)}"`, so per-entry keys never collide. It is created once per open
+and retained beside the actual item in non-persistent state, preserving child state across
+parent renders without pretending an identity alone can render an item that has left the
+current window. `opened` stays internal with an `on_open` callback in v1.
 
-Consumers: `ClaimReviewComponent` (`squid/bot/claims_view.py` — select a claim, act on it,
-return to the queue is exactly this shape), search results
-(`squid/bot/submission/search_view.py`), and `AccountPanel` identities.
+Proving consumer: search results (`squid/bot/submission/search_view.py`). Its source adapter
+retains per-window warning metadata for the `overview` hook. Claim review remains a good
+future consumer; static account identities correctly remain static.
 
 ## 5. Lookup
 
@@ -191,8 +208,8 @@ better; `Lookup` exists for entities Discord has never heard of.
 
 ```python
 class Lookup[ItemT](Component):
-    query: str = state("")
-    picked: tuple[str, ...] = state(())
+    query: str | None = state(None)
+    picked: tuple[ItemT, ...] = state((), persist=False)
 
     @resource(depends=(query,))
     async def results(self) -> LoadedWindow[ItemT]: ...
@@ -208,16 +225,17 @@ class Lookup[ItemT](Component):
         minimum: int = 0,
         maximum: int = 1,
         picked: Sequence[ItemT] = (),
-        on_pick: Callable[[SelectionEvent], Awaitable[None]],
+        on_pick: Callable[[ActionEvent, tuple[ItemT, ...]], Awaitable[None]],
     ) -> None: ...
 ```
 
-A single-`TextField` search form writes `query`; the dependency invalidates `results`;
+A single-`TextField` search form writes `query` and resets paging; the dependencies invalidate `results`;
 33's monotonic request tokens drop a stale completion when a second search lands during
 the first fetch. That is worth stating plainly: the resource model deleted this pattern's
 hardest bug before the pattern existed. Results page through `WindowLoader`; a select
-picks; picked entries render as fields with per-entry remove actions (or replace, when
-`maximum == 1`).
+picks; actual picked items are retained in runtime-only state and render as fields with
+per-entry remove actions (or replace, when `maximum == 1`). The callback receives the
+resolved item tuple rather than making the consumer repeat the lookup.
 
 The source abstraction is the sharp decision:
 
@@ -227,12 +245,12 @@ The source abstraction is the sharp decision:
 | A new `SearchSource` protocol with `search(query, position, extent)` | Rejected. Duplicates the Window/Position plumbing and every cursor affordance. |
 | `Callable[[str], Awaitable[Sequence[ItemT]]]` | Not the contract, but supported via an adapter. |
 
-The adapter ships as `sl.list_source(items)`, wrapping a static sequence as an exact
-`WindowSource` — small, and generally useful beyond `Lookup`.
+The adapter ships as `sl.list_source(items)`, wrapping an immutable static sequence as an
+exact offset-addressed `WindowSource` — small, and generally useful beyond `Lookup`.
 
-Consumers: claim reassignment targets (`squid/bot/claims_view.py`), build lookup by
-id/name for the commands that take a raw `build_id` today (`squid/bot/submission/search.py`,
-`schematics.py`), and alias lookup (`squid/bot/verify.py`).
+No bot flow is migrated in this batch. Discord command autocomplete remains the better
+interaction for existing command parameters; Lookup ships as a tested library boundary for
+future mounted flows.
 
 ## Considered, not done
 
@@ -246,25 +264,25 @@ id/name for the commands that take a raw `build_id` today (`squid/bot/submission
 
 ## Chrome
 
-`Chrome` gains `save`, `unsaved`, `search`, and `no_results`, all resolved by
+`Chrome` gains `apply`, `save`, `unsaved`, `search`, and `no_results`, all resolved by
 `localize_chrome`.
 
 ## Landing order
 
 `CommitPolicy` first, then MultiChoicePanel immediate commit (smallest consumer), then
-`Editor` (uses `CommitPolicy` and `EditSection`), then `Browser`, then `Lookup` (reuses
+`Editor` (uses `CommitPolicy` and `EditorSection`), then `Browser`, then `Lookup` (reuses
 Browser's resource/window idioms).
 
 ## Verification
 
 - `test_multichoice_pattern.py`: an `IMMEDIATE` valid select change commits in one
-  transition and fires `on_apply` exactly once; an invalid change stays staged with errors
+  transition and fires `on_commit` exactly once; an invalid change stays staged with errors
   shown and commits on the next valid change; the Apply row is absent; `EXPLICIT` behavior
   is unchanged.
-- `test_editor_pattern.py`: section submits store values; the commit row is gated on dirty
-  and on `validate`; `IMMEDIATE` fires per-section `on_commit` with only that section;
-  summaries round-trip through `format_prefill`; `form_for` gives routed parity; a
-  `CollectionEditor` section composes and mutates.
+- `test_editor_pattern.py`: form submits store values; the commit row is gated on dirty
+  and on `validate`; `IMMEDIATE` reports all committed values and changed section keys;
+  summaries round-trip through `format_prefill`; nested actions/forms keep routed parity;
+  a `CollectionEditor` section composes while paging/selection remain non-dirty.
 - `test_browser.py`: a position write turns the window `Pending(previous=...)` and the
   stale window stays visible; open/back; per-identity embed keys; the pager delegates to
   `WindowLoader` (a fake source records fetches); capability-gated footer; `strict_state`

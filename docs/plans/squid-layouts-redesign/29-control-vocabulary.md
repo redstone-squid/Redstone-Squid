@@ -341,13 +341,72 @@ class DateTimeField(FormField[datetime]):
     minimum: datetime | None = None
     maximum: datetime | None = None
     placeholder: TextLike | None = "YYYY-MM-DD HH:MM"
+    ambiguous: AmbiguousTimePolicy = AmbiguousTimePolicy.REJECT
+    nonexistent: NonexistentTimePolicy = NonexistentTimePolicy.REJECT
 ```
 
 Parsing uses `time.fromisoformat` and `datetime.fromisoformat` (including a space separator),
-with existing “Enter a …” errors and inclusive bounds. A naive submitted datetime receives
-the field timezone; returned values are always aware. Prefill uses ISO format. Short aliases
-are `Time` and `DateTime`. The timezone belongs on the field so the host can supply the
-guild/user zone; a form never returns a naive datetime.
+with existing “Enter a …” errors and inclusive instant bounds. A naive submitted datetime is
+resolved in the field timezone; returned values are always aware. UTC, fixed-offset zones, and
+ordinary regional-zone times have one result. Regional-zone overlaps and gaps use separate
+strict-by-default policies:
+
+- `AmbiguousTimePolicy.REJECT | EARLIER | LATER` rejects a repeated wall time or selects its
+  chronologically earlier or later instant.
+- `NonexistentTimePolicy.REJECT | SHIFT_FORWARD` rejects a skipped wall time or moves it by the
+  transition gap, preserving its position within that gap (`02:30` becomes `03:30` across a
+  one-hour jump).
+
+The split follows Noda Time's composable overlap/gap model rather than Temporal's single
+`compatible | earlier | later | reject` option: authors can resolve an overlap while still
+rejecting nonexistent reader input, and `earlier` never acquires the surprising second meaning
+of shifting a skipped time backwards. Boundary snapping and backwards shifting remain deferred
+until a consumer needs them. Explicitly offset input already identifies an instant and bypasses
+the local-time policies; the field timezone is only the interpretation context for naive input.
+Prefill uses ISO format. Short aliases are `Time` and `DateTime`. The timezone belongs on the
+field so the host can supply the guild/user zone; a form never returns a naive datetime.
+
+That instant-only contract remains useful but does not preserve a named zone. The portable
+zoned value makes the distinction explicit:
+
+```python
+@dataclass(frozen=True, slots=True)
+class ZonedDateTime:
+    instant: datetime  # aware and normalized to UTC
+    timezone: str      # validated IANA key
+
+    @property
+    def local(self) -> datetime: ...
+
+    def isoformat(self) -> str: ...
+
+@dataclass(frozen=True, slots=True)
+class ZonedDateTimeField(FormField[ZonedDateTime]):
+    timezone: str = "UTC"
+    minimum: datetime | None = None
+    maximum: datetime | None = None
+    placeholder: TextLike | None = "YYYY-MM-DD HH:MM"
+    ambiguous: AmbiguousTimePolicy = AmbiguousTimePolicy.REJECT
+    nonexistent: NonexistentTimePolicy = NonexistentTimePolicy.REJECT
+```
+
+The field's author-configured zone is visible beside the input and is part of the returned
+value. Naive input uses the overlap/gap policies above. An explicit offset must be valid for
+that wall time in the configured zone; in an overlap it selects the exact occurrence, while a
+conflict or gap is a field error. Prefill includes the local offset so an overlap round-trips
+without losing which occurrence was chosen. Bounds compare the resolved UTC instant.
+
+`ZonedTimestamp(value, label=None)` and `zoned_timestamp()` are the visible output pair.
+Unlike `Timestamp`, which intentionally renders in each Discord viewer's timezone, zoned
+output renders deterministic explicit text such as
+`2026-08-22 10:30:00-04:00[America/New_York]`. Its primitive and `SceneZonedTime` retain the
+UTC instant, IANA key, and optional prefix. Discord emits text; HTML emits the same text in a
+`<time>` whose `datetime` is UTC and whose `data-squid-timezone` carries the IANA key. The
+experimental scene protocol remains version 1 and gains the `zoned_time` kind in place.
+
+Reader-selected timezone controls, locale-dependent zoned styles, fixed-offset-only zone
+identities, and text interpolation remain deferred. Existing `DateTimeField`, `Timestamp`,
+and timestamp interpolation contracts do not change.
 
 Consumers: poll deadlines and close-time display, claims/account timestamps, and diagnostics
 uptime.
@@ -361,8 +420,9 @@ uptime.
 
 - `test_toggle.py`: factory, managed/controlled writes, invalidation, stale-session ownership,
   keyed rewrite, and lowering shape.
-- `test_forms.py`: multi-choice ordering/cardinality/required/prefill/duplicates and temporal
-  parsing, bounds, zoning, and prefill.
+- `test_temporal.py` and `test_forms.py`: zoned value identity/formatting, multi-choice
+  ordering/cardinality/required/prefill/duplicates, and temporal parsing, bounds, zoning,
+  offset validation, and prefill.
 - `test_form_discord.py`: select shape and 25-option limit; upload wrapping and 10-file limit.
 - `test_decision_pattern.py`: one-way decision, disabled controls, confirm handlers/tone, and
   finish events.

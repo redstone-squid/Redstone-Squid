@@ -44,7 +44,7 @@ class _WindowRequest:
 class SourceRankedList[EntryT](Component):
     """Render a ranking whose visible async resource is backed by a window source."""
 
-    _request: _WindowRequest = state(default=_WindowRequest(), persist=False, copy="ref")
+    _request: _WindowRequest = state(default=_WindowRequest(), persist=False, opaque=True)
 
     def __init__(
         self,
@@ -81,7 +81,7 @@ class SourceRankedList[EntryT](Component):
         self.load_failed = load_failed
         self.retry = retry
 
-    @resource(depends=(_request,))
+    @resource
     async def loaded(self) -> LoadedWindow[RankedEntry | EntryT]:
         state = self.loaded.state
         previous = state.previous.value if isinstance(state, Pending | Failed) and state.previous is not None else None
@@ -121,7 +121,7 @@ class SourceRankedList[EntryT](Component):
         value = hook(total) if callable(hook) else hook
         content = normalize_content(value, name=name)
         return tuple(
-            self.embed(item, key=f"{name}-{index}") if isinstance(item, Component) else item
+            self.boundary(item, key=f"{name}-{index}") if isinstance(item, Component) else item
             for index, item in enumerate(content)
         )
 

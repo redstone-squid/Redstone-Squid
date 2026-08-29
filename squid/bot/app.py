@@ -51,7 +51,8 @@ from squid.runtime import (
     start_permission_epoch_watch,
 )
 from squid_layouts import TopicBus
-from squid_layouts.discord import MountRegistry, Reactor
+from squid_layouts.discord import Reactor, SessionRegistry
+from squid_layouts.profiling import MemoryProfiler
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -156,8 +157,9 @@ class RedstoneSquid(Bot):
         self.account_ids = AccountIdCache()
         # How many of each panel a user may have open, and which mounts die with their
         # parent. Reached from a handler as `interaction.client.mounts`.
-        self.mounts = MountRegistry()
-        self.topic_bus = TopicBus()
+        self.mounts = SessionRegistry()
+        self.layout_profiler = MemoryProfiler()
+        self.topic_bus = TopicBus(profiler=self.layout_profiler)
         self.layout_reactor = Reactor(self.topic_bus)
 
     def is_operational(self) -> bool:
@@ -223,6 +225,7 @@ class RedstoneSquid(Bot):
 
         # After every extension, because loading is what imports the handler modules that
         # register routes, and installing the router freezes the table.
+        control_router.profiler = self.layout_profiler
         control_router.register(self)
 
     async def get_or_fetch_messageable_channel(self, channel_id: int) -> MessageableChannel | None:

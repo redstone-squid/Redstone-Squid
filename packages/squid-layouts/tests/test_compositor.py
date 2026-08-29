@@ -7,9 +7,10 @@ from hypothesis import strategies as st
 
 from squid_layouts import PressEvent
 from squid_layouts.discord import (
-    DEFAULT_LIMITS as LIMITS,
+    V2_LIMITS as LIMITS,
 )
 from squid_layouts.discord import (
+    ResourceCost,
     compose,
     render_static,
 )
@@ -74,16 +75,19 @@ class TestCompose:
 
 @given(documents(), st.integers(min_value=0, max_value=3900))
 def test_reserved_text_is_held_back_from_the_budget(nodes, reserved):
-    view = compose(nodes, reserved_text=reserved).view
+    view = compose(nodes, reservation=ResourceCost({"display_text": reserved})).view
     assert _display_text(view) <= LIMITS.total_text - reserved
 
 
 @given(documents())
 def test_render_static_matches_compose(nodes):
-    assert render_static(nodes).to_components() == compose(nodes).view.to_components()
+    assert render_static(nodes).layout.to_components() == compose(nodes).view.to_components()
 
 
 def test_a_reserved_budget_survives_nesting():
     # The host case: one card composed into a message whose other half the solver never sees.
     body = Panel(children=(Text("x" * 5000),))
-    assert _display_text(compose([body], reserved_text=1000).view) <= LIMITS.total_text - 1000
+    assert (
+        _display_text(compose([body], reservation=ResourceCost({"display_text": 1000})).view)
+        <= LIMITS.total_text - 1000
+    )

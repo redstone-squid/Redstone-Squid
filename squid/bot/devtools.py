@@ -13,4 +13,10 @@ async def _authorized(ctx: Context[squid.bot.app.RedstoneSquid]) -> bool:
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
     """Add the package-owned devtools with this process's policy and session registry."""
-    await bot.add_cog(sl.discord.devtools.DevTools(check=_authorized, registry=bot.mounts))
+    await bot.add_cog(
+        sl.discord.devtools.DevTools(
+            check=_authorized,
+            registry=bot.mounts,
+            reactor=getattr(bot, "layout_reactor", None),
+        )
+    )

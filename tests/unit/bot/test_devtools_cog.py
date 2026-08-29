@@ -5,19 +5,24 @@ from typing import Any, cast
 from unittest.mock import AsyncMock
 
 from squid.bot.devtools import _authorized, setup
-from squid_layouts.discord import MountRegistry
+from squid_layouts.discord import Reactor, SessionRegistry
 from squid_layouts.discord.devtools import DevTools
+from squid_layouts.profiling import MemoryProfiler
 
 
 async def test_setup_adds_the_generic_cog_with_the_host_registry() -> None:
-    registry = MountRegistry()
-    bot = SimpleNamespace(mounts=registry, add_cog=AsyncMock())
+    registry = SessionRegistry()
+    profiler = MemoryProfiler()
+    reactor = Reactor(profiler=profiler)
+    bot = SimpleNamespace(mounts=registry, layout_reactor=reactor, add_cog=AsyncMock())
 
     await setup(cast(Any, bot))
 
     cog = bot.add_cog.await_args.args[0]
     assert isinstance(cog, DevTools)
     assert cog._registry is registry
+    assert cog._reactor is reactor
+    assert cog._profiler is profiler
 
 
 async def test_host_gate_requires_development_mode_and_ownership() -> None:

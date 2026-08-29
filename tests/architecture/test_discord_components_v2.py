@@ -9,6 +9,18 @@ BOT_ROOT = Path(__file__).parents[2] / "squid" / "bot"
 LAYOUTS_ROOT = Path(__file__).parents[2] / "packages" / "squid-layouts" / "src"
 MESSAGE_METHODS = {"edit", "edit_message", "send", "send_message"}
 LEGACY_KEYWORDS = {"content", "embed", "embeds"}
+# The framework has to *name* the classic message vocabulary to model it: a
+# `DiscordPresentation` says which mode a payload is in, and the delivery protocol says what a
+# host `send` must accept. Naming the types is allowed there; building one is not.
+# `compose.py` names `View` only in a generic bound: a `Composition` is typed by which
+# kind of view its mode produces, and it never builds one.
+LEGACY_TYPE_HOMES = {"presentation.py", "delivery.py", "compose.py"}
+
+# The classic target *is* the classic message vocabulary, so these modules build it on
+# purpose: they draw embeds and plain views, measure a host's, and mount one. This is the
+# whole point of the target and not a regression. Everything else in the package — and every
+# line of the bot — stays on Components V2, which is what the rest of this test guards.
+CLASSIC_TARGET_HOMES = {"classic.py", "classic_renderer.py", "inspection.py", "mount.py", "targets.py"}
 
 
 class DiscordUiVisitor(ast.NodeVisitor):
@@ -16,6 +28,10 @@ class DiscordUiVisitor(ast.NodeVisitor):
         self.path = path
         self.function_names: list[str] = []
         self.violations: list[str] = []
+        in_discord_frontend = path.parts[-3:-1] == ("squid_layouts", "discord")
+        self.names_types_only = in_discord_frontend and path.name in LEGACY_TYPE_HOMES
+        self.owns_classic = in_discord_frontend and path.name in CLASSIC_TARGET_HOMES
+        self.constructions: set[int] = set()
 
     @override
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
@@ -31,6 +47,7 @@ class DiscordUiVisitor(ast.NodeVisitor):
 
     @override
     def visit_Call(self, node: ast.Call) -> None:
+        self.constructions.add(id(node.func))
         method = node.func.attr if isinstance(node.func, ast.Attribute) else None
         if method in MESSAGE_METHODS:
             legacy = {
@@ -49,6 +66,12 @@ class DiscordUiVisitor(ast.NodeVisitor):
 
     @override
     def visit_Attribute(self, node: ast.Attribute) -> None:
+        if self.owns_classic:
+            self.generic_visit(node)
+            return
+        if self.names_types_only and id(node) not in self.constructions:
+            self.generic_visit(node)
+            return
         if (
             node.attr in {"Embed", "View"}
             and isinstance(node.value, ast.Attribute)

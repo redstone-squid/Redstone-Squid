@@ -30,7 +30,7 @@ from squid.bot.submission.ui.components import (
     get_text_input,
 )
 from squid.bot.topics import follow_resource, resource_topic
-from squid.bot.ui import create_mount, display_text_length, render_static
+from squid.bot.ui import contribute, create_mount, render_static
 from squid.bot.utils.components import (
     DISCORD_BLUE,
     DISCORD_YELLOW,
@@ -484,7 +484,7 @@ class SubmissionFormComponent(sl.Component):
     closed: bool = sl.state(default=False)
     # The draft this workspace edits. Held by reference: the modals mutate it through their
     # own reference, so the handlers report that with mutated("build").
-    build: BuildDraft = sl.state(copy="ref")
+    build: BuildDraft = sl.state(opaque=True)
 
     def __init__(
         self,
@@ -904,11 +904,15 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
                 fields=(CardField(t(self.locale, _("Fields in this section")), self.summary_text()),),
             )
         )
-        # The header card is already in the view, so the build card gets what is left of the
-        # display budget; conform is the gate this hand-assembled view would otherwise skip.
-        reserved = display_text_length(self)
-        self.add_item(await self.get_handler(interaction).render_container(reserved_text=reserved))
-        self.add_item(controls)
+        # The build card is planned against what the header already spent and what the
+        # controls are about to, so the view proven legal here is the one that gets sent.
+        # conform stays as the delivery gate; contribute should leave it nothing to do.
+        contribute(
+            [await self.get_handler(interaction).render_node()],
+            to=self,
+            followed_by=(controls,),
+            locale=self.locale,
+        )
         sl.discord.conform(self)
 
     @actions.button(label="Open", style=discord.ButtonStyle.primary)
@@ -976,7 +980,9 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
         if render_node is not None:
             build_node = await render_node()
         else:
-            build_container = await handler.render_container(reserved_text=len(heading))
+            build_container = await handler.render_container(
+                reservation=sl.discord.ResourceCost({"display_text": len(heading)})
+            )
             build_node = sl.primitives.RawItem(lambda: build_container, kind="discord.item", version=1)
         success = render_static([sl.primitives.Text(heading), build_node], locale=self.locale)
         # The workspace is ephemeral, and an ephemeral message only exists inside the interaction:
@@ -994,8 +1000,8 @@ class BuildEditComponent(sl.Component):
     locale: str | None = sl.state(None, persist=False)
     # Both are large object graphs the editor replaces wholesale, so they snapshot by reference:
     # assignment rolls back, in-place mutation of the Build does not.
-    build: Build = sl.state(copy="ref")
-    _node: sl.LayoutNode | None = sl.state(None, copy="ref")
+    build: Build = sl.state(opaque=True)
+    _node: sl.LayoutNode | None = sl.state(None, opaque=True)
 
     def __init__(
         self,
@@ -1278,12 +1284,17 @@ class BuildEditComponent(sl.Component):
                 reload,
             )
             await reload(self)
-        await interaction.client.mounts.open(
-            mount,
-            sl.discord.respond_to(interaction, ephemeral=ephemeral, wait=True),
-            key=SessionKey("build-edit", interaction.user.id, self.build.id),
-            parent=parent,
-        )
+        destination = sl.discord.respond_to(interaction, ephemeral=ephemeral, wait=True)
+        parent_session = None if parent is None else interaction.client.mounts.session_for(parent)
+        if parent_session is None:
+            await interaction.client.mounts.open(
+                mount,
+                destination,
+                key=SessionKey.custom("build-edit", (interaction.user.id, self.build.id)),
+                actor_id=interaction.user.id,
+            )
+        else:
+            await parent_session.attach(mount, destination, actor_id=interaction.user.id, parent=parent)
 
     def mount(self, user_id: int, *, reactor: sl.discord.Reactor | None = None) -> sl.discord.Mount:
         self._mount = create_mount(
@@ -1322,9 +1333,13 @@ class BuildInfoView[BotT: "squid.bot.app.RedstoneSquid"](BaseNavigableView[BotT]
 
     async def _render(self, interaction: discord.Interaction[BotT]) -> None:
         self.clear_items()
-        self.add_item(await interaction.client.for_build(self.build).render_container())
-        self.add_item(self._edit_row)
-        self.add_item(self._navigation_row)
+        # Both rows are costed before the card is planned; this view used to reserve nothing
+        # for them and relied on conform to trim solved content back out.
+        contribute(
+            [await interaction.client.for_build(self.build).render_node()],
+            to=self,
+            followed_by=(self._edit_row, self._navigation_row),
+        )
         sl.discord.conform(self)
 
     @override

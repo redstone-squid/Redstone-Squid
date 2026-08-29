@@ -1,38 +1,58 @@
-"""Fit an IR tree to Discord's message budgets.
+"""Measure one concrete IR tree against Discord's message budgets.
 
-The solver measures every node's chrome (markdown prefixes, code fences, join characters)
-exactly, grants the shared display-text budget in priority order, and applies each node's
-overflow policy only when its content does not fit. Higher priority is allocated first; ties
-fall back to document order. Dropped nodes refund their grant and the allocation reruns, so a
-dropped footnote genuinely returns its characters to the body.
+`measure()` evaluates a single already-decided layout. It costs every node's chrome
+(markdown prefixes, code fences, join characters) exactly, grants the shared display-text
+budget in priority order, and applies each node's overflow policy only when its content does
+not fit. Higher priority is allocated first; ties fall back to document order. Dropped nodes
+refund their grant and the allocation reruns, so a dropped footnote genuinely returns its
+characters to the body.
+
+Nothing here chooses between alternatives. `Variants` and semantic fallbacks are the
+planner's search decisions, and a layout reaching this module has already made them.
 """
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import Enum, StrEnum
 from heapq import heappop, heappush
-from itertools import count
 
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome, localize_chrome
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning.breaking import BreakItem, balanced_breaks
-from squid_layouts.planning.degradation import DegradationEffect, DegradationProfile, DegradationRecorder
-from squid_layouts.planning.limits import ELLIPSIS, LIMITS, V2Limits
+from squid_layouts.planning.degradation import DegradationProfile, DegradationRecorder
+from squid_layouts.planning.limits import (
+    COMPONENTS,
+    CONTENT_TEXT,
+    CONTROLS,
+    DISPLAY_TEXT,
+    ELLIPSIS,
+    EMBED_TEXT,
+    EMBEDS,
+    LIMITS,
+    ROWS,
+    TEXT_AXES,
+    DiscordLimits,
+)
 from squid_layouts.planning.navigation import (
     NavNode,
     PlannedNav,
     materialized_navigation_state,
 )
-from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET
+from squid_layouts.planning.target import EMPTY_COST, ResourceCost
 from squid_layouts.primitives.constraints import Alts, Condense, Drop, Never, Overflow, Paginate, Spill, Truncate
 from squid_layouts.primitives.nodes import (
     ActionGroup,
+    Boundary,
     Break,
     Budget,
     Button,
+    Card,
+    CardMedia,
+    CardText,
     Code,
-    Embed,
+    Content,
     File,
     Footer,
     Gallery,
@@ -54,9 +74,12 @@ from squid_layouts.primitives.nodes import (
     Thumbnail,
     Time,
     Variants,
+    ZonedTime,
+    card_text,
 )
 from squid_layouts.primitives.styles import Color
 from squid_layouts.sources import Position
+from squid_layouts.temporal import ZonedDateTime
 from squid_layouts.text import NEUTRAL, Localization
 
 type TextBearing = Text | Heading | Footer | Code | Lines
@@ -71,6 +94,8 @@ class SolveNoteCode(StrEnum):
     CLAMP_SELECT_PLACEHOLDER = "clamp.select_placeholder"
     CLAMP_SECTION_TEXTS = "clamp.section_texts"
     CLAMP_GALLERY_ITEMS = "clamp.gallery_items"
+    CLAMP_EMBED_TEXT = "clamp.embed_text"
+    CLAMP_EMBED_FIELDS = "clamp.embed_fields"
     NODE_DROPPED = "degradation.node_dropped"
     ALTERNATE = "degradation.alternate"
     ALTERNATE_EXHAUSTED = "degradation.alternate_exhausted"
@@ -85,13 +110,25 @@ class SolveNoteCode(StrEnum):
     NEVER_BUDGET = "failure.never_budget"
     BUDGET_FLOOR = "failure.budget_floor"
     BEST_EFFORT_FLOOR = "degradation.best_effort_floor"
-    VARIANT_STEP = "degradation.variant_step"
+    VARIANT_STEP = "adaptation.variant_step"
+    SEMANTIC_FALLBACK = "degradation.semantic_fallback"
+    VARIANT_REFORMATTED = "degradation.variant_reformatted"
+    VARIANT_LOSSY = "degradation.variant_lossy"
     PAGINATE_PER_FALLBACK = "degradation.paginate_per_fallback"
     COMPONENT_BUDGET = "degradation.component_budget"
+    TEXT_BUDGET = "degradation.text_budget"
 
 
 class SolveNoteSeverity(Enum):
     """How a solver note affects feasibility and reporting."""
+
+    ADAPTATION = "adaptation"
+    """The layout took another shape and lost nothing; `strict=True` accepts this.
+
+    Stepping a ladder to an exact rung is the case that matters: paginating a long region
+    or splitting it across cards shows every word the author wrote, so a caller who asked
+    for no degradation has not been given any.
+    """
 
     CLAMP = "clamp"
     DEGRADATION = "degradation"
@@ -108,6 +145,11 @@ class SolveNote:
 
     def __str__(self) -> str:
         return self.message
+
+
+def lossy_notes(notes: Sequence[SolveNote]) -> list[SolveNote]:
+    """The notes `strict=True` refuses: everything that is not lossless adaptation."""
+    return [note for note in notes if note.severity is not SolveNoteSeverity.ADAPTATION]
 
 
 def _note(
@@ -143,6 +185,12 @@ class RTime:
 
 
 @dataclass(frozen=True, slots=True)
+class RZonedTime:
+    value: ZonedDateTime
+    prefix: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class RSection:
     texts: list[RText]
     accessory: Thumbnail | LinkButton | RawItem
@@ -161,12 +209,49 @@ class RGroup:
     children: list[Realized]
 
 
+@dataclass(frozen=True, slots=True)
+class RContent:
+    """The realized `content` field, whose text was allocated from its own pool."""
+
+    slot: RText
+
+
+@dataclass(frozen=True, slots=True)
+class RCardField:
+    name: RText
+    value: RText
+    inline: bool
+
+
+@dataclass(frozen=True, slots=True)
+class RCard:
+    """One realized embed. Every slot already holds its final, allocated string."""
+
+    title: RText | None
+    url: str | None
+    blocks: list[Realized]
+    """Description blocks, joined by the dialect once their text is allocated."""
+    fields: list[RCardField]
+    footer: RText | None
+    footer_icon: str | None
+    author: RText | None
+    author_url: str | None
+    author_icon: str | None
+    accent: Color | None
+    image: CardMedia | None
+    thumbnail: CardMedia | None
+    timestamp: ZonedDateTime | datetime | None
+
+
 type Realized = (
     RText
     | RTime
+    | RZonedTime
     | RSection
     | RPanel
     | RGroup
+    | RCard
+    | RContent
     | File
     | Sep
     | Row
@@ -192,6 +277,8 @@ class Pager:
     fragments: list[str]
     footer_slot: RText
     footer: Callable[[int, int], str]
+    axis: str = DISPLAY_TEXT
+    """The text pool this pager's body and footer draw from."""
     initial: int = 0
     """The page to open on; a mount adopts this before its first render."""
     page: int = 0
@@ -214,12 +301,19 @@ class Pager:
 
 
 @dataclass(frozen=True, slots=True)
-class SolvedLayout:
+class MeasuredLayout:
+    """One concrete primitive layout, measured against one target's budgets."""
+
     children: list[Realized]
     notes: list[SolveNote]
     pagers: tuple[Pager, ...] = ()
-    components: int = 0
-    """Components the built view will hold, including every pager's controls."""
+    cost: ResourceCost = EMPTY_COST
+    """Everything this layout spends, per named axis, including every pager's controls.
+
+    One cost rather than a components scalar beside a text scalar: a target with two text
+    pools has no single number to report, and a caller asking "does this fit?" has to ask
+    it of every axis the target budgets or it is not asking the question at all.
+    """
     overflowed: bool = False
     """Whether anything had to give to fit, as opposed to being clamped on the way in.
 
@@ -230,11 +324,12 @@ class SolvedLayout:
     """
     nav: PlannedNav | None = None
     chrome: Chrome = DEFAULT_CHROME
-    limits: V2Limits = LIMITS
+    limits: DiscordLimits = LIMITS
     degradation: DegradationProfile = field(default_factory=DegradationProfile)
-    states_explored: int = 1
-    search_fallback: bool = False
-    variant_positions: tuple[tuple[_VariantPath, int], ...] = ()
+
+    def fits(self, capacities: Mapping[str, int]) -> bool:
+        """Whether every budgeted axis is within its cap."""
+        return self.cost.within(capacities)
 
     @property
     def failures(self) -> tuple[SolveNote, ...]:
@@ -249,7 +344,7 @@ class SolvedLayout:
         measured at its widest, and a nav factory may not vary its shape by page. So a
         caller that only learns where the reader belongs *after* fitting — which is
         anyone reconciling against a stored cursor, since the page count is an output —
-        can move the page here instead of solving again.
+        can move the page here instead of measuring again.
         """
         for pager in self.pagers:
             position = positions.get(pager.key)
@@ -297,6 +392,13 @@ class _Unit:
     node: TextBearing
     slot: RText
     index: int
+    axis: str
+    """Which message-wide text pool this unit draws from.
+
+    Set where the unit is realized, because that is the only place that knows whether it
+    sits in a card, in message content, or in the message body itself. Pools never lend to
+    each other, so this decides which allocation it takes part in.
+    """
     prefix: str
     suffix: str
     content: str
@@ -331,13 +433,28 @@ class _BudgetRegion:
     stretch: int
     best_effort: bool
 
+    @property
+    def axis(self) -> str | None:
+        """The single text pool this region reserves from, or None if it holds no text.
+
+        A `Budget` states one preferred size. Applying that same size independently to two
+        pools would silently double the author's reservation, so a region spanning pools is
+        rejected rather than guessed at.
+        """
+        axes = {unit.axis for unit in self.units}
+        if len(axes) > 1:
+            named = ", ".join(sorted(axes))
+            message = f"a Budget region spans the text axes {named}; give each axis its own Budget"
+            raise LayoutInvariantError(message)
+        return next(iter(axes), None)
+
 
 def _escape_fences(content: str) -> str:
     # A closing fence inside the content would end the block early; break it invisibly.
     return content.replace("```", "``\N{ZERO WIDTH SPACE}`")
 
 
-def _make_unit(node: TextBearing, slot: RText, index: int) -> _Unit | None:
+def _make_unit(node: TextBearing, slot: RText, index: int, axis: str = DISPLAY_TEXT) -> _Unit | None:
     prefix, suffix, ladders, join = "", "", None, "\n"
     ranks: tuple[int, ...] = ()
     match node:
@@ -366,6 +483,7 @@ def _make_unit(node: TextBearing, slot: RText, index: int) -> _Unit | None:
         node=node,
         slot=slot,
         index=index,
+        axis=axis,
         prefix=prefix,
         suffix=suffix,
         content=content,
@@ -430,16 +548,18 @@ def _trim_keep(text: str, limit: int, keep: str) -> str:
     return text[: limit - 1].rstrip() + ELLIPSIS
 
 
-@dataclass(frozen=True, slots=True)
-class NodeMeasure:
-    """Exact preferred resource cost for a resolved primitive sequence."""
+def text_total(cost: ResourceCost) -> int:
+    """Every text axis a cost spends on, added up.
 
-    chars: int
-    components: int
+    Safe to add only because a single region lives in a single pool: a card's text is all
+    `embed_text`, a content node's is all `content_text`. Callers reasoning about one region
+    want its size; callers reasoning about a whole message must ask per axis instead.
+    """
+    return sum(value for axis, value in cost.values.items() if axis in TEXT_AXES)
 
 
-def measure_nodes(nodes: Sequence[Node], *, limits: V2Limits = LIMITS) -> NodeMeasure:
-    """Measure preferred text and component cost without applying pressure."""
+def measure_nodes(nodes: Sequence[Node], *, limits: DiscordLimits = LIMITS) -> ResourceCost:
+    """Measure preferred cost per named axis, without applying any budget pressure."""
 
     def lower_shape(node: Node) -> list[Node]:
         match node:
@@ -453,17 +573,26 @@ def measure_nodes(nodes: Sequence[Node], *, limits: V2Limits = LIMITS) -> NodeMe
                     Gallery(tuple(urls[start : start + limits.gallery_items]))
                     for start in range(0, len(urls), limits.gallery_items)
                 ]
-            case Panel(children=children):
+            case (
+                Panel(children=children)
+                | Budget(children=children)
+                | Break(children=children)
+                | Card(children=children)
+            ):
                 return [replace(node, children=tuple(child for item in children for child in lower_shape(item)))]
-            case Budget(children=children) | Break(children=children):
-                return [replace(node, children=tuple(child for item in children for child in lower_shape(item)))]
+            case Variants(variants=variants):
+                # Preferred cost, so every ladder is priced on the rung it opens at.
+                return [child for item in variants[0].nodes for child in lower_shape(item)]
             case _:
                 return [node]
 
     lowered = [child for node in nodes for child in lower_shape(node)]
     builder = _Builder(limits=limits)
-    children = builder.realize_children(_resolve_variants(lowered, {}))
-    return NodeMeasure(builder.raw_text_cost + sum(unit.need for unit in builder.units), _component_count(children))
+    children = builder.realize_children(lowered)
+    text = dict(builder.raw_text_cost)
+    for unit in builder.units:
+        text[unit.axis] = text.get(unit.axis, 0) + unit.need
+    return ResourceCost({**text, **_structural_cost(children)})
 
 
 def split_text_node(
@@ -497,11 +626,100 @@ def split_text_node(
 
 @dataclass(slots=True)
 class _Builder:
-    limits: V2Limits = LIMITS
+    limits: DiscordLimits = LIMITS
     notes: list[SolveNote] = field(default_factory=list)
     units: list[_Unit] = field(default_factory=list)
-    raw_text_cost: int = 0
+    raw_text_cost: dict[str, int] = field(default_factory=dict)
+    """Text no overflow policy can shrink, per axis: timestamps and prepared native items."""
     budgets: list[_BudgetRegion] = field(default_factory=list)
+    axis: str = DISPLAY_TEXT
+    """The pool text realized right now draws from; target shape moves it, nothing else."""
+
+    def charge(self, characters: int) -> None:
+        self.raw_text_cost[self.axis] = self.raw_text_cost.get(self.axis, 0) + characters
+
+    def unit(self, node: TextBearing, slot: RText) -> None:
+        made = _make_unit(node, slot, len(self.units), self.axis)
+        if made is not None:
+            self.units.append(made)
+
+    @contextmanager
+    def pool(self, axis: str) -> Iterator[None]:
+        """Realize everything inside this block against another text pool."""
+        previous = self.axis
+        self.axis = axis
+        try:
+            yield
+        finally:
+            self.axis = previous
+
+    def slot(self, value: CardText | None, cap: int, what: str) -> RText | None:
+        """Realize one card text slot, clamping it to its own local cap first.
+
+        Local caps are the target's shape, not its remaining room: an embed title is 256
+        characters whatever else the message holds. A slot that cannot shrink and does not
+        fit is rejected by the dialect's validation before this ever runs, so anything
+        trimmed here asked to be.
+        """
+        if value is None:
+            return None
+        node = card_text(value)
+        content = node.content.strip()
+        if not content:
+            return None
+        if len(content) > cap:
+            self.notes.append(
+                _note(
+                    SolveNoteCode.CLAMP_EMBED_TEXT,
+                    f"{what} clamped from {len(content)} to {cap}",
+                    SolveNoteSeverity.CLAMP,
+                )
+            )
+            content = _trim_keep(content, cap, "head")
+        slot = RText()
+        self.unit(replace(node, content=content), slot)
+        return slot
+
+    def card(self, node: Card) -> RCard:
+        limits = self.limits
+        fields = node.fields[: getattr(limits, "embed_fields", len(node.fields))]
+        if len(fields) != len(node.fields):
+            self.notes.append(
+                _note(
+                    SolveNoteCode.CLAMP_EMBED_FIELDS,
+                    f"card holds {len(node.fields)} fields; keeping {len(fields)}",
+                    SolveNoteSeverity.CLAMP,
+                )
+            )
+        realized_fields: list[RCardField] = []
+        for field_node in fields:
+            name = self.slot(field_node.name, getattr(limits, "field_name", 256), "field name")
+            value = self.slot(field_node.value, getattr(limits, "field_value", 1024), "field value")
+            if name is None or value is None:
+                # Discord rejects an empty field name or value outright, and a field with
+                # neither is not a smaller field, it is a different document.
+                message = "a CardField needs a non-empty name and value after trimming"
+                raise LayoutInvariantError(message)
+            realized_fields.append(RCardField(name, value, field_node.inline))
+        return RCard(
+            title=self.slot(node.title, getattr(limits, "embed_title", 256), "embed title"),
+            url=node.url,
+            blocks=self.realize_children(node.children),
+            fields=realized_fields,
+            footer=None
+            if node.footer is None
+            else self.slot(node.footer.text, getattr(limits, "embed_footer", 2048), "embed footer"),
+            footer_icon=None if node.footer is None else node.footer.icon_url,
+            author=None
+            if node.author is None
+            else self.slot(node.author.name, getattr(limits, "embed_author", 256), "embed author"),
+            author_url=None if node.author is None else node.author.url,
+            author_icon=None if node.author is None else node.author.icon_url,
+            accent=node.accent,
+            image=node.image,
+            thumbnail=node.thumbnail,
+            timestamp=node.timestamp,
+        )
 
     def _clamp_button[ButtonT: Button | LinkButton | RoutedButton](self, button: ButtonT) -> ButtonT:
         if len(button.label) <= self.limits.button_label:
@@ -565,14 +783,15 @@ class _Builder:
         match node:
             case Text() | Heading() | Footer() | Code() | Lines():
                 slot = RText()
-                unit = _make_unit(node, slot, len(self.units))
-                if unit is not None:
-                    self.units.append(unit)
+                self.unit(node, slot)
                 return slot
             case Time(instant=instant, style=style, prefix=prefix):
                 unix = int(instant.timestamp())
-                self.raw_text_cost += len(prefix or "") + len(f"<t:{unix}:{style}>")
+                self.charge(len(prefix or "") + len(f"<t:{unix}:{style}>"))
                 return RTime(instant, style, prefix)
+            case ZonedTime(value=value, prefix=prefix):
+                self.charge(len(prefix or "") + len(value.isoformat()))
+                return RZonedTime(value, prefix)
             case Section(texts=texts, accessory=accessory):
                 if len(texts) > 3:
                     self.notes.append(
@@ -586,13 +805,21 @@ class _Builder:
                 slots: list[RText] = []
                 for text_node in texts:
                     slot = RText()
-                    unit = _make_unit(text_node, slot, len(self.units))
-                    if unit is not None:
-                        self.units.append(unit)
+                    self.unit(text_node, slot)
                     slots.append(slot)
                 if isinstance(accessory, RawItem):
-                    self.raw_text_cost += accessory.text_cost
+                    self.charge(accessory.text_cost)
                 return RSection(texts=slots, accessory=accessory)
+            case Content(content=text, overflow=overflow, priority=priority):
+                slot = RText()
+                # Message content is its own pool. Nothing in an embed can borrow from it and
+                # nothing here can borrow from them, which is the whole point of the split.
+                with self.pool(CONTENT_TEXT):
+                    self.unit(Text(text, overflow=overflow, priority=priority), slot)
+                return RContent(slot)
+            case Card():
+                with self.pool(EMBED_TEXT):
+                    return self.card(node)
             case Panel(children=children, accent=accent):
                 return RPanel(children=self.realize_children(children), accent=accent)
             case Budget(
@@ -620,7 +847,7 @@ class _Builder:
                     node = Gallery(urls=urls[:10])
                 return node
             case Row(items=items):
-                self.raw_text_cost += sum(item.text_cost for item in items if isinstance(item, RawItem))
+                self.charge(sum(item.text_cost for item in items if isinstance(item, RawItem)))
                 clamped = tuple(
                     self._clamp_button(item) if isinstance(item, Button | LinkButton | RoutedButton) else item
                     for item in items
@@ -629,14 +856,14 @@ class _Builder:
             case SelectMenu() | RoutedSelect():
                 return self._clamp_select(node)
             case RawItem(text_cost=text_cost):
-                self.raw_text_cost += text_cost
+                self.charge(text_cost)
                 return node
-            case Embed():
-                message = "Embed must be expanded before solving"
+            case Boundary():
+                message = "Boundary must be expanded before solving"
                 raise ValueError(message)
             case Variants():
-                message = "Variants must be resolved before solving"
-                raise ValueError(message)
+                message = "Variants must be resolved before measuring; plan() owns that choice"
+                raise LayoutInvariantError(message)
             case _:
                 return node
 
@@ -966,7 +1193,8 @@ class _GrantGroup:
 
 
 def _allocate_budgeted(
-    builder: _Builder,
+    regions: Sequence[_BudgetRegion],
+    units: Sequence[_Unit],
     budget: int,
     notes: list[SolveNote],
     chrome: Chrome,
@@ -977,7 +1205,7 @@ def _allocate_budgeted(
     groups: list[_GrantGroup] = []
     # Outer regions are recorded after their descendants. Claiming them first gives a
     # nested declaration one owner instead of charging the same unit twice.
-    for region in reversed(builder.budgets):
+    for region in reversed(regions):
         units = tuple(unit for unit in region.units if unit.index not in claimed)
         if not units:
             continue
@@ -1007,7 +1235,7 @@ def _allocate_budgeted(
                 region.best_effort,
             )
         )
-    for unit in builder.units:
+    for unit in units:
         if unit.index in claimed:
             continue
         fixed = isinstance(unit.overflow, Never | Condense)
@@ -1072,6 +1300,10 @@ def _prune(children: list[Realized]) -> list[Realized]:
         match child:
             case RText(dropped=True):
                 continue
+            case RCard(blocks=blocks):
+                pruned.append(replace(child, blocks=_prune(blocks)))
+            case RContent(slot=slot) if slot.dropped:
+                continue
             case RPanel(children=inner, accent=accent):
                 kept = _prune(inner)
                 if kept:
@@ -1132,360 +1364,89 @@ def _item_component_cost(item: object) -> int:
     return item.component_cost if isinstance(item, RawItem) else 1
 
 
-def _component_count(children: list[Realized]) -> int:
-    count = 0
-    for child in children:
-        match child:
-            case RPanel(children=inner):
-                count += 1 + _component_count(inner)
-            case RGroup(children=inner):
-                count += _component_count(inner)
-            case RSection(texts=texts, accessory=accessory):
-                count += 1 + len(texts) + _item_component_cost(accessory)
-            case Row(items=items):
-                count += 1 + sum(_item_component_cost(item) for item in items)
-            case SelectMenu() | RoutedSelect():
-                count += 2  # the implicit ActionRow plus the select itself
-            case RawItem(component_cost=component_cost):
-                count += component_cost
-            case _:
-                count += 1
-    return count
+def _structural_cost(children: Sequence[Realized]) -> dict[str, int]:
+    """Count every structural axis at once, whichever target ends up budgeting them.
 
-
-type _VariantPath = tuple[int | str, ...]
-type _Positions = Mapping[_VariantPath, int]
-"""Which rung each ladder occurrence currently sits on; absent means rung 0."""
-
-
-def _format_path(path: _VariantPath) -> str:
-    """Render a ladder's path for a note. A reader's landmark, not an addressing scheme."""
-    return "$." + ".".join(str(part) for part in path if part != "panel")
-
-
-def _walk_ladders(nodes: Sequence[Node], positions: _Positions, visit) -> None:
-    """Visit every node reachable through the currently selected rungs, in document order.
-
-    Ladders only occur at the top level, inside a Panel, or inside another ladder's rung:
-    `Section.texts`, `Row.items` and `ActionGroup.items` are typed to exclude them, so these
-    two recursive arms are exhaustive.
+    A Components V2 target budgets components; a classic target budgets embeds, rows, and
+    view children. Counting all four always is cheaper than asking the dialect, and costs
+    nothing: a target simply does not budget the axes it has no field for, and an axis no
+    target budgets is unconstrained rather than zero.
     """
+    totals = {COMPONENTS: 0, EMBEDS: 0, ROWS: 0, CONTROLS: 0}
 
-    def walk(node: Node, path: _VariantPath) -> None:
-        match node:
-            case Variants(variants=variants):
-                rung = min(positions.get(path, 0), len(variants) - 1)
-                visit(path, node, rung)
-                # The rung is part of the descendants' path, so stepping this ladder abandons
-                # their positions rather than reinterpreting them against a different subtree.
-                for index, child in enumerate(variants[rung].nodes):
-                    walk(child, (*path, rung, index))
-            case Panel(children=children) | Budget(children=children) | Break(children=children):
-                for index, child in enumerate(children):
-                    walk(child, (*path, "panel", index))
-            case _:
-                return
+    def walk(nodes: Sequence[Realized]) -> None:
+        for child in nodes:
+            match child:
+                case RPanel(children=inner):
+                    totals[COMPONENTS] += 1
+                    walk(inner)
+                case RGroup(children=inner):
+                    walk(inner)
+                case RCard(blocks=blocks):
+                    totals[EMBEDS] += 1
+                    totals[COMPONENTS] += 1
+                    walk(blocks)
+                case RContent():
+                    # Content is a message field, not a component. It costs no structure.
+                    continue
+                case RSection(texts=texts, accessory=accessory):
+                    totals[COMPONENTS] += 1 + len(texts) + _item_component_cost(accessory)
+                case Row(items=items):
+                    totals[COMPONENTS] += 1 + sum(_item_component_cost(item) for item in items)
+                    totals[ROWS] += 1
+                    totals[CONTROLS] += len(items)
+                case SelectMenu() | RoutedSelect():
+                    totals[COMPONENTS] += 2  # the implicit ActionRow plus the select itself
+                    totals[ROWS] += 1  # a select always occupies a whole row
+                    totals[CONTROLS] += 1
+                case RawItem(component_cost=component_cost):
+                    totals[COMPONENTS] += component_cost
+                case _:
+                    totals[COMPONENTS] += 1
 
-    for index, node in enumerate(nodes):
-        walk(node, (index,))
-
-
-def _steppable(nodes: Sequence[Node], positions: _Positions) -> list[tuple[_VariantPath, Variants, int]]:
-    """Every reachable ladder that still has a rung left, in document order."""
-    found: list[tuple[_VariantPath, Variants, int]] = []
-
-    def visit(path: _VariantPath, node: Variants, rung: int) -> None:
-        if rung + 1 < len(node.variants):
-            found.append((path, node, rung))
-
-    _walk_ladders(nodes, positions, visit)
-    return found
-
-
-def _canonical_positions(nodes: Sequence[Node], positions: _Positions) -> dict[_VariantPath, int]:
-    """Discard zero and unreachable positions after a parent changes rungs."""
-    canonical: dict[_VariantPath, int] = {}
-
-    def visit(path: _VariantPath, _node: Variants, rung: int) -> None:
-        if rung:
-            canonical[path] = rung
-
-    _walk_ladders(nodes, positions, visit)
-    return canonical
+    walk(children)
+    return totals
 
 
-def _variant_profile(nodes: Sequence[Node], positions: _Positions) -> DegradationProfile:
-    profile = DegradationProfile()
-
-    def visit(path: _VariantPath, node: Variants, rung: int) -> None:
-        nonlocal profile
-        if rung:
-            profile = profile.with_effect(
-                DegradationEffect(
-                    priority=node.priority,
-                    path=_format_path(path),
-                    semantic_steps=rung,
-                )
-            )
-
-    _walk_ladders(nodes, positions, visit)
-    return profile
-
-
-def _variant_notes(nodes: Sequence[Node], positions: _Positions) -> list[SolveNote]:
-    notes: list[SolveNote] = []
-
-    def visit(path: _VariantPath, node: Variants, rung: int) -> None:
-        notes.extend(
-            _note(
-                SolveNoteCode.VARIANT_STEP,
-                f"{_format_path(path)} stepped to variant {step + 2} of {len(node.variants)} "
-                f"(priority {node.priority}) under layout pressure",
-            )
-            for step in range(rung)
-        )
-
-    _walk_ladders(nodes, positions, visit)
-    return notes
-
-
-def _variant_state_bound(nodes: Sequence[Node], cutoff: int) -> int:
-    """Count reachable rung assignments, stopping once the bounded search cannot exhaust them."""
-
-    def multiply(values: Sequence[int]) -> int:
-        product = 1
-        for value in values:
-            product *= value
-            if product > cutoff:
-                return cutoff + 1
-        return product
-
-    def count_node(node: Node) -> int:
-        match node:
-            case Variants(variants=variants):
-                total = 0
-                for variant in variants:
-                    total += multiply([count_node(child) for child in variant.nodes])
-                    if total > cutoff:
-                        return cutoff + 1
-                return total
-            case Panel(children=children) | Budget(children=children) | Break(children=children):
-                return multiply([count_node(child) for child in children])
-            case _:
-                return 1
-
-    return multiply([count_node(node) for node in nodes])
-
-
-def _static_components(nodes: Sequence[Node], limits: V2Limits) -> int:
-    builder = _Builder(limits=limits)
-    return _component_count(_prune(builder.realize_children(_resolve_variants(nodes, {}))))
-
-
-def _guided_variant_solve(
-    tree: list[Node],
-    *,
-    limits: V2Limits,
-    chrome: Chrome,
-    reserved_text: int,
-    position: PositionState,
-    nav: PlannedNav | None,
-    search_budget: int,
-) -> SolvedLayout:
-    """Preserve priority and breadth while guiding an intractable product by component savings."""
-    positions: dict[_VariantPath, int] = {}
-    states_explored = 0
-    solved: SolvedLayout | None = None
-    while states_explored < search_budget:
-        structural = _variant_profile(tree, positions)
-        solved = _solve_once(
-            tree,
-            positions=positions,
-            limits=limits,
-            chrome=chrome,
-            reserved_text=reserved_text,
-            position=position,
-            nav=nav,
-            notes=_variant_notes(tree, positions),
-        )
-        states_explored += 1
-        solved = replace(
-            solved,
-            degradation=solved.degradation.merged(structural),
-            states_explored=states_explored,
-            search_fallback=bool(positions) or solved.components > limits.total_components,
-            variant_positions=tuple(positions.items()),
-        )
-        if solved.components <= limits.total_components and not solved.failures:
-            break
-        remaining = _steppable(tree, positions)
-        if not remaining:
-            break
-        priority, rung = min((ladder.priority, current) for _path, ladder, current in remaining)
-        peers = [
-            (path, ladder, current)
-            for path, ladder, current in remaining
-            if ladder.priority == priority and current == rung
-        ]
-
-        def candidate(
-            order: int,
-            path: _VariantPath,
-            ladder: Variants,
-            current: int,
-            base_positions: dict[_VariantPath, int],
-        ) -> tuple[int, int, dict[_VariantPath, int]]:
-            neighbor = dict(base_positions)
-            neighbor[path] = current + 1
-            neighbor = _canonical_positions(tree, neighbor)
-            current_components = _static_components(ladder.variants[current].nodes, limits)
-            next_components = _static_components(ladder.variants[current + 1].nodes, limits)
-            return next_components - current_components, order, neighbor
-
-        _delta, _order, positions = min(
-            candidate(order, path, ladder, current, positions) for order, (path, ladder, current) in enumerate(peers)
-        )
-    assert solved is not None
-    return solved
-
-
-def _resolve_variants(nodes: Sequence[Node], positions: _Positions) -> list[Node]:
-    """Splice each ladder's selected rung into its parent for this measuring pass."""
-
-    def rewrite(node: Node, path: _VariantPath) -> list[Node]:
-        match node:
-            case Variants(variants=variants):
-                rung = min(positions.get(path, 0), len(variants) - 1)
-                resolved: list[Node] = []
-                for index, child in enumerate(variants[rung].nodes):
-                    resolved.extend(rewrite(child, (*path, rung, index)))
-                return resolved
-            case Panel(children=children, accent=accent):
-                inner: list[Node] = []
-                for index, child in enumerate(children):
-                    inner.extend(rewrite(child, (*path, "panel", index)))
-                return [Panel(children=tuple(inner), accent=accent)]
-            case Budget(children=children):
-                inner = []
-                for index, child in enumerate(children):
-                    inner.extend(rewrite(child, (*path, "budget", index)))
-                return [replace(node, children=tuple(inner))]
-            case Break(children=children):
-                inner = []
-                for index, child in enumerate(children):
-                    inner.extend(rewrite(child, (*path, "break", index)))
-                return [replace(node, children=tuple(inner))]
-            case _:
-                return [node]
-
-    resolved: list[Node] = []
-    for index, node in enumerate(nodes):
-        resolved.extend(rewrite(node, (index,)))
-    return resolved
+def _component_count(children: Sequence[Realized]) -> int:
+    """Components alone, for callers comparing one V2 subtree against another."""
+    return _structural_cost(children)[COMPONENTS]
 
 
 type PositionState = Mapping[str, Position] | Position | None
 
 
-def solve(
+def measure(
     nodes: Sequence[Node],
     *,
-    limits: V2Limits = LIMITS,
+    limits: DiscordLimits = LIMITS,
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     strict: bool = False,
-    reserved_text: int = 0,
+    reserved: ResourceCost = EMPTY_COST,
     position: PositionState = None,
     nav: PlannedNav | None = None,
-    search_budget: int = DEFAULT_SEARCH_BUDGET,
-) -> SolvedLayout:
-    """Fit nodes into target budgets with independently keyed pagination.
+) -> MeasuredLayout:
+    """Fit one concrete primitive layout into its target budgets.
 
-    `Variant.requires` is not consulted here: capability filtering belongs to the planner,
-    which is the only layer that knows the target. A ladder reaching the solver is a pure
-    budget ladder whose rungs are all available.
+    Exactly one deterministic pass over one already-decided tree: no alternatives are
+    weighed here. Choosing between them — semantic strategies, semantic fallbacks, and
+    primitive `Variants` — belongs to the planner's search, which calls this per candidate.
+    An unresolved `Variants` reaching here is a planner bug, not a layout to fit.
     """
-    if search_budget < 1:
-        message = "solver search budget must be positive"
-        raise ValueError(message)
     chrome = localize_chrome(chrome, localization)
-    tree = list(nodes)
-    if _variant_state_bound(tree, search_budget) > search_budget:
-        selected = _guided_variant_solve(
-            tree,
-            limits=limits,
-            chrome=chrome,
-            reserved_text=reserved_text,
-            position=position,
-            nav=nav,
-            search_budget=search_budget,
-        )
-        if strict and selected.notes:
-            raise LayoutOverflowError(selected.notes)
-        return selected
-    frontier: list[tuple[DegradationProfile, int, dict[_VariantPath, int]]] = []
-    serial = count()
-    heappush(frontier, (DegradationProfile(), next(serial), {}))
-    seen: set[frozenset[tuple[_VariantPath, int]]] = {frozenset()}
-    best: SolvedLayout | None = None
-    best_overflow: SolvedLayout | None = None
-    states_explored = 0
-
-    while frontier and states_explored < search_budget:
-        structural, _order, positions = heappop(frontier)
-        if best is not None and best.degradation < structural:
-            break
-        solved = _solve_once(
-            tree,
-            positions=positions,
-            limits=limits,
-            chrome=chrome,
-            reserved_text=reserved_text,
-            position=position,
-            nav=nav,
-            notes=_variant_notes(tree, positions),
-        )
-        states_explored += 1
-        solved = replace(
-            solved,
-            degradation=solved.degradation.merged(structural),
-            states_explored=states_explored,
-            variant_positions=tuple(positions.items()),
-        )
-        valid = solved.components <= limits.total_components and not solved.failures
-        if valid and (best is None or solved.degradation < best.degradation):
-            best = solved
-            if solved.degradation.lossless:
-                break
-        if best_overflow is None or (solved.components, solved.degradation) < (
-            best_overflow.components,
-            best_overflow.degradation,
-        ):
-            best_overflow = solved
-
-        if solved.components <= limits.total_components and not solved.failures:
-            continue
-
-        for path, _ladder, rung in _steppable(tree, positions):
-            neighbor = dict(positions)
-            neighbor[path] = rung + 1
-            neighbor = _canonical_positions(tree, neighbor)
-            key = frozenset(neighbor.items())
-            if key in seen:
-                continue
-            seen.add(key)
-            lower_bound = _variant_profile(tree, neighbor)
-            if best is not None and best.degradation < lower_bound:
-                continue
-            heappush(frontier, (lower_bound, next(serial), neighbor))
-
-    selected = best or best_overflow
-    assert selected is not None
-    fallback = bool(frontier) and states_explored >= search_budget
-    selected = replace(selected, states_explored=states_explored, search_fallback=fallback)
-    if strict and selected.notes:
-        raise LayoutOverflowError(selected.notes)
-    return selected
+    measured = _measure_once(
+        nodes,
+        limits=limits,
+        chrome=chrome,
+        reserved=reserved,
+        position=position,
+        nav=nav,
+        notes=[],
+    )
+    if strict and (lossy := lossy_notes(measured.notes)):
+        raise LayoutOverflowError(lossy)
+    return measured
 
 
 def _configure_paginators(
@@ -1544,36 +1505,41 @@ def _requested_position(state: PositionState, key: str, *, first: bool) -> Posit
     return None
 
 
-def _solve_once(
+@dataclass(slots=True)
+class _Pass:
+    """One complete measuring pass, kept so the last one can be used after the loop ends."""
+
+    builder: _Builder
+    children: list[Realized]
+    paginate_units: list[_Unit]
+    keys: dict[int, str]
+    footers: dict[int, Callable[[int, int], str]]
+    clamps: int
+    degradation: DegradationProfile
+    text_used: dict[str, int]
+
+
+def _measure_once(
     nodes: Sequence[Node],
     *,
-    positions: _Positions,
-    limits: V2Limits,
+    limits: DiscordLimits,
     chrome: Chrome,
-    reserved_text: int,
+    reserved: ResourceCost,
     position: PositionState,
     nav: PlannedNav | None,
     notes: list[SolveNote],
-) -> SolvedLayout:
+) -> MeasuredLayout:
     """One measuring pass, including a fixed point for all measured pager footers."""
-    resolved = _resolve_variants(nodes, positions)
-    active: set[int] = set()
-    final: (
-        tuple[
-            _Builder,
-            list[Realized],
-            list[_Unit],
-            dict[int, str],
-            dict[int, Callable[[int, int], str]],
-            int,
-            DegradationProfile,
-        ]
-        | None
-    ) = None
+    resolved = list(nodes)
+    active: frozenset[int] = frozenset()
+    seen: set[frozenset[int]] = {active}
+    final: _Pass | None = None
 
-    # At least one previously unseen paginator joins active on every non-terminal pass.
-    # The component ceiling is a safe bound even when many paginators are nested in one Panel.
-    for _ in range(limits.total_components + 1):
+    # `active` only ever grows and is bounded by the number of paginators in the tree, so
+    # this terminates. The bound is stated rather than borrowed from an unrelated limit,
+    # and a repeated active set means a paginator toggled itself off, which is a bug in
+    # this function rather than a document the caller can fix.
+    while True:
         pass_notes = list(notes)
         degradation = DegradationRecorder.create()
         builder = _Builder(limits=limits, notes=pass_notes)
@@ -1581,31 +1547,49 @@ def _solve_once(
         paginate_units, keys, footers = _configure_paginators(builder, chrome)
         # Everything noted so far is a clamp to Discord's own shape; fitting starts here.
         clamps = len(pass_notes)
-        footer_reservation = sum(
-            _footer_cost(footers[unit.index], len(unit.content)) for unit in paginate_units if unit.index in active
-        )
-        budget = limits.total_text - builder.raw_text_cost - reserved_text - footer_reservation
-        if builder.budgets:
-            _allocate_budgeted(builder, budget, pass_notes, chrome, degradation)
-        else:
-            _allocate(builder.units, budget, pass_notes, chrome, degradation)
+        # Every pool is solved on its own. A document that exhausts one must not be able to
+        # shrink, spill, or drop anything drawn from another: they are separate fields on
+        # the outgoing message and Discord charges them separately.
+        for axis, capacity in limits.text_axes.items():
+            axis_units = [unit for unit in builder.units if unit.axis == axis]
+            axis_regions = [region for region in builder.budgets if region.axis == axis]
+            footer_reservation = sum(
+                _footer_cost(footers[unit.index], len(unit.content))
+                for unit in paginate_units
+                if unit.index in active and unit.axis == axis
+            )
+            budget = capacity - builder.raw_text_cost.get(axis, 0) - reserved.get(axis) - footer_reservation
+            if axis_regions:
+                _allocate_budgeted(axis_regions, axis_units, budget, pass_notes, chrome, degradation)
+            else:
+                _allocate(axis_units, budget, pass_notes, chrome, degradation)
         children = _prune(children)
-        detected = {unit.index for unit in paginate_units if unit.fragments is not None and len(unit.fragments) > 1}
-        final = (builder, children, paginate_units, keys, footers, clamps, degradation.freeze())
+        text_used = dict(builder.raw_text_cost)
+        for unit in builder.units:
+            if not unit.slot.dropped:
+                text_used[unit.axis] = text_used.get(unit.axis, 0) + len(unit.slot.content)
+        detected = frozenset(
+            unit.index for unit in paginate_units if unit.fragments is not None and len(unit.fragments) > 1
+        )
+        final = _Pass(builder, children, paginate_units, keys, footers, clamps, degradation.freeze(), text_used)
         expanded = active | detected
         if expanded == active:
             break
+        if expanded in seen or len(expanded) > len(paginate_units):
+            message = "paginator activation did not reach a fixed point; a pager toggled itself off"
+            raise LayoutInvariantError(message)
+        seen.add(expanded)
         active = expanded
 
-    assert final is not None
-    builder, children, paginate_units, keys, footers, clamps, degradation = final
+    builder, children = final.builder, final.children
+    text_used = final.text_used
     pagers: list[Pager] = []
-    for unit in paginate_units:
+    for unit in final.paginate_units:
         if unit.fragments is None or len(unit.fragments) <= 1:
             continue
         policy = unit.overflow
         assert isinstance(policy, Paginate)
-        key = keys[unit.index]
+        key = final.keys[unit.index]
         footer_slot = RText()
         initial = len(unit.fragments) - 1 if policy.initial == "end" else 0
         pager = Pager(
@@ -1615,11 +1599,13 @@ def _solve_once(
             suffix=unit.suffix,
             fragments=unit.fragments,
             footer_slot=footer_slot,
-            footer=footers[unit.index],
+            footer=final.footers[unit.index],
             initial=initial,
+            axis=unit.axis,
         )
         requested = _requested_position(position, key, first=not pagers)
         shown = pager.select(initial if requested is None else requested.offset)
+        text_used[unit.axis] = text_used.get(unit.axis, 0) + len(footer_slot.content)
         additions: list[Realized] = [footer_slot]
         if nav is not None:
             additions.extend(
@@ -1635,24 +1621,25 @@ def _solve_once(
         pager.nav_host, pager.nav_at, pager.nav_count = placement[0], placement[1] + 1, len(additions) - 1
         pagers.append(pager)
 
-    count = _component_count(children)
-    if count > limits.total_components:
+    cost = ResourceCost({**text_used, **_structural_cost(children)})
+    capacities = {name: getattr(limits, attribute) for name, attribute in limits.budgets.items()}
+    for axis, spent, capacity in cost.over({**limits.text_axes, **capacities}):
         builder.notes.append(
             _note(
-                SolveNoteCode.COMPONENT_BUDGET,
-                f"{count} components exceed {limits.total_components}; the document needs restructuring",
+                SolveNoteCode.COMPONENT_BUDGET if axis == COMPONENTS else SolveNoteCode.TEXT_BUDGET,
+                f"{spent} {axis} exceed {capacity}; the document needs restructuring",
             )
         )
-    return SolvedLayout(
+    return MeasuredLayout(
         children=children,
         notes=builder.notes,
         pagers=tuple(pagers),
-        components=count,
+        cost=cost,
         # Incoming notes are the ladder steps this pass was asked to measure, which are
         # themselves a response to overflow.
-        overflowed=bool(notes) or len(builder.notes) > clamps,
+        overflowed=bool(notes) or len(builder.notes) > final.clamps,
         nav=nav,
         chrome=chrome,
         limits=limits,
-        degradation=degradation,
+        degradation=final.degradation,
     )

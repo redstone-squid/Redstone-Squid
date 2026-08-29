@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta, timezone
 from typing import ClassVar
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -143,6 +144,164 @@ async def test_temporal_fields_report_parse_and_bound_errors(field, raw, message
     assert message in str(result.errors[0].message)
 
 
+async def test_datetime_field_rejects_ambiguous_local_time_by_default() -> None:
+    field = sl.DateTimeField(key="value", label="Value", timezone=ZoneInfo("America/New_York"))
+
+    result = await sl.FormSpec("Temporal", (field,)).evaluate({"value": "2026-11-01 01:30"})
+
+    assert "occurs twice" in str(result.errors[0].message)
+
+
+def test_datetime_field_interprets_ordinary_local_time_in_iana_zone() -> None:
+    zone = ZoneInfo("America/New_York")
+
+    value = sl.DateTimeField(timezone=zone).parse("2026-08-22 14:30")
+
+    assert value == datetime(2026, 8, 22, 14, 30, tzinfo=zone)
+
+
+@pytest.mark.parametrize(
+    ("policy", "expected"),
+    [
+        (sl.AmbiguousTimePolicy.EARLIER, datetime(2026, 11, 1, 5, 30, tzinfo=UTC)),
+        (sl.AmbiguousTimePolicy.LATER, datetime(2026, 11, 1, 6, 30, tzinfo=UTC)),
+    ],
+)
+def test_datetime_field_resolves_ambiguous_local_time_by_instant(policy, expected) -> None:
+    field = sl.DateTimeField(timezone=ZoneInfo("America/New_York"), ambiguous=policy)
+
+    value = field.parse("2026-11-01 01:30")
+
+    assert value is not None
+    assert value.astimezone(UTC) == expected
+
+
+async def test_datetime_field_rejects_nonexistent_local_time_by_default() -> None:
+    field = sl.DateTimeField(key="value", label="Value", timezone=ZoneInfo("America/New_York"))
+
+    result = await sl.FormSpec("Temporal", (field,)).evaluate({"value": "2026-03-08 02:30"})
+
+    assert "does not exist" in str(result.errors[0].message)
+
+
+@pytest.mark.parametrize(
+    ("zone", "raw", "expected"),
+    [
+        ("America/New_York", "2026-03-08 02:30", "2026-03-08T03:30:00-04:00"),
+        ("Australia/Lord_Howe", "2026-10-04 02:15", "2026-10-04T02:45:00+11:00"),
+    ],
+)
+def test_datetime_field_shifts_nonexistent_local_time_by_the_gap(zone, raw, expected) -> None:
+    field = sl.DateTimeField(
+        timezone=ZoneInfo(zone),
+        nonexistent=sl.NonexistentTimePolicy.SHIFT_FORWARD,
+    )
+
+    value = field.parse(raw)
+
+    assert value is not None
+    assert value.isoformat() == expected
+
+
+def test_datetime_field_keeps_explicit_offset_input_exact() -> None:
+    field = sl.DateTimeField(timezone=ZoneInfo("America/New_York"))
+
+    value = field.parse("2026-11-01 01:30-05:00")
+
+    assert value is not None
+    assert value.isoformat() == "2026-11-01T01:30:00-05:00"
+    assert value.astimezone(UTC) == datetime(2026, 11, 1, 6, 30, tzinfo=UTC)
+
+
+def test_datetime_field_applies_bounds_to_ambiguous_instants() -> None:
+    zone = ZoneInfo("America/New_York")
+    minimum = datetime(2026, 11, 1, 1, 30, tzinfo=zone, fold=1)
+    field = sl.DateTimeField(
+        timezone=zone,
+        minimum=minimum,
+        ambiguous=sl.AmbiguousTimePolicy.EARLIER,
+    )
+
+    with pytest.raises(sl.FormValueError, match="on or after"):
+        field.parse("2026-11-01 01:30")
+
+
+def test_zoned_datetime_field_returns_instant_and_configured_zone() -> None:
+    field = sl.ZonedDateTimeField(timezone="America/New_York")
+
+    value = field.parse("2026-08-22 10:30")
+
+    assert value == sl.ZonedDateTime(datetime(2026, 8, 22, 14, 30, tzinfo=UTC), "America/New_York")
+
+
+async def test_zoned_datetime_field_rejects_ambiguous_and_nonexistent_input_by_default() -> None:
+    field = sl.ZonedDateTimeField(key="value", label="Value", timezone="America/New_York")
+    spec = sl.FormSpec("Zoned", (field,))
+
+    ambiguous = await spec.evaluate({"value": "2026-11-01 01:30"})
+    nonexistent = await spec.evaluate({"value": "2026-03-08 02:30"})
+
+    assert "occurs twice" in str(ambiguous.errors[0].message)
+    assert "does not exist" in str(nonexistent.errors[0].message)
+
+
+def test_zoned_datetime_field_resolves_local_time_with_policies() -> None:
+    overlap = sl.ZonedDateTimeField(
+        timezone="America/New_York",
+        ambiguous=sl.AmbiguousTimePolicy.LATER,
+    ).parse("2026-11-01 01:30")
+    gap = sl.ZonedDateTimeField(
+        timezone="America/New_York",
+        nonexistent=sl.NonexistentTimePolicy.SHIFT_FORWARD,
+    ).parse("2026-03-08 02:30")
+
+    assert overlap is not None
+    assert overlap.isoformat() == "2026-11-01 01:30:00-05:00[America/New_York]"
+    assert gap is not None
+    assert gap.isoformat() == "2026-03-08 03:30:00-04:00[America/New_York]"
+
+
+def test_zoned_datetime_field_uses_valid_offset_to_select_overlap() -> None:
+    field = sl.ZonedDateTimeField(timezone="America/New_York")
+
+    earlier = field.parse("2026-11-01 01:30-04:00")
+    later = field.parse("2026-11-01 01:30-05:00")
+
+    assert earlier is not None
+    assert earlier.instant == datetime(2026, 11, 1, 5, 30, tzinfo=UTC)
+    assert later is not None
+    assert later.instant == datetime(2026, 11, 1, 6, 30, tzinfo=UTC)
+
+
+def test_zoned_datetime_field_rejects_offset_conflicts() -> None:
+    field = sl.ZonedDateTimeField(timezone="America/New_York")
+
+    with pytest.raises(sl.FormValueError, match="offset does not match"):
+        field.parse("2026-08-22 10:30-05:00")
+    with pytest.raises(sl.FormValueError, match="offset does not match"):
+        field.parse("2026-03-08 02:30-05:00")
+
+
+def test_zoned_datetime_field_prefill_round_trips_exact_overlap() -> None:
+    field = sl.ZonedDateTimeField(timezone="America/New_York")
+    value = sl.ZonedDateTime(datetime(2026, 11, 1, 6, 30, tzinfo=UTC), "America/New_York")
+
+    prefill = field.format_prefill(value)
+
+    assert prefill == "2026-11-01T01:30:00-05:00"
+    assert field.parse(prefill) == value
+
+
+def test_zoned_datetime_field_applies_instant_bounds() -> None:
+    field = sl.ZonedDateTimeField(
+        timezone="America/New_York",
+        minimum=datetime(2026, 11, 1, 6, tzinfo=UTC),
+    )
+
+    with pytest.raises(sl.FormValueError, match="on or after"):
+        field.parse("2026-11-01 01:30-04:00")
+
+
 def test_temporal_field_prefill_uses_isoformat() -> None:
     instant = datetime(2026, 8, 22, 14, 30, tzinfo=UTC)
 
@@ -197,7 +356,7 @@ def test_form_trigger_plans_as_content_with_a_submission_binding() -> None:
 
     result = sl.plan(sl.form(spec, key="edit", label="Edit", on_submit=_submitted), target=target)
 
-    row = result.scene.children[0]
+    row = result.scene.components_v2.children[0]
     assert isinstance(row, SceneRow)
     assert isinstance(row.items[0], SceneButton)
     assert row.items[0].action == "edit"
@@ -235,7 +394,7 @@ def test_extension_field_uses_its_portable_fallback() -> None:
 
     result = sl.plan(sl.form(spec, key="native", on_submit=_submitted), target=target)
 
-    assert isinstance(result.scene.children[0], SceneRow)
+    assert isinstance(result.scene.components_v2.children[0], SceneRow)
 
 
 @dataclass(frozen=True, slots=True)
@@ -280,3 +439,46 @@ async def test_a_custom_duration_parser_reports_bad_input_as_a_field_error() -> 
     evaluated = await spec.evaluate({"for": "banana"})
 
     assert evaluated.errors == (sl.FieldError("for", "Durations look like 30m."),)
+
+
+def test_scale_field_parses_a_picked_point_and_a_typed_one() -> None:
+    field = sl.ScaleField(key="score", label="Score")
+
+    assert field.parse("3") == 3
+    assert field.parse(5) == 5
+    assert [option for option in field.points] == [1, 2, 3, 4, 5]
+
+
+def test_scale_field_rejects_values_outside_its_span() -> None:
+    field = sl.ScaleField(key="score", label="Score", minimum=1, maximum=5)
+
+    with pytest.raises(sl.FormValueError, match="from 1 to 5"):
+        field.parse("6")
+    with pytest.raises(sl.FormValueError, match="from 1 to 5"):
+        field.parse("0")
+    with pytest.raises(sl.FormValueError, match="whole number"):
+        field.parse("great")
+
+
+def test_scale_field_labels_named_points_and_numbers_the_rest() -> None:
+    field = sl.ScaleField(key="score", labels={1: "Poor", 5: "Excellent"})
+
+    assert field.label_for(1) == "Poor"
+    assert field.label_for(3) == "3"
+    assert field.label_for(5) == "Excellent"
+
+
+def test_scale_field_prefill_is_the_option_key() -> None:
+    field = sl.ScaleField(key="score")
+
+    assert field.format_prefill(4) == "4"
+    assert field.format_prefill(None) is None
+
+
+def test_scale_field_needs_a_span_to_pick_from() -> None:
+    with pytest.raises(ValueError, match="maximum greater than minimum"):
+        sl.ScaleField(key="score", minimum=3, maximum=3)
+
+
+def test_scale_is_the_short_alias() -> None:
+    assert sl.Scale is sl.ScaleField

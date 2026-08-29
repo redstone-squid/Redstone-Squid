@@ -10,11 +10,22 @@ from datetime import UTC, date, tzinfo
 from datetime import datetime as DateTimeValue
 from datetime import time as TimeValue
 from enum import StrEnum
-from types import MappingProxyType
 from typing import Any, ClassVar, NoReturn, Self, overload
 
 from squid_layouts.actions import ActionPolicy, SubmitEvent
 from squid_layouts.errors import LayoutInvariantError
+from squid_layouts.frozen import FrozenMapping
+from squid_layouts.temporal import (
+    AmbiguousLocalTimeError,
+    AmbiguousTimePolicy,
+    InvalidTimezoneOffsetError,
+    NonexistentLocalTimeError,
+    NonexistentTimePolicy,
+    ZonedDateTime,
+    resolve_local_datetime,
+    resolve_offset_datetime,
+    timezone_from_name,
+)
 from squid_layouts.text import TextLike
 
 
@@ -291,14 +302,26 @@ class TimeField(FormField[TimeValue]):
 
 @dataclass(frozen=True, slots=True)
 class DateTimeField(FormField[DateTimeValue]):
-    """An ISO-8601 instant; naive input is interpreted in ``timezone``."""
+    """An ISO-8601 instant; naive input is resolved in ``timezone``.
+
+    Ambiguous and nonexistent local times reject by default. Explicitly offset
+    input already identifies an instant and does not use the local-time policies.
+    """
 
     timezone: tzinfo = UTC
     minimum: DateTimeValue | None = None
     maximum: DateTimeValue | None = None
     placeholder: TextLike | None = "YYYY-MM-DD HH:MM"
+    ambiguous: AmbiguousTimePolicy = AmbiguousTimePolicy.REJECT
+    nonexistent: NonexistentTimePolicy = NonexistentTimePolicy.REJECT
 
     def __post_init__(self) -> None:
+        if not isinstance(self.ambiguous, AmbiguousTimePolicy):
+            message = "DateTimeField ambiguous must be an AmbiguousTimePolicy"
+            raise TypeError(message)
+        if not isinstance(self.nonexistent, NonexistentTimePolicy):
+            message = "DateTimeField nonexistent must be a NonexistentTimePolicy"
+            raise TypeError(message)
         for name, bound in (("minimum", self.minimum), ("maximum", self.maximum)):
             if bound is not None and (bound.tzinfo is None or bound.utcoffset() is None):
                 message = f"DateTimeField {name} must be aware"
@@ -312,15 +335,128 @@ class DateTimeField(FormField[DateTimeValue]):
         except ValueError:
             _invalid("Enter a date and time as YYYY-MM-DD HH:MM.")
         if value.tzinfo is None or value.utcoffset() is None:
-            value = value.replace(tzinfo=self.timezone)
-        if self.minimum is not None and value < self.minimum:
+            try:
+                value = resolve_local_datetime(value, self.timezone, self.ambiguous, self.nonexistent)
+            except AmbiguousLocalTimeError:
+                _invalid(
+                    "This local time occurs twice in the selected timezone. "
+                    "Enter a date and time with an explicit UTC offset."
+                )
+            except NonexistentLocalTimeError:
+                _invalid("This local time does not exist in the selected timezone.")
+        instant = value.astimezone(UTC)
+        if self.minimum is not None and instant < self.minimum.astimezone(UTC):
             _invalid(f"Enter a date and time on or after {self.minimum.isoformat()}.")
-        if self.maximum is not None and value > self.maximum:
+        if self.maximum is not None and instant > self.maximum.astimezone(UTC):
             _invalid(f"Enter a date and time on or before {self.maximum.isoformat()}.")
         return value
 
     def format_prefill(self, value: object) -> object:
         return value.isoformat() if isinstance(value, DateTimeValue) else value
+
+
+@dataclass(frozen=True, slots=True)
+class ZonedDateTimeField(FormField[ZonedDateTime]):
+    """A local ISO-8601 datetime resolved in one named IANA timezone."""
+
+    timezone: str = "UTC"
+    minimum: DateTimeValue | None = None
+    maximum: DateTimeValue | None = None
+    placeholder: TextLike | None = "YYYY-MM-DD HH:MM"
+    ambiguous: AmbiguousTimePolicy = AmbiguousTimePolicy.REJECT
+    nonexistent: NonexistentTimePolicy = NonexistentTimePolicy.REJECT
+
+    def __post_init__(self) -> None:
+        timezone_from_name(self.timezone)
+        if not isinstance(self.ambiguous, AmbiguousTimePolicy):
+            message = "ZonedDateTimeField ambiguous must be an AmbiguousTimePolicy"
+            raise TypeError(message)
+        if not isinstance(self.nonexistent, NonexistentTimePolicy):
+            message = "ZonedDateTimeField nonexistent must be a NonexistentTimePolicy"
+            raise TypeError(message)
+        for name, bound in (("minimum", self.minimum), ("maximum", self.maximum)):
+            if bound is not None and (bound.tzinfo is None or bound.utcoffset() is None):
+                message = f"ZonedDateTimeField {name} must be aware"
+                raise ValueError(message)
+
+    def parse(self, raw: object) -> ZonedDateTime | None:
+        if self._optional(raw):
+            return None
+        try:
+            submitted = DateTimeValue.fromisoformat(str(raw).strip())
+        except ValueError:
+            _invalid("Enter a date and time as YYYY-MM-DD HH:MM.")
+        timezone = timezone_from_name(self.timezone)
+        try:
+            if submitted.tzinfo is None or submitted.utcoffset() is None:
+                resolved = resolve_local_datetime(submitted, timezone, self.ambiguous, self.nonexistent)
+            else:
+                resolved = resolve_offset_datetime(submitted, timezone)
+        except AmbiguousLocalTimeError:
+            _invalid(
+                "This local time occurs twice in the selected timezone. "
+                "Enter a date and time with an explicit UTC offset."
+            )
+        except NonexistentLocalTimeError:
+            _invalid("This local time does not exist in the selected timezone.")
+        except InvalidTimezoneOffsetError:
+            _invalid("The UTC offset does not match this local time in the selected timezone.")
+
+        value = ZonedDateTime(resolved, self.timezone)
+        if self.minimum is not None and value.instant < self.minimum.astimezone(UTC):
+            _invalid(f"Enter a date and time on or after {self.minimum.isoformat()}.")
+        if self.maximum is not None and value.instant > self.maximum.astimezone(UTC):
+            _invalid(f"Enter a date and time on or before {self.maximum.isoformat()}.")
+        return value
+
+    def format_prefill(self, value: object) -> object:
+        if not isinstance(value, ZonedDateTime):
+            return value
+        return value.instant.astimezone(timezone_from_name(self.timezone)).isoformat()
+
+
+@dataclass(frozen=True, slots=True)
+class ScaleField(FormField[int]):
+    """One point on an inclusive ordinal scale, such as a 1-5 rating.
+
+    Portable by construction: a target with a radio-group shape draws the whole span, and one
+    without draws a number the reader types. `labels` names individual points — the endpoints
+    are the usual case — and unnamed points show their number.
+    """
+
+    minimum: int = 1
+    maximum: int = 5
+    labels: Mapping[int, TextLike] | None = None
+
+    def __post_init__(self) -> None:
+        if self.maximum <= self.minimum:
+            message = f"ScaleField {self.key!r} needs maximum greater than minimum"
+            raise ValueError(message)
+
+    @property
+    def points(self) -> tuple[int, ...]:
+        """Every value on the scale, low to high."""
+        return tuple(range(self.minimum, self.maximum + 1))
+
+    def label_for(self, value: int) -> TextLike:
+        """The reader-facing text for one point."""
+        named = None if self.labels is None else self.labels.get(value)
+        return str(value) if named is None else named
+
+    def parse(self, raw: object) -> int | None:
+        if self._optional(raw):
+            return None
+        try:
+            value = int(str(raw).strip())
+        except ValueError:
+            _invalid(f"Choose a whole number from {self.minimum} to {self.maximum}.")
+        if not self.minimum <= value <= self.maximum:
+            _invalid(f"Choose a value from {self.minimum} to {self.maximum}.")
+        return value
+
+    def format_prefill(self, value: object) -> object:
+        # A string either way: it is the radio option's value and the text input's default.
+        return None if value is None else str(value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -481,7 +617,7 @@ class FormSpec:
             message = f"FormSpec prefill contains unknown keys: {sorted(unknown)!r}"
             raise ValueError(message)
         object.__setattr__(self, "fields", normalized)
-        object.__setattr__(self, "prefill", MappingProxyType(dict(self.prefill)))
+        object.__setattr__(self, "prefill", FrozenMapping(self.prefill))
 
     @property
     def field_keys(self) -> tuple[str, ...]:
@@ -490,7 +626,7 @@ class FormSpec:
 
     async def evaluate(self, attempted: Mapping[str, object]) -> FormEvaluation:
         """Parse every field, then run cross-field validation only after parsing succeeds."""
-        raw = MappingProxyType(dict(attempted))
+        raw = FrozenMapping(attempted)
         values: dict[str, object] = {}
         errors: list[FormIssue] = []
         for field in self.fields:
@@ -499,10 +635,10 @@ class FormSpec:
             except FormValueError as error:
                 errors.append(FieldError(field.key, str(error)))
         if not errors and self.validator is not None:
-            validated = self.validator(MappingProxyType(values))
+            validated = self.validator(FrozenMapping(values))
             issues = await validated if inspect.isawaitable(validated) else validated
             errors.extend(issues)
-        return FormEvaluation(MappingProxyType(values), raw, tuple(errors))
+        return FormEvaluation(FrozenMapping(values), raw, tuple(errors))
 
     def prefill_for(self, field: FormField[Any]) -> object:
         """Return the serialized prefill for one field."""
@@ -608,6 +744,10 @@ class Form:
 
     async def on_submit(self, event: SubmitEvent) -> None:
         """Handle a successfully parsed submission, or an accepted invalid one."""
+
+
+Scale = ScaleField
+"""Short alias for `ScaleField`, for authors writing a form class."""
 
 
 @dataclass(frozen=True, slots=True)

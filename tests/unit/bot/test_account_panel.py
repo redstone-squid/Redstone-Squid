@@ -9,11 +9,15 @@ from uuid import UUID
 import discord
 from whenever import Instant
 
+import squid_layouts as sl
 from squid.accounts.domain import (
     Account,
     AccountIdentity,
+    AccountProfile,
+    ProfileLink,
     PublicCreatorProfile,
 )
+from squid.bot.account_view import AccountPanel
 from squid.bot.verify import VerifyCog
 
 ACCOUNT_ID = 42
@@ -78,3 +82,65 @@ async def test_somebody_elses_creator_page_is_a_public_read() -> None:
     await VerifyCog.account_group.callback(cog, cast(Any, ctx), cast(Any, other))  # type: ignore[arg-type]
 
     assert ctx.send.await_args.kwargs.get("ephemeral") is not True
+
+
+def _account_panel(profile: AccountProfile) -> AccountPanel:
+    panel = AccountPanel(
+        accounts=cast(Any, SimpleNamespace(update_profile=AsyncMock())),
+        account_id=ACCOUNT_ID,
+        author_id=AUTHOR_ID,
+        locale="en",
+    )
+    panel._profile = profile
+    return panel
+
+
+def test_profile_editor_splits_profile_fields_from_ordered_links() -> None:
+    panel = _account_panel(
+        AccountProfile(
+            ACCOUNT_ID,
+            display_name="Builder",
+            bio="Hello",
+            links=(ProfileLink("Site", "https://example.com"),),
+        )
+    )
+
+    component = panel._build_profile_editor()
+    editor = cast(sl.Editor, component.pattern)
+    values = editor.values(component.pattern_state)
+
+    assert values["profile"] == {"display_name": "Builder", "pronouns": None, "bio": "Hello"}
+    assert tuple(dict(link) for link in cast(tuple, values["links"])) == (
+        {"label": "Site", "url": "https://example.com"},
+    )
+
+
+def test_profile_editor_rejects_non_https_links_before_staging() -> None:
+    panel = _account_panel(AccountProfile.empty(ACCOUNT_ID))
+
+    issues = panel._validate_link({"label": "Bad", "url": "http://example.com"})
+
+    assert len(issues) == 1
+    assert isinstance(issues[0], sl.FormError)
+
+
+async def test_profile_editor_commit_persists_and_returns_to_account_panel() -> None:
+    panel = _account_panel(AccountProfile.empty(ACCOUNT_ID))
+    panel._refresh = AsyncMock()  # type: ignore[method-assign]
+    component = panel._build_profile_editor()
+    panel._profile_editor = component
+    editor = cast(sl.Editor, component.pattern)
+    staged = editor.transition(
+        component.pattern_state,
+        "submit:profile",
+        submitted={"display_name": "Builder", "pronouns": None, "bio": "Hello"},
+    )
+    committed = editor.transition(staged, "save")
+    source = SimpleNamespace(notice=AsyncMock())
+
+    assert component.on_change is not None
+    await component.on_change(sl.PatternEvent(cast(Any, source), "save", staged, committed))
+
+    cast(AsyncMock, panel._accounts.update_profile).assert_awaited_once()
+    assert panel._profile_editor is None
+    source.notice.assert_awaited_once()

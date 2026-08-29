@@ -8,31 +8,49 @@ stopped after a successful edit so dispatch tables do not accumulate.
 
 import asyncio
 import hashlib
-import io
 import logging
 import secrets
 import time
 from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass
-from typing import Any, Protocol, override
-from urllib.parse import urlsplit
+from dataclasses import dataclass, replace
+from typing import Any, Protocol, cast
 
 import anyio
 import discord
 
-from squid_layouts.actions import ActionBinding, ActionPolicy, Actor, PressEvent, SelectionEvent, SubmitEvent
+from squid_layouts.actions import (
+    ActionBinding,
+    ActionEvent,
+    ActionKind,
+    ActionMiddleware,
+    ActionPolicy,
+    ActionProceed,
+    ActionRequest,
+    Actor,
+    Feedback,
+    PressEvent,
+    SelectionEvent,
+    SubmitEvent,
+)
 from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME, LOCALIZATION_CONTEXT, Chrome, localize_chrome
 from squid_layouts.discord import delivery as deliver
 from squid_layouts.discord import live
 from squid_layouts.discord.access import AccessPolicy, Allowed, Denied, Owner
 from squid_layouts.discord.actions import ActionResponder
+from squid_layouts.discord.attachments import files_for
+from squid_layouts.discord.classic import compose as classic_compose
+from squid_layouts.discord.classic_renderer import ClassicRenderer
 from squid_layouts.discord.compose import Composition, compose
-from squid_layouts.discord.renderer import Renderer
-from squid_layouts.document import Asset, Document, InlineAsset, StoredAsset
+from squid_layouts.discord.presentation import DiscordMode, DiscordPresentation
+from squid_layouts.discord.renderer import V2Renderer
+from squid_layouts.discord.target import V2_TARGET, Target
+from squid_layouts.document import Asset, Document
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import FormBinding, FormSpec, FormValidationPolicy, SubmitHandler
-from squid_layouts.planning.limits import LIMITS, V2Limits
+from squid_layouts.guards import GuardLedger
+from squid_layouts.palette import DEFAULT_PALETTE, Palette
+from squid_layouts.planning.limits import LIMITS, ClassicLimits, DiscordLimits, V2Limits
 from squid_layouts.planning.navigation import (
     NAV_FACTORY_CONTEXT,
     NavFactory,
@@ -41,6 +59,21 @@ from squid_layouts.planning.navigation import (
     default_nav,
 )
 from squid_layouts.primitives.nodes import Node
+from squid_layouts.profiling import (
+    ActionOutcome,
+    DetachedSpanRecorder,
+    DispatchDisposition,
+    DispatchResult,
+    GenerationDecision,
+    NoOpProfiler,
+    OperationKind,
+    OperationRecorder,
+    PresentationOutcome,
+    Profiler,
+    TraceLink,
+    TraceOutcome,
+    TraceResult,
+)
 
 # (deliver is imported as a module so tests can monkeypatch its functions.)
 from squid_layouts.runtime.component import Component, ComponentTree
@@ -54,9 +87,6 @@ from squid_layouts.scene.model import (
     PlanResult,
     SceneButton,
     SceneDocument,
-    SceneFile,
-    SceneNode,
-    ScenePanel,
     SceneSelect,
 )
 from squid_layouts.semantic import Status
@@ -64,6 +94,7 @@ from squid_layouts.sources import Position
 from squid_layouts.text import NEUTRAL, Localization, TextLike, resolve_text
 
 logger = logging.getLogger(__name__)
+_NOOP_PROFILER = NoOpProfiler()
 
 _MAX_LOAD_PASSES = 16
 """Component/resource tiers one delivery loads through -- not retries.
@@ -134,23 +165,45 @@ class FinishHook(Protocol):
     def __call__(self, mount: Mount, /) -> Awaitable[None]: ...
 
 
+class PresentedHook(Protocol):
+    """Observer told that Discord accepted and the mount committed a generation."""
+
+    def __call__(self, mount: Mount, /) -> Awaitable[None]: ...
+
+
 class Scheduler(Protocol):
     """Anything that can absorb out-of-band refresh requests (see `Reactor`)."""
 
     def schedule(self, mount: Mount) -> None: ...
 
 
-class MountedView(discord.ui.LayoutView):
-    """One render generation of a mounted component."""
+def _unique_by_identity(middleware: Sequence[ActionMiddleware]) -> tuple[ActionMiddleware, ...]:
+    """Freeze middleware while treating the same installed instance as idempotent."""
+    unique: list[ActionMiddleware] = []
+    for candidate in middleware:
+        if not any(existing is candidate for existing in unique):
+            unique.append(candidate)
+    return tuple(unique)
+
+
+class _MountedBehaviour:
+    """What a mounted view does, independently of which components it holds.
+
+    A mixin over discord.py's `BaseView`, which both `View` and `LayoutView` derive from, so
+    the two mounted views differ in exactly one thing: their component vocabulary. Timeout,
+    dispatchability, the error hook, and the mount back-reference are the same behaviour in
+    both message modes, and a second copy of them would be a second thing to keep in step.
+    """
+
+    _mount: Mount
 
     def __init__(self, mount: Mount, timeout: float | None) -> None:
-        super().__init__(timeout=timeout)
+        super().__init__(timeout=timeout)  # type: ignore[call-arg]
         self._mount = mount
 
     async def on_timeout(self) -> None:
         await self._mount.handle_timeout()
 
-    @override
     def is_dispatchable(self) -> bool:
         # A mount wants storing even when it draws nothing dispatchable, because
         # `store_view` is gated on this and `add_view` is what starts the timeout task.
@@ -159,6 +212,17 @@ class MountedView(discord.ui.LayoutView):
 
     async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item[Any]) -> None:
         await self._mount.handle_error(interaction, error, f"item:{type(item).__name__}")
+
+
+class MountedView(_MountedBehaviour, discord.ui.LayoutView):
+    """One render generation of a mounted component, as a Components V2 message."""
+
+
+class ClassicMountedView(_MountedBehaviour, discord.ui.View):
+    """One render generation of a mounted component, as a classic message's controls."""
+
+
+type AnyMountedView = MountedView | ClassicMountedView
 
 
 def _custom_id(mount_id: str, generation: int, key: str) -> str:
@@ -179,7 +243,7 @@ def _custom_id(mount_id: str, generation: int, key: str) -> str:
     return f"{prefix}#{hashlib.blake2s(key.encode()).hexdigest()[:12]}"
 
 
-class _WiredButton(discord.ui.Button[MountedView]):
+class _WiredButton(discord.ui.Button[AnyMountedView]):
     def __init__(self, node: SceneButton, mount: Mount, key: str, generation: int) -> None:
         super().__init__(
             style=getattr(discord.ButtonStyle, node.style.value),
@@ -196,7 +260,7 @@ class _WiredButton(discord.ui.Button[MountedView]):
         await self._mount.dispatch(self._key, interaction, generation=self._generation)
 
 
-class _WiredSelect(discord.ui.Select[MountedView]):
+class _WiredSelect(discord.ui.Select[AnyMountedView]):
     def __init__(self, node: SceneSelect, mount: Mount, key: str, generation: int) -> None:
         super().__init__(
             placeholder=node.placeholder,
@@ -230,8 +294,8 @@ class _SubmitBinding(ActionBinding):
 class _Candidate:
     """One staged render generation, which becomes the mount's state only when committed."""
 
-    view: MountedView
-    composition: Composition
+    view: AnyMountedView
+    composition: Composition[Any]
     tree: ComponentTree
     handlers: dict[str, ActionBinding]
     form_bindings: Mapping[str, FormBinding]
@@ -240,6 +304,16 @@ class _Candidate:
     assets: tuple[Asset, ...]
     # Presentation writes this render earned; a failed delivery simply drops them.
     session_updates: tuple[SessionUpdate, ...]
+
+    @property
+    def presentation(self) -> DiscordPresentation:
+        """The complete message this render delivers to.
+
+        The composition already built it, in whichever mode the target chose. A mount does
+        not reassemble one, because doing so would be a second place that has to know what
+        each mode is allowed to carry.
+        """
+        return self.composition.presentation
 
 
 @dataclass(frozen=True, slots=True)
@@ -290,6 +364,110 @@ class MountSnapshot:
     metrics: PlanMetrics | None
 
 
+@dataclass(slots=True)
+class _DispatchProfile:
+    """Mutable operation-local facts frozen into a dispatch result at the terminal branch."""
+
+    operation: OperationRecorder
+    interaction: discord.Interaction
+    generation: GenerationDecision
+    acknowledgement: DetachedSpanRecorder
+    action: ActionOutcome = ActionOutcome.NOT_RUN
+    presentation: PresentationOutcome = PresentationOutcome.NOT_REQUIRED
+    finished: bool = False
+
+    def decide_generation(self, active: int, *, rebased: bool = False) -> None:
+        self.generation = GenerationDecision(self.generation.submitted, active, rebased)
+
+    def acknowledge(self, source: str) -> None:
+        if self.interaction.response.is_done():
+            self.acknowledgement.set_attribute("source", source)
+            self.acknowledgement.finish()
+
+    def finish(self, disposition: DispatchDisposition, error: Exception | None = None) -> None:
+        if self.finished:
+            return
+        self.finished = True
+        self.operation.increment("dispatch.rebased", int(self.generation.rebased))
+        self.acknowledge("action")
+        outcome = (
+            TraceOutcome.CANCELLED
+            if disposition is DispatchDisposition.CANCELLED
+            else TraceOutcome.FAILED
+            if disposition
+            in {
+                DispatchDisposition.ACCESS_FAILED,
+                DispatchDisposition.GUARD_FAILED,
+                DispatchDisposition.ACTION_FAILED,
+                DispatchDisposition.DELIVERY_FAILED,
+            }
+            else TraceOutcome.COMPLETED
+        )
+        detail = None if error is None else f"{type(error).__module__}.{type(error).__qualname__}"
+        self.operation.set_result(
+            TraceResult(
+                outcome,
+                detail,
+                DispatchResult(disposition, self.action, self.presentation, self.generation),
+            )
+        )
+
+
+class _BusyPaint:
+    """One action's interim "working" render, and the ordering between it and the flush.
+
+    The paint is scheduled by the acknowledgement watchdog and the flush by the handler
+    returning, so the two race. They are ordered by this object's lock rather than by
+    cancellation: `close()` waits out a paint already in flight and then latches, so a
+    watchdog that wakes late paints nothing over the final render.
+    """
+
+    def __init__(self, mount: Mount, key: str, feedback: Feedback, interaction: discord.Interaction) -> None:
+        self._mount = mount
+        self._key = key
+        self._feedback = feedback
+        self._interaction = interaction
+        self._lock = asyncio.Lock()
+        self._closed = False
+        self._shown = False
+
+    @property
+    def shown(self) -> bool:
+        """Whether an interim render is currently what the reader is looking at."""
+        return self._shown
+
+    async def show(self, profile: _DispatchProfile) -> None:
+        """Relabel the pressed control and disable the panel, once."""
+        async with self._lock:
+            if self._closed or self._shown or self._mount._finished:
+                return
+            pending = self._feedback.pending
+            label = self._mount._chrome_text(self._mount.chrome.working if pending is None else pending)
+            source = deliver.handle_from(self._interaction)
+            wrote = await self._mount._repaint(self._key, label, through=source)
+            if wrote is None:
+                # Nothing could write, so the click is still unanswered: the watchdog goes
+                # on to defer it at the usual deadline.
+                return
+            self._shown = True
+            if wrote is source:
+                profile.acknowledge("busy")
+
+    async def close(self) -> bool:
+        """Stop any further painting and report whether one is on screen."""
+        async with self._lock:
+            self._closed = True
+            return self._shown
+
+    async def restore(self) -> None:
+        """Put the committed scene back, live controls and all."""
+        async with self._lock:
+            if not self._shown or self._mount._finished:
+                return
+            self._shown = False
+            await self._mount._repaint(None, None, through=deliver.handle_from(self._interaction))
+
+
 class Mount:
     """Binds a component to a message and owns its whole interaction lifecycle."""
 
@@ -298,15 +476,19 @@ class Mount:
         component: Component,
         *,
         access: AccessPolicy,
+        target: Target = V2_TARGET,
         chrome: Chrome = DEFAULT_CHROME,
         localization: Localization = NEUTRAL,
-        limits: V2Limits = LIMITS,
+        palette: Palette = DEFAULT_PALETTE,
         strict: bool = False,
         timeout: float | None = 900,
         on_error: ErrorHook | None = None,
+        middleware: Sequence[ActionMiddleware] = (),
+        profiler: Profiler | None = None,
         scheduler: Scheduler | None = None,
         nav: NavFactory | None = None,
         acknowledgement_timeout: float = 2.5,
+        pending_after: float = 1.0,
         clock: Callable[[], float] = _monotonic,
     ) -> None:
         self.id = secrets.token_urlsafe(6)
@@ -319,6 +501,7 @@ class Mount:
         """Where this mount's message is, once it has one. Read `handle` to write to it."""
         self._chrome = chrome
         self.localization = localization
+        self.palette = palette
         self.chrome = localize_chrome(chrome, localization)
         self.nav = nav if nav is not None else default_nav
         self.runtime = ComponentRuntime(
@@ -331,11 +514,32 @@ class Mount:
             },
         )
         self.acknowledgement_timeout = acknowledgement_timeout
-        self.limits = limits
+        self.pending_after = pending_after
+        """How long an action carrying `Feedback` may run before its interim paint appears."""
+        self.guards = GuardLedger(now=clock)
+        """Where stateful guards keep their counts; it lives and dies with this mount."""
+        self.target = target
+        """The message mode this mount owns for its whole life.
+
+        A mount has one target: changing it means opening a replacement mount, not swapping
+        a live mount's renderer out from under its action bindings.
+        """
+        self.limits = target.limits if isinstance(target.limits, DiscordLimits) else LIMITS
+        self.mode = DiscordMode.CLASSIC if isinstance(self.limits, ClassicLimits) else DiscordMode.COMPONENTS_V2
+        """Which kind of Discord message this mount owns, for its whole life."""
         self.strict = strict
         self.timeout = timeout
         self.access = access
         self.on_error = on_error
+        self._middleware = _unique_by_identity(middleware)
+        inherited_profiler = None if scheduler is None else getattr(scheduler, "profiler", None)
+        self.profiler = (
+            profiler
+            if profiler is not None
+            else cast(Profiler, inherited_profiler)
+            if inherited_profiler is not None
+            else _NOOP_PROFILER
+        )
         self.scheduler = scheduler
         self.status: TextLike | None = None
         """Framework-drawn status appended to the document until the next accepted interaction."""
@@ -357,6 +561,7 @@ class Mount:
         self._dirty = False
         self._finished = False
         self._finish_hooks: list[FinishHook] = []
+        self._presented_hooks: list[PresentedHook] = []
         self._hooks_fired = False
         self._assets: tuple[Asset, ...] = ()
         self._plan: PlanResult | None = None
@@ -365,6 +570,31 @@ class Mount:
     def handle(self) -> deliver.EditHandle | None:
         """How this mount can write to its message right now, if it still can."""
         return self._handle
+
+    async def adopt_handle(self, handle: deliver.EditHandle) -> None:
+        """Retain newly established edit authority for this mount's existing message.
+
+        Frontends use this after trading temporary delivery credentials for durable ones.
+        Adoption shares the render lock with every Discord write, rejects already-stale
+        authority, and never replaces permanent authority with a temporary handle.
+
+        The caller is responsible for establishing that ``handle`` addresses this mount's
+        message; :class:`EditHandle` deliberately exposes capability, not coordinates.
+
+        Raises:
+            RuntimeError: The mount has already finished.
+            StaleHandleError: The supplied handle is already expired.
+        """
+        async with self._render_lock:
+            if self._finished:
+                message = f"mount {self.id} has already finished"
+                raise RuntimeError(message)
+            if handle.expired():
+                message = "cannot adopt an expired edit handle"
+                raise deliver.StaleHandleError(message)
+            if self._handle is not None and self._handle.permanent and not handle.permanent:
+                return
+            self._handle = handle
 
     @property
     def pending(self) -> bool:
@@ -460,7 +690,13 @@ class Mount:
         """
         return self._draw(self.runtime.render(), disabled=disabled)
 
-    def _draw(self, tree: ComponentTree, *, disabled: bool = False) -> _Candidate:
+    def _draw(
+        self,
+        tree: ComponentTree,
+        *,
+        disabled: bool = False,
+        profile: OperationRecorder | None = None,
+    ) -> _Candidate:
         """Plan and draw one rendered tree into a candidate generation."""
         self._issued += 1
         generation = self._issued
@@ -495,34 +731,28 @@ class Mount:
                 # A materialized cursor always knows its own extent, so it can always seek.
                 return self.nav(NavigationContext(state, previous, next_, seek))
 
-            composition = compose(
+            composition = self._composer()(
                 rendered,
                 wire=wire,
-                renderer=Renderer(
-                    limits=self.limits,
-                    view_factory=lambda: MountedView(self, self._remaining_timeout()),
-                ),
-                limits=self.limits,
+                renderer=self._renderer(self._remaining_timeout()),
+                target=self.target,
                 chrome=self._chrome,
                 localization=self.localization,
+                palette=self.palette,
                 strict=self.strict,
                 nav=nav,
                 session=self.presentation,
                 cache=self.runtime.plan_cache,
+                profile=profile,
             )
-            if not isinstance(composition.view, MountedView):
+            view = composition.presentation.view
+            if not isinstance(view, MountedView | ClassicMountedView):
                 message = "mounted Discord renderer returned the wrong view type"
                 raise TypeError(message)
-            return composition.view, composition
+            return view, composition
 
         view, composition = draw()
-        linked_assets = _linked_file_assets(composition.plan.scene.children, composition.plan.resources)
-        assets = tuple(
-            asset
-            for scene_asset in composition.plan.scene.assets
-            if isinstance(asset := composition.plan.resources.get(f"asset:{scene_asset.key}"), Asset)
-            and scene_asset.key not in linked_assets
-        )
+        assets = composition.assets
         if disabled:
             _disable_all(view)
         return _Candidate(
@@ -536,6 +766,74 @@ class Mount:
             assets,
             composition.plan.session_updates,
         )
+
+    def _composer(self) -> Callable[..., Composition[Any]]:
+        """Which composition this mount's target uses. One of exactly four target-owned choices.
+
+        The target decides the dialect, the renderer, the view factory, and the message mode
+        — and nothing else. Every other branch in this file would be a shared operation that
+        has not been extracted yet.
+        """
+        return classic_compose if self.mode is DiscordMode.CLASSIC else compose
+
+    def _renderer(self, timeout: float | None) -> V2Renderer | ClassicRenderer:
+        if self.mode is DiscordMode.CLASSIC:
+            return ClassicRenderer(
+                limits=cast(ClassicLimits, self.limits),
+                view_factory=lambda: ClassicMountedView(self, timeout),
+                always_view=True,
+            )
+        return V2Renderer(
+            limits=cast(V2Limits, self.limits),
+            view_factory=lambda: MountedView(self, timeout),
+        )
+
+    def _chrome_text(self, text: TextLike) -> str:
+        return resolve_text(text, self.localization).content
+
+    async def _repaint(
+        self,
+        busy_key: str | None,
+        pending: str | None,
+        *,
+        through: deliver.EditHandle | None,
+    ) -> deliver.EditHandle | None:
+        """Redraw the scene already on screen, optionally as a busy interim.
+
+        Not a render: the committed plan is drawn again with the same control ids, so the
+        panel that comes back is the one the reader was looking at. With `busy_key` the
+        pressed button takes `pending` and every control is disabled; without it this is the
+        restore. Either way the component tree is untouched, which is the point — the handler
+        is mid-transaction and a re-render would observe half-written state.
+        """
+        async with self._render_lock:
+            if self._finished:
+                return None
+            plan = self._plan
+            if plan is None:
+                return None
+            generation = self._generation
+            busy = busy_key is not None
+
+            def wire(node: SceneButton | SceneSelect, binding: ActionBinding) -> discord.ui.Item[Any]:
+                if isinstance(node, SceneButton):
+                    if busy:
+                        node = replace(
+                            node,
+                            disabled=True,
+                            label=pending if binding.key == busy_key and pending is not None else node.label,
+                        )
+                    return _WiredButton(node, self, binding.key, generation)
+                return _WiredSelect(replace(node, disabled=True) if busy else node, self, binding.key, generation)
+
+            # No timeout on the paint: the committed view still owns the mount's idle timer,
+            # and a second one would race it. For the same reason the paint is never
+            # `stop()`ed -- it shares the committed generation's custom ids, so unregistering
+            # it would take the live controls' dispatch entries with it.
+            presentation = self._renderer(None).draw(plan.scene, plan=plan, wire=wire)
+            if busy and presentation.view is not None:
+                _disable_all(presentation.view)
+            return await self._write(presentation, keep_attachments=True, through=through)
 
     def _commit(self, candidate: _Candidate) -> None:
         """Publish a delivered candidate — the one place a render becomes the mount's state."""
@@ -553,6 +851,15 @@ class Mount:
         # The commit point is where a mount becomes something a reader can see and click, and
         # so the first moment it is worth listing as live. Idempotent after the first.
         live.track(self)
+
+    async def _commit_presented(self, candidate: _Candidate) -> None:
+        """Commit one successfully delivered candidate and notify durability observers."""
+        self._commit(candidate)
+        for hook in tuple(self._presented_hooks):
+            try:
+                await hook(self)
+            except Exception:
+                logger.exception("presented hook failed for mount %s", self.id)
 
     def _rollback(self, candidate: _Candidate) -> None:
         """Discard an undelivered candidate; the message still shows the live generation.
@@ -587,6 +894,13 @@ class Mount:
         self.runtime.set_context(LOCALIZATION_CONTEXT, localization)
         self.invalidate()
 
+    def use_palette(self, palette: Palette) -> None:
+        """Change the presentation colours used by the next render."""
+        if palette == self.palette:
+            return
+        self.palette = palette
+        self.invalidate()
+
     async def _move_cursor(self, key: str, delta: int) -> None:
         cursor = self.presentation.cursor(key)
         if 0 <= cursor.position.offset + delta < cursor.extent:
@@ -615,11 +929,16 @@ class Mount:
         A staged render's assets win, so files fetched alongside a `_stage_view()` belong to
         that render rather than to the generation it will replace.
         """
-        return _attachment_files(self._pending.assets if self._pending is not None else self._assets)
+        return files_for(self._pending.assets if self._pending is not None else self._assets)
 
     # --- Loading -----------------------------------------------------------------------
 
-    async def _stage_loaded(self, *, disabled: bool = False) -> _Candidate:
+    async def _stage_loaded(
+        self,
+        *,
+        disabled: bool = False,
+        profile: OperationRecorder | None = None,
+    ) -> _Candidate:
         """Stage a candidate whose components and atomic resources are settled.
 
         One pass per embedding tier: the root is known without rendering anything, and each
@@ -634,19 +953,41 @@ class Mount:
         A raise leaves every completed load completed, every other one eligible to retry, and
         nothing staged, so the mount is exactly as deliverable as it was.
         """
-        for _ in range(_MAX_LOAD_PASSES):
+        for pass_index in range(_MAX_LOAD_PASSES):
             if _needs_load(root := self.runtime.root):
-                await self._load_all((root,))
+                if profile is None:
+                    await self._load_all((root,))
+                else:
+                    with profile.span("component_load", attributes={"count": 1, "pass": pass_index}):
+                        await self._load_all((root,))
                 continue
-            tree = self.runtime.render(defer=_needs_load)
+            if profile is None:
+                tree = self.runtime.render(defer=_needs_load)
+            else:
+                with profile.span("runtime_render", attributes={"pass": pass_index}):
+                    tree = self.runtime.render(defer=_needs_load)
             if tree.deferred:
-                await self._load_all(tree.deferred)
+                if profile is None:
+                    await self._load_all(tree.deferred)
+                else:
+                    with profile.span(
+                        "component_load",
+                        attributes={"count": len(tree.deferred), "pass": pass_index},
+                    ):
+                        await self._load_all(tree.deferred)
                 continue
             atomic = self._pending_resources(tree, ResourceDelivery.ATOMIC)
             if atomic:
-                await self._settle_resources(atomic)
+                if profile is None:
+                    await self._settle_resources(atomic)
+                else:
+                    with profile.span(
+                        "resource_settle.atomic",
+                        attributes={"count": len(atomic), "pass": pass_index},
+                    ):
+                        await self._settle_resources(atomic)
                 continue
-            return self._draw(tree, disabled=disabled)
+            return self._draw(tree, disabled=disabled, profile=profile)
         message = f"mount {self.id}: component and resource loading did not settle in {_MAX_LOAD_PASSES} passes"
         raise LayoutInvariantError(message)
 
@@ -663,21 +1004,34 @@ class Mount:
             for resource in resources:
                 tasks.start_soon(resource._settle)
 
-    async def _settle_visible(self, committed: _Candidate, *, through: deliver.EditHandle | None = None) -> None:
+    async def _settle_visible(
+        self,
+        committed: _Candidate,
+        *,
+        through: deliver.EditHandle | None = None,
+        profile: OperationRecorder | None = None,
+    ) -> None:
         """Advance visible resources from their committed pending paint to settled paints."""
         candidate = committed
-        for _ in range(_MAX_LOAD_PASSES):
+        for pass_index in range(_MAX_LOAD_PASSES):
             resources = self._pending_resources(candidate.tree, ResourceDelivery.VISIBLE)
             if not resources or self.runtime.dirty:
                 return
             if self._handle is None or self._handle.expired():
                 self._dirty = True
                 return
-            await self._settle_resources(resources)
+            if profile is None:
+                await self._settle_resources(resources)
+            else:
+                with profile.span(
+                    "resource_settle.visible",
+                    attributes={"count": len(resources), "pass": pass_index},
+                ):
+                    await self._settle_resources(resources)
             settled: _Candidate | None = None
             try:
-                settled = await self._stage_loaded()
-                wrote = await self._deliver(settled, through=through)
+                settled = await self._stage_loaded(profile=profile)
+                wrote = await self._deliver(settled, through=through, profile=profile)
             except Exception:
                 if settled is not None:
                     self._rollback(settled)
@@ -686,7 +1040,11 @@ class Mount:
             if wrote is None:
                 self._rollback(settled)
                 return
-            self._commit(settled)
+            if profile is None:
+                await self._commit_presented(settled)
+            else:
+                with profile.span("commit"):
+                    await self._commit_presented(settled)
             candidate = settled
         self._dirty = True
         logger.error(
@@ -724,40 +1082,61 @@ class Mount:
         The structured result distinguishes a committed delivery, including a handle-less
         one, from a destination that deliberately abandoned delivery.
         """
-        async with self._render_lock:
-            if self._finished:
-                return deliver.Abandoned()
-            # A render staged by `_stage_view` and never delivered is superseded, not delivered.
-            if self._pending is not None:
-                self._pending.view.stop()
-                self._pending = None
-            # Component on_load and atomic resources settle first. Visible resources
-            # deliberately make this the pending paint and settle after it commits.
-            candidate = await self._stage_loaded()
+        component = type(self.component)
+        name = f"{component.__module__}.{component.__qualname__}"
+        with self.profiler.operation(OperationKind.SEND, name=name, attributes={"mount_id": self.id}) as profile:
+            with profile.span("render_lock"):
+                await self._render_lock.acquire()
             try:
-                receipt = await destination(candidate.view, _attachment_files(candidate.assets))
-            except deliver.DeliveryAbandoned:
-                logger.debug("mount %s was not delivered: the destination abandoned it", self.id)
-                self._rollback(candidate)
-                return deliver.Abandoned()
-            except Exception:
-                self._rollback(candidate)
-                raise
-            self._handle = receipt.handle
-            if receipt.message is not None:
-                self._note_address(receipt.message)
-            self._active = self.clock()
-            self._commit(candidate)
-            await self._settle_visible(candidate)
-            return deliver.Delivered(receipt)
+                if self._finished:
+                    profile.set_result(TraceResult(TraceOutcome.ABANDONED, presentation=PresentationOutcome.ABANDONED))
+                    return deliver.Abandoned()
+                # A render staged by `_stage_view` and never delivered is superseded, not delivered.
+                if self._pending is not None:
+                    with profile.span("supersede"):
+                        self._pending.view.stop()
+                        self._pending = None
+                # Component on_load and atomic resources settle first. Visible resources
+                # deliberately make this the pending paint and settle after it commits.
+                candidate = await self._stage_loaded(profile=profile)
+                try:
+                    destination_type = f"{type(destination).__module__}.{type(destination).__qualname__}"
+                    with profile.span("discord_write", attributes={"destination": destination_type}):
+                        receipt = await destination(candidate.presentation)
+                except deliver.DeliveryAbandoned:
+                    logger.debug("mount %s was not delivered: the destination abandoned it", self.id)
+                    with profile.span("rollback"):
+                        self._rollback(candidate)
+                    profile.set_result(TraceResult(TraceOutcome.ABANDONED, presentation=PresentationOutcome.ABANDONED))
+                    return deliver.Abandoned()
+                except Exception:
+                    with profile.span("rollback"):
+                        self._rollback(candidate)
+                    raise
+                self._handle = receipt.handle
+                if receipt.message is not None:
+                    self._note_address(receipt.message)
+                self._active = self.clock()
+                with profile.span("commit"):
+                    await self._commit_presented(candidate)
+                await self._settle_visible(candidate, profile=profile)
+                profile.set_result(TraceResult(TraceOutcome.COMPLETED, presentation=PresentationOutcome.WRITTEN))
+                return deliver.Delivered(receipt)
+            finally:
+                self._render_lock.release()
 
-    def _swap_view(self, view: MountedView) -> None:
+    def _swap_view(self, view: AnyMountedView) -> None:
         if self._view is not None and self._view is not view:
             self._view.stop()
         self._view = view
 
     async def _deliver(
-        self, candidate: _Candidate, *, through: deliver.EditHandle | None = None, files: bool = True
+        self,
+        candidate: _Candidate,
+        *,
+        through: deliver.EditHandle | None = None,
+        files: bool = True,
+        profile: OperationRecorder | None = None,
     ) -> deliver.EditHandle | None:
         """Show a staged render, through `through` when it is usable and the standing handle otherwise.
 
@@ -769,12 +1148,32 @@ class Mount:
         `files=False` leaves the message's attachments alone; a terminal disable-edit changes
         only the controls, and an empty asset set would otherwise strip them.
         """
-        attachments = _attachment_files(candidate.assets) if files else None
+        return await self._write(candidate.presentation, keep_attachments=not files, through=through, profile=profile)
+
+    async def _write(
+        self,
+        presentation: DiscordPresentation,
+        *,
+        keep_attachments: bool,
+        through: deliver.EditHandle | None,
+        profile: OperationRecorder | None = None,
+    ) -> deliver.EditHandle | None:
+        """Write one presentation through the first usable handle, and say which one that was.
+
+        `keep_attachments` leaves the message's files alone, which is what every edit that
+        changes only controls wants.
+        """
         for handle in (through, self._handle):
             if handle is None or handle.expired():
                 continue
             try:
-                await handle.write(candidate.view, attachments=attachments)
+                if profile is None:
+                    await handle.write(presentation, keep_attachments=keep_attachments)
+                else:
+                    source = "interaction" if handle is through else "standing"
+                    handle_type = f"{type(handle).__module__}.{type(handle).__qualname__}"
+                    with profile.span("discord_write", attributes={"source": source, "handle": handle_type}):
+                        await handle.write(presentation, keep_attachments=keep_attachments)
             except deliver.StaleHandleError:
                 logger.debug("mount %s discarded a stale edit handle", self.id, exc_info=True)
                 if handle is self._handle:
@@ -804,26 +1203,68 @@ class Mount:
         generation: int | None = None,
     ) -> None:
         """The funnel: finished check -> access policy -> handler -> flush."""
-        if not await self._begin_dispatch(interaction):
-            return
-        binding = self._handlers.get(key)
-        if binding is None:
-            # A click raced a re-render that removed the control; acknowledge and move on.
-            await self.flush(interaction)
-            return
-        if values is not None:
-            binding = binding.routed(tuple(values))
-            if binding is None:
-                await self._acknowledge(interaction)
-                return
-            key = binding.key
+        kind = ActionKind.PRESS if values is None else ActionKind.SELECTION
+        with self.profiler.operation(
+            OperationKind.DISPATCH,
+            name=key,
+            attributes={"kind": kind.value, "mount_id": self.id},
+        ) as operation:
+            profile = _DispatchProfile(
+                operation,
+                interaction,
+                GenerationDecision(generation, self._generation),
+                operation.start_span("acknowledgement"),
+            )
+            try:
+                if not await self._begin_dispatch(interaction, profile):
+                    return
+                with operation.span("binding"):
+                    binding = self._handlers.get(key)
+                if binding is None:
+                    # A click raced a re-render that removed the control; acknowledge and move on.
+                    profile.presentation = await self.flush(interaction, profile=profile)
+                    profile.finish(DispatchDisposition.MISSING)
+                    return
+                if values is not None:
+                    with operation.span("selection"):
+                        binding = binding.routed(tuple(values))
+                    if binding is None:
+                        await self._acknowledge(interaction, profile=profile, source="invalid_selection")
+                        profile.presentation = PresentationOutcome.ACKNOWLEDGED
+                        profile.finish(DispatchDisposition.INVALID_SELECTION)
+                        return
+                    key = binding.key
 
-        async def invoke(current: ActionBinding) -> None:
-            await self._invoke(current, key, interaction, values)
+                async def invoke(current: ActionBinding, rebased: bool, active_generation: int) -> None:
+                    await self._invoke(
+                        current,
+                        key,
+                        interaction,
+                        values,
+                        generation,
+                        active_generation,
+                        rebased,
+                        profile,
+                    )
 
-        await self._dispatch_binding(
-            binding, key, interaction, generation, invoke, rebase=lambda: self._handlers.get(key)
-        )
+                await self._dispatch_binding(
+                    binding,
+                    key,
+                    interaction,
+                    generation,
+                    invoke,
+                    profile,
+                    values=values,
+                    rebase=lambda: self._handlers.get(key),
+                )
+            except anyio.get_cancelled_exc_class():
+                profile.action = ActionOutcome.CANCELLED
+                profile.finish(DispatchDisposition.CANCELLED)
+                raise
+            except Exception as error:
+                profile.presentation = PresentationOutcome.FAILED
+                profile.finish(DispatchDisposition.DELIVERY_FAILED, error)
+                raise
 
     async def dispatch_submit(
         self,
@@ -845,23 +1286,63 @@ class Mount:
         render dropped has no newer one; both run what the reader submitted, because
         discarding a filled-in form is the worse of the two surprises.
         """
-        if not await self._begin_dispatch(interaction):
-            return
-        binding = _SubmitBinding(key, handler, policy, spec=spec)
+        with self.profiler.operation(
+            OperationKind.DISPATCH,
+            name=key,
+            attributes={"kind": ActionKind.SUBMIT.value, "mount_id": self.id},
+        ) as operation:
+            profile = _DispatchProfile(
+                operation,
+                interaction,
+                GenerationDecision(generation, self._generation),
+                operation.start_span("acknowledgement"),
+            )
+            try:
+                if not await self._begin_dispatch(interaction, profile):
+                    return
+                binding = _SubmitBinding(key, handler, policy, spec=spec)
 
-        def rebase() -> ActionBinding | None:
-            newest = self._form_bindings.get(key)
-            if newest is None or newest.spec.field_keys != spec.field_keys:
-                return binding
-            return _SubmitBinding(key, newest.on_submit, policy, spec=newest.spec)
+                def rebase() -> ActionBinding | None:
+                    newest = self._form_bindings.get(key)
+                    if newest is None or newest.spec.field_keys != spec.field_keys:
+                        return binding
+                    return _SubmitBinding(key, newest.on_submit, policy, spec=newest.spec)
 
-        async def invoke(current: ActionBinding) -> None:
-            resolved = current.spec if isinstance(current, _SubmitBinding) and current.spec is not None else spec
-            await self._invoke_submit(current, key, interaction, resolved, values, generation)
+                async def invoke(current: ActionBinding, rebased: bool, active_generation: int) -> None:
+                    resolved = (
+                        current.spec if isinstance(current, _SubmitBinding) and current.spec is not None else spec
+                    )
+                    await self._invoke_submit(
+                        current,
+                        key,
+                        interaction,
+                        resolved,
+                        values,
+                        generation,
+                        active_generation,
+                        rebased,
+                        profile,
+                    )
 
-        await self._dispatch_binding(binding, key, interaction, generation, invoke, rebase=rebase)
+                await self._dispatch_binding(
+                    binding,
+                    key,
+                    interaction,
+                    generation,
+                    invoke,
+                    profile,
+                    rebase=rebase,
+                )
+            except anyio.get_cancelled_exc_class():
+                profile.action = ActionOutcome.CANCELLED
+                profile.finish(DispatchDisposition.CANCELLED)
+                raise
+            except Exception as error:
+                profile.presentation = PresentationOutcome.FAILED
+                profile.finish(DispatchDisposition.DELIVERY_FAILED, error)
+                raise
 
-    async def _begin_dispatch(self, interaction: discord.Interaction) -> bool:
+    async def _begin_dispatch(self, interaction: discord.Interaction, profile: _DispatchProfile) -> bool:
         # A mount sent through an unwaited interaction response never saw its own message; the
         # click is where it finally learns where it lives.
         self._note_address(interaction.message)
@@ -872,20 +1353,34 @@ class Mount:
             # nobody will see again.
             text = resolve_text(self.chrome.session_ended, self.localization).content
             await deliver.respond_text(interaction, text, ephemeral=True)
+            profile.presentation = PresentationOutcome.WRITTEN
+            profile.acknowledge("mount_finished")
+            profile.finish(DispatchDisposition.MOUNT_FINISHED)
             return False
         try:
-            decision = await self.access.check(interaction)
+            with profile.operation.span(
+                "access",
+                attributes={"policy": f"{type(self.access).__module__}.{type(self.access).__qualname__}"},
+            ):
+                decision = await self.access.check(interaction)
         except Exception as error:
             await self.handle_error(interaction, error, "access")
+            profile.acknowledge("error_hook")
+            profile.finish(DispatchDisposition.ACCESS_FAILED, error)
             return False
         if isinstance(decision, Denied):
             reason = self.chrome.not_yours if decision.reason is None else decision.reason
             text = resolve_text(reason, self.localization).content
             await deliver.respond_text(interaction, text, ephemeral=True)
+            profile.presentation = PresentationOutcome.WRITTEN
+            profile.acknowledge("access_denied")
+            profile.finish(DispatchDisposition.ACCESS_DENIED)
             return False
         if not isinstance(decision, Allowed):
             error = TypeError(f"access policy returned unsupported decision {type(decision).__name__}")
             await self.handle_error(interaction, error, "access")
+            profile.acknowledge("error_hook")
+            profile.finish(DispatchDisposition.ACCESS_FAILED, error)
             return False
         self._active = self.clock()
         if self.status is not None:
@@ -893,33 +1388,107 @@ class Mount:
             self.invalidate()
         return True
 
+    def _event(self, interaction: discord.Interaction, values: list[str] | None) -> ActionEvent:
+        """The portable event one Discord interaction becomes."""
+        actor = Actor(str(interaction.user.id), getattr(interaction.user, "display_name", None))
+        responder = ActionResponder(interaction, self)
+        locale = self.localization.locale
+        if values is None:
+            return PressEvent(actor, responder, locale, {"frontend": "discord"})
+        return SelectionEvent(actor, responder, locale, {"frontend": "discord"}, tuple(values))
+
+    async def _admit(
+        self,
+        binding: ActionBinding,
+        key: str,
+        interaction: discord.Interaction,
+        values: list[str] | None,
+        profile: _DispatchProfile,
+    ) -> bool:
+        """Run this action's guard, answering the reader privately when it refuses.
+
+        The access policy has already said this reader may use the panel; the guard says
+        whether this press may run now. A denial writes nothing, bumps no generation, and
+        opens no transaction -- it costs exactly one ephemeral message.
+        """
+        guard = binding.guard
+        if guard is None:
+            return True
+        try:
+            with profile.operation.span(
+                "guard",
+                attributes={"guard": f"{type(guard).__module__}.{type(guard).__qualname__}"},
+            ):
+                verdict = await guard.admit(self._event(interaction, values), self.guards.for_action(key))
+        except Exception as error:
+            await self.handle_error(interaction, error, f"guard:{key}")
+            profile.acknowledge("error_hook")
+            profile.finish(DispatchDisposition.GUARD_FAILED, error)
+            return False
+        if verdict.allowed:
+            return True
+        reason = verdict.reason
+        if reason is None:
+            reason = (
+                self.chrome.not_now if verdict.retry_after is None else self.chrome.try_again_in(verdict.retry_after)
+            )
+        await deliver.respond_text(interaction, self._chrome_text(reason), ephemeral=True)
+        profile.presentation = PresentationOutcome.WRITTEN
+        profile.acknowledge("guard_denied")
+        profile.finish(DispatchDisposition.GUARD_DENIED)
+        return False
+
     async def _dispatch_binding(
         self,
         binding: ActionBinding,
         key: str,
         interaction: discord.Interaction,
         generation: int | None,
-        invoke: Callable[[ActionBinding], Awaitable[None]],
+        invoke: Callable[[ActionBinding, bool, int], Awaitable[None]],
+        profile: _DispatchProfile,
         *,
+        values: list[str] | None = None,
         rebase: Callable[[], ActionBinding | None] | None = None,
     ) -> None:
         if binding.policy in {ActionPolicy.IMMEDIATE, ActionPolicy.PARALLEL_READ}:
-            await invoke(binding)
+            rebased = False
+            profile.decide_generation(self._generation)
+            # No lock to be inside for these two, so admission is simply the last gate
+            # before the handler, exactly as it is under the other policies.
+            if not await self._admit(binding, key, interaction, values, profile):
+                return
+            await invoke(binding, rebased, self._generation)
             return
 
-        async with self._action_lock:
+        with profile.operation.span("action_lock"):
+            await self._action_lock.acquire()
+        try:
+            profile.decide_generation(self._generation)
             if binding.policy is ActionPolicy.EXCLUSIVE and generation not in {None, self._generation}:
-                await self._acknowledge(interaction)
+                await self._acknowledge(interaction, profile=profile, source="stale")
+                profile.presentation = PresentationOutcome.ACKNOWLEDGED
+                profile.finish(DispatchDisposition.STALE)
                 return
+            rebased = binding.policy is ActionPolicy.REBASE and generation not in {None, self._generation}
+            profile.decide_generation(self._generation, rebased=rebased)
             if binding.policy is ActionPolicy.REBASE and rebase is not None:
                 # Resolved inside the lock: outside it, "newest" is whatever happened to be
                 # committed before this action started waiting for its turn.
-                refreshed = rebase()
+                with profile.operation.span("generation"):
+                    refreshed = rebase()
                 if refreshed is None:
-                    await self._acknowledge(interaction)
+                    await self._acknowledge(interaction, profile=profile, source="stale")
+                    profile.presentation = PresentationOutcome.ACKNOWLEDGED
+                    profile.finish(DispatchDisposition.STALE)
                     return
                 binding = refreshed
-            await invoke(binding)
+            # Inside the lock, so a `when(...)` closure reads component state nobody is
+            # writing, and before the transaction, so a denial writes nothing.
+            if not await self._admit(binding, key, interaction, values, profile):
+                return
+            await invoke(binding, rebased, self._generation)
+        finally:
+            self._action_lock.release()
 
     async def _invoke(
         self,
@@ -927,15 +1496,42 @@ class Mount:
         key: str,
         interaction: discord.Interaction,
         values: list[str] | None,
+        submitted_generation: int | None,
+        active_generation: int,
+        rebased: bool,
+        profile: _DispatchProfile,
     ) -> None:
+        # One watchdog, two stages: an action carrying `Feedback` paints "working" at the
+        # threshold, and that edit *is* the acknowledgement, so the deferral below never
+        # fires for it. An action without feedback keeps the single-stage behaviour.
+        busy = None if binding.feedback is None else _BusyPaint(self, key, binding.feedback, interaction)
+
         async def watchdog() -> None:
-            await anyio.sleep(self.acknowledgement_timeout)
-            await self._acknowledge(interaction)
+            remaining = self.acknowledgement_timeout
+            if busy is not None:
+                threshold = min(self.pending_after, remaining)
+                await anyio.sleep(threshold)
+                await busy.show(profile)
+                remaining -= threshold
+            await anyio.sleep(max(0.0, remaining))
+            deferred = await self._acknowledge(interaction, profile=profile, source="watchdog")
+            if deferred:
+                profile.operation.mark_deadline_missed()
 
         with _unwrapped():
             async with anyio.create_task_group() as tasks:
                 tasks.start_soon(watchdog)
-                await self._invoke_and_flush(binding, key, interaction, values)
+                await self._invoke_and_flush(
+                    binding,
+                    key,
+                    interaction,
+                    values,
+                    submitted_generation,
+                    active_generation,
+                    rebased,
+                    profile,
+                    busy,
+                )
                 tasks.cancel_scope.cancel()
 
     async def _invoke_and_flush(
@@ -944,24 +1540,56 @@ class Mount:
         key: str,
         interaction: discord.Interaction,
         values: list[str] | None,
+        submitted_generation: int | None,
+        active_generation: int,
+        rebased: bool,
+        profile: _DispatchProfile,
+        busy: _BusyPaint | None = None,
     ) -> None:
-        actor = Actor(str(interaction.user.id), getattr(interaction.user, "display_name", None))
-        responder = ActionResponder(interaction, self)
-        locale = self.localization.locale
-        event = (
-            PressEvent(actor, responder, locale, {"frontend": "discord"})
-            if values is None
-            else SelectionEvent(actor, responder, locale, {"frontend": "discord"}, tuple(values))
+        event = self._event(interaction, values)
+        request = ActionRequest(
+            event,
+            key,
+            ActionKind.PRESS if values is None else ActionKind.SELECTION,
+            binding.policy,
+            submitted_generation,
+            active_generation,
+            rebased,
         )
-        try:
+
+        async def handle() -> None:
             context = readonly_transaction() if binding.policy is ActionPolicy.PARALLEL_READ else transaction()
             with context:
                 await binding.handler(event)
+
+        try:
+            handled = await self._run_middleware(request, handle, profile.operation)
         except Exception as error:
-            await self.handle_error(interaction, error, f"handler:{key}")
+            profile.action = ActionOutcome.FAILED
+            # Before the error hook: the failed action leaves no flush behind, so without
+            # this the panel would sit on "working" with every control dead.
+            restore = binding.feedback is not None and binding.feedback.restore_on_error
+            if busy is not None and await busy.close() and restore:
+                await busy.restore()
+            await self.handle_error(interaction, error, f"action:{key}")
+            profile.acknowledge("error_hook")
+            profile.finish(DispatchDisposition.ACTION_FAILED, error)
             return
+        profile.action = ActionOutcome.HANDLED if handled else ActionOutcome.SHORT_CIRCUITED
+        profile.acknowledge("action")
         self._renew(interaction)
-        await self.flush(interaction)
+        painted = busy is not None and await busy.close()
+        try:
+            profile.presentation = await self.flush(interaction, profile=profile)
+        except Exception as error:
+            profile.presentation = PresentationOutcome.FAILED
+            profile.finish(DispatchDisposition.DELIVERY_FAILED, error)
+            raise
+        # An action that changed nothing flushes nothing, and a stranded "working" panel is
+        # not a policy choice -- so this restore ignores `restore_on_error`.
+        if painted and busy is not None and profile.presentation is not PresentationOutcome.WRITTEN:
+            await busy.restore()
+        profile.finish(DispatchDisposition.COMPLETED)
 
     async def _invoke_submit(
         self,
@@ -971,15 +1599,30 @@ class Mount:
         spec: FormSpec,
         values: Mapping[str, object],
         generation: int | None,
+        active_generation: int,
+        rebased: bool,
+        profile: _DispatchProfile,
     ) -> None:
         async def watchdog() -> None:
             await anyio.sleep(self.acknowledgement_timeout)
-            await self._acknowledge(interaction)
+            deferred = await self._acknowledge(interaction, profile=profile, source="watchdog")
+            if deferred:
+                profile.operation.mark_deadline_missed()
 
         with _unwrapped():
             async with anyio.create_task_group() as tasks:
                 tasks.start_soon(watchdog)
-                await self._invoke_submit_and_flush(binding, key, interaction, spec, values, generation)
+                await self._invoke_submit_and_flush(
+                    binding,
+                    key,
+                    interaction,
+                    spec,
+                    values,
+                    generation,
+                    active_generation,
+                    rebased,
+                    profile,
+                )
                 tasks.cancel_scope.cancel()
 
     async def _invoke_submit_and_flush(
@@ -990,9 +1633,13 @@ class Mount:
         spec: FormSpec,
         values: Mapping[str, object],
         generation: int | None,
+        active_generation: int,
+        rebased: bool,
+        profile: _DispatchProfile,
     ) -> None:
         try:
-            evaluation = await spec.evaluate(values)
+            with profile.operation.span("form_evaluation"):
+                evaluation = await spec.evaluate(values)
             actor = Actor(str(interaction.user.id), getattr(interaction.user, "display_name", None))
             responder = ActionResponder(interaction, self)
             event = SubmitEvent(
@@ -1014,50 +1661,175 @@ class Mount:
                     generation=self._generation if generation is None else generation,
                     actor_id=interaction.user.id,
                 )
-            else:
+                profile.presentation = PresentationOutcome.WRITTEN
+                profile.acknowledge("validation_retry")
+                profile.finish(DispatchDisposition.VALIDATION_RETRY)
+                return
+            request = ActionRequest(
+                event,
+                key,
+                ActionKind.SUBMIT,
+                binding.policy,
+                generation,
+                active_generation,
+                rebased,
+            )
+
+            async def handle() -> None:
                 context = readonly_transaction() if binding.policy is ActionPolicy.PARALLEL_READ else transaction()
                 with context:
                     await binding.handler(event)
-        except Exception as error:
-            await self.handle_error(interaction, error, f"form:{key}")
-            return
-        self._renew(interaction)
-        await self.flush(interaction)
 
-    async def _acknowledge(self, interaction: discord.Interaction) -> None:
+            handled = await self._run_middleware(request, handle, profile.operation)
+            profile.action = ActionOutcome.HANDLED if handled else ActionOutcome.SHORT_CIRCUITED
+        except Exception as error:
+            profile.action = ActionOutcome.FAILED
+            await self.handle_error(interaction, error, f"form:{key}")
+            profile.acknowledge("error_hook")
+            profile.finish(DispatchDisposition.ACTION_FAILED, error)
+            return
+        profile.acknowledge("action")
+        self._renew(interaction)
+        try:
+            profile.presentation = await self.flush(interaction, profile=profile)
+        except Exception as error:
+            profile.presentation = PresentationOutcome.FAILED
+            profile.finish(DispatchDisposition.DELIVERY_FAILED, error)
+            raise
+        profile.finish(DispatchDisposition.COMPLETED)
+
+    async def _run_middleware(
+        self,
+        request: ActionRequest,
+        endpoint: ActionProceed,
+        operation: OperationRecorder,
+    ) -> bool:
+        """Compose the frozen mount middleware in first-listed, outermost order."""
+
+        handled = False
+
+        async def invoke(index: int) -> None:
+            nonlocal handled
+            if index == len(self._middleware):
+                handled = True
+                with operation.span("handler"):
+                    await endpoint()
+                return
+
+            active = True
+            called = False
+
+            async def proceed() -> None:
+                nonlocal called
+                if not active:
+                    message = "action middleware proceed() is only valid during dispatch()"
+                    raise RuntimeError(message)
+                if called:
+                    message = "action middleware proceed() may only be called once"
+                    raise RuntimeError(message)
+                called = True
+                await invoke(index + 1)
+
+            try:
+                middleware = self._middleware[index]
+                provenance = f"{type(middleware).__module__}.{type(middleware).__qualname__}"
+                with operation.span(f"middleware:{provenance}"):
+                    await middleware.dispatch(request, proceed)
+            finally:
+                active = False
+
+        await invoke(0)
+        return handled
+
+    async def _acknowledge(
+        self,
+        interaction: discord.Interaction,
+        *,
+        profile: _DispatchProfile | None = None,
+        source: str = "framework",
+    ) -> bool:
+        deferred = False
         if not interaction.response.is_done():
             await interaction.response.defer()
+            deferred = True
+        if profile is not None:
+            profile.acknowledge(source if deferred else "action")
+        return deferred
 
-    async def flush(self, interaction: discord.Interaction) -> None:
+    async def flush(
+        self,
+        interaction: discord.Interaction,
+        *,
+        profile: _DispatchProfile | None = None,
+    ) -> PresentationOutcome:
         """Apply pending state changes as an interaction edit, or just acknowledge."""
+        if profile is not None:
+            with profile.operation.span("flush"):
+                return await self._flush(interaction, profile.operation, dispatch=profile)
+        with self.profiler.operation(
+            OperationKind.DELIVERY, name="flush", attributes={"mount_id": self.id}
+        ) as operation:
+            try:
+                presentation = await self._flush(interaction, operation)
+            except Exception:
+                operation.set_result(TraceResult(TraceOutcome.FAILED, presentation=PresentationOutcome.FAILED))
+                raise
+            outcome = (
+                TraceOutcome.ABANDONED if presentation is PresentationOutcome.ABANDONED else TraceOutcome.COMPLETED
+            )
+            operation.set_result(TraceResult(outcome, presentation=presentation))
+            return presentation
+
+    async def _flush(
+        self,
+        interaction: discord.Interaction,
+        operation: OperationRecorder,
+        *,
+        dispatch: _DispatchProfile | None = None,
+    ) -> PresentationOutcome:
         acknowledge = False
-        async with self._render_lock:
+        presentation = PresentationOutcome.NO_CHANGE
+        with operation.span("render_lock"):
+            await self._render_lock.acquire()
+        try:
             if self._finished:
-                return
+                return PresentationOutcome.ABANDONED
             if not self._dirty:
                 acknowledge = True
             else:
                 # A component cannot enter the tree without a state write, so a click that
                 # changed nothing never reaches this at all.
-                candidate = await self._stage_loaded()
+                candidate = await self._stage_loaded(profile=operation)
                 source = deliver.handle_from(interaction)
                 try:
-                    wrote = await self._deliver(candidate, through=source)
+                    wrote = await self._deliver(candidate, through=source, profile=operation)
                 except Exception:
-                    self._rollback(candidate)
+                    with operation.span("rollback"):
+                        self._rollback(candidate)
                     raise
                 if wrote is None:
-                    self._rollback(candidate)
+                    with operation.span("rollback"):
+                        self._rollback(candidate)
                     acknowledge = True
+                    presentation = PresentationOutcome.ABANDONED
                 else:
-                    self._commit(candidate)
-                    await self._settle_visible(candidate, through=source)
+                    with operation.span("commit"):
+                        await self._commit_presented(candidate)
+                    await self._settle_visible(candidate, through=source, profile=operation)
+                    presentation = PresentationOutcome.WRITTEN
+                    if dispatch is not None and wrote is source:
+                        dispatch.acknowledge("interaction_write")
                     # Only the interaction's own handle answers the click by editing through
                     # it. Delivery through the standing handle leaves the click unanswered,
                     # and Discord shows the user "This interaction failed" three seconds later.
                     acknowledge = wrote is not source
+        finally:
+            self._render_lock.release()
         if acknowledge:
-            await self._acknowledge(interaction)
+            await self._acknowledge(interaction, profile=dispatch, source="flush")
+            if presentation is PresentationOutcome.NO_CHANGE:
+                presentation = PresentationOutcome.ACKNOWLEDGED
+        return presentation
 
     async def finish_via(self, interaction: discord.Interaction) -> None:
         """Finish through an interaction edit — the shape a Close button wants."""
@@ -1106,27 +1878,48 @@ class Mount:
             return
         await self.refresh_now()
 
-    async def refresh_now(self) -> None:
-        async with self._render_lock:
-            if self._finished:
-                return
-            if self._handle is None or self._handle.expired():
-                self._dirty = True
-                return
-            candidate = await self._stage_loaded()
+    async def refresh_now(self, *, links: Sequence[TraceLink] = ()) -> None:
+        component = type(self.component)
+        name = f"{component.__module__}.{component.__qualname__}"
+        with self.profiler.operation(
+            OperationKind.REFRESH, name=name, attributes={"mount_id": self.id}, links=links
+        ) as profile:
+            with profile.span("render_lock"):
+                await self._render_lock.acquire()
             try:
-                delivered = await self._deliver(candidate) is not None
-            except Exception:
-                self._rollback(candidate)
-                raise
-            if not delivered:
-                # `_rollback` leaves the mount dirty, so the next interaction shows this render.
-                # `refresh` has always promised the next opportunity rather than this instant.
-                self._rollback(candidate)
-                logger.debug("mount %s has no live edit handle; render deferred", self.id)
-                return
-            self._commit(candidate)
-            await self._settle_visible(candidate)
+                if self._finished:
+                    profile.set_result(TraceResult(TraceOutcome.ABANDONED, presentation=PresentationOutcome.ABANDONED))
+                    return
+                if self._handle is None or self._handle.expired():
+                    self._dirty = True
+                    profile.set_result(TraceResult(TraceOutcome.ABANDONED, presentation=PresentationOutcome.ABANDONED))
+                    return
+                candidate = await self._stage_loaded(profile=profile)
+                try:
+                    delivered = await self._deliver(candidate, profile=profile) is not None
+                except Exception:
+                    with profile.span("rollback"):
+                        self._rollback(candidate)
+                    profile.set_result(TraceResult(TraceOutcome.FAILED, presentation=PresentationOutcome.FAILED))
+                    raise
+                if not delivered:
+                    # `_rollback` leaves the mount dirty, so the next interaction shows this render.
+                    # `refresh` has always promised the next opportunity rather than this instant.
+                    with profile.span("rollback"):
+                        self._rollback(candidate)
+                    logger.debug("mount %s has no live edit handle; render deferred", self.id)
+                    profile.set_result(TraceResult(TraceOutcome.ABANDONED, presentation=PresentationOutcome.ABANDONED))
+                    return
+                with profile.span("commit"):
+                    await self._commit_presented(candidate)
+                await self._settle_visible(candidate, profile=profile)
+                profile.set_result(TraceResult(TraceOutcome.COMPLETED, presentation=PresentationOutcome.WRITTEN))
+            finally:
+                self._render_lock.release()
+
+    def on_presented(self, callback: PresentedHook) -> None:
+        """Observe future generations after Discord delivery and local commit both succeed."""
+        self._presented_hooks.append(callback)
 
     def on_finish(self, callback: FinishHook) -> None:
         """Call `callback` once this mount has finished, after its teardown.
@@ -1204,35 +1997,9 @@ class Mount:
         logger.error("unhandled component error in %s", source, exc_info=error)
 
 
-def _attachment_files(assets: Sequence[Asset]) -> list[discord.File]:
-    files: list[discord.File] = []
-    for asset in assets:
-        if not isinstance(asset.source, InlineAsset):
-            message = f"Discord mount needs a host resolver for stored asset {asset.key!r}"
-            raise TypeError(message)
-        files.append(discord.File(io.BytesIO(asset.source.data), filename=asset.name))
-    return files
-
-
-def _linked_file_assets(nodes: Sequence[SceneNode], resources: Mapping[str, object]) -> frozenset[str]:
-    linked: set[str] = set()
-    for node in nodes:
-        if isinstance(node, ScenePanel):
-            linked.update(_linked_file_assets(node.children, resources))
-            continue
-        if not isinstance(node, SceneFile):
-            continue
-        resource = resources.get(f"asset:{node.asset_key}")
-        if not isinstance(resource, Asset) or not isinstance(resource.source, StoredAsset):
-            continue
-        parsed = urlsplit(resource.source.reference)
-        if parsed.scheme in {"http", "https"} and parsed.netloc:
-            linked.add(node.asset_key)
-    return frozenset(linked)
-
-
-def _disable_all(view: discord.ui.LayoutView) -> None:
-    for item in view.walk_children():
+def _disable_all(view: discord.ui.LayoutView | discord.ui.View) -> None:
+    children = view.walk_children() if isinstance(view, discord.ui.LayoutView) else view.children
+    for item in children:
         target = item.item if isinstance(item, discord.ui.DynamicItem) else item
         if isinstance(target, discord.ui.Button | discord.ui.Select) or hasattr(target, "disabled"):
             target.disabled = True  # pyrefly: ignore  # guarded by hasattr

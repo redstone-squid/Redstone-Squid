@@ -3,6 +3,7 @@
 import base64
 import json
 from collections.abc import Callable
+from datetime import datetime
 from html import escape
 from urllib.parse import urlsplit
 
@@ -13,6 +14,7 @@ from squid_layouts.scene.model import (
     PlanResult,
     SceneAsset,
     SceneButton,
+    SceneComponentsV2,
     SceneDocument,
     SceneExtension,
     SceneFile,
@@ -29,7 +31,9 @@ from squid_layouts.scene.model import (
     SceneText,
     SceneThumbnail,
     SceneTime,
+    SceneZonedTime,
 )
+from squid_layouts.temporal import ZonedDateTime
 
 PREVIEW_CSS = """
 .squid-view{box-sizing:border-box;max-width:720px;padding:16px;border-radius:8px;background:#313338;color:#dbdee1;
@@ -80,6 +84,11 @@ class Renderer:
         if scene.target != "discord.components-v2" or scene.target_version != 1:
             message = f"Renderer cannot preview target {scene.target!r} version {scene.target_version}"
             raise DrawInvariantError(message)
+        if not isinstance(scene.body, SceneComponentsV2):
+            # Explicit rather than duck-typed: this preview draws a component tree, and a
+            # classic message is content and embeds with no tree to walk.
+            message = f"HTML preview cannot draw a {type(scene.body).__name__} body"
+            raise DrawInvariantError(message)
         pager_data = json.dumps(
             [{"key": pager.key, "page": pager.page, "pages": pager.pages} for pager in scene.pagers],
             separators=(",", ":"),
@@ -102,7 +111,7 @@ class Renderer:
                 return _url(resource.source.reference)
             return None
 
-        body = "".join(self._node(child, resolve_file) for child in scene.children)
+        body = "".join(self._node(child, resolve_file) for child in scene.body.children)
         root = (
             f'<div class="squid-view" data-squid-protocol="{scene.protocol}" '
             f'data-squid-target="{_attribute(scene.target)}" data-squid-pagers="{_attribute(pager_data)}">{body}</div>'
@@ -127,6 +136,13 @@ class Renderer:
                     f'<div class="squid-text">{escape(prefix or "")}'
                     f'<time datetime="{_attribute(instant)}" data-squid-style="{_attribute(style)}">'
                     f"{escape(instant)}</time></div>"
+                )
+            case SceneZonedTime(instant=instant, timezone=timezone, prefix=prefix):
+                value = ZonedDateTime(datetime.fromisoformat(instant), timezone)
+                return (
+                    f'<div class="squid-text">{escape(prefix or "")}'
+                    f'<time datetime="{_attribute(instant)}" data-squid-timezone="{_attribute(timezone)}">'
+                    f"{escape(value.isoformat())}</time></div>"
                 )
             case SceneFile(name=name):
                 resolved = resolve_file(node)
