@@ -2,7 +2,7 @@
 
 import contextlib
 import logging
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, cast, override
 
 import discord
 from discord import app_commands
@@ -10,18 +10,20 @@ from discord.ext.commands import Cog
 
 import squid_ui_discord as sd
 from squid.accounts.domain import IdentityProvider
+from squid.bot._types import GuildMessageable
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.operations import run_command_operation
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
 from squid.bot.ui import error_node, info_node, render_payload, text_node
 from squid.bot.voting.actors import describe_rejection, resolve_actor
-from squid.bot.voting.poll_wizard import present_poll_form
+from squid.bot.voting.poll_wizard import PollDraft, PollScreen
 from squid.bot.voting.publisher import DiscordPollPublisher
 from squid.bot.voting.sessions import start_delete_log_vote
 from squid.core.i18n import _
 from squid.runtime import JobHandle
-from squid.voting.domain import VoteActor, VoteKind, VoteRejection
+from squid.voting.domain import PollScope, VoteActor, VoteKind, VoteOption, VoteRejection
+from squid.voting.errors import InvalidVoteConfigurationError
 from squid_ui_discord import send_to
 
 if TYPE_CHECKING:
@@ -211,7 +213,32 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         allow_network = isinstance(interaction.user, discord.Member) and await self.publisher.may_create_network(
             interaction.user
         )
-        await present_poll_form(interaction, self.publisher, account.id, allow_network=allow_network)
+        guild = interaction.guild
+        channel = interaction.channel
+        if guild is None or channel is None:
+            return
+
+        async def resolve_options(lines: tuple[str, ...]) -> tuple[VoteOption, ...]:
+            return await self.publisher.resolve_options(guild.id, lines)
+
+        async def publish(draft: PollDraft, options: tuple[VoteOption, ...]) -> str:
+            if draft.scope is PollScope.NETWORK and not (
+                isinstance(interaction.user, discord.Member)
+                and await self.publisher.may_create_network(interaction.user)
+            ):
+                raise InvalidVoteConfigurationError(_("You may no longer publish a poll to every server."))
+            message = await self.publisher.create_and_publish(
+                author_account_id=account.id,
+                channel=cast(GuildMessageable, channel),
+                question=draft.question,
+                visibility=draft.visibility,
+                duration_seconds=draft.duration_seconds,
+                options=options,
+                scope=draft.scope,
+            )
+            return message.jump_url
+
+        await PollScreen(resolve_options, publish, allow_network=allow_network).show(interaction)
 
     async def delete_vote_context_menu(self, interaction: discord.Interaction[BotT], message: discord.Message) -> None:
         """Open a vote on deleting the message that was right-clicked.
