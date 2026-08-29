@@ -48,6 +48,7 @@ from squid_ui_discord import (
     target,
     targets,
     testing,
+    v2,
 )
 from squid_ui_discord import (
     modal as modals,
@@ -246,17 +247,17 @@ __all__ = [
     "RolesUpdated",
     "ScopeKind",
     "Screen",
-    "SharedGuildSessionScreen",
     "SessionKey",
     "SessionManager",
     "SessionOptions",
     "SessionOptionsResolver",
     "SessionSpec",
+    "SharedGuildSessionScreen",
     "StackNavigator",
     "SuccessRenderer",
-    "Users",
     "UserGuildSessionScreen",
     "UserSessionScreen",
+    "Users",
     "Visibility",
     "Work",
     "access",
@@ -314,4 +315,5 @@ __all__ = [
     "target",
     "targets",
     "testing",
+    "v2",
 ]

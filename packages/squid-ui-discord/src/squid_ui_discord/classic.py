@@ -9,7 +9,8 @@ target exists to avoid.
 import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Unpack
+from datetime import datetime
+from typing import Any, Literal, Unpack, cast
 
 import discord
 
@@ -25,13 +26,44 @@ from squid_ui.planning.limits import CLASSIC_LIMITS, Axis, ClassicLimits
 from squid_ui.planning.planner import EMPTY_RESERVATION
 from squid_ui.planning.request import PlanOptions, PlanRequest, StaticPlanOptions
 from squid_ui.planning.target import ResourceCost
+from squid_ui.primitives.constraints import Never, Overflow
+from squid_ui.primitives.nodes import (
+    Card,
+    CardAuthor,
+    CardField,
+    CardFooter,
+    CardMedia,
+    CardText,
+    Content,
+    Node,
+    Text,
+)
+from squid_ui.primitives.styles import Color
 from squid_ui.profiling import OperationRecorder
 from squid_ui.runtime.component import Component
 from squid_ui.scene.model import PlanReport, PlanResult
 from squid_ui.sources import Position
-from squid_ui.target_types import ClassicTarget, DiscordPyAdapter
-from squid_ui.text import NEUTRAL, Localization
+from squid_ui.target_types import ClassicTarget, DiscordPyAdapter, Renderable
+from squid_ui.temporal import ZonedDateTime
+from squid_ui.text import NEUTRAL, Localization, TextLike
 from squid_ui_discord._draw import plan_and_draw
+from squid_ui_discord._exact_factories import (
+    button,
+    code,
+    controls,
+    entity_select,
+    footer,
+    heading,
+    lines,
+    link_button,
+    option,
+    premium_button,
+    routed_button,
+    routed_select,
+    row,
+    select,
+    text,
+)
 from squid_ui_discord.adapter import require_discord_py_target
 from squid_ui_discord.attachments import files_for
 from squid_ui_discord.classic_renderer import ClassicRenderer, Wire
@@ -49,6 +81,60 @@ from squid_ui_discord.rendering import RenderedMessage
 from squid_ui_discord.target import DISCORD_V1_DPY27, Target
 
 logger = logging.getLogger(__name__)
+
+type Child = Renderable[ClassicTarget] | TextLike | None | Literal[False]
+
+
+def content(value: TextLike, *, overflow: Overflow | None = None, priority: int = 0) -> Content:
+    """Build the exact classic message content field."""
+    return Content(value, overflow=Never() if overflow is None else overflow, priority=priority)
+
+
+def card_field(name: CardText, value: CardText, *, inline: bool = False) -> CardField:
+    """Build one exact classic card field."""
+    return CardField(name, value, inline)
+
+
+def card_author(name: CardText, *, url: str | None = None, icon_url: str | None = None) -> CardAuthor:
+    """Build exact classic card author metadata."""
+    return CardAuthor(name, url, icon_url)
+
+
+def card_footer(value: CardText, *, icon_url: str | None = None) -> CardFooter:
+    """Build exact classic card footer metadata."""
+    return CardFooter(value, icon_url)
+
+
+def card_media(url: str, *, description: TextLike | None = None) -> CardMedia:
+    """Build exact classic card image or thumbnail metadata."""
+    return CardMedia(url, description)
+
+
+def card(
+    *children: Child,
+    title: CardText | None = None,
+    url: str | None = None,
+    fields: tuple[CardField, ...] = (),
+    footer: CardFooter | None = None,
+    author: CardAuthor | None = None,
+    accent: Color | None = None,
+    image: CardMedia | None = None,
+    thumbnail: CardMedia | None = None,
+    timestamp: ZonedDateTime | datetime | None = None,
+) -> Card:
+    """Build an exact classic embed with normalized description children."""
+    normalized: list[Node] = []
+    for index, child in enumerate(children):
+        if child is None or child is False:
+            continue
+        if child is True:
+            message = f"card argument {index}: True is not content"
+            raise TypeError(message)
+        if isinstance(child, Renderable):
+            normalized.append(cast(Node, child))
+        else:
+            normalized.append(Text(child))
+    return Card(tuple(normalized), title, url, fields, footer, author, accent, image, thumbnail, timestamp)
 
 
 def render_message(
@@ -323,8 +409,29 @@ __all__ = [
     "CLASSIC_LIMITS",
     "AttachedClassicContribution",
     "ClassicRenderer",
+    "button",
+    "card",
+    "card_author",
+    "card_field",
+    "card_footer",
+    "card_media",
+    "code",
+    "content",
     "contribute",
+    "controls",
+    "entity_select",
+    "footer",
+    "heading",
+    "lines",
+    "link_button",
     "measure_host",
+    "option",
+    "premium_button",
     "render_message",
     "render_static",
+    "routed_button",
+    "routed_select",
+    "row",
+    "select",
+    "text",
 ]
