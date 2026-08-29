@@ -1,9 +1,8 @@
 """Shared fakes and test configuration for HTTP API transport tests."""
 
 import uuid
-from types import SimpleNamespace
+from dataclasses import dataclass
 from typing import cast
-from unittest.mock import AsyncMock
 from uuid import UUID
 
 from fastapi import FastAPI
@@ -307,6 +306,41 @@ class MockPermissionEpoch:
         return None
 
 
+@dataclass(slots=True)
+class FakeApiServiceGraph:
+    """The complete API service graph with transport-test collaborators."""
+
+    api_keys: object | None
+    web_auth: object | None
+    cli_authorization: object
+    idempotency: object
+    notifications: object
+    builds: object
+    accounts: object
+    build_queries: object
+    permissions: object
+    permission_epoch: object
+    search: object
+    suggestions: object
+    tags: object
+    versions: object
+    schematics: object
+    votes: object
+    vote_members: object | None
+    records: object
+    submission_forms: object
+    submission_drafts: object
+    submission_finalization: object
+    media_jobs: object
+    minecraft_installations: object
+    minecraft_player_authorization: object
+    error_reports: object
+
+
+async def keep_database_active() -> None:
+    """Represent a healthy database keepalive without a mock call boundary."""
+
+
 def build_app(
     *,
     web_auth: object | None = None,
@@ -320,13 +354,13 @@ def build_app(
     database = MockDatabaseManager()
     services = cast(
         ApiServices,
-        SimpleNamespace(
+        FakeApiServiceGraph(
             api_keys=None,
             web_auth=web_auth,
             cli_authorization=cli_authorization or MockCliAuthorization(),
             idempotency=idempotency or MockIdempotency(),
             notifications=MockNotifications(),
-            builds=SimpleNamespace(),
+            builds=object(),
             accounts=accounts or MockAccountManager(),
             build_queries=MockBuildQueries(),
             permissions=MockPermissions(),
@@ -342,13 +376,13 @@ def build_app(
             vote_members=None,
             records=MockRecords(),
             submission_forms=MockSubmissionForms(),
-            submission_drafts=SimpleNamespace(),
-            submission_finalization=SimpleNamespace(),
+            submission_drafts=object(),
+            submission_finalization=object(),
             media_jobs=MockMediaJobs(),
             minecraft_installations=MockMinecraftInstallations(),
             minecraft_player_authorization=MockMinecraftPlayerAuthorization(),
             error_reports=error_reports or MockErrorReports(),
         ),
     )
-    runtime = ApplicationRuntime(services, database.close, AsyncMock())
+    runtime = ApplicationRuntime(services, database.close, keep_database_active)
     return create_api_app(lambda _config: runtime, config=config), database
