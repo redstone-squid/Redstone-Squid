@@ -1,13 +1,15 @@
 """Browser-session service tests, over Discord and over a second provider alike."""
 
-from unittest.mock import AsyncMock
+from dataclasses import dataclass, field
+from typing import override
 
 import httpx
 import pytest
 from pydantic import AnyHttpUrl, SecretStr
 from whenever import Instant
 
-from squid.accounts.domain import IdentityProvider
+from squid.accounts.application import AccountService
+from squid.accounts.domain import Account, AccountConsent, IdentityProvider
 from squid.auth.application.providers import DiscordOAuthProvider, OAuthProvider
 from squid.auth.application.web import WebSessionService
 from squid.config import OAuthClientCredentials, OAuthConfig, UpstreamHttpConfig
@@ -15,6 +17,20 @@ from squid.core.errors import AuthenticationError, NotFoundError
 from tests.unit.auth.application.fakes import FakeXboxOAuthProvider, SessionRepository
 
 NOW = Instant.from_utc(2026, 8, 5)
+
+
+@dataclass(slots=True)
+class AccountServiceRecorder(AccountService):
+    account_id: int = 42
+    identities: list[tuple[IdentityProvider, str]] = field(default_factory=list)
+
+    @override
+    async def get_or_create_identity(
+        self, provider: IdentityProvider, subject: str, *, consent: AccountConsent | None = None
+    ) -> Account:
+        del consent
+        self.identities.append((provider, subject))
+        return Account(id=self.account_id)
 
 
 def credentials() -> OAuthClientCredentials:
@@ -40,11 +56,9 @@ def discord_provider(
 
 
 def service(repository: SessionRepository, *providers: OAuthProvider) -> WebSessionService:
-    accounts = AsyncMock()
-    accounts.get_or_create_identity.return_value.id = 42
     return WebSessionService(
         repository,
-        accounts,
+        AccountServiceRecorder(),
         {provider.slug: provider for provider in providers},
         336,
         "session-pepper-for-tests",
@@ -108,8 +122,7 @@ async def test_a_second_provider_logs_in_and_lands_its_own_identity_namespace() 
     """
     repository = SessionRepository()
     fake = FakeXboxOAuthProvider()
-    accounts = AsyncMock()
-    accounts.get_or_create_identity.return_value.id = 7
+    accounts = AccountServiceRecorder(account_id=7)
     web = WebSessionService(repository, accounts, {fake.slug: fake}, 336, "session-pepper-for-tests", now=lambda: NOW)
 
     authorize_url = await web.authorize_url("bedrock", "/account")
@@ -120,7 +133,7 @@ async def test_a_second_provider_logs_in_and_lands_its_own_identity_namespace() 
 
     token, redirect_to = await web.callback("bedrock", "code", repository.state.state, user_agent=None)
 
-    accounts.get_or_create_identity.assert_awaited_once_with(IdentityProvider.BEDROCK, "2535465049322445")
+    assert accounts.identities == [(IdentityProvider.BEDROCK, "2535465049322445")]
     assert fake.exchanges == [("code", minted_verifier)]
     assert redirect_to == "/account"
     assert repository.account_id == 7
@@ -165,6 +178,6 @@ def test_partial_credentials_are_rejected_rather_than_silently_disabling_login()
 
 
 def test_a_deployment_with_no_providers_reports_itself_unconfigured() -> None:
-    web = WebSessionService(SessionRepository(), AsyncMock(), {}, 336, "pepper", now=lambda: NOW)
+    web = WebSessionService(SessionRepository(), AccountServiceRecorder(), {}, 336, "pepper", now=lambda: NOW)
 
     assert web.configured is False
