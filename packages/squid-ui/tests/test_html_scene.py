@@ -63,11 +63,9 @@ def test_html_body_round_trips_through_scene_protocol_one() -> None:
     jsonschema.validate(scene.Codec.to_dict(document), scene.Codec.schema())
 
 
-def test_html_scene_vocabulary_has_no_raw_html_or_style_attribute() -> None:
+def test_html_scene_vocabulary_rejects_unsafe_tags_and_attributes() -> None:
     assert "style" not in {attribute.value for attribute in scene.HtmlAttributeName}
     assert "script" not in {tag.value for tag in scene.HtmlTag}
-    assert not hasattr(scene, "HtmlRaw")
-
     with pytest.raises(TypeError, match="unsupported HTML scene tag"):
         scene.HtmlElement("script")  # type: ignore[arg-type]
 

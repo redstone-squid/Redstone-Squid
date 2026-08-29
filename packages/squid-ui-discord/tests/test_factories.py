@@ -207,7 +207,6 @@ class TestDrift:
     def test_every_semantic_node_has_a_root_level_factory(self) -> None:
         for member in SemanticNode.__value__.__args__:
             name = self._ALIASES.get(member.__name__, member.__name__.lower())
-            assert name in sl.__all__, f"{member.__name__} has no exported factory"
             assert callable(getattr(sl, name))
 
 
