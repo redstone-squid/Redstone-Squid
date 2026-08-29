@@ -6,8 +6,7 @@ validates that the *parameter* exists. This walks the real command tree and chec
 """
 
 import importlib
-from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from discord import app_commands
@@ -34,7 +33,7 @@ COMMAND_MODULES = [
 
 
 def discord_registry() -> SuggestionRegistry:
-    stub: Any = SimpleNamespace()
+    stub = cast(Any, object())
     return build_registry(
         repository=stub,
         search=stub,
