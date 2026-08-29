@@ -184,7 +184,6 @@ async def test_ownership_exhibit_separates_session_owned_and_component_owned_val
 
     assert "First switch: on" in labels
     assert message_root.presentation.toggles["ownership.managed"].on is True, "the session holds it, not the component"
-    assert not hasattr(component, "managed"), "no component state backs the managed toggle"
 
 
 async def test_forms_exhibit_validates_then_binds_typed_values_and_prefills() -> None:

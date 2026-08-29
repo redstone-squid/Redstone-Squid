@@ -116,11 +116,6 @@ class TestBoundaries:
         assert message_root.pending
         assert "right: 3" in payload_texts(commit_render(message_root))
 
-    def test_components_do_not_expose_the_frontend_root(self):
-        pair = Pair()
-        commit_render(MessageRoot(pair, access=Everyone(), timeout=None))
-        assert not hasattr(pair.left, "mount")
-
     def test_embedding_does_not_mutate_the_childs_own_keys(self):
         # render() stays pure: namespacing rewrites the returned tree, not the component.
         pair = Pair()

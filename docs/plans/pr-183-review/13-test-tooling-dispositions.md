@@ -16,7 +16,7 @@ CodeQL's two bot comments on `tests/` are out of scope: they are not review comm
 
 | # | File | Comment | Disposition |
 |---|---|---|---|
-| 3766216496 | `unit/bot/test_command_taxonomy.py` | "bad test tbh" (`EXPECTED_PREFIX_COMMAND_TREE`) | **Retained.** The command surface is a public interface and both directions of drift are otherwise silent. Rationale recorded on the constant and the test. |
+| 3766216496 | `unit/bot/test_command_taxonomy.py` | "bad test tbh" (`EXPECTED_PREFIX_COMMAND_TREE`) | **Superseded and deleted.** The workspace audit applies its consumer-behaviour rule consistently: permission, picker visibility, option ordering, and real slash-command discovery remain covered without restating the complete prefix tree. |
 | 3766220759 | `unit/persistence/test_timestamp_models.py` | "obviously this will pass, and failures are always boring" | **Fixed.** The hand-maintained list of 21 columns became a sweep of `Base.registry`, which fails for any column mapped to a bare `datetime`, including ones added after this. |
 | 3766332672 | `architecture/test_import_surfaces.py` | "duplicating the nucleation test a stupid amount of times" | **Already fixed**, then improved. The cases were parameterised before this plan; the failure output was not, so a leak reported only a non-zero exit code. The child now reports which module leaked. |
 | 3766500676 | `unit/bot/test_components_v2_ui.py` | "bad asseerts tbh" | **Fixed.** `[17, 1, 1, 1]` became named `discord.ComponentType` members, and the bare button count became a label comparison. |
