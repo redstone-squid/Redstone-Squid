@@ -133,9 +133,11 @@ class TagsScreen(sd.Screen):
             label=lambda tag: tag.display_name,
             summary=_tag_summary,
             detail=(
-                lambda tag: _ModerationActions(tag, ("archive",), self._request_moderation)
-                if TAG_PROPOSAL_ARCHIVE in self._capabilities
-                else _tag_fields(tag)
+                lambda tag: (
+                    _ModerationActions(tag, ("archive",), self._request_moderation)
+                    if TAG_PROPOSAL_ARCHIVE in self._capabilities
+                    else _tag_fields(tag)
+                )
             ),
             page_size=15,
             title=L(t"Published build tags"),
@@ -157,9 +159,9 @@ class TagsScreen(sd.Screen):
                 identity=lambda tag: str(tag.id),
                 label=lambda tag: tag.display_name,
                 summary=_tag_summary,
-                detail=lambda tag: _ModerationActions(tag, actions, self._request_moderation)
-                if actions
-                else _tag_fields(tag),
+                detail=lambda tag: (
+                    _ModerationActions(tag, actions, self._request_moderation) if actions else _tag_fields(tag)
+                ),
                 page_size=15,
                 title=L(t"Tag proposals awaiting review"),
                 empty=L(t"No tag proposals are awaiting review."),
@@ -197,13 +199,9 @@ class TagsScreen(sd.Screen):
 
     def _contribution_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self._actor_account_id is None:
-            return (
-                sl.note(L(t"Link and consent an account in `/account` before proposing or applying tags.")),
-            )
+            return (sl.note(L(t"Link and consent an account in `/account` before proposing or applying tags.")),)
         build_field: tuple[sl.forms.FormField[Any] | sl.forms.FormText, ...] = (
-            ()
-            if self._build_id is not None
-            else (sl.forms.IntField(key="build_id", label=L(t"Build ID"), minimum=1),)
+            () if self._build_id is not None else (sl.forms.IntField(key="build_id", label=L(t"Build ID"), minimum=1),)
         )
         return (
             sl.form(L(t"Propose tag"), self._proposal_form(), key="propose", on_submit=self._propose),
@@ -211,8 +209,11 @@ class TagsScreen(sd.Screen):
                 L(t"Apply tag to build"),
                 sl.forms.FormSpec(
                     L(t"Apply showcase tag"),
-                    (*build_field, sl.forms.IntField(key="tag_id", label=L(t"Tag ID"), minimum=1),
-                     sl.forms.TextField(key="value", label=L(t"Value"), required=False, maximum=300)),
+                    (
+                        *build_field,
+                        sl.forms.IntField(key="tag_id", label=L(t"Tag ID"), minimum=1),
+                        sl.forms.TextField(key="value", label=L(t"Value"), required=False, maximum=300),
+                    ),
                 ),
                 key="apply",
                 on_submit=self._apply,
@@ -229,9 +230,7 @@ class TagsScreen(sd.Screen):
                     key="value_type",
                     label=L(t"Value type"),
                     default=TagValueType.NONE,
-                    options=tuple(
-                        sl.forms.ChoiceOption(kind.value, kind.value.title(), kind) for kind in TagValueType
-                    ),
+                    options=tuple(sl.forms.ChoiceOption(kind.value, kind.value.title(), kind) for kind in TagValueType),
                 ),
                 sl.forms.TextField(key="query_name", label=L(t"Query field"), required=False, maximum=64),
             ),

@@ -82,9 +82,7 @@ async def test_tags_use_browsers_and_capability_aware_tabs() -> None:
     assert screen._catalogue is not None
     assert screen._pending is not None
     assert screen._tabs is not None
-    assert {"Catalogue", "Propose and apply", "Moderation", "Restriction aliases"} <= set(
-        labels(screen._tabs.render())
-    )
+    assert {"Catalogue", "Propose and apply", "Moderation", "Restriction aliases"} <= set(labels(screen._tabs.render()))
 
 
 async def test_seeded_build_application_uses_the_opening_build() -> None:

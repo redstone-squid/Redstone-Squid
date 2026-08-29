@@ -93,9 +93,7 @@ class ErrorReportScreen(sd.Screen):
         await self._load_recent()
 
     async def _load_recent(self) -> None:
-        self._reports = tuple(
-            await self._operations.recent(limit=RECENT_LIMIT, work_lost_only=self.work_lost_only)
-        )
+        self._reports = tuple(await self._operations.recent(limit=RECENT_LIMIT, work_lost_only=self.work_lost_only))
         self._browser = sp.Browser(
             sl.sources.list_source(self._reports),
             key="error-reports",
