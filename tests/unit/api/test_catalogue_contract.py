@@ -1,18 +1,19 @@
 """Public catalogue API contract extensions."""
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
-from types import SimpleNamespace
-from typing import Any, cast
-from unittest.mock import AsyncMock
+from typing import Any
 from uuid import UUID
 
 import pytest
 
 from squid.api.v1.records import get_record
 from squid.api.v1.schemas.builds import BuildDetail, BuildSummary, DoorDetails, ExtenderDetails, GeneralDetails
+from squid.builds.application import BuildQueryService
 from squid.builds.domain import Build, DoorBuild, ExtenderBuild, MediaTypeLiteral, Status, UtilityBuild
 from squid.core.errors import DataIntegrityError
 from squid.records.application.models import PublishedRecord
+from squid.records.application.services import RecordService
 from squid.sponsors import PublicSponsor
 from squid.tags.domain import (
     TagAssignment,
@@ -68,6 +69,24 @@ def published_record(*holder_build_ids: int) -> PublishedRecord:
         holder_build_ids=holder_build_ids,
         computed_at=datetime(2026, 8, 10, 12, tzinfo=UTC),
     )
+
+
+class RecordFake(RecordService):
+    def __init__(self, record: PublishedRecord) -> None:
+        self.record = record
+
+    async def get(self, result_id: int) -> PublishedRecord | None:
+        return self.record if result_id == self.record.id else None
+
+
+class BuildQueryFake(BuildQueryService):
+    def __init__(self, builds: list[Build]) -> None:
+        self.builds = builds
+        self.requests: list[tuple[int, ...]] = []
+
+    async def get_many(self, build_ids: Sequence[int]) -> list[Build]:
+        self.requests.append(tuple(build_ids))
+        return self.builds
 
 
 def test_build_summary_exposes_catalogue_card_fields_and_stable_tag_keys() -> None:
@@ -161,14 +180,14 @@ def test_build_detail_exposes_only_the_immutable_public_sponsor_projection() -> 
 @pytest.mark.asyncio
 async def test_record_detail_hydrates_holders_in_record_order() -> None:
     record = published_record(41, 42)
-    records = SimpleNamespace(get=AsyncMock(return_value=record))
-    build_queries = SimpleNamespace(get_many=AsyncMock(return_value=[catalogue_build(42), catalogue_build(41)]))
+    records = RecordFake(record)
+    build_queries = BuildQueryFake([catalogue_build(42), catalogue_build(41)])
 
-    detail = await get_record(7, cast(Any, records), cast(Any, build_queries))
+    detail = await get_record(7, records, build_queries)
 
     assert detail.holder_build_ids == [41, 42]
     assert [build.id for build in detail.holder_builds] == [41, 42]
-    build_queries.get_many.assert_awaited_once_with((41, 42))
+    assert build_queries.requests == [(41, 42)]
 
 
 @pytest.mark.asyncio
@@ -180,11 +199,11 @@ async def test_record_detail_hydrates_holders_in_record_order() -> None:
     ],
 )
 async def test_record_detail_rejects_unavailable_or_non_public_holders(available: list[Build]) -> None:
-    records = SimpleNamespace(get=AsyncMock(return_value=published_record(41, 42)))
-    build_queries = SimpleNamespace(get_many=AsyncMock(return_value=available))
+    records = RecordFake(published_record(41, 42))
+    build_queries = BuildQueryFake(available)
 
     with pytest.raises(DataIntegrityError) as exc_info:
-        await get_record(7, cast(Any, records), cast(Any, build_queries))
+        await get_record(7, records, build_queries)
 
     assert exc_info.value.context == {"record_id": 7, "unavailable_holder_build_ids": [42]}
 
