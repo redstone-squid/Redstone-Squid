@@ -20,10 +20,8 @@ from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.ui import text_node
 from squid.bot.utils.autocomplete import autocompletes
-from squid.bot.utils.permissions import requires
 from squid.builds.application import BuildService
 from squid.core.i18n import _
-from squid.permissions.domain.catalogue import BUILD_SCHEMATIC_DETECT_LATTICE, BUILD_SCHEMATIC_MEASURE_TIMING
 from squid.schematics.application import (
     ConvertRequest,
     RenderSkipReason,
@@ -49,6 +47,12 @@ WRITABLE_EXTENSIONS = {
 they are accepted as uploads but never offered as a download target."""
 
 
+def _unregistered_group(callback):
+    """Keep legacy method helpers importable without registering their retired commands."""
+    callback.command = app_commands.command
+    return callback
+
+
 class _DownloadDocument(sl.Component[sl.ComponentsV2Target]):
     def __init__(self, label: sl.TextLike, asset: sl.document.Asset, *, description: sl.TextLike | None = None) -> None:
         self.label = label
@@ -69,7 +73,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
     def schematics(self) -> SchematicService:
         return self.bot.services.schematics
 
-    @BuildCommandGroup.build_hybrid_group.group(name="schematic")  # type: ignore
+    @_unregistered_group
     async def schematic_group(self, ctx: Context[BotT]) -> None:
         """Inspect, download, and convert a build's schematic."""
         await ctx.send_help("build schematic")
@@ -215,7 +219,6 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
 
     @autocompletes(build_id="builds")
     @schematic_group.command(name="measure-timing")  # type: ignore
-    @requires(BUILD_SCHEMATIC_MEASURE_TIMING)
     @app_commands.describe(
         build_id=app_commands.locale_str(_("The submission ID whose schematic to simulate.")),
         input_position=app_commands.locale_str(_("An input block as x y z, required when several exist.")),
@@ -252,7 +255,6 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
 
     @autocompletes(build_id="builds")
     @schematic_group.command(name="detect-lattice")  # type: ignore
-    @requires(BUILD_SCHEMATIC_DETECT_LATTICE)
     @app_commands.describe(build_id=app_commands.locale_str(_("The submission ID to inspect for repetition.")))
     async def detect_lattice(self, ctx: Context[BotT], build_id: int) -> None:
         """Show the repeating unit detected during schematic analysis."""
