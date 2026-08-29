@@ -28,7 +28,6 @@ from tests.unit.api.fakes import (
     build_app,
 )
 
-
 SESSION_IDENTITY = WebSessionIdentity(session_id="session", account_id=1, consent_pending=False)
 
 
