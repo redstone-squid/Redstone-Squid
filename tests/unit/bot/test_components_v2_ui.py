@@ -12,7 +12,7 @@ import pytest
 import squid_ui_discord as sd
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.submission.search_view import SearchResultsView
-from squid.bot.submission.ui.views import EDIT_FIELDS, BuildEditComponent
+from squid.bot.submission.ui.views import EDIT_FIELDS, BuildEditScreen
 from squid.builds.application import BuildService
 from squid.builds.domain import Build, BuildLink, DoorBuild, SourceMessage, Status
 from squid.search.application import SearchService
@@ -67,7 +67,14 @@ async def test_build_handler_renders_composable_v2_card(display_build: Build) ->
 
 async def test_build_editor_uses_semantic_state_and_forms(display_build: Build) -> None:
     field = next(spec for spec in EDIT_FIELDS if spec.patch_key == "version_spec").bind(display_build)
-    component = BuildEditComponent(display_build, cast(BuildService, object()), [field])
+    component = BuildEditScreen(
+        display_build,
+        cast(BuildService, object()),
+        [field],
+        authorize=AsyncMock(return_value=True),
+        render_build=AsyncMock(),
+        refresh_posts=AsyncMock(),
+    )
 
     # `projection` is an atomic resource, so reading its status aborts a discovery render
     # until it has settled. A mount settles it before rendering; calling `render()` straight
@@ -78,6 +85,12 @@ async def test_build_editor_uses_semantic_state_and_forms(display_build: Build) 
     assert component.max_pages == 1
     assert "Edit this section" in str(component.render())
     assert component._current()[0] is display_build
+
+
+def test_build_editor_declares_keyed_topic_following_policy() -> None:
+    assert BuildEditScreen.session_name == "build-edit"
+    assert BuildEditScreen.timeout == 900
+    assert BuildEditScreen.follow_topics is True
 
 
 @pytest.mark.asyncio

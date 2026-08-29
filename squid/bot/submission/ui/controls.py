@@ -21,7 +21,7 @@ build_edit = _feature_route(builds, "{build_id:int}:edit", aliases=("edit:build:
 @builds.route(build_edit)
 async def edit_build(interaction: Interaction[RedstoneSquid], build_id: int) -> None:
     """Open the build editor for the build a posted card points at."""
-    from squid.bot.submission.ui.views import BuildEditComponent
+    from squid.bot.submission.ui.opening import open_build_editor
 
     build = await interaction.client.services.builds.get(build_id)
     if build is None:
@@ -29,7 +29,7 @@ async def edit_build(interaction: Interaction[RedstoneSquid], build_id: int) -> 
         invocation = await sd.Invocation.of(interaction)
         await invocation.reply(text_node(t(locale, _("That build no longer exists."))), visibility="personal")
         return
-    await BuildEditComponent(build, interaction.client.services.builds).send(interaction)
+    await open_build_editor(interaction, build)
 
 
 __all__ = ["build_edit", "builds", "edit_build"]
