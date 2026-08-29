@@ -1,6 +1,6 @@
 """The Wizard-driven poll composition screen."""
 
-from types import SimpleNamespace
+from dataclasses import dataclass
 from typing import Any, cast
 from unittest.mock import AsyncMock
 
@@ -21,6 +21,11 @@ from tests.support.voting import GENERIC_OPTIONS
 OWNER_ID = 11
 
 
+@dataclass(frozen=True, slots=True)
+class Guild:
+    id: int = 7
+
+
 def make_screen(*, failure: Exception | None = None) -> PollScreen:
     resolve = AsyncMock(side_effect=failure, return_value=GENERIC_OPTIONS)
     publish = AsyncMock(return_value="https://discord.invalid/channels/1/2/3")
@@ -35,7 +40,7 @@ async def open_screen(
     bot = make_layout_bot()
     interaction = interaction_harness(user_id=OWNER_ID)
     interaction.client = bot
-    interaction.guild = SimpleNamespace(id=7)
+    interaction.guild = Guild()
     interaction.guild_locale = None
     interaction.locale = "en-US"
     if message is not None:
