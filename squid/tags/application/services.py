@@ -7,7 +7,7 @@ from typing import Protocol
 from uuid import uuid4
 
 from squid.core.errors import ValidationError
-from squid.core.i18n import _
+from squid.core.i18n import _, tr
 from squid.tags.domain import TagDefinition, TagModerationStatus, TagValue, TagValueType
 from squid.tags.errors import TagNotFoundError
 
@@ -147,17 +147,14 @@ class TagService:
 
 
 def _coerce_assignment_value(definition: TagDefinition, raw_value: str | None) -> TagValue:
+    display_name = definition.display_name
     if definition.value_type is TagValueType.NONE:
         if raw_value not in {None, ""}:
-            msg = _("{display_name} does not accept a value.")
-            raise ValidationError(msg, message_params={"display_name": definition.display_name})
+            raise ValidationError(tr(t"{display_name} does not accept a value."))
         return None
     if raw_value is None or not raw_value.strip():
-        msg = _("{display_name} requires a {value_type} value.")
-        raise ValidationError(
-            msg,
-            message_params={"display_name": definition.display_name, "value_type": definition.value_type.value},
-        )
+        value_type = definition.value_type.value
+        raise ValidationError(tr(t"{display_name} requires a {value_type} value."))
     value = raw_value.strip()
     if definition.value_type is TagValueType.TEXT:
         return value
@@ -167,14 +164,11 @@ def _coerce_assignment_value(definition: TagDefinition, raw_value: str | None) -
             return True
         if normalized in {"false", "no", "0"}:
             return False
-        msg = _("{display_name} expects true or false.")
-        raise ValidationError(msg, message_params={"display_name": definition.display_name})
+        raise ValidationError(tr(t"{display_name} expects true or false."))
     try:
         numeric = Decimal(value)
     except InvalidOperation as error:
-        msg = _("{display_name} expects a number in its canonical unit.")
-        raise ValidationError(msg, message_params={"display_name": definition.display_name}) from error
+        raise ValidationError(tr(t"{display_name} expects a number in its canonical unit.")) from error
     if not numeric.is_finite():
-        msg = _("{display_name} expects a finite number.")
-        raise ValidationError(msg, message_params={"display_name": definition.display_name})
+        raise ValidationError(tr(t"{display_name} expects a finite number."))
     return numeric

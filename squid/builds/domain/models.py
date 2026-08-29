@@ -32,7 +32,7 @@ from whenever import Instant
 
 from squid.builds.errors import InvalidBuildError
 from squid.core.errors import DataIntegrityError, InvalidStateError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 from squid.sponsors import PublicSponsor
 from squid.tags.domain import TagAssignment
 
@@ -129,8 +129,8 @@ class FrozenField[T]:
 
     def __set__(self, instance: object, value: T) -> None:
         if hasattr(instance, self._private_name):
-            msg = _("Attribute `{name}` is immutable!")
-            raise InvalidStateError(msg, message_params={"name": self._private_name[1:]}) from None
+            name = self._private_name[1:]
+            raise InvalidStateError(tr(t"Attribute `{name}` is immutable!")) from None
 
         setattr(instance, self._private_name, value)
 
@@ -156,8 +156,8 @@ def freeze_fields[T](cls: type[T]) -> type[T]:
 
     cls_fields = getattr(cls, "__dataclass_fields__", None)
     if cls_fields is None:
-        msg = _("{class_name} is not a dataclass")
-        raise InvalidStateError(msg, message_params={"class_name": cls.__name__})
+        class_name = cls.__name__
+        raise InvalidStateError(tr(t"{class_name} is not a dataclass"))
 
     params = cls.__dataclass_params__  # type: ignore
     if params.frozen:
@@ -396,8 +396,9 @@ class Build(StagedMedia, StagedTaxonomy):
 
     def __post_init__(self) -> None:
         if type(self) is Build:
-            msg = _("Build cannot be instantiated directly; construct a category subclass or a BuildDraft.")
-            raise InvalidStateError(msg)
+            raise InvalidStateError(
+                tr(t"Build cannot be instantiated directly; construct a category subclass or a BuildDraft.")
+            )
 
     @property
     def original_link(self) -> str | None:
