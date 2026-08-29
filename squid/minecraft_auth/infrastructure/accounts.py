@@ -5,7 +5,8 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
+from squid.accounts.domain import IdentityProvider
+from squid.accounts.infrastructure.consent import account_consent_current
 from squid.accounts.infrastructure.models import Account, AccountIdentity
 
 
@@ -21,8 +22,7 @@ class PostgresAccountIdentityAuthorizer:
             result = await session.scalar(
                 select(Account.id).where(
                     Account.id == account_id,
-                    Account.consent_version == CURRENT_CONSENT_VERSION,
-                    Account.consented_at.is_not(None),
+                    account_consent_current(),
                 )
             )
             return result is not None
@@ -35,8 +35,7 @@ class PostgresAccountIdentityAuthorizer:
                 .join(Account, Account.id == AccountIdentity.account_id)
                 .where(
                     Account.id == account_id,
-                    Account.consent_version == CURRENT_CONSENT_VERSION,
-                    Account.consented_at.is_not(None),
+                    account_consent_current(),
                     AccountIdentity.provider == IdentityProvider.JAVA,
                     AccountIdentity.subject == str(java_uuid),
                     AccountIdentity.verified_at.is_not(None),

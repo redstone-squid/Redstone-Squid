@@ -15,7 +15,7 @@ from squid.bot.reactions import ReactionClearEvent, ReactionEvent
 from squid.bot.starboard.debounce import EntryDebouncer, EntryKey
 from squid.bot.utils.autocomplete import autocompletes, guild_context, suggests
 from squid.bot.utils.components import no_mentions, text_layout
-from squid.bot.utils.permissions import requires
+from squid.bot.utils.permissions import hide_unless, requires
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import (
     STARBOARD_BOARD_CREATE,
@@ -153,6 +153,7 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     @hybrid_group(name="starboard")
     @guild_only()
     @requires(*STARBOARD_CAPABILITIES, mode="any")
+    @hide_unless(manage_guild=True)
     async def starboard_group(self, ctx: Context[BotT]) -> None:
         """Configure weighted message starboards."""
         await ctx.send_help("starboard")

@@ -26,7 +26,7 @@ from alembic_utils.replaceable_entity import ReplaceableEntity
 from sqlalchemy.dialects import postgresql
 
 from alembic import op
-from squid.persistence.alembic_entities import ALEMBIC_UTIL_ENTITIES
+from squid.persistence.alembic_entities import alembic_util_entities
 
 revision: str = "d8e9f0a1b2c3"
 down_revision: str | Sequence[str] | None = "c7d8e9f0a1b2"
@@ -384,7 +384,7 @@ def _selected_entities(entity_type: type[EntityT], names: set[str]) -> list[Enti
     """The named entities from the shipped definitions, in declaration order."""
     selected = [
         entity
-        for entity in ALEMBIC_UTIL_ENTITIES
+        for entity in alembic_util_entities()
         if isinstance(entity, entity_type) and entity.signature.split("(")[0] in names
     ]
     if len(selected) != len(names):

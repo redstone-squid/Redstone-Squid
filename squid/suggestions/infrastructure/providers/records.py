@@ -3,15 +3,15 @@
 from collections.abc import Sequence
 from typing import Protocol
 
-from squid.accounts.domain import AliasClaim
+from squid.accounts.domain import AliasClaim, IdentityProvider
 from squid.suggestions.application import Candidate, candidate
 from squid.suggestions.domain import MAX_SUGGESTIONS, SuggestionRequest
 
 
-class RecordKeyReader(Protocol):
-    """Read canonical record category keys."""
+class RecordDefinitionReader(Protocol):
+    """Read record definitions by the title an admin recognizes them by."""
 
-    async def record_base_keys(self, query: str, *, limit: int) -> Sequence[tuple[str, str]]: ...
+    async def record_definitions(self, query: str, *, limit: int) -> Sequence[tuple[int, str, str]]: ...
 
 
 class CreatorReader(Protocol):
@@ -20,15 +20,24 @@ class CreatorReader(Protocol):
     async def creators(self, query: str, *, limit: int) -> Sequence[tuple[str, bool]]: ...
 
 
-class RecordBaseKeyProvider:
-    """Suggest the canonical category keys `/admin records-lookup` materializes against."""
+class RecordDefinitionProvider:
+    """Suggest the categories `/admin records-lookup` materializes, submitting the definition id."""
 
-    def __init__(self, reader: RecordKeyReader) -> None:
+    def __init__(self, reader: RecordDefinitionReader) -> None:
         self._reader = reader
 
     async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
-        keys = await self._reader.record_base_keys(request.query, limit=request.limit or MAX_SUGGESTIONS)
-        return tuple(candidate(key, description=build_kind, kind="record_category") for key, build_kind in keys)
+        rows = await self._reader.record_definitions(request.query, limit=request.limit or MAX_SUGGESTIONS)
+        return tuple(
+            candidate(
+                str(definition_id),
+                label=title,
+                description=build_kind,
+                kind="record_category",
+                terms=(title, str(definition_id)),
+            )
+            for definition_id, title, build_kind in rows
+        )
 
 
 class CreatorProfileReader(Protocol):
@@ -40,7 +49,7 @@ class CreatorProfileReader(Protocol):
 class CompetitionReader(Protocol):
     """Read record competition identifiers."""
 
-    async def competitions(self, query: str, *, limit: int) -> Sequence[tuple[str, str, str]]: ...
+    async def competitions(self, query: str, *, limit: int) -> Sequence[tuple[str, str, str | None]]: ...
 
 
 class CreatorProfileProvider:
@@ -59,7 +68,7 @@ class CreatorProfileProvider:
 
 
 class CompetitionProvider:
-    """Suggest record competitions by their readable identity, submitting the public UUID."""
+    """Suggest record competitions by their record title, submitting the public UUID."""
 
     def __init__(self, reader: CompetitionReader) -> None:
         self._reader = reader
@@ -69,18 +78,35 @@ class CompetitionProvider:
         return tuple(
             candidate(
                 public_id,
-                label=f"{title} — {category_key}",
+                label=title,
+                description=subtitle,
                 kind="competition",
-                terms=(title, category_key),
+                terms=(title, subtitle) if subtitle else (title,),
             )
-            for public_id, title, category_key in competitions
+            for public_id, title, subtitle in competitions
         )
 
 
 class PendingAliasClaims(Protocol):
     """Read creator credit claims awaiting staff review."""
 
-    async def pending_alias_claims(self) -> Sequence[AliasClaim]: ...
+    async def pending_alias_claims(self, *, with_claimants: bool = False) -> Sequence[AliasClaim]: ...
+
+
+def _claimant_description(claim: AliasClaim) -> str:
+    """Describe a claimant in the little room an autocomplete row has.
+
+    Not `present_claimant`: this surface cannot render a mention, so it reaches for the names a
+    reviewer can actually read and falls back to the internal ID only when there is nothing else.
+    """
+    claimant = claim.claimant
+    if claimant is not None:
+        java = claimant.identity(IdentityProvider.JAVA)
+        if java is not None and java.display_name is not None:
+            return java.display_name[:100]
+        if claimant.public_creator_id is not None:
+            return f"creator {claimant.public_creator_id}"[:100]
+    return f"account {claim.account_id}"
 
 
 class AliasClaimProvider:
@@ -97,11 +123,14 @@ class AliasClaimProvider:
             candidate(
                 str(claim.id),
                 label=f"#{claim.id} · {claim.alias_name}",
-                description=f"account {claim.account_id}",
+                # Discord truncates a description at 100 characters, and a mention renders as raw
+                # `<@id>` here rather than as a chip, so this asks for claimants and then prefers a
+                # readable name over the snowflake.
+                description=_claimant_description(claim),
                 kind="claim",
                 terms=(claim.alias_name, str(claim.id)),
             )
-            for claim in await self._accounts.pending_alias_claims()
+            for claim in await self._accounts.pending_alias_claims(with_claimants=True)
         )
 
 

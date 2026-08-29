@@ -19,7 +19,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC
+from squid.persistence.types import InstantUTC, now
 
 
 class PaperInstallationRecord(Base, kw_only=True):
@@ -76,7 +76,7 @@ class PaperInstallationRecord(Base, kw_only=True):
     public_website_url: Mapped[str | None] = mapped_column(Text, default=None)
     sponsor_opt_in: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     rotated_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     revoked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
@@ -87,6 +87,7 @@ class PlayerChallengeRecord(Base, kw_only=True):
 
     __tablename__ = "minecraft_player_challenges"
     __table_args__ = (
+        Index("minecraft_player_challenges_approved_by_idx", "approved_by_account_id"),
         UniqueConstraint("device_code_hash", name="minecraft_player_challenges_device_code_hash_key"),
         UniqueConstraint("user_code_hash", name="minecraft_player_challenges_user_code_hash_key"),
         CheckConstraint("octet_length(device_code_hash) = 32", name="minecraft_player_challenges_device_hash_length"),

@@ -20,8 +20,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC, StrEnumText
-from squid.voting.domain import VoteChoice, VoteKind, VoteSessionResult, VoteStatus, VoteVisibility
+from squid.persistence.types import InstantUTC, StrEnumText, now
+from squid.voting.domain import PollScope, VoteChoice, VoteKind, VoteSessionResult, VoteStatus, VoteVisibility
 
 _KIND_VALUES = ", ".join(f"'{kind.value}'" for kind in VoteKind)
 _CHOICE_VALUES = ", ".join(f"'{choice.value}'" for choice in VoteChoice)
@@ -29,16 +29,23 @@ _STATUS_VALUES = ", ".join(f"'{status.value}'" for status in VoteStatus)
 _RESULT_VALUES = ", ".join(f"'{result.value}'" for result in VoteSessionResult)
 _VISIBILITY_VALUES = ", ".join(f"'{visibility.value}'" for visibility in VoteVisibility)
 
+_SCOPE_VALUES = ", ".join(f"'{scope.value}'" for scope in PollScope)
+
 THRESHOLD_CONSTRAINT = (
     "CASE WHEN kind = 'generic'"
     " THEN pass_threshold IS NULL AND fail_threshold IS NULL"
-    " ELSE pass_threshold > 0 AND fail_threshold < 0"
+    " ELSE pass_threshold IS NOT NULL AND fail_threshold IS NOT NULL"
+    " AND pass_threshold > 0 AND fail_threshold < 0"
     " END"
 )
 """Thresholds belong to score-closing kinds only.
 
 Generic polls close on a deadline, so a threshold on one is unreadable state; this
 is the constraint that stopped the `32767`/`-32768` sentinels from coming back.
+
+The null checks are explicit because `NULL > 0` is NULL, not false, and a check
+constraint only rejects on false -- without them a build session with no thresholds
+at all satisfied the constraint and could never close.
 """
 
 
@@ -47,6 +54,7 @@ class VoteSession(Base, kw_only=True):
 
     __tablename__ = "vote_sessions"
     __table_args__ = (
+        Index("vote_sessions_author_idx", "author_account_id"),
         CheckConstraint(THRESHOLD_CONSTRAINT, name="vote_sessions_threshold_kind_check"),
         CheckConstraint(f"kind = ANY (ARRAY[{_KIND_VALUES}])", name="vote_sessions_kind_check"),
         CheckConstraint(f"status = ANY (ARRAY[{_STATUS_VALUES}])", name="vote_sessions_status_check"),
@@ -67,7 +75,7 @@ class VoteSession(Base, kw_only=True):
     pass_threshold: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     fail_threshold: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
     votes: Mapped[list[Vote]] = relationship(
@@ -123,9 +131,9 @@ class VoteSessionOption(Base, kw_only=True):
 
 class BuildVoteSession(Base, kw_only=True):
     __tablename__ = "build_vote_sessions"
+    __table_args__ = (Index("build_vote_sessions_build_idx", "build_id"),)
     vote_session_id: Mapped[int] = mapped_column(
         BigInteger,
-        Identity(),
         ForeignKey(
             "vote_sessions.id",
             name="build_vote_sessions_vote_session_id_fkey",
@@ -151,7 +159,6 @@ class DeleteLogVoteSession(Base, kw_only=True):
     __tablename__ = "delete_log_vote_sessions"
     vote_session_id: Mapped[int] = mapped_column(
         BigInteger,
-        Identity(),
         ForeignKey(
             "vote_sessions.id",
             name="delete_log_vote_sessions_vote_session_id_fkey",
@@ -171,9 +178,15 @@ class GenericVoteSession(Base, kw_only=True):
 
     __tablename__ = "generic_vote_sessions"
     __table_args__ = (
+        Index("generic_vote_sessions_guild_idx", "guild_id"),
         CheckConstraint(
             f"visibility IN ({_VISIBILITY_VALUES})",
             name="generic_vote_sessions_visibility_check",
+        ),
+        CheckConstraint(f"scope IN ({_SCOPE_VALUES})", name="generic_vote_sessions_scope_check"),
+        CheckConstraint(
+            "scope = 'guild' OR guild_id IS NOT NULL",
+            name="generic_vote_sessions_network_guild_check",
         ),
         Index("generic_vote_sessions_deadline_idx", "deadline"),
     )
@@ -192,6 +205,10 @@ class GenericVoteSession(Base, kw_only=True):
     """
     question: Mapped[str] = mapped_column(Text, nullable=False)
     visibility: Mapped[VoteVisibility] = mapped_column(StrEnumText(VoteVisibility), nullable=False)
+    scope: Mapped[PollScope] = mapped_column(
+        StrEnumText(PollScope), nullable=False, server_default=PollScope.GUILD.value
+    )
+    """Whether the poll is carded only in its own guild or in every vote channel."""
     deadline: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
 
 
@@ -200,6 +217,7 @@ class Vote(Base):
 
     __tablename__ = "votes"
     __table_args__ = (
+        Index("votes_account_idx", "account_id"),
         CheckConstraint(
             "weight > 0 AND weight != 'Infinity'::double precision AND weight != 'NaN'::double precision",
             name="votes_weight_check",
@@ -207,7 +225,6 @@ class Vote(Base):
     )
     vote_session_id: Mapped[int] = mapped_column(
         BigInteger,
-        Identity(),
         ForeignKey(
             "vote_sessions.id",
             name="votes_vote_session_id_fkey",

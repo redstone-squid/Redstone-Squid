@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 from whenever import Instant
 
+from squid.core.errors import InvalidStateError
 from squid.events import DomainEvent, DomainEventDelivery, DomainEventService
 
 
@@ -54,15 +55,15 @@ async def test_service_permanently_rejects_invalid_contracts() -> None:
 
 @pytest.mark.parametrize("limit", [0, 101])
 async def test_claim_rejects_unsafe_batch_sizes(limit: int) -> None:
-    with pytest.raises(ValueError, match="between 1 and 100"):
+    with pytest.raises(InvalidStateError, match="between 1 and 100"):
         await DomainEventService(AsyncMock()).claim("discord", limit)
 
 
 async def test_claim_rejects_an_empty_consumer() -> None:
-    with pytest.raises(ValueError, match="non-empty name"):
+    with pytest.raises(InvalidStateError, match="non-empty name"):
         await DomainEventService(AsyncMock()).claim("")
 
 
 def test_service_rejects_a_non_positive_attempt_ceiling() -> None:
-    with pytest.raises(ValueError, match="must be positive"):
+    with pytest.raises(InvalidStateError, match="must be positive"):
         DomainEventService(AsyncMock(), max_attempts=0)

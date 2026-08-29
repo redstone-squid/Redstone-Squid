@@ -20,7 +20,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC
+from squid.persistence.types import InstantUTC, now
 
 MAX_SCHEMATIC_BYTES = 16 * 1024 * 1024
 """Hard compressed-byte ceiling enforced in the database as well as at upload."""
@@ -42,7 +42,7 @@ class SchematicFile(Base):
     """The format the content sniffer identified, e.g. `litematic`."""
     object_key: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -57,6 +57,8 @@ class BuildSchematic(Base, kw_only=True):
 
     __tablename__ = "build_schematics"
     __table_args__ = (
+        Index("build_schematics_uploaded_by_idx", "uploaded_by_account_id"),
+        Index("build_schematics_rights_attested_by_idx", "rights_attested_by_account_id"),
         UniqueConstraint("build_id", "file_sha256", name="build_schematics_build_file_key"),
         # At most one primary schematic per build, while still allowing many secondary ones.
         Index(
@@ -210,7 +212,7 @@ class BuildSchematic(Base, kw_only=True):
     """Who supplied the file, beside `rights_attested_by_account_id` so the table
     carries one attribution style rather than two."""
     analyzed_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -237,7 +239,7 @@ class SchematicRender(Base, kw_only=True):
     height: Mapped[int] = mapped_column(Integer, nullable=False)
     byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -259,10 +261,10 @@ class SchematicRenderQueueItem(Base, kw_only=True):
         primary_key=True,
     )
     enqueued_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     available_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     """When this row next becomes claimable, and the only column backoff writes."""
     claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
@@ -302,7 +304,7 @@ class SchematicJob(Base, kw_only=True):
     result_object_key: Mapped[str | None] = mapped_column(Text, default=None)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     available_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
@@ -314,5 +316,5 @@ class SchematicJob(Base, kw_only=True):
     error_kind: Mapped[str | None] = mapped_column(Text, default=None)
     error_context: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default_factory=dict)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )

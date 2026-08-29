@@ -219,3 +219,65 @@ class PollPublisher(Protocol):
 | **Discord Recovery** | Missing messages, reaction clears, permission loss, unhandled exceptions during background fan-outs | **Fix.** Graceful handling of `discord.NotFound`/`discord.Forbidden`, safe reaction re-adding, and `BackgroundTaskSupervisor` deadline scheduling. |
 | **API & Ballot Privacy** | API routes exposing aggregate tallies, privacy for hidden polls, stable option ID writes | **Already fixed** in `5edfd3e` and retained; strengthen with typed DTO mappings and enum validation. |
 | **Test Fixtures** | 80-line hand-written DDL in `test_vote_repository.py`, oversized integration test cases | **Already fixed** in `16eb510` and improved; extract reusable session/poll builders in `tests/helpers/voting.py`. |
+
+---
+
+## Verification status (as of `d2341c80`, 2026-08-18)
+
+All of the Findings and Subplans above are now stale as description-of-work-remaining; they are
+kept verbatim because the Disposition table still points at them. What follows is the current
+state, checked against actual code and tests, not the plan text.
+
+- **Subplans 1-4: done.** `509406c2` landed the bulk of it (`StrEnum`s for `VoteKind`,
+  `VoteStatus`, `VoteSessionResult`, `VoteVisibility`, `VoteRejection`; `BuildVoteTarget` /
+  `DeleteLogVoteTarget` / `GenericPoll` in `squid/voting/domain/models.py`; nullable
+  `pass_threshold`/`fail_threshold` with a check constraint enforcing kind/threshold combinations,
+  verified in `tests/integration/voting/infrastructure/test_vote_repository.py::test_the_schema_rejects_kind_threshold_combinations_the_domain_forbids`;
+  the `/poll` wizard; `PollPublisher` in `squid/bot/voting/publisher.py`). `base_session.py` and
+  `AbstractVoteSession` no longer exist anywhere in `squid/` or `tests/`. `close_due` is scheduled
+  via `self._supervisor.start_periodic(self._close_due_votes, ...)` in `squid/worker/app.py`, so it
+  runs under `BackgroundTaskSupervisor` (`squid/runtime.py`) as required.
+  - The presentation layer went further than subplan 4 described: rather than per-kind thin
+    wrapper classes (`BuildVotePresentation`, `DeleteLogVotePresentation`, `GenericVotePresentation`),
+    `squid/bot/voting/sessions.py` now only *creates* sessions, and rendering/reconciliation was
+    generalized into `squid/bot/posts/reconciler.py` and `squid/bot/posts/vote_renderer.py`, shared
+    with non-voting post kinds. `discord.NotFound`/`discord.Forbidden` are handled there and in
+    `squid/bot/voting/vote.py`'s `_restore_reactions` (used for both `on_reaction_clear` and
+    `on_reaction_clear_emoji`), which re-adds configured baseline reactions without attempting to
+    infer discarded ballots, matching the subplan's intent even though the class names differ.
+  - Later voting-touching commits after `509406c2` (`63c5918a` resolve vote actors by account,
+    `9476415d` match delete-log cards on enum members, `1ce791c4` treat a missing vote channel as a
+    setup gap, `5061234e` stop minting vote foreign keys from sequences, `37add609` resolve Discord
+    members through discord.py's rate limiter) are incidental hardening, not new redesign scope, and
+    don't change this disposition.
+
+- **Subplan 5: partially done, not "unverified."** Checked directly against the test files named
+  in the Test Suite Matrix:
+  - `tests/helpers/voting.py` exists and is used by all four suites (`build_snapshot`,
+    `poll_snapshot`, `attach_vote_message`, `seed_delete_log_vote`) — the fixture-extraction bullet
+    is done, and per plan 13's disposition table (`3775316974`, `3775329634`), so is the DDL/helper
+    extraction in `test_vote_repository.py` (`tests/helpers/schema.py`, `seed_generic_poll`).
+  - Direct SQL remaining in `test_vote_repository.py` is scoped correctly: root-count sanity checks,
+    one read-back of sentinel-vs-NULL thresholds ("the domain refuses to represent the sentinels at
+    all"), and the parametrized `test_the_schema_rejects_kind_threshold_combinations_the_domain_forbids`
+    which asserts a DB constraint the repository can't itself produce. No hand-rolled setup SQL that
+    the repository could exercise instead was found.
+  - The "matrix across all `VoteKind`, `VoteTarget`, `VoteVisibility`, `VoteChoice`, and
+    `VoteRejection` values" is **not** a real cross-product matrix anywhere. What exists is scattered,
+    single-axis `@pytest.mark.parametrize` (e.g. `kind` over `[BUILD, DELETE_LOG]` in
+    `test_dynamic_voting.py`'s threshold/anonymity tests, `visibility` over the two anonymous modes,
+    `(kind, pass_threshold, fail_threshold)` triples in `test_vote_repository.py`). `GENERIC` is
+    largely exercised only through separate non-parametrized tests (`poll_snapshot`-based), not
+    folded into the same parametrized cases as `BUILD`/`DELETE_LOG`. `tests/unit/api/test_vote_writes.py`
+    has zero `@pytest.mark.parametrize` uses; its option-id/guild-alias coverage is one test per
+    scenario rather than a matrix. No commit in `git log` mentions parametrization or a test matrix
+    for voting, confirming this bullet was never done, not just done-and-unverifiable.
+  - Net: subplan 5's first two bullets (fixture/builder extraction, SQL scoping) are done; the third
+    (kind/visibility/target matrix parameterization) is not started as a deliberate cross-product,
+    though incidental single-axis parametrization exists.
+
+**Overall disposition: Mostly done.** Subplans 1-4 (domain typing, transport-independent polls,
+`/poll` UI, session/recovery cleanup) are complete and verified against current code, including
+`close_due` running under `BackgroundTaskSupervisor`. Subplan 5's fixture-extraction and SQL-scoping
+bullets are done; only the kind/visibility/target matrix-parameterization bullet remains open, and it
+has not been started as a systematic cross-product (only ad hoc single-axis parametrization exists).

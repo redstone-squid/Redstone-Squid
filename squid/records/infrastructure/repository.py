@@ -18,6 +18,8 @@ from whenever import Instant
 
 from squid.builds.domain import Status
 from squid.builds.infrastructure.models import Door, Extender
+from squid.core.errors import DataIntegrityError
+from squid.core.i18n import _
 from squid.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.records.application.models import (
     CandidateFacet,
@@ -32,6 +34,7 @@ from squid.records.application.models import (
 from squid.records.application.ports import RecomputeLease
 from squid.records.domain import (
     BuildKind,
+    CategoryText,
     DoorCategory,
     ExtenderCategory,
     RecordCandidate,
@@ -458,7 +461,26 @@ class PostgresRecordRepository:
                     identities.append(identity)
             return tuple(identities)
 
-    async def save_requested_category(self, ruleset_id: int, category: CategoryIdentity) -> None:
+    async def get_definition_identity(self, definition_id: int) -> CategoryIdentity | None:
+        """Return the parsed category identity of one stored definition."""
+        async with self._session_factory() as session:
+            key = await session.scalar(
+                select(RecordDefinition.category_key).where(RecordDefinition.id == definition_id)
+            )
+        if key is None:
+            return None
+        identity = parse_category_key(key)
+        if identity is None:
+            msg = _("Record definition {definition_id} stores a category key that does not parse.")
+            raise DataIntegrityError(msg, message_params={"definition_id": definition_id})
+        return identity
+
+    async def save_requested_category(
+        self,
+        ruleset_id: int,
+        category: CategoryIdentity,
+        titles: Mapping[RecordClass, CategoryText],
+    ) -> None:
         """Persist an accepted exact category so future rebuilds retain it."""
         async with self._session_factory() as session, session.begin():
             for record_class in _record_classes(category.kind):
@@ -488,9 +510,9 @@ class PostgresRecordRepository:
                         version_scope=VersionScope.ALL_TIME.value,
                         version_id=None,
                         category_key=category.key,
-                        title=f"{record_class.value.replace('_', ' ').title()} {category.base_key}",
-                        subtitle=None,
-                        title_diagnostics=[],
+                        title=titles[record_class].title,
+                        subtitle=titles[record_class].subtitle,
+                        title_diagnostics=[diagnostic.as_dict() for diagnostic in titles[record_class].diagnostics],
                         materialization_source="public_lookup",
                     )
                     session.add(definition)
@@ -960,7 +982,8 @@ def _gap_from_row(definition: RecordDefinition, result: RecordResult) -> RecordG
             fields.append(field)
     return RecordGap(
         definition_id=definition.id,
-        category_key=definition.category_key,
+        title=definition.title,
+        subtitle=definition.subtitle,
         record_class=RecordClass(definition.record_class),
         build_ids=tuple(build_ids),
         fields=tuple(fields),

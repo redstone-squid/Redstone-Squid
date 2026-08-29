@@ -5,12 +5,14 @@ from pathlib import Path
 from babel.messages.mofile import read_mo
 from babel.messages.pofile import read_po
 
-LOCALES_DIR = Path(__file__).resolve().parents[3] / "locales"
+from squid.core.i18n import locales_dir
 
 
 def _po_paths() -> list[Path]:
-    paths = sorted(LOCALES_DIR.glob("*/LC_MESSAGES/squid.po"))
-    assert paths, f"No .po catalogs found under {LOCALES_DIR}"
+    """Catalogs as the application itself locates them, not as a second hard-coded walk."""
+    root = locales_dir()
+    paths = sorted(root.glob("*/LC_MESSAGES/squid.po"))
+    assert paths, f"No .po catalogs found under {root}"
     return paths
 
 

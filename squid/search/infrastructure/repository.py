@@ -9,6 +9,8 @@ from sqlalchemy import case, func, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.sql.elements import ColumnElement
 
+from squid.core.errors import ErrorCode, ValidationError
+from squid.core.i18n import _
 from squid.search.application import (
     RankedCandidate,
     RankingBranch,
@@ -87,8 +89,14 @@ class PostgresSearchBackend(SearchBackend):
             if request.sort is not None:
                 field = registry.resolve(request.sort.field)
                 if field is None or not field.supports_sort:
-                    msg = f"Search field {request.sort.field!r} cannot be sorted."
-                    raise ValueError(msg)
+                    # User input on both transports, so a message rather than a 500.
+                    msg = _("Search results cannot be sorted by {field_name}.")
+                    raise ValidationError(
+                        msg,
+                        code=ErrorCode.INVALID_QUERY,
+                        message_params={"field_name": request.sort.field},
+                        public_context={"field": "sort", "value": request.sort.field},
+                    )
                 return await self._sorted(session, request, predicate, offset, field)
             if is_filter_only(query):
                 return await self._filter_only(session, request, predicate, offset)

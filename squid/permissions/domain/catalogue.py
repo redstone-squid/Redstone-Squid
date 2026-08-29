@@ -292,6 +292,18 @@ ACCOUNT_IDENTITY_REFRESH_ANY = _b.node(
     _("Re-read another user's linked Minecraft name."),
     tags=(Tag.MODERATION,),
 )
+ACCOUNT_SELF_MANAGE = _b.node(
+    "account.self.manage",
+    NodeScope.GLOBAL,
+    _("Edit your own profile, visibility, linked identities, and merges."),
+    default=Default.ALLOW,
+)
+ACCOUNT_PROFILE_MODERATE = _b.node(
+    "account.profile.moderate",
+    NodeScope.GLOBAL,
+    _("Clear another user's public profile."),
+    tags=(Tag.MODERATION,),
+)
 
 PERM_GRANT_GLOBAL = _b.node(
     "perm.grant.global",
@@ -309,6 +321,15 @@ DIAGNOSTICS_ERROR_READ = _b.node(
     NodeScope.GLOBAL,
     _("Read a stored error report by the reference its user was shown."),
     tags=(Tag.DIAGNOSTIC, Tag.READONLY),
+)
+DIAGNOSTICS_ERROR_CLEAR = _b.node(
+    "diagnostics.error.clear",
+    NodeScope.GLOBAL,
+    _("Delete every stored error report."),
+    # `@destructive` is excluded from both admin roles (see GLOBAL_ADMIN, GUILD_ADMIN below), so
+    # this node's default DENY leaves it reachable only through the owner's unconditional `**`
+    # or an explicit grant, without a bespoke "owner only" mechanism.
+    tags=(Tag.DESTRUCTIVE, Tag.DIAGNOSTIC),
 )
 
 BOT_TREE_SYNC = _b.node(
@@ -415,6 +436,11 @@ VOTE_POLL_CREATE = _b.node(
     "vote.poll.create",
     NodeScope.GUILD,
     _("Create a poll."),
+)
+VOTE_POLL_NETWORK_CREATE = _b.node(
+    "vote.poll.network_create",
+    NodeScope.GUILD,
+    _("Create a poll carded in every server's vote channel."),
 )
 VOTE_POLL_CLOSE_ANY = _b.node(
     "vote.poll.close_any",

@@ -130,7 +130,8 @@ class RecordGap:
     """A persisted unresolved record and its decisive missing facts."""
 
     definition_id: int
-    category_key: str
+    title: str
+    subtitle: str | None
     record_class: RecordClass
     build_ids: tuple[int, ...]
     fields: tuple[str, ...]

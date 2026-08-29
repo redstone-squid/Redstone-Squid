@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from squid.core.errors import DataIntegrityError
+from squid.core.errors import DataIntegrityError, InvalidStateError
 from squid.sync import (
     DiscordReconciliationService,
     ReconciliationAction,
@@ -55,7 +55,7 @@ async def test_service_truncates_failure_and_applies_attempt_ceiling() -> None:
 
 @pytest.mark.parametrize("limit", [0, 101])
 async def test_claim_rejects_unsafe_batch_sizes(limit: int) -> None:
-    with pytest.raises(ValueError, match="between 1 and 100"):
+    with pytest.raises(InvalidStateError, match="between 1 and 100"):
         await DiscordReconciliationService(AsyncMock()).claim(limit)
 
 

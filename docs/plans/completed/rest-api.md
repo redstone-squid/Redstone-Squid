@@ -1,15 +1,34 @@
 # A REST API for Redstone-Squid
 
-> **Status.** Implemented through Phase 8 on 2026-08-06. The four prerequisite findings,
-> cross-process observability groundwork, public reads, scoped service keys, durable Discord
-> reconciliation, Discord OAuth sessions, build writes, weighted vote writes, and the full
-> resource model are complete. The blockers in "Findings" were pre-existing and verified in-tree
-> rather than hypothetical risks, and three would have surfaced as production incidents with the
-> matching route. Amend this document in place as phases land, calling out where building it
-> proved part of it wrong rather than silently rewriting.
+> **Status.** All nine phases (0-9) are implemented, last confirmed against `squid/api/` through
+> `b64e24fe` on 2026-08-17. The four prerequisite findings, cross-process observability
+> groundwork, public reads, scoped service keys, durable Discord reconciliation, Discord OAuth
+> sessions, build writes, weighted vote writes, the full resource model, and distributed rate
+> limiting are complete. The blockers in "Findings" were pre-existing and verified in-tree rather
+> than hypothetical risks, and three would have surfaced as production incidents with the matching
+> route. Amend this document in place as phases land, calling out where building it proved part of
+> it wrong rather than silently rewriting.
 >
-> **Known gap.** Discord reconciliation of *deletes* is acknowledged and logged, not acted on;
-> see the implementation correction under "Decision: reconciliation uses an outbox table".
+> **Landed since the 2026-08-06 status.** The delete side of Discord reconciliation, called out
+> below as a known gap, was resolved by the `discord_posts` diff-loop rework (2026-08-15,
+> `docs/plans/discord-message-tracking.md`): a vanished resource now simply renders as "wants no
+> posts," so deletion needs no branch of its own — see the "(resolved)" correction under "Decision:
+> reconciliation uses an outbox table". The search-projection-freeze gap noted under that same
+> decision is also gone: the 2026-08-09 API/bot/worker process split (`squid/worker/app.py`) moved
+> `refresh_search_index` onto a standalone database worker, so it no longer depends on the bot
+> process being up. Three later refactors changed *how* this document's design is implemented
+> without changing what is exposed, and are the current source of truth for their areas rather than
+> this document: `docs/plans/completed/pagination-redesign.md` deleted the signed `CursorCodec`
+> design in favor of transparent `{items, total, next, prev}` pagination (2026-08-14), superseding
+> "abstraction 2" and the cursor material in "Findings" and "Phase 0" below; `docs/plans/rbac.md`
+> replaced the `Scope` vocabulary in "abstraction 4" with granular permission nodes (2026-08-13/14,
+> already forward-referenced from "Decision: voting over HTTP" below); and `Principal` was renamed
+> to `Caller` throughout `squid/api/` (2026-08-16) with no behavior change. Finally, 2026-08-17
+> moved every route's OpenAPI/CLI-contract metadata (security, scopes, `x-squid-cli`, response
+> links) off the central `OPERATIONS` table and onto each route via `squid/api/contract.py`,
+> then deleted `OPERATIONS` and made `validate_contract()` a strict build-time check — a
+> continuation of "abstraction 6" (errors and routes stay contract-declared), not new resource
+> scope; it is complete, with no further `squid/api/` commits after it.
 
 ## Context
 
@@ -335,6 +354,12 @@ drop with a logged error.
 Fold the search-projection drain into this same loop and document that it runs only in the bot
 process — `refresh_search_index` is wired into `ApplicationServices` but its only caller is a bot
 cog, so an API-only deployment currently has a permanently frozen index.
+
+**Implementation correction (resolved).** The 2026-08-09 API/bot/worker process split moved
+`refresh_search_index` off the bot cog and onto `squid/worker/app.py::DatabaseWorker._refresh_search`,
+a standalone periodic job in the dedicated database-worker process. An API-only deployment no
+longer needs the bot to keep the search index warm; it needs the worker process, which every
+deployment already runs for schematic jobs, media cleanup, and vote closing.
 
 **Implementation correction (resolved).** A delete trigger fires after related message rows have
 cascaded, so a delete job no longer had the Discord message IDs needed to delete those messages.

@@ -18,14 +18,21 @@ from sqlalchemy import (
     func,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine.default import DefaultExecutionContext
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.orm.attributes import get_history
 from whenever import Instant
 
-from squid.accounts.domain import ClaimMethod, ClaimStatus, IdentityProvider, fold_creator_name
+from squid.accounts.domain import (
+    MERGE_TICKET_TTL_SECONDS,
+    ClaimMethod,
+    ClaimStatus,
+    IdentityProvider,
+    fold_creator_name,
+)
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC
+from squid.persistence.types import InstantUTC, now
 
 _PROVIDER_VALUES = ", ".join(f"'{provider.value}'" for provider in IdentityProvider)
 """Generated from the enum so the CHECK cannot drift from the domain."""
@@ -60,7 +67,9 @@ class Account(Base):
     public_creator_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), nullable=False, server_default=text("gen_random_uuid()"), default_factory=uuid.uuid4
     )
-    created_at: Mapped[Instant | None] = mapped_column(InstantUTC(), server_default=func.now(), default=None)
+    created_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+    )
     consent_version: Mapped[str | None] = mapped_column(Text, default=None)
     consented_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 
@@ -88,10 +97,99 @@ class AccountIdentity(Base):
     subject: Mapped[str] = mapped_column(Text, nullable=False)
     display_name: Mapped[str | None] = mapped_column(Text, default=None)
     verified_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+    )
+    is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
+    """Whether this identity appears on the account's public creator profile."""
+
+    avatar_key: Mapped[str | None] = mapped_column(Text, default=None)
+    """Provider rendering key, where the subject alone is not enough to build an avatar URL.
+
+    Discord avatar URLs need the hash, which only the gateway supplies. Java heads derive from
+    the UUID, so this stays NULL there.
+    """
+
+
+class AccountProfile(Base):
+    """What an account chooses to publish about itself on its creator page.
+
+    A child of `accounts` rather than more columns on it. The account row is an identity anchor
+    that thirty-odd foreign keys point at and that link and merge paths lock `FOR UPDATE`;
+    profile text is user-edited prose with an entirely different write cadence, and widening the
+    anchor to carry it would make every identity read pay for a bio.
+    """
+
+    __tablename__ = "account_profiles"
+    __table_args__ = (
+        # Length and shape only. The application owns normalization (NFKC-fold, trim, control
+        # character rejection) for the same reason `creator_aliases.normalized_name` does, so
+        # these catch a hand-written SQL insert rather than defining the value.
+        CheckConstraint(
+            "display_name IS NULL OR char_length(display_name) BETWEEN 1 AND 64",
+            name="account_profiles_display_name_length",
+        ),
+        CheckConstraint(
+            "display_name IS NULL OR display_name = btrim(display_name)",
+            name="account_profiles_display_name_trimmed",
+        ),
+        CheckConstraint("bio IS NULL OR char_length(bio) BETWEEN 1 AND 500", name="account_profiles_bio_length"),
+        CheckConstraint(
+            "pronouns IS NULL OR char_length(pronouns) BETWEEN 1 AND 40",
+            name="account_profiles_pronouns_length",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(links) = 'array' AND jsonb_array_length(links) <= 10",
+            name="account_profiles_links_shape",
+        ),
+        # An unindexed foreign key makes deleting an identity scan this table; the same defect
+        # class was closed across the schema in b9d3e6a1f8c5.
+        Index("account_profiles_avatar_identity_idx", "avatar_identity_id"),
+    )
+    account_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("accounts.id", name="account_profiles_account_id_fkey", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    display_name: Mapped[str | None] = mapped_column(Text, default=None)
+    """Presentation only, deliberately not a `creator_aliases` name: renaming yourself here moves
+    no build credit and needs no staff review."""
+
+    bio: Mapped[str | None] = mapped_column(Text, default=None)
+    pronouns: Mapped[str | None] = mapped_column(Text, default=None)
+    links: Mapped[list[dict[str, str]]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb"), default_factory=list
+    )
+    """External links as `[{"label": ..., "url": ...}]`.
+
+    JSONB rather than a child table: nothing queries links, and every write replaces the whole
+    list from one owner, so a table would buy referential integrity to nothing and cost a join on
+    the hottest public read.
+    """
+
+    hidden: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    """Whether to withhold the profile. A hidden profile still serves its aliases and build
+    credits, because a creator page that vanished would strand every build crediting it."""
+
+    avatar_identity_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("account_identities.id", name="account_profiles_avatar_identity_id_fkey", ondelete="SET NULL"),
+        default=None,
+    )
+    """The linked identity this profile's avatar is rendered from.
+
+    `SET NULL` so unlinking that identity clears the avatar rather than leaving a render pointing
+    at a subject we no longer hold. Ownership — that the identity belongs to this same account —
+    is checked in the repository, since the composite foreign key that would enforce it here
+    cannot coexist with `ON DELETE SET NULL`.
+    """
+    created_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+    )
+    updated_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -99,6 +197,7 @@ class PublicCreatorRedirect(Base):
     """Permanent redirect from a merged public creator identifier."""
 
     __tablename__ = "public_creator_redirects"
+    __table_args__ = (Index("public_creator_redirects_target_idx", "target_account_id"),)
     retired_public_creator_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     target_account_id: Mapped[int] = mapped_column(
         Integer,
@@ -106,7 +205,7 @@ class PublicCreatorRedirect(Base):
         nullable=False,
     )
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -115,6 +214,7 @@ class CreatorAlias(Base):
 
     __tablename__ = "creator_aliases"
     __table_args__ = (
+        Index("creator_aliases_account_idx", "account_id"),
         UniqueConstraint("normalized_name", name="creator_aliases_normalized_name_key"),
         Index(
             # The unique constraint above serves equality only; a creator typeahead needs a prefix
@@ -160,7 +260,7 @@ class CreatorAlias(Base):
     claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     claim_method: Mapped[ClaimMethod | None] = mapped_column(Text, default=None)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -181,6 +281,8 @@ class CreatorAliasClaim(Base):
 
     __tablename__ = "creator_alias_claims"
     __table_args__ = (
+        Index("creator_alias_claims_account_idx", "account_id"),
+        Index("creator_alias_claims_resolved_by_idx", "resolved_by_account_id"),
         Index(
             "creator_alias_claims_one_pending_per_account",
             "alias_id",
@@ -210,7 +312,7 @@ class CreatorAliasClaim(Base):
     )
     status: Mapped[ClaimStatus] = mapped_column(Text, nullable=False, default=ClaimStatus.PENDING)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     resolved_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     resolved_by_account_id: Mapped[int | None] = mapped_column(
@@ -237,7 +339,7 @@ class VerificationCode(Base):
     username: Mapped[str] = mapped_column(Text, nullable=False, default="")
     valid: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     created: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     expires: Mapped[Instant] = mapped_column(
         InstantUTC(),
@@ -283,5 +385,45 @@ class VerificationAttempt(Base):
     consecutive_failures: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     locked_until: Mapped[Instant | None] = mapped_column(InstantUTC(), nullable=True, default=None)
     updated_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+    )
+
+
+class AccountMergeTicket(Base):
+    """A live, single-use claim that one account consents to being absorbed by another.
+
+    A merge needs recent proof of *both* accounts, and no one session can hold both. The ticket is
+    that second proof, carried through the only channel the two sides share: a person who can sign
+    into each. Minting one is the absorbed side authenticating; redeeming it is the surviving side
+    doing so, inside the ticket's lifetime.
+
+    Keyed on the account rather than on the digest, so minting replaces. One account can only ever
+    have one live ticket, which is most of why an eight-character code is enough.
+    """
+
+    __tablename__ = "account_merge_tickets"
+    __table_args__ = (
+        CheckConstraint("expires_at > created_at", name="account_merge_tickets_expiry_after_creation"),
+        Index("account_merge_tickets_code_digest_idx", "code_digest"),
+    )
+
+    account_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("accounts.id", name="account_merge_tickets_account_id_fkey", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    code_digest: Mapped[str] = mapped_column(Text, nullable=False)
+    """Digest, never the code. The plaintext is shown once at mint time and never stored, exactly
+    as a verification code is."""
+
+    expires_at: Mapped[Instant] = mapped_column(
+        InstantUTC(),
+        nullable=False,
+        default_factory=lambda: Instant.now().add(seconds=MERGE_TICKET_TTL_SECONDS),
+    )
+    """Doubles as the proof timestamp: a ticket is redeemable for exactly as long as
+    `RecentAccountProof` accepts the authentication that minted it."""
+
+    created_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )

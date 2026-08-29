@@ -26,7 +26,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC
+from squid.persistence.types import InstantUTC, now
 from squid.tags.domain import (
     RecordOperator,
     TagAuthority,
@@ -52,6 +52,7 @@ class TagDefinition(Base, kw_only=True):
 
     __tablename__ = "tag_definitions"
     __table_args__ = (
+        Index("tag_definitions_created_by_idx", "created_by_account_id"),
         UniqueConstraint("id", "value_type", name="tag_definitions_id_value_type_key"),
         UniqueConstraint("stable_key", name="tag_definitions_stable_key_key"),
         UniqueConstraint("query_name", name="tag_definitions_query_name_key"),
@@ -89,11 +90,13 @@ class TagDefinition(Base, kw_only=True):
             "(semantic_kind <> 'restriction' AND restriction_type IS NULL)",
             name="tag_definitions_restriction_type_check",
         ),
-        CheckConstraint(
-            "(value_type = 'numeric') = (canonical_unit_key IS NOT NULL OR numeric_step IS NOT NULL) OR "
-            "(value_type = 'numeric' AND canonical_unit_key IS NULL AND numeric_step IS NULL)",
-            name="tag_definitions_numeric_metadata_check",
-        ),
+        # There was a `tag_definitions_numeric_metadata_check` here. Its second disjunct
+        # (`value_type = 'numeric' AND both columns NULL`) made every numeric row pass
+        # regardless, so all it actually enforced was that a non-numeric row carries no
+        # unit and no step -- which `tag_definitions_non_numeric_unit_check` below already
+        # states, and more strictly. Restoring the apparent intent is not an option either:
+        # `TagRepository.create_showcase` deliberately mints numeric user tags with neither
+        # a canonical unit nor a step, so "numeric implies numeric metadata" is not true here.
         CheckConstraint(
             "value_type = 'numeric' OR "
             "(canonical_unit_key IS NULL AND default_display_unit_key IS NULL AND numeric_step IS NULL)",
@@ -142,10 +145,10 @@ class TagDefinition(Base, kw_only=True):
         default=None,
     )
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     updated_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     archived_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 
@@ -175,7 +178,7 @@ class TagAlias(Base, kw_only=True):
     alias: Mapped[str] = mapped_column(Text, nullable=False)
     normalized_alias: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
     definition: Mapped[TagDefinition] = relationship(back_populates="aliases", lazy="joined", default=None)
@@ -202,6 +205,7 @@ class BuildTagAssignment(Base, kw_only=True):
 
     __tablename__ = "build_tag_assignments"
     __table_args__ = (
+        Index("build_tag_assignments_created_by_idx", "created_by_account_id"),
         PrimaryKeyConstraint("build_id", "tag_id"),
         ForeignKeyConstraint(
             ["tag_id", "value_type"],
@@ -268,10 +272,10 @@ class BuildTagAssignment(Base, kw_only=True):
         default=None,
     )
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     updated_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
     definition: Mapped[TagDefinition] = relationship(back_populates="assignments", lazy="joined", default=None)
@@ -282,6 +286,7 @@ class TagRelation(Base, kw_only=True):
 
     __tablename__ = "tag_relations"
     __table_args__ = (
+        Index("tag_relations_target_idx", "target_tag_id"),
         PrimaryKeyConstraint("source_tag_id", "relation_kind", "target_tag_id"),
         CheckConstraint("relation_kind IN ('implies', 'incompatible')", name="tag_relations_kind_check"),
         CheckConstraint("source_tag_id <> target_tag_id", name="tag_relations_distinct_check"),

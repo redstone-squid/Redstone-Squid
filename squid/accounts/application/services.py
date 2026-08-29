@@ -1,5 +1,6 @@
 """Account application services: one account may hold Discord and Java identities alike."""
 
+import base64
 import logging
 import secrets
 from collections.abc import Awaitable, Callable, Sequence
@@ -9,9 +10,13 @@ from whenever import Instant
 
 from squid.accounts.application.ports import AccountRepository
 from squid.accounts.domain import (
+    MERGE_CODE_BYTES,
+    MERGE_TICKET_TTL_SECONDS,
     Account,
     AccountConsent,
+    AccountIdentity,
     AccountMerge,
+    AccountProfile,
     AliasClaim,
     ClaimStatus,
     CreatorAlias,
@@ -19,15 +24,24 @@ from squid.accounts.domain import (
     IdentityProvider,
     IdentityRefresh,
     LinkReservation,
+    MergePreview,
+    MergeTicket,
+    ProfileUpdate,
+    PublicCreatorProfile,
     RecentAccountProof,
+    present_public_profile,
 )
 from squid.accounts.errors import (
     AccountAlreadyLinkedError,
+    AccountIdentityNotFoundError,
     AccountNotFoundError,
+    AliasAlreadyClaimedError,
     ClaimNotFoundError,
     ConsentRequiredError,
+    InvalidMergeCodeError,
     InvalidMergeProofError,
     InvalidVerificationCodeError,
+    LastIdentityError,
     LinkReservationExpiredError,
     MinecraftAccountNotFoundError,
     NoLinkedMinecraftAccountError,
@@ -101,14 +115,20 @@ class AccountService:
         """
         return await self._repository.get_many(account_ids)
 
-    async def get_or_create_identity(self, provider: IdentityProvider, subject: str) -> Account:
+    async def get_or_create_identity(
+        self, provider: IdentityProvider, subject: str, *, consent: AccountConsent | None = None
+    ) -> Account:
         """Resolve the account established by a verified external identity, creating it if absent.
 
         Every caller holds evidence of the *provider* subject it passes — an OAuth exchange, a
         gateway event — which is what makes creating an account here legitimate. Nothing that
         merely observes a subject may use this; see `AccountIdCache`'s never-create rule.
+
+        A caller that just asked for consent passes the receipt, so the row and its receipt are
+        one write. Creating the row first and recording consent second leaves a receipt-less
+        account behind whenever the second call fails.
         """
-        return await self._repository.get_or_create_identity(provider, subject)
+        return await self._repository.get_or_create_identity(provider, subject, consent=consent)
 
     async def grant_current_consent(self, account_id: int) -> Account:
         """Record consent for any authenticated caller, however they proved their identity."""
@@ -130,6 +150,62 @@ class AccountService:
         ):
             raise InvalidMergeProofError
         return await self._repository.merge(surviving_proof.account_id, absorbed_proof.account_id)
+
+    async def create_merge_code(self, account_id: int) -> tuple[str, MergeTicket]:
+        """Mint a single-use code offering this account up to be absorbed.
+
+        Called on the account that is going *away*. That direction is deliberate: minting is an
+        act of consent by the side that loses its public creator id, and it is the side that must
+        prove it authenticated recently, since the surviving side proves that by redeeming.
+
+        The plaintext is returned once and never stored.
+        """
+        code = base64.b32encode(secrets.token_bytes(MERGE_CODE_BYTES)).decode("ascii").rstrip("=")
+        # The pepper stays in infrastructure: the repository hashes, exactly as it does for a
+        # verification code, so no application-layer value is ever the stored one.
+        ticket = await self._repository.replace_merge_ticket(account_id, code, MERGE_TICKET_TTL_SECONDS)
+        return code, ticket
+
+    async def preview_merge(self, surviving_account_id: int, code: str) -> MergePreview:
+        """Describe what redeeming *code* would move, without spending it.
+
+        A merge cannot be undone -- the absorbed public creator id becomes a permanent redirect --
+        so both surfaces show this before the irreversible button.
+        """
+        ticket = await self._repository.peek_merge_ticket(code)
+        if ticket is None or ticket.account_id == surviving_account_id:
+            # Self-merge is refused here as well as in `merge_accounts`, so the preview never
+            # renders a confirmation for something that cannot commit.
+            raise InvalidMergeCodeError
+        absorbed = await self._repository.get_by_id(ticket.account_id)
+        if absorbed is None or absorbed.public_creator_id is None:
+            raise InvalidMergeCodeError
+        record = await self._repository.get_creator_profile_record(absorbed.public_creator_id)
+        aliases = () if record is None else record.aliases
+        return MergePreview(
+            absorbed_public_creator_id=absorbed.public_creator_id,
+            alias_names=tuple(alias.name for alias in aliases),
+            identity_count=len(absorbed.identities),
+            build_count=sum(alias.build_count for alias in aliases),
+        )
+
+    async def complete_merge(self, surviving_account_id: int, code: str, *, now: Instant | None = None) -> AccountMerge:
+        """Absorb the account that minted *code* into the caller's.
+
+        Consuming the ticket is what supplies the absorbed side's `RecentAccountProof`: the ticket
+        was minted by an authenticated session and lives exactly as long as such a proof is
+        accepted, so its creation timestamp is the proof timestamp. The caller authenticating now
+        is the surviving side's.
+        """
+        ticket = await self._repository.consume_merge_ticket(code)
+        if ticket is None:
+            raise InvalidMergeCodeError
+        checked_at = now or Instant.now()
+        return await self.merge_accounts(
+            RecentAccountProof(surviving_account_id, checked_at),
+            RecentAccountProof(ticket.account_id, ticket.created_at),
+            now=checked_at,
+        )
 
     async def get_creator_alias(self, name: str) -> CreatorAlias | None:
         """Return a creator credit by name without loading its linked account."""
@@ -254,9 +330,71 @@ class AccountService:
                 extra={"provider": provider.value, "locked_until": str(locked_until)},
             )
 
-    async def unlink_minecraft_account(self, account_id: int) -> bool:
-        """Unlink every Java identity from an account."""
-        return await self._repository.unlink_java_identity(account_id)
+    async def list_identities(self, account_id: int) -> tuple[AccountIdentity, ...]:
+        """Return every identity linked to an account, hidden ones included.
+
+        This is the self view, so visibility does not filter it: you can only unhide what you can
+        see listed.
+        """
+        account = await self._repository.get_by_id(account_id)
+        if account is None:
+            raise AccountNotFoundError(account_id)
+        return account.identities
+
+    async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity:
+        """Remove one linked identity, refusing to strand the account without any.
+
+        Creator credit is deliberately untouched: aliases stay claimed, because a build's
+        attribution is a fact about the build and should not change when someone tidies up how
+        they sign in.
+        """
+        if await self._repository.count_identities(account_id) <= 1:
+            raise LastIdentityError(account_id=account_id)
+        removed = await self._repository.unlink_identity(account_id, identity_id)
+        if removed is None:
+            raise AccountIdentityNotFoundError(identity_id, account_id=account_id)
+        return removed
+
+    async def set_identity_visibility(self, account_id: int, identity_id: int, *, is_public: bool) -> AccountIdentity:
+        """Publish or withhold one linked identity on the account's public profile."""
+        return await self._repository.set_identity_visibility(account_id, identity_id, is_public=is_public)
+
+    async def record_identity_avatar_key(self, account_id: int, identity_id: int, avatar_key: str | None) -> None:
+        """Store the provider key an avatar URL needs, when a caller happens to hold a fresh one."""
+        await self._repository.set_identity_avatar_key(account_id, identity_id, avatar_key)
+
+    async def get_profile(self, account_id: int) -> AccountProfile:
+        """Return an account's own profile, including anything it has chosen to hide."""
+        profile = await self._repository.get_profile(account_id)
+        if profile is None:
+            raise AccountNotFoundError(account_id)
+        return profile
+
+    async def update_profile(self, account_id: int, update: ProfileUpdate) -> AccountProfile:
+        """Apply a partial profile edit after validating it.
+
+        Consent-gated like every other write that publishes something about a person: a profile is
+        the most public thing an account owns.
+        """
+        account = await self._repository.get_by_id(account_id)
+        if account is None:
+            raise AccountNotFoundError(account_id)
+        if account.needs_consent_refresh:
+            raise ConsentRequiredError(account_id=account_id)
+        return await self._repository.upsert_profile(account_id, update.validated())
+
+    async def clear_profile(self, account_id: int) -> AccountProfile:
+        """Reset a profile to its empty state, for staff handling abuse.
+
+        Deliberately does not hide the profile: `hidden` belongs to its owner, and a moderation
+        action that also flipped it would take that decision away from them.
+        """
+        return await self._repository.clear_profile(account_id)
+
+    async def get_public_profile(self, public_id: UUID) -> PublicCreatorProfile | None:
+        """Return what a stranger may see of one creator, following merge redirects."""
+        record = await self._repository.get_creator_profile_record(public_id)
+        return None if record is None else present_public_profile(record)
 
     async def refresh_java_identity(self, account_id: int, *, java_uuid: UUID | None = None) -> IdentityRefresh:
         """Re-read the linked Java name from Mojang and reconcile the creator credit.
@@ -297,7 +435,24 @@ class AccountService:
             raise AccountNotFoundError(account_id)
         if account.needs_consent_refresh:
             raise ConsentRequiredError(account_id=account_id)
-        return await self._repository.request_claim(name=name, account_id=account.id)
+        try:
+            return await self._repository.request_claim(name=name, account_id=account.id)
+        except AliasAlreadyClaimedError as conflict:
+            raise await self._name_the_holder(conflict) from None
+
+    async def _name_the_holder(self, conflict: AliasAlreadyClaimedError) -> AliasAlreadyClaimedError:
+        """Resolve a conflicting holder's public creator name, when there is one to resolve.
+
+        Enriched here rather than in the repository so the extra query happens only on the error
+        path, and only where a human is going to read the result. A profile with no aliases yet
+        leaves the message as it was rather than naming an empty string.
+        """
+        if conflict.holder_public_creator_id is None:
+            return conflict
+        profile = await self._repository.get_creator_profile(conflict.holder_public_creator_id)
+        if profile is None or not profile.aliases:
+            return conflict
+        return conflict.with_holder_name(profile.aliases[0])
 
     async def pending_alias_claims(self, *, with_claimants: bool = False) -> Sequence[AliasClaim]:
         """List creator credit claims awaiting staff review.
@@ -325,12 +480,16 @@ class AccountService:
         claim = await self._repository.get_claim(claim_id)
         if claim is None or claim.status is not ClaimStatus.PENDING:
             raise ClaimNotFoundError(claim_id)
-        return await self._repository.resolve_claim(
-            claim_id=claim_id,
-            status=status,
-            resolved_by_account_id=staff_account_id,
-            reassign=reassign,
-        )
+        try:
+            return await self._repository.resolve_claim(
+                claim_id=claim_id,
+                status=status,
+                resolved_by_account_id=staff_account_id,
+                reassign=reassign,
+            )
+        except AliasAlreadyClaimedError as conflict:
+            # A reviewer needs to know who holds the name they are being stopped from granting.
+            raise await self._name_the_holder(conflict) from None
 
     async def generate_verification_code(self, minecraft_uuid: UUID) -> int:
         """Generate a verification code after validating the Java account."""

@@ -7,6 +7,7 @@ import zlib
 import pytest
 from whenever import Instant
 
+from squid.core.errors import DataIntegrityError
 from squid.schematics.application import (
     CachedRender,
     ConvertRequest,
@@ -133,9 +134,9 @@ def test_default_upload_budgets_match_the_public_plugin_contract() -> None:
 def test_publication_requires_rights_and_a_completed_sanitizer_identity() -> None:
     now = Instant.parse_iso("2026-08-11T12:00:00Z")
 
-    with pytest.raises(ValueError, match="license and rights"):
+    with pytest.raises(DataIntegrityError, match="license and rights"):
         SchematicPublication(visibility=SchematicVisibility.PUBLIC_DOWNLOAD)
-    with pytest.raises(ValueError, match="audit report"):
+    with pytest.raises(DataIntegrityError, match="audit report"):
         SchematicPublication(sanitizer_version="nucleation-test")
     assert sanitized_publication(public=True).is_public_downloadable is True
     assert SchematicLicense.CC_BY_NC_SA_4_0.uri == "https://creativecommons.org/licenses/by-nc-sa/4.0/"

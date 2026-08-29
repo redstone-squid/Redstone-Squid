@@ -2,22 +2,23 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Path, Query
+from fastapi import APIRouter, Depends, Path, Query, Response, status
 
+from squid.api.contract import ANONYMOUS, cli_command, contract
 from squid.api.dependencies import ErrorReports
 from squid.api.errors import responses
+from squid.api.idempotency import enforce_request_idempotency
 from squid.api.pagination import Page, PageSizeParam, render_page
 from squid.api.security import requires
 from squid.api.v1.schemas.diagnostics import ErrorReportDetail, ErrorReportSummary
 from squid.core.pagination import offset_page
 from squid.diagnostics.domain import MAX_REFERENCE_LENGTH
-from squid.permissions.domain.catalogue import DIAGNOSTICS_ERROR_READ
+from squid.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR, DIAGNOSTICS_ERROR_READ
 
-router = APIRouter(
-    prefix="/diagnostics/errors",
-    tags=["diagnostics"],
-    dependencies=[Depends(requires(DIAGNOSTICS_ERROR_READ))],
-)
+# No router-level dependency: clearing every report is a distinct, more dangerous capability
+# than reading one, so each route declares the permission it actually needs instead of the GET
+# routes' `diagnostics.error.read` leaking onto the DELETE route below.
+router = APIRouter(prefix="/diagnostics/errors", tags=["diagnostics"])
 
 WorkLostParam = Annotated[
     bool,
@@ -34,7 +35,18 @@ ReferenceParam = Annotated[
 ]
 
 
-@router.get("", response_model=Page[ErrorReportSummary], responses=responses(401, 403, 422))
+@router.get(
+    "",
+    response_model=Page[ErrorReportSummary],
+    responses=responses(401, 403, 422),
+    dependencies=[Depends(requires(DIAGNOSTICS_ERROR_READ))],
+    operation_id="diagnostics_errors_list",
+    openapi_extra=contract(
+        security=[ANONYMOUS],
+        cli=cli_command("errors.list", interaction="direct"),
+        scopes=("diagnostics.error.read",),
+    ),
+)
 async def list_error_reports(
     error_reports: ErrorReports,
     page_size: PageSizeParam = 20,
@@ -59,6 +71,13 @@ async def list_error_reports(
         422,
         describe={404: "No stored report matches the reference, or it has passed its retention window."},
     ),
+    dependencies=[Depends(requires(DIAGNOSTICS_ERROR_READ))],
+    operation_id="diagnostics_error_get",
+    openapi_extra=contract(
+        security=[ANONYMOUS],
+        cli=cli_command("errors.show", interaction="direct"),
+        scopes=("diagnostics.error.read",),
+    ),
 )
 async def get_error_report(reference: ReferenceParam, error_reports: ErrorReports) -> ErrorReportDetail:
     """Resolve a quoted reference to the failure behind it.
@@ -68,3 +87,25 @@ async def get_error_report(reference: ReferenceParam, error_reports: ErrorReport
     """
     report, matches = await error_reports.lookup(reference)
     return ErrorReportDetail.of(report, matches)
+
+
+@router.delete(
+    "",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=responses(401, 403, 422),
+    dependencies=[Depends(requires(DIAGNOSTICS_ERROR_CLEAR)), Depends(enforce_request_idempotency)],
+    operation_id="diagnostics_errors_clear",
+    openapi_extra=contract(
+        security=[ANONYMOUS],
+        cli=cli_command("errors.clear", interaction="direct"),
+        scopes=("diagnostics.error.clear",),
+    ),
+)
+async def clear_error_reports(error_reports: ErrorReports) -> Response:
+    """Delete every stored error report, expired or not.
+
+    Denied by default to everyone but the bot owner: `diagnostics.error.clear` is tagged
+    destructive, which both built-in admin roles explicitly exclude.
+    """
+    await error_reports.clear_all()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

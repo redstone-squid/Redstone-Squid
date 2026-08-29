@@ -8,6 +8,7 @@ from uuid import UUID
 
 from fastapi import FastAPI
 
+from squid.accounts.domain import AccountProfile
 from squid.accounts.errors import MinecraftAccountNotFoundError
 from squid.api.app import create_api_app
 from squid.builds.errors import BuildNotFoundError
@@ -72,6 +73,15 @@ class MockAccountManager:
 
     async def get_creator_profile(self, _public_id: UUID):
         return None
+
+    async def get_public_profile(self, _public_id: UUID):
+        return None
+
+    async def get_profile(self, account_id: int):
+        return AccountProfile.empty(account_id)
+
+    async def list_identities(self, _account_id: int):
+        return ()
 
     async def generate_verification_code(self, user_uuid: str | UUID) -> int:
         if isinstance(user_uuid, str):
@@ -242,22 +252,12 @@ class MockIdempotency:
 
 class MockNotifications:
     async def preferences(self, account_id: int):
-        return NotificationPreferences(account_id=account_id, notice_version=None, consented_at=None)
-
-    async def accept_notice(self, account_id: int, *, web_enabled: bool, dm_enabled: bool):
-        return NotificationPreferences(
-            account_id=account_id,
-            notice_version="2026-08-10",
-            consented_at=None,
-            web_enabled=web_enabled,
-            dm_enabled=dm_enabled,
-        )
+        return NotificationPreferences(account_id=account_id, consent_pending=True)
 
     async def set_preferences(self, account_id: int, *, web_enabled: bool, dm_enabled: bool):
         return NotificationPreferences(
             account_id=account_id,
-            notice_version="2026-08-10",
-            consented_at=None,
+            consent_pending=False,
             web_enabled=web_enabled,
             dm_enabled=dm_enabled,
         )

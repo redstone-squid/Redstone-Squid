@@ -13,7 +13,7 @@ from alembic_utils.pg_trigger import PGTrigger
 from sqlalchemy.dialects import postgresql
 
 from alembic import op
-from squid.persistence.alembic_entities import ALEMBIC_UTIL_ENTITIES
+from squid.persistence.alembic_entities import alembic_util_entities
 
 revision: str = "c5e6f7a8b9c0"
 down_revision: str | Sequence[str] | None = "b4d5e6f7a8b9"
@@ -257,7 +257,7 @@ def downgrade() -> None:
 def _function(name: str) -> PGFunction:
     return next(
         entity
-        for entity in ALEMBIC_UTIL_ENTITIES
+        for entity in alembic_util_entities()
         if isinstance(entity, PGFunction) and entity.signature.partition("(")[0] == name
     )
 
@@ -265,6 +265,6 @@ def _function(name: str) -> PGFunction:
 def _trigger(name: str) -> PGTrigger:
     return next(
         entity
-        for entity in ALEMBIC_UTIL_ENTITIES
+        for entity in alembic_util_entities()
         if isinstance(entity, PGTrigger) and entity.signature.partition("(")[0] == name
     )

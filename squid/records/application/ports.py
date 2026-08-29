@@ -1,7 +1,7 @@
 """Ports used by record application services."""
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -13,7 +13,7 @@ from squid.records.application.models import (
     RecordSourceCandidate,
     TitleDiagnosticGap,
 )
-from squid.records.domain import BuildKind
+from squid.records.domain import BuildKind, CategoryText, RecordClass
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,7 +68,14 @@ class RecordRunRepository(Protocol):
 
     async def list_requested_categories(self, kind: BuildKind) -> Sequence[CategoryIdentity]: ...
 
-    async def save_requested_category(self, ruleset_id: int, category: CategoryIdentity) -> None: ...
+    async def get_definition_identity(self, definition_id: int) -> CategoryIdentity | None: ...
+
+    async def save_requested_category(
+        self,
+        ruleset_id: int,
+        category: CategoryIdentity,
+        titles: Mapping[RecordClass, CategoryText],
+    ) -> None: ...
 
     async def enqueue(self, kind: BuildKind, *, build_id: int | None, reason: str) -> None: ...
 

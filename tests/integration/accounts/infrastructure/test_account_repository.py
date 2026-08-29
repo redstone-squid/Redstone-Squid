@@ -41,6 +41,7 @@ SECOND_MINECRAFT_UUID = UUID("22222222-2222-2222-2222-222222222222")
 _TABLES = [
     Base.metadata.tables["accounts"],
     Base.metadata.tables["account_identities"],
+    Base.metadata.tables["account_profiles"],
     Base.metadata.tables["public_creator_redirects"],
     Base.metadata.tables["creator_aliases"],
     Base.metadata.tables["creator_alias_claims"],
@@ -274,7 +275,13 @@ async def test_unlink_removes_all_java_identities(repository: AccountRepository)
     )
 
     assert account.id is not None
-    assert await repository.unlink_java_identity(account.id)
+    java = [identity for identity in account.identities if identity.provider is IdentityProvider.JAVA]
+    assert len(java) == 2
+    # Removed one at a time by id: unlinking a whole provider at once is exactly what an account
+    # holding two Java identities makes ambiguous.
+    for identity in java:
+        assert identity.id is not None
+        assert await repository.unlink_identity(account.id, identity.id) is not None
     reloaded = await repository.get_by_id(account.id)
     assert reloaded is not None
     assert all(identity.provider is not IdentityProvider.JAVA for identity in reloaded.identities)

@@ -17,6 +17,7 @@ from squid.voting.domain import (
     DeleteLogVoteTarget,
     EmojiPreset,
     GenericPoll,
+    PollScope,
     RoleWeight,
     StoredVoteMutation,
     VoteChange,
@@ -141,6 +142,7 @@ class VoteRepository:
         deadline: Instant,
         options: Sequence[VoteOption],
         guild_id: int | None = None,
+        scope: PollScope = PollScope.GUILD,
     ) -> int:
         options = normalize_vote_options(options, kind=VoteKind.GENERIC)
         async with self._session_factory.begin() as session:
@@ -151,6 +153,7 @@ class VoteRepository:
                     guild_id=guild_id,
                     question=question,
                     visibility=visibility,
+                    scope=scope,
                     deadline=deadline,
                 )
             )
@@ -565,4 +568,6 @@ class VoteRepository:
                 )
                 if generic is None:
                     return None, None
-                return None, GenericPoll(generic.question, generic.visibility, generic.deadline, generic.guild_id)
+                return None, GenericPoll(
+                    generic.question, generic.visibility, generic.deadline, generic.guild_id, generic.scope
+                )

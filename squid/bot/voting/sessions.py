@@ -8,12 +8,11 @@ two-phase construction — be deleted outright.
 
 import logging
 from collections.abc import Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import discord
 
 from squid.bot._types import GuildMessageable
-from squid.bot.utils.accounts import account_id_for
 from squid.builds.domain import Build, Status
 from squid.voting.domain import VoteKind, VoteOption
 
@@ -21,6 +20,13 @@ if TYPE_CHECKING:
     import squid.bot.app
 
 logger = logging.getLogger(__name__)
+
+
+async def configured_vote_channels(bot: squid.bot.app.RedstoneSquid) -> list[GuildMessageable]:
+    """Every vote channel the bot can currently see, one per guild that set one."""
+    configured = await bot.services.settings.get_many((guild.id for guild in bot.guilds), "Vote")
+    resolved = (bot.get_channel(channel_id) for channel_id in configured.values() if channel_id is not None)
+    return cast(list[GuildMessageable], [channel for channel in resolved if channel is not None])
 
 
 async def ensure_build_review(
@@ -78,7 +84,7 @@ async def ensure_build_review(
 async def start_delete_log_vote(
     bot: squid.bot.app.RedstoneSquid,
     *,
-    author_id: int,
+    author_account_id: int,
     target_message: discord.Message,
     published_message: discord.Message,
 ) -> int:
@@ -93,7 +99,6 @@ async def start_delete_log_vote(
         raise ValueError(msg)
 
     options = (await bot.services.votes.emoji_preset(target_message.guild.id, VoteKind.DELETE_LOG)).options
-    author_account_id = await account_id_for(bot.services.accounts, author_id)
     session_id = await bot.services.votes.start_delete_log_vote(
         author_account_id=author_account_id,
         pass_threshold=3,

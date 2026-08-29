@@ -8,7 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC
+from squid.persistence.types import InstantUTC, now
 
 
 class CliDeviceEnrollmentRecord(Base, kw_only=True):
@@ -16,6 +16,7 @@ class CliDeviceEnrollmentRecord(Base, kw_only=True):
 
     __tablename__ = "cli_device_enrollments"
     __table_args__ = (
+        Index("cli_device_enrollments_approved_by_idx", "approved_by_account_id"),
         UniqueConstraint("device_code_hash", name="cli_device_enrollments_device_code_hash_key"),
         UniqueConstraint("user_code_hash", name="cli_device_enrollments_user_code_hash_key"),
         CheckConstraint("octet_length(device_code_hash) = 32", name="cli_device_enrollments_device_hash_length"),
@@ -85,10 +86,10 @@ class CliDeviceRecord(Base, kw_only=True):
     client_instance_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     label: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     last_used_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     revoked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 

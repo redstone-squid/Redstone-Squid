@@ -57,6 +57,22 @@
     characters, which is already the width of the untraced fallback, and lookup accepts either width.
 - [ ] Integrate Sentry (or wire up a real log/trace backend) instead of the current no-op `debug` exporter in
   `deploy/otel-collector.yaml`.
+- [x] Let the worker and API processes use the human-readable log formatter in dev mode like the bot does.
+  `development_mode` moved from `BotProcessConfig` to the shared `_ProcessSettings` base, and
+  `configure_service_worker_logging`/`configure_api_logging` now take a `dev_mode` flag threaded from
+  `resolved_config.development_mode`, matching `configure_bot_logging`.
+
+## Schematic rendering
+
+- [ ] Decouple on-demand bot rendering from automatic preview publication.
+  - `SQUID_SCHEMATIC_RENDER_ENABLED` should gate renderer availability and `/build schematic render` without
+    requiring a public API URL.
+  - Make automatic preview publication explicit and require `SQUID_SCHEMATIC_RENDER_PUBLIC_BASE_URL` only for
+    that publication path.
+  - Remove the worker's direct dependency on API-shaped preview URLs; publish through an explicitly owned,
+    reachable storage or delivery boundary.
+  - Do not allow a placeholder URL to make a durable render appear successful while leaving Discord with a broken
+    preview link.
 
 ## Creator identity
 

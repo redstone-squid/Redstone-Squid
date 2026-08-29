@@ -45,7 +45,7 @@ from sqlalchemy.dialects import postgresql
 
 import squid.persistence.types
 from alembic import op
-from squid.persistence.alembic_entities import ALEMBIC_UTIL_ENTITIES
+from squid.persistence.alembic_entities import alembic_util_entities
 
 revision: str = "c3d4e5f6a7b2"
 down_revision: str | Sequence[str] | None = "c9d2e3f4a5b6"
@@ -199,7 +199,7 @@ EntityT = TypeVar("EntityT", bound=ReplaceableEntity)
 def _selected_entities(entity_type: type[EntityT], names: set[str]) -> list[EntityT]:
     return [
         entity
-        for entity in ALEMBIC_UTIL_ENTITIES
+        for entity in alembic_util_entities()
         if isinstance(entity, entity_type) and entity.signature.partition("(")[0] in names
     ]
 

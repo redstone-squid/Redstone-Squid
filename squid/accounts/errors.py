@@ -62,6 +62,66 @@ class AccountNotFoundError(NotFoundError):
         self.subject = subject
 
 
+class AccountIdentityNotFoundError(NotFoundError):
+    """The account has no identity with the requested internal id.
+
+    Identities are addressed by id rather than by provider because an account can legitimately
+    hold two of the same provider — a merge moves every identity row across.
+    """
+
+    default_message = _("That linked identity does not belong to your account.")
+    default_title = _("Identity not found")
+    default_code = ErrorCode.ACCOUNT_IDENTITY_NOT_FOUND
+    default_resource = "account_identity"
+    default_end_user_action = _("List your linked identities and try again with one of those.")
+
+    def __init__(self, identity_id: int, *, account_id: int | None = None) -> None:
+        context: dict[str, JSONValue] = {"identity_id": identity_id}
+        if account_id is not None:
+            context["account_id"] = account_id
+        super().__init__(context=context, public_context={"identity_id": identity_id})
+        self.identity_id = identity_id
+        self.account_id = account_id
+
+
+class LastIdentityError(ConflictError):
+    """Unlinking the account's only identity would leave nobody able to sign in.
+
+    Nothing else can re-attach an identity to an orphaned account: every sign-in path starts from
+    a provider subject and looks the account up by it. Deleting the account is a different
+    operation with different consequences for build credit, so this refuses rather than guessing.
+    """
+
+    default_message = _("You cannot unlink your only remaining identity.")
+    default_title = _("Last identity")
+    default_code = ErrorCode.LAST_IDENTITY
+    default_resource = "account_identity"
+    default_end_user_action = _("Link another identity first, then unlink this one.")
+
+    def __init__(self, *, account_id: int | None = None) -> None:
+        super().__init__(context={} if account_id is None else {"account_id": account_id})
+        self.account_id = account_id
+
+
+class InvalidProfileError(ValidationError):
+    """Profile content failed validation."""
+
+    default_message = _("The profile data is invalid.")
+    default_title = _("Invalid profile")
+    default_code = ErrorCode.INVALID_PROFILE
+    default_resource = "account_profile"
+
+
+class InvalidMergeCodeError(ValidationError):
+    """A merge code is unknown, already spent, or expired."""
+
+    default_message = _("That merge code is invalid or expired.")
+    default_title = _("Invalid merge code")
+    default_code = ErrorCode.INVALID_MERGE_CODE
+    default_resource = "account_merge"
+    default_end_user_action = _("Generate a new merge code from the account you want to absorb, then try again.")
+
+
 class InvalidMergeProofError(ValidationError):
     """Both accounts were not authenticated recently enough for a merge."""
 
@@ -156,6 +216,28 @@ class ConsentRequiredError(ValidationError):
         self.account_id = account_id
 
 
+class StaleConsentNoticeError(ConflictError):
+    """A client offered acceptance of a notice version that is no longer published.
+
+    Recorded consent is only meaningful if the text the user read is the text the receipt names.
+    A client holding a cached notice would otherwise record agreement to wording nobody saw.
+    """
+
+    default_message = _("The privacy notice has changed since this one was shown.")
+    default_title = _("Privacy notice out of date")
+    default_code = ErrorCode.CONSENT_VERSION_STALE
+    default_resource = "account"
+    default_end_user_action = _("Re-read the current privacy notice, then accept it again.")
+
+    def __init__(self, *, offered: str, current: str) -> None:
+        super().__init__(
+            context={"offered": offered, "current": current},
+            public_context={"offered": offered, "current": current},
+        )
+        self.offered = offered
+        self.current = current
+
+
 class CreatorAliasNotFoundError(NotFoundError):
     """No build credits a creator under the requested name."""
 
@@ -186,7 +268,13 @@ class CreatorNotFoundError(NotFoundError):
 
 
 class AliasAlreadyClaimedError(ConflictError):
-    """A creator name is already credited to an account."""
+    """A creator name is already credited to an account.
+
+    Carries *which* creator holds it, not just that somebody does. A creator profile is public data —
+    `GET /v1/creators/{creator_id}` serves it unauthenticated — so naming the holder discloses
+    nothing that was private, and without it the error tells the affected user nothing they can act
+    on. The internal account ID stays in `context`, which is log-only.
+    """
 
     default_message = _("That creator name is already claimed by another account.")
     default_title = _("Creator name already claimed")
@@ -194,9 +282,36 @@ class AliasAlreadyClaimedError(ConflictError):
     default_resource = "creator_alias"
     default_end_user_action = _("Ask staff to review the claim if you believe the name is yours.")
 
-    def __init__(self, name: str) -> None:
-        super().__init__(context={"name": name}, public_context={"name": name})
+    def __init__(
+        self,
+        name: str,
+        *,
+        holder_public_creator_id: UUID | None = None,
+        holder_account_id: int | None = None,
+        end_user_action: str | None = None,
+    ) -> None:
+        public_context: dict[str, JSONValue] = {"name": name}
+        if holder_public_creator_id is not None:
+            public_context["public_creator_id"] = str(holder_public_creator_id)
+        context: dict[str, JSONValue] = dict(public_context)
+        if holder_account_id is not None:
+            context["holder_account_id"] = holder_account_id
+        super().__init__(context=context, public_context=public_context, end_user_action=end_user_action)
         self.name = name
+        self.holder_public_creator_id = holder_public_creator_id
+        self.holder_account_id = holder_account_id
+
+    def with_holder_name(self, holder_name: str) -> AliasAlreadyClaimedError:
+        """Name the holder in the user-facing message once something has resolved it.
+
+        Resolving a public creator profile costs a query, so it happens in the service on the error
+        path rather than in the repository on every raise.
+        """
+        return self.with_context(
+            public_context={"holder_name": holder_name},
+            message=_("**{name}** is already credited to the creator known as **{holder_name}**."),
+            message_params={"name": self.name, "holder_name": holder_name},
+        )
 
 
 class ClaimNotFoundError(NotFoundError):
