@@ -1,8 +1,7 @@
 """Public dogfood surface for the squid-ui engine."""
 
-from types import SimpleNamespace
+from dataclasses import dataclass
 from typing import Any, cast
-from unittest.mock import AsyncMock
 
 import discord
 import pytest
@@ -19,9 +18,12 @@ from squid.bot.layout_showcase import (
     PreviewPanel,
     Session,
 )
+from squid.settings.application import SettingsService
 from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler, Owner
 from squid_ui_discord.sessions import UserScope
 from squid_ui_discord.testing import (
+    ContextHarness,
+    MessageHarness,
     assert_within_limits,
     commit_render,
     delivered_to,
@@ -29,6 +31,24 @@ from squid_ui_discord.testing import (
     message_harness,
 )
 from tests.support.discord import make_layout_bot
+
+
+class SettingsRecorder(SettingsService):
+    def __init__(self) -> None:
+        pass
+
+    async def get_locale(self, server_id: int) -> str | None:
+        return None
+
+
+@dataclass(frozen=True)
+class Services:
+    settings: SettingsService
+
+
+@dataclass(frozen=True)
+class Guild:
+    id: int
 
 
 def _buttons(view: discord.ui.LayoutView) -> list[discord.ui.Button[Any]]:
@@ -311,21 +331,14 @@ async def test_effects_exhibit_retries_compensation_and_accepts_an_operation_res
 
 
 async def test_demo_command_and_controls_are_public() -> None:
-    settings = SimpleNamespace(get_locale=AsyncMock(return_value=None))
-    bot = make_layout_bot(services=SimpleNamespace(settings=settings), topic_bus=sl.runtime.LocalTopicBus())
+    bot = make_layout_bot(
+        services=Services(settings=SettingsRecorder()),
+        topic_bus=sl.runtime.LocalTopicBus(),
+    )
     cog = LayoutShowcaseCog(cast(Any, bot))
     ctx = cast(
         commands.Context[Any],
-        cast(
-            Any,
-            SimpleNamespace(
-                bot=bot,
-                interaction=None,
-                guild=None,
-                author=SimpleNamespace(id=7),
-                send=AsyncMock(return_value=message_harness(message_id=1)),
-            ),
-        ),
+        ContextHarness(message=MessageHarness(message_id=1), bot=bot, user_id=7).source,
     )
 
     await LayoutShowcaseCog.demo.callback(cog, ctx, "pagination", 20)  # type: ignore[arg-type]
@@ -432,13 +445,12 @@ class TestLobby:
         host_id: int = 7,
     ) -> tuple[Any, Lobby]:
         bot = make_layout_bot() if bot is None else bot
-        context = SimpleNamespace(
+        context = ContextHarness(
+            message=MessageHarness(message_id=guild_id),
             bot=bot,
-            author=SimpleNamespace(id=host_id),
-            guild=SimpleNamespace(id=guild_id),
-            interaction=None,
-            send=AsyncMock(return_value=message_harness(message_id=guild_id)),
+            user_id=host_id,
         )
+        context.guild = Guild(id=guild_id)
         panel = await Lobby(host_id).show(cast(sd.InvocationSource, context))
         assert panel is not None
         return bot, panel
