@@ -11,7 +11,7 @@ from squid.bot.submission.search import SearchCog, SearchTarget
 from squid.core.errors import ValidationError
 from squid.search.domain import SearchMode, SearchPage, SearchRequest, SearchScope, SortDirection
 from squid_ui_discord.testing import message_harness
-from tests.helpers.discord import make_layout_bot
+from tests.support.discord import make_layout_bot
 
 
 class RecordingSearch:

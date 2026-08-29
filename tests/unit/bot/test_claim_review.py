@@ -11,7 +11,7 @@ from squid.accounts.domain import Account, AccountIdentity, AliasClaim, ClaimSta
 from squid.bot.claims_view import ClaimReviewComponent
 from squid.permissions.domain import PermissionNode
 from squid_ui_discord.testing import commit_render
-from tests.helpers.discord import make_layout_bot
+from tests.support.discord import make_layout_bot
 
 AUTHOR_ID = 11
 NOW = Instant.from_utc(2026, 8, 19)

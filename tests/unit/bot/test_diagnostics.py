@@ -18,7 +18,7 @@ from squid_ui_discord import (
 )
 from squid_ui_discord import MessageRoot, Owner, Private
 from squid_ui_discord.testing import assert_within_limits, commit_render, interaction_harness
-from tests.helpers.discord import make_layout_bot
+from tests.support.discord import make_layout_bot
 
 
 def make_report(

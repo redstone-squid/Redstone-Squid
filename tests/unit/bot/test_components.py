@@ -13,7 +13,7 @@ from squid.bot.ui import (
     tr,
     truncate_display_text,
 )
-from tests.helpers.discord import make_message
+from tests.support.discord import make_message
 
 
 def test_card_node_serializes_as_components_v2() -> None:

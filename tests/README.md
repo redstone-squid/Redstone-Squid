@@ -62,7 +62,8 @@ import SQLAlchemy, Advanced Alchemy, Discord, FastAPI, or Supabase.
 
 Application tests cover use-case decisions and orchestration. Their dependencies are narrow protocols expressed in
 domain terms. Use a small stateful fake when its state matters; use `Mock` or `AsyncMock` only for a narrow interaction
-boundary.
+boundary. When adapter code accepts a concrete application service, subclass that service in the test instead of
+adding a production protocol solely to make the test double easier to construct.
 
 Infrastructure tests cover behavior owned by Squid:
 

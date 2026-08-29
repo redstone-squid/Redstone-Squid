@@ -6,7 +6,7 @@ from typing import Any, cast
 
 from squid.bot.posts.vote_renderer import VoteSessionRenderer
 from squid.voting.domain import PollScope, VoteMessage, VoteSessionSnapshot, VoteStatus
-from tests.helpers.voting import poll_snapshot
+from tests.support.voting import poll_snapshot
 
 OWNER_GUILD_ID = 10
 OTHER_GUILD_ID = 999

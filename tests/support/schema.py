@@ -1,4 +1,4 @@
-"""Build the table subset a repository test needs without hand-maintaining a schema."""
+"""Build table subsets shared by repository tests without duplicating schemas."""
 
 from sqlalchemy import Table
 

@@ -1,4 +1,4 @@
-"""Small typed harnesses for Discord boundary tests."""
+"""Small typed harnesses shared by Discord boundary tests."""
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager

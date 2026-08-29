@@ -3,7 +3,7 @@
 import squid_ui_discord as sd
 from squid.bot.voting.rendering import render_generic_poll
 from squid.voting.domain import VoteSessionResult, VoteStatus
-from tests.helpers.voting import poll_snapshot
+from tests.support.voting import poll_snapshot
 
 
 def _custom_ids(payload: sd.message_payload.MessagePayload) -> list[str]:
