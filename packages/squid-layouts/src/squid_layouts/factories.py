@@ -22,11 +22,11 @@ from string.templatelib import Template
 from types import UnionType
 from typing import TYPE_CHECKING, Literal, NoReturn, TypeAliasType, get_args
 
-from squid_layouts.interactions import ActionEvent, ActionPolicy, Feedback
 from squid_layouts.assets import Asset
 from squid_layouts.entity import ChannelType, EntityRef, EntityType
 from squid_layouts.forms import FormLike, SubmitHandler, bind_form
 from squid_layouts.guards import Guard
+from squid_layouts.interactions import ActionEvent, ActionPolicy, Feedback
 from squid_layouts.palette import INHERIT, Accent, Palette
 from squid_layouts.semantic import (
     CLOSED,
@@ -51,6 +51,7 @@ from squid_layouts.semantic import (
     Code,
     Column,
     Columns,
+    ConcreteLayoutNode,
     Controlled,
     Destination,
     Details,
@@ -73,7 +74,6 @@ from squid_layouts.semantic import (
     ItemLabel,
     ItemOwnership,
     Items,
-    ConcreteLayoutNode,
     LayoutNode,
     Link,
     List,

@@ -4,10 +4,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
-from squid_layouts.interactions import ActionEvent
 from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.factories import action, actions, heading, note, stack
+from squid_layouts.interactions import ActionEvent
 from squid_layouts.patterns._content import ContentLike, normalize_content, require_key
 from squid_layouts.patterns._ranked import Projector, RankedEntry, RankedRows
 from squid_layouts.planning.navigation import (

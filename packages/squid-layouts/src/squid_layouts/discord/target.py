@@ -15,15 +15,14 @@ from squid_layouts.planning.discord import (
 )
 from squid_layouts.planning.limits import CLASSIC_LIMITS, LIMITS, ClassicLimits, V2Limits
 from squid_layouts.planning.target import TargetProfile
+from squid_layouts.primitives.nodes import Extension, PrimitiveNode
+from squid_layouts.scene.model import SceneClassicMessage, SceneComponentsV2
 from squid_layouts.target_types import (
     ClassicTarget,
     ComponentsV2Target,
     DiscordPy27Adapter,
     DiscordPyAdapter,
 )
-from squid_layouts.primitives.nodes import Extension, PrimitiveNode
-from squid_layouts.scene.model import SceneClassicMessage, SceneComponentsV2
-
 
 V2_CAPABILITIES = DISCORD_PY_27_ADAPTER.combine_capabilities(V2_PROTOCOL_CAPABILITIES)
 CLASSIC_CAPABILITIES = CLASSIC_PROTOCOL_CAPABILITIES
@@ -34,9 +33,7 @@ class Target[ModeT = Any, AdapterT = Any, BodyT = Any](TargetProfile[ModeT, Adap
 
     @overload
     @classmethod
-    def v2(
-        cls, *, limits: V2Limits = LIMITS
-    ) -> Target[ComponentsV2Target, DiscordPy27Adapter, SceneComponentsV2]: ...
+    def v2(cls, *, limits: V2Limits = LIMITS) -> Target[ComponentsV2Target, DiscordPy27Adapter, SceneComponentsV2]: ...
 
     @overload
     @classmethod

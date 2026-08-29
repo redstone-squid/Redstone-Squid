@@ -230,9 +230,15 @@ def test_ranked_list_projects_entries_and_renders_an_explicit_window() -> None:
 @pytest.mark.parametrize(
     ("capabilities", "expected"),
     [
-        (sl.sources.SourceCapabilities(offsets=True, jumpable=True, count=sl.sources.CountPrecision.EXACT), "-# Page 1 of 2"),
+        (
+            sl.sources.SourceCapabilities(offsets=True, jumpable=True, count=sl.sources.CountPrecision.EXACT),
+            "-# Page 1 of 2",
+        ),
         (sl.sources.SourceCapabilities(offsets=True, count=sl.sources.CountPrecision.EXACT), "-# 1\N{EN DASH}2 of 3"),
-        (sl.sources.SourceCapabilities(offsets=True, count=sl.sources.CountPrecision.APPROXIMATE), "-# 1\N{EN DASH}2 of ~3"),
+        (
+            sl.sources.SourceCapabilities(offsets=True, count=sl.sources.CountPrecision.APPROXIMATE),
+            "-# 1\N{EN DASH}2 of ~3",
+        ),
         (sl.sources.SourceCapabilities(offsets=True), "-# 1\N{EN DASH}2"),
         (sl.sources.SourceCapabilities(), None),
     ],
@@ -408,7 +414,9 @@ async def test_source_ranked_list_uses_the_mount_navigation_factory() -> None:
 
 
 async def test_ranked_list_keeps_global_ranks_on_later_pages() -> None:
-    ranked = sl.patterns.RankedList([("Ada", 30), ("Grace", 20), ("Edsger", 10)], key="leaderboard", page_size=2).component()
+    ranked = sl.patterns.RankedList(
+        [("Ada", 30), ("Grace", 20), ("Edsger", 10)], key="leaderboard", page_size=2
+    ).component()
     mount = Mount(ranked, access=Everyone(), timeout=None)
     commit_render(mount)
 

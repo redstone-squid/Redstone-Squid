@@ -2,11 +2,10 @@
 
 import pytest
 
-from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
-from squid_layouts.planning import plan
 from squid_layouts.discord import V2_LIMITS as LIMITS
 from squid_layouts.discord import V2_TARGET
-from squid_layouts.planning import TargetProfile, measure
+from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
+from squid_layouts.planning import TargetProfile, measure, plan
 from squid_layouts.planning.limits import ATTACHMENTS, COMPONENTS, DISPLAY_TEXT
 from squid_layouts.planning.measurement import RText, _BudgetRegion, _make_unit, measure_nodes, text_total
 from squid_layouts.planning.target import ResourceCost

@@ -10,7 +10,6 @@ import pytest
 
 import squid_layouts as sl
 from squid_layouts.discord import Everyone, SessionKey, SessionRegistry
-from squid_layouts.discord.sessions import Opened, SessionPolicy, Unprotected
 from squid_layouts.discord.delivery import DeliveryReceipt
 from squid_layouts.discord.durability import (
     ComponentRegistry,
@@ -27,6 +26,7 @@ from squid_layouts.discord.durability import (
     SnapshotError,
     Unreachable,
 )
+from squid_layouts.discord.sessions import Opened, SessionPolicy, Unprotected
 from squid_layouts.discord.testing import delivered_to, fake_message
 from squid_layouts.primitives import Text
 from squid_layouts.profiling import PresentationOutcome

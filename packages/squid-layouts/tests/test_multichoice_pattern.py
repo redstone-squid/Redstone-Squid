@@ -73,7 +73,9 @@ def test_cardinality_violation_blocks_apply_and_reduces_other_window_capacity() 
     invalid = sl.patterns.MultiChoiceState(("left-0", "left-1", "right-0", "right-1"))
     component = pattern.component(initial=invalid)
     rendered = component.render()
-    apply = next(node for node in _walk(rendered) if isinstance(node, sl.semantic.Action) and node.key == "choices.apply")
+    apply = next(
+        node for node in _walk(rendered) if isinstance(node, sl.semantic.Action) and node.key == "choices.apply"
+    )
     assert not apply.available
     assert pattern.errors(invalid) == ("Select no more than 3 options.",)
 
@@ -155,13 +157,17 @@ def test_router_shell_encodes_page_and_apply_state_and_uses_input_for_selection(
     rendered = sl.patterns.RouterShell(route).render(pattern, staged)
     assert any(isinstance(node, RoutedAction) and node.key == "choices.apply" for node in _walk(rendered))
     apply = next(request for request in routes if request.action == "apply")
-    assert apply == sl.patterns.PatternRoute("apply", sl.patterns.MultiChoiceState(("role-0",), ("role-0",), ()), "next")
+    assert apply == sl.patterns.PatternRoute(
+        "apply", sl.patterns.MultiChoiceState(("role-0",), ("role-0",), ()), "next"
+    )
 
 
 async def test_immediate_policy_commits_valid_changes_without_apply() -> None:
     commits: list[tuple[str, ...]] = []
 
-    async def committed(_event: sl.patterns.PatternEvent[sl.patterns.MultiChoiceState], values: tuple[str, ...]) -> None:
+    async def committed(
+        _event: sl.patterns.PatternEvent[sl.patterns.MultiChoiceState], values: tuple[str, ...]
+    ) -> None:
         commits.append(values)
 
     panel = sl.patterns.MultiChoicePanel(
@@ -177,7 +183,9 @@ async def test_immediate_policy_commits_valid_changes_without_apply() -> None:
 
     assert panel.pattern_state == sl.patterns.MultiChoiceState(("role-1",), ("role-1",))
     assert commits == [("role-1",)]
-    assert not any(isinstance(node, sl.semantic.Action) and node.key == "choices.apply" for node in _walk(panel.render()))
+    assert not any(
+        isinstance(node, sl.semantic.Action) and node.key == "choices.apply" for node in _walk(panel.render())
+    )
 
 
 def test_immediate_policy_retains_invalid_staging_until_next_valid_change() -> None:
