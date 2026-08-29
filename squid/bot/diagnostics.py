@@ -2,15 +2,13 @@
 
 from typing import TYPE_CHECKING
 
-import discord
 from discord.ext import commands
 from discord.ext.commands import Context
 
 import squid_layouts as sl
-from squid.bot.diagnostics_view import SESSION_SECONDS, ErrorReportBrowser, report_attachment
+from squid.bot.diagnostics_view import SESSION_SECONDS, ErrorReportBrowser
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.ui import Private, create_mount, destination
-from squid.bot.utils.components import info_layout
+from squid.bot.ui import Private, create_mount, destination, info_layout
 from squid.bot.utils.permissions import hide_unless, requires
 from squid.bot.utils.visibility import deliver_privately
 from squid.core.i18n import _
@@ -37,7 +35,7 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         report, matches = await self.error_reports.lookup(reference)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         browser = ErrorReportBrowser(report=report, matches=matches)
-        await self._deliver_browser(ctx, browser, locale, file=report_attachment(report))
+        await self._deliver_browser(ctx, browser, locale)
 
     @error_group.command(name="recent")
     @requires(DIAGNOSTICS_ERROR_READ)
@@ -71,8 +69,6 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         ctx: Context[BotT],
         browser: ErrorReportBrowser,
         locale: str | None,
-        *,
-        file: discord.File | None = None,
     ) -> None:
         """Mount the browser and answer where only the caller can read it.
 
@@ -96,20 +92,19 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
                     t(locale, _("An error report names internal paths, so it is never posted in a channel."))
                 ),
                 locale=locale,
-                files=[] if file is None else [file],
             )
         )
 
     async def _deliver(
         self,
         ctx: Context[BotT],
-        layout: discord.ui.LayoutView,
+        presentation: sl.discord.presentation.DiscordPresentation,
         locale: str | None,
     ) -> None:
         """Answer a plain layout where only the caller can read it (see `_deliver_browser`)."""
         await deliver_privately(
             ctx,
-            layout,
+            presentation,
             reason=t(locale, _("An error report names internal paths, so it is never posted in a channel.")),
             locale=locale,
         )

@@ -16,7 +16,7 @@ from squid.accounts.domain import (
     avatar_url_for,
 )
 from squid.bot.i18n import t
-from squid.bot.utils.components import CardField
+from squid.bot.ui import CardField
 from squid.core.i18n import _
 
 _PROVIDER_LABELS = {

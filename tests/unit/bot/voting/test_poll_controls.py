@@ -1,19 +1,20 @@
 """The controls an open poll's card carries."""
 
-import discord
-
+import squid_layouts as sl
 from squid.bot.voting.rendering import render_generic_poll
 from squid.voting.domain import VoteSessionResult, VoteStatus
 from tests.helpers.voting import poll_snapshot
 
 
-def _custom_ids(layout: discord.ui.LayoutView) -> list[str]:
+def _custom_ids(presentation: sl.discord.presentation.DiscordPresentation) -> list[str]:
     """Every clickable custom id on a card, in render order.
 
     A dynamic item is not a `Button` — it wraps one — so the children are matched on
     carrying a custom id rather than on their type.
     """
-    return [custom_id for child in layout.walk_children() if (custom_id := getattr(child, "custom_id", None))]
+    return [
+        custom_id for child in presentation.layout.walk_children() if (custom_id := getattr(child, "custom_id", None))
+    ]
 
 
 def test_an_open_poll_card_carries_its_own_close_and_refresh_controls() -> None:

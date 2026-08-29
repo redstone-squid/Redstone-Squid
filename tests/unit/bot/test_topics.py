@@ -24,7 +24,7 @@ class Projection(sl.Component):
     def __init__(self, read) -> None:
         self._read = read
 
-    @sl.resource(delivery=sl.runtime.ResourceDelivery.ATOMIC)
+    @sl.resource(pending=sl.resources.PendingPolicy.ATOMIC)
     async def value(self) -> str:
         sl.runtime.watch(resource_topic("build", "42"))
         return self._read()
@@ -32,8 +32,8 @@ class Projection(sl.Component):
     def render(self):
         # An atomic resource is still rendered once while pending: that discovery render is
         # how the mount learns the resource exists, and what it reads is what it follows.
-        match self.value.state:
-            case sl.runtime.Ready(value=value):
+        match self.value.status:
+            case sl.resources.Ready(value=value):
                 return sl.paragraph(value)
             case _:
                 return sl.paragraph("loading")
@@ -47,7 +47,7 @@ async def _drain_reactor(reactor: sl.discord.Reactor) -> None:
 
 
 async def test_one_resource_publish_refreshes_two_panels_without_second_post_writer() -> None:
-    bus = sl.runtime.TopicBus()
+    bus = sl.runtime.LocalTopicBus()
     reactor = sl.discord.Reactor(bus)
     messages = [fake_message(message_id=1), fake_message(message_id=2)]
     source = "before"
@@ -68,7 +68,6 @@ async def test_one_resource_publish_refreshes_two_panels_without_second_post_wri
     source = "after"
 
     await RedstoneSquid.refresh_posts(bot, "build", "42")
-    await bus.drain()
     await _drain_reactor(reactor)
 
     assert all("after" in str(message.edit.await_args.kwargs["view"].to_components()) for message in messages)

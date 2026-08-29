@@ -3,12 +3,13 @@
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 
-from squid_layouts.interactions import ActionBinding, ActionEvent, EntitySelectionEvent, PressEvent, SelectionEvent
 from squid_layouts.assets import Asset
+from squid_layouts.capabilities import Capability
 from squid_layouts.chrome import Chrome
-from squid_layouts.entity import EntityRef
+from squid_layouts.entity import EntityKind, EntityRef
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.forms import FormBinding
+from squid_layouts.interactions import ActionBinding, ActionEvent, EntitySelectionEvent, PressEvent, SelectionEvent
 from squid_layouts.palette import DEFAULT_PALETTE, AccentDefault, Palette
 from squid_layouts.planning.breaking import BreakItem, balanced_breaks
 from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursorRequest, content_fingerprint
@@ -189,6 +190,7 @@ class _Context:
     search_budget: int = DEFAULT_SEARCH_BUDGET
     states_explored: int = 0
     search_fallback: bool = False
+    panel_depth: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -360,6 +362,15 @@ def lower_semantics(
     )
 
 
+def _panel_children(children: Sequence[LayoutNode], path: str, context: _Context) -> list[Node]:
+    """Lower children while recording that Discord already has their enclosing container."""
+    context.panel_depth += 1
+    try:
+        return _children(children, path, context)
+    finally:
+        context.panel_depth -= 1
+
+
 def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
     match node:
         case Truncated(node=child, keep=keep):
@@ -417,7 +428,9 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             resolved_accent = context.palette.brand if accent is AccentDefault.INHERIT else accent
             if _cards(context):
                 return [_region(Card(accent=resolved_accent), _children(children, path, context), context)]
-            return [Panel(tuple(_children(children, path, context)), accent=resolved_accent)]
+            nested = context.panel_depth > 0
+            contents = _panel_children(children, path, context)
+            return contents if nested else [Panel(tuple(contents), accent=resolved_accent)]
         case (
             Section(children=children, heading=heading, accent=accent, thumbnail=thumbnail)
             | Article(children=children, heading=heading, accent=accent, thumbnail=thumbnail)
@@ -439,6 +452,7 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
                         context,
                     )
                 ]
+            nested = context.panel_depth > 0
             contents: list[Node] = []
             title = PrimitiveHeading(
                 resolved_heading,
@@ -449,13 +463,15 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             # The lead image sits beside the title and nothing else: picking "the body"
             # out of an arbitrary children tuple would be a guess.
             contents.append(PrimitiveSection(texts=(title,), accessory=Thumbnail(thumbnail)) if thumbnail else title)
-            contents.extend(_children(children, path, context))
-            return [Panel(tuple(contents), accent=resolved_accent)]
+            contents.extend(_panel_children(children, path, context))
+            return contents if nested else [Panel(tuple(contents), accent=resolved_accent)]
         case Aside(children=children, tone=tone):
             accent = context.palette.tone(tone)
             if _cards(context):
                 return [_region(Card(accent=accent), _children(children, path, context), context)]
-            return [Panel(tuple(_children(children, path, context)), accent=accent)]
+            nested = context.panel_depth > 0
+            contents = _panel_children(children, path, context)
+            return contents if nested else [Panel(tuple(contents), accent=accent)]
         case Heading(content=content, level=level, importance=importance):
             return [
                 PrimitiveHeading(_resolve(content, context), level=level, overflow=Never(), priority=int(importance))
@@ -472,7 +488,7 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             )
             return [Lines(lines, overflow=Paginate(key=key, per=page_size))]
         case Fields(fields=fields):
-            if "layout.embed_fields" in context.capabilities:
+            if Capability.LAYOUT_EMBED_FIELDS in context.capabilities:
                 entries = _card_fields(fields, context)
                 per_card = getattr(context.limits, "embed_fields", 25)
                 # More fields than one embed holds continue into the next card. Lossless:
@@ -491,7 +507,9 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             return [PrimitiveCode(content, language, overflow=Never())]
         case Figure(media=media, caption=caption):
             if media.spoiler and _cards(context):
-                message = f"{path}: classic targets cannot preserve media spoilers; provide an explicit Variants fallback"
+                message = (
+                    f"{path}: classic targets cannot preserve media spoilers; provide an explicit Variants fallback"
+                )
                 raise LayoutInvariantError(message)
             if _cards(context):
                 # The description rides along even where Discord will not show it: it is the
@@ -826,7 +844,7 @@ def _individual_fits(controls: int, limits: V2Limits) -> bool:
 
 def _cards(context: _Context) -> bool:
     """Whether this target draws regions as embeds rather than as container components."""
-    return "layout.embed" in context.capabilities
+    return Capability.LAYOUT_EMBED in context.capabilities
 
 
 def _card_fields(fields: Sequence[Field], context: _Context) -> list[CardField]:
@@ -1089,11 +1107,10 @@ def _paged_region(
 
 
 def _form(node: FormTrigger, context: _Context) -> list[Node]:
-    if not {"forms.modal", "forms.inline"} & context.capabilities:
+    if Capability.FORMS_MODAL not in context.capabilities:
         message = "target does not support forms"
         raise LayoutInvariantError(message)
-    maximum = context.limits.modal_components if "forms.modal" in context.capabilities else None
-    spec = node.spec.adapt(context.capabilities, maximum_fields=maximum)
+    spec = node.spec.adapt(context.capabilities, maximum_fields=context.limits.modal_components)
 
     async def present(event: PressEvent) -> None:
         await event.present_form(spec, key=node.key, on_submit=node.on_submit, policy=node.policy)
@@ -1222,6 +1239,11 @@ def _entity_key(ref: EntityRef) -> str:
     return f"{ref.kind.value}:{ref.id}"
 
 
+def _entity_ref(key: str) -> EntityRef:
+    kind, raw_id = key.split(":", 1)
+    return EntityRef(EntityKind(kind), int(raw_id))
+
+
 def _entities(node: Entities, path: str, context: _Context) -> list[Node]:
     match node.selection:
         case Controlled(value=value):
@@ -1229,9 +1251,7 @@ def _entities(node: Entities, path: str, context: _Context) -> list[Node]:
         case Managed(initial=initial):
             initial_keys = tuple(_entity_key(value) for value in initial)
             stored = context.session.selection(node.key, initial=initial_keys).selected
-            by_key = {_entity_key(choice.ref): choice.ref for choice in node.choices}
-            by_key.update({_entity_key(value): value for value in initial})
-            previous = tuple(by_key[key] for key in stored if key in by_key)
+            previous = tuple(_entity_ref(key) for key in stored)
 
     async def commit(event: ActionEvent, selected: tuple[EntityRef, ...]) -> None:
         match node.selection:
@@ -1252,7 +1272,7 @@ def _entities(node: Entities, path: str, context: _Context) -> list[Node]:
                 context.session.select(node.key, tuple(_entity_key(value) for value in selected))
                 event.invalidate()
 
-    if "actions.discord.entity" in context.capabilities:
+    if Capability.ACTIONS_DISCORD_ENTITY in context.capabilities:
 
         async def select_entities(event: EntitySelectionEvent) -> None:
             await commit(event, event.values)
@@ -1275,6 +1295,7 @@ def _entities(node: Entities, path: str, context: _Context) -> list[Node]:
 
     available = tuple(choice for choice in node.choices if choice.available)
     by_key = {_entity_key(choice.ref): choice.ref for choice in available}
+    previous = tuple(value for value in previous if _entity_key(value) in by_key)
 
     async def choose_fallback(event: ChoiceEvent) -> None:
         await commit(event, tuple(by_key[key] for key in event.selected if key in by_key))

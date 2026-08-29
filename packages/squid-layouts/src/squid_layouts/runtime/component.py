@@ -10,11 +10,10 @@ child class can appear in one message without their controls or pagers cross-wir
 root component is attached to a Mount; children reach it through their parent.
 """
 
-import functools
 from collections.abc import Callable, Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass, replace
-from typing import Any, ClassVar, Protocol, Self
+from typing import Any, Protocol
 
 from squid_layouts.document import Asset, Document
 from squid_layouts.errors import LayoutInvariantError
@@ -38,20 +37,13 @@ from squid_layouts.primitives.nodes import (
     Variants,
 )
 from squid_layouts.runtime.context import ContextKey
-from squid_layouts.runtime.reactivity import (
-    _CURRENT,
-    _Computed,
-    _State,
-    observe_render,
-    report_undeclared_write,
-    untracked,
-)
 from squid_layouts.runtime.resources import (
-    Resource,
+    AsyncBinding,
     _AtomicResourcePending,
-    observe_resources,
-    unique_resources,
+    observe_async_bindings,
+    unique_async_bindings,
 )
+from squid_layouts.runtime.topics import Address
 from squid_layouts.semantic import (
     Action as SemanticAction,
 )
@@ -132,7 +124,11 @@ from squid_layouts.semantic import (
     Truncated as SemanticTruncated,
 )
 from squid_layouts.semantic import Unbreakable as SemanticUnbreakable
-from squid_layouts.runtime.topics import Address
+from squid_reactive.core import (
+    _RENDER_OBSERVATION,
+    Reactive,
+    observe_render,
+)
 
 type RenderNode[ModeT = Any] = LayoutNode[ModeT]
 type RenderResult[ModeT = Any] = Document[ModeT] | LayoutNode[ModeT] | Sequence[LayoutNode[ModeT]]
@@ -147,42 +143,6 @@ _CURRENT_CONTEXT: ContextVar[dict[ContextKey[Any], object] | None] = ContextVar(
 )
 _MISSING = object()
 
-# Written by the tree walker, not by authors, so they are never an author's state change.
-_FRAMEWORK_ATTRIBUTES = frozenset({"_runtime", "_parent", "_loaded"})
-
-
-def _is_abstract(cls: type) -> bool:
-    """Whether this class is a base to build on rather than one to instantiate.
-
-    Such a class may declare state only its concrete subclasses can assign, so its constructor
-    is not the place to demand one. Not having implemented render is the test: `ABCMeta` needs
-    no special case, both because it populates `__abstractmethods__` only after
-    `__init_subclass__` has run, and because it already refuses to instantiate the class, so
-    that wrapper can never be the outermost one.
-    """
-    return cls.render is Component.render
-
-
-def _checked_init(
-    original: Callable[..., None],
-    required: tuple[tuple[str, _State], ...],
-) -> Callable[..., None]:
-    """Wrap ``__init__`` so state declared without an initial value must be assigned."""
-
-    @functools.wraps(original)
-    def __init__(self: Component, *args: Any, **kwargs: Any) -> None:
-        original(self, *args, **kwargs)
-        # Only the outermost __init__ checks. A subclass calling super().__init__() would
-        # otherwise trip the base's wrapper before it had finished assigning.
-        if type(self).__init__ is not __init__:
-            return
-        missing = sorted(name for name, descriptor in required if not descriptor.is_set(self))
-        if missing:
-            message = f"{type(self).__name__}.__init__ left declared state unassigned: {', '.join(missing)}"
-            raise TypeError(message)
-
-    return __init__
-
 
 @dataclass(frozen=True, slots=True)
 class ComponentTree:
@@ -193,7 +153,7 @@ class ComponentTree:
     assets: tuple[Asset, ...] = ()
     document_key: str | None = None
     deferred: tuple[Component, ...] = ()
-    resources: tuple[Resource[Any], ...] = ()
+    async_bindings: tuple[AsyncBinding, ...] = ()
     """Embedded components expansion stopped at, in the order it met them.
 
     Only ever non-empty for a discovery render (see ``render_component_tree``'s ``defer``).
@@ -210,55 +170,19 @@ class ComponentTree:
     """
 
 
-class Component[ModeT = Any]:
+class Component[ModeT = Any](Reactive):
     """Base class for mounted, stateful views."""
 
     _runtime: RuntimeOwner | None = None
     _parent: Component | None = None
     _loaded: bool = False
     """Whether this instance's :meth:`on_load` has completed. Owned by the frontend."""
-    _state_names: ClassVar[frozenset[str]] = frozenset()
-    _state_descriptors: ClassVar[dict[str, _State]] = {}
-    _opaque_state: ClassVar[tuple[tuple[str, _State], ...]] = ()
-    """The `opaque=True` subset of `_state_descriptors`, fixed at class creation for `mutated`."""
-    _computed_descriptors: ClassVar[dict[str, _Computed]] = {}
+    _reactive_internal_attributes = frozenset({"_runtime", "_parent", "_loaded"})
+    _reactive_require_state = False
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
+        cls._reactive_require_state = cls.render is not Component.render
         super().__init_subclass__(**kwargs)
-        declared = {
-            name: descriptor
-            for klass in reversed(cls.__mro__)
-            for name, descriptor in vars(klass).items()
-            if isinstance(descriptor, _State)
-        }
-        cls._state_names = frozenset(declared)
-        cls._state_descriptors = declared
-        cls._opaque_state = tuple((name, descriptor) for name, descriptor in declared.items() if descriptor.opaque)
-        cls._computed_descriptors = {
-            name: descriptor
-            for klass in reversed(cls.__mro__)
-            for name, descriptor in vars(klass).items()
-            if isinstance(descriptor, _Computed)
-        }
-        required = tuple((name, descriptor) for name, descriptor in declared.items() if not descriptor.has_initial)
-        if required and not _is_abstract(cls):
-            # Wrap even an inherited __init__, so adding a required field to a subclass that
-            # defines no constructor of its own is still checked.
-            cls.__init__ = _checked_init(cls.__init__, required)
-
-    def __new__(cls, *args: Any, **kwargs: Any) -> Self:
-        # A handler may build components. Noting the ones born mid-action is what lets their
-        # __init__ write freely while a live component's writes stay covered.
-        instance = super().__new__(cls)
-        if current := _CURRENT.get():
-            current.note_born(instance)
-        return instance
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        # Fast path: one contextvar read when no action is in flight, which is almost always.
-        if _CURRENT.get() is not None and name not in _FRAMEWORK_ATTRIBUTES and name not in type(self)._state_names:
-            report_undeclared_write(self, name)
-        object.__setattr__(self, name, value)
 
     def _state_changed(self, names: frozenset[str]) -> None:
         """React to committed writes to these state slots.
@@ -270,7 +194,7 @@ class Component[ModeT = Any]:
         del names
         self.invalidate()
 
-    def _state_rolled_back(self) -> None:
+    def on_state_rollback(self) -> None:
         self.__dict__["_state_revision"] = self.__dict__.get("_state_revision", 0) + 1
 
     def render(self) -> RenderResult[ModeT]:
@@ -303,33 +227,6 @@ class Component[ModeT = Any]:
 
     def on_unmount(self) -> None:
         """Run after this component leaves a successfully drawn tree."""
-
-    def mutated(self, collaborator: object) -> None:
-        """Re-render because an ``opaque=True`` field's value changed in place.
-
-        Assignment is observed already, and a state value is replaced rather than mutated, so
-        the only field whose *contents* can change behind the framework's back is an opaque
-        one -- a collaborator the component holds by reference. Passing the object rather than
-        a field name keeps the call typed; identity finds the field, since that is how an
-        opaque field settles anyway. It moves the cell's version so a computed that read the
-        field recomputes, and schedules the draw; it cannot roll the change back.
-        """
-        with untracked():
-            holders = [
-                (name, descriptor)
-                for name, descriptor in type(self)._opaque_state
-                if descriptor.is_set(self) and descriptor.__get__(self) is collaborator
-            ]
-        if not holders:
-            message = f"no opaque state on {type(self).__name__} holds {collaborator!r}"
-            raise TypeError(message)
-        if len(holders) > 1:
-            names = ", ".join(name for name, _ in holders)
-            message = f"{type(self).__name__} holds {collaborator!r} in more than one field ({names})"
-            raise TypeError(message)
-        _, descriptor = holders[0]
-        descriptor.mutated(self)
-        self._state_changed(frozenset((descriptor._name,)))
 
     def invalidate(self) -> None:
         """Mark this component's message as needing a re-render."""
@@ -514,6 +411,11 @@ def render_component_tree(
             return tuple(expanded)
 
         try:
+            # Past this point, a write of this component's own state is no longer construction:
+            # its own render() is the thing that could tear, so the exemption ends here and not
+            # a moment later.
+            if observation := _RENDER_OBSERVATION.get():
+                observation.entering_own_render(component)
             nodes: list[LayoutNode] = []
             for index, item in enumerate(items(component.render(), path)):
                 nodes.extend(expand_item(item, f"{path}.{index}"))
@@ -522,7 +424,7 @@ def render_component_tree(
             _CURRENT_CONTEXT.reset(token)
             active.remove(identity)
 
-    with observe_render() as observation, observe_resources() as observed:
+    with observe_render() as observation, observe_async_bindings() as observed:
         try:
             nodes = tuple(expand(root, "$", context or {}))
         except _AtomicResourcePending as pending:
@@ -536,7 +438,7 @@ def render_component_tree(
         tuple(assets),
         document_key,
         tuple(deferred),
-        unique_resources(observed),
+        unique_async_bindings(observed),
         observation.addresses(),
     )
 

@@ -98,10 +98,14 @@ async def test_plain_next_opens_the_following_form_without_an_intermediate_rende
 async def test_last_form_dispatches_finish_once_with_live_answers() -> None:
     completed: list[sl.patterns.WizardAnswers] = []
 
-    async def finish(_event: sl.patterns.PatternEvent[sl.patterns.WizardState], answers: sl.patterns.WizardAnswers) -> None:
+    async def finish(
+        _event: sl.patterns.PatternEvent[sl.patterns.WizardState], answers: sl.patterns.WizardAnswers
+    ) -> None:
         completed.append(answers)
 
-    wizard = sl.patterns.Wizard("One", (sl.patterns.WizardStep("name", "Name", _form("Name", "name")),)).component(on_finish=finish)
+    wizard = sl.patterns.Wizard("One", (sl.patterns.WizardStep("name", "Name", _form("Name", "name")),)).component(
+        on_finish=finish
+    )
     mount = Mount(wizard, access=Everyone(), timeout=None)
     commit_render(mount)
 
@@ -141,7 +145,9 @@ def _review_steps(answers: sl.patterns.WizardAnswers):
         yield sl.patterns.WizardStep("detail", "Detail", _form("Detail", "detail"))
 
 
-def _answer(wizard: sl.patterns.Wizard, state: sl.patterns.WizardState, step: str, value: str) -> sl.patterns.WizardState:
+def _answer(
+    wizard: sl.patterns.Wizard, state: sl.patterns.WizardState, step: str, value: str
+) -> sl.patterns.WizardState:
     return wizard.transition(state, f"submit:{step}", submitted={step: value})
 
 
@@ -243,7 +249,9 @@ def test_a_summarize_callback_replaces_the_default_rows() -> None:
 async def test_finish_dispatches_once_from_the_review_screen() -> None:
     completed: list[sl.patterns.WizardAnswers] = []
 
-    async def finish(_event: sl.patterns.PatternEvent[sl.patterns.WizardState], answers: sl.patterns.WizardAnswers) -> None:
+    async def finish(
+        _event: sl.patterns.PatternEvent[sl.patterns.WizardState], answers: sl.patterns.WizardAnswers
+    ) -> None:
         completed.append(dict(answers))
 
     wizard = sl.patterns.Wizard("One", (sl.patterns.WizardStep("name", "Name", _form("Name", "name")),), review=True)

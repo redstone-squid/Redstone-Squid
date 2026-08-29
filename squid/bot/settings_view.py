@@ -2,15 +2,13 @@
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast, override
+from typing import TYPE_CHECKING, cast
 
 import discord
 
 import squid_layouts as sl
-from squid.bot.errors import ErrorHandledModal
 from squid.bot.i18n import t
-from squid.bot.ui import L, create_mount, localization_for
-from squid.bot.utils.components import CardField, no_mentions
+from squid.bot.ui import CardField, L, create_mount, localization_for
 from squid.bot.utils.permissions import allows
 from squid.core.i18n import SUPPORTED_LOCALES, _
 from squid.permissions.domain import PermissionNode
@@ -240,7 +238,9 @@ class SettingsPanel(sl.Component):
             ),
             sl.semantic.Choices(
                 key="vote-kind",
-                choices=tuple(sl.semantic.Choice(kind.value, L(label), available=True) for kind, label in KIND_LABELS.items()),
+                choices=tuple(
+                    sl.semantic.Choice(kind.value, L(label), available=True) for kind, label in KIND_LABELS.items()
+                ),
                 selection=sl.controlled((self.kind.value,), self._kind_changed),
             ),
         ]
@@ -309,13 +309,89 @@ class SettingsPanel(sl.Component):
         if role is None:
             await event.notice(L(t"That role has been deleted."))
             return
-        responder = sl.discord.responder(event)
-        await responder.send_modal(RoleWeightModal(self, role, mount=responder.mount))
+        await event.present_form(
+            sl.forms.FormSpec(
+                t(self.locale, _("Vote weight for {role}"), role=role.name),
+                (
+                    sl.forms.TextField(
+                        key="multiplier",
+                        label=t(self.locale, _("Multiplier; leave empty to remove this role's weight")),
+                        placeholder="1.5",
+                        default=(f"{current:g}" if (current := self.weight_for(role.id)) is not None else ""),
+                        required=False,
+                        maximum=16,
+                    ),
+                ),
+            ),
+            key="role-weight",
+            on_submit=lambda form_event: self._role_weight_submitted(form_event, role.id),
+        )
 
     async def _edit_emojis(self, event: sl.PressEvent) -> None:
         if await self._may_event(event, SETTINGS_VOTING_EDIT):
-            responder = sl.discord.responder(event)
-            await responder.send_modal(VoteEmojiModal(self, mount=responder.mount))
+            await event.present_form(
+                sl.forms.FormSpec(
+                    t(self.locale, _("{kind} vote emojis"), kind=self.kind.value),
+                    (
+                        sl.forms.TextAreaField(
+                            key="aliases",
+                            label=t(self.locale, _("One `choice | emoji` per line")),
+                            placeholder="approve | ✅\ndeny | ❌",
+                            default=self.emoji_preset_text(),
+                            minimum=1,
+                            maximum=1000,
+                        ),
+                    ),
+                ),
+                key="vote-emojis",
+                on_submit=self._emoji_form_submitted,
+            )
+
+    async def _role_weight_submitted(self, event: sl.SubmitEvent, role_id: int) -> None:
+        text = cast(str, event.values["multiplier"]).strip()
+        try:
+            await self.set_weight(role_id, float(text) if text else None)
+        except InvalidVoteConfigurationError, ValueError:
+            await event.notice(t(self.locale, _("A vote multiplier must be a positive number, such as 1.5.")))
+
+    async def _emoji_form_submitted(self, event: sl.SubmitEvent) -> None:
+        interaction = sl.discord.native(event)
+        if interaction.guild is None:
+            return
+        text = cast(str, event.values["aliases"])
+        locale = self.locale
+        options: list[VoteOption] = []
+        for position, line in enumerate(filter(None, (line.strip() for line in text.splitlines()))):
+            parts = [part.strip() for part in line.split("|", 1)]
+            if len(parts) != 2:
+                await event.notice(t(locale, _("Each line must read `choice | emoji`.")))
+                return
+            choice_text, emoji = parts
+            try:
+                choice = VoteChoice.GENERIC if self.kind is VoteKind.GENERIC else VoteChoice(choice_text)
+            except ValueError:
+                await event.notice(t(locale, _("`{choice}` is not a vote choice."), choice=choice_text))
+                return
+            parsed = discord.PartialEmoji.from_str(emoji)
+            if parsed.is_custom_emoji():
+                custom = interaction.guild.get_emoji(parsed.id or 0)
+                if custom is None or not custom.is_usable():
+                    await event.notice(t(locale, _("The custom emoji {emoji} is inaccessible."), emoji=emoji))
+                    return
+            options.append(
+                VoteOption(
+                    emoji,
+                    choice,
+                    identifier=str(position + 1) if self.kind is VoteKind.GENERIC else choice.value,
+                    guild_id=interaction.guild.id,
+                    label=f"Option {position + 1}" if self.kind is VoteKind.GENERIC else None,
+                    position=position,
+                )
+            )
+        try:
+            await self.set_emojis(options)
+        except InvalidVoteConfigurationError as error:
+            await event.notice(str(error))
 
     async def _reset(self, event: sl.PressEvent) -> None:
         if not await self._may_event(event, SETTINGS_VOTING_EDIT):
@@ -463,105 +539,3 @@ class SettingsPanel(sl.Component):
             self, access=sl.discord.Owner(self._author_id), locale=self.locale, timeout=SESSION_SECONDS
         )
         return self._mount
-
-
-class RoleWeightModal(ErrorHandledModal):
-    """Set or remove one role's vote multiplier."""
-
-    def __init__(self, panel: SettingsPanel, role: discord.Role, *, mount: sl.discord.Mount) -> None:
-        super().__init__(title=t(panel.locale, _("Vote weight for {role}"), role=role.name)[:45])
-        self._panel = panel
-        self._mount = mount
-        self._role = role
-        current = panel.weight_for(role.id)
-        self.multiplier = discord.ui.TextInput(
-            default=f"{current:g}" if current is not None else None,
-            placeholder="1.5",
-            required=False,
-            max_length=16,
-        )
-        self.add_item(
-            discord.ui.Label(
-                text=t(panel.locale, _("Multiplier — leave empty to remove this role's weight")),
-                component=self.multiplier,
-            )
-        )
-
-    @override
-    async def on_submit(self, interaction: discord.Interaction) -> None:
-        text = self.multiplier.value.strip()
-        try:
-            await self._panel.set_weight(self._role.id, float(text) if text else None)
-        except InvalidVoteConfigurationError, ValueError:
-            await interaction.response.send_message(
-                t(self._panel.locale, _("A vote multiplier must be a positive number, such as 1.5.")),
-                ephemeral=True,
-                allowed_mentions=no_mentions(),
-            )
-            return
-        await self._mount.flush(interaction)
-
-
-class VoteEmojiModal(ErrorHandledModal):
-    """Edit an ordered guild emoji preset as one choice/emoji pair per line."""
-
-    def __init__(self, panel: SettingsPanel, *, mount: sl.discord.Mount) -> None:
-        super().__init__(title=t(panel.locale, _("{kind} vote emojis"), kind=panel.kind.value)[:45])
-        self._panel = panel
-        self._mount = mount
-        self.aliases = discord.ui.TextInput(
-            default=panel.emoji_preset_text(),
-            style=discord.TextStyle.paragraph,
-            placeholder="approve | 👍\ndeny | 👎",
-            min_length=1,
-            max_length=1000,
-        )
-        self.add_item(
-            discord.ui.Label(text=t(panel.locale, _("One `choice | emoji` per line")), component=self.aliases)
-        )
-
-    @override
-    async def on_submit(self, interaction: discord.Interaction) -> None:
-        if interaction.guild is None:
-            return
-        locale = self._panel.locale
-        options: list[VoteOption] = []
-        kind = self._panel.kind
-        for position, line in enumerate(filter(None, (line.strip() for line in self.aliases.value.splitlines()))):
-            parts = [part.strip() for part in line.split("|", 1)]
-            if len(parts) != 2:
-                await _reject(interaction, t(locale, _("Each line must read `choice | emoji`.")))
-                return
-            choice_text, emoji = parts
-            try:
-                choice = VoteChoice.GENERIC if kind is VoteKind.GENERIC else VoteChoice(choice_text)
-            except ValueError:
-                await _reject(interaction, t(locale, _("`{choice}` is not a vote choice."), choice=choice_text))
-                return
-            parsed = discord.PartialEmoji.from_str(emoji)
-            if parsed.is_custom_emoji():
-                custom = interaction.guild.get_emoji(parsed.id or 0)
-                if custom is None or not custom.is_usable():
-                    await _reject(interaction, t(locale, _("The custom emoji {emoji} is inaccessible."), emoji=emoji))
-                    return
-            options.append(
-                VoteOption(
-                    emoji,
-                    choice,
-                    identifier=str(position + 1) if kind is VoteKind.GENERIC else choice.value,
-                    guild_id=interaction.guild.id,
-                    label=f"Option {position + 1}" if kind is VoteKind.GENERIC else None,
-                    position=position,
-                )
-            )
-        try:
-            await self._panel.set_emojis(options)
-        except InvalidVoteConfigurationError as error:
-            await _reject(interaction, str(error))
-            return
-        await self._mount.flush(interaction)
-
-
-async def _reject(interaction: discord.Interaction, message: str) -> None:
-    """Answer a rejected edit privately, leaving the panel as it was."""
-    await interaction.response.send_message(message, ephemeral=True, allowed_mentions=no_mentions())

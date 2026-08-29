@@ -2,18 +2,30 @@
 
 import inspect
 from dataclasses import fields
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import anyio
 import pytest
 
 import squid_layouts as sl
-from squid_layouts.discord import Everyone, MountDefaults, Owner, SessionKey, SessionRegistry
+from squid_layouts.discord import Everyone, MountDefaults, SessionKey, SessionRegistry
 from squid_layouts.discord.delivery import Abandoned
-from squid_layouts.discord.sessions import Opened, ProtectCrossUserAttachments, Reject, Rejected, RejectionReason, Replace, SessionPolicy, Unprotected, open_personal
-from squid_layouts.discord.sessions import OpeningRequest
-from squid_layouts.discord.testing import fake_interaction, fake_message
+from squid_layouts.discord.sessions import (
+    MembershipStatus,
+    Opened,
+    OpeningRequest,
+    OpenResult,
+    ProtectCrossUserAttachments,
+    Reject,
+    Rejected,
+    RejectionReason,
+    Replace,
+    Session,
+    SessionPolicy,
+    Unprotected,
+)
+from squid_layouts.discord.testing import fake_message
 from squid_layouts.primitives import Button, Heading, Row
 
 
@@ -97,16 +109,11 @@ def test_mount_defaults_apply_overrides_without_mutating_the_defaults() -> None:
     assert defaults.timeout == 30
 
 
-async def test_registry_opens_components_through_its_mount_defaults() -> None:
-    on_error = AsyncMock()
-    registry = SessionRegistry(MountDefaults(timeout=30, on_error=on_error))
+async def test_registry_requires_a_constructed_mount() -> None:
+    registry = SessionRegistry()
 
-    result = await registry.open(Panel(), to_message(), access=Owner(7), timeout=None)
-
-    assert isinstance(result, Opened)
-    assert result.session.root.timeout is None
-    assert result.session.root.on_error is on_error
-    assert result.session.root.access == Owner(7)
+    with pytest.raises(TypeError, match=r"requires a Mount; use MountDefaults\.mount or Screen\.open"):
+        await registry.open(cast(Any, Panel()), to_message())
 
 
 async def test_any_hashable_key_can_name_a_session() -> None:
@@ -362,6 +369,329 @@ class TestAttachments:
         assert registry.get(KEY) == ()
 
 
+class TestMembership:
+    async def test_the_opener_is_the_only_initial_member(self) -> None:
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        assert isinstance(opened, Opened)
+
+        assert opened.session.members == frozenset({7})
+        assert opened.session.capacity is None
+        assert opened.session.remaining_capacity is None
+
+    async def test_a_root_component_finds_its_session_on_its_first_render(self) -> None:
+        registry = SessionRegistry()
+        seen: list[frozenset[int] | None] = []
+
+        class Roster(sl.Component):
+            def render(self):
+                session = registry.session_for(mount)
+                seen.append(None if session is None else session.members)
+                return Heading("Roster")
+
+        mount = sl.discord.Mount(Roster(), access=Everyone(), timeout=None)
+        opened = await registry.open(mount, to_message(), key=KEY, actor_id=7)
+
+        assert isinstance(opened, Opened)
+        assert seen == [frozenset({7})]
+
+    async def test_an_abandoned_delivery_leaves_no_mount_indexed(self) -> None:
+        registry = SessionRegistry()
+        mount = a_mount()
+
+        result = await registry.open(mount, abandoning(), key=KEY, actor_id=7)
+
+        assert isinstance(result, Abandoned)
+        assert registry.session_for(mount) is None
+
+    async def test_an_actorless_session_starts_empty(self) -> None:
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY)
+        assert isinstance(opened, Opened)
+
+        assert opened.session.members == frozenset()
+        assert opened.session.participants == frozenset()
+
+    async def test_an_attachment_actor_is_attributed_but_never_a_member(self) -> None:
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        assert isinstance(opened, Opened)
+
+        await opened.session.attach(a_mount(), to_message(), actor_id=8)
+
+        assert opened.session.members == frozenset({7})
+        assert opened.session.participants == frozenset({7, 8})
+
+    async def test_join_admits_below_capacity_and_reports_the_remaining_slots(self) -> None:
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7, capacity=3)
+        assert isinstance(opened, Opened)
+
+        result = await opened.session.join(8)
+
+        assert result.status is MembershipStatus.JOINED
+        assert result.committed
+        assert result.members == frozenset({7, 8})
+        assert result.remaining_capacity == 1
+
+    async def test_rejoining_at_capacity_stays_idempotent(self) -> None:
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7, capacity=1)
+        assert isinstance(opened, Opened)
+
+        result = await opened.session.join(7)
+
+        assert result.status is MembershipStatus.ALREADY_MEMBER
+        assert not result.committed
+        assert opened.session.members == frozenset({7})
+
+    async def test_join_at_capacity_refuses_without_mutating(self) -> None:
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7, capacity=1)
+        assert isinstance(opened, Opened)
+
+        result = await opened.session.join(8)
+
+        assert result.status is MembershipStatus.AT_CAPACITY
+        assert result.remaining_capacity == 0
+        assert opened.session.members == frozenset({7})
+
+    async def test_a_declining_rule_refuses_without_mutating(self) -> None:
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        assert isinstance(opened, Opened)
+
+        result = await opened.session.join(8, when=lambda members: len(members) < 1)
+
+        assert result.status is MembershipStatus.REFUSED
+        assert opened.session.members == frozenset({7})
+
+    async def test_leave_permits_the_opener_and_the_final_member(self) -> None:
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        assert isinstance(opened, Opened)
+
+        result = await opened.session.leave(7)
+
+        assert result.status is MembershipStatus.LEFT
+        assert opened.session.members == frozenset()
+        assert not opened.session.root.finished
+        assert registry.get(KEY) == (opened.session,)
+
+    async def test_leaving_a_non_member_is_idempotent(self) -> None:
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        assert isinstance(opened, Opened)
+
+        result = await opened.session.leave(8)
+
+        assert result.status is MembershipStatus.NOT_MEMBER
+        assert opened.session.members == frozenset({7})
+
+    async def test_membership_operations_on_a_finished_session_do_nothing(self) -> None:
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        assert isinstance(opened, Opened)
+        await opened.session.finish()
+
+        joined = await opened.session.join(8)
+        left = await opened.session.leave(7)
+
+        assert joined.status is MembershipStatus.SESSION_FINISHED
+        assert left.status is MembershipStatus.SESSION_FINISHED
+        assert opened.session.members == frozenset({7})
+
+    async def test_a_stale_expectation_conflicts_and_a_retry_converges(self) -> None:
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        assert isinstance(opened, Opened)
+        stale = opened.session.members
+        await opened.session.join(8)
+
+        conflicted = await opened.session.join(9, expect=stale)
+        retried = await opened.session.join(9, expect=opened.session.members)
+
+        assert conflicted.status is MembershipStatus.CONFLICT
+        assert conflicted.members == frozenset({7, 8})
+        assert retried.status is MembershipStatus.JOINED
+
+    async def test_concurrent_joins_admit_exactly_one_into_the_final_slot(self) -> None:
+        """A non-durable join never awaits inside the lock, so this guards a refactor.
+
+        The durable path checkpoints and therefore does await; its race test is the one
+        that exercises real contention.
+        """
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7, capacity=2)
+        assert isinstance(opened, Opened)
+        results: list[MembershipStatus] = []
+
+        async def contend(user_id: int) -> None:
+            results.append((await opened.session.join(user_id)).status)
+
+        async with anyio.create_task_group() as tasks:
+            for user_id in (8, 9, 10):
+                tasks.start_soon(contend, user_id)
+
+        assert results.count(MembershipStatus.JOINED) == 1
+        assert results.count(MembershipStatus.AT_CAPACITY) == 2
+        assert len(opened.session.members) == 2
+
+    async def test_a_member_protects_the_session_from_the_opener_reopening(self) -> None:
+        registry = SessionRegistry()
+        first = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        assert isinstance(first, Opened)
+        await first.session.join(8)
+
+        protected = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        unprotected = await registry.open(
+            a_mount(), to_message(), key=KEY, actor_id=7, policy=SessionPolicy(protect=Unprotected())
+        )
+
+        assert protected == Rejected((first.session.summary,), RejectionReason.PROTECTED)
+        assert isinstance(unprotected, Opened)
+
+    async def test_capacity_and_member_ids_are_validated(self) -> None:
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        assert isinstance(opened, Opened)
+
+        with pytest.raises(ValueError, match="positive"):
+            await registry.open(a_mount(), to_message(), capacity=0)
+        for bad in (True, 0, -1):
+            with pytest.raises(ValueError, match="positive integers"):
+                await opened.session.join(cast(int, bad))
+
+
+class TestQuota:
+    """Capacity caps users per session; quota caps sessions per user."""
+
+    GUILD_ONE = SessionKey.guild("game", 1)
+    GUILD_TWO = SessionKey.guild("game", 2)
+
+    async def test_a_quota_refuses_a_second_session_in_the_same_domain(self) -> None:
+        registry = SessionRegistry()
+        first = await registry.open(a_mount(), to_message(), key=self.GUILD_ONE, actor_id=7, quota=1)
+        assert isinstance(first, Opened)
+        second_mount = a_mount()
+
+        second = await registry.open(second_mount, to_message(), key=self.GUILD_TWO, actor_id=7, quota=1)
+
+        assert isinstance(second, Rejected)
+        assert second.reason is RejectionReason.QUOTA_REACHED
+        assert second_mount.handle is None
+        assert len(tuple(registry.active())) == 1
+
+    async def test_a_quota_refuses_a_join_that_would_exceed_it(self) -> None:
+        registry = SessionRegistry()
+        held = await registry.open(a_mount(), to_message(), key=self.GUILD_ONE, actor_id=8, quota=1)
+        elsewhere = await registry.open(a_mount(), to_message(), key=self.GUILD_TWO, actor_id=9, quota=1)
+        assert isinstance(held, Opened) and isinstance(elsewhere, Opened)
+
+        result = await elsewhere.session.join(8)
+
+        assert result.status is MembershipStatus.QUOTA_REACHED
+        assert elsewhere.session.members == frozenset({9})
+
+    async def test_leaving_one_session_frees_the_quota_for_another(self) -> None:
+        registry = SessionRegistry()
+        held = await registry.open(a_mount(), to_message(), key=self.GUILD_ONE, actor_id=8, quota=1)
+        elsewhere = await registry.open(a_mount(), to_message(), key=self.GUILD_TWO, actor_id=9, quota=1)
+        assert isinstance(held, Opened) and isinstance(elsewhere, Opened)
+
+        await held.session.leave(8)
+        result = await elsewhere.session.join(8)
+
+        assert result.status is MembershipStatus.JOINED
+
+    async def test_a_finished_session_frees_the_quota(self) -> None:
+        registry = SessionRegistry()
+        first = await registry.open(a_mount(), to_message(), key=self.GUILD_ONE, actor_id=7, quota=1)
+        assert isinstance(first, Opened)
+        await first.session.finish()
+
+        second = await registry.open(a_mount(), to_message(), key=self.GUILD_TWO, actor_id=7, quota=1)
+
+        assert isinstance(second, Opened)
+
+    async def test_a_different_domain_does_not_count(self) -> None:
+        registry = SessionRegistry()
+        game = await registry.open(a_mount(), to_message(), key=self.GUILD_ONE, actor_id=7, quota=1)
+        assert isinstance(game, Opened)
+
+        settings = await registry.open(
+            a_mount(), to_message(), key=SessionKey.guild("settings", 2), actor_id=7, quota=1
+        )
+
+        assert isinstance(settings, Opened)
+
+    async def test_an_explicit_domain_joins_two_key_names_into_one_family(self) -> None:
+        registry = SessionRegistry()
+        lobby = await registry.open(
+            a_mount(), to_message(), key=SessionKey.guild("lobby", 1), actor_id=7, quota=1, domain="game"
+        )
+        assert isinstance(lobby, Opened)
+
+        match = await registry.open(
+            a_mount(), to_message(), key=SessionKey.guild("match", 1), actor_id=7, quota=1, domain="game"
+        )
+
+        assert isinstance(match, Rejected)
+        assert match.reason is RejectionReason.QUOTA_REACHED
+
+    async def test_racing_opens_for_one_user_admit_exactly_one(self) -> None:
+        """The advisory check passes in both, so only the commit-time lock can settle it."""
+        registry = SessionRegistry()
+        results: list[OpenResult] = []
+
+        async def contend(key: SessionKey) -> None:
+            results.append(await registry.open(a_mount(), slowly(), key=key, actor_id=7, quota=1))
+
+        async with anyio.create_task_group() as tasks:
+            for key in (self.GUILD_ONE, self.GUILD_TWO):
+                tasks.start_soon(contend, key)
+
+        assert sum(isinstance(result, Opened) for result in results) == 1
+        assert sum(isinstance(result, Rejected) for result in results) == 1
+        assert len(tuple(registry.active())) == 1
+
+    async def test_racing_joins_for_one_user_admit_exactly_one(self) -> None:
+        registry = SessionRegistry()
+        one = await registry.open(a_mount(), to_message(), key=self.GUILD_ONE, actor_id=1, quota=1)
+        two = await registry.open(a_mount(), to_message(), key=self.GUILD_TWO, actor_id=2, quota=1)
+        assert isinstance(one, Opened) and isinstance(two, Opened)
+        statuses: list[MembershipStatus] = []
+
+        async with anyio.create_task_group() as tasks:
+            for opened in (one, two):
+                tasks.start_soon(lambda target=opened: _record_join(statuses, target.session, 7))
+
+        assert statuses.count(MembershipStatus.JOINED) == 1
+        assert statuses.count(MembershipStatus.QUOTA_REACHED) == 1
+
+    async def test_sessions_for_member_answers_what_a_user_is_in(self) -> None:
+        registry = SessionRegistry()
+        game = await registry.open(a_mount(), to_message(), key=self.GUILD_ONE, actor_id=7)
+        settings = await registry.open(a_mount(), to_message(), key=SessionKey.guild("settings", 1), actor_id=7)
+        assert isinstance(game, Opened) and isinstance(settings, Opened)
+
+        assert registry.sessions_for_member(7) == (game.session, settings.session)
+        assert registry.sessions_for_member(7, domain="game") == (game.session,)
+        assert registry.sessions_for_member(8) == ()
+
+    async def test_a_quota_without_a_domain_is_refused(self) -> None:
+        registry = SessionRegistry()
+
+        with pytest.raises(ValueError, match="membership domain"):
+            await registry.open(a_mount(), to_message(), actor_id=7, quota=1)
+        with pytest.raises(ValueError, match="positive"):
+            await registry.open(a_mount(), to_message(), key=self.GUILD_ONE, actor_id=7, quota=0)
+
+
+async def _record_join(statuses: list[MembershipStatus], session: Session, user_id: int) -> None:
+    statuses.append((await session.join(user_id)).status)
+
+
 class TestRacesAndCleanup:
     async def test_racing_opens_leave_one_survivor(self) -> None:
         registry = SessionRegistry()
@@ -394,20 +724,6 @@ class TestRacesAndCleanup:
 
         assert keyed.session.root.finished and keyless.session.root.finished
         assert tuple(registry.active()) == ()
-
-
-async def test_open_personal_owns_access_audience_and_registration() -> None:
-    on_error = AsyncMock()
-    registry = SessionRegistry(MountDefaults(on_error=on_error))
-    interaction = fake_interaction(user_id=7)
-
-    result = await open_personal(registry, Panel(), interaction, key=SessionKey.user("panel", 7), timeout=None)
-
-    assert isinstance(result, Opened)
-    assert result.session.participants == frozenset({7})
-    assert result.session.root.access == Owner(7)
-    assert result.session.root.on_error is on_error
-    assert interaction.response.send_message.await_args.kwargs["ephemeral"] is True
 
 
 async def _note(order: list[str], label: str) -> None:

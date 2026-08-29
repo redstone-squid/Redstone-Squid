@@ -1,235 +1,208 @@
-# 60 — Session membership: participants and per-session capacity
+# 60 — Session membership: members and per-session capacity
 
-## Problem
+## Status
 
-`SessionPolicy` controls how many logical sessions may occupy one `SessionKey`. It does not
-control how many users may participate in one session. Games, lobbies, collaborative editors,
-and review rooms therefore have no framework operation for admission:
+Shipped. Membership is `sessions.py`; the record protocol is `durability/session_records.py`;
+the durable path is `durability/runtime.py`; the worked consumer is `/layout lobby` in
+`squid/bot/layout_showcase.py`. This closes [90](90-deferred.md)'s "Participant tracking /
+shared sessions" entry on [34](../completed/squid-layouts-redesign/34-safe-session-runtime.md)
+§B.4's terms.
+
+The build differs from the first draft in four places, and each difference is a section below:
+capacity is an `int` rather than a `ParticipantPolicy` (§2), the durable write follows `_attach`
+instead of fencing inside the lock (§4), the four result types collapsed to two (§3), and the
+worked consumer is a real command rather than a test fixture (§6). Writing that consumer found
+a framework defect the draft could not have predicted (§7).
+
+## The problem
+
+`SessionPolicy` controls how many logical sessions may occupy one `SessionKey`. Nothing
+controlled how many users may participate in one session:
 
 ```text
-SessionPolicy      = how many sessions may occupy this key?
-ParticipantPolicy  = how many users may join this session?
+SessionPolicy  = how many sessions may occupy this key?
+capacity       = how many users may join this session?
 ```
 
-`Session.participants` already appears in summaries and replacement protection, but today it is
-initialized only from the root `actor_id` and never changes. Attachment actors are tracked
-separately. Durable summaries serialize the participant set, then recovered `Session`
-construction resets it from `actor_id`; that dormant mismatch becomes a real data-loss bug as
-soon as membership can change.
+Worse, `SessionSummary.participants` carried no information. `Session.__init__` set it to
+`{actor_id}` and nothing ever changed it, so `victim.participants - {actor_id}` in
+`ProtectCrossUserAttachments` was provably always empty: cross-user replacement protection
+rested entirely on `attachment_actors`. The field was either dead weight to delete or a model
+to finish. This finishes it.
 
-Applications can keep their own set in component state, but then admission races with concurrent
-clicks, replacement protection cannot see it, devtools report the wrong users, and a recovered
-durable lobby forgets its members. Membership belongs to the logical session, not to any one
-mount in its tree.
-
-## Decision
-
-Make membership a serialized operation on `Session`, governed by an immutable
-`ParticipantPolicy` separate from `SessionPolicy`:
+## 1. Membership is a session operation
 
 ```python
 opened = await sessions.open(
-    Lobby(...),
+    lobby.mount(),
     destination,
-    key=SessionKey.guild("game", guild.id),
-    participant_policy=ParticipantPolicy(limit=10),
+    key=SessionKey.guild("lobby", guild.id),
     actor_id=interaction.user.id,
+    capacity=4,
 )
 
 result = await opened.session.join(other_user_id)
 left = await opened.session.leave(other_user_id)
 ```
 
-Normal admission outcomes are typed values rather than exceptions. Operational failures—store
-loss, programming errors, and Discord delivery failures—remain exceptions or existing open
-results rather than being disguised as capacity decisions.
+Membership is caller-authorized. The framework decides capacity and atomicity, never whether a
+user was invited, banned, paid, or assigned to a team.
 
-## Public API
+The opener is the initial member when `actor_id` is present; an actorless session starts empty.
+Attachment actors remain operational attribution and never join implicitly — opening a child
+screen or pressing a control is not evidence that somebody accepted membership. Leaving the
+opener or the final member is allowed, and an empty session stays alive: only the application
+knows when a lobby is over.
 
-`squid_layouts.discord.sessions` adds:
+`participants` is now **derived** — `members | attachment_actors | {actor_id}` — so a protection
+policy reads one field. Before, a third-party `ReplacementProtection` had to remember to union
+three of them, and the shipped one did.
 
-```python
-@dataclass(frozen=True, slots=True)
-class ParticipantPolicy:
-    limit: int | None = None
+## 2. Capacity is an `int`; other rules are per-call predicates
 
-@dataclass(frozen=True, slots=True)
-class Joined:
-    user_id: int
-    participants: frozenset[int]
+The draft proposed `SessionPolicy(participants=ParticipantPolicy(limit=10))`. Two things were
+wrong with it.
 
-@dataclass(frozen=True, slots=True)
-class AlreadyJoined:
-    user_id: int
-    participants: frozenset[int]
+`SessionPolicy` governs the key contest — `_open_locked` consults it only when a key is present
+— while capacity applies to a keyless session too, so nesting them leaves half the type dead
+depending on an unrelated argument, and spells one integer as three nested constructors. Capacity
+is therefore a sibling `capacity=` on `open` and a flat `Screen.capacity` field.
 
-@dataclass(frozen=True, slots=True)
-class ParticipantLimitReached:
-    user_id: int
-    limit: int
-    participants: frozenset[int]
+More importantly, a bare limit does not deliver the atomicity the feature exists for. A caller
+whose rule is anything else — teams, bans, one-game-at-a-time — checks it and *then* calls
+`join()`, and the race reopens between the two. So an admission rule decomposes:
 
-@dataclass(frozen=True, slots=True)
-class ParticipantSessionFinished:
-    user_id: int
+- **Facts about the candidate** (banned, consented, paid) are async and I/O-bound but independent
+  of who else is present, so concurrent joins cannot invalidate each other's answers. They belong
+  in the caller. The lifecycle lock also serialises `attach` and `finish`; a round-trip under it
+  is the defect shape [64](64-challenged-admission.md) was written around, one layer down.
+- **Facts about the set** (capacity, uniqueness, team balance) are pure functions of `members` and
+  must be atomic. They belong under the lock, and they need no I/O to be.
 
-type JoinResult = Joined | AlreadyJoined | ParticipantLimitReached | ParticipantSessionFinished
+`join(user_id, when=...)` takes the second half as a synchronous pure predicate over the current
+members. The showcase lobby uses `when=lambda members: self.host_id in members` — a rule that
+depends on the roster, cannot be expressed as a number, and would race if checked outside.
 
-@dataclass(frozen=True, slots=True)
-class Left:
-    user_id: int
-    participants: frozenset[int]
-
-@dataclass(frozen=True, slots=True)
-class NotParticipant:
-    user_id: int
-    participants: frozenset[int]
-
-type LeaveResult = Left | NotParticipant | ParticipantSessionFinished
-```
-
-`ParticipantPolicy.limit` must be positive or `None`; `None` means unbounded. There is no minimum
-in v1. A session may be empty, its opener may leave, and becoming empty does not finish it.
-
-`SessionRegistry.open`, its bare-component overloads, `Screen.open`, and
-`DurableSessionRuntime.open` accept:
+For the residual case — a rule that is *both* async and set-dependent, such as "max two per team
+where teams live in Postgres" — the answer is optimistic concurrency rather than in-lock I/O:
 
 ```python
-participant_policy: ParticipantPolicy = ParticipantPolicy()
+while True:
+    members = session.members
+    if not await team_rule(members, user_id):
+        return refuse()
+    result = await session.join(user_id, expect=members)
+    if result.status is not MembershipStatus.CONFLICT:
+        break
 ```
 
-`Screen` gains a `participant_policy` field because it is reusable per-screen opening policy;
-this is an extension of the shipped value, not a second `SessionSpec` abstraction. A per-call
-override follows the same precedence as other `Screen.open` overrides only if the existing typed
-options surface can express it cleanly; otherwise the screen field is fixed and callers needing a
-different policy call `SessionRegistry.open` directly.
+`expect=` costs one comparison under the lock and one status value, and it is what makes the
+synchronous predicate a decomposition rather than a limitation.
 
-`Session` exposes:
+## 3. One result type
 
 ```python
-@property
-def participant_policy(self) -> ParticipantPolicy: ...
+class MembershipStatus(StrEnum):
+    JOINED = "joined"
+    ALREADY_MEMBER = "already_member"
+    LEFT = "left"
+    NOT_MEMBER = "not_member"
+    AT_CAPACITY = "at_capacity"
+    REFUSED = "refused"            # the caller's `when=` declined
+    CONFLICT = "conflict"          # `expect=` did not match
+    SESSION_FINISHED = "session_finished"
 
-@property
-def participants(self) -> frozenset[int]: ...
+@dataclass(frozen=True, slots=True)
+class MembershipResult:
+    user_id: int
+    status: MembershipStatus
+    members: frozenset[int]
+    remaining_capacity: int | None
 
-@property
-def participant_limit(self) -> int | None: ...
-
-@property
-def remaining_capacity(self) -> int | None: ...
-
-def has_participant(self, user_id: int) -> bool: ...
-
-async def join(self, user_id: int) -> JoinResult: ...
-async def leave(self, user_id: int) -> LeaveResult: ...
+    @property
+    def committed(self) -> bool: ...
 ```
 
-`remaining_capacity` is `None` for an unbounded session and otherwise
-`max(limit - len(participants), 0)`. Public integer inputs reject `bool` and non-positive Discord
-IDs with `ValueError`; this matches session identity being Discord-user membership rather than an
-arbitrary application key.
+The draft had `JoinResult`/`LeaveResult` — field-identical — and two status enums sharing
+`SESSION_FINISHED`. Four public types for one operation, in a package whose idiom is unions of
+frozen dataclasses. Results carry immutable snapshots so a caller can render the outcome it
+received even if the session moves afterwards.
 
-## Membership semantics
+Order under the lock, both operations: session alive → `expect` matches → membership → capacity →
+`when` → commit. The idempotent answers precede capacity, so re-joining a full lobby is
+`ALREADY_MEMBER` rather than an error.
 
-The root `actor_id`, when present, is the initial participant. Because a finite limit is always
-positive, opening can always admit that one user. `actor_id=None` starts empty.
+## 4. Durability follows `_attach`
 
-Attachment actors remain operational attribution and do **not** join automatically. Opening a
-child screen, inspecting a session, or pressing one of its controls is not evidence that the user
-accepted membership. Applications call `join()` at the domain event that actually means “join.”
+`DurableSessionRecord` advances to protocol 2 and carries the member set and the capacity beside
+the mount graph. Protocol 1 records predate membership and decode with an unbounded capacity and
+the stored opener as their only member, which is what they meant; the next checkpoint rewrites
+them at protocol 2. The summary payload needs no version field — a payload without a `members`
+key is a legacy one by construction.
 
-`join(user_id)` under the session lifecycle lock performs, in order:
+A durable join commits under the lifecycle lock and checkpoints **after releasing it**, exactly
+as `_attach` has always done. The draft demanded an immediate fenced checkpoint inside the lock,
+rollback on failure, a `ParticipantPersistenceError`, and deferred teardown. Those last two exist
+only to survive a deadlock the first two create: a failed `save()` calls `_lose_claim`, which
+finishes the session, which takes the lock the operation still holds. `test_a_membership_
+checkpoint_that_loses_the_claim_finishes_without_deadlocking` times out if the checkpoint is moved
+back inside.
 
-1. Return `ParticipantSessionFinished` if the session is closed, finishing, or its root is
-   finished.
-2. Return `AlreadyJoined` if the user is present; this succeeds idempotently even when the session
-   is currently at capacity.
-3. Return `ParticipantLimitReached` if adding one would exceed the finite limit.
-4. Persist the candidate membership when the session is durable.
-5. Publish the new immutable set and return `Joined`.
+The accepted cost, stated plainly: a crash between a join and its checkpoint loses that join, so a
+recovered lobby can briefly sit above its capacity. This is what already happens to an attachment,
+a failed checkpoint is visible as `DurabilityHealth.CHECKPOINT_PENDING` and retried by
+maintenance, and a caller needing read-your-write awaits `DurableSessionRuntime.flush()`.
 
-`leave(user_id)` uses the same lock, returns `ParticipantSessionFinished` for a dead session,
-`NotParticipant` when absent, and otherwise persists then publishes the set without that user.
-Neither operation finishes mounts, changes access policy, or sends a Discord response.
+Two things the draft was right about and this keeps: recovery validates that the stored summary
+and record agree on membership before registering, and checkpoint writes for one session are
+serialized so a slower writer cannot land an older snapshot after a newer one. That second race
+predates membership — `_attach` has always checkpointed outside the maintenance lock — but joins
+are frequent enough to make it ordinary rather than theoretical.
 
-The participant policy is capacity only. It does not answer who is allowed to join. The caller,
-route middleware, or application service owns invitation, ban, guild, payment, and game-state
-authorization before invoking `join()`.
+## 5. Inspection
 
-`ProtectCrossUserAttachments` already consults both `SessionSummary.participants` and
-`attachment_actors`; no new replacement policy is needed. Once joins are real, an opener cannot
-replace a session while a different explicit participant remains in it. `Unprotected` continues
-to opt out.
+`SessionInspection` carries `members`, `capacity` and `remaining_capacity` beside the derived
+`participants`, and the devtools render `used/limit` on both the session list and the detail
+panel: the question an operator asks about a lobby is whether it is full. No devtools join/kick
+operation is added — operational mutation needs its own authorization and audit design.
 
-## Durability
+## 6. The worked consumer
 
-Membership and capacity are part of the durable logical-session record, not component state.
+34 §B.4 said that "without that worked consumer, participant indexing is omitted rather than
+guessed at from Cascade's API", and 90 made a lobby/game example the removal condition. The draft
+substituted a test-only fixture and explicitly no bot UX, which inverts that gate. `/layout lobby`
+is the consumer: a four-seat guild lobby that renders `session.members`, holds no roster of its
+own, opens Join to everyone and lets Start consult the roster itself — the exact split 34 §B.2
+describes for an open lobby with member-only controls.
 
-- `SessionSummary` gains `participant_limit`; `participants` remains the immutable current set.
-- `DurableSessionRecord` and its codec carry `participant_limit` and `participants`.
-- The durable session record protocol increments. The decoder accepts protocol 1 records as
-  `participant_limit=None` with participants derived from the stored root actor, then writes the
-  current protocol on the next checkpoint.
-- The separately stored summary payload also carries `participant_limit`; its existing missing
-  `participants` compatibility remains an empty/default decode only for genuinely old records.
-- Recovery initializes `Session._participants` from the decoded summary/record, never by
-  recomputing it from `actor_id` when durable membership is available.
-- Summary and record validation requires matching ids, keys, participant policy, and participant
-  sets so a torn store cannot quietly recover contradictory membership.
+## 7. What the consumer found
 
-A durable join or leave is successful only after a fenced checkpoint stores the candidate set.
-The operation stages the new set while holding the lifecycle lock; on checkpoint failure it keeps
-the old in-memory set, updates durability health through the existing runtime path, and raises a
-new `ParticipantPersistenceError`. Thus `Joined` and `Left` mean the membership will survive an
-immediate process loss. Remote admission inspection sees the updated summary after the same
-checkpoint.
-
-The active durable runtime already owns the session under a distributed lease, so the local
-lifecycle lock is the only in-process admission lock required. A lost fence makes persistence
-fail rather than allowing two processes to admit independently.
-
-## Inspection and operations
-
-`SessionSummary`, `SessionInspection`, and devtools show the participant count, finite/unbounded
-limit, and remaining capacity. Existing participant lists now mean explicit membership rather
-than merely echoing the opener. No devtools join/kick operation is added in v1; operational
-mutation needs an authorization and audit design of its own.
+Delivery renders. The registry indexed a root mount only *after* delivery returned, so a component
+drawing session facts found no session on its own first paint and was never asked to draw again —
+the lobby rendered its "closed" branch and stayed there. Fixed by indexing before `mount.send` and
+unindexing on an abandoned delivery. No amount of reading would have produced this; a test fixture
+that constructs its session first would not have either.
 
 ## Not included
 
-- No invitation, role, team, ready-state, owner, or ban model.
-- No minimum participant count or automatic finish when empty.
+- No invitation, role, team, ready-state, ban, or member-metadata model.
+- No framework-level authorization callback.
+- No minimum member count or automatic finish when empty.
 - No automatic join from attachment, access, or interaction activity.
-- No participant-specific mount access changes.
+- No member-specific mount access changes.
 - No waiting queue when capacity is full.
 - No transfer of membership between sessions.
-- No participant metadata; applications keep game-specific data in their own durable component or
-  application store.
+- **No cross-session member index.** 34 §B.4 also asked that joining be atomic across every scope
+  a member occupies, so a session could refuse a user already in another one. That is the part
+  only the registry can do — per-session capacity needs one lock, this needs two — and it is a
+  lock-ordering problem with no consumer today. Recorded rather than dropped.
+- No database schema migration; only versioned durable JSON payloads change.
 
 ## Verification
 
-- The root actor is the sole initial participant; an actorless session starts empty and attachment
-  actors never join implicitly.
-- Join succeeds below capacity, is idempotent when already joined, and returns the typed full result
-  at capacity.
-- Leave succeeds, is idempotent when absent, permits the opener and final participant to leave, and
-  never finishes the session.
-- Join/leave after or during finish return `ParticipantSessionFinished` without mutation.
-- Concurrent joins for the final slot admit exactly one user under the lifecycle lock.
-- Participant summaries immediately affect `ProtectCrossUserAttachments`; `Unprotected` still
-  permits replacement.
-- Unbounded and finite capacity properties report correctly.
-- Durable join/leave checkpoint before returning, survive recovery, and roll back in memory when
-  persistence or fencing fails.
-- Protocol 1 durable records recover with unbounded policy and their root actor as the participant;
-  current records round-trip the exact set and limit.
-- A recovered attachment actor remains attribution but is not promoted to membership.
-- Inspection and devtools snapshots report the same membership and capacity as the live session.
-- Focused session, durability codec/runtime, operations, Screen, public API, and typing tests pass;
-  then run `just typecheck` and `git diff --check`.
+`tests/test_sessions.py::TestMembership`, `tests/test_screens.py`,
+`tests/test_durable_runtime.py`, `tests/test_operations.py`, and
+`tests/unit/bot/test_layout_showcase.py::TestLobby`.
 
-## Status
-
-Designed. Depends on no other new plan; plan 61 may use it for future lobby-like role workflows
-but does not require it.
+Not run locally: `just typecheck` and the full suite, which exhaust this machine's memory. CI
+owns both.

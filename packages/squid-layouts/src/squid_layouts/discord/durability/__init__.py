@@ -19,15 +19,16 @@ from squid_layouts.runtime.presentation import (
 )
 from squid_layouts.runtime.reactivity import export_state, restore_state
 from squid_layouts.sources import Direction, Position
-
-from .postgres import PostgresSnapshotStore, PostgresTopicBridge, TopicBridgeSnapshot
-from .stores import (
+from squid_stores import (
     AdmissionToken,
     ClaimToken,
     DurableSessionStore,
-    MemorySnapshotStore,
-    SQLiteSnapshotStore,
+    MemorySessionStore,
+    PostgresSessionStore,
+    PostgresTopicBridge,
+    SQLiteSessionStore,
     StoredSessionRecord,
+    TopicBridgeSnapshot,
 )
 
 __all__ = [
@@ -35,14 +36,13 @@ __all__ = [
     "AdmissionToken",
     "ClaimToken",
     "ComponentRegistry",
-    "ComponentSnapshot",
+    "ComponentState",
     "DiscordFrontend",
     "DurabilityHealth",
     "DurableBot",
     "DurableFrontend",
     "DurableMountCodec",
     "DurableMountRecord",
-    "DurableMountState",
     "DurableOpenResult",
     "DurableRuntimeSnapshot",
     "DurableSession",
@@ -50,14 +50,16 @@ __all__ = [
     "DurableSessionRecord",
     "DurableSessionRuntime",
     "DurableSessionStore",
-    "MemorySnapshotStore",
+    "MemorySessionStore",
     "Missing",
     "MountLocator",
-    "MountSnapshot",
+    "MountState",
+    "MountStateCodec",
+    "MountStateError",
     "NotDurable",
-    "PostgresSnapshotStore",
+    "PostgresSessionStore",
     "PostgresTopicBridge",
-    "PresentationSnapshot",
+    "PresentationState",
     "Promoted",
     "PurgeResult",
     "Reconnected",
@@ -65,9 +67,8 @@ __all__ = [
     "RecoveryItem",
     "RecoveryReport",
     "RestoreContext",
-    "SQLiteSnapshotStore",
-    "SnapshotCodec",
-    "SnapshotError",
+    "SQLiteSessionStore",
+    "SessionMountRecord",
     "StoredSessionRecord",
     "TargetRegistry",
     "TopicBridgeSnapshot",
@@ -76,19 +77,19 @@ __all__ = [
 ]
 
 
-class SnapshotError(ValueError):
+class MountStateError(ValueError):
     """A snapshot is malformed, incompatible, or unsafe to restore."""
 
 
 @dataclass(frozen=True, slots=True)
-class ComponentSnapshot:
+class ComponentState:
     path: str
     type_id: str
     state: Mapping[str, object]
 
 
 @dataclass(frozen=True, slots=True)
-class PresentationSnapshot:
+class PresentationState:
     cursors: Mapping[str, CursorState]
     selections: Mapping[str, SelectionState]
     disclosures: Mapping[str, DisclosureState]
@@ -96,12 +97,12 @@ class PresentationSnapshot:
 
 
 @dataclass(frozen=True, slots=True)
-class MountSnapshot:
+class MountState:
     protocol: int
     component_key: str
     component_version: int
-    components: tuple[ComponentSnapshot, ...]
-    presentation: PresentationSnapshot
+    components: tuple[ComponentState, ...]
+    presentation: PresentationState
     target_id: str = V2_TARGET.id
     target_version: int = V2_TARGET.version
     target_fingerprint: str = ""
@@ -124,10 +125,10 @@ class MountLocator:
 
 @dataclass(frozen=True, slots=True)
 class DurableMountRecord:
-    """A component snapshot plus operational recovery metadata."""
+    """One mount's stored state plus the operational metadata recovery needs."""
 
     protocol: int
-    snapshot: MountSnapshot
+    state: MountState
     locator: MountLocator
     expires_at: float | None = None
 
@@ -141,10 +142,12 @@ class DurableMountCodec:
     def dumps(cls, record: DurableMountRecord) -> str:
         if record.protocol != cls.protocol:
             message = f"unsupported durable mount record protocol {record.protocol}"
-            raise SnapshotError(message)
+            raise MountStateError(message)
         raw = {
             "protocol": record.protocol,
-            "snapshot": json.loads(SnapshotCodec.dumps(record.snapshot)),
+            # Wire key stays "snapshot": the field was renamed for legibility, and
+            # changing what is written would strand every record already in a store.
+            "snapshot": json.loads(MountStateCodec.dumps(record.state)),
             "locator": {
                 "frontend": record.locator.frontend,
                 "values": dict(record.locator.values),
@@ -155,96 +158,96 @@ class DurableMountCodec:
             return json.dumps(raw, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
         except (TypeError, ValueError) as error:
             message = f"durable mount metadata is not JSON serializable: {error}"
-            raise SnapshotError(message) from error
+            raise MountStateError(message) from error
 
     @classmethod
     def loads(cls, payload: str) -> DurableMountRecord:
         try:
             raw = json.loads(payload)
         except json.JSONDecodeError as error:
-            raise SnapshotError(str(error)) from error
+            raise MountStateError(str(error)) from error
         item = _object(raw)
         protocol = _integer(item, "protocol")
         if protocol != cls.protocol or "snapshot" not in item:
             message = f"unsupported durable mount record protocol {protocol}"
-            raise SnapshotError(message)
+            raise MountStateError(message)
         locator = _object(item.get("locator"))
         values = _object(locator.get("values"))
         if not all(isinstance(key, str) and isinstance(value, str | int) for key, value in values.items()):
             message = "mount locator values must contain string keys and string or integer values"
-            raise SnapshotError(message)
+            raise MountStateError(message)
         expires_at = item.get("expires_at")
         if expires_at is not None and not isinstance(expires_at, int | float):
             message = "mount record expires_at must be a number or null"
-            raise SnapshotError(message)
+            raise MountStateError(message)
         snapshot_payload = json.dumps(item.get("snapshot"), ensure_ascii=False, separators=(",", ":"))
         return DurableMountRecord(
             protocol,
-            SnapshotCodec.loads(snapshot_payload),
+            MountStateCodec.loads(snapshot_payload),
             MountLocator(_string(locator, "frontend"), values),
             float(expires_at) if expires_at is not None else None,
         )
 
 
-class SnapshotCodec:
-    """Canonical JSON codec for the current pre-release mount snapshot shape."""
+class MountStateCodec:
+    """Canonical JSON codec for the current pre-release mount state shape."""
 
     protocol = 1
 
     @classmethod
-    def dumps(cls, snapshot: MountSnapshot) -> str:
-        if snapshot.protocol != cls.protocol:
-            message = f"unsupported mount snapshot protocol {snapshot.protocol}"
-            raise SnapshotError(message)
+    def dumps(cls, state: MountState) -> str:
+        if state.protocol != cls.protocol:
+            message = f"unsupported mount state protocol {state.protocol}"
+            raise MountStateError(message)
         raw = {
-            "protocol": snapshot.protocol,
-            "component_key": snapshot.component_key,
-            "component_version": snapshot.component_version,
+            "protocol": state.protocol,
+            "component_key": state.component_key,
+            "component_version": state.component_version,
             "components": [
                 {"path": component.path, "type_id": component.type_id, "state": dict(component.state)}
-                for component in snapshot.components
+                for component in state.components
             ],
-            "presentation": _presentation_to_dict(snapshot.presentation),
+            "presentation": _presentation_to_dict(state.presentation),
             "target": {
-                "id": snapshot.target_id,
-                "version": snapshot.target_version,
-                "fingerprint": snapshot.target_fingerprint,
-                "adapter_capabilities": list(snapshot.target_adapter_capabilities),
+                "id": state.target_id,
+                "version": state.target_version,
+                "fingerprint": state.target_fingerprint,
+                "adapter_capabilities": list(state.target_adapter_capabilities),
             },
         }
         try:
             return json.dumps(raw, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
         except (TypeError, ValueError) as error:
             message = f"component state is not JSON serializable: {error}"
-            raise SnapshotError(message) from error
+            raise MountStateError(message) from error
 
     @classmethod
-    def loads(cls, payload: str) -> MountSnapshot:
+    def loads(cls, payload: str) -> MountState:
         try:
             raw = json.loads(payload)
         except json.JSONDecodeError as error:
-            raise SnapshotError(str(error)) from error
+            raise MountStateError(str(error)) from error
         if not isinstance(raw, dict):
-            message = "mount snapshot must be an object"
-            raise SnapshotError(message)
+            message = "mount state must be an object"
+            raise MountStateError(message)
         protocol = _integer(raw, "protocol")
         if protocol != cls.protocol:
-            message = f"unsupported mount snapshot protocol {protocol}"
-            raise SnapshotError(message)
+            message = f"unsupported mount state protocol {protocol}"
+            raise MountStateError(message)
         components = raw.get("components")
         presentation = raw.get("presentation")
         if not isinstance(components, list) or not isinstance(presentation, dict):
-            message = "mount snapshot components or presentation are malformed"
-            raise SnapshotError(message)
-        decoded_components: list[ComponentSnapshot] = []
+            message = "mount state components or presentation are malformed"
+            raise MountStateError(message)
+        decoded_components: list[ComponentState] = []
         for value in components:
             item = _object(value)
             state = item.get("state")
             if not isinstance(state, dict) or not all(isinstance(key, str) for key in state):
                 message = "component snapshot state must be an object with string keys"
-                raise SnapshotError(message)
+                raise MountStateError(message)
             decoded_components.append(
-                ComponentSnapshot(
+                ComponentState(
                     path=_string(item, "path"),
                     type_id=_string(item, "type_id"),
                     state=state,
@@ -255,12 +258,12 @@ class SnapshotCodec:
         if not isinstance(adapter_capabilities, list) or not all(
             isinstance(capability, str) for capability in adapter_capabilities
         ):
-            message = "mount snapshot target adapter_capabilities must be a string list"
-            raise SnapshotError(message)
+            message = "mount state target adapter_capabilities must be a string list"
+            raise MountStateError(message)
         if adapter_capabilities != sorted(set(adapter_capabilities)):
-            message = "mount snapshot target adapter_capabilities must be sorted and unique"
-            raise SnapshotError(message)
-        return MountSnapshot(
+            message = "mount state target adapter_capabilities must be sorted and unique"
+            raise MountStateError(message)
+        return MountState(
             protocol,
             _string(raw, "component_key"),
             _integer(raw, "component_version"),
@@ -273,7 +276,7 @@ class SnapshotCodec:
         )
 
 
-def _presentation_to_dict(snapshot: PresentationSnapshot) -> dict[str, object]:
+def _presentation_to_dict(state: PresentationState) -> dict[str, object]:
     return {
         "cursors": {
             key: {
@@ -285,10 +288,10 @@ def _presentation_to_dict(snapshot: PresentationSnapshot) -> dict[str, object]:
                 "extent": cursor.extent,
                 "fingerprint": cursor.fingerprint,
             }
-            for key, cursor in snapshot.cursors.items()
+            for key, cursor in state.cursors.items()
         },
-        "selections": {key: {"selected": list(selection.selected)} for key, selection in snapshot.selections.items()},
-        "disclosures": {key: {"open": disclosure.open} for key, disclosure in snapshot.disclosures.items()},
+        "selections": {key: {"selected": list(selection.selected)} for key, selection in state.selections.items()},
+        "disclosures": {key: {"open": disclosure.open} for key, disclosure in state.disclosures.items()},
         "strategies": {
             key: {
                 "node_key": strategy.node_key,
@@ -296,17 +299,17 @@ def _presentation_to_dict(snapshot: PresentationSnapshot) -> dict[str, object]:
                 "adapter_version": strategy.adapter_version,
                 "strategy_id": strategy.strategy_id,
             }
-            for key, strategy in snapshot.strategies.items()
+            for key, strategy in state.strategies.items()
         },
     }
 
 
-def _presentation_from_dict(raw: Mapping[str, object]) -> PresentationSnapshot:
+def _presentation_from_dict(raw: Mapping[str, object]) -> PresentationState:
     cursors = _object(raw.get("cursors"))
     selections = _object(raw.get("selections"))
     disclosures = _object(raw.get("disclosures"))
     strategies = _object(raw.get("strategies"))
-    return PresentationSnapshot(
+    return PresentationState(
         cursors={
             key: CursorState(
                 Position(
@@ -346,7 +349,7 @@ class RestoreContext:
     parent_id: str | None
 
 
-type SnapshotMigration = Callable[[MountSnapshot], MountSnapshot]
+type MountStateMigration = Callable[[MountState], MountState]
 
 
 @dataclass(frozen=True, slots=True)
@@ -354,7 +357,7 @@ class _Registration:
     version: int
     factory: Callable[[], Component] | None
     restore: Callable[[RestoreContext], Mount] | None
-    migrations: Mapping[int, SnapshotMigration]
+    migrations: Mapping[int, MountStateMigration]
 
 
 class ComponentRegistry:
@@ -373,7 +376,7 @@ class ComponentRegistry:
         *,
         version: int,
         restore: Callable[[RestoreContext], Mount] | None = None,
-        migrations: Mapping[int, SnapshotMigration] | None = None,
+        migrations: Mapping[int, MountStateMigration] | None = None,
         factory: Callable[[], Component] | None = None,
     ) -> None:
         """Register one known root and every sequential migration to its current version.
@@ -397,24 +400,24 @@ class ComponentRegistry:
             raise ValueError(message)
         self._registrations[key] = _Registration(version, factory, restore, migration_map)
 
-    def capture(self, mount: Mount, component_key: str) -> MountSnapshot:
+    def capture(self, mount: Mount, component_key: str) -> MountState:
         registration = self._registrations.get(component_key)
         if registration is None:
             message = f"durable component {component_key!r} is not registered"
-            raise SnapshotError(message)
+            raise MountStateError(message)
         if not mount.runtime.components:
             message = "a mount must be built before it can be snapshotted"
-            raise SnapshotError(message)
+            raise MountStateError(message)
         components = tuple(
-            ComponentSnapshot(path, _type_id(component), export_state(component))
+            ComponentState(path, _type_id(component), export_state(component))
             for path, component in sorted(mount.runtime.components.items())
         )
-        snapshot = MountSnapshot(
-            SnapshotCodec.protocol,
+        snapshot = MountState(
+            MountStateCodec.protocol,
             component_key,
             registration.version,
             components,
-            PresentationSnapshot(
+            PresentationState(
                 dict(mount.presentation.cursors),
                 dict(mount.presentation.selections),
                 dict(mount.presentation.disclosures),
@@ -425,72 +428,72 @@ class ComponentRegistry:
             mount.target.fingerprint,
             tuple(sorted(mount.target.adapter_capabilities)),
         )
-        SnapshotCodec.dumps(snapshot)
+        MountStateCodec.dumps(snapshot)
         return snapshot
 
     def restore(
         self,
-        snapshot: MountSnapshot,
+        state: MountState,
         context: RestoreContext | None = None,
         *,
         targets: TargetRegistry = DEFAULT_TARGETS,
         **mount_options: Any,
     ) -> Mount:
-        """Rebuild a mount from a snapshot, against the exact target it was planned for.
+        """Rebuild a mount from a state, against the exact target it was planned for.
 
         The target is resolved *before* anything is built, so an unavailable or changed
         profile fails while the record is still just data — not after a mount exists and a
         reader could already be clicking it.
         """
         target = targets.resolve(
-            snapshot.target_id,
-            snapshot.target_version,
-            snapshot.target_fingerprint,
-            snapshot.target_adapter_capabilities,
+            state.target_id,
+            state.target_version,
+            state.target_fingerprint,
+            state.target_adapter_capabilities,
         )
         mount_options.setdefault("target", target)
-        registration = self._registrations.get(snapshot.component_key)
+        registration = self._registrations.get(state.component_key)
         if registration is None:
-            message = f"durable component {snapshot.component_key!r} is not registered"
-            raise SnapshotError(message)
-        snapshot = self._migrate(snapshot, registration)
-        by_path = {component.path: component for component in snapshot.components}
+            message = f"durable component {state.component_key!r} is not registered"
+            raise MountStateError(message)
+        state = self._migrate(state, registration)
+        by_path = {component.path: component for component in state.components}
         if registration.restore is not None:
             if context is None:
-                message = f"durable component {snapshot.component_key!r} requires a restore context"
-                raise SnapshotError(message)
+                message = f"durable component {state.component_key!r} requires a restore context"
+                raise MountStateError(message)
             mount = registration.restore(context)
             root = mount.component
         else:
             factory = registration.factory
             if factory is None:
-                message = f"durable component {snapshot.component_key!r} has no restore recipe"
-                raise SnapshotError(message)
+                message = f"durable component {state.component_key!r} has no restore recipe"
+                raise MountStateError(message)
             root = factory()
             mount = Mount(root, **mount_options)
         root_snapshot = by_path.get("$")
         if root_snapshot is None:
-            message = "mount snapshot has no root component"
-            raise SnapshotError(message)
+            message = "mount state has no root component"
+            raise MountStateError(message)
         _restore_component(root, root_snapshot)
         tree = render_component_tree(root)
         if set(by_path) != set(tree.components):
-            message = "restored component tree does not match the snapshot paths"
-            raise SnapshotError(message)
+            message = "restored component tree does not match the state paths"
+            raise MountStateError(message)
         for path, component in tree.components.items():
             if path != "$":
                 _restore_component(component, by_path[path])
         mount.presentation = PresentationSession(
-            cursors=dict(snapshot.presentation.cursors),
-            selections=dict(snapshot.presentation.selections),
-            disclosures=dict(snapshot.presentation.disclosures),
-            strategies=dict(snapshot.presentation.strategies),
+            cursors=dict(state.presentation.cursors),
+            selections=dict(state.presentation.selections),
+            disclosures=dict(state.presentation.disclosures),
+            strategies=dict(state.presentation.strategies),
         )
         return mount
 
     @staticmethod
-    def _migrate(snapshot: MountSnapshot, registration: _Registration) -> MountSnapshot:
-        current = snapshot
+    def _migrate(state: MountState, registration: _Registration) -> MountState:
+        current = state
         while current.component_version < registration.version:
             migration = registration.migrations.get(current.component_version)
             if migration is None:
@@ -498,36 +501,36 @@ class ComponentRegistry:
                     f"durable component {current.component_key!r} has no migration from "
                     f"version {current.component_version}"
                 )
-                raise SnapshotError(message)
+                raise MountStateError(message)
             source_version = current.component_version
             migrated = migration(current)
             if (
-                migrated.protocol != SnapshotCodec.protocol
+                migrated.protocol != MountStateCodec.protocol
                 or migrated.component_key != current.component_key
                 or migrated.component_version != source_version + 1
             ):
-                message = f"snapshot migration from version {source_version} must produce version {source_version + 1}"
-                raise SnapshotError(message)
-            SnapshotCodec.dumps(migrated)
-            current = SnapshotCodec.loads(SnapshotCodec.dumps(migrated))
+                message = f"state migration from version {source_version} must produce version {source_version + 1}"
+                raise MountStateError(message)
+            MountStateCodec.dumps(migrated)
+            current = MountStateCodec.loads(MountStateCodec.dumps(migrated))
         if current.component_version != registration.version:
             message = (
-                f"durable component {current.component_key!r} snapshot version "
+                f"durable component {current.component_key!r} state version "
                 f"{current.component_version} is newer than registered version {registration.version}"
             )
-            raise SnapshotError(message)
+            raise MountStateError(message)
         return current
 
 
-def _restore_component(component: Component, snapshot: ComponentSnapshot) -> None:
+def _restore_component(component: Component, state: ComponentState) -> None:
     expected = _type_id(component)
-    if snapshot.type_id != expected:
-        message = f"component at {snapshot.path!r} changed type from {snapshot.type_id!r} to {expected!r}"
-        raise SnapshotError(message)
+    if state.type_id != expected:
+        message = f"component at {state.path!r} changed type from {state.type_id!r} to {expected!r}"
+        raise MountStateError(message)
     try:
-        restore_state(component, snapshot.state)
+        restore_state(component, state.state)
     except ValueError as error:
-        raise SnapshotError(str(error)) from error
+        raise MountStateError(str(error)) from error
 
 
 def _type_id(component: Component) -> str:
@@ -538,7 +541,7 @@ def _type_id(component: Component) -> str:
 def _object(value: object) -> dict[str, object]:
     if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
         message = "snapshot entry must be an object"
-        raise SnapshotError(message)
+        raise MountStateError(message)
     return value
 
 
@@ -546,7 +549,7 @@ def _string(raw: Mapping[str, object], key: str) -> str:
     value = raw.get(key)
     if not isinstance(value, str):
         message = f"snapshot field {key!r} must be a string"
-        raise SnapshotError(message)
+        raise MountStateError(message)
     return value
 
 
@@ -554,7 +557,7 @@ def _integer(raw: Mapping[str, object], key: str) -> int:
     value = raw.get(key)
     if not isinstance(value, int) or isinstance(value, bool):
         message = f"snapshot field {key!r} must be an integer"
-        raise SnapshotError(message)
+        raise MountStateError(message)
     return value
 
 
@@ -562,7 +565,7 @@ def _optional_string(raw: Mapping[str, object], key: str) -> str | None:
     value = raw.get(key)
     if value is not None and not isinstance(value, str):
         message = f"snapshot field {key!r} must be a string or null"
-        raise SnapshotError(message)
+        raise MountStateError(message)
     return value
 
 
@@ -570,7 +573,7 @@ def _boolean(raw: Mapping[str, object], key: str) -> bool:
     value = raw.get(key)
     if not isinstance(value, bool):
         message = f"snapshot field {key!r} must be a boolean"
-        raise SnapshotError(message)
+        raise MountStateError(message)
     return value
 
 
@@ -578,7 +581,7 @@ def _strings(raw: Mapping[str, object], key: str) -> tuple[str, ...]:
     value = raw.get(key)
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         message = f"snapshot field {key!r} must be an array of strings"
-        raise SnapshotError(message)
+        raise MountStateError(message)
     return tuple(value)
 
 
@@ -604,8 +607,8 @@ from .runtime import (
     RecoveryReport,
 )
 from .session_records import (
-    DurableMountState,
     DurableSessionCodec,
     DurableSessionRecord,
+    SessionMountRecord,
     encode_session_scope,
 )

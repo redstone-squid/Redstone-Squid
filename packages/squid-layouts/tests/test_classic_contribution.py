@@ -3,14 +3,12 @@
 import discord
 import pytest
 
-from squid_layouts.errors import UnsolvableLayoutError
-from squid_layouts.semantic import Heading, Paragraph
 from squid_layouts.discord import ExistingLayoutError, classic
 from squid_layouts.discord.inspection import measure
-from squid_layouts.discord.limits import CLASSIC_LIMITS
-from squid_layouts.discord.presentation import DiscordPresentation
-from squid_layouts.discord.presentation import DiscordModeError
-from squid_layouts.planning.limits import CONTENT_TEXT, CONTROLS, EMBED_TEXT, EMBEDS, ROWS
+from squid_layouts.discord.presentation import DiscordModeError, DiscordPresentation
+from squid_layouts.errors import UnsolvableLayoutError
+from squid_layouts.planning.limits import CLASSIC_LIMITS, CONTENT_TEXT, CONTROLS, EMBED_TEXT, EMBEDS, ROWS
+from squid_layouts.semantic import Heading, Paragraph
 
 
 def host(*, content=None, embeds=(), controls=()) -> DiscordPresentation:

@@ -8,10 +8,12 @@ from squid_layouts import (
     guards,
     html,
     interactions,
+    operations,
     patterns,
     planning,
     primitives,
     profiling,
+    resources,
     routing,
     runtime,
     scene,
@@ -131,6 +133,7 @@ from squid_layouts.text import (
     plain,
     raw_md,
 )
+from squid_reactive.operations import operation
 
 
 def __getattr__(name: str) -> object:
@@ -209,6 +212,8 @@ __all__ = [
     "media_item",
     "navigation",
     "note",
+    "operation",
+    "operations",
     "optional",
     "paged",
     "paragraph",
@@ -222,6 +227,7 @@ __all__ = [
     "rating",
     "raw_md",
     "resource",
+    "resources",
     "routed_action",
     "routed_choices",
     "routing",

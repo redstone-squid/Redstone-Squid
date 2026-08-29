@@ -1,12 +1,12 @@
 """Operational devtools runtime contracts."""
 
-from unittest.mock import AsyncMock
+from collections.abc import Callable
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
 import squid_layouts as sl
 from squid_layouts.discord import Everyone, SessionKey, SessionRegistry
-from squid_layouts.discord.sessions import Opened
 from squid_layouts.discord.durability import PurgeResult
 from squid_layouts.discord.operations import (
     ActionDisabled,
@@ -15,8 +15,11 @@ from squid_layouts.discord.operations import (
     DevToolsPolicy,
     DevToolsRuntime,
 )
+from squid_layouts.discord.reactor import ReactorSnapshot
+from squid_layouts.discord.sessions import Opened
 from squid_layouts.discord.testing import delivered_to, fake_message
 from squid_layouts.profiling import MemoryProfiler, OperationKind
+from squid_layouts.runtime import BusSnapshot
 
 
 class Panel(sl.Component):
@@ -52,6 +55,27 @@ async def test_snapshot_and_mount_inspection_include_sessions_history_and_middle
     assert inspection.histories[0].undo == ()
 
 
+async def test_session_inspection_reports_membership_and_capacity() -> None:
+    registry = SessionRegistry()
+    opened = await registry.open(
+        sl.discord.Mount(Panel(), access=Everyone(), timeout=None),
+        delivered_to(fake_message()),
+        key=SessionKey.global_("devtools"),
+        actor_id=7,
+        capacity=3,
+    )
+    assert isinstance(opened, Opened)
+    await opened.session.join(8)
+    runtime = DevToolsRuntime(sessions=registry)
+
+    inspected = runtime.snapshot().sessions[0]
+
+    assert inspected.members == (7, 8)
+    assert inspected.capacity == 3
+    assert inspected.remaining_capacity == 1
+    assert inspected.participants == (7, 8)
+
+
 async def test_close_session_requires_confirmation_and_finishes_all_mounts() -> None:
     registry = SessionRegistry()
     opened = await open_panel(registry, key=SessionKey.global_("devtools"))
@@ -67,24 +91,102 @@ async def test_close_session_requires_confirmation_and_finishes_all_mounts() -> 
     assert opened.session.root.finished
 
 
-async def test_wait_idle_drains_topics_and_clear_profile_resets_bounded_diagnostics() -> None:
+async def test_wait_idle_observes_sync_topics_and_clear_profile_resets_bounded_diagnostics() -> None:
     profiler = MemoryProfiler()
-    bus = sl.runtime.TopicBus(profiler=profiler)
-    callback = AsyncMock()
-    bus.subscribe(sl.runtime.Topic("devtools", "test"), callback, label="test subscriber")
+    bus = sl.runtime.LocalTopicBus()
+    callback = Mock()
+    bus.subscribe(sl.runtime.Topic("devtools", "test"), callback)
     bus.publish(sl.runtime.Topic("devtools", "test"))
     with profiler.operation(OperationKind.DISPATCH, name="devtools-test"):
         pass
     runtime = DevToolsRuntime(bus=bus, profiler=profiler)
 
     await runtime.wait_idle()
-    assert callback.await_count == 1
+    callback.assert_called_once_with(sl.runtime.Topic("devtools", "test"))
     topics = runtime.snapshot().topics
     assert topics is not None
     assert topics.queued == 0
 
     runtime.clear_profile()
     assert runtime.snapshot().profiler.aggregates == ()
+
+
+class _IdleQueue:
+    def __init__(self) -> None:
+        self.queued = 0
+        self.in_flight = 0
+        self.waits = 0
+        self.on_wait: Callable[[], None] | None = None
+
+    def snapshot(self) -> BusSnapshot:
+        return BusSnapshot((), queued=self.queued, in_flight=self.in_flight, delivered=0, failed=0)
+
+    async def wait_idle(self) -> None:
+        self.waits += 1
+        self.queued = 0
+        self.in_flight = 0
+        if self.on_wait is not None:
+            self.on_wait()
+
+
+class _IdleReactor:
+    def __init__(self) -> None:
+        self.profiler = MemoryProfiler()
+        self.queued = 0
+        self.in_flight = 0
+        self.redeliver = 0
+        self.waits = 0
+        self.on_wait: Callable[[], None] | None = None
+
+    def snapshot(self) -> ReactorSnapshot:
+        return ReactorSnapshot(self.queued, self.in_flight, self.redeliver, 0, 0, 0, 0, 0)
+
+    async def wait_idle(self) -> None:
+        self.waits += 1
+        self.queued = 0
+        self.in_flight = 0
+        self.redeliver = 0
+        if self.on_wait is not None:
+            self.on_wait()
+
+
+async def test_wait_idle_reaches_a_fixed_point_when_bus_schedules_reactor() -> None:
+    bus = _IdleQueue()
+    reactor = _IdleReactor()
+    bus.queued = 1
+
+    def bus_delivery() -> None:
+        bus.queued = 0
+        reactor.queued = 1
+
+    bus.on_wait = bus_delivery
+
+    runtime = DevToolsRuntime(bus=bus, reactor=reactor)  # type: ignore[arg-type]
+
+    await runtime.wait_idle()
+
+    assert bus.waits == 1
+    assert reactor.waits == 1
+
+
+async def test_wait_idle_reaches_a_fixed_point_when_reactor_publishes_to_bus() -> None:
+    bus = _IdleQueue()
+    reactor = _IdleReactor()
+    reactor.queued = 1
+
+    def reactor_delivery() -> None:
+        reactor.on_wait = None
+        reactor.queued = 0
+        bus.queued = 1
+
+    reactor.on_wait = reactor_delivery
+
+    runtime = DevToolsRuntime(bus=bus, reactor=reactor)  # type: ignore[arg-type]
+
+    await runtime.wait_idle()
+
+    assert bus.waits == 2
+    assert reactor.waits == 2
 
 
 async def test_policy_can_disable_confirmation_required_actions() -> None:

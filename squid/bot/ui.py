@@ -3,15 +3,15 @@
 This module is the bot's front door to the `squid_layouts` package. The package resolves text,
 while this host supplies the gettext catalogue and translatable chrome messages.
 
-The layout helpers keep the exact signatures of their `squid.bot.utils.components`
-predecessors, so call sites migrate by changing an import line.
+The bot owns only localized chrome and audience policy; rendering and delivery stay in
+``squid_layouts``.
 """
 
 from collections.abc import Sequence
 from dataclasses import dataclass
 from math import ceil
 from string.templatelib import Template
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import discord
 from discord.ext.commands import Context
@@ -41,12 +41,16 @@ __all__ = [
     "Private",
     "Visibility",
     "card_layout",
+    "card_node",
     "contribute",
     "create_mount",
     "destination",
     "error_layout",
+    "error_node",
     "help_layout",
     "info_layout",
+    "info_node",
+    "install_mount_defaults",
     "link_layout",
     "localization_for",
     "render_item",
@@ -54,7 +58,9 @@ __all__ = [
     "render_static",
     "reply",
     "reply_presentation",
+    "respond_presentation",
     "send_component",
+    "send_to",
     "text_layout",
     "truncate_display_text",
     "warning_layout",
@@ -162,35 +168,42 @@ type Visibility = Private | Literal["public", "personal"]
 
 async def reply(
     ctx: Context[Any],
-    view: discord.ui.LayoutView,
+    presentation: ui.discord.presentation.DiscordPresentation,
     *,
     visibility: Visibility = "public",
     locale: str | None = None,
     files: Sequence[discord.File] = (),
 ) -> discord.Message | None:
-    """The one reply entry point: send `view` with an explicit audience.
+    """The one reply entry point: send a presentation with an explicit audience.
 
     "public" answers in the channel; "personal" is ephemeral where the transport allows it
     (see `squid.bot.utils.visibility.personal`); `Private(reason)` must never reach a channel
     and falls back to a DM on the prefix side.
     """
-    # Imported lazily: visibility -> utils.components -> this module would otherwise cycle.
+    # Imported lazily to keep the command UI helpers independent from audience policy.
     from squid.bot.utils.visibility import deliver_privately, personal
 
     if isinstance(visibility, Private):
-        return await deliver_privately(ctx, view, reason=visibility.reason, locale=locale, files=files)
-    extra: dict[str, Any] = {"files": list(files)} if files else {}
+        return await deliver_privately(
+            ctx,
+            presentation,
+            reason=visibility.reason,
+            locale=locale,
+            files=files,
+        )
     ephemeral = visibility == "personal" and personal(ctx)
-    return await ctx.send(view=view, ephemeral=ephemeral, allowed_mentions=ui.discord.delivery.no_mentions(), **extra)
+    receipt = await ui.discord.reply_to(ctx, ephemeral=ephemeral, files=files)(presentation)
+    return receipt.message
 
 
 async def reply_presentation(
     ctx: Context[Any],
-    presentation: ui.discord.DiscordPresentation,
+    presentation: ui.discord.presentation.DiscordPresentation,
     *,
     visibility: Visibility = "public",
     allowed_mentions: discord.AllowedMentions | None = None,
-) -> ui.discord.DeliveryReceipt:
+    files: Sequence[discord.File] = (),
+) -> ui.discord.delivery.DeliveryReceipt:
     """Deliver a complete Squid presentation through the selected command audience."""
     from squid.bot.utils.visibility import personal
 
@@ -202,18 +215,37 @@ async def reply_presentation(
             presentation,
             reason=visibility.reason,
             allowed_mentions=allowed_mentions,
+            files=files,
         )
         if message is None:
-            raise ui.discord.DeliveryAbandoned
+            raise ui.discord.delivery.DeliveryAbandoned
         handle = ui.discord.delivery.handle_for(message, mode=presentation.mode)
-        return ui.discord.DeliveryReceipt(message, handle)
+        return ui.discord.delivery.DeliveryReceipt(message, handle)
 
     destination = ui.discord.reply_to(
         ctx,
         ephemeral=visibility == "personal" and personal(ctx),
+        files=files,
         allowed_mentions=allowed_mentions,
     )
     return await destination(presentation)
+
+
+async def respond_presentation(
+    interaction: discord.Interaction[Any],
+    presentation: ui.discord.DiscordPresentation,
+    *,
+    ephemeral: bool = True,
+    wait: bool = False,
+    allowed_mentions: discord.AllowedMentions | None = None,
+) -> ui.discord.delivery.DeliveryReceipt:
+    """Deliver a complete presentation as an interaction response or follow-up."""
+    return await ui.discord.respond_to(
+        interaction,
+        ephemeral=ephemeral,
+        wait=wait,
+        allowed_mentions=allowed_mentions,
+    )(presentation)
 
 
 def destination(
@@ -232,30 +264,54 @@ def destination(
     A closed DM under `Private` delivers nothing, which is not the same as delivering without
     a handle, so it is reported as `DeliveryAbandoned` rather than as a `None` message.
     """
-    # Imported lazily: visibility -> utils.components -> this module would otherwise cycle.
+    # Imported lazily to keep the command UI helpers independent from audience policy.
     from squid.bot.utils.visibility import deliver_privately, personal
 
     if isinstance(visibility, Private):
         if ctx.interaction is not None:
             return ui.discord.reply_to(ctx, ephemeral=True, files=files)
 
-        async def privately(presentation: ui.discord.DiscordPresentation) -> ui.discord.DeliveryReceipt:
+        async def privately(
+            presentation: ui.discord.presentation.DiscordPresentation,
+        ) -> ui.discord.delivery.DeliveryReceipt:
             message = await deliver_privately(
                 ctx,
-                presentation.layout,
+                presentation,
                 reason=visibility.reason,
                 locale=locale,
-                files=[*files, *presentation.files()],
+                files=files,
             )
             if message is None:
-                raise ui.discord.DeliveryAbandoned
+                raise ui.discord.delivery.DeliveryAbandoned
             handle = ui.discord.delivery.handle_for(message, mode=presentation.mode)
-            return ui.discord.DeliveryReceipt(message, handle)
+            return ui.discord.delivery.DeliveryReceipt(message, handle)
 
         return privately
 
     ephemeral = visibility == "personal" and personal(ctx)
     return ui.discord.reply_to(ctx, ephemeral=ephemeral, files=files)
+
+
+def send_to(
+    channel: discord.abc.Messageable | discord.Member | discord.User | discord.Webhook,
+    *,
+    files: Sequence[discord.File] = (),
+    allowed_mentions: discord.AllowedMentions | None = None,
+    delete_after: float | None = None,
+) -> ui.discord.Destination:
+    """Send a presentation to a Discord messageable through the framework delivery boundary.
+
+    discord.py exposes a family of overloaded ``send`` methods whose precise signatures vary
+    by channel type. The framework intentionally keeps a smaller structural protocol, so this
+    host adapter is the one typed cast between those two surfaces.
+    """
+    channel_protocol = cast(ui.discord.delivery.Messageable, channel)
+    return ui.discord.delivery.send_to(
+        channel_protocol,
+        files=files,
+        allowed_mentions=allowed_mentions,
+        delete_after=delete_after,
+    )
 
 
 def contribute(
@@ -265,7 +321,7 @@ def contribute(
     followed_by: Sequence[discord.ui.Item[Any]] = (),
     locale: str | None = None,
     strict: bool = False,
-) -> ui.discord.AttachedFragment:
+) -> ui.discord.fragments.AttachedFragment:
     """Contribute a Squid region to a hand-assembled view, through the bot's chrome.
 
     `followed_by` carries the rows the host adds after the Squid region: they are costed
@@ -292,9 +348,9 @@ def render_item(
     Prefer `contribute`, which measures the host and places the result atomically. This
     stays for callers that build the surrounding view themselves and know their own budget.
     """
-    view = render_static([node], locale=locale, reservation=reservation)
-    item = view.children[0]
-    view.remove_item(item)
+    presentation = render_static([node], locale=locale, reservation=reservation)
+    item = presentation.layout.children[0]
+    presentation.layout.remove_item(item)
     return item
 
 
@@ -304,17 +360,15 @@ def render_static(
     locale: str | None = None,
     strict: bool = False,
     reservation: ui.discord.ResourceCost = ui.discord.EMPTY_RESERVATION,
-) -> discord.ui.LayoutView:
+) -> ui.discord.presentation.DiscordPresentation:
     """Render a sessionless document through the bot's chrome and catalogue."""
-    # `.layout` rather than the whole presentation: the bot is entirely on Components V2,
-    # where the layout *is* the message, and every caller here wants a view to send.
     return ui.discord.render_static(
         nodes,
         chrome=CHROME,
         localization=localization_for(locale),
         strict=strict,
         reservation=reservation,
-    ).layout
+    )
 
 
 def render_presentation(
@@ -323,7 +377,7 @@ def render_presentation(
     locale: str | None = None,
     strict: bool = False,
     reservation: ui.discord.ResourceCost = ui.discord.EMPTY_RESERVATION,
-) -> ui.discord.DiscordPresentation:
+) -> ui.discord.presentation.DiscordPresentation:
     """Render a complete presentation for framework-owned delivery."""
     return ui.discord.render_static(
         nodes,
@@ -344,13 +398,27 @@ def truncate_display_text(content: str, limit: int) -> str:
 
 
 async def _component_error_hook(interaction: discord.Interaction, error: Exception, source: str) -> None:
-    # Imported lazily: errors.py -> utils.components -> this module would otherwise cycle.
+    # Imported lazily to keep error handling independent from the command UI catalogue.
     from squid.bot.errors import handle_interaction_error
 
     await handle_interaction_error(interaction, error, surface=f"component:{source}")
 
 
 MOUNT_DEFAULTS = ui.discord.MountDefaults(chrome=CHROME, on_error=_component_error_hook)
+"""Host-wide mount construction, read by `create_mount` on every call.
+
+Not every default can be written down here: a challenge presenter needs the session registry
+and the background runner, and both belong to a bot instance. `install_mount_defaults` is how
+the bot fills those in once it has built them, so a panel constructed through `create_mount`
+-- which is most of them, and none of which hold a bot -- gets the same wiring as one opened
+through `bot.mounts`.
+"""
+
+
+def install_mount_defaults(defaults: ui.discord.MountDefaults) -> None:
+    """Replace the process's host defaults. Called once, from the bot's constructor."""
+    global MOUNT_DEFAULTS
+    MOUNT_DEFAULTS = defaults
 
 
 def create_mount(
@@ -361,7 +429,7 @@ def create_mount(
     chrome: ui.chrome.Chrome | None = None,
     timeout: float = 180,
     reactor: ui.discord.Reactor | None = None,
-    expiry: ui.discord.ExpiryPolicy | None = _DEFAULT_EXPIRY,
+    expiry: ui.discord.mount.ExpiryPolicy | None = _DEFAULT_EXPIRY,
 ) -> ui.discord.Mount:
     """A mount wired to the bot's chrome and shared interaction error handler."""
     defaults = MOUNT_DEFAULTS if chrome is None else MOUNT_DEFAULTS.replace(chrome=chrome)
@@ -399,7 +467,7 @@ async def send_component(
 class PagedList(ui.Component):
     """A card holding one page of a pre-rendered list, plus the controls to walk it.
 
-    The reactive successor to `squid.bot.utils.pagination.ListPaginator`: `page_size` entries
+    The reactive page primitive: `page_size` entries
     per page is a deliberate UX pin, expressed as the engine's count-based `Paginate`.
     Passing ``None`` lets the engine fill each page from the target's measured text budget.
     The mount owns paging, its access policy, and expiry. It does not fetch — every caller
@@ -464,7 +532,7 @@ def _groups(sections: Sequence[CardSection]) -> tuple[ui.semantic.Section, ...]:
     return tuple(ui.section(ui.heading(s.title), ui.fields(*_fields(s.fields))) for s in sections if s.fields)
 
 
-def card_layout(
+def card_node(
     title: ui.TextLike,
     description: ui.TextLike | None = None,
     *,
@@ -473,11 +541,10 @@ def card_layout(
     sections: Sequence[CardSection] = (),
     footer: ui.TextLike | None = None,
     media: Sequence[str] = (),
-    locale: str | None = None,
-) -> discord.ui.LayoutView:
-    """Create a standalone V2 card."""
+) -> ui.LayoutNode:
+    """Build a semantic card that can be composed inside a component render."""
     extra_media = media[1:]
-    node = ui.section(
+    return ui.section(
         ui.heading(title),
         # The body is the card's shock absorber: truncate lets it give up characters under
         # pressure before a field or the footer loses any.
@@ -491,12 +558,39 @@ def card_layout(
         accent=accent_colour,
         thumbnail=media[0] if media else None,
     )
-    return render_static([node], locale=locale)
+
+
+def card_layout(
+    title: ui.TextLike,
+    description: ui.TextLike | None = None,
+    *,
+    accent_colour: int = DISCORD_GREEN,
+    fields: Sequence[CardField] = (),
+    sections: Sequence[CardSection] = (),
+    footer: ui.TextLike | None = None,
+    media: Sequence[str] = (),
+    locale: str | None = None,
+) -> ui.discord.presentation.DiscordPresentation:
+    """Create a standalone V2 card."""
+    return render_static(
+        [
+            card_node(
+                title,
+                description,
+                accent_colour=accent_colour,
+                fields=fields,
+                sections=sections,
+                footer=footer,
+                media=media,
+            )
+        ],
+        locale=locale,
+    )
 
 
 def text_layout(
     content: ui.TextLike, *, accent_colour: int | None = None, locale: str | None = None
-) -> discord.ui.LayoutView:
+) -> ui.discord.presentation.DiscordPresentation:
     """Create a simple V2 text response."""
     # Truncate-wrapped rather than bare: a plain paragraph lowers to Never, which *raises*
     # on an overlong message. This is the bot's most-used reply path, so it clips.
@@ -517,18 +611,22 @@ def _prefixed(prefix: str, value: ui.TextLike) -> ui.TextLike:
 
 def error_layout(
     title: ui.TextLike, description: ui.TextLike | None, *, locale: str | None = None
-) -> discord.ui.LayoutView:
-    return card_layout(
+) -> ui.discord.presentation.DiscordPresentation:
+    return render_static([error_node(title, description)], locale=locale)
+
+
+def error_node(title: ui.TextLike, description: ui.TextLike | None) -> ui.LayoutNode:
+    """Build an error card for composition inside a component render."""
+    return card_node(
         title,
         _prefixed(":x: ", description or ""),
         accent_colour=DISCORD_RED,
-        locale=locale,
     )
 
 
 def warning_layout(
     title: ui.TextLike, description: ui.TextLike | None, *, locale: str | None = None
-) -> discord.ui.LayoutView:
+) -> ui.discord.presentation.DiscordPresentation:
     return card_layout(
         _prefixed(":warning: ", title),
         description,
@@ -539,8 +637,13 @@ def warning_layout(
 
 def info_layout(
     title: ui.TextLike, description: ui.TextLike | None, *, locale: str | None = None
-) -> discord.ui.LayoutView:
-    return card_layout(title, description, accent_colour=DISCORD_GREEN, locale=locale)
+) -> ui.discord.presentation.DiscordPresentation:
+    return render_static([info_node(title, description)], locale=locale)
+
+
+def info_node(title: ui.TextLike, description: ui.TextLike | None) -> ui.LayoutNode:
+    """Build an informational card for composition inside a component render."""
+    return card_node(title, description, accent_colour=DISCORD_GREEN)
 
 
 def help_layout(
@@ -550,7 +653,7 @@ def help_layout(
     sections: Sequence[CardSection] = (),
     footer: ui.TextLike | None = None,
     locale: str | None = None,
-) -> discord.ui.LayoutView:
+) -> ui.discord.presentation.DiscordPresentation:
     return card_layout(
         title,
         description,
@@ -568,7 +671,7 @@ def link_layout(
     description: ui.TextLike | None = None,
     label: ui.TextLike = _OPEN_LINK,
     locale: str | None = None,
-) -> discord.ui.LayoutView:
+) -> ui.discord.presentation.DiscordPresentation:
     """Create a card whose primary action opens a URL."""
     node = ui.section(
         ui.heading(title),

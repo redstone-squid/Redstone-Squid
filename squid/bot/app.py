@@ -8,8 +8,6 @@ from typing import Any, Self, override
 
 import anyio
 import discord
-from discord import Webhook
-from discord.abc import Messageable
 from discord.ext import commands
 from discord.ext.commands import Bot
 
@@ -18,14 +16,13 @@ from squid.bootstrap import create_bot_runtime
 # Note that every import to a package that imports back RedstoneSquid (even if it is just in TYPE_CHECKING)
 # will create an import cycle from the view of a static type checker, which slows down type checking significantly.
 from squid.bot._types import MessageableChannel
-from squid.bot.errors import SquidCommandTree, set_error_reporter
+from squid.bot.errors import SquidCommandTree
 from squid.bot.i18n import SquidAppCommandTranslator
 from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRenderer, VoteSessionRenderer
 from squid.bot.reactions import ReactionRouter
 from squid.bot.routes import router as control_router
 from squid.bot.submission.build_handler import BuildHandler
-from squid.bot.ui import MOUNT_DEFAULTS
-from squid.bot.utils.embeds import RunningMessage
+from squid.bot.ui import MOUNT_DEFAULTS, install_mount_defaults
 from squid.bot.utils.permissions import AccountIdCache
 from squid.bot.utils.uploads import CatboxClient
 from squid.bot.utils.web import MediaPreviewClient
@@ -52,10 +49,10 @@ from squid.runtime import (
     start_permission_epoch_watch,
 )
 from squid.topics import TopicPublisher, open_topic_bridge, resource_topic
-from squid_layouts.runtime import TopicBus
-from squid_layouts.discord import Reactor, SessionRegistry
+from squid_layouts.discord import ChallengeRunner, DialogPresenter, Reactor, SessionRegistry
 from squid_layouts.discord.durability import PostgresTopicBridge
 from squid_layouts.profiling import MemoryProfiler
+from squid_reactive import LocalTopicBus
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -163,14 +160,23 @@ class RedstoneSquid(Bot):
         # How many of each panel a user may have open, and which mounts die with their
         # parent. Reached from a handler as `interaction.client.mounts`.
         self.layout_profiler = MemoryProfiler()
-        self.topic_bus = TopicBus(profiler=self.layout_profiler)
-        self.layout_reactor = Reactor(self.topic_bus)
+        self.topic_bus = LocalTopicBus()
+        self.layout_reactor = Reactor(self.topic_bus, profiler=self.layout_profiler)
         self.topic_bridge: PostgresTopicBridge | None = None
         # Publishing goes through whichever of the two reaches every process. Until
         # `setup_hook` opens the bridge -- and forever, if no listener URL is configured --
         # that is the local bus, and the reconciler's poll is what the other processes get.
         self.topic_publisher: TopicPublisher = self.topic_bus
         self.mounts = SessionRegistry(defaults=MOUNT_DEFAULTS.replace(scheduler=self.layout_reactor))
+        # A guard that challenges a press asks in a child panel and resumes the press once
+        # the reader agrees. The resumption must not run in the answering press's
+        # transaction, so it goes through this runner's queue rather than a spawned task.
+        self.layout_challenges = ChallengeRunner()
+        presenter = DialogPresenter(self.mounts, self.layout_challenges)
+        self.mounts.defaults = self.mounts.defaults.replace(challenge=presenter)
+        # And again for the panels that never touch the registry: `create_mount` reads the
+        # module default, and a guard that challenges is a programmer error without one.
+        install_mount_defaults(MOUNT_DEFAULTS.replace(challenge=presenter))
 
     def is_operational(self) -> bool:
         """Return whether Discord and every critical bot-owned job are healthy."""
@@ -212,18 +218,14 @@ class RedstoneSquid(Bot):
     @override
     async def setup_hook(self) -> None:
         """Called when the bot is ready to start."""
-        # Progress-message failures are handled from a `Messageable` that does not expose the
-        # client, so the store has to be reachable without one. Registered here rather than in
-        # `__init__` so merely constructing a bot in a test does not install a live service.
-        set_error_reporter(self.services.error_reports)
         self.background_tasks.capture_failures_into(self.services.error_reports)
         await self.tree.set_translator(SquidAppCommandTranslator())
         # Not a cog: every command's permission check reads through the cache this
         # watcher keeps honest, so it runs before any extension loads rather than
         # as a side effect of one of them being enabled.
         start_permission_epoch_watch(self.background_tasks, self.services.permission_epoch)
-        self.background_tasks.start(self.topic_bus.run(), name="layout-topics")
         self.background_tasks.start(self.layout_reactor.run(), name="layout-reactor")
+        self.background_tasks.start(self.layout_challenges.run(), name="layout-challenges")
         if self.database_config is not None:
             self.topic_bridge = await open_topic_bridge(self.database_config, self.topic_bus)
         if self.topic_bridge is not None:
@@ -285,38 +287,6 @@ class RedstoneSquid(Bot):
         except discord.Forbidden:
             pass
         return None
-
-    def get_running_message(
-        self,
-        ctx: Messageable | Webhook,
-        *,
-        title: str = "Working",
-        description: str = "Getting information...",
-        delete_on_exit: bool = False,
-        locale: str | None = None,
-    ) -> RunningMessage:
-        """
-        Returns a context manager which can be used to display a message that will be updated
-        as the command progresses.
-
-        `title`/`description` are translated into `locale` (resolved via
-        `squid.bot.i18n.resolve_locale`) if given, else sent untranslated.
-
-        Usage:
-            ```python
-            async with bot.get_running_message(ctx, title="Processing") as msg:
-                await edit_layout(msg, info_layout("Processing", "Still working..."))
-                # Do some work here
-                await edit_layout(msg, info_layout("Processing", "Done!"))
-            ```
-        """
-        return RunningMessage(
-            ctx,
-            title=title,
-            description=description,
-            delete_on_exit=delete_on_exit,
-            locale=locale,
-        )
 
     def for_build(self, build: Build) -> BuildHandler[Self]:
         """A helper function to create a BuildHandler with the bot instance."""

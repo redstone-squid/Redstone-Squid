@@ -16,8 +16,8 @@ from squid_layouts.discord.renderer import V2Renderer, Wire
 from squid_layouts.discord.target import V2_TARGET, Target
 from squid_layouts.document import DocumentLike
 from squid_layouts.palette import DEFAULT_PALETTE, Palette
-from squid_layouts.planning.cache import PlanCache
 from squid_layouts.planning.adapter import ADAPTER_RENDER_V2
+from squid_layouts.planning.cache import PlanCache
 from squid_layouts.planning.limits import V2Limits
 from squid_layouts.planning.navigation import PlannedNav
 from squid_layouts.planning.planner import EMPTY_RESERVATION
@@ -25,10 +25,11 @@ from squid_layouts.planning.planner import plan as plan_document
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_layouts.planning.target import ResourceCost
 from squid_layouts.profiling import OperationRecorder, SpanRecorder
+from squid_layouts.runtime.component import Component
 from squid_layouts.runtime.presentation import PresentationSession
 from squid_layouts.scene.model import PlanResult, SceneComponentsV2
-from squid_layouts.target_types import ComponentsV2Target, DiscordPyAdapter
 from squid_layouts.sources import Position
+from squid_layouts.target_types import ComponentsV2Target, DiscordPyAdapter
 from squid_layouts.text import NEUTRAL, Localization
 
 logger = logging.getLogger(__name__)
@@ -139,7 +140,7 @@ def compose(
 
 
 def render_static(
-    nodes: DocumentLike,
+    nodes: DocumentLike | Component,
     *,
     target: Target[ComponentsV2Target, DiscordPyAdapter, SceneComponentsV2] = V2_TARGET,
     chrome: Chrome = DEFAULT_CHROME,
@@ -150,7 +151,7 @@ def render_static(
 ) -> DiscordPresentation:
     """Plan and draw a sessionless Components V2 document as a complete message."""
     return compose(
-        nodes,
+        nodes.render() if isinstance(nodes, Component) else nodes,
         target=target,
         chrome=chrome,
         localization=localization,

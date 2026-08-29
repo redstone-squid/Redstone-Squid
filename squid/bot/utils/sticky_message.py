@@ -9,6 +9,9 @@ from typing import Any, override
 import discord
 from discord import TextChannel
 
+import squid_layouts as sl
+from squid.bot.ui import send_to
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_STALE_THRESHOLD = 3
@@ -43,8 +46,8 @@ class StickyMessage(abc.ABC):
         return self._locks[channel_id]
 
     @abc.abstractmethod
-    async def render(self, channel: TextChannel) -> discord.ui.LayoutView:
-        """Render the layout view to display in the sticky message."""
+    async def render(self, channel: TextChannel) -> sl.discord.presentation.DiscordPresentation:
+        """Render the presentation to display in the sticky message."""
         ...
 
     def is_active_in(self, channel_id: int) -> bool:
@@ -111,9 +114,13 @@ class StickyMessage(abc.ABC):
                         exc_info=True,
                     )
 
-            view = await self.render(channel)
+            presentation = await self.render(channel)
             try:
-                new_msg = await channel.send(view=view)
+                receipt = await send_to(channel)(presentation)
+                new_msg = receipt.message
+                if new_msg is None:
+                    logger.warning("Sticky delivery returned no message for channel %s", channel.id)
+                    return
                 self._last_message_id[channel.id] = new_msg.id
                 self._messages_since_reposition[channel.id] = 0
             except discord.Forbidden, discord.HTTPException:
@@ -141,7 +148,7 @@ class FunctionalStickyMessage(StickyMessage):
 
     def __init__(
         self,
-        renderer: Callable[[TextChannel], Coroutine[Any, Any, discord.ui.LayoutView]],
+        renderer: Callable[[TextChannel], Coroutine[Any, Any, sl.discord.presentation.DiscordPresentation]],
         *,
         stale_threshold: int = DEFAULT_STALE_THRESHOLD,
         debounce_delay: float = DEFAULT_DEBOUNCE_DELAY,
@@ -150,5 +157,5 @@ class FunctionalStickyMessage(StickyMessage):
         self._renderer = renderer
 
     @override
-    async def render(self, channel: TextChannel) -> discord.ui.LayoutView:
+    async def render(self, channel: TextChannel) -> sl.discord.presentation.DiscordPresentation:
         return await self._renderer(channel)

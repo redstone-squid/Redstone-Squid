@@ -54,7 +54,9 @@ async def _submit(mount: Mount, action: str, value: str) -> discord.ui.Modal:
 async def test_add_appends_a_minted_entry_and_reports_the_full_ordered_collection() -> None:
     changes: list[tuple[Mapping[str, object], ...]] = []
 
-    async def changed(_event: sl.patterns.PatternEvent[sl.patterns.CollectionState], values: tuple[Mapping[str, object], ...]) -> None:
+    async def changed(
+        _event: sl.patterns.PatternEvent[sl.patterns.CollectionState], values: tuple[Mapping[str, object], ...]
+    ) -> None:
         changes.append(values)
 
     component = _editor().component(on_change=changed)
@@ -63,7 +65,9 @@ async def test_add_appends_a_minted_entry_and_reports_the_full_ordered_collectio
 
     await _submit(mount, "collection.add", "OpenAI")
 
-    assert component.pattern_state == sl.patterns.CollectionState((sl.patterns.CollectionEntry("1", (("name", "OpenAI"),)),), "1")
+    assert component.pattern_state == sl.patterns.CollectionState(
+        (sl.patterns.CollectionEntry("1", (("name", "OpenAI"),)),), "1"
+    )
     assert tuple(dict(value) for value in changes[-1]) == ({"name": "OpenAI"},)
 
 
@@ -90,8 +94,12 @@ def test_remove_and_add_are_gated_by_minimum_and_maximum() -> None:
     assert editor.form_for(selected, "add") is None
 
     rendered = editor.component(initial=selected).render()
-    add = next(item for item in _walk(rendered) if isinstance(item, sl.semantic.Action) and item.key == "collection.add")
-    remove = next(item for item in _walk(rendered) if isinstance(item, sl.semantic.Action) and item.key == "collection.remove")
+    add = next(
+        item for item in _walk(rendered) if isinstance(item, sl.semantic.Action) and item.key == "collection.add"
+    )
+    remove = next(
+        item for item in _walk(rendered) if isinstance(item, sl.semantic.Action) and item.key == "collection.remove"
+    )
     assert not add.available
     assert not remove.available
 

@@ -12,6 +12,7 @@ from typing import Any, ClassVar
 
 import discord
 
+from squid_layouts.capabilities import Capability
 from squid_layouts.discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
 from squid_layouts.discord.conformance import conform_modal
 from squid_layouts.discord.emoji import discord_emoji
@@ -39,8 +40,8 @@ from squid_layouts.forms import (
     UploadedFile,
     ZonedDateTimeField,
 )
-from squid_layouts.planning.limits import LIMITS, V2Limits
 from squid_layouts.planning.adapter import ADAPTER_MODAL_FORMS, AdapterProfile
+from squid_layouts.planning.limits import LIMITS, V2Limits
 from squid_layouts.target_types import DiscordPyAdapter
 from squid_layouts.text import NEUTRAL, Localization, TextLike, resolve_text
 
@@ -58,7 +59,7 @@ class EntityField(ExtensionField[object]):
     minimum: int = 1
     maximum: int = 1
     placeholder: TextLike | None = None
-    capability: ClassVar[str] = "forms.discord.entity"
+    capability: ClassVar[str] = Capability.FORMS_DISCORD_ENTITY
 
     def parse(self, raw: object) -> object | None:
         values = tuple(raw) if isinstance(raw, list | tuple) else (() if raw is None else (raw,))
@@ -76,7 +77,7 @@ class FileField(ExtensionField[object]):
 
     minimum: int = 1
     maximum: int = 1
-    capability: ClassVar[str] = "forms.discord.file"
+    capability: ClassVar[str] = Capability.FORMS_DISCORD_FILE
 
     def parse(self, raw: object) -> UploadedFile | tuple[UploadedFile, ...] | None:
         values = tuple(raw) if isinstance(raw, list | tuple) else (() if raw is None else (raw,))
@@ -104,7 +105,7 @@ class CheckboxGroupField[ValueT](ExtensionField[tuple[ValueT, ...]]):
     options: tuple[ChoiceOption[ValueT], ...] = ()
     minimum: int = 0
     maximum: int | None = None
-    capability: ClassVar[str] = "forms.discord.checkbox_group"
+    capability: ClassVar[str] = Capability.FORMS_DISCORD_CHECKBOX_GROUP
 
     def __post_init__(self) -> None:
         keys = [option.key for option in self.options]
@@ -468,7 +469,9 @@ def build_form_modal(
     """Build a Discord modal from a portable form schema."""
     require_discord_py_capability(adapter, ADAPTER_MODAL_FORMS, "build a modal form")
     adapted = spec.adapt(
-        frozenset({"forms.modal", EntityField.capability, FileField.capability, CheckboxGroupField.capability}),
+        frozenset(
+            {Capability.FORMS_MODAL, EntityField.capability, FileField.capability, CheckboxGroupField.capability}
+        ),
         maximum_fields=limits.modal_components,
     )
     modal = _FormModal(adapted, on_submit, timeout, localization)

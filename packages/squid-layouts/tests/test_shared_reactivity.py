@@ -5,11 +5,11 @@ from dataclasses import dataclass
 import pytest
 
 from squid_layouts import Component, computed, state
-from squid_layouts.runtime import CellAddress, Shared, addresses, transaction
-from squid_layouts.primitives import Text
+from squid_layouts.primitives import Boundary, Text
+from squid_layouts.runtime import CellAddress, ReactiveWriteError, Shared, addresses, transaction
 from squid_layouts.runtime.component import render_component_tree
 from squid_layouts.runtime.shared import describe
-from squid_layouts.runtime.topics import Topic, TopicBus
+from squid_layouts.runtime.topics import LocalTopicBus, Topic
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,12 +23,12 @@ class Preferences(Shared[Member]):
 
 
 @pytest.fixture
-def bus() -> TopicBus:
-    return TopicBus()
+def bus() -> LocalTopicBus:
+    return LocalTopicBus()
 
 
 @pytest.fixture
-def preferences(bus: TopicBus) -> Preferences:
+def preferences(bus: LocalTopicBus) -> Preferences:
     return Preferences(bus, Member(1))
 
 
@@ -121,6 +121,64 @@ def test_a_write_during_a_render_raises(preferences: Preferences) -> None:
     assert preferences.theme == "system"
 
 
+def test_an_unaddressed_write_during_a_render_raises_and_tears_no_further() -> None:
+    """Component state has no address, but the same render still may not write it back."""
+
+    class Torn(Component):
+        n: int = state(0)
+
+        def render(self) -> Text:
+            self.n = 1
+            return Text(str(self.n))
+
+    torn = Torn()
+    with pytest.raises(ReactiveWriteError) as excinfo:
+        render_component_tree(torn)
+    assert "factory=" in str(excinfo.value)
+    assert "computed" in str(excinfo.value)
+    assert torn.n == 0
+
+
+def test_a_component_built_inside_a_parent_render_may_assign_its_own_state() -> None:
+    """Construction is not mutation: a child's __init__ runs while the parent is rendering."""
+
+    class Child(Component):
+        label: str = state("")
+
+        def __init__(self, label: str) -> None:
+            self.label = label
+
+        def render(self) -> Text:
+            return Text(self.label)
+
+    class Parent(Component):
+        def render(self) -> Boundary:
+            return self.boundary(Child("hi"), key="child")
+
+    tree = render_component_tree(Parent())
+    child = tree.components["child"]
+    assert isinstance(child, Child)
+    assert child.label == "hi"
+
+
+def test_a_component_born_this_render_still_raises_once_its_own_render_runs() -> None:
+    """The exemption ends at construction: a child tearing its own tree is not excused."""
+
+    class TornChild(Component):
+        n: int = state(0)
+
+        def render(self) -> Text:
+            self.n = 1
+            return Text(str(self.n))
+
+    class Parent(Component):
+        def render(self) -> Boundary:
+            return self.boundary(TornChild(), key="child")
+
+    with pytest.raises(ReactiveWriteError, match="factory="):
+        render_component_tree(Parent())
+
+
 # --- Naming an address by hand --------------------------------------------------------------
 
 
@@ -162,10 +220,10 @@ def test_describe_names_the_namespace_scope_and_cell(preferences: Preferences) -
 # --- Publication ----------------------------------------------------------------------------
 
 
-async def test_a_commit_publishes_once_to_every_subscriber(bus: TopicBus, preferences: Preferences) -> None:
+async def test_a_commit_publishes_once_to_every_subscriber(bus: LocalTopicBus, preferences: Preferences) -> None:
     seen: list[object] = []
 
-    async def subscriber(topic: object) -> None:
+    def subscriber(topic: object) -> None:
         seen.append(topic)
 
     for _ in range(2):
@@ -173,14 +231,13 @@ async def test_a_commit_publishes_once_to_every_subscriber(bus: TopicBus, prefer
     with transaction():
         preferences.theme = "dark"
         preferences.theme = "light"
-    await bus.drain()
     assert seen == [address(preferences, "theme")] * 2, "one coalesced delivery per subscriber"
 
 
-async def test_a_rolled_back_action_publishes_nothing(bus: TopicBus, preferences: Preferences) -> None:
+async def test_a_rolled_back_action_publishes_nothing(bus: LocalTopicBus, preferences: Preferences) -> None:
     seen: list[object] = []
 
-    async def subscriber(topic: object) -> None:
+    def subscriber(topic: object) -> None:
         seen.append(topic)
 
     bus.subscribe(address(preferences, "theme"), subscriber)
@@ -188,5 +245,4 @@ async def test_a_rolled_back_action_publishes_nothing(bus: TopicBus, preferences
         preferences.theme = "dark"
         message = "no"
         raise RuntimeError(message)
-    await bus.drain()
     assert seen == []

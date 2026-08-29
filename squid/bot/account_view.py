@@ -8,7 +8,7 @@ or drop, so looking at it and acting on it belong to the same message (audit C5'
 the shape 5.3 and 5.4 already removed from notifications and claim review).
 """
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from typing import cast
 
 import discord
@@ -22,6 +22,7 @@ from squid.accounts.domain import (
     MAX_LINK_URL_LENGTH,
     MAX_PROFILE_LINKS,
     MAX_PRONOUNS_LENGTH,
+    AccountConsent,
     AccountIdentity,
     AccountProfile,
     IdentityProvider,
@@ -29,14 +30,10 @@ from squid.accounts.domain import (
     ProfileUpdate,
 )
 from squid.accounts.errors import AccountNotFoundError
-from squid.bot.consent import NOT_ASKED, prompt_for_consent
+from squid.bot.consent import request_consent
 from squid.bot.i18n import t
 from squid.bot.profile_render import identity_label, own_profile_avatar, own_profile_fields
-from squid.bot.ui import create_mount
-from squid.bot.utils.components import (
-    DISCORD_BLUE,
-    CardField,
-)
+from squid.bot.ui import DISCORD_BLUE, CardField, create_mount
 from squid.core.errors import ValidationError
 from squid.core.i18n import _
 
@@ -50,14 +47,15 @@ class AccountPanel(sl.Component):
     """A mounted account workspace with semantic identity actions."""
 
     selected_id: int | None = sl.state(None)
-    unlink_armed: int | None = sl.state(None)
     closed: bool = sl.state(default=False)
     # Refreshed from the service by load(), so a snapshot would only restore them stale.
     _identities: tuple[AccountIdentity, ...] = sl.state((), persist=False)
     _needs_consent: bool = sl.state(default=False, persist=False)
     # No default: the empty profile needs this instance's account id.
     _profile: AccountProfile = sl.state(persist=False)
-    _profile_editor: sl.patterns.ComponentShell[sl.patterns.EditorState] | None = sl.state(None, persist=False, opaque=True)
+    _profile_editor: sl.patterns.ComponentShell[sl.patterns.EditorState] | None = sl.state(
+        None, persist=False, opaque=True
+    )
 
     def __init__(
         self,
@@ -90,7 +88,6 @@ class AccountPanel(sl.Component):
         self._profile = await self._accounts.get_profile(self._account_id)
         if self.selected is None:
             self.selected_id = None
-            self.unlink_armed = None
 
     @property
     def identities(self) -> tuple[AccountIdentity, ...]:
@@ -181,13 +178,12 @@ class AccountPanel(sl.Component):
             sl.primitives.Row(
                 (
                     sl.primitives.Button(
-                        t(self.locale, _("Unlink for good"))
-                        if self.unlink_armed == self.selected_id
-                        else t(self.locale, _("Unlink")),
+                        t(self.locale, _("Unlink")),
                         self._unlink,
                         "unlink",
                         style=sl.primitives.ActionStyle.DANGER,
                         disabled=self.selected is None,
+                        guard=sl.guards.confirm(self._unlink_warning()),
                     ),
                     sl.primitives.Button(
                         t(self.locale, _("Edit page")),
@@ -203,35 +199,35 @@ class AccountPanel(sl.Component):
 
     async def _selection_changed(self, event: sl.ChoiceEvent) -> None:
         self.selected_id = int(event.selected[0])
-        self.unlink_armed = None
 
     async def _toggle_identity(self, event: sl.ToggleEvent) -> None:
         identity = self.selected
-        if identity is None or identity.id is None or not await self._consented(event):
+        if identity is None or identity.id is None:
             return
-        await self._accounts.set_identity_visibility(
-            self._account_id,
-            identity.id,
-            is_public=event.value,
-        )
-        await self._reload()
+        identity_id, is_public = identity.id, event.value
+
+        async def apply() -> None:
+            await self._accounts.set_identity_visibility(self._account_id, identity_id, is_public=is_public)
+            await self._reload()
+
+        await self._with_consent(event, apply)
 
     async def _toggle_page(self, event: sl.ToggleEvent) -> None:
-        if not await self._consented(event):
-            return
-        await self._accounts.update_profile(self._account_id, ProfileUpdate(hidden=not event.value))
-        await self._reload()
+        hidden = not event.value
+
+        async def apply() -> None:
+            await self._accounts.update_profile(self._account_id, ProfileUpdate(hidden=hidden))
+            await self._reload()
+
+        await self._with_consent(event, apply)
 
     async def _unlink(self, event: sl.PressEvent) -> None:
+        """Remove the selected identity. The reader has already agreed to this."""
         identity = self.selected
         if identity is None or identity.id is None:
             return
-        if self.unlink_armed != identity.id:
-            self.unlink_armed = identity.id
-            return
         await event.acknowledge()
         removed = await self._accounts.unlink_identity(self._account_id, identity.id)
-        self.unlink_armed = None
         await self._reload()
         await event.notice(
             t(
@@ -242,24 +238,10 @@ class AccountPanel(sl.Component):
         )
 
     async def _edit_page(self, event: sl.PressEvent) -> None:
-        interaction = sl.discord.native(event)
-        if self._needs_consent:
-            consent = await prompt_for_consent(
-                interaction,
-                user_id=self._author_id,
-                locale=self.locale,
-                parent=sl.discord.responder(event).mount,
-            )
-            if consent is NOT_ASKED:
-                return
-            if consent is None:
-                await event.notice(t(self.locale, _("Cancelled. Nothing was changed.")))
-                return
-            await self._accounts.grant_current_consent(self._account_id)
-            self._needs_consent = False
-            await event.notice(t(self.locale, _("Thanks. Press **Edit page** again to open the editor.")))
-            return
-        self._profile_editor = self._build_profile_editor()
+        async def apply() -> None:
+            self._profile_editor = self._build_profile_editor()
+
+        await self._with_consent(event, apply)
 
     def _build_profile_editor(self) -> sl.patterns.ComponentShell[sl.patterns.EditorState]:
         profile_section = sl.patterns.EditorSection.form(
@@ -388,24 +370,37 @@ class AccountPanel(sl.Component):
     async def _cancel_profile_edit(self, _event: sl.PressEvent) -> None:
         self._profile_editor = None
 
-    async def _consented(self, event: sl.ActionEvent) -> bool:
-        await event.acknowledge()
+    async def _with_consent(self, event: sl.ActionEvent, work: Callable[[], Awaitable[None]]) -> None:
+        """Run `work` now, or once the reader has agreed to be recorded.
+
+        Opening the notice ends this press: `request_consent` returns as soon as it is on
+        screen, so the panel's transaction closes and its dispatch lock is released rather
+        than being held for as long as the reader takes to read. `work` then runs inside the
+        prompt's own press, and the panel redraws through its own handle -- never through the
+        prompt's interaction, which addresses the prompt's message rather than the panel's.
+        """
         if not self._needs_consent:
-            return True
-        consent = await prompt_for_consent(
+            await work()
+            return
+        mount = sl.discord.responder(event).mount
+
+        async def answered(_prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
+            if consent is None:
+                # Cancelled. The notice said agreeing is what stores anything, and the prompt
+                # closing is the whole answer; the panel already shows the unchanged truth.
+                return
+            await self._accounts.grant_current_consent(self._account_id)
+            self._needs_consent = False
+            await work()
+            await mount.refresh()
+
+        await request_consent(
             sl.discord.native(event),
             user_id=self._author_id,
+            on_answer=answered,
             locale=self.locale,
-            parent=sl.discord.responder(event).mount,
+            parent=mount,
         )
-        if consent is NOT_ASKED:
-            return False
-        if consent is None:
-            await event.notice(t(self.locale, _("Cancelled. Nothing was changed.")))
-            return False
-        await self._accounts.grant_current_consent(self._account_id)
-        self._needs_consent = False
-        return True
 
     async def _reload(self) -> None:
         await self._refresh()
@@ -443,20 +438,24 @@ class AccountPanel(sl.Component):
             ),
         )
 
-    def _footer(self) -> str | None:
+    def _unlink_warning(self) -> str:
+        """What the reader is agreeing to, asked before the press rather than after it."""
         identity = self.selected
-        if self.unlink_armed == self.selected_id and identity is not None:
-            warning = t(
+        if identity is None:
+            return t(self.locale, _("Remove this linked account?"))
+        warning = t(
+            self.locale,
+            _("Remove {identity}? Any build credit you hold is unaffected."),
+            identity=identity_label(identity, self.locale),
+        )
+        if identity.provider is IdentityProvider.DISCORD and identity.discord_id == self._author_id:
+            warning += " " + t(
                 self.locale,
-                _("Click **Unlink** again to remove {identity}."),
-                identity=identity_label(identity, self.locale),
+                _("This is the Discord account you are using now. The bot will stop recognising you here."),
             )
-            if identity.provider is IdentityProvider.DISCORD and identity.discord_id == self._author_id:
-                warning += " " + t(
-                    self.locale,
-                    _("This is the Discord account you are using now. The bot will stop recognising you here."),
-                )
-            return warning
+        return warning
+
+    def _footer(self) -> str | None:
         if self.page_hidden:
             return t(
                 self.locale,

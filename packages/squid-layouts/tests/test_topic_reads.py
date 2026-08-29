@@ -14,11 +14,11 @@ import discord
 
 import squid_layouts as sl
 from squid_layouts import Component, resource, state
-from squid_layouts.runtime import ResourceDelivery, Topic, TopicBus
 from squid_layouts.discord import Everyone, Mount, Reactor
 from squid_layouts.discord.delivery import DeliveryReceipt, handle_for
 from squid_layouts.discord.testing import delivered_to, fake_message
 from squid_layouts.primitives import Text
+from squid_layouts.runtime import LocalTopicBus, PendingPolicy, Topic
 
 BUILD = Topic("build", "1")
 OTHER = Topic("build", "2")
@@ -33,14 +33,14 @@ class Watcher(Component):
         self._load = load
         self._topics = topics
 
-    @resource(delivery=ResourceDelivery.ATOMIC)
+    @resource(pending=PendingPolicy.ATOMIC)
     async def value(self) -> str:
         sl.runtime.watch(*(self._topics if self._topics is not None else (self.topic,)))
         return await self._load()
 
     def render(self):
-        match self.value.state:
-            case sl.runtime.Ready(value=value):
+        match self.value.status:
+            case sl.resources.Ready(value=value):
                 return Text(f"ready:{value}")
             case _:
                 return Text("pending")
@@ -57,10 +57,10 @@ def counting_loader(values: list[str]):
     return load, lambda: loads
 
 
-async def drain(reactor: Reactor, bus: TopicBus) -> None:
+async def drain(reactor: Reactor, bus: LocalTopicBus) -> None:
+    del bus
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(reactor.run)
-        await bus.drain()
         await asyncio.wait_for(reactor._queue.join(), timeout=1)
         tasks.cancel_scope.cancel()
 
@@ -69,7 +69,7 @@ def texts(view: discord.ui.LayoutView) -> str:
     return "\n".join(item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay))
 
 
-async def mounted(panel: Component, bus: TopicBus, reactor: Reactor) -> tuple[Mount, Any]:
+async def mounted(panel: Component, bus: LocalTopicBus, reactor: Reactor) -> tuple[Mount, Any]:
     message: Any = fake_message()
     mount = Mount(panel, access=Everyone(), scheduler=reactor, timeout=None)
     await mount.send(delivered_to(message))
@@ -81,7 +81,7 @@ async def mounted(panel: Component, bus: TopicBus, reactor: Reactor) -> tuple[Mo
 
 async def test_a_topic_watched_only_inside_a_loader_is_followed_by_the_mount() -> None:
     """The whole phase rests on this: a loader's read has to reach the render's observations."""
-    bus = TopicBus()
+    bus = LocalTopicBus()
     reactor = Reactor(bus)
     load, _ = counting_loader(["first"])
     mount, message = await mounted(Watcher(load), bus, reactor)
@@ -91,7 +91,7 @@ async def test_a_topic_watched_only_inside_a_loader_is_followed_by_the_mount() -
 
 
 async def test_a_variadic_watch_follows_every_topic_it_names() -> None:
-    bus = TopicBus()
+    bus = LocalTopicBus()
     reactor = Reactor(bus)
     load, _ = counting_loader(["first"])
     mount, message = await mounted(Watcher(load, topics=(BUILD, OTHER)), bus, reactor)
@@ -107,7 +107,7 @@ async def test_a_topic_watched_in_render_is_followed_too() -> None:
             sl.runtime.watch(BUILD)
             return Text("x")
 
-    bus = TopicBus()
+    bus = LocalTopicBus()
     reactor = Reactor(bus)
     mount, message = await mounted(Direct(), bus, reactor)
 
@@ -118,7 +118,7 @@ async def test_a_topic_watched_in_render_is_followed_too() -> None:
 
 
 async def test_one_publish_refreshes_a_watching_mount_exactly_once() -> None:
-    bus = TopicBus()
+    bus = LocalTopicBus()
     reactor = Reactor(bus)
     load, _ = counting_loader(["first"])
     mount, message = await mounted(Watcher(load), bus, reactor)
@@ -137,7 +137,7 @@ async def test_one_publish_refreshes_a_watching_mount_exactly_once() -> None:
 
 
 async def test_a_publish_reloads_the_resource_and_redraws_the_new_value() -> None:
-    bus = TopicBus()
+    bus = LocalTopicBus()
     reactor = Reactor(bus)
     load, loads = counting_loader(["first", "second"])
     mount, message = await mounted(Watcher(load), bus, reactor)
@@ -151,7 +151,7 @@ async def test_a_publish_reloads_the_resource_and_redraws_the_new_value() -> Non
 
 
 async def test_an_unrelated_publish_does_not_reload() -> None:
-    bus = TopicBus()
+    bus = LocalTopicBus()
     reactor = Reactor(bus)
     load, loads = counting_loader(["first", "second"])
     await mounted(Watcher(load), bus, reactor)
@@ -164,7 +164,7 @@ async def test_an_unrelated_publish_does_not_reload() -> None:
 
 async def test_a_mount_with_no_reactor_still_refetches_on_its_next_render() -> None:
     """The version moves on publish whether or not anything was subscribed."""
-    bus = TopicBus()
+    bus = LocalTopicBus()
     load, loads = counting_loader(["first", "second"])
     panel = Watcher(load)
     mount = Mount(panel, access=Everyone(), timeout=None)
@@ -182,7 +182,7 @@ async def test_a_mount_with_no_reactor_still_refetches_on_its_next_render() -> N
 
 async def test_a_publish_during_the_load_is_not_lost() -> None:
     """`follow` told hosts to subscribe before the first read. A version needs no such rule."""
-    bus = TopicBus()
+    bus = LocalTopicBus()
     reactor = Reactor(bus)
     released = asyncio.Event()
     loads = 0
@@ -220,7 +220,7 @@ async def test_a_publish_during_the_load_is_not_lost() -> None:
 
 
 async def test_a_dropped_conditional_watch_stops_refreshing_once_delivered() -> None:
-    bus = TopicBus()
+    bus = LocalTopicBus()
     reactor = Reactor(bus)
     load, _ = counting_loader(["first", "second"])
     panel = Watcher(load)
@@ -235,7 +235,7 @@ async def test_a_dropped_conditional_watch_stops_refreshing_once_delivered() -> 
 
 
 async def test_a_discarded_staged_render_leaves_no_permanent_follow() -> None:
-    bus = TopicBus()
+    bus = LocalTopicBus()
     reactor = Reactor(bus)
     load, _ = counting_loader(["first", "second"])
     panel = Watcher(load)
@@ -251,7 +251,7 @@ async def test_a_discarded_staged_render_leaves_no_permanent_follow() -> None:
 
 
 async def test_no_follow_outlives_its_mount() -> None:
-    bus = TopicBus()
+    bus = LocalTopicBus()
     reactor = Reactor(bus)
     load, _ = counting_loader(["first"])
     mount, message = await mounted(Watcher(load), bus, reactor)
@@ -269,10 +269,10 @@ def test_a_topic_nobody_watches_holds_no_cell() -> None:
     """The registry is weak, so an unwatched topic costs nothing and needs no cleanup."""
     import gc
 
-    from squid_layouts.runtime.topics import _TOPIC_CELLS
+    from squid_reactive.topics import _TOPIC_CELLS
 
     lonely = Topic("lonely", "1")
-    bus = TopicBus()
+    bus = LocalTopicBus()
     bus.publish(lonely)
     gc.collect()
 
@@ -298,9 +298,9 @@ async def test_a_publish_moves_a_resources_sources_so_it_repends() -> None:
     load, loads = counting_loader(["first", "second"])
     panel = Watcher(load)
     await panel.value.reload()
-    assert isinstance(panel.value.state, sl.runtime.Ready)
+    assert isinstance(panel.value.status, sl.resources.Ready)
 
-    TopicBus().publish(BUILD)
+    LocalTopicBus().publish(BUILD)
 
     assert panel.value.pending
     assert loads() == 1, "re-pending is a pull: nothing reloads until someone settles it"
@@ -311,7 +311,7 @@ async def test_replace_rebaselines_against_a_topic_so_a_later_publish_still_relo
     load, _ = counting_loader(["first", "second"])
     panel = Watcher(load)
     await panel.value.reload()
-    bus = TopicBus()
+    bus = LocalTopicBus()
 
     bus.publish(BUILD)
     panel.value.replace("edited")

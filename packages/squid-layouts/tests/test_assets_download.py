@@ -5,7 +5,7 @@ import pytest
 
 import squid_layouts as sl
 from squid_layouts.discord import V2_TARGET, Everyone, Mount, delivery
-from squid_layouts.discord.rendering import V2Renderer
+from squid_layouts.discord.renderer import V2Renderer
 from squid_layouts.html import Renderer as HtmlRenderer
 from squid_layouts.runtime.component import Component, RenderResult
 from squid_layouts.scene import Codec
@@ -57,8 +57,8 @@ def test_scene_file_codec_round_trips() -> None:
         "kind": "file",
         "asset_key": "report",
         "name": "report.txt",
-            "media_type": "text/plain",
-            "spoiler": False,
+        "media_type": "text/plain",
+        "spoiler": False,
     }
 
 
@@ -67,7 +67,9 @@ def test_discord_renderer_draws_an_attachment_file_or_url_link() -> None:
     inline_view = V2Renderer().view(inline.scene, plan=inline)
     assert any(isinstance(item, discord.ui.File) for item in inline_view.walk_children())
 
-    stored = sl.document.Asset("report", "report.txt", "text/plain", sl.document.StoredAsset("https://example.com/report.txt"))
+    stored = sl.document.Asset(
+        "report", "report.txt", "text/plain", sl.document.StoredAsset("https://example.com/report.txt")
+    )
     linked = sl.planning.plan(sl.download("Report", stored, key="report-download"), target=V2_TARGET)
     linked_view = V2Renderer().view(linked.scene, plan=linked)
     link = next(item for item in linked_view.walk_children() if isinstance(item, discord.ui.Button))
@@ -101,7 +103,9 @@ async def test_mount_attaches_inline_bytes_and_does_not_attach_url_assets() -> N
     assert files[0].filename == "report.txt"
     assert files[0].fp.read() == b"full report"
 
-    stored = sl.document.Asset("report", "report.txt", "text/plain", sl.document.StoredAsset("https://example.com/report.txt"))
+    stored = sl.document.Asset(
+        "report", "report.txt", "text/plain", sl.document.StoredAsset("https://example.com/report.txt")
+    )
     view, linked_files = await _send(Mount(_DownloadComponent(stored), access=Everyone(), timeout=None))
     assert linked_files == []
     assert any(isinstance(item, discord.ui.Button) and item.url for item in view.walk_children())

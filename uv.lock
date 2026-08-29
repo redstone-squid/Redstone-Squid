@@ -13,6 +13,8 @@ nucleation = "2026-08-16T00:00:00Z"
 members = [
     "redstone-squid",
     "squid-layouts",
+    "squid-reactive",
+    "squid-stores",
 ]
 
 [[package]]
@@ -2650,6 +2652,10 @@ postgresql-psycopg2binary = [
 name = "squid-layouts"
 version = "0.1.0"
 source = { editable = "packages/squid-layouts" }
+dependencies = [
+    { name = "squid-reactive" },
+    { name = "squid-stores" },
+]
 
 [package.optional-dependencies]
 discord = [
@@ -2658,17 +2664,46 @@ discord = [
     { name = "packaging" },
 ]
 postgres = [
-    { name = "asyncpg" },
+    { name = "squid-stores", extra = ["postgres"] },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "anyio", marker = "extra == 'discord'", specifier = ">=4.14,<5" },
-    { name = "asyncpg", marker = "extra == 'postgres'", specifier = ">=0.31,<1" },
     { name = "discord-py", marker = "extra == 'discord'", specifier = ">=2.7,<3" },
     { name = "packaging", marker = "extra == 'discord'", specifier = ">=24,<27" },
+    { name = "squid-reactive", editable = "packages/squid-reactive" },
+    { name = "squid-stores", editable = "packages/squid-stores" },
+    { name = "squid-stores", extras = ["postgres"], marker = "extra == 'postgres'", editable = "packages/squid-stores" },
 ]
 provides-extras = ["discord", "postgres"]
+
+[[package]]
+name = "squid-reactive"
+version = "0.1.0"
+source = { editable = "packages/squid-reactive" }
+
+[[package]]
+name = "squid-stores"
+version = "0.1.0"
+source = { editable = "packages/squid-stores" }
+dependencies = [
+    { name = "anyio" },
+    { name = "squid-reactive" },
+]
+
+[package.optional-dependencies]
+postgres = [
+    { name = "asyncpg" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "anyio", specifier = ">=4.14,<5" },
+    { name = "asyncpg", marker = "extra == 'postgres'", specifier = ">=0.31,<1" },
+    { name = "squid-reactive", editable = "packages/squid-reactive" },
+]
+provides-extras = ["postgres"]
 
 [[package]]
 name = "starlette"

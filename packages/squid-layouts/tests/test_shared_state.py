@@ -10,9 +10,9 @@ from typing import Any
 import pytest
 
 from squid_layouts import Component, computed, state
-from squid_layouts.runtime import CellAddress, Shared, SharedStateConflictError, transaction
 from squid_layouts.primitives import Text
-from squid_layouts.runtime.topics import TopicBus
+from squid_layouts.runtime import CellAddress, Shared, SharedStateConflictError, transaction
+from squid_layouts.runtime.topics import LocalTopicBus
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,8 +37,8 @@ class Anonymous(Shared):
 
 
 @pytest.fixture
-def bus() -> TopicBus:
-    return TopicBus()
+def bus() -> LocalTopicBus:
+    return LocalTopicBus()
 
 
 @pytest.fixture
@@ -49,7 +49,7 @@ def here() -> Member:
 # --- Declaration ------------------------------------------------------------------------
 
 
-def test_cells_are_read_and_written_as_attributes(bus: TopicBus, here: Member) -> None:
+def test_cells_are_read_and_written_as_attributes(bus: LocalTopicBus, here: Member) -> None:
     preferences = Preferences(bus, here)
     assert preferences.theme == "system"
     preferences.theme = "dark"
@@ -57,31 +57,31 @@ def test_cells_are_read_and_written_as_attributes(bus: TopicBus, here: Member) -
     assert preferences.locale == "en"
 
 
-def test_two_namespaces_with_the_same_cell_name_do_not_collide(bus: TopicBus, here: Member) -> None:
+def test_two_namespaces_with_the_same_cell_name_do_not_collide(bus: LocalTopicBus, here: Member) -> None:
     preferences = Preferences(bus, here)
     workspace = Workspace(bus, here)
     preferences.theme = "dark"
     assert workspace.theme == "unrelated"
 
 
-def test_two_handles_of_one_class_are_separate_state(bus: TopicBus) -> None:
+def test_two_handles_of_one_class_are_separate_state(bus: LocalTopicBus) -> None:
     mine = Preferences(bus, Member(1, 2))
     yours = Preferences(bus, Member(3, 2))
     mine.theme = "dark"
     assert yours.theme == "system"
 
 
-def test_scope_is_whatever_the_host_gave_it(bus: TopicBus, here: Member) -> None:
+def test_scope_is_whatever_the_host_gave_it(bus: LocalTopicBus, here: Member) -> None:
     assert Preferences(bus, here).scope == here
     assert Anonymous(bus).scope is None
 
 
-def test_an_unhashable_or_mutable_scope_is_accepted(bus: TopicBus) -> None:
+def test_an_unhashable_or_mutable_scope_is_accepted(bus: LocalTopicBus) -> None:
     mutable = ["guild", 7]
     assert Anonymous(bus, mutable).scope is mutable  # pyrefly: ignore[bad-argument-type]
 
 
-def test_repr_names_the_class_and_the_scope(bus: TopicBus, here: Member) -> None:
+def test_repr_names_the_class_and_the_scope(bus: LocalTopicBus, here: Member) -> None:
     assert repr(Preferences(bus, here)) == "Preferences(Member(user_id=1, guild_id=2))"
     assert repr(Anonymous(bus)) == "Anonymous()"
 
@@ -100,7 +100,7 @@ def test_an_underscored_cell_raises_at_class_creation() -> None:
             _hidden: int = state(0)
 
 
-def test_one_declaration_serves_both_owners(bus: TopicBus, here: Member) -> None:
+def test_one_declaration_serves_both_owners(bus: LocalTopicBus, here: Member) -> None:
     """`sl.state()` everywhere: what it means is what holds it, which the class already says."""
 
     class Namespace(Shared[Member]):
@@ -120,7 +120,7 @@ def test_one_declaration_serves_both_owners(bus: TopicBus, here: Member) -> None
     assert (namespace.value, panel.value) == (1, 1)
 
 
-def test_only_a_namespace_gives_its_state_an_address(bus: TopicBus, here: Member) -> None:
+def test_only_a_namespace_gives_its_state_an_address(bus: LocalTopicBus, here: Member) -> None:
     """The whole difference, and it is a property of the owner rather than the declaration."""
 
     class Namespace(Shared[Member]):
@@ -133,7 +133,7 @@ def test_only_a_namespace_gives_its_state_an_address(bus: TopicBus, here: Member
             return Text(str(self.value))
 
     namespace = Namespace(bus, here)
-    assert type(namespace)._cells["value"].address(namespace) == CellAddress(namespace, "value")
+    assert type(namespace)._state_descriptors["value"].address(namespace) == CellAddress(namespace, "value")
     assert Panel._state_descriptors["value"].address(Panel()) is None
 
 
@@ -144,7 +144,7 @@ def test_a_namespace_refuses_persistence_it_cannot_honour() -> None:
             wrong: int = state(0, persist=True)
 
 
-def test_a_namespace_field_that_merely_defaulted_to_persist_is_fine(bus: TopicBus, here: Member) -> None:
+def test_a_namespace_field_that_merely_defaulted_to_persist_is_fine(bus: LocalTopicBus, here: Member) -> None:
     """`persist` defaults to True, so only an explicit ask can be refused."""
 
     class Fine(Shared[Member]):
@@ -153,13 +153,13 @@ def test_a_namespace_field_that_merely_defaulted_to_persist_is_fine(bus: TopicBu
     assert Fine(bus, here).value == 0
 
 
-def test_an_undeclared_attribute_cannot_be_written(bus: TopicBus, here: Member) -> None:
+def test_an_undeclared_attribute_cannot_be_written(bus: LocalTopicBus, here: Member) -> None:
     preferences = Preferences(bus, here)
     with pytest.raises(AttributeError, match="not declared state"):
         preferences.undeclared = 1  # pyrefly: ignore[missing-attribute]
 
 
-def test_a_cell_cannot_be_deleted(bus: TopicBus, here: Member) -> None:
+def test_a_cell_cannot_be_deleted(bus: LocalTopicBus, here: Member) -> None:
     """Reset is an assignment. `del` would mean removal, and the attribute stays."""
     preferences = Preferences(bus, here)
     preferences.theme = "dark"
@@ -171,7 +171,7 @@ def test_a_cell_cannot_be_deleted(bus: TopicBus, here: Member) -> None:
 # --- Values -----------------------------------------------------------------------------
 
 
-def test_an_equal_write_changes_nothing(bus: TopicBus, here: Member) -> None:
+def test_an_equal_write_changes_nothing(bus: LocalTopicBus, here: Member) -> None:
     preferences = Preferences(bus, here)
     preferences.theme = "dark"
     published: list[object] = []
@@ -192,7 +192,7 @@ class Held:
     __hash__ = None  # type: ignore[assignment]
 
 
-def test_an_opaque_cell_settles_by_identity(bus: TopicBus) -> None:
+def test_an_opaque_cell_settles_by_identity(bus: LocalTopicBus) -> None:
     class Services(Shared):
         held: Held = state(factory=Held, opaque=True)
 
@@ -203,7 +203,7 @@ def test_an_opaque_cell_settles_by_identity(bus: TopicBus) -> None:
     assert services.held is not same
 
 
-def test_a_replaced_collection_is_stored_as_assigned(bus: TopicBus, here: Member) -> None:
+def test_a_replaced_collection_is_stored_as_assigned(bus: LocalTopicBus, here: Member) -> None:
     workspace = Workspace(bus, here)
     workspace.filters = (*workspace.filters, "redstone")
     assert workspace.filters == ("redstone",)
@@ -213,37 +213,35 @@ def test_a_replaced_collection_is_stored_as_assigned(bus: TopicBus, here: Member
 
 
 def _record(into: list[object]):
-    async def subscriber(topic: object) -> None:
+    def subscriber(topic: object) -> None:
         into.append(topic)
 
     return subscriber
 
 
-async def test_a_write_outside_an_action_publishes_immediately(bus: TopicBus, here: Member) -> None:
+async def test_a_write_outside_an_action_publishes_immediately(bus: LocalTopicBus, here: Member) -> None:
     preferences = Preferences(bus, here)
     theme = CellAddress(preferences, "theme")
     seen: list[object] = []
     bus.subscribe(theme, _record(seen))
     preferences.theme = "dark"
-    await bus.drain()
     assert seen == [theme]
 
 
-async def test_only_the_cells_that_moved_publish(bus: TopicBus, here: Member) -> None:
+async def test_only_the_cells_that_moved_publish(bus: LocalTopicBus, here: Member) -> None:
     preferences = Preferences(bus, here)
     seen: list[object] = []
     bus.subscribe(CellAddress(preferences, "theme"), _record(seen))
     bus.subscribe(CellAddress(preferences, "locale"), _record(seen))
     with transaction():
         preferences.theme = "dark"
-    await bus.drain()
     assert seen == [CellAddress(preferences, "theme")]
 
 
 # --- Actions ----------------------------------------------------------------------------
 
 
-async def test_writes_stage_and_publish_together(bus: TopicBus, here: Member) -> None:
+async def test_writes_stage_and_publish_together(bus: LocalTopicBus, here: Member) -> None:
     preferences = Preferences(bus, here)
     workspace = Workspace(bus, here)
     seen: list[object] = []
@@ -254,11 +252,10 @@ async def test_writes_stage_and_publish_together(bus: TopicBus, here: Member) ->
         assert preferences.theme == "dark", "an action reads its own writes"
         workspace.selected = 7
         assert seen == [], "nothing is published while the action is still running"
-    await bus.drain()
     assert len(seen) == 2
 
 
-def test_a_staged_write_is_not_visible_to_another_reader(bus: TopicBus, here: Member) -> None:
+def test_a_staged_write_is_not_visible_to_another_reader(bus: LocalTopicBus, here: Member) -> None:
     preferences = Preferences(bus, here)
     observed: list[str] = []
     with transaction():
@@ -277,7 +274,7 @@ def elsewhere[ValueT](what: Callable[[], ValueT]) -> ValueT:
     return contextvars.Context().run(what)
 
 
-async def test_a_failed_action_leaks_no_staged_value(bus: TopicBus, here: Member) -> None:
+async def test_a_failed_action_leaks_no_staged_value(bus: LocalTopicBus, here: Member) -> None:
     preferences = Preferences(bus, here)
     seen: list[object] = []
     bus.subscribe(CellAddress(preferences, "theme"), _record(seen))
@@ -285,12 +282,11 @@ async def test_a_failed_action_leaks_no_staged_value(bus: TopicBus, here: Member
         preferences.theme = "dark"
         message = "handler failed"
         raise RuntimeError(message)
-    await bus.drain()
     assert preferences.theme == "system"
     assert seen == []
 
 
-def test_one_action_spans_several_namespaces(bus: TopicBus, here: Member) -> None:
+def test_one_action_spans_several_namespaces(bus: LocalTopicBus, here: Member) -> None:
     handles = [Workspace(bus, Member(index, 2)) for index in range(3)]
     with pytest.raises(RuntimeError, match="handler failed"), transaction():
         for index, handle in enumerate(handles):
@@ -303,7 +299,7 @@ def test_one_action_spans_several_namespaces(bus: TopicBus, here: Member) -> Non
 # --- The commit precondition --------------------------------------------------------------
 
 
-def test_a_read_and_written_cell_conflicts_when_it_moves(bus: TopicBus, here: Member) -> None:
+def test_a_read_and_written_cell_conflicts_when_it_moves(bus: LocalTopicBus, here: Member) -> None:
     workspace = Workspace(bus, here)
     conflict = r"Workspace\(Member\(user_id=1, guild_id=2\)\)\.filters"
     with pytest.raises(SharedStateConflictError, match=conflict), transaction():
@@ -317,7 +313,7 @@ def _write_from_elsewhere(handle: Shared[Any], name: str, value: object) -> None
     elsewhere(lambda: setattr(handle, name, value))
 
 
-def test_a_write_only_cell_is_blind(bus: TopicBus, here: Member) -> None:
+def test_a_write_only_cell_is_blind(bus: LocalTopicBus, here: Member) -> None:
     preferences = Preferences(bus, here)
     with transaction():
         preferences.locale = "fr"
@@ -325,7 +321,7 @@ def test_a_write_only_cell_is_blind(bus: TopicBus, here: Member) -> None:
     assert preferences.locale == "fr", "last commit wins"
 
 
-def test_a_read_only_action_never_conflicts(bus: TopicBus, here: Member) -> None:
+def test_a_read_only_action_never_conflicts(bus: LocalTopicBus, here: Member) -> None:
     preferences = Preferences(bus, here)
     composed: list[str] = []
     with transaction():
@@ -335,7 +331,7 @@ def test_a_read_only_action_never_conflicts(bus: TopicBus, here: Member) -> None
     assert preferences.theme == "dark"
 
 
-def test_reading_a_staged_value_does_not_enter_the_read_set(bus: TopicBus, here: Member) -> None:
+def test_reading_a_staged_value_does_not_enter_the_read_set(bus: LocalTopicBus, here: Member) -> None:
     preferences = Preferences(bus, here)
     with transaction():
         preferences.theme = "dark"
@@ -344,7 +340,7 @@ def test_reading_a_staged_value_does_not_enter_the_read_set(bus: TopicBus, here:
     assert preferences.theme == "dark"
 
 
-def test_a_later_write_does_not_clear_the_guard(bus: TopicBus, here: Member) -> None:
+def test_a_later_write_does_not_clear_the_guard(bus: LocalTopicBus, here: Member) -> None:
     preferences = Preferences(bus, here)
     with pytest.raises(SharedStateConflictError), transaction():
         seen = preferences.theme
@@ -353,7 +349,7 @@ def test_a_later_write_does_not_clear_the_guard(bus: TopicBus, here: Member) -> 
         _write_from_elsewhere(preferences, "theme", "moved")
 
 
-def test_a_b_a_does_not_conflict(bus: TopicBus, here: Member) -> None:
+def test_a_b_a_does_not_conflict(bus: LocalTopicBus, here: Member) -> None:
     preferences = Preferences(bus, here)
     with transaction():
         seen = preferences.theme
@@ -363,7 +359,7 @@ def test_a_b_a_does_not_conflict(bus: TopicBus, here: Member) -> None:
     assert preferences.theme == "system!"
 
 
-def test_a_conflict_publishes_nothing_at_all(bus: TopicBus, here: Member) -> None:
+def test_a_conflict_publishes_nothing_at_all(bus: LocalTopicBus, here: Member) -> None:
     preferences = Preferences(bus, here)
     workspace = Workspace(bus, here)
     with pytest.raises(SharedStateConflictError), transaction():
@@ -373,7 +369,7 @@ def test_a_conflict_publishes_nothing_at_all(bus: TopicBus, here: Member) -> Non
     assert workspace.selected is None
 
 
-def test_local_state_rolls_back_with_a_conflict(bus: TopicBus, here: Member) -> None:
+def test_local_state_rolls_back_with_a_conflict(bus: LocalTopicBus, here: Member) -> None:
     preferences = Preferences(bus, here)
 
     class Panel(Component):
@@ -387,7 +383,7 @@ def test_local_state_rolls_back_with_a_conflict(bus: TopicBus, here: Member) -> 
     assert panel.open is False
 
 
-def test_outside_an_action_every_write_is_blind(bus: TopicBus, here: Member) -> None:
+def test_outside_an_action_every_write_is_blind(bus: LocalTopicBus, here: Member) -> None:
     preferences = Preferences(bus, here)
     seen = preferences.theme
     _write_from_elsewhere(preferences, "theme", "dark")
@@ -398,7 +394,7 @@ def test_outside_an_action_every_write_is_blind(bus: TopicBus, here: Member) -> 
 # --- Computed over shared state -----------------------------------------------------------
 
 
-def test_a_computed_recomputes_when_another_owner_writes(bus: TopicBus, here: Member) -> None:
+def test_a_computed_recomputes_when_another_owner_writes(bus: LocalTopicBus, here: Member) -> None:
     workspace = Workspace(bus, here)
     runs: list[int] = []
 
@@ -423,12 +419,11 @@ def test_a_computed_recomputes_when_another_owner_writes(bus: TopicBus, here: Me
 # --- Lifetime ---------------------------------------------------------------------------
 
 
-async def test_a_namespace_with_no_holder_is_collected(bus: TopicBus, here: Member) -> None:
+async def test_a_namespace_with_no_holder_is_collected(bus: LocalTopicBus, here: Member) -> None:
     workspace = Workspace(bus, here)
     gone = weakref.ref(workspace)
     unfollow = bus.subscribe(CellAddress(workspace, "selected"), _record([]))
     workspace.selected = 3
-    await bus.drain()
     # Both halves of what keeps a namespace alive: the handle itself, and the unfollow that
     # closes over its address. A mount holds exactly these two and drops both on finish.
     unfollow()

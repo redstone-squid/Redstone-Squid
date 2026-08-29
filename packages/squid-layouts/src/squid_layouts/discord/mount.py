@@ -12,8 +12,9 @@ import logging
 import math
 import secrets
 import time
+import weakref
 from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -22,21 +23,6 @@ from typing import Any, Protocol, cast, runtime_checkable
 import anyio
 import discord
 
-from squid_layouts.interactions import (
-    ActionBinding,
-    ActionEvent,
-    ActionKind,
-    ActionMiddleware,
-    ActionPolicy,
-    ActionProceed,
-    ActionRequest,
-    Actor,
-    EntitySelectionEvent,
-    Feedback,
-    PressEvent,
-    SelectionEvent,
-    SubmitEvent,
-)
 from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME, LOCALIZATION_CONTEXT, Chrome, localize_chrome
 from squid_layouts.discord import delivery as deliver
 from squid_layouts.discord import live
@@ -55,15 +41,30 @@ from squid_layouts.document import Asset, Document
 from squid_layouts.entity import ChannelType, EntityKind, EntityRef, EntityType
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import FormBinding, FormSpec, FormValidationPolicy, SubmitHandler
-from squid_layouts.guards import GuardLedger
+from squid_layouts.guards import Challenge, GuardLedger, approvals
+from squid_layouts.interactions import (
+    ActionBinding,
+    ActionEvent,
+    ActionKind,
+    ActionMiddleware,
+    ActionPolicy,
+    ActionProceed,
+    ActionRequest,
+    Actor,
+    EntitySelectionEvent,
+    Feedback,
+    PressEvent,
+    SelectionEvent,
+    SubmitEvent,
+)
 from squid_layouts.palette import DEFAULT_PALETTE, Palette
-from squid_layouts.planning.limits import LIMITS, ClassicLimits, DiscordLimits, V2Limits
 from squid_layouts.planning.adapter import (
     ADAPTER_DISPATCH,
     ADAPTER_INTERACTION_DELIVERY,
     ADAPTER_RENDER_CLASSIC,
     ADAPTER_RENDER_V2,
 )
+from squid_layouts.planning.limits import LIMITS, ClassicLimits, DiscordLimits, V2Limits
 from squid_layouts.planning.navigation import (
     NAV_FACTORY_CONTEXT,
     NavFactory,
@@ -71,7 +72,6 @@ from squid_layouts.planning.navigation import (
     NavigationState,
     default_nav,
 )
-from squid_layouts.target_types import DiscordPyAdapter
 from squid_layouts.primitives.nodes import Button, Node, Row
 from squid_layouts.profiling import (
     ActionOutcome,
@@ -94,7 +94,8 @@ from squid_layouts.runtime.component import Component, ComponentTree
 from squid_layouts.runtime.owner import ComponentRuntime
 from squid_layouts.runtime.presentation import PresentationSession, SessionUpdate, apply_updates
 from squid_layouts.runtime.reactivity import StateDelta, on_action_commit, readonly_transaction, transaction
-from squid_layouts.runtime.resources import Resource, ResourceDelivery
+from squid_layouts.runtime.resources import AsyncBinding, PendingPolicy
+from squid_layouts.runtime.topics import Address, SubscriptionReconciler, TopicBus
 from squid_layouts.scene.model import (
     PlanMetrics,
     PlanReport,
@@ -106,8 +107,8 @@ from squid_layouts.scene.model import (
 )
 from squid_layouts.semantic import Status
 from squid_layouts.sources import Position
+from squid_layouts.target_types import DiscordPyAdapter
 from squid_layouts.text import NEUTRAL, Localization, TextLike, resolve_text
-from squid_layouts.runtime.topics import Address
 
 logger = logging.getLogger(__name__)
 _NOOP_PROFILER = NoOpProfiler()
@@ -208,6 +209,60 @@ class Scheduler(Protocol):
     def schedule(self, mount: Mount) -> None: ...
 
 
+type ResumedPress = Callable[[], Awaitable[None]]
+
+
+class ChallengeSupervisor(Protocol):
+    """Somewhere to run an approved press that is not the press that approved it.
+
+    The requirement this exists for: `transaction()` flattens rather than nests, so running
+    the challenged press from inside the approving handler would run it in the *dialog's*
+    transaction -- staging the panel's writes in the dialog's overlay, committing with it,
+    and unwinding through its error hook. A `PARALLEL_READ` press would not even misbehave,
+    it would raise, because `readonly_transaction()` refuses to nest.
+
+    Spawning a task from the approving handler does not escape it either: the transaction is
+    held in a `ContextVar` and a task started there inherits the context. So `resume` must
+    hand the work to a task whose own context predates the press -- in practice a queue
+    drained by something started at host startup. It is deliberately synchronous: an
+    implementation that could await would be tempted to await the press itself.
+    """
+
+    def resume(self, press: ResumedPress) -> None: ...
+
+
+@dataclass(frozen=True, slots=True)
+class ChallengeRequest:
+    """One press that stopped to ask its actor a question, and the two answers it takes.
+
+    `approve` *is* the resumed press: it re-enters `Mount.dispatch` from the top and runs
+    the whole action. It must therefore be handed to a `ChallengeSupervisor` rather than
+    awaited from the dialog's own handler. `decline` only records the refusal and delivers
+    the challenge's wording, so it is safe to await anywhere.
+    """
+
+    mount: Mount
+    interaction: discord.Interaction
+    """The interaction that asked. Its response has been spent on the question, so it is an
+    actor identity and a private answering channel -- never a handle to this mount's message."""
+    challenge: Challenge
+    key: str
+    """The routed binding key the approval resumes, which is what carries a grouped select's route."""
+    approve: ResumedPress
+    decline: ResumedPress
+
+
+class ChallengePresenter(Protocol):
+    """Shows a challenge and arranges for the answer to run outside the answering press.
+
+    Host-supplied, because a mount cannot open a dialog by itself: it holds no session
+    registry -- the lookup runs the other way -- and no supervisor. A mount whose guard
+    challenges without one configured treats that as a programmer error.
+    """
+
+    async def present(self, request: ChallengeRequest) -> None: ...
+
+
 @runtime_checkable
 class ExpirySupervisor(Protocol):
     """A scheduler that observes mount edit-authority deadlines."""
@@ -216,14 +271,16 @@ class ExpirySupervisor(Protocol):
 
 
 @runtime_checkable
-class TopicFollower(Protocol):
-    """A scheduler that can also subscribe a mount to topics (see `Reactor`).
+class TopicScheduler(Protocol):
+    """A scheduler backed by a topic bus (see `Reactor`).
 
     Separate from `Scheduler` because following is optional: a mount with no scheduler, or
     one whose scheduler only absorbs refreshes, is simply not live-updated.
     """
 
-    def follow(self, mount: Mount, *topics: Address) -> Callable[[], None]: ...
+    bus: TopicBus
+
+    def schedule(self, mount: Mount) -> None: ...
 
 
 def _unique_by_identity(middleware: Sequence[ActionMiddleware]) -> tuple[ActionMiddleware, ...]:
@@ -510,6 +567,14 @@ class _Candidate:
     assets: tuple[Asset, ...]
     # Presentation writes this render earned; a failed delivery simply drops them.
     session_updates: tuple[SessionUpdate, ...]
+    settled: bool = False
+    """Whether this candidate has already been committed or rolled back.
+
+    Every path that draws a candidate owes it exactly one of those two endings. Which
+    candidate is outstanding is already unambiguous -- `_draw` stages subscriptions, and
+    the reconciler refuses a second staged set -- so what is left to get wrong is settling
+    the same one twice, and that is what this refuses.
+    """
 
     @property
     def presentation(self) -> DiscordPresentation:
@@ -602,6 +667,14 @@ class _DispatchProfile:
     presentation: PresentationOutcome = PresentationOutcome.NOT_REQUIRED
     acknowledged: bool = False
     finished: bool = False
+    resumed: bool = False
+    """Whether an approved challenge started this press, which decides what may be edited.
+
+    A resumed press carries the interaction that asked the question, not one that came from
+    this mount's message, so nothing in the dispatch may take a handle from it: not the
+    flush's edit target, not `_renew`'s standing-handle trade-up, and not the address a
+    mount without one would otherwise learn. The mount redraws where it already lives.
+    """
 
     def decide_generation(self, active: int, *, rebased: bool = False) -> None:
         self.generation = GenerationDecision(self.generation.submitted, active, rebased)
@@ -618,6 +691,8 @@ class _DispatchProfile:
         self.finished = True
         self.operation.increment("dispatch.rebased", int(self.generation.rebased))
         self.acknowledge("action")
+        # Both challenge dispositions fall through to COMPLETED, which is right: asking a
+        # question and being told no are outcomes, not failures.
         outcome = (
             TraceOutcome.CANCELLED
             if disposition is DispatchDisposition.CANCELLED
@@ -641,6 +716,24 @@ class _DispatchProfile:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class _Admission:
+    """What the admission stage decided, and the question it wants put to the actor.
+
+    Three-valued because a challenge is not a refusal the funnel can simply return on: the
+    dialog is presented after the action lock is released, so `_dispatch_binding` has to
+    carry it back out rather than answer it in place.
+    """
+
+    admitted: bool
+    challenge: Challenge | None = None
+
+
+_ADMITTED = _Admission(admitted=True)
+_REFUSED = _Admission(admitted=False)
+"""Refused *and already answered*: the guard denied or raised, and the profile is finished."""
+
+
 class _BusyPaint:
     """One action's interim "working" render, and the ordering between it and the flush.
 
@@ -650,11 +743,20 @@ class _BusyPaint:
     watchdog that wakes late paints nothing over the final render.
     """
 
-    def __init__(self, mount: Mount, key: str, feedback: Feedback, interaction: discord.Interaction) -> None:
+    def __init__(
+        self,
+        mount: Mount,
+        key: str,
+        feedback: Feedback,
+        interaction: discord.Interaction,
+        *,
+        resumed: bool = False,
+    ) -> None:
         self._mount = mount
         self._key = key
         self._feedback = feedback
         self._interaction = interaction
+        self._resumed = resumed
         self._lock = asyncio.Lock()
         self._closed = False
         self._shown = False
@@ -671,7 +773,7 @@ class _BusyPaint:
                 return
             pending = self._feedback.pending
             label = self._mount._chrome_text(self._mount.chrome.working if pending is None else pending)
-            source = deliver.handle_from(self._interaction)
+            source = self._mount._source(self._interaction, resumed=self._resumed)
             wrote = await self._mount._repaint(self._key, label, through=source)
             if wrote is None:
                 # Nothing could write, so the click is still unanswered: the watchdog goes
@@ -693,7 +795,9 @@ class _BusyPaint:
             if not self._shown or self._mount._finished:
                 return
             self._shown = False
-            await self._mount._repaint(None, None, through=deliver.handle_from(self._interaction))
+            await self._mount._repaint(
+                None, None, through=self._mount._source(self._interaction, resumed=self._resumed)
+            )
 
 
 class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
@@ -716,6 +820,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         scheduler: Scheduler | None = None,
         expiry: ExpiryPolicy | None = DEFAULT_EXPIRY,
         nav: NavFactory | None = None,
+        challenge: ChallengePresenter | None = None,
         acknowledgement_timeout: float = 2.5,
         pending_after: float = 1.0,
         clock: Callable[[], float] = _monotonic,
@@ -750,6 +855,8 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         """How long an action carrying `Feedback` may run before its interim paint appears."""
         self.guards = GuardLedger(now=clock)
         """Where stateful guards keep their counts; it lives and dies with this mount."""
+        self.challenge = challenge
+        """Who shows a guard's challenge and runs the press the actor approves, if anyone."""
         self.target = target
         """The message mode this mount owns for its whole life.
 
@@ -777,6 +884,25 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             else _NOOP_PROFILER
         )
         self.scheduler = scheduler
+        topic_bus = scheduler.bus if isinstance(scheduler, TopicScheduler) else None
+        reconciler_ref: weakref.ReferenceType[SubscriptionReconciler] | None = None
+
+        def collected(_reference: weakref.ReferenceType[Mount]) -> None:
+            if reconciler_ref is not None and (reconciler := reconciler_ref()) is not None:
+                reconciler.close()
+
+        mount_ref = weakref.ref(self, collected)
+
+        def refresh(_address: Address) -> None:
+            if (current := mount_ref()) is None:
+                if reconciler_ref is not None and (reconciler := reconciler_ref()) is not None:
+                    reconciler.close()
+                return
+            if current.scheduler is not None:
+                current.scheduler.schedule(current)
+
+        self._subscriptions = SubscriptionReconciler(topic_bus, refresh)
+        reconciler_ref = weakref.ref(self._subscriptions)
         if isinstance(expiry, RenewEphemeral) and not isinstance(scheduler, ExpirySupervisor):
             message = "RenewEphemeral requires a scheduler that supervises mount expiry"
             raise TypeError(message)
@@ -784,6 +910,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         self.status: TextLike | None = None
         """Framework-drawn status appended to the document until the next accepted interaction."""
         self._handle: deliver.EditHandle | None = None
+        self._delete_handle: deliver.DeleteHandle | None = None
         self._ephemeral: bool | None = None
         self._lifecycle = MountLifecycle.ACTIVE
         self._unwatch_expiry: Callable[[], None] | None = None
@@ -803,6 +930,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         self._issued = 0
         self._pending: _Candidate | None = None
         self._dirty = False
+        self._settlement_wake: asyncio.Event | None = None
         # Renders committed without a Discord edit because the reader already had them.
         self._suppressed = 0
         self._finished = False
@@ -812,15 +940,11 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         self._hooks_fired = False
         self._assets: tuple[Asset, ...] = ()
         self._plan: PlanResult | None = None
-        # What the committed generation read, what it plus every render staged since read,
-        # and what this mount managed to subscribe to. Three different things: a mount with no
-        # reactor still knows what it is looking at, which is what lets its own writes repaint
-        # it even when nobody can deliver a topic to it. A follow is acquired at stage time,
-        # because a write landing between a render's read and its subscription is lost and the
-        # bus is not durable -- but only a delivered render may retire one.
-        self._observed: tuple[Address, ...] = ()
-        self._watched: dict[Address, None] = {}
-        self._follows: dict[Address, Callable[[], None]] = {}
+        # What the committed generation read, what its single staged successor read, and what
+        # this mount managed to subscribe to are three different things. A mount with no bus
+        # still knows what it is looking at, which lets its own writes repaint it. A follow is
+        # acquired at stage time because a write landing between the read and subscription is
+        # lost, but only a delivered render may retire one.
         self._follow_warned = False
 
     @property
@@ -882,7 +1006,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         them. A render staged since is not here until it is delivered; `followed` may
         already cover it, because a subscription is acquired early and retired late.
         """
-        return self._observed
+        return self._subscriptions.committed
 
     @property
     def followed(self) -> tuple[Address, ...]:
@@ -892,7 +1016,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         subscribe to. A host that followed a topic of its own through the reactor holds that
         subscription itself and is not listed here.
         """
-        return tuple(self._follows)
+        return self._subscriptions.followed
 
     @property
     def middleware(self) -> tuple[str, ...]:
@@ -1035,9 +1159,10 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         staged here and never delivered is superseded by the next one.
         """
         pending = self._pending
-        candidate = self._stage(disabled=disabled)
         if pending is not None:
             pending.view.stop()
+            self._subscriptions.discard()
+        candidate = self._stage(disabled=disabled)
         self._pending = candidate
         return candidate.view
 
@@ -1114,11 +1239,23 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                 raise TypeError(message)
             return view, composition
 
-        view, composition = draw()
+        observed = tree.observations
+        if observed and self._subscriptions.bus is None and not self._follow_warned:
+            self._follow_warned = True
+            logger.warning(
+                "mount %s renders shared state or a watched topic but its scheduler has no "
+                "topic bus, so changes made elsewhere will not refresh it",
+                self.id,
+            )
+        self._subscriptions.stage(observed)
+        try:
+            view, composition = draw()
+        except BaseException:
+            self._subscriptions.discard()
+            raise
         assets = composition.assets
         if disabled:
             _disable_all(view)
-        self._ensure_follows(tree.observations)
         return _Candidate(
             view,
             composition,
@@ -1193,50 +1330,6 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             _disable_all(view)
         return _LifecycleCandidate(view, composition, handlers, generation)
 
-    def _ensure_follows(self, observed: Sequence[Address]) -> None:
-        """Acquire whatever a staged render newly reads, and retire nothing.
-
-        Over-subscribe, never under-subscribe. Staging is the only moment early enough to
-        close the read-to-subscribe race, and it is far too early to drop anything: the
-        candidate may never be delivered, and the generation still on screen displays cells
-        this render stopped reading. `_prune_follows` is the other half, and delivery is what
-        earns it.
-        """
-        if self._finished or not observed:
-            return
-        self._watched.update(dict.fromkeys(observed))
-        follower = self.scheduler
-        if not isinstance(follower, TopicFollower):
-            if not self._follow_warned:
-                self._follow_warned = True
-                logger.warning(
-                    "mount %s renders shared state or a watched topic but its scheduler cannot "
-                    "follow addresses, so changes made elsewhere will not refresh it",
-                    self.id,
-                )
-            return
-        for topic in observed:
-            if topic not in self._follows:
-                self._follows[topic] = follower.follow(self, topic)
-
-    def _prune_follows(self, observed: Sequence[Address]) -> None:
-        """Publish a delivered render's reads and drop the follows nothing visible needs.
-
-        The mirror of `_ensure_follows`: what a candidate provisionally acquired becomes this
-        mount's own only here, and a subscription the previous generation depended on is
-        retired only once its generation is off screen. A read that a conditional branch
-        dropped therefore stops refreshing when that branch reaches Discord, not before.
-        """
-        if self._finished:
-            return
-        wanted = dict.fromkeys(observed)
-        self._observed = tuple(wanted)
-        self._watched = wanted
-        for topic, unfollow in tuple(self._follows.items()):
-            if topic not in wanted:
-                del self._follows[topic]
-                unfollow()
-
     @contextmanager
     def _action_transaction(self, policy: ActionPolicy) -> Iterator[None]:
         """Run one handler in its transaction, watching for writes this mount renders.
@@ -1264,9 +1357,10 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         than `_observed`, because a candidate that newly reads the written cell must not
         commit a value it has already been told is stale.
         """
-        if not self._watched:
+        watched = self._subscriptions.watched
+        if not watched:
             return
-        if any(address in self._watched for address in delta.addresses()):
+        if any(address in watched for address in delta.addresses()):
             self.runtime.invalidate()
 
     def _composer(self) -> Callable[..., Composition[Any]]:
@@ -1348,14 +1442,26 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         self._commit_render(candidate)
         self._commit_delivery(candidate)
 
+    def _settle(self, candidate: _Candidate, ending: str) -> None:
+        """Record that `candidate` has reached its one ending, refusing a second.
+
+        The discipline `_Subscriptions.commit`/`discard` already keeps for the reactive
+        half, kept here for the visible half.
+        """
+        if candidate.settled:
+            message = f"mount {self.id}: candidate generation {candidate.generation} already settled, cannot {ending}"
+            raise LayoutInvariantError(message)
+        candidate.settled = True
+
     def _commit_render(self, candidate: _Candidate) -> None:
         """Commit the candidate's application runtime; what the reader sees is untouched.
 
         `session_updates` apply here too: planning's clamps describe the scene that is on
         screen, and a suppressed candidate is on screen by definition.
         """
+        self._settle(candidate, "commit")
         apply_updates(self.presentation, candidate.session_updates)
-        self._prune_follows(candidate.tree.observations)
+        self._subscriptions.commit()
         self.runtime.commit(candidate.tree, rendered_revision=candidate.revision)
         self._handlers = candidate.handlers
         self._form_bindings = candidate.form_bindings
@@ -1447,7 +1553,9 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         Nothing to unwind: planning only read the session, so dropping the candidate drops
         its presentation writes with it.
         """
+        self._settle(candidate, "roll back")
         candidate.view.stop()
+        self._subscriptions.discard()
         self._dirty = True
         if self._pending is candidate:
             self._pending = None
@@ -1462,6 +1570,8 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
 
     def _mark_dirty(self) -> None:
         self._dirty = True
+        if self._settlement_wake is not None:
+            self._settlement_wake.set()
 
     def invalidate(self) -> None:
         self.runtime.invalidate()
@@ -1556,7 +1666,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     ):
                         await self._load_all(tree.deferred)
                 continue
-            atomic = self._pending_resources(tree, ResourceDelivery.ATOMIC)
+            atomic = self._pending_resources(tree, PendingPolicy.ATOMIC)
             if atomic:
                 if profile is None:
                     await self._settle_resources(atomic)
@@ -1572,10 +1682,12 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         raise LayoutInvariantError(message)
 
     @staticmethod
-    def _pending_resources(tree: ComponentTree, delivery: ResourceDelivery) -> tuple[Resource[Any], ...]:
-        return tuple(resource for resource in tree.resources if resource.delivery is delivery and resource.pending)
+    def _pending_resources(tree: ComponentTree, pending: PendingPolicy) -> tuple[AsyncBinding, ...]:
+        return tuple(
+            binding for binding in tree.async_bindings if binding.pending_policy is pending and binding.pending
+        )
 
-    async def _settle_resources(self, resources: Sequence[Resource[Any]]) -> None:
+    async def _settle_resources(self, resources: Sequence[AsyncBinding]) -> None:
         """Settle one observed resource tier concurrently under this render operation."""
         if len(resources) == 1:
             await resources[0]._load()
@@ -1591,54 +1703,109 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         through: deliver.EditHandle | None = None,
         profile: OperationRecorder | None = None,
     ) -> None:
-        """Advance visible resources from their committed pending paint to settled paints."""
+        """Advance explicit async bindings through progress and terminal paints."""
         if self._lifecycle is MountLifecycle.RENEWAL_ARMED:
             return
         candidate = committed
         for pass_index in range(_MAX_LOAD_PASSES):
-            resources = self._pending_resources(candidate.tree, ResourceDelivery.VISIBLE)
-            if not resources or self.runtime.dirty:
+            bindings = self._pending_resources(candidate.tree, PendingPolicy.EXPLICIT)
+            if not bindings or self.runtime.dirty:
                 return
-            if self._handle is None or self._handle.expired():
-                self._dirty = True
-                return
-            if profile is None:
-                await self._settle_resources(resources)
-            else:
-                with profile.span(
-                    "resource_settle.visible",
-                    attributes={"count": len(resources), "pass": pass_index},
-                ):
-                    await self._settle_resources(resources)
-            settled: _Candidate | None = None
+            wake = asyncio.Event()
+            done = asyncio.Event()
+            delivery_open = self._handle is not None and not self._handle.expired()
+            if not delivery_open:
+                bindings = tuple(binding for binding in bindings if binding.settle_without_delivery)
+                if not bindings:
+                    self._dirty = True
+                    return
+
+            async def settle(
+                current_bindings: tuple[AsyncBinding, ...] = bindings,
+                current_done: asyncio.Event = done,
+                current_wake: asyncio.Event = wake,
+            ) -> None:
+                try:
+                    await self._settle_resources(current_bindings)
+                finally:
+                    current_done.set()
+                    current_wake.set()
+
+            async def reconcile(
+                current_done: asyncio.Event = done,
+                current_wake: asyncio.Event = wake,
+                current_bindings: tuple[AsyncBinding, ...] = bindings,
+            ) -> None:
+                nonlocal candidate, delivery_open
+                while True:
+                    await current_wake.wait()
+                    current_wake.clear()
+                    live_progress = any(
+                        binding.reconcile_while_pending and binding.pending for binding in current_bindings
+                    )
+                    while delivery_open and self.runtime.dirty and (current_done.is_set() or live_progress):
+                        presented = await self._present_async_update(candidate, through=through, profile=profile)
+                        if presented is None:
+                            delivery_open = False
+                            break
+                        candidate = presented
+                    if current_done.is_set():
+                        return
+
+            self._settlement_wake = wake
             try:
-                settled = await self._stage_loaded(profile=profile)
-                if self._same_as_live(settled):
-                    # A resource that loaded to what the pending paint already showed.
-                    self._suppress(settled, profile)
-                    candidate = settled
-                    continue
-                wrote = await self._deliver(settled, through=through, profile=profile)
-            except Exception:
-                if settled is not None:
-                    self._rollback(settled)
-                logger.exception("mount %s could not deliver a settled resource render", self.id)
+                context = (
+                    profile.span(
+                        "resource_settle.visible",
+                        attributes={"count": len(bindings), "pass": pass_index},
+                    )
+                    if profile is not None
+                    else nullcontext()
+                )
+                with context:
+                    async with anyio.create_task_group() as tasks:
+                        tasks.start_soon(settle)
+                        tasks.start_soon(reconcile)
+            finally:
+                self._settlement_wake = None
+            if not delivery_open:
                 return
-            if wrote is None:
-                self._rollback(settled)
-                return
-            if profile is None:
-                self._commit_presented(settled)
-            else:
-                with profile.span("commit"):
-                    self._commit_presented(settled)
-            candidate = settled
         self._dirty = True
         logger.error(
-            "mount %s: visible resources did not settle in %s passes",
+            "mount %s: explicit async bindings did not settle in %s passes",
             self.id,
             _MAX_LOAD_PASSES,
         )
+
+    async def _present_async_update(
+        self,
+        committed: _Candidate,
+        *,
+        through: deliver.EditHandle | None,
+        profile: OperationRecorder | None,
+    ) -> _Candidate | None:
+        """Present the latest coalesced status of async bindings, if it changed the scene."""
+        candidate: _Candidate | None = None
+        try:
+            candidate = await self._stage_loaded(profile=profile)
+            if self._same_as_live(candidate):
+                self._suppress(candidate, profile)
+                return candidate
+            wrote = await self._deliver(candidate, through=through, profile=profile)
+        except Exception:
+            if candidate is not None:
+                self._rollback(candidate)
+            logger.exception("mount %s could not deliver an async binding update", self.id)
+            return None
+        if wrote is None:
+            self._rollback(candidate)
+            return None
+        if profile is None:
+            self._commit_presented(candidate)
+        else:
+            with profile.span("commit"):
+                self._commit_presented(candidate)
+        return candidate
 
     async def _load_all(self, components: Sequence[Component]) -> None:
         """Load one tier concurrently. A failure cancels its siblings; the render is doomed."""
@@ -1683,6 +1850,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     with profile.span("supersede"):
                         self._pending.view.stop()
                         self._pending = None
+                        self._subscriptions.discard()
                 # Component on_load and atomic resources settle first. Visible resources
                 # deliberately make this the pending paint and settle after it commits.
                 candidate = await self._stage_loaded(profile=profile)
@@ -1701,6 +1869,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                         self._rollback(candidate)
                     raise
                 self._handle = receipt.handle
+                self._delete_handle = receipt.delete_handle
                 self._ephemeral = receipt.ephemeral
                 if receipt.message is not None:
                     self._note_address(receipt.message)
@@ -1711,7 +1880,8 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     self._unwatch_expiry = self.scheduler.watch(self)
                 await self._settle_visible(candidate, profile=profile)
                 profile.set_result(TraceResult(TraceOutcome.COMPLETED, presentation=PresentationOutcome.WRITTEN))
-                return deliver.Delivered(receipt)
+                settled = all(not binding.pending for binding in candidate.tree.async_bindings)
+                return deliver.Delivered(receipt, settled=settled)
             finally:
                 self._render_lock.release()
 
@@ -1772,16 +1942,29 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             return handle
         return None
 
-    def _renew(self, interaction: discord.Interaction) -> None:
+    def _source(self, interaction: discord.Interaction, *, resumed: bool) -> deliver.EditHandle | None:
+        """The handle a dispatch may write this mount's message through, if any.
+
+        A resumed press has none. Its interaction came from the panel but has already spent
+        its response on the question, so `handle_from` refuses it anyway -- this states the
+        rule as the mount's own rather than leaving it to what the presenter happened to do
+        with the interaction.
+        """
+        return None if resumed else deliver.handle_from(interaction)
+
+    def _renew(self, interaction: discord.Interaction, *, resumed: bool = False) -> None:
         """Trade up to the credentials this click carries.
 
         The bot's own never expire, so a mount holding them keeps them. Anything else is
         worth replacing: each interaction resets the clock, so a mount in use stays writable
         even when its message was only ever writable through the interaction that sent it.
+
+        A resumed press trades nothing: taking the handle would re-address the mount to
+        wherever the question was answered, permanently, and outlive the press that did it.
         """
         if self._handle is not None and self._handle.permanent:
             return
-        if (fresher := deliver.handle_from(interaction)) is not None:
+        if (fresher := self._source(interaction, resumed=resumed)) is not None:
             self._handle = fresher
 
     async def dispatch(
@@ -1791,19 +1974,27 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         values: _SelectionValues = None,
         *,
         generation: int | None = None,
+        resumed: bool = False,
     ) -> None:
-        """The funnel: finished check -> access policy -> handler -> flush."""
+        """The funnel: finished check -> access policy -> guard -> handler -> flush.
+
+        `resumed` says an approved challenge started this press. Approval re-enters here
+        rather than resuming mid-funnel on purpose: the actor may have lost access and the
+        panel may have re-rendered while the dialog was open, so every stage runs again
+        against current truth.
+        """
         kind = ActionKind.PRESS if values is None else ActionKind.SELECTION
         with self.profiler.operation(
             OperationKind.DISPATCH,
             name=key,
-            attributes={"kind": kind.value, "mount_id": self.id},
+            attributes={"kind": kind.value, "mount_id": self.id, "resumed": resumed},
         ) as operation:
             profile = _DispatchProfile(
                 operation,
                 interaction,
                 GenerationDecision(generation, self._generation),
                 operation.start_span("acknowledgement"),
+                resumed=resumed,
             )
             try:
                 if not await self._begin_dispatch(interaction, profile):
@@ -2000,8 +2191,10 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
 
     async def _begin_dispatch(self, interaction: discord.Interaction, profile: _DispatchProfile) -> bool:
         # A mount sent through an unwaited interaction response never saw its own message; the
-        # click is where it finally learns where it lives.
-        self._note_address(interaction.message)
+        # click is where it finally learns where it lives. A resumed press is not that click:
+        # what it carries is where the question was answered.
+        if not profile.resumed:
+            self._note_address(interaction.message)
         if self._finished:
             # A finished mount can still be on screen with live controls: its disable-edit
             # may have failed, or a replacement may have taken over the session while this
@@ -2062,39 +2255,152 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         interaction: discord.Interaction,
         values: _SelectionValues,
         profile: _DispatchProfile,
-    ) -> bool:
+    ) -> _Admission:
         """Run this action's guard, answering the reader privately when it refuses.
 
         The access policy has already said this reader may use the panel; the guard says
         whether this press may run now. A denial writes nothing, bumps no generation, and
-        opens no transaction -- it costs exactly one ephemeral message.
+        opens no transaction -- it costs exactly one ephemeral message. A challenge costs the
+        same, and is not admission deferred but admission refused: the press is dropped, and
+        approving the question starts a new one.
+
+        Every pass is staged and committed only when it did not end in a question, so the
+        guards that ran ahead of a challenge have spent nothing by the time the actor is
+        asked. Denial keeps its writes, exactly as it always has.
         """
         guard = binding.guard
         if guard is None:
-            return True
+            return _ADMITTED
+        ledger = self.guards.for_action(key).staged()
         try:
             with profile.operation.span(
                 "guard",
                 attributes={"guard": f"{type(guard).__module__}.{type(guard).__qualname__}"},
             ):
-                verdict = await guard.admit(self._event(interaction, values), self.guards.for_action(key))
+                outcome = await guard.admit(self._event(interaction, values), ledger)
         except Exception as error:
             await self.handle_error(interaction, error, f"guard:{key}")
             profile.acknowledge("error_hook")
             profile.finish(DispatchDisposition.GUARD_FAILED, error)
-            return False
-        if verdict.allowed:
-            return True
-        reason = verdict.reason
+            return _REFUSED
+        if isinstance(outcome, Challenge):
+            return _Admission(admitted=False, challenge=outcome)
+        ledger.commit()
+        if outcome.allowed:
+            return _ADMITTED
+        reason = outcome.reason
         if reason is None:
             reason = (
-                self.chrome.not_now if verdict.retry_after is None else self.chrome.try_again_in(verdict.retry_after)
+                self.chrome.not_now if outcome.retry_after is None else self.chrome.try_again_in(outcome.retry_after)
             )
         await deliver.respond_text(interaction, self._chrome_text(reason), ephemeral=True)
         profile.presentation = PresentationOutcome.WRITTEN
         profile.acknowledge("guard_denied")
         profile.finish(DispatchDisposition.GUARD_DENIED)
-        return False
+        return _REFUSED
+
+    async def _present_challenge(
+        self,
+        challenge: Challenge,
+        key: str,
+        interaction: discord.Interaction,
+        values: _SelectionValues,
+        profile: _DispatchProfile,
+    ) -> None:
+        """Put the guard's question to the actor, outside the action lock, and end this press.
+
+        Presenting through the interaction *is* the acknowledgement, which is why nothing may
+        be awaited ahead of it: admission runs before the watchdog starts, so a challenge has
+        the click's own three seconds and no safety net.
+        """
+        presenter = self.challenge
+        if presenter is None:
+            error = LayoutInvariantError(
+                f"the guard on {key!r} challenged this press, but the mount has no challenge presenter"
+            )
+            await self.handle_error(interaction, error, f"guard:{key}")
+            profile.acknowledge("error_hook")
+            profile.finish(DispatchDisposition.GUARD_FAILED, error)
+            return
+        if key in self._form_bindings:
+            # The press that opens a modal cannot be challenged: asking spends the response,
+            # and a resumed press has no fresh interaction to open the modal through.
+            error = LayoutInvariantError(f"a form trigger cannot be challenged, and the guard on {key!r} did")
+            await self.handle_error(interaction, error, f"guard:{key}")
+            profile.acknowledge("error_hook")
+            profile.finish(DispatchDisposition.GUARD_FAILED, error)
+            return
+        actor = str(interaction.user.id)
+
+        async def approve() -> None:
+            await self._approve_challenge(key, interaction, values, actor)
+
+        async def decline() -> None:
+            await self._decline_challenge(challenge, key, interaction)
+
+        request = ChallengeRequest(self, interaction, challenge, key, approve, decline)
+        try:
+            with profile.operation.span("challenge"):
+                await presenter.present(request)
+        except Exception as error:
+            await self.handle_error(interaction, error, f"guard:{key}")
+            profile.acknowledge("error_hook")
+            profile.finish(DispatchDisposition.GUARD_FAILED, error)
+            return
+        profile.presentation = PresentationOutcome.WRITTEN
+        profile.acknowledge("challenge_issued")
+        profile.finish(DispatchDisposition.CHALLENGE_ISSUED)
+
+    async def _approve_challenge(
+        self,
+        key: str,
+        interaction: discord.Interaction,
+        values: _SelectionValues,
+        actor: str,
+    ) -> None:
+        """Record one approval and re-enter the funnel from the top.
+
+        `generation=None` on purpose: a dialog outlives renders, and the actor confirmed an
+        intent rather than a pixel. That is the contract `ActionPolicy.REBASE` already
+        offers, and `EXCLUSIVE` would otherwise reject the press it just asked about.
+        """
+        ledger = self.guards.for_action(key)
+        bucket = approvals(ledger, actor)
+        ledger.write(bucket, ledger.read(bucket, 0) + 1)
+        await self.dispatch(key, interaction, values, generation=None, resumed=True)
+
+    async def _decline_challenge(
+        self,
+        challenge: Challenge,
+        key: str,
+        interaction: discord.Interaction,
+    ) -> None:
+        """Note the refusal, and say so when the challenge asked for wording.
+
+        There is nothing to undo: the press was never admitted and the approval that would
+        have admitted it was never written.
+        """
+        with self.profiler.operation(
+            OperationKind.DISPATCH,
+            name=key,
+            attributes={"kind": ActionKind.PRESS.value, "mount_id": self.id, "resumed": True},
+        ) as operation:
+            if challenge.on_decline is not None:
+                await deliver.respond_text(interaction, self._chrome_text(challenge.on_decline), ephemeral=True)
+            operation.set_result(
+                TraceResult(
+                    TraceOutcome.COMPLETED,
+                    None,
+                    DispatchResult(
+                        DispatchDisposition.CHALLENGE_DECLINED,
+                        ActionOutcome.NOT_RUN,
+                        PresentationOutcome.WRITTEN
+                        if challenge.on_decline is not None
+                        else PresentationOutcome.NOT_REQUIRED,
+                        GenerationDecision(None, self._generation),
+                    ),
+                )
+            )
 
     async def _dispatch_binding(
         self,
@@ -2113,7 +2419,11 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             profile.decide_generation(self._generation)
             # No lock to be inside for these two, so admission is simply the last gate
             # before the handler, exactly as it is under the other policies.
-            if not await self._admit(binding, key, interaction, values, profile):
+            admission = await self._admit(binding, key, interaction, values, profile)
+            if admission.challenge is not None:
+                await self._present_challenge(admission.challenge, key, interaction, values, profile)
+                return
+            if not admission.admitted:
                 return
             await invoke(binding, rebased, self._generation)
             return
@@ -2142,11 +2452,19 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                 binding = refreshed
             # Inside the lock, so a `when(...)` closure reads component state nobody is
             # writing, and before the transaction, so a denial writes nothing.
-            if not await self._admit(binding, key, interaction, values, profile):
+            admission = await self._admit(binding, key, interaction, values, profile)
+            if admission.challenge is None:
+                if not admission.admitted:
+                    return
+                await invoke(binding, rebased, self._generation)
                 return
-            await invoke(binding, rebased, self._generation)
+            challenged = admission.challenge
         finally:
             self._action_lock.release()
+        # Only a challenge falls out of the block above rather than returning from inside it.
+        # The dialog is opened with the lock released and the press already over, so every
+        # other control on the panel stays live while the actor reads the question.
+        await self._present_challenge(challenged, key, interaction, values, profile)
 
     async def _invoke(
         self,
@@ -2161,7 +2479,11 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
     ) -> None:
         # Painting feedback may wait behind arbitrary visible-resource work under the render
         # lock. The acknowledgement deadline is independent so only Discord can delay it.
-        busy = None if binding.feedback is None else _BusyPaint(self, key, binding.feedback, interaction)
+        busy = (
+            None
+            if binding.feedback is None
+            else _BusyPaint(self, key, binding.feedback, interaction, resumed=profile.resumed)
+        )
 
         async def acknowledge_by_deadline() -> None:
             await anyio.sleep(self.acknowledgement_timeout)
@@ -2238,7 +2560,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             return
         profile.action = ActionOutcome.HANDLED if handled else ActionOutcome.SHORT_CIRCUITED
         profile.acknowledge("action")
-        self._renew(interaction)
+        self._renew(interaction, resumed=profile.resumed)
         painted = busy is not None and await busy.close()
         try:
             profile.presentation = await self.flush(interaction, profile=profile)
@@ -2462,7 +2784,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                 # A component cannot enter the tree without a state write, so a click that
                 # changed nothing never reaches this at all.
                 candidate = await self._stage_loaded(profile=operation)
-                source = deliver.handle_from(interaction)
+                source = self._source(interaction, resumed=dispatch is not None and dispatch.resumed)
                 if self._same_as_live(candidate):
                     with operation.span("suppress"):
                         self._suppress(candidate, operation)
@@ -2692,6 +3014,27 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         if run_hooks:
             await self._run_finish_hooks()
 
+    async def dismiss(self) -> None:
+        """Delete the delivered message and finish this mount."""
+        run_hooks = False
+        try:
+            async with self._render_lock:
+                if self._finished:
+                    return
+                self._finished = True
+                try:
+                    if self._delete_handle is not None:
+                        await self._delete_handle.delete()
+                finally:
+                    self._teardown()
+                    run_hooks = True
+        except BaseException:
+            if run_hooks:
+                await self._run_finish_hooks()
+            raise
+        if run_hooks:
+            await self._run_finish_hooks()
+
     def _teardown(self) -> None:
         """Stop the live view and unmount the committed tree, once."""
         if self._unwatch_expiry is not None:
@@ -2700,13 +3043,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         if self._view is not None:
             self._view.stop()
             self._view = None
-        # Reactor.follow unfollows on finish anyway; dropping the handles here is what lets a
-        # namespace nobody else holds be collected as soon as its last panel closes.
-        for unfollow in tuple(self._follows.values()):
-            unfollow()
-        self._follows.clear()
-        self._watched.clear()
-        self._observed = ()
+        self._subscriptions.close()
         self._expiry_arm_requested = None
         self.runtime.finish()
 

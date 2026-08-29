@@ -5,11 +5,11 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from squid_layouts.discord import LimitViolationError, conform
-from squid_layouts.discord.conformance import ELLIPSIS, conform_modal, trim
 from squid_layouts.discord import (
     V2_LIMITS as LIMITS,
 )
+from squid_layouts.discord import LimitViolationError, conform
+from squid_layouts.discord.conformance import ELLIPSIS, conform_modal, trim
 from squid_layouts.discord.testing import assert_within_limits, payload_problems
 
 

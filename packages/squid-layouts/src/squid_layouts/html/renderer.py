@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 
 from squid_layouts.assets import Asset, InlineAsset, StoredAsset
 from squid_layouts.errors import DrawInvariantError
+from squid_layouts.planning.discord import V2_TARGET_ID
 from squid_layouts.scene.codec import SceneCodec
 from squid_layouts.scene.model import (
     PlanResult,
@@ -83,7 +84,7 @@ class Renderer:
         if scene.protocol != SceneCodec.protocol:
             message = f"Renderer cannot draw scene protocol {scene.protocol}"
             raise DrawInvariantError(message)
-        if scene.target != "discord.components-v2" or scene.target_version != 1:
+        if scene.target != V2_TARGET_ID or scene.target_version != 1:
             message = f"Renderer cannot preview target {scene.target!r} version {scene.target_version}"
             raise DrawInvariantError(message)
         if not isinstance(scene.body, SceneComponentsV2):
@@ -206,7 +207,9 @@ class Renderer:
                 icon = f'<span class="squid-button__emoji">{escape(emoji.name)}</span> ' if emoji else ""
                 safe = _url(url)
                 if safe is None or disabled:
-                    return f'<span class="squid-button squid-link" aria-disabled="true">{icon}{escape(label or "")}</span>'
+                    return (
+                        f'<span class="squid-button squid-link" aria-disabled="true">{icon}{escape(label or "")}</span>'
+                    )
                 return (
                     f'<a class="squid-button squid-link" href="{_attribute(safe)}" '
                     f'rel="noopener noreferrer">{icon}{escape(label or "")}</a>'
@@ -277,7 +280,7 @@ class Renderer:
             case SceneGallery(items=items):
                 images = "".join(
                     f'<img class="{"squid-spoiler" if item.spoiler else ""}" src="{_attribute(safe)}" '
-                    f'alt="{_attribute(item.description or "")}"{" tabindex=\"0\"" if item.spoiler else ""}>'
+                    f'alt="{_attribute(item.description or "")}"{' tabindex="0"' if item.spoiler else ""}>'
                     for item in items
                     if (safe := _url(item.url)) is not None
                 )

@@ -11,12 +11,25 @@ import discord
 import pytest
 
 import squid_layouts as sl
+from squid_layouts.assets import Asset, InlineAsset, StoredAsset
 from squid_layouts.discord import Everyone, Mount
 from squid_layouts.discord.adoption import AdoptionError, adopt
 from squid_layouts.discord.mount import _EntityValues
 from squid_layouts.discord.testing import commit_render, delivered_to, fake_interaction, fake_message
+from squid_layouts.document import Document
 from squid_layouts.entity import ChannelType, EntityKind, EntityRef, EntityType
-from squid_layouts.primitives import ActionStyle, Button, EntitySelect, LinkButton, Row, SelectMenu
+from squid_layouts.primitives import (
+    ActionStyle,
+    Button,
+    EntitySelect,
+    Gallery,
+    LinkButton,
+    Panel,
+    Row,
+    Section,
+    SelectMenu,
+    Text,
+)
 
 
 class Paginator(discord.ui.View):
@@ -47,6 +60,13 @@ class Paginator(discord.ui.View):
 
 def _mounted(view: discord.ui.View, **options: Any) -> tuple[Mount, list[BaseException]]:
     """A committed mount around `view`, plus the list its error hook appends to."""
+    errors: list[BaseException] = []
+    mount = Mount(adopt(view, **options), access=Everyone(), timeout=None, on_error=_record(errors))
+    commit_render(mount)
+    return mount, errors
+
+
+def _mounted_layout(view: discord.ui.LayoutView, **options: Any) -> tuple[Mount, list[BaseException]]:
     errors: list[BaseException] = []
     mount = Mount(adopt(view, **options), access=Everyone(), timeout=None, on_error=_record(errors))
     commit_render(mount)
@@ -84,12 +104,143 @@ async def test_the_message_convention_still_refuses_as_a_second_signal() -> None
         adopt(view)
 
 
-async def test_a_layout_view_refuses_and_names_contribute() -> None:
+async def test_an_unsent_layout_view_is_adopted_as_exact_v2_content() -> None:
     layout = discord.ui.LayoutView(timeout=None)
-    layout.add_item(discord.ui.TextDisplay("content"))
+    layout.add_item(
+        discord.ui.Container(
+            discord.ui.TextDisplay("content"),
+            discord.ui.ActionRow(discord.ui.Button(label="Run", custom_id="run")),
+            accent_colour=0x123456,
+            spoiler=True,
+        )
+    )
 
-    with pytest.raises(AdoptionError, match="contribute"):
-        adopt(layout)  # pyrefly: ignore[bad-argument-type]
+    document = adopt(layout).render()  # pyrefly: ignore[missing-attribute]
+
+    assert isinstance(document, Document)
+    assert isinstance(document.children[0], Panel)
+    panel = document.children[0]
+    assert panel.accent == 0x123456 and panel.spoiler is True
+    assert isinstance(panel.children[0], Text)
+    assert isinstance(panel.children[1], Row)
+    assert panel.children[1].items[0].key == "run"
+
+
+def test_layout_view_preserves_nested_media_and_assets() -> None:
+    layout = discord.ui.LayoutView(timeout=None)
+    layout.add_item(
+        discord.ui.Container(
+            discord.ui.Section(
+                discord.ui.TextDisplay("description"),
+                accessory=discord.ui.Thumbnail("https://example.invalid/thumb.png", spoiler=True),
+            ),
+            discord.ui.MediaGallery(
+                discord.MediaGalleryItem("attachment://gallery.png", description="gallery", spoiler=True),
+            ),
+        )
+    )
+    asset = Asset("gallery", "gallery.png", "image/png", InlineAsset(b"bytes"))
+
+    document = adopt(layout, assets=(asset,)).render()  # pyrefly: ignore[missing-attribute]
+
+    assert isinstance(document, Document)
+    panel = document.children[0]
+    assert isinstance(panel, Panel)
+    assert isinstance(panel.children[0], Section)
+    assert panel.children[0].accessory.spoiler is True
+    assert isinstance(panel.children[1], Gallery)
+    assert panel.children[1].items[0].url == "attachment://gallery.png"
+    assert document.assets == (asset,)
+
+
+def test_layout_view_rejects_missing_and_ambiguous_assets() -> None:
+    layout = discord.ui.LayoutView(timeout=None)
+    layout.add_item(discord.ui.File("attachment://download.zip"))
+    asset = Asset("download", "download.zip", "application/zip", InlineAsset(b"bytes"))
+
+    with pytest.raises(AdoptionError, match="no supplied Asset"):
+        adopt(layout)
+
+    duplicate = Asset("other", "download.zip", "application/zip", InlineAsset(b"other"))
+    with pytest.raises(AdoptionError, match="attachment name"):
+        adopt(layout, assets=(asset, duplicate))
+
+    assert adopt(layout, assets=(asset,)).render() is not None
+
+
+def test_layout_view_resolves_http_files_through_stored_asset_metadata() -> None:
+    layout = discord.ui.LayoutView(timeout=None)
+    layout.add_item(discord.ui.File("https://example.invalid/report.txt"))
+    asset = Asset(
+        "report",
+        "report.txt",
+        "text/plain",
+        StoredAsset("https://example.invalid/report.txt"),
+    )
+
+    document = adopt(layout, assets=(asset,)).render()  # pyrefly: ignore[missing-attribute]
+
+    assert isinstance(document, Document)
+    file = document.children[0]
+    assert file.asset_key == "report"  # pyrefly: ignore[missing-attribute]
+    assert file.name == "report.txt"  # pyrefly: ignore[missing-attribute]
+    assert file.media_type == "text/plain"  # pyrefly: ignore[missing-attribute]
+
+
+def test_layout_view_uses_structural_keys_for_nested_controls() -> None:
+    layout = discord.ui.LayoutView(timeout=None)
+    layout.add_item(
+        discord.ui.Container(
+            discord.ui.ActionRow(discord.ui.Button(label="Run")),
+        )
+    )
+
+    document = adopt(layout).render()  # pyrefly: ignore[missing-attribute]
+
+    assert isinstance(document, Document)
+    panel = document.children[0]
+    assert isinstance(panel, Panel)
+    assert isinstance(panel.children[0], Row)
+    assert panel.children[0].items[0].key == "adopted-0.0.0"
+
+
+def test_layout_view_rejects_duplicate_keys_across_nested_branches() -> None:
+    layout = discord.ui.LayoutView(timeout=None)
+    layout.add_item(
+        discord.ui.Container(
+            discord.ui.ActionRow(discord.ui.Button(label="One", custom_id="same")),
+            discord.ui.ActionRow(discord.ui.Button(label="Two", custom_id="same")),
+        )
+    )
+
+    with pytest.raises(AdoptionError, match="share the key"):
+        adopt(layout)
+
+
+async def test_layout_view_dispatches_original_callback_and_reconstructs_the_tree() -> None:
+    layout = discord.ui.LayoutView(timeout=None)
+    text = discord.ui.TextDisplay("before")
+    button = discord.ui.Button(label="Run", custom_id="run")
+
+    async def callback(interaction: discord.Interaction) -> None:
+        text.content = "after"
+        button.disabled = True
+        await interaction.response.edit_message(view=layout)
+
+    button.callback = callback
+    layout.add_item(discord.ui.Container(text, discord.ui.ActionRow(button)))
+    mount, errors = _mounted_layout(layout)
+    interaction = fake_interaction()
+
+    await mount.dispatch("run", interaction)
+
+    assert not errors
+    assert text.content == "after"
+    response = interaction.response.edit_message
+    assert response.await_count == 1
+    drawn = response.await_args.kwargs["view"]
+    assert [item.content for item in drawn.walk_children() if isinstance(item, discord.ui.TextDisplay)] == ["after"]
+    assert [item.disabled for item in drawn.walk_children() if isinstance(item, discord.ui.Button)] == [True]
 
 
 async def test_an_overridden_on_timeout_refuses_unless_discarded() -> None:
@@ -433,6 +584,67 @@ async def test_an_overridden_interaction_check_can_refuse_the_press() -> None:
     assert ran == []
 
 
+async def test_a_refusing_interaction_check_still_reports_mutation_and_finishes() -> None:
+    class Guarded(discord.ui.View):
+        async def interaction_check(self, interaction: discord.Interaction) -> bool:
+            self.go.disabled = True
+            self.stop()
+            return False
+
+        @discord.ui.button(label="go", custom_id="go")
+        async def go(self, interaction: discord.Interaction, button: discord.ui.Button[Any]) -> None:
+            raise AssertionError("the item callback must not run")
+
+    view = Guarded()
+    mount, errors = _mounted(view)
+
+    await mount.dispatch("go", fake_interaction())
+
+    button = view.children[0]
+    assert isinstance(button, discord.ui.Button)
+    assert button.disabled
+    assert mount.finished
+    assert errors == []
+
+
+async def test_an_interaction_check_error_uses_the_legacy_error_hook() -> None:
+    caught: list[BaseException] = []
+
+    class Failing(discord.ui.View):
+        async def interaction_check(self, interaction: discord.Interaction) -> bool:
+            raise RuntimeError("check failed")
+
+        async def on_error(self, interaction, error, item) -> None:
+            caught.append(error)
+
+        @discord.ui.button(label="go", custom_id="go")
+        async def go(self, interaction: discord.Interaction, button: discord.ui.Button[Any]) -> None:
+            raise AssertionError("the item callback must not run")
+
+    mount, errors = _mounted(Failing())
+
+    await mount.dispatch("go", fake_interaction())
+
+    assert [type(error) for error in caught] == [RuntimeError]
+    assert errors == []
+
+
+async def test_without_a_legacy_error_hook_an_interaction_check_error_reaches_the_mount() -> None:
+    class Failing(discord.ui.View):
+        async def interaction_check(self, interaction: discord.Interaction) -> bool:
+            raise RuntimeError("check failed")
+
+        @discord.ui.button(label="go", custom_id="go")
+        async def go(self, interaction: discord.Interaction, button: discord.ui.Button[Any]) -> None:
+            raise AssertionError("the item callback must not run")
+
+    mount, errors = _mounted(Failing())
+
+    await mount.dispatch("go", fake_interaction())
+
+    assert [type(error) for error in errors] == [RuntimeError]
+
+
 async def test_an_overridden_on_error_intercepts_before_the_mount_sees_it() -> None:
     caught: list[BaseException] = []
 
@@ -578,4 +790,4 @@ def test_button_translation_keeps_style_and_emoji() -> None:
     button = row.items[0]
     assert isinstance(button, Button)
     assert button.style is ActionStyle.DANGER
-    assert button.emoji == "\N{FIRE}"
+    assert button.emoji is not None and button.emoji.name == "\N{FIRE}"

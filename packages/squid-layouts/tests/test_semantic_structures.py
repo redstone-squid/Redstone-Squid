@@ -1,12 +1,12 @@
 """Semantic structures select legal Discord representations."""
 
+import discord
 import pytest
 
 import squid_layouts as sl
+from squid_layouts.discord import V2_TARGET, render_static
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning import plan
-from squid_layouts.sources import Position
-from squid_layouts.discord import V2_TARGET
 from squid_layouts.runtime import PresentationSession, apply_updates
 from squid_layouts.scene.model import (
     SceneGallery,
@@ -36,6 +36,7 @@ from squid_layouts.semantic import (
     Table,
     TableRow,
 )
+from squid_layouts.sources import Position
 
 
 async def _change(_event) -> None: ...
@@ -102,7 +103,10 @@ def test_large_semantic_pickers_fold_into_keyed_25_and_11_pages() -> None:
     choices = Choices("size", tuple(Choice(str(index), f"Choice {index}") for index in range(36)))
     items = Items(
         "catalog",
-        tuple(Item(str(index), sl.semantic.ItemLabel(f"Item {index}"), (Paragraph(f"Detail {index}"),)) for index in range(36)),
+        tuple(
+            Item(str(index), sl.semantic.ItemLabel(f"Item {index}"), (Paragraph(f"Detail {index}"),))
+            for index in range(36)
+        ),
     )
     navigation = Navigation("tabs", tuple(Destination(str(index), f"Tab {index}") for index in range(36)))
 
@@ -125,7 +129,9 @@ def test_large_semantic_pickers_fold_into_keyed_25_and_11_pages() -> None:
 
 def test_keyed_item_page_stays_with_its_anchor_when_entries_are_inserted() -> None:
     session = PresentationSession()
-    original = tuple(Item(str(index), sl.semantic.ItemLabel(f"Item {index}"), (Paragraph("detail"),)) for index in range(36))
+    original = tuple(
+        Item(str(index), sl.semantic.ItemLabel(f"Item {index}"), (Paragraph("detail"),)) for index in range(36)
+    )
     first = plan(Items("catalog", original), target=V2_TARGET, session=session)
     apply_updates(session, first.session_updates)
     session.move_cursor("catalog.items", Position(offset=1))
@@ -200,6 +206,41 @@ def test_a_section_carries_house_colour_a_lead_image_and_small_print() -> None:
     assert lead.texts[0].content == "## Title"
     assert lead.accessory == SceneThumbnail("https://example.invalid/lead.png")
     assert panel.children[-1] == SceneText("-# Submission ID: 5")
+
+
+def test_nested_sections_flatten_inside_the_outer_discord_container() -> None:
+    document = Section(
+        sl.semantic.Heading("Help"),
+        (
+            Paragraph("Choose a workflow."),
+            Section(
+                sl.semantic.Heading("Build"),
+                (Fields((Field("build", "/build", "Submit a build."),)),),
+            ),
+            Section(
+                sl.semantic.Heading("Discover"),
+                (Fields((Field("search", "/search", "Find a build."),)),),
+            ),
+        ),
+    )
+
+    presentation = render_static(document)
+    panel = presentation.layout.to_components()[0]
+
+    assert panel["type"] == discord.ComponentType.container.value
+    assert all(
+        child["type"]
+        in {
+            discord.ComponentType.action_row.value,
+            discord.ComponentType.section.value,
+            discord.ComponentType.text_display.value,
+            discord.ComponentType.media_gallery.value,
+            discord.ComponentType.file.value,
+            discord.ComponentType.separator.value,
+        }
+        for child in panel["components"]
+    )
+    assert "Build" in str(panel) and "Discover" in str(panel)
 
 
 def test_palette_resolves_inherited_exact_and_explicitly_absent_accents() -> None:

@@ -3,12 +3,12 @@
 import discord
 import pytest
 
+from squid_layouts.discord import CLASSIC_TARGET, V2_LIMITS, V2_TARGET, Target
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.planning import plan
-from squid_layouts.discord import CLASSIC_TARGET, V2_LIMITS, V2_TARGET, Target
-from squid_layouts.discord.limits import CLASSIC_LIMITS
 from squid_layouts.planning.limits import (
     ATTACHMENTS,
+    CLASSIC_LIMITS,
     COMPONENTS,
     CONTENT_TEXT,
     CONTROLS,

@@ -626,8 +626,7 @@ def plan[ModeT, AdapterT, BodyT](
     body = dialect.body(measured.children, bindings)
     if target.body_type is not None and not isinstance(body, target.body_type):
         message = (
-            f"target {target.id!r} declared {target.body_type.__name__}, "
-            f"but its dialect produced {type(body).__name__}"
+            f"target {target.id!r} declared {target.body_type.__name__}, but its dialect produced {type(body).__name__}"
         )
         raise LayoutInvariantError(message)
     scene = SceneDocument(
@@ -730,7 +729,7 @@ def _plan_cache_key(
 ) -> str:
     relevant = {
         "document": stable_value(nodes),
-        "target": (target.id, target.version),
+        "target": target.fingerprint,
         "limits": stable_value(limits),
         "presentation": stable_value(presentation),
         "chrome": (

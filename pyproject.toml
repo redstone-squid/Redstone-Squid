@@ -121,6 +121,8 @@ members = ["packages/*"]
 
 [tool.uv.sources]
 squid-layouts = { workspace = true }
+squid-reactive = { workspace = true }
+squid-stores = { workspace = true }
 
 [tool.uv]
 package = false
@@ -270,7 +272,7 @@ ignore = [
 
 [tool.ruff.lint.isort]
 # The workspace member's src layout is outside ruff's first-party detection at the repo root.
-known-first-party = ["squid_layouts"]
+known-first-party = ["squid_layouts", "squid_reactive", "squid_stores"]
 
 [tool.ruff.lint.per-file-ignores]
 # Ignore `E402` (import violations) in all `__init__.py` files.
@@ -378,6 +380,8 @@ pythonpath = ["."]
 testpaths = [
     "tests/unit",
     "tests/architecture",
+    "packages/squid-reactive/tests",
+    "packages/squid-stores/tests",
     "packages/squid-layouts/tests",
 ]
 xfail_strict = true
@@ -386,6 +390,8 @@ addopts = [
     "--strict-config",
     "-ra",                 # short summary of skips/xfails
     "--cov=squid",
+    "--cov=squid_reactive",
+    "--cov=squid_stores",
     "--cov=squid_layouts",
 ]
 # https://docs.pytest.org/en/stable/how-to/capture-warnings.html#controlling-warnings

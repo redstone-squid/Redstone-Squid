@@ -152,9 +152,9 @@ discarding that content.
 
 ### Live updates across mounts
 
-`TopicBus` is a payload-free, process-local latency projection. Publishing says only that an
-address changed; every subscriber re-reads the application's source of truth. It is not durable,
-and queued topics disappear with the process.
+`TopicBus` is the two-method protocol for a payload-free latency projection. Publishing says only
+that an address changed; every subscriber re-reads the application's source of truth.
+`LocalTopicBus` is the synchronous in-process implementation for tests and single-process hosts.
 
 An address is either a `sl.runtime.Topic(kind, key)` -- a value a host writes, equal by value so two
 publishers agree without sharing a constructor -- or a `sl.runtime.CellAddress`, which is a `Shared` cell's
@@ -169,7 +169,7 @@ class BuildPanel(sl.Component):
     def __init__(self, build_id: str) -> None:
         self.build_id = build_id
 
-    @sl.resource(delivery=sl.runtime.ResourceDelivery.ATOMIC)
+    @sl.resource(pending=sl.resources.PendingPolicy.ATOMIC)
     async def build(self) -> Build:
         sl.runtime.watch(sl.runtime.Topic("build", self.build_id))
         return await queries.get_build(self.build_id)
@@ -182,7 +182,7 @@ class BuildPanel(sl.Component):
 follows the topic, a render that stops reading it stops following, and `bus.publish` re-pends
 the resource before the mount redraws. Nothing is subscribed by hand, so nothing has to be
 unsubscribed -- and the initial load is just the resource's first settle. Prefer
-`ResourceDelivery.ATOMIC` for live data: the default `VISIBLE` would flash a pending paint on
+`PendingPolicy.ATOMIC` for live data: the default `EXPLICIT` would flash a pending paint on
 every external change.
 
 Because the topic carries a version, a publish landing *during* the load is not lost: it moves
@@ -194,23 +194,24 @@ resource, never in `on_load`, which runs once and under no consumer.
 for a subscriber that is not a mount:
 
 ```python
-bus = sl.runtime.TopicBus()
+bus = sl.runtime.LocalTopicBus()
 reactor = sl.discord.Reactor(bus)
 mount = sl.discord.Mount(panel, access=sl.discord.Owner(interaction.user.id), scheduler=reactor)
 reactor.follow(mount, sl.runtime.Topic("build", "123"))  # subscribe before the first read/send
 await mount.send(sl.discord.respond_to(interaction))
 
-# The host visibly owns both long-running coroutines.
+# The host owns the only long-running coroutine.
 async with anyio.create_task_group() as tasks:
-    tasks.start_soon(bus.run)
     tasks.start_soon(reactor.run)
 ```
 
-`publish()` is a synchronous enqueue for the event-loop thread. A distributed application bridges
+`publish()` delivers local subscribers synchronously in registration order. A subscriber that
+raises is reported through the bus's error hook, delivery continues to the rest, and the bus has
+no task that can die. A distributed application bridges
 its own durable change feed, NOTIFY listener, or queue consumer into the local bus. Publish where
 the application already funnels committed changes; do not subscribe a durable projection that
 already has a reconciler, because that would give one message two competing writers. For tests,
-call `publish()`, then `await bus.drain()` and assert without starting background work or sleeping.
+call `publish()` and assert immediately.
 Expiry and idle-time tests can inject UTC and monotonic clocks through `Reactor(clock=...)` and
 `Mount(clock=...)`; production callers normally keep their defaults.
 
@@ -274,15 +275,15 @@ silently be missed.
 
 ### Runtime profiling
 
-Runtime profiling is opt-in, bounded, and synchronous. One `MemoryProfiler` can cover the whole
-live-update chain: `Reactor` inherits its bus's profiler, and a `Mount` inherits its scheduler's
-profiler unless explicitly overridden. Routers are independent ownership roots and accept the
-same collector directly.
+Runtime profiling is opt-in, bounded, and synchronous. One `MemoryProfiler` can cover the host's
+live-update chain: pass it to `Reactor`, and a `Mount` inherits its scheduler's profiler unless
+explicitly overridden. Routers are independent ownership roots and accept the same collector
+directly.
 
 ```python
 profiler = sl.profiling.MemoryProfiler(sample_rate=0.1)
-bus = sl.runtime.TopicBus(profiler=profiler)
-reactor = sl.discord.Reactor(bus)
+bus = sl.runtime.LocalTopicBus()
+reactor = sl.discord.Reactor(bus, profiler=profiler)
 
 mount = sl.discord.Mount(panel, access=sl.discord.Everyone(), scheduler=reactor)
 router = sl.discord.Router(profiler=profiler)
@@ -365,6 +366,11 @@ cardinality, while `SessionPolicy` composes a limit, collision selection, and re
 protection. Opens return `Opened`, `Rejected`, or `Abandoned`; no preflight `get()` is needed to
 explain a collision.
 
+`Screen` holds reusable key scope, admission, access, and mount policy for a logical application
+screen. Use `screen.respond(sessions, component, interaction)` when one interaction supplies both
+delivery and opener identity; use `screen.open(...)` with an explicit `Destination` and `Opener`
+for other transports.
+
 Stateful drafts that must survive restarts open through `DurableSessionRuntime`, which coordinates
 fenced admission, recoverable Discord bindings, whole-session checkpoints, and lease supervision.
 See [Durable sessions](docs/durable-mounts.md) for the imperative and `DurableBot` startup paths.
@@ -427,6 +433,31 @@ service, a guild, a session — which settles on identity and is never persisted
 Inside an action a write stages into the transaction's overlay and becomes visible at commit.
 The action reads its own writes; another task reading the same field across an `await` sees the
 committed value until then, and a rollback is dropping the overlay.
+
+### Action history
+
+History is opt-in and component-owned. Declare a bounded stack like state, then pass it to
+state-changing actions; the framework records the whole state delta only when the action commits:
+
+```python
+class Editor(sl.Component):
+    history: sl.runtime.History = sl.runtime.history(limit=20)
+    title: str = sl.state("")
+
+    def render(self):
+        return sl.actions(
+            sl.action("Rename", self.rename, key="rename", record=self.history),
+            sl.runtime.history_actions(self.history),
+            key="editor-actions",
+        )
+
+    async def rename(self, event: sl.PressEvent) -> None:
+        self.title = "New title"
+```
+
+For an action that also changes a database or API, call `self.history.record("Rename", undo=..., redo=...)`
+inside the handler. The framework restores component state; the supplied async callbacks reverse
+external work. A failed action creates no entry, and a new recorded action clears redo history.
 
 ### Shared state
 
@@ -492,14 +523,14 @@ class VotingPanel(sl.Component):
         return await votes.configuration(self.kind)
 
     def render(self):
-        match self.configuration.state:
-            case sl.runtime.Pending(previous=None):
+        match self.configuration.status:
+            case sl.resources.Pending(previous=None):
                 return sl.note("Loading…")
-            case sl.runtime.Pending(previous=sl.runtime.Ready(value=config)):
+            case sl.resources.Pending(previous=sl.resources.Ready(value=config)):
                 return refreshing_panel(config)
-            case sl.runtime.Failed(error=error, previous=previous):
+            case sl.resources.Failed(error=error, previous=previous):
                 return failed_panel(error, previous)
-            case sl.runtime.Ready(value=config):
+            case sl.resources.Ready(value=config):
                 return voting_panel(config)
 ```
 
@@ -509,10 +540,10 @@ will not subscribe to it. Hidden branches remain lazy:
 only resources observed during rendering are loaded. `Pending` and `Failed` retain the last `Ready`
 value when available, while request tokens prevent stale completions from publishing.
 
-Visible delivery is the default: Discord commits the pending render, settles observed sibling
+Explicit pending is the default: Discord commits the pending render, settles observed sibling
 resources concurrently, then edits to the settled render. Use
-`@sl.resource(delivery=sl.runtime.ResourceDelivery.ATOMIC)` when pending should remain an internal state and
-the first delivery must already be settled. Its `.state` is typed as `Ready[T] | Failed[T]`:
+`@sl.resource(pending=sl.resources.PendingPolicy.ATOMIC)` when pending should remain internal and
+the first delivery must already be settled. Its `.status` is typed as `Ready[T] | Failed[T]`:
 refreshes expose the previous `Ready` value while loading, and an initial pending read is retried
 by the mount. Both policies use the same internal state machine and neither starts detached
 background work.
@@ -520,6 +551,38 @@ background work.
 `await panel.configuration.reload()` is the caller-owned, awaited form. `invalidate()` requests a
 new value without immediately loading it, and `replace(value)` publishes an authoritative local
 result. Resource state is runtime-only and is not included in durable component snapshots.
+
+### One-shot operations
+
+`sl.operation` is a component-bound effect that runs once under the mount's caller-owned task.
+Progress is explicit, reactive current state; it is not an event stream:
+
+```python
+class PublishVote(sl.Component):
+    @sl.operation(initial=PublishProgress.CREATING)
+    async def publication(
+        self,
+        progress: sl.operations.Progress[PublishProgress],
+    ) -> VoteId:
+        progress.set(PublishProgress.PUBLISHING)
+        return await votes.publish()
+
+    def render(self):
+        match self.publication.status:
+            case sl.operations.Pending(progress=progress):
+                return pending_vote(progress)
+            case sl.operations.Succeeded(value=vote_id):
+                return published_vote(vote_id)
+            case sl.operations.Failed(error=error, progress=progress):
+                return failed_vote(error, progress)
+            case sl.operations.Cancelled(progress=progress):
+                return cancelled_vote(progress)
+```
+
+Unlike a resource, an operation has no `reload`, `invalidate`, or `replace`: success, failure,
+and cancellation are terminal. Mounts coalesce progress invalidations through their ordinary
+stage/deliver/commit path while the operation runs. Resources remain repeatable and intentionally
+have no cancelled status; cancelling one load attempt leaves it pending and retryable.
 
 ### Async cursor sources
 
@@ -559,9 +622,9 @@ outside planning and cannot run in `RouterShell.render()`.
 
 ## Host integration rules
 
-- The base package has no dependencies. Install the `discord` extra for discord.py and anyio. The
-  adapter never starts background work on its own — start `sl.runtime.TopicBus.run()` and
-  `sl.discord.Reactor.run()` under your own supervisor.
+- The base package depends only on the zero-dependency `squid-reactive` kernel. Install the
+  `discord` extra for discord.py and anyio. The adapter never starts background work on its own;
+  start `sl.discord.Reactor.run()` and any external bridge under your own supervisor.
 - Factories take content positionally and everything else by keyword. `None` and `False`
   children are skipped, so `cond and node` is the way to include something conditionally;
   `True` is rejected because `and` can never produce it. Collections are unpacked by the

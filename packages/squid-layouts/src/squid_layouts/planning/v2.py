@@ -4,6 +4,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC
 
+from squid_layouts.capabilities import Capability
 from squid_layouts.chrome import Chrome
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursorRequest
@@ -81,7 +82,9 @@ from squid_layouts.sources import Position
 class _V2Converter:
     bindings: SceneBindings
 
-    def accessory(self, node: Thumbnail | LinkButton | PremiumButton | Button | RoutedButton | RawItem, path: str) -> SceneNode:
+    def accessory(
+        self, node: Thumbnail | LinkButton | PremiumButton | Button | RoutedButton | RawItem, path: str
+    ) -> SceneNode:
         return self.bindings.control(node, path)
 
     def node(self, node: Realized, path: str) -> SceneNode:
@@ -172,16 +175,16 @@ def _lower(
     lowered: list[Node] = []
     for node in nodes:
         match node:
-            case PremiumButton() if "actions.discord.premium" not in target.capabilities:
+            case PremiumButton() if Capability.ACTIONS_DISCORD_PREMIUM not in target.capabilities:
                 message = "premium buttons require an explicit Variants fallback on this target"
                 raise LayoutInvariantError(message)
             case Row(items=items) | ActionGroup(items=items) if (
-                "actions.discord.premium" not in target.capabilities
+                Capability.ACTIONS_DISCORD_PREMIUM not in target.capabilities
                 and any(isinstance(item, PremiumButton) for item in items)
             ):
                 message = "premium buttons require an explicit Variants fallback on this target"
                 raise LayoutInvariantError(message)
-            case Section(accessory=PremiumButton()) if "actions.discord.premium" not in target.capabilities:
+            case Section(accessory=PremiumButton()) if Capability.ACTIONS_DISCORD_PREMIUM not in target.capabilities:
                 message = "premium buttons require an explicit Variants fallback on this target"
                 raise LayoutInvariantError(message)
             case ActionGroup(items=items):

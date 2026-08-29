@@ -1,4 +1,5 @@
 import ast
+import sys
 from pathlib import Path
 
 from babel.messages.pofile import read_po
@@ -8,7 +9,7 @@ from squid.core.extract import deferred_msgid
 
 # Roots for the AST scans that state repo-wide invariants. The squid-layouts workspace member
 # is held to the same rules as squid itself.
-SCAN_ROOTS = (Path("squid"), Path("packages/squid-layouts/src"))
+SCAN_ROOTS = (Path("squid"), Path("packages/squid-reactive/src"), Path("packages/squid-layouts/src"))
 
 
 def _scanned_files() -> list[Path]:
@@ -27,6 +28,25 @@ def test_layouts_package_stays_standalone() -> None:
         .should_not_import("nucleation*")
         .check("squid_layouts", only_direct_imports=True)
     )
+
+
+def test_reactive_package_has_no_hard_dependencies() -> None:
+    """The extracted runtime may import only itself and Python's standard library."""
+    allowed = sys.stdlib_module_names | {"squid_reactive"}
+    violations: list[tuple[Path, int, str]] = []
+    for path in Path("packages/squid-reactive/src").rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Import):
+                imported = ((node.lineno, alias.name) for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module is not None:
+                imported = ((node.lineno, node.module),)
+            else:
+                continue
+            violations.extend(
+                (path, line, module) for line, module in imported if module.partition(".")[0] not in allowed
+            )
+
+    assert violations == []
 
 
 def test_only_the_discord_transport_uses_the_layouts_package() -> None:

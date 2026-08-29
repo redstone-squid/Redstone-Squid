@@ -10,8 +10,8 @@ import pytest
 
 import squid_layouts as sl
 from squid_layouts.discord import Everyone, Mount, Owner, live
-from squid_layouts.discord.routing import Router
 from squid_layouts.discord.devtools import DevTools
+from squid_layouts.discord.routing import Router
 from squid_layouts.discord.testing import delivered_to, fake_message
 from squid_layouts.primitives import Heading
 from squid_layouts.profiling import MemoryProfiler, OperationKind
@@ -175,10 +175,10 @@ class TestProfiles:
 
     async def test_queue_command_infers_bus_and_profiler_from_reactor(self) -> None:
         profiler = MemoryProfiler()
-        bus = sl.runtime.TopicBus(profiler=profiler)
-        reactor = sl.discord.Reactor(bus)
+        bus = sl.runtime.LocalTopicBus()
+        reactor = sl.discord.Reactor(bus, profiler=profiler)
 
-        async def refresh(topic) -> None:
+        def refresh(topic) -> None:
             pass
 
         bus.subscribe(sl.runtime.Topic("build", "devtools"), refresh)

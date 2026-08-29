@@ -8,18 +8,18 @@ import anyio
 import pytest
 
 from squid_layouts import Component, state
-from squid_layouts.sources import Position
 from squid_layouts.discord import Everyone, Mount
 from squid_layouts.discord.durability import (
     ComponentRegistry,
     DurableSessionStore,
-    MemorySnapshotStore,
-    SnapshotCodec,
-    SnapshotError,
-    SQLiteSnapshotStore,
+    MemorySessionStore,
+    MountStateCodec,
+    MountStateError,
+    SQLiteSessionStore,
 )
 from squid_layouts.discord.testing import commit_render
 from squid_layouts.primitives import Lines, Paginate, Text
+from squid_layouts.sources import Position
 
 
 class DurableChild(Component):
@@ -48,8 +48,8 @@ def _registry(*, version: int = 1, migrations=None) -> ComponentRegistry:
 
 def _snapshot_store(kind: str, path: Path, clock: Callable[[], float]) -> DurableSessionStore:
     if kind == "memory":
-        return MemorySnapshotStore(clock=clock)
-    return SQLiteSnapshotStore(path, table_name="durable_sessions", clock=clock)
+        return MemorySessionStore(clock=clock)
+    return SQLiteSessionStore(path, table_name="durable_sessions", clock=clock)
 
 
 async def _publish(
@@ -116,7 +116,7 @@ async def test_admission_atomically_retires_victims_and_fences_their_writers(kin
 
 async def test_lost_admission_token_cannot_publish(tmp_path: Path) -> None:
     now = [100.0]
-    store = SQLiteSnapshotStore(tmp_path / "snapshots.sqlite3", clock=lambda: now[0])
+    store = SQLiteSessionStore(tmp_path / "snapshots.sqlite3", clock=lambda: now[0])
     stale = await store.reserve("scope", "first", 10.0)
     assert stale is not None
     now[0] = 110.1
@@ -139,13 +139,13 @@ async def test_lost_admission_token_cannot_publish(tmp_path: Path) -> None:
 
 async def test_sqlite_store_serializes_claim_contention(tmp_path: Path) -> None:
     path = tmp_path / "snapshots.sqlite3"
-    writer = SQLiteSnapshotStore(path)
+    writer = SQLiteSessionStore(path)
     token = await _publish(writer, key="session")
     assert await writer.release(token)
-    contenders = [SQLiteSnapshotStore(path), SQLiteSnapshotStore(path)]
+    contenders = [SQLiteSessionStore(path), SQLiteSessionStore(path)]
     results: list[bool] = []
 
-    async def claim(store: SQLiteSnapshotStore, owner: str) -> None:
+    async def claim(store: SQLiteSessionStore, owner: str) -> None:
         results.append(await store.claim("session", owner, 30.0) is not None)
 
     async with anyio.create_task_group() as tasks:
@@ -157,7 +157,7 @@ async def test_sqlite_store_serializes_claim_contention(tmp_path: Path) -> None:
 
 def test_snapshot_store_rejects_unsafe_table_names(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="SQL identifier"):
-        SQLiteSnapshotStore(tmp_path / "snapshots.sqlite3", table_name="snapshots; DROP TABLE users")
+        SQLiteSessionStore(tmp_path / "snapshots.sqlite3", table_name="snapshots; DROP TABLE users")
 
 
 def test_component_tree_state_and_page_cursors_round_trip_as_canonical_json() -> None:
@@ -170,8 +170,8 @@ def test_component_tree_state_and_page_cursors_round_trip_as_canonical_json() ->
     mount.presentation.move_cursor("child.items", Position(offset=2))
 
     snapshot = _registry().capture(mount, "counter")
-    encoded = SnapshotCodec.dumps(snapshot)
-    restored = _registry().restore(SnapshotCodec.loads(encoded), access=Everyone(), timeout=None)
+    encoded = MountStateCodec.dumps(snapshot)
+    restored = _registry().restore(MountStateCodec.loads(encoded), access=Everyone(), timeout=None)
     commit_render(restored)
     restored_root = restored.component
 
@@ -180,7 +180,7 @@ def test_component_tree_state_and_page_cursors_round_trip_as_canonical_json() ->
     assert restored_root.child.entries[-1] == "entry 6"
     assert restored.presentation.cursor("child.items").position.offset == 2
     assert "transient" not in next(component.state for component in snapshot.components if component.path == "$")
-    assert encoded == SnapshotCodec.dumps(SnapshotCodec.loads(encoded))
+    assert encoded == MountStateCodec.dumps(MountStateCodec.loads(encoded))
 
 
 def test_non_json_persistent_state_fails_at_capture_boundary() -> None:
@@ -195,7 +195,7 @@ def test_non_json_persistent_state_fails_at_capture_boundary() -> None:
     mount = Mount(Invalid(), access=Everyone(), timeout=None)
     commit_render(mount)
 
-    with pytest.raises(SnapshotError, match="not JSON serializable"):
+    with pytest.raises(MountStateError, match="not JSON serializable"):
         registry.capture(mount, "invalid")
 
 
@@ -204,7 +204,7 @@ def test_version_mismatch_requires_a_sequential_migration() -> None:
     commit_render(mount)
     snapshot = _registry().capture(mount, "counter")
 
-    with pytest.raises(SnapshotError, match="no migration"):
+    with pytest.raises(MountStateError, match="no migration"):
         _registry(version=2).restore(snapshot, access=Everyone())
 
     migrated = _registry(
@@ -220,5 +220,5 @@ def test_migration_must_advance_exactly_one_version() -> None:
     snapshot = _registry().capture(mount, "counter")
     registry = _registry(version=2, migrations={1: lambda current: replace(current, component_version=3)})
 
-    with pytest.raises(SnapshotError, match="must produce version 2"):
+    with pytest.raises(MountStateError, match="must produce version 2"):
         registry.restore(snapshot, access=Everyone())

@@ -190,9 +190,9 @@ def _neutralize_mentions(value: str) -> str:
 
 
 __all__ = [
+    "NEUTRAL",
     "Localization",
     "Message",
-    "NEUTRAL",
     "RawMarkdown",
     "ResolvedText",
     "TextDialect",

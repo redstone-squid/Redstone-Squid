@@ -217,14 +217,14 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert sl.discord.MountDefaults
     assert sl.discord.SessionRegistry
     assert sl.discord.routing.routers
-    assert sl.discord.rendering.V2Renderer
-    assert sl.discord.classic.ClassicRenderer
+    assert sl.discord.renderer.V2Renderer
+    assert sl.discord.classic_renderer.ClassicRenderer
     assert sl.discord.classic.compose
     assert sl.discord.SessionKey
     assert sl.discord.sessions.SessionPolicy
     assert sl.discord.Screen
-    assert sl.discord.sessions.Scope
-    assert sl.discord.sessions.Opener
+    assert sl.discord.screens.Scope
+    assert sl.discord.screens.Opener
     assert sl.discord.presentation.DiscordPresentation
     assert sl.discord.DiscordMode.COMPONENTS_V2
     assert sl.discord.DiscordModeError
@@ -239,7 +239,11 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert not hasattr(sl.discord.durability, "MountManager")
     assert sl.runtime.TopicBus
     assert sl.discord.Reactor.follow
-    assert {"Shared", "SharedStateConflictError", "state", "addresses"} <= set(sl.runtime.__all__)
+    assert {"Shared", "SharedPool", "SharedFactory", "SharedStateConflictError", "state", "addresses"} <= set(
+        sl.runtime.__all__
+    )
+    for removed in ("SessionPolicy", "Opener", "Scope", "Router", "V2Renderer", "ClassicRenderer", "AuditReport"):
+        assert removed not in sl.discord.__all__ and not hasattr(sl.discord, removed)
 
 
 def test_core_and_html_import_without_discord_dependencies() -> None:
@@ -262,6 +266,7 @@ import squid_layouts.runtime
 import squid_layouts.runtime.shared
 import squid_layouts.runtime.topics
 assert squid_layouts.runtime.shared.Shared
+assert squid_layouts.runtime.shared.SharedPool
 assert "discord" not in sys.modules
 assert "anyio" not in sys.modules
 """
@@ -280,9 +285,9 @@ class BlockAsyncpg(importlib.abc.MetaPathFinder):
         return None
 
 sys.meta_path.insert(0, BlockAsyncpg())
-from squid_layouts.discord.durability import PostgresSnapshotStore, SQLiteSnapshotStore
-assert PostgresSnapshotStore
-assert SQLiteSnapshotStore
+from squid_layouts.discord.durability import PostgresSessionStore, SQLiteSessionStore
+assert PostgresSessionStore
+assert SQLiteSessionStore
 assert "asyncpg" not in sys.modules
 """
     subprocess.run([sys.executable, "-c", code], check=True)
@@ -292,9 +297,10 @@ def test_package_metadata_keeps_version_and_adapter_extra() -> None:
     metadata = tomllib.loads((Path(__file__).parents[1] / "pyproject.toml").read_text())
     project = metadata["project"]
     assert project["version"] == "0.1.0"
-    assert project["dependencies"] == []
+    assert project["dependencies"] == ["squid-reactive", "squid-stores"]
     assert set(project["optional-dependencies"]["discord"]) == {
         "discord-py>=2.7,<3",
         "anyio>=4.14,<5",
         "packaging>=24,<27",
     }
+    assert project["optional-dependencies"]["postgres"] == ["squid-stores[postgres]"]

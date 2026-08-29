@@ -4,10 +4,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
-from squid_layouts.interactions import ActionEvent
 from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.factories import action, actions, heading, note, stack
+from squid_layouts.interactions import ActionEvent
 from squid_layouts.patterns._content import ContentLike, normalize_content, require_key
 from squid_layouts.patterns._ranked import Projector, RankedEntry, RankedRows
 from squid_layouts.planning.navigation import (
@@ -83,7 +83,7 @@ class SourceRankedList[EntryT](Component):
 
     @resource
     async def loaded(self) -> LoadedWindow[RankedEntry | EntryT]:
-        state = self.loaded.state
+        state = self.loaded.status
         previous = state.previous.value if isinstance(state, Pending | Failed) and state.previous is not None else None
         match self._request:
             case _WindowRequest("previous") if previous is not None:
@@ -126,7 +126,7 @@ class SourceRankedList[EntryT](Component):
         )
 
     def render(self) -> RenderResult:
-        match self.loaded.state:
+        match self.loaded.status:
             case Pending(previous=None):
                 return self._status(self.loading)
             case Failed(previous=None):

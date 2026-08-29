@@ -2,42 +2,45 @@
 
 from typing import Any
 
+from squid_layouts.capabilities import Capability
 from squid_layouts.planning.adapter import AdapterProfile
 from squid_layouts.planning.classic import CLASSIC_DIALECT
 from squid_layouts.planning.limits import CLASSIC_LIMITS, LIMITS, ClassicLimits, V2Limits
 from squid_layouts.planning.target import TargetProfile
-from squid_layouts.target_types import ClassicTarget, ComponentsV2Target, DiscordAdapter
 from squid_layouts.planning.v2 import V2_DIALECT
 from squid_layouts.scene.model import SceneClassicMessage, SceneComponentsV2
+from squid_layouts.target_types import ClassicTarget, ComponentsV2Target, DiscordAdapter
 
+V2_TARGET_ID = "discord.components-v2"
+CLASSIC_TARGET_ID = "discord.components-v1"
 
 V2_PROTOCOL_CAPABILITIES = frozenset(
     {
-        "actions.buttons",
-        "actions.discord.premium",
-        "actions.select",
-        "actions.discord.entity",
-        "forms.discord.entity",
-        "forms.discord.file",
-        "forms.discord.checkbox_group",
-        "forms.modal",
-        "layout.container",
-        "layout.gallery",
-        "layout.section",
+        Capability.ACTIONS_BUTTONS,
+        Capability.ACTIONS_DISCORD_PREMIUM,
+        Capability.ACTIONS_SELECT,
+        Capability.ACTIONS_DISCORD_ENTITY,
+        Capability.FORMS_DISCORD_ENTITY,
+        Capability.FORMS_DISCORD_FILE,
+        Capability.FORMS_DISCORD_CHECKBOX_GROUP,
+        Capability.FORMS_MODAL,
+        Capability.LAYOUT_CONTAINER,
+        Capability.LAYOUT_GALLERY,
+        Capability.LAYOUT_SECTION,
     }
 )
 
 CLASSIC_PROTOCOL_CAPABILITIES = frozenset(
     {
-        "actions.buttons",
-        "actions.discord.premium",
-        "actions.select",
-        "actions.discord.entity",
-        "forms.modal",
-        "forms.discord.checkbox_group",
-        "layout.embed",
-        "layout.embed_fields",
-        "message.content",
+        Capability.ACTIONS_BUTTONS,
+        Capability.ACTIONS_DISCORD_PREMIUM,
+        Capability.ACTIONS_SELECT,
+        Capability.ACTIONS_DISCORD_ENTITY,
+        Capability.FORMS_MODAL,
+        Capability.FORMS_DISCORD_CHECKBOX_GROUP,
+        Capability.LAYOUT_EMBED,
+        Capability.LAYOUT_EMBED_FIELDS,
+        Capability.MESSAGE_CONTENT,
     }
 )
 
@@ -52,7 +55,7 @@ def components_v2_target[AdapterT: DiscordAdapter](
     extension_capabilities = frozenset(f"extension.{kind}" for kind in extensions)
     adapter_capabilities = adapter.capabilities | extension_capabilities
     return TargetProfile(
-        id="discord.components-v2",
+        id=V2_TARGET_ID,
         version=1,
         capabilities=V2_PROTOCOL_CAPABILITIES | adapter.capabilities | extension_capabilities,
         limits=limits,
@@ -72,7 +75,7 @@ def classic_target[AdapterT: DiscordAdapter](
 ) -> TargetProfile[ClassicTarget, AdapterT, SceneClassicMessage]:
     """Build a classic-message protocol target from an adapter's verified behavior."""
     return TargetProfile(
-        id="discord.components-v1",
+        id=CLASSIC_TARGET_ID,
         version=1,
         capabilities=CLASSIC_PROTOCOL_CAPABILITIES | adapter.capabilities,
         limits=limits,

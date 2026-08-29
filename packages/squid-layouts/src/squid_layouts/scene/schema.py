@@ -2,6 +2,29 @@
 
 from typing import Any
 
+from squid_layouts.scene.model import (
+    SceneButton,
+    SceneClassicMessage,
+    SceneComponentsV2,
+    SceneEntitySelect,
+    SceneExtension,
+    SceneFile,
+    SceneGallery,
+    SceneLink,
+    ScenePanel,
+    ScenePremiumButton,
+    SceneRoutedButton,
+    SceneRoutedSelect,
+    SceneRow,
+    SceneSection,
+    SceneSelect,
+    SceneSeparator,
+    SceneText,
+    SceneThumbnail,
+    SceneTime,
+    SceneZonedTime,
+)
+
 
 def _node(kind: str, properties: dict[str, Any], *required: str) -> dict[str, Any]:
     return {
@@ -53,14 +76,14 @@ SCENE_SCHEMA: dict[str, Any] = {
     },
     "required": ["protocol", "target", "target_version", "body", "assets", "pagers"],
     "$defs": {
-        "body": {"oneOf": [{"$ref": "#/$defs/components_v2"}, {"$ref": "#/$defs/classic_message"}]},
+        "body": {"oneOf": [{"$ref": f"#/$defs/{kind}"} for kind in (SceneComponentsV2.KIND, SceneClassicMessage.KIND)]},
         "components_v2": _node(
-            "components_v2",
+            SceneComponentsV2.KIND,
             {"children": {"type": "array", "items": {"$ref": "#/$defs/node"}}},
             "children",
         ),
         "classic_message": _node(
-            "classic_message",
+            SceneClassicMessage.KIND,
             {
                 "content": {"type": ["string", "null"]},
                 "embeds": {"type": "array", "items": {"$ref": "#/$defs/embed"}},
@@ -170,35 +193,35 @@ SCENE_SCHEMA: dict[str, Any] = {
             "oneOf": [
                 {"$ref": f"#/$defs/{kind}"}
                 for kind in (
-                    "text",
-                    "time",
-                    "zoned_time",
-                    "file",
-                    "separator",
-                    "link",
-                    "button",
-                    "routed_button",
-                    "premium_button",
-                    "select",
-                    "routed_select",
-                    "entity_select",
-                    "row",
-                    "thumbnail",
-                    "gallery",
-                    "section",
-                    "panel",
-                    "extension",
+                    SceneText.KIND,
+                    SceneTime.KIND,
+                    SceneZonedTime.KIND,
+                    SceneFile.KIND,
+                    SceneSeparator.KIND,
+                    SceneLink.KIND,
+                    SceneButton.KIND,
+                    SceneRoutedButton.KIND,
+                    ScenePremiumButton.KIND,
+                    SceneSelect.KIND,
+                    SceneRoutedSelect.KIND,
+                    SceneEntitySelect.KIND,
+                    SceneRow.KIND,
+                    SceneThumbnail.KIND,
+                    SceneGallery.KIND,
+                    SceneSection.KIND,
+                    ScenePanel.KIND,
+                    SceneExtension.KIND,
                 )
             ]
         },
         "text": _node(
-            "text",
+            SceneText.KIND,
             {"content": {"type": "string"}, "dialect": {"enum": ["plain", "discord-markdown"]}},
             "content",
             "dialect",
         ),
         "time": _node(
-            "time",
+            SceneTime.KIND,
             {
                 "instant": {"type": "string", "format": "date-time"},
                 "style": {"enum": ["t", "T", "d", "D", "f", "F", "R"]},
@@ -209,7 +232,7 @@ SCENE_SCHEMA: dict[str, Any] = {
             "prefix",
         ),
         "zoned_time": _node(
-            "zoned_time",
+            SceneZonedTime.KIND,
             {
                 "instant": {"type": "string", "format": "date-time"},
                 "timezone": {"type": "string", "minLength": 1},
@@ -220,7 +243,7 @@ SCENE_SCHEMA: dict[str, Any] = {
             "prefix",
         ),
         "file": _node(
-            "file",
+            SceneFile.KIND,
             {
                 "asset_key": {"type": "string"},
                 "name": {"type": "string"},
@@ -232,13 +255,13 @@ SCENE_SCHEMA: dict[str, Any] = {
             "media_type",
         ),
         "separator": _node(
-            "separator",
+            SceneSeparator.KIND,
             {"large": {"type": "boolean"}, "visible": {"type": "boolean"}},
             "large",
             "visible",
         ),
         "link": _node(
-            "link",
+            SceneLink.KIND,
             {
                 "label": {"type": ["string", "null"]},
                 "url": {"type": "string", "maxLength": 512},
@@ -249,12 +272,12 @@ SCENE_SCHEMA: dict[str, Any] = {
             "url",
         ),
         "premium_button": _node(
-            "premium_button",
+            ScenePremiumButton.KIND,
             {"sku_id": {"type": "integer", "minimum": 1}},
             "sku_id",
         ),
         "button": _node(
-            "button",
+            SceneButton.KIND,
             {
                 "label": {"type": ["string", "null"]},
                 "action": {"type": "string"},
@@ -271,7 +294,7 @@ SCENE_SCHEMA: dict[str, Any] = {
             "policy",
         ),
         "routed_button": _node(
-            "routed_button",
+            SceneRoutedButton.KIND,
             {
                 "label": {"type": ["string", "null"]},
                 "route_id": {"type": "string", "maxLength": 100},
@@ -286,7 +309,7 @@ SCENE_SCHEMA: dict[str, Any] = {
             "disabled",
         ),
         "select": _node(
-            "select",
+            SceneSelect.KIND,
             {
                 "options": {"type": "array", "items": {"$ref": "#/$defs/option"}},
                 "action": {"type": "string"},
@@ -305,7 +328,7 @@ SCENE_SCHEMA: dict[str, Any] = {
             "policy",
         ),
         "routed_select": _node(
-            "routed_select",
+            SceneRoutedSelect.KIND,
             {
                 "options": {"type": "array", "items": {"$ref": "#/$defs/option"}, "maxItems": 25},
                 "route_id": {"type": "string", "maxLength": 100},
@@ -322,7 +345,7 @@ SCENE_SCHEMA: dict[str, Any] = {
             "disabled",
         ),
         "entity_select": _node(
-            "entity_select",
+            SceneEntitySelect.KIND,
             {
                 "entity_type": {"enum": ["user", "role", "channel", "mentionable"]},
                 "action": {"type": "string"},
@@ -385,7 +408,7 @@ SCENE_SCHEMA: dict[str, Any] = {
             "required": ["label", "value", "description", "default"],
         },
         "row": _node(
-            "row",
+            SceneRow.KIND,
             {
                 "items": {
                     "type": "array",
@@ -403,7 +426,7 @@ SCENE_SCHEMA: dict[str, Any] = {
             "items",
         ),
         "thumbnail": _node(
-            "thumbnail",
+            SceneThumbnail.KIND,
             {
                 "url": {"type": "string"},
                 "description": {"type": ["string", "null"]},
@@ -413,7 +436,7 @@ SCENE_SCHEMA: dict[str, Any] = {
             "description",
         ),
         "gallery": _node(
-            "gallery",
+            SceneGallery.KIND,
             {"items": {"type": "array", "items": {"$ref": "#/$defs/gallery_item"}}},
             "items",
         ),
@@ -428,7 +451,7 @@ SCENE_SCHEMA: dict[str, Any] = {
             "required": ["url", "description"],
         },
         "section": _node(
-            "section",
+            SceneSection.KIND,
             {
                 "texts": {"type": "array", "items": {"$ref": "#/$defs/text"}},
                 "accessory": {
@@ -446,7 +469,7 @@ SCENE_SCHEMA: dict[str, Any] = {
             "accessory",
         ),
         "panel": _node(
-            "panel",
+            ScenePanel.KIND,
             {
                 "children": {"type": "array", "items": {"$ref": "#/$defs/node"}},
                 "accent": {"type": ["integer", "null"], "minimum": 0, "maximum": 16777215},
@@ -456,7 +479,7 @@ SCENE_SCHEMA: dict[str, Any] = {
             "accent",
         ),
         "extension": _node(
-            "extension",
+            SceneExtension.KIND,
             {
                 "extension": {"type": "string"},
                 "version": {"type": "integer", "minimum": 0},

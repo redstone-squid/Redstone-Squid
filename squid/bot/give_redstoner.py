@@ -12,8 +12,7 @@ import squid_layouts as sl
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.routes.redstoner_roles import redstoner_roles, remove_redstoner_role
-from squid.bot.ui import render_static
-from squid.bot.utils.components import no_mentions, text_layout
+from squid.bot.ui import render_presentation, reply_presentation, respond_presentation, send_to, text_layout
 from squid.bot.utils.permissions import check_is_home_server, hide_unless, requires
 from squid.community.domain import RedstonerDecisionKind
 from squid.core.i18n import _
@@ -39,29 +38,30 @@ async def remove_own_redstoner_role(interaction: Interaction[squid.bot.app.Redst
     assert owner is not None
     redstoner_channel = interaction.client.get_channel(community.redstoner_corner_channel_id)
     assert isinstance(redstoner_channel, GuildMessageable)
-    await redstoner_channel.send(
-        view=text_layout(
-            t(
-                locale,
-                _("{owner}, {member} has removed their own redstoner role."),
-                owner=owner.mention,
-                member=member.mention,
-            )
-        ),
+    await send_to(
+        redstoner_channel,
         allowed_mentions=discord.AllowedMentions(
             everyone=False,
             users=(owner, member),
             roles=False,
             replied_user=False,
         ),
+    )(
+        text_layout(
+            t(
+                locale,
+                _("{owner}, {member} has removed their own redstoner role."),
+                owner=owner.mention,
+                member=member.mention,
+            )
+        )
     )
     await asyncio.sleep(10)
 
     await member.add_roles(redstoner_role)
-    await interaction.followup.send(
-        view=text_layout(t(locale, _("{member} — just kidding, here is your role back."), member=member.mention)),
-        ephemeral=True,
-        allowed_mentions=no_mentions(),
+    await respond_presentation(
+        interaction,
+        text_layout(t(locale, _("{member} — just kidding, here is your role back."), member=member.mention)),
     )
 
 
@@ -88,7 +88,7 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def abc(self, ctx: Context[BotT]):
         """Post the Redstoner role controls."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        view = render_static(
+        presentation = render_presentation(
             [
                 sl.primitives.Text(t(locale, _("Redstoner role controls"))),
                 # Not translated: one panel is read by everyone in the channel, so the
@@ -105,7 +105,7 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             ],
             locale=locale,
         )
-        await ctx.send(view=view, allowed_mentions=no_mentions())
+        await reply_presentation(ctx, presentation)
 
     @redstoner_group.command(name="resync")
     @check_is_home_server()
@@ -127,9 +127,8 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
 
         locale = await resolve_locale(message, self.bot.services.settings)
         if decision.kind is RedstonerDecisionKind.MALFORMED:
-            await message.channel.send(
-                view=text_layout(t(locale, _("{reason} in {url}"), reason=decision.reason, url=message.jump_url)),
-                allowed_mentions=no_mentions(),
+            await send_to(message.channel)(
+                text_layout(t(locale, _("{reason} in {url}"), reason=decision.reason, url=message.jump_url))
             )
             return
 
@@ -139,18 +138,14 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         assert message.guild is not None
         redstoner_role = message.guild.get_role(self.bot.community_config.redstoner_role_id)
         if redstoner_role is None:
-            await message.channel.send(
-                view=text_layout(t(locale, _("Could not find the redstoner role."))),
-                allowed_mentions=no_mentions(),
-            )
+            await send_to(message.channel)(text_layout(t(locale, _("Could not find the redstoner role."))))
             return
         await member.add_roles(redstoner_role)
-        await message.channel.send(
-            view=text_layout(t(locale, _("Gave {member} the redstoner role."), member=member.mention)),
-            allowed_mentions=no_mentions(),
+        await send_to(message.channel)(
+            text_layout(t(locale, _("Gave {member} the redstoner role."), member=member.mention))
         )
 
-        view = render_static(
+        presentation = render_presentation(
             [
                 sl.primitives.Text(
                     t(
@@ -164,10 +159,10 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             ],
             locale=locale,
         )
-        await self.bot.get_channel(self.bot.community_config.redstoner_announcement_channel_id).send(
+        await send_to(
+            self.bot.get_channel(self.bot.community_config.redstoner_announcement_channel_id),
             allowed_mentions=discord.AllowedMentions(roles=False, users=(member,), everyone=False),
-            view=view,
-        )
+        )(presentation)
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid):

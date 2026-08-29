@@ -4,10 +4,10 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
-from squid_layouts.interactions import ActionEvent
 from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.factories import action, actions, bullet, bullets, choice, choices, controlled, heading, note, stack
+from squid_layouts.interactions import ActionEvent
 from squid_layouts.patterns._content import ContentLike, normalize_content, render_content, require_key
 from squid_layouts.planning.navigation import NAV_FACTORY_CONTEXT, NavigationContext, NavigationState, default_nav
 from squid_layouts.runtime.component import Component, RenderResult
@@ -84,7 +84,7 @@ class Browser[ItemT](Component):
 
     @resource
     async def window(self) -> LoadedWindow[ItemT]:
-        current = self.window.state
+        current = self.window.status
         previous = current.previous.value if isinstance(current, Pending | Failed) and current.previous else None
         match self._request:
             case _WindowRequest("previous") if previous is not None:
@@ -118,7 +118,7 @@ class Browser[ItemT](Component):
         self._request = _WindowRequest(self._request.operation, self._request.position)
 
     def _ready(self) -> LoadedWindow[ItemT] | None:
-        current = self.window.state
+        current = self.window.status
         if isinstance(current, Ready):
             return current.value
         if isinstance(current, Pending | Failed) and current.previous is not None:
@@ -165,7 +165,7 @@ class Browser[ItemT](Component):
         await self._adjacent(event, 1)
 
     def render(self) -> RenderResult:
-        match self.window.state:
+        match self.window.status:
             case Pending(previous=None):
                 return self._status(self.loading)
             case Failed(previous=None):

@@ -15,8 +15,8 @@ import discord
 
 from squid_layouts.assets import Asset
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
-from squid_layouts.discord.attachments import files_for
 from squid_layouts.discord.adapter import require_discord_py_target
+from squid_layouts.discord.attachments import files_for
 from squid_layouts.discord.classic_renderer import ClassicRenderer, Wire
 from squid_layouts.discord.fragments import _reject_dispatchable
 from squid_layouts.discord.inspection import (
@@ -32,8 +32,8 @@ from squid_layouts.discord.target import CLASSIC_TARGET, Target
 from squid_layouts.document import DocumentLike
 from squid_layouts.errors import ExistingLayoutError
 from squid_layouts.palette import DEFAULT_PALETTE, Palette
-from squid_layouts.planning.cache import PlanCache
 from squid_layouts.planning.adapter import ADAPTER_RENDER_CLASSIC
+from squid_layouts.planning.cache import PlanCache
 from squid_layouts.planning.limits import CLASSIC_LIMITS, CONTROLS, EMBED_TEXT, EMBEDS, ClassicLimits
 from squid_layouts.planning.navigation import PlannedNav
 from squid_layouts.planning.planner import EMPTY_RESERVATION
@@ -41,10 +41,11 @@ from squid_layouts.planning.planner import plan as plan_document
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_layouts.planning.target import ResourceCost
 from squid_layouts.profiling import OperationRecorder
+from squid_layouts.runtime.component import Component
 from squid_layouts.runtime.presentation import PresentationSession
 from squid_layouts.scene.model import PlanReport, PlanResult, SceneClassicMessage
-from squid_layouts.target_types import ClassicTarget, DiscordPyAdapter
 from squid_layouts.sources import Position
+from squid_layouts.target_types import ClassicTarget, DiscordPyAdapter
 from squid_layouts.text import NEUTRAL, Localization
 
 logger = logging.getLogger(__name__)
@@ -112,7 +113,7 @@ def compose(
 
 
 def render_static(
-    nodes: DocumentLike,
+    nodes: DocumentLike | Component,
     *,
     target: Target[ClassicTarget, DiscordPyAdapter, SceneClassicMessage] = CLASSIC_TARGET,
     chrome: Chrome = DEFAULT_CHROME,
@@ -127,7 +128,7 @@ def render_static(
     only the controls would leave the caller to reassemble the half that carries the content.
     """
     return compose(
-        nodes,
+        nodes.render() if isinstance(nodes, Component) else nodes,
         target=target,
         chrome=chrome,
         localization=localization,

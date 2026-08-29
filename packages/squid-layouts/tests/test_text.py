@@ -79,5 +79,7 @@ def test_timestamp_interpolation_uses_discord_tokens_and_plain_iso() -> None:
     instant = datetime(2026, 8, 22, 14, 30, tzinfo=UTC)
 
     assert md(t"Updated {instant}").content == "Updated <t:1787409000:f>"
-    assert md(t"Updated {sl.timestamp(instant, style=sl.TimeStyle.RELATIVE)}").content == ("Updated <t:1787409000:R>")
+    assert md(t"Updated {sl.timestamp(instant, style=sl.semantic.TimeStyle.RELATIVE)}").content == (
+        "Updated <t:1787409000:R>"
+    )
     assert plain(instant).content == "2026-08-22T14:30:00+00:00"

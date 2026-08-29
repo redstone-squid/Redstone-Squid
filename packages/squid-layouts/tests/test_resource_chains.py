@@ -25,13 +25,13 @@ class Chain(sl.Component):
         self.node_loads = 0
         self.seen: list[str] = []
 
-    @sl.resource(delivery=sl.runtime.ResourceDelivery.ATOMIC)
+    @sl.resource(pending=sl.resources.PendingPolicy.ATOMIC)
     async def build(self) -> str:
         self.build_loads += 1
         sl.runtime.watch(TOPIC)
         return self.source
 
-    @sl.resource(delivery=sl.runtime.ResourceDelivery.ATOMIC)
+    @sl.resource(pending=sl.resources.PendingPolicy.ATOMIC)
     async def node(self) -> str:
         self.node_loads += 1
         value = await self.build
@@ -39,8 +39,8 @@ class Chain(sl.Component):
         return f"card({value})"
 
     def render(self):
-        match self.node.state:
-            case sl.runtime.Ready(value=value):
+        match self.node.status:
+            case sl.resources.Ready(value=value):
                 return sl.paragraph(value)
             case _:
                 return sl.paragraph("loading")
@@ -67,7 +67,7 @@ async def test_a_publish_two_links_up_repends_the_dependent() -> None:
     assert panel.node.value == "card(v1)"
 
     panel.source = "v2"
-    sl.runtime.TopicBus().publish(TOPIC)
+    sl.runtime.LocalTopicBus().publish(TOPIC)
 
     # `node` never read the topic; it read `build`, which did. Asking `node` whether it moved
     # re-checks `build`, which re-checks the topic.
@@ -147,7 +147,7 @@ async def test_a_failed_load_moves_the_version_too() -> None:
     panel.fail = True
     await panel.value.reload()
 
-    assert isinstance(panel.value.state, sl.runtime.Failed)
+    assert isinstance(panel.value.status, sl.resources.Failed)
     assert panel.value.version > settled, "a dependent must re-derive against the failure"
 
 
@@ -176,7 +176,7 @@ async def test_a_chain_settles_in_one_send_and_draws_once() -> None:
 
 
 async def test_a_publish_redraws_the_whole_chain_without_a_torn_paint() -> None:
-    bus = sl.runtime.TopicBus()
+    bus = sl.runtime.LocalTopicBus()
     reactor = sl.discord.Reactor(bus)
     panel = Chain()
     message: Any = fake_message()
@@ -198,18 +198,18 @@ async def test_two_independent_resources_still_settle_together() -> None:
     """Nothing about chaining serialises a tier that has no chain in it."""
 
     class Pair(sl.Component):
-        @sl.resource(delivery=sl.runtime.ResourceDelivery.ATOMIC)
+        @sl.resource(pending=sl.resources.PendingPolicy.ATOMIC)
         async def left(self) -> str:
             return "L"
 
-        @sl.resource(delivery=sl.runtime.ResourceDelivery.ATOMIC)
+        @sl.resource(pending=sl.resources.PendingPolicy.ATOMIC)
         async def right(self) -> str:
             return "R"
 
         def render(self):
-            left = self.left.state
-            right = self.right.state
-            ready = isinstance(left, sl.runtime.Ready) and isinstance(right, sl.runtime.Ready)
+            left = self.left.status
+            right = self.right.status
+            ready = isinstance(left, sl.resources.Ready) and isinstance(right, sl.resources.Ready)
             return sl.paragraph(f"{left.value}{right.value}" if ready else "loading")
 
     mount = Mount(Pair(), access=Everyone(), timeout=None)
@@ -234,8 +234,8 @@ async def test_a_resource_that_awaits_itself_names_itself() -> None:
     panel = Ouroboros()
     await panel.value.reload()
 
-    state = panel.value.state
-    assert isinstance(state, sl.runtime.Failed)
+    state = panel.value.status
+    assert isinstance(state, sl.resources.Failed)
     assert isinstance(state.error, sl.runtime.ReactiveCycleError)
     assert state.error.path == ("Ouroboros.value", "Ouroboros.value")
 
@@ -258,8 +258,8 @@ async def test_a_mutual_cycle_names_the_whole_path_not_the_link_that_closed_it()
     panel = Pair()
     await panel.left.reload()
 
-    state = panel.left.state
-    assert isinstance(state, sl.runtime.Failed)
+    state = panel.left.status
+    assert isinstance(state, sl.resources.Failed)
     assert isinstance(state.error, sl.runtime.ReactiveCycleError)
     assert state.error.path == ("Pair.left", "Pair.right", "Pair.left")
 
@@ -286,8 +286,8 @@ async def test_a_cycle_reports_the_ring_without_the_run_up_to_it() -> None:
     panel = Three()
     await panel.entry.reload()
 
-    state = panel.entry.state
-    assert isinstance(state, sl.runtime.Failed)
+    state = panel.entry.status
+    assert isinstance(state, sl.resources.Failed)
     assert isinstance(state.error, sl.runtime.ReactiveCycleError)
     assert state.error.path == ("Three.a", "Three.b", "Three.a")
     assert "cycle: Three.a -> Three.b -> Three.a" in str(state.error)
@@ -345,7 +345,7 @@ async def test_a_cycle_through_a_computed_is_named_across_both_kinds() -> None:
     panel = Mixed()
     await panel.loaded.reload()
 
-    state = panel.loaded.state
-    assert isinstance(state, sl.runtime.Failed)
+    state = panel.loaded.status
+    assert isinstance(state, sl.resources.Failed)
     assert isinstance(state.error, sl.runtime.ReactiveCycleError)
     assert state.error.path == ("Mixed.loaded", "Mixed.doubled", "Mixed.loaded")

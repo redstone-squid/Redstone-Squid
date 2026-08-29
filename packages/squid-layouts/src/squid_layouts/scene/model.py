@@ -3,12 +3,13 @@
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import ClassVar
 
-from squid_layouts.interactions import ActionBinding, ActionPolicy
 from squid_layouts.emoji import Emoji
 from squid_layouts.entity import ChannelType, EntityRef, EntityType
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import FormBinding
+from squid_layouts.interactions import ActionBinding, ActionPolicy
 from squid_layouts.primitives.styles import ActionStyle, Color
 from squid_layouts.runtime.presentation import SessionUpdate
 from squid_layouts.text import TextDialect
@@ -16,12 +17,16 @@ from squid_layouts.text import TextDialect
 
 @dataclass(frozen=True, slots=True)
 class SceneText:
+    KIND: ClassVar[str] = "text"
+
     content: str
     dialect: TextDialect = TextDialect.DISCORD_MARKDOWN
 
 
 @dataclass(frozen=True, slots=True)
 class SceneTime:
+    KIND: ClassVar[str] = "time"
+
     instant: str
     style: str
     prefix: str | None = None
@@ -29,6 +34,8 @@ class SceneTime:
 
 @dataclass(frozen=True, slots=True)
 class SceneZonedTime:
+    KIND: ClassVar[str] = "zoned_time"
+
     instant: str
     timezone: str
     prefix: str | None = None
@@ -36,6 +43,8 @@ class SceneZonedTime:
 
 @dataclass(frozen=True, slots=True)
 class SceneFile:
+    KIND: ClassVar[str] = "file"
+
     asset_key: str
     name: str
     media_type: str
@@ -44,12 +53,16 @@ class SceneFile:
 
 @dataclass(frozen=True, slots=True)
 class SceneSeparator:
+    KIND: ClassVar[str] = "separator"
+
     large: bool = False
     visible: bool = True
 
 
 @dataclass(frozen=True, slots=True)
 class SceneLink:
+    KIND: ClassVar[str] = "link"
+
     label: str | None
     url: str
     emoji: Emoji | None = None
@@ -58,11 +71,15 @@ class SceneLink:
 
 @dataclass(frozen=True, slots=True)
 class ScenePremiumButton:
+    KIND: ClassVar[str] = "premium_button"
+
     sku_id: int
 
 
 @dataclass(frozen=True, slots=True)
 class SceneButton:
+    KIND: ClassVar[str] = "button"
+
     label: str | None
     action: str
     style: ActionStyle = ActionStyle.SECONDARY
@@ -79,6 +96,8 @@ class SceneRoutedButton:
     what lets a sessionless document hold a control, and a codec can round-trip one,
     which a process-local handler could never be.
     """
+
+    KIND: ClassVar[str] = "routed_button"
 
     label: str | None
     route_id: str
@@ -98,6 +117,8 @@ class SceneOption:
 
 @dataclass(frozen=True, slots=True)
 class SceneSelect:
+    KIND: ClassVar[str] = "select"
+
     options: tuple[SceneOption, ...]
     action: str
     placeholder: str | None = None
@@ -109,6 +130,8 @@ class SceneSelect:
 
 @dataclass(frozen=True, slots=True)
 class SceneRoutedSelect:
+    KIND: ClassVar[str] = "routed_select"
+
     options: tuple[SceneOption, ...]
     route_id: str
     placeholder: str | None = None
@@ -119,6 +142,8 @@ class SceneRoutedSelect:
 
 @dataclass(frozen=True, slots=True)
 class SceneEntitySelect:
+    KIND: ClassVar[str] = "entity_select"
+
     entity_type: EntityType
     action: str
     placeholder: str | None = None
@@ -132,11 +157,15 @@ class SceneEntitySelect:
 
 @dataclass(frozen=True, slots=True)
 class SceneRow:
+    KIND: ClassVar[str] = "row"
+
     items: tuple[SceneLink | ScenePremiumButton | SceneButton | SceneRoutedButton | SceneExtension, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class SceneThumbnail:
+    KIND: ClassVar[str] = "thumbnail"
+
     url: str
     description: str | None = None
     spoiler: bool = False
@@ -151,17 +180,23 @@ class SceneGalleryItem:
 
 @dataclass(frozen=True, slots=True)
 class SceneGallery:
+    KIND: ClassVar[str] = "gallery"
+
     items: tuple[SceneGalleryItem, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class SceneSection:
+    KIND: ClassVar[str] = "section"
+
     texts: tuple[SceneText, ...]
     accessory: SceneThumbnail | SceneLink | ScenePremiumButton | SceneButton | SceneRoutedButton | SceneExtension
 
 
 @dataclass(frozen=True, slots=True)
 class ScenePanel:
+    KIND: ClassVar[str] = "panel"
+
     children: tuple[SceneNode, ...]
     accent: Color | None = None
     spoiler: bool = False
@@ -170,6 +205,8 @@ class ScenePanel:
 @dataclass(frozen=True, slots=True)
 class SceneExtension:
     """Versioned target payload prepared by a registered extension adapter."""
+
+    KIND: ClassVar[str] = "extension"
 
     kind: str
     version: int
@@ -208,6 +245,8 @@ type SceneNode = (
 @dataclass(frozen=True, slots=True)
 class SceneComponentsV2:
     """A Components V2 message: the component tree is the whole message."""
+
+    KIND: ClassVar[str] = "components_v2"
 
     children: tuple[SceneNode, ...] = ()
 
@@ -285,12 +324,45 @@ class SceneClassicRow:
 class SceneClassicMessage:
     """A pre-Components-V2 message: content, embeds, and up to five action rows."""
 
+    KIND: ClassVar[str] = "classic_message"
+
     content: str | None = None
     embeds: tuple[SceneEmbed, ...] = ()
     rows: tuple[SceneClassicRow, ...] = ()
 
 
 type SceneBody = SceneComponentsV2 | SceneClassicMessage
+
+
+_KIND_OWNERS: dict[str, type] = {}
+for _kind_cls in (
+    SceneText,
+    SceneTime,
+    SceneZonedTime,
+    SceneFile,
+    SceneSeparator,
+    SceneLink,
+    ScenePremiumButton,
+    SceneButton,
+    SceneRoutedButton,
+    SceneSelect,
+    SceneRoutedSelect,
+    SceneEntitySelect,
+    SceneRow,
+    SceneThumbnail,
+    SceneGallery,
+    SceneSection,
+    ScenePanel,
+    SceneExtension,
+    SceneComponentsV2,
+    SceneClassicMessage,
+):
+    if _kind_cls.KIND in _KIND_OWNERS:
+        # A reused tag would let the codec's `match kind:` misroute an unrelated node type.
+        message = f"scene kind tag {_kind_cls.KIND!r} is used by both {_KIND_OWNERS[_kind_cls.KIND].__name__} and {_kind_cls.__name__}"
+        raise AssertionError(message)
+    _KIND_OWNERS[_kind_cls.KIND] = _kind_cls
+del _kind_cls
 
 
 @dataclass(frozen=True, slots=True)
@@ -335,8 +407,7 @@ class SceneDocument[BodyT = SceneBody]:
         """Narrow a broadly decoded scene at an explicit frontend boundary."""
         if not isinstance(self.body, body_type):
             message = (
-                f"scene for target {self.target!r} has a {type(self.body).__name__} body, "
-                f"not {body_type.__name__}"
+                f"scene for target {self.target!r} has a {type(self.body).__name__} body, not {body_type.__name__}"
             )
             raise LayoutInvariantError(message)
         return self.body

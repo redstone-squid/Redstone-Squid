@@ -1,9 +1,13 @@
 """Operational inspection and controls for live Discord layout runtimes."""
 
+import inspect
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from typing import cast
+
+import anyio
 
 from squid_layouts.discord.durability.runtime import (
     DurableRuntimeSnapshot,
@@ -77,6 +81,9 @@ class SessionInspection:
     opened_at: datetime
     participants: tuple[int, ...]
     mounts: tuple[str, ...]
+    members: tuple[int, ...] = ()
+    capacity: int | None = None
+    remaining_capacity: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -187,7 +194,10 @@ class DevToolsRuntime:
         sessions = (
             () if self.sessions is None else tuple(_session_inspection(session) for session in self.sessions.active())
         )
-        topics = None if self.bus is None else self.bus.snapshot()
+        snapshot_topics = (
+            None if self.bus is None else cast(Callable[[], BusSnapshot] | None, getattr(self.bus, "snapshot", None))
+        )
+        topics = snapshot_topics() if callable(snapshot_topics) else None
         return OperationalSnapshot(
             sessions,
             tuple(mount.snapshot() for mount in mounts()),
@@ -246,13 +256,42 @@ class DevToolsRuntime:
         return self._success(DevToolsAction.CLOSE_SESSION, session_id, "session closed")
 
     async def wait_idle(self) -> OperationResult:
-        """Wait for all configured refresh and topic queues to settle."""
+        """Wait for all configured refresh and topic queues to reach a stable idle point."""
         self._authorize(DevToolsAction.WAIT_IDLE, None, confirmed=True)
-        if self.reactor is not None:
-            await self.reactor.wait_idle()
-        if self.bus is not None:
-            await self.bus.wait_idle()
+        while True:
+            await self._wait_bus_idle()
+            if self.reactor is not None:
+                await self.reactor.wait_idle()
+
+            if self._queues_idle():
+                await anyio.sleep(0)
+                if self._queues_idle():
+                    break
         return self._success(DevToolsAction.WAIT_IDLE, None, "runtime is idle")
+
+    async def _wait_bus_idle(self) -> None:
+        """Drain an asynchronous bus when the configured implementation owns a queue."""
+        if self.bus is None:
+            return
+        wait_idle = getattr(self.bus, "wait_idle", None)
+        if not callable(wait_idle):
+            return
+        result = wait_idle()
+        if inspect.isawaitable(result):
+            await result
+
+    def _queues_idle(self) -> bool:
+        """Return whether both configured queue owners report no pending work."""
+        if self.bus is not None:
+            snapshot_topics = cast(Callable[[], BusSnapshot] | None, getattr(self.bus, "snapshot", None))
+            snapshot = snapshot_topics() if callable(snapshot_topics) else None
+            if snapshot is not None and (snapshot.queued or snapshot.in_flight):
+                return False
+        if self.reactor is not None:
+            snapshot = self.reactor.snapshot()
+            if snapshot.queued or snapshot.in_flight or snapshot.redeliver:
+                return False
+        return True
 
     async def flush_persistence(self) -> OperationResult:
         """Checkpoint pending durable sessions without resetting application state."""
@@ -329,6 +368,9 @@ def _session_inspection(session: Session) -> SessionInspection:
         summary.opened_at,
         tuple(sorted(summary.participants)),
         tuple(mount.id for mount in session.mounts),
+        tuple(sorted(summary.members)),
+        summary.capacity,
+        summary.remaining_capacity,
     )
 
 

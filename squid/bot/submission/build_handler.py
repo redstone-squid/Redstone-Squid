@@ -9,11 +9,14 @@ from discord.utils import escape_markdown
 
 import squid_layouts as sl
 from squid.bot._types import GuildMessageable
-from squid.bot.ui import render_item, render_presentation, render_static, truncate_display_text
-from squid.bot.utils.components import (
+from squid.bot.ui import (
     DISCORD_GREEN,
     DISCORD_RED,
     DISCORD_YELLOW,
+    render_item,
+    render_presentation,
+    render_static,
+    truncate_display_text,
 )
 from squid.bot.voting.sessions import configured_vote_channels, ensure_build_review
 from squid.builds.domain import Build, DoorBuild, Status
@@ -94,11 +97,11 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
                 return await self.bot.get_or_fetch_message(source.channel_id, source.message_id)
         return None
 
-    async def render_layout(self) -> discord.ui.LayoutView:
-        """Render a standalone Components V2 layout for the build."""
+    async def render_layout(self) -> sl.discord.presentation.DiscordPresentation:
+        """Render a standalone Components V2 presentation for the build."""
         return render_static([await self.render_node()])
 
-    async def render_presentation(self) -> sl.discord.DiscordPresentation:
+    async def render_presentation(self) -> sl.discord.presentation.DiscordPresentation:
         """Render the complete presentation used by post delivery."""
         return render_presentation([await self.render_node()])
 

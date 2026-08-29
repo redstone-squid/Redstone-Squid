@@ -2,7 +2,6 @@
 
 import uuid
 from functools import partial
-from typing import Any, cast
 
 import anyio
 import asyncpg
@@ -10,8 +9,8 @@ import pytest
 from testcontainers.postgres import PostgresContainer
 
 from squid.topics import resource_topic
-from squid_layouts.runtime import Topic, TopicBus
 from squid_layouts.discord.durability import PostgresTopicBridge
+from squid_layouts.runtime import LocalTopicBus, Topic
 
 
 async def _announce(event: anyio.Event) -> None:
@@ -25,14 +24,14 @@ async def test_two_processes_exchange_topics_over_one_channel(postgres_container
     there_pool = await asyncpg.create_pool(dsn, min_size=1, max_size=2)
     assert here_pool is not None
     assert there_pool is not None
-    here, there = TopicBus(), TopicBus()
+    here, there = LocalTopicBus(), LocalTopicBus()
     seen_here: list[Topic] = []
     seen_there: list[Topic] = []
 
-    async def record_here(topic: Topic) -> None:
+    def record_here(topic: Topic) -> None:
         seen_here.append(topic)
 
-    async def record_there(topic: Topic) -> None:
+    def record_there(topic: Topic) -> None:
         seen_there.append(topic)
 
     here.subscribe(resource_topic("build", "42"), record_here)
@@ -47,8 +46,6 @@ async def test_two_processes_exchange_topics_over_one_channel(postgres_container
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(bridge_here.run)
             tasks.start_soon(bridge_there.run)
-            tasks.start_soon(here.run)
-            tasks.start_soon(there.run)
             with anyio.fail_after(30):
                 await listening_here.wait()
                 await listening_there.wait()
@@ -85,22 +82,22 @@ async def test_transaction_publish_is_commit_ordered_and_self_delivered(
     there_pool = await asyncpg.create_pool(dsn, min_size=1, max_size=2)
     assert here_pool is not None
     assert there_pool is not None
-    here, there = TopicBus(), TopicBus()
+    here, there = LocalTopicBus(), LocalTopicBus()
     committed = resource_topic("build", "committed")
     rolled_back = resource_topic("build", "rolled-back")
     seen_here: list[Topic] = []
     seen_there: list[Topic] = []
 
-    async def record_here(topic: Topic) -> None:
+    def record_here(topic: Topic) -> None:
         seen_here.append(topic)
 
-    async def record_there(topic: Topic) -> None:
+    def record_there(topic: Topic) -> None:
         seen_there.append(topic)
 
-    here.subscribe(committed, cast(Any, record_here))
-    here.subscribe(rolled_back, cast(Any, record_here))
-    there.subscribe(committed, cast(Any, record_there))
-    there.subscribe(rolled_back, cast(Any, record_there))
+    here.subscribe(committed, record_here)
+    here.subscribe(rolled_back, record_here)
+    there.subscribe(committed, record_there)
+    there.subscribe(rolled_back, record_there)
     listening_here, listening_there = anyio.Event(), anyio.Event()
     bridge_here = PostgresTopicBridge(here_pool, here, channel=channel, on_resync=partial(_announce, listening_here))
     bridge_there = PostgresTopicBridge(
@@ -111,8 +108,6 @@ async def test_transaction_publish_is_commit_ordered_and_self_delivered(
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(bridge_here.run)
             tasks.start_soon(bridge_there.run)
-            tasks.start_soon(here.run)
-            tasks.start_soon(there.run)
             with anyio.fail_after(30):
                 await listening_here.wait()
                 await listening_there.wait()

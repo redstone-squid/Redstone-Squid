@@ -1,0 +1,17 @@
+[project]
+name = "squid-reactive"
+version = "0.1.0"
+description = "Dependency-free transactional reactive state for Python"
+requires-python = ">=3.14"
+readme = "README.md"
+license = "MIT"
+dependencies = []
+
+[build-system]
+requires = ["uv_build>=0.11,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv]
+# Key the cached wheel on package sources as well as metadata. Docker builds use a persistent
+# uv cache, so a metadata-only key can reuse a wheel that predates a source change.
+cache-keys = [{ file = "pyproject.toml" }, { file = "src/**/*" }]
