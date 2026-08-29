@@ -70,7 +70,6 @@ EXTENSIONS = (
     "squid.bot.reactions",
     "squid.bot.messages",
     "squid.bot.misc_commands",
-    "squid.bot.layout_showcase",
     "squid.bot.settings",
     "squid.bot.submission",
     "squid.bot.log",
@@ -95,7 +94,7 @@ between two cogs is only raised when they are registered onto the same bot, whic
 does -- it used to surface as the process failing to start.
 """
 
-DEVELOPMENT_EXTENSIONS = ("jishaku", "squid.bot.devtools")
+DEVELOPMENT_EXTENSIONS = ("jishaku", "squid.bot.devtools", "squid.bot.layout_showcase")
 """Loaded on top of `EXTENSIONS`, in development mode only.
 
 Owner-gated either way. Keeping them off a production process is the second lock: a mount id
