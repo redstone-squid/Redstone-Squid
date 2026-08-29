@@ -1,15 +1,17 @@
 """The bot's topic vocabulary and live-build publishing path."""
 
 import asyncio
-from types import SimpleNamespace
+from dataclasses import dataclass
 from typing import Any, cast
-from unittest.mock import AsyncMock
 
 import anyio
 
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.app import RedstoneSquid
+from squid.bot.posts.reconciler import PostReconciler
+from squid.posts.application import PostService
+from squid.posts.domain import ResourceKind
 from squid.topics import resource_topic
 from squid_ui_discord import Everyone
 from squid_ui_discord.testing import delivered_to, message_harness
@@ -47,6 +49,28 @@ async def _drain_scheduler(scheduler: sd.MessageRootScheduler) -> None:
         tasks.cancel_scope.cancel()
 
 
+class PostRecorder(PostService):
+    def __init__(self) -> None:
+        pass
+
+    async def pending_generation(self, resource_kind: ResourceKind, resource_key: str) -> int | None:
+        assert (resource_kind, resource_key) == ("build", "42")
+        return 7
+
+
+class ReconcileRecorder(PostReconciler[RedstoneSquid]):
+    def __init__(self) -> None:
+        self.calls: list[tuple[ResourceKind, str, int]] = []
+
+    async def reconcile(self, resource_kind: ResourceKind, resource_key: str, generation: int) -> None:
+        self.calls.append((resource_kind, resource_key, generation))
+
+
+@dataclass(frozen=True)
+class TopicServices:
+    posts: PostService
+
+
 async def test_one_resource_publish_refreshes_two_panels_without_second_post_writer() -> None:
     bus = sl.runtime.LocalTopicBus()
     scheduler = sd.MessageRootScheduler(bus)
@@ -59,17 +83,17 @@ async def test_one_resource_publish_refreshes_two_panels_without_second_post_wri
         await message_root.send(delivered_to(message))
         assert message_root.followed == (resource_topic("build", "42"),), "following is what the render read"
 
-    posts = SimpleNamespace(pending_generation=AsyncMock(return_value=7))
-    reconciler = SimpleNamespace(reconcile=AsyncMock())
+    posts = PostRecorder()
+    reconciler = ReconcileRecorder()
     bot = RedstoneSquid.__new__(RedstoneSquid)
     bot.topic_bus = bus
     bot.topic_publisher = bus
-    bot.services = cast(Any, SimpleNamespace(posts=posts))
-    bot.post_reconciler = cast(Any, reconciler)
+    bot.services = cast(Any, TopicServices(posts=posts))
+    bot.post_reconciler = reconciler
     source = "after"
 
     await RedstoneSquid.refresh_posts(bot, "build", "42")
     await _drain_scheduler(scheduler)
 
     assert all("after" in str(message.edit.await_args.kwargs["view"].to_components()) for message in messages)
-    reconciler.reconcile.assert_awaited_once_with("build", "42", 7)
+    assert reconciler.calls == [("build", "42", 7)]
