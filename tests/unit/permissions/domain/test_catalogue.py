@@ -39,6 +39,12 @@ def test_every_node_is_described() -> None:
     assert all(tr(node.description).strip() for node in CATALOGUE)
 
 
+def test_nodes_can_form_capability_sets_after_description_localization() -> None:
+    capabilities = frozenset(CATALOGUE)
+
+    assert all(node in capabilities for node in CATALOGUE)
+
+
 def test_unknown_nodes_raise_rather_than_deny() -> None:
     with pytest.raises(UnknownPermissionNodeError):
         _ = CATALOGUE["build.submission.nonexistent"]
