@@ -4,7 +4,7 @@ from dataclasses import dataclass, replace
 from math import isfinite
 
 from squid.core.errors import ValidationError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 from squid.reactions.application import RoleWeightPolicy
 from squid.reactions.domain import ReactionActor, RoleMultiplier, WeightScope
 from squid.starboard.application.ports import EntryKey, EntryState, PendingVote, StarboardRepository
@@ -139,7 +139,7 @@ class StarboardService:
 
     async def set_role_multiplier(self, config: StarboardConfig, role_id: int, multiplier: float | None) -> None:
         if multiplier is not None and (not isfinite(multiplier) or multiplier <= 0):
-            msg = _("Role multiplier must be finite and greater than zero.")
+            msg = tr(t"Role multiplier must be finite and greater than zero.")
             raise ValidationError(msg)
         await self._repository.set_role_multiplier(config.id, role_id, multiplier)
 

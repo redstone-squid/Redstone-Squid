@@ -8,7 +8,7 @@ from difflib import get_close_matches
 from enum import StrEnum
 
 from squid.core.errors import InvalidStateError, ValidationError
-from squid.core.i18n import _, tr
+from squid.core.i18n import tr
 from squid.search.domain.query import ScalarValue
 
 
@@ -145,7 +145,7 @@ def _coerce_decimal(raw: str, field: FieldDefinition) -> Decimal:
         else:
             value = Decimal(normalized)
     if not value.is_finite():
-        msg = _("Search numbers must be finite")
+        msg = tr(t"Search numbers must be finite")
         raise ValidationError(msg)
     if field.numeric_step is not None and value % field.numeric_step != 0:
         field_name = field.name

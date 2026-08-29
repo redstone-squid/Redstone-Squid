@@ -5,7 +5,8 @@ from enum import IntEnum, StrEnum
 from typing import Self
 
 from squid.core.errors import ConfigurationError, InvalidStateError, ValidationError
-from squid.core.i18n import _
+from squid.core.i18n import tr
+from squid_ui.text import Message
 
 
 class NodeScope(StrEnum):
@@ -65,7 +66,7 @@ class PermissionNode:
 
     name: str
     scope: NodeScope
-    description: str
+    description: Message
     default: Default = Default.DENY
     tags: frozenset[Tag] = field(default_factory=frozenset)
 
@@ -81,8 +82,8 @@ class PermissionNode:
 class InvalidPatternError(ValidationError):
     """A permission pattern is not well-formed."""
 
-    default_message = _("That is not a valid permission pattern.")
-    default_title = _("Invalid permission pattern")
+    default_message = tr(t"That is not a valid permission pattern.")
+    default_title = tr(t"Invalid permission pattern")
 
 
 class UnknownPermissionNodeError(InvalidStateError):

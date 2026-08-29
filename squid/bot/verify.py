@@ -20,13 +20,13 @@ from squid.accounts.domain import (
 )
 from squid.bot.account_workspace import AccountWorkspace
 from squid.bot.consent import request_consent
-from squid.bot.i18n import resolve_locale, t
+from squid.bot.i18n import resolve_locale
 from squid.bot.profile_render import (
     public_profile_fields,
 )
 from squid.bot.ui import card_node, text_node
 from squid.bot.utils.permissions import allows
-from squid.core.i18n import _
+from squid.core.i18n import tr
 from squid.permissions.domain.catalogue import (
     ACCOUNT_CLAIM_APPROVE,
     ACCOUNT_CLAIM_LIST,
@@ -43,7 +43,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         self.account_service = bot.services.accounts
 
     @app_commands.command(name="account", description="Manage your account or view a creator page")
-    @app_commands.describe(user=app_commands.locale_str(_("Whose creator page to show. Defaults to your own account.")))
+    @app_commands.describe(user=app_commands.locale_str("Whose creator page to show. Defaults to your own account."))
     async def account(
         self, interaction: discord.Interaction[BotT], user: discord.Member | discord.User | None = None
     ) -> None:
@@ -103,7 +103,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(user.id))
         if account is None or account.public_creator_id is None:
             await invocation.reply(
-                text_node(t(locale, _("{user} doesn't have a creator page."), user=user.display_name)),
+                text_node(tr("{user} doesn't have a creator page.", user=user.display_name)),
                 visibility="personal",
             )
             return
@@ -114,11 +114,11 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         """Render somebody else's page from the same filtered view the API serves."""
         public = await self.account_service.get_public_profile(public_id)
         if public is None:
-            return text_node(t(locale, _("That creator page could not be found.")))
+            return text_node(tr("That creator page could not be found."))
         if public.hidden:
             return card_node(
-                t(locale, _("Hidden creator page")),
-                t(locale, _("This creator has hidden their page. Their build credit is still listed.")),
+                tr("Hidden creator page"),
+                tr("This creator has hidden their page. Their build credit is still listed."),
                 fields=public_profile_fields(public, locale),
             )
         return card_node(
@@ -175,9 +175,8 @@ def _link_message(refresh: IdentityRefresh, locale: str) -> str:
     the same vocabulary; only the headline differs.
     """
     lines = [
-        t(
-            locale,
-            _("Your Discord account is now linked to **{name}**."),
+        tr(
+            "Your Discord account is now linked to **{name}**.",
             name=refresh.current_name,
         )
     ]
@@ -188,12 +187,11 @@ def _link_message(refresh: IdentityRefresh, locale: str) -> str:
 def _refresh_message(refresh: IdentityRefresh, locale: str) -> str:
     """Render every branch of a refresh, including the one where nothing changed."""
     if not refresh.renamed:
-        lines = [t(locale, _("Your Minecraft name is still **{name}**. Nothing changed."), name=refresh.current_name)]
+        lines = [tr("Your Minecraft name is still **{name}**. Nothing changed.", name=refresh.current_name)]
     else:
         lines = [
-            t(
-                locale,
-                _("Your Minecraft name changed from **{old}** to **{new}**."),
+            tr(
+                "Your Minecraft name changed from **{old}** to **{new}**.",
                 old=refresh.previous_name,
                 new=refresh.current_name,
             )
@@ -207,20 +205,16 @@ def _reconciliation_lines(refresh: IdentityRefresh, locale: str) -> list[str]:
     lines: list[str] = []
     if refresh.claimed_alias is not None:
         lines.append(
-            t(
-                locale,
-                _("Build credits under **{name}** are attributed to your account."),
+            tr(
+                "Build credits under **{name}** are attributed to your account.",
                 name=refresh.claimed_alias.name,
             )
         )
     elif refresh.contested_alias is not None:
         lines.append(
-            t(
-                locale,
-                _(
-                    "**{name}** is already credited to another account, so it was not moved. "
-                    "Claim #{id} is awaiting staff review."
-                ),
+            tr(
+                "**{name}** is already credited to another account, so it was not moved. "
+                "Claim #{id} is awaiting staff review.",
                 name=refresh.contested_alias.name,
                 id=refresh.opened_claim.id if refresh.opened_claim is not None else 0,
             )
@@ -228,9 +222,8 @@ def _reconciliation_lines(refresh: IdentityRefresh, locale: str) -> list[str]:
 
     if refresh.retained_alias_names:
         lines.append(
-            t(
-                locale,
-                _("You are still credited under: {names}."),
+            tr(
+                "You are still credited under: {names}.",
                 names=", ".join(f"**{name}**" for name in refresh.retained_alias_names),
             )
         )

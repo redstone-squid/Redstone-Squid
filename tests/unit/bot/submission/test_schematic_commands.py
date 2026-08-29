@@ -2,6 +2,7 @@
 """Text rendered by the `/build schematic` and `/build measure-timing` commands."""
 
 from squid.bot.submission.schematics import _CANDIDATE_LIMIT, _describe, _describe_input_refusal
+from squid.core.i18n import tr
 from squid.schematics.application import RenderSkipReason, SchematicPublication, StoredSchematic
 from squid.schematics.errors import AmbiguousSimulationInputError
 from tests.unit.schematics.fakes import make_analysis
@@ -37,7 +38,7 @@ def test_no_skip_reason_leaks_the_engine_or_its_configured_caps() -> None:
     forbidden = ("nucleation", "wgpu", "vulkan", "worker", "adapter", "block_count", "bounding_volume")
 
     for reason in RenderSkipReason:
-        assert not any(word in reason.description.lower() for word in forbidden), reason
+        assert not any(word in tr(reason.description).lower() for word in forbidden), reason
 
 
 def test_an_ambiguous_input_lists_the_coordinates_to_choose_between() -> None:

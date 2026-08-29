@@ -9,7 +9,7 @@ import pytest
 from pytest_mock import MockerFixture
 
 import squid_ui_discord as sd
-from squid.bot.i18n import localization_for, localization_resolver, resolve_locale, t
+from squid.bot.i18n import localization_for, localization_resolver, resolve_locale
 from squid.settings.application import SettingsService
 from squid.settings.domain import Setting, SettingOptions
 
@@ -66,14 +66,10 @@ def _make_interaction(
     )
 
 
-def test_t_is_a_thin_pass_through() -> None:
-    assert t("en", "Try again in {seconds:.1f} seconds.", seconds=1.0) == "Try again in 1.0 seconds."
-
-
 def test_localization_for_builds_the_negotiated_catalogue(mocker: MockerFixture) -> None:
     catalog = mocker.Mock()
     catalog.gettext.return_value = "translated"
-    mocker.patch("squid.bot.i18n.catalog_for", return_value=catalog)
+    mocker.patch("squid.core.i18n.catalog_for", return_value=catalog)
 
     localization = localization_for("zh-CN")
 

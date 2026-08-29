@@ -7,7 +7,7 @@ from uuid import UUID
 from whenever import Instant
 
 from squid.core.errors import ErrorCode, JSONValue, NotFoundError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 
 MAX_REFERENCE_LENGTH = 128
 """Longest reference a lookup will consider.
@@ -58,6 +58,6 @@ class ErrorReportNotFoundError(NotFoundError):
     telling a caller that a reference *used* to exist reveals that an error happened.
     """
 
-    default_message = _("No stored error matches that reference.")
-    default_title = _("Error report not found")
+    default_message = tr(t"No stored error matches that reference.")
+    default_title = tr(t"Error report not found")
     default_resource = "error_report"

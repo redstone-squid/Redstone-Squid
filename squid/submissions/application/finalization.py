@@ -10,7 +10,7 @@ from uuid import UUID, uuid5
 from whenever import Instant
 
 from squid.core.errors import DataIntegrityError, InvalidStateError, JSONValue, ValidationError
-from squid.core.i18n import _, tr
+from squid.core.i18n import tr
 from squid.sponsors import PublicSponsor
 from squid.submissions.application.drafts import DEFAULT_DRAFT_RETENTION_DAYS, StoredDraft, SubmissionDraftService
 from squid.submissions.domain import DraftStatus, SubmissionOrigin
@@ -59,7 +59,7 @@ class ClaimedFinalizationJob:
 
     def __post_init__(self) -> None:
         if self.job_id.int == 0 or self.claim_token.int == 0 or self.attempts < 1:
-            msg = _("claimed submission finalization metadata is invalid")
+            msg = tr(t"claimed submission finalization metadata is invalid")
             raise DataIntegrityError(msg)
 
 
@@ -120,10 +120,10 @@ class ActionableSubmissionError(ValidationError):
 
     def __init__(self, issues: Sequence[SubmissionAttentionIssue]) -> None:
         if not issues:
-            msg = _("actionable submission errors require at least one issue")
+            msg = tr(t"actionable submission errors require at least one issue")
             raise InvalidStateError(msg)
         self.issues = tuple(issues)
-        super().__init__(_("Submission target rejected actionable fields."))
+        super().__init__(tr(t"Submission target rejected actionable fields."))
 
 
 class DraftArtifactReadiness(Protocol):
@@ -232,7 +232,7 @@ class SubmissionFinalizationService:
         retention_days: int = DEFAULT_DRAFT_RETENTION_DAYS,
     ) -> None:
         if retention_days < 1:
-            msg = _("finalization attention retention must be positive")
+            msg = tr(t"finalization attention retention must be positive")
             raise InvalidStateError(msg)
         self._drafts = drafts
         self._artifacts = artifacts
@@ -257,12 +257,12 @@ class SubmissionFinalizationService:
                 FinalizationJobStatus.CLAIMED,
             }:
                 return existing
-            msg = _("processing draft has no active finalization job")
+            msg = tr(t"processing draft has no active finalization job")
             raise InvalidStateError(msg)
         if current.snapshot.status is DraftStatus.SUBMITTED:
             existing = await self._jobs.get(draft_id)
             if existing is None or existing.status is not FinalizationJobStatus.COMPLETED:
-                msg = _("submitted draft has no retained finalization result")
+                msg = tr(t"submitted draft has no retained finalization result")
                 raise InvalidStateError(msg)
             return existing
 
@@ -341,7 +341,7 @@ class SubmissionFinalizationWorker:
         retention_days: int = DEFAULT_DRAFT_RETENTION_DAYS,
     ) -> None:
         if max_attempts < 1 or retention_days < 1:
-            msg = _("finalization retry and retention limits must be positive")
+            msg = tr(t"finalization retry and retention limits must be positive")
             raise InvalidStateError(msg)
         self._jobs = jobs
         self._target = target

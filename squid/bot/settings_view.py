@@ -10,12 +10,13 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.i18n import localization_for
 from squid.bot.ui import CardField, tr
-from squid.core.i18n import SUPPORTED_LOCALES, _
+from squid.core.i18n import SUPPORTED_LOCALES
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import SETTINGS_SERVER_EDIT, SETTINGS_VOTING_EDIT
 from squid.settings.domain import ScalarChannelSetting
 from squid.voting.domain import EmojiPreset, RoleWeight, VoteChoice, VoteKind, VoteOption
 from squid.voting.errors import InvalidVoteConfigurationError
+from squid_ui.text import Message
 
 if TYPE_CHECKING:
     from squid.settings.application import SettingsService
@@ -40,19 +41,19 @@ CONVERSATION_TYPES = (
 )
 """What `GuildMessageable` admits, as channel types a picker can offer."""
 
-SETTING_LABELS: dict[ScalarChannelSetting, str] = {
-    "Smallest": _("Smallest-record builds"),
-    "Fastest": _("Fastest-record builds"),
-    "First": _("First-of-a-kind builds"),
-    "Builds": _("Confirmed builds"),
-    "Vote": _("Builds awaiting review"),
+SETTING_LABELS: dict[ScalarChannelSetting, Message] = {
+    "Smallest": tr(t"Smallest-record builds"),
+    "Fastest": tr(t"Fastest-record builds"),
+    "First": tr(t"First-of-a-kind builds"),
+    "Builds": tr(t"Confirmed builds"),
+    "Vote": tr(t"Builds awaiting review"),
 }
 """What each channel setting is for, named rather than title-cased so it translates."""
 
-KIND_LABELS: dict[VoteKind, str] = {
-    VoteKind.BUILD: _("Build reviews"),
-    VoteKind.DELETE_LOG: _("Deletion votes"),
-    VoteKind.GENERIC: _("Polls"),
+KIND_LABELS: dict[VoteKind, Message] = {
+    VoteKind.BUILD: tr(t"Build reviews"),
+    VoteKind.DELETE_LOG: tr(t"Deletion votes"),
+    VoteKind.GENERIC: tr(t"Polls"),
 }
 
 

@@ -11,10 +11,9 @@ from discord.ext.commands import Cog
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
-from squid.bot.i18n import resolve_locale, t
+from squid.bot.i18n import resolve_locale
 from squid.bot.ui import render_payload, text_node, tr
 from squid.bot.utils.permissions import allows
-from squid.core.i18n import _
 from squid.permissions.domain.catalogue import VERSION_ENTRY_CREATE
 from squid.versions.domain import Edition, MinecraftVersion
 from squid_ui_discord import send_to
@@ -163,9 +162,9 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="VersionTrac
         if channel_id != self.bot.community_config.version_tracker_channel_id:
             return
         version = await self.version_service.add(message.content.split("\n", 1)[0])
-        locale = await resolve_locale(message, self.bot.services.settings)
+        await resolve_locale(message, self.bot.services.settings)
         await send_to(self.bot.get_channel(channel_id))(  # type: ignore[arg-type]
-            render_payload([text_node(t(locale, _("Version added successfully: {version}"), version=version))])
+            render_payload([text_node(tr("Version added successfully: {version}", version=version))])
         )
 
 

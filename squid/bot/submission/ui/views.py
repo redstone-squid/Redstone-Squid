@@ -56,43 +56,43 @@ def _format_dimensions(value: tuple[int | None, ...]) -> str:
 
 def _submission_basics_form(build: BuildDraft, invocation: sd.Invocation) -> sl.forms.FormSpec:
     return sl.forms.FormSpec(
-        invocation.t(tr(t"Build basics")),
+        tr("Build basics"),
         (
             sl.forms.TextField(
                 key="door_size",
-                label=invocation.t(tr(t"Door opening size")),
-                placeholder=invocation.t(tr(t"For example: 2x2")),
+                label=tr("Door opening size"),
+                placeholder=tr("For example: 2x2"),
                 default=_format_dimensions(build.door_dimensions),
                 maximum=100,
             ),
             sl.forms.TextField(
                 key="pattern",
-                label=invocation.t(tr(t"Pattern")),
-                placeholder=invocation.t(tr(t"For example: regular, full lamp")),
+                label=tr("Pattern"),
+                placeholder=tr("For example: regular, full lamp"),
                 default=", ".join(build.patterns),
                 required=False,
                 maximum=500,
             ),
             sl.forms.TextField(
                 key="dimensions",
-                label=invocation.t(tr(t"Overall build size")),
-                placeholder=invocation.t(tr(t"Width x Height x Depth")),
+                label=tr("Overall build size"),
+                placeholder=tr("Width x Height x Depth"),
                 default=_format_dimensions(build.dimensions),
                 required=False,
                 maximum=100,
             ),
             sl.forms.TextField(
                 key="versions",
-                label=invocation.t(tr(t"Supported versions")),
-                placeholder=invocation.t(tr(t"For example: 1.20.4+")),
+                label=tr("Supported versions"),
+                placeholder=tr("For example: 1.20.4+"),
                 default=build.version_spec or "",
                 required=False,
                 maximum=200,
             ),
             sl.forms.TextField(
                 key="creators",
-                label=invocation.t(tr(t"Creators")),
-                placeholder=invocation.t(tr(t"Minecraft names, comma separated")),
+                label=tr("Creators"),
+                placeholder=tr("Minecraft names, comma separated"),
                 default=", ".join(build.creators_ign),
                 required=False,
                 maximum=500,
@@ -109,44 +109,44 @@ def _submission_details_form(build: BuildDraft, invocation: sd.Invocation) -> sl
         + build.miscellaneous_restrictions
     )
     return sl.forms.FormSpec(
-        invocation.t(tr(t"Links and optional details")),
+        tr("Links and optional details"),
         (
             sl.forms.TextField(
                 key="restrictions",
-                label=invocation.t(tr(t"Restrictions")),
-                placeholder=invocation.t(tr(t"For example: Seamless, Observerless")),
+                label=tr("Restrictions"),
+                placeholder=tr("For example: Seamless, Observerless"),
                 default=", ".join(restrictions),
                 required=False,
                 maximum=1000,
             ),
             sl.forms.TextField(
                 key="image_urls",
-                label=invocation.t(tr(t"Images")),
-                placeholder=invocation.t(tr(t"Image links, comma separated")),
+                label=tr("Images"),
+                placeholder=tr("Image links, comma separated"),
                 default=", ".join(build.image_urls),
                 required=False,
                 maximum=4000,
             ),
             sl.forms.TextField(
                 key="video_urls",
-                label=invocation.t(tr(t"Videos")),
-                placeholder=invocation.t(tr(t"Video links, comma separated")),
+                label=tr("Videos"),
+                placeholder=tr("Video links, comma separated"),
                 default=", ".join(build.video_urls),
                 required=False,
                 maximum=4000,
             ),
             sl.forms.TextField(
                 key="world_urls",
-                label=invocation.t(tr(t"World downloads")),
-                placeholder=invocation.t(tr(t"World download links, comma separated")),
+                label=tr("World downloads"),
+                placeholder=tr("World download links, comma separated"),
                 default=", ".join(build.world_download_urls),
                 required=False,
                 maximum=4000,
             ),
             sl.forms.TextAreaField(
                 key="notes",
-                label=invocation.t(tr(t"Notes")),
-                placeholder=invocation.t(tr(t"Anything staff should know")),
+                label=tr("Notes"),
+                placeholder=tr("Anything staff should know"),
                 default=build.extra_info.get("user") or "",
                 required=False,
                 maximum=4000,
@@ -401,7 +401,7 @@ def _edit_form(items: Sequence[BoundBuildField], page: int, invocation: sd.Invoc
         fields.append(
             field_type(
                 key=item.attribute,
-                label=invocation.t(tr(spec.label)),
+                label=tr(spec.label),
                 placeholder=spec.placeholder,
                 default=item.current_text,
                 required=spec.required,
@@ -409,7 +409,7 @@ def _edit_form(items: Sequence[BoundBuildField], page: int, invocation: sd.Invoc
                 maximum=spec.maximum,
             )
         )
-    return sl.forms.FormSpec(invocation.t(tr(t"Edit build, section {page}")), tuple(fields))
+    return sl.forms.FormSpec(tr("Edit build, section {page}", page=page), tuple(fields))
 
 
 class BuildEditScreen(sd.Screen):

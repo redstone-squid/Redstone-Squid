@@ -9,20 +9,11 @@ from typing import overload
 
 from babel import Locale, UnknownLocaleError
 
-from squid_ui.text import Localization, Message, current_localization, localization_scope, resolve_text
+from squid_ui.text import Localization, Message, current_localization, resolve_text
 
 DOMAIN = "squid"
 DEFAULT_LOCALE = "en"
 SUPPORTED_LOCALES = frozenset({"en", "zh-CN"})
-
-
-def _(message: str) -> str:
-    """Mark a string literal as translatable for `pybabel extract`.
-
-    Returns the message unchanged; actual translation happens later via
-    `translate()`, once a locale is known.
-    """
-    return message
 
 
 def _placeholder(interpolation: Interpolation) -> str:
@@ -180,27 +171,3 @@ def negotiate_locale_candidates(requested: Sequence[str]) -> str:
         if match is not None:
             return match
     return DEFAULT_LOCALE
-
-
-def translate(locale: str | None, message: str, /, **params: object) -> str:
-    """Translate `message` (used as the gettext msgid) into `locale`.
-
-    `params` are applied with `str.format` *after* translation, so dynamic
-    content is never baked into the msgid.
-    """
-    with localization_scope(localization_for(locale)):
-        return tr(message, **params)
-
-
-def ntranslate(
-    locale: str | None,
-    singular: str,
-    plural: str,
-    n: int,
-    /,
-    **params: object,
-) -> str:
-    """Translate a pluralized message for `n` items into `locale`."""
-    resolved = negotiate_locale(locale)
-    text = _catalog(resolved).ngettext(singular, plural, n)
-    return text.format(n=n, **params) if params else text.format(n=n)
