@@ -32,7 +32,6 @@ from squid.accounts.domain import (
     ProfileUpdate,
 )
 from squid.accounts.errors import AccountNotFoundError
-from squid.bot.consent import request_consent
 from squid.bot.profile_render import own_profile_avatar
 from squid.bot.ui import CardField, L
 from squid.core.errors import ValidationError
@@ -41,6 +40,11 @@ SESSION_SECONDS = 300
 
 MAX_LISTED = 25
 """A select holds 25 options, and only a long merge history reaches even a handful."""
+
+type ConsentRequest = Callable[
+    [sl.ActionEvent, Callable[[AccountConsent | None], Awaitable[None]]],
+    Awaitable[None],
+]
 
 
 def _provider_label(provider: IdentityProvider) -> sl.TextLike:
@@ -71,8 +75,12 @@ def _error_detail(error: ValidationError) -> sl.TextLike:
     return L("{message} {action}", message=message, action=L(error.end_user_action))
 
 
-class AccountPanel(sl.Component[sl.ComponentsV2Target]):
-    """A mounted account workspace with semantic identity actions."""
+class AccountScreen(sd.Screen):
+    """An account workspace that ends when closed, replaced, or timed out."""
+
+    session_name = "account"
+    timeout = SESSION_SECONDS
+    visibility = "personal"
 
     selected_id: int | None = sl.state(None)
     closed: bool = sl.state(default=False)
@@ -90,16 +98,15 @@ class AccountPanel(sl.Component[sl.ComponentsV2Target]):
         *,
         accounts: AccountService,
         account_id: int,
-        author_id: int,
-        timeout: float = SESSION_SECONDS,
+        actor_id: int,
+        request_consent: ConsentRequest,
     ) -> None:
         self._accounts = accounts
         self._account_id = account_id
-        self._author_id = author_id
-        self._timeout = timeout
+        self._actor_id = actor_id
+        self._request_consent = request_consent
         self._profile = AccountProfile.empty(account_id)
         self._profile_editor = None
-        self._root: sd.MessageRoot | None = None
 
     async def on_load(self) -> None:
         await self._refresh()
@@ -401,9 +408,7 @@ class AccountPanel(sl.Component[sl.ComponentsV2Target]):
         if not self._needs_consent:
             await work()
             return
-        message_root = sd.responder(event).message_root
-
-        async def answered(_prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
+        async def answered(consent: AccountConsent | None) -> None:
             if consent is None:
                 # Cancelled. The notice said agreeing is what stores anything, and the prompt
                 # closing is the whole answer; the panel already shows the unchanged truth.
@@ -411,14 +416,8 @@ class AccountPanel(sl.Component[sl.ComponentsV2Target]):
             await self._accounts.grant_current_consent(self._account_id)
             self._needs_consent = False
             await work()
-            await message_root.schedule()
 
-        await request_consent(
-            sd.native(event),
-            user_id=self._author_id,
-            on_answer=answered,
-            parent=message_root,
-        )
+        await self._request_consent(event, answered)
 
     async def _reload(self) -> None:
         await self._refresh()
@@ -471,7 +470,7 @@ class AccountPanel(sl.Component[sl.ComponentsV2Target]):
             "Remove {identity}? Any build credit you hold is unaffected.",
             identity=_identity_label(identity),
         )
-        if identity.provider is IdentityProvider.DISCORD and identity.discord_id == self._author_id:
+        if identity.provider is IdentityProvider.DISCORD and identity.discord_id == self._actor_id:
             return L(
                 "{warning} {consequence}",
                 warning=warning,
