@@ -15,19 +15,18 @@ class Screen(sl.Component[sl.ComponentsV2Target]):
         return sl.paragraph(f"screen: {self.name}")
 
 
-def _settings() -> sp.Menu:
-    return sp.Menu(
-        "Settings",
-        [
-            sp.MenuEntry("appearance", "Appearance", sl.paragraph("appearance body")),
-            sp.MenuEntry(
-                "Administration",
-                Screen("administration"),
-                entries=[sp.MenuEntry("Audit", sl.paragraph("audit body"), key="audit")],
-            ),
-        ],
-        key="settings",
-    )
+def _settings() -> sp.Menu[sl.ComponentsV2Target]:
+    # V2 throughout because one entry embeds `Screen`, which is a V2 component. Naming the
+    # element type lets the portable entries solve to the same dialect instead of defaulting.
+    entries: list[sp.MenuEntry[sl.ComponentsV2Target]] = [
+        sp.MenuEntry("appearance", "Appearance", sl.paragraph("appearance body")),
+        sp.MenuEntry(
+            "Administration",
+            Screen("administration"),
+            entries=[sp.MenuEntry("Audit", sl.paragraph("audit body"), key="audit")],
+        ),
+    ]
+    return sp.Menu("Settings", entries, key="settings")
 
 
 async def test_the_root_shows_only_the_heading_and_ends_with_its_own_chrome() -> None:

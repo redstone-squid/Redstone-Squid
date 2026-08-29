@@ -203,14 +203,14 @@ class Aside[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
 
 
 @dataclass(frozen=True, slots=True)
-class Heading:
+class Heading(Renderable[RenderTarget]):
     content: TextLike
     level: int = 2
     importance: Importance = Importance.HIGH
 
 
 @dataclass(frozen=True, slots=True)
-class Paragraph:
+class Paragraph(Renderable[RenderTarget]):
     content: TextLike
     importance: Importance = Importance.NORMAL
 
@@ -223,7 +223,7 @@ class ListItem:
 
 
 @dataclass(frozen=True, slots=True)
-class List:
+class List(Renderable[RenderTarget]):
     items: tuple[ListItem, ...]
     key: str
     ordered: bool = False
@@ -247,7 +247,7 @@ class Field:
 
 
 @dataclass(frozen=True, slots=True)
-class Fields:
+class Fields(Renderable[RenderTarget]):
     fields: tuple[Field, ...]
 
 
@@ -269,7 +269,7 @@ class TableRow:
 
 
 @dataclass(frozen=True, slots=True)
-class Table:
+class Table(Renderable[RenderTarget]):
     columns: Columns
     rows: tuple[TableRow, ...]
     key: str
@@ -287,7 +287,7 @@ class Table:
 
 
 @dataclass(frozen=True, slots=True)
-class Note:
+class Note(Renderable[RenderTarget]):
     """Small print: an id, a timestamp, a caveat the reader may skip."""
 
     content: TextLike
@@ -295,13 +295,13 @@ class Note:
 
 
 @dataclass(frozen=True, slots=True)
-class Quote:
+class Quote(Renderable[RenderTarget]):
     content: TextLike
     attribution: TextLike | None = None
 
 
 @dataclass(frozen=True, slots=True)
-class Code:
+class Code(Renderable[RenderTarget]):
     content: str
     language: str = ""
 
@@ -315,13 +315,13 @@ class MediaItem:
 
 
 @dataclass(frozen=True, slots=True)
-class Figure:
+class Figure(Renderable[RenderTarget]):
     media: MediaItem
     caption: TextLike | None = None
 
 
 @dataclass(frozen=True, slots=True)
-class Media:
+class Media(Renderable[RenderTarget]):
     items: tuple[MediaItem, ...]
     key: str
     display: MediaDisplay = MediaDisplay.AUTO
@@ -349,7 +349,7 @@ class ToggleEvent(ActionEvent):
 
 
 @dataclass(frozen=True, slots=True)
-class Toggle:
+class Toggle(Renderable[RenderTarget]):
     """One keyed boolean control with explicit state ownership."""
 
     key: str
@@ -362,7 +362,7 @@ class Toggle:
 
 
 @dataclass(frozen=True, slots=True)
-class Download:
+class Download(Renderable[RenderTarget]):
     """A visible file control whose asset is declared at its point of use."""
 
     key: str
@@ -374,21 +374,21 @@ class Download:
 
 
 @dataclass(frozen=True, slots=True)
-class Status:
+class Status(Renderable[RenderTarget]):
     content: TextLike
     tone: Tone = Tone.NEUTRAL
     emphasis: Emphasis = Emphasis.NORMAL
 
 
 @dataclass(frozen=True, slots=True)
-class ProgressBar:
+class ProgressBar(Renderable[RenderTarget]):
     value: float
     label: TextLike | None = None
     maximum: float = 1.0
 
 
 @dataclass(frozen=True, slots=True)
-class Roster:
+class Roster(Renderable[RenderTarget]):
     """A host-owned roster allocation rendered with active localized chrome."""
 
     key: str
@@ -412,7 +412,7 @@ class Roster:
 
 
 @dataclass(frozen=True, slots=True)
-class Grid:
+class Grid(Renderable[RenderTarget]):
     """A selectable spatial collection with target-shaped fallback strategies."""
 
     key: str
@@ -429,14 +429,14 @@ class Grid:
 
 
 @dataclass(frozen=True, slots=True)
-class Metric:
+class Metric(Renderable[RenderTarget]):
     value: int | float | str
     label: TextLike
     unit: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
-class Timestamp:
+class Timestamp(Renderable[RenderTarget]):
     """An aware instant plus a portable display preference."""
 
     instant: datetime
@@ -445,7 +445,7 @@ class Timestamp:
 
 
 @dataclass(frozen=True, slots=True)
-class ZonedTimestamp:
+class ZonedTimestamp(Renderable[RenderTarget]):
     """An exact instant rendered visibly in its named timezone."""
 
     value: ZonedDateTime
@@ -453,7 +453,7 @@ class ZonedTimestamp:
 
 
 @dataclass(frozen=True, slots=True)
-class FormTrigger:
+class FormTrigger(Renderable[RenderTarget]):
     """A content entry point that presents a portable form."""
 
     key: str
@@ -524,7 +524,7 @@ class ControlGroup:
 
 
 @dataclass(frozen=True, slots=True)
-class ActionControls:
+class ActionControls(Renderable[RenderTarget]):
     items: tuple[ActionControl | Link | RoutedActionControl | ControlGroup, ...]
     key: str
     display: ControlDisplay = ControlDisplay.AUTO
@@ -576,7 +576,7 @@ class ScaleEvent(ActionEvent):
 
 
 @dataclass(frozen=True, slots=True)
-class Choices:
+class Choices(Renderable[RenderTarget]):
     """A picker over `choices`, backed by buttons or a select depending on shape.
 
     `minimum` defaults to 1, so the picker cannot be cleared to nothing without setting
@@ -593,7 +593,7 @@ class Choices:
 
 
 @dataclass(frozen=True, slots=True)
-class Entities:
+class Entities(Renderable[RenderTarget]):
     """A picker over frontend-resolved entities with an optional enumerated fallback."""
 
     key: str
@@ -616,7 +616,7 @@ class Entities:
 
 
 @dataclass(frozen=True, slots=True)
-class RoutedChoices:
+class RoutedChoices(Renderable[RenderTarget]):
     """An explicitly stateless picker whose values are submitted to one route."""
 
     key: str
@@ -663,7 +663,7 @@ class NavigateEvent(ActionEvent):
 
 
 @dataclass(frozen=True, slots=True)
-class Navigation:
+class Navigation(Renderable[RenderTarget]):
     key: str
     options: tuple[NavOption, ...]
     current: NavOwnership = FIRST_OPTION
@@ -844,9 +844,18 @@ The closed spelling of `LayoutNode`, which is open at its `Renderable` arm. "Bui
 the operative word: a caller's own `Renderable` is a layout node and is deliberately not
 one of these, which is what the Discord lowering needs to say when it meets one.
 """
-type LayoutNode[RenderTargetT = RenderTarget] = (
-    SemanticNode[RenderTargetT] | Adaptation[RenderTargetT] | FallbackContent[RenderTargetT] | Renderable[RenderTargetT]
-)
+type LayoutNode[RenderTargetT = RenderTarget] = Renderable[RenderTargetT]
+"""Anything that may stand in the authored tree, in the dialects it can be drawn in.
+
+Exactly `Renderable`, and named apart from it on purpose: `Renderable` is the capability a
+class claims by inheriting it, while this is the stage a value is at. A field or parameter
+wants to say "a node of the authored tree", not "something drawable", even though the two
+are the same type.
+
+Open at its only arm, so nothing may match over it. `PortableNode` is the closed union a
+traversal proves itself exhaustive against, and `BuiltinLayoutNode` the one an `isinstance`
+can test.
+"""
 
 
 def truncate[RenderTargetT = RenderTarget](

@@ -43,6 +43,7 @@ from squid_ui.semantic import (
     Article,
     Aside,
     Block,
+    BuiltinLayoutNode,
     Choice,
     ChoiceEvent,
     ChoiceOwnership,
@@ -51,7 +52,6 @@ from squid_ui.semantic import (
     Code,
     Column,
     Columns,
-    BuiltinLayoutNode,
     ControlDisplay,
     ControlGroup,
     Controlled,
@@ -229,7 +229,7 @@ def _is_component(value: object) -> bool:
     return isinstance(value, Component)
 
 
-def _children[RenderTargetT](
+def _children[RenderTargetT: RenderTarget](
     values: tuple[ChildLike[RenderTargetT], ...], origin: str
 ) -> tuple[LayoutNode[RenderTargetT], ...]:
     collected: list[LayoutNode[RenderTargetT]] = []

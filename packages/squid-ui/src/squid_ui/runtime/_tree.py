@@ -95,6 +95,14 @@ def _map_layout_children_routed[RenderTargetT: RenderTarget](
             raise LayoutInvariantError(message)
         return transformed[0]
 
+    # The suppressions below all name one mismatch, not four. This walker rewrites the
+    # *authored* tree, so it speaks `LayoutNode[RenderTargetT]` -- open, and parameterized by
+    # the caller's dialect. But the primitive containers it has to rebuild (`Break`, `Budget`,
+    # `Extension.fallback`, `Variant.nodes`) declare their child fields as `Node`: the closed,
+    # already-lowered union, which is what lets the planner match over them exhaustively. The
+    # two are the same objects at runtime and neither declaration is wrong for its own job.
+    # Closing the gap means making those containers generic in their children's target, which
+    # is a change to the primitive vocabulary rather than to this traversal.
     match node:
         case (
             Group(children=children)
@@ -173,7 +181,7 @@ def _map_layout_children_routed[RenderTargetT: RenderTarget](
                             f"{path}.variant.{index}",
                             (*route, _IndexStep("variants", index)),
                             "nodes",
-                            transform,
+                            transform,  # pyrefly: ignore[bad-argument-type]
                         ),
                     )
                     for index, variant in enumerate(variants)
