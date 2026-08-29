@@ -12,7 +12,7 @@ from whenever import Instant
 
 import squid.bot.app
 from squid.bot.diagnostics import Diagnostics
-from squid.bot.diagnostics_view import ErrorReportBrowser, report_attachment
+from squid.bot.diagnostics_view import ErrorReportScreen, report_attachment
 from squid.diagnostics.domain import ErrorReport
 from squid_ui.sources import Position
 from squid_ui_discord import (
@@ -83,7 +83,7 @@ def make_cog(*, report: ErrorReport | None = None, reports: tuple[ErrorReport, .
     return Diagnostics(cast("squid.bot.app.RedstoneSquid", bot))
 
 
-def message_root_browser(browser: ErrorReportBrowser) -> tuple[MessageRoot, discord.ui.LayoutView]:
+def message_root_browser(browser: ErrorReportScreen) -> tuple[MessageRoot, discord.ui.LayoutView]:
     bot = make_layout_bot()
     message_root = bot.client_runtime.mount(browser, access=Owner(1), chrome=browser.chrome())
     return message_root, commit_render(message_root)
@@ -113,7 +113,7 @@ def _code_pages(message_root: MessageRoot) -> list[str]:
 async def test_recent_list_offers_every_entry_for_opening() -> None:
     """The audit's complaint: a listed reference could only be read, then retyped."""
     reports = (make_report("aaa111"), make_report("bbb222", work_lost=True))
-    _, view = message_root_browser(ErrorReportBrowser(reports))
+    _, view = message_root_browser(ErrorReportScreen(reports))
 
     payload = view.to_components()
     select = payload[1]["components"][0]
@@ -122,7 +122,7 @@ async def test_recent_list_offers_every_entry_for_opening() -> None:
 
 
 async def test_opening_a_listed_report_replaces_the_list_in_place() -> None:
-    browser = ErrorReportBrowser((make_report("aaa111"),))
+    browser = ErrorReportScreen((make_report("aaa111"),))
     message_root, _ = message_root_browser(browser)
     interaction = fake_interaction()
 
@@ -137,7 +137,7 @@ async def test_opening_a_listed_report_replaces_the_list_in_place() -> None:
 async def test_a_long_traceback_is_readable_past_one_page() -> None:
     """Previously the card showed a fixed 1200-character tail and nothing could reach the rest."""
     frames = "\n".join(f"  File 'module{index}.py', line {index}, in frame{index}" for index in range(300))
-    browser = ErrorReportBrowser(report=make_report(traceback=f"Traceback:\n{frames}\nValueError: boom"))
+    browser = ErrorReportScreen(report=make_report(traceback=f"Traceback:\n{frames}\nValueError: boom"))
     message_root, view = message_root_browser(browser)
 
     # The failing frame is at the end, so that is where the report opens.
@@ -153,7 +153,7 @@ async def test_a_long_traceback_is_readable_past_one_page() -> None:
 
 
 async def test_paging_controls_absent_for_a_short_traceback() -> None:
-    _, view = message_root_browser(ErrorReportBrowser(report=make_report(traceback="one frame")))
+    _, view = message_root_browser(ErrorReportScreen(report=make_report(traceback="one frame")))
 
     buttons = [item.label for item in view.walk_children() if isinstance(item, discord.ui.Button)]
     assert "Earlier" not in buttons
@@ -162,7 +162,7 @@ async def test_paging_controls_absent_for_a_short_traceback() -> None:
 
 async def test_paging_stops_at_both_ends() -> None:
     frames = "\n".join("frame " + "x" * 90 for _ in range(200))
-    browser = ErrorReportBrowser(report=make_report(traceback=frames))
+    browser = ErrorReportScreen(report=make_report(traceback=frames))
     message_root, view = message_root_browser(browser)
 
     nav = [item for item in view.walk_children() if isinstance(item, discord.ui.Button) and item.custom_id]
@@ -174,7 +174,7 @@ async def test_paging_stops_at_both_ends() -> None:
 
 
 async def test_the_log_tail_is_shown_and_keeps_its_last_lines() -> None:
-    browser = ErrorReportBrowser(report=make_report(log_tail=("first line", "second line")))
+    browser = ErrorReportScreen(report=make_report(log_tail=("first line", "second line")))
     _, view = message_root_browser(browser)
 
     text = "\n".join(_texts(view))
@@ -185,7 +185,7 @@ async def test_the_log_tail_is_shown_and_keeps_its_last_lines() -> None:
 async def test_every_page_fits_the_real_display_budget() -> None:
     """The PAGE_CHARS killer: each page, chrome and footer included, fits the actual budget."""
     long_line = "x" * 9001
-    browser = ErrorReportBrowser(report=make_report(traceback=f"{long_line}\nValueError: boom"))
+    browser = ErrorReportScreen(report=make_report(traceback=f"{long_line}\nValueError: boom"))
     message_root, _ = message_root_browser(browser)
 
     message_root.presentation.move_cursor("traceback", Position())
@@ -203,7 +203,7 @@ async def test_every_page_fits_the_real_display_budget() -> None:
 
 
 async def test_choosing_a_report_attaches_its_full_text() -> None:
-    browser = ErrorReportBrowser((make_report("aaa111"),))
+    browser = ErrorReportScreen((make_report("aaa111"),))
     message_root, _ = message_root_browser(browser)
     interaction = fake_interaction()
 
@@ -214,7 +214,7 @@ async def test_choosing_a_report_attaches_its_full_text() -> None:
 
 
 async def test_going_back_removes_the_attachment() -> None:
-    browser = ErrorReportBrowser((make_report("aaa111"),))
+    browser = ErrorReportScreen((make_report("aaa111"),))
     message_root, _ = message_root_browser(browser)
     await message_root.dispatch("open", fake_interaction(), ["0"])
     interaction = fake_interaction()
@@ -273,7 +273,7 @@ async def test_recent_delivers_the_view_privately(in_guild: bool) -> None:
 
 
 async def test_a_fence_inside_a_traceback_cannot_close_the_card_fence() -> None:
-    _, view = message_root_browser(ErrorReportBrowser(report=make_report(traceback="ValueError: ```not markdown```")))
+    _, view = message_root_browser(ErrorReportScreen(report=make_report(traceback="ValueError: ```not markdown```")))
 
     fenced = next(text for text in _texts(view) if "not markdown" in text)
     assert "```not" not in fenced
