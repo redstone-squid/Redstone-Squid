@@ -2,7 +2,6 @@
 
 import json
 from datetime import UTC, datetime
-from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -18,7 +17,7 @@ from squid_ui_discord import Everyone, MessageRoot, Owner, live
 from squid_ui_discord.devtools import DevTools
 from squid_ui_discord.devtools_runtime import DevToolsRuntime
 from squid_ui_discord.routing import Router
-from squid_ui_discord.testing import commit_render, delivered_to, interaction_harness, message_harness
+from squid_ui_discord.testing import ContextHarness, commit_render, delivered_to, interaction_harness, message_harness
 
 
 class Subject(sl.Component[sl.ComponentsV2Target]):
@@ -45,14 +44,14 @@ class FakeBot:
         self.items.extend(items)
 
 
+class DevContext(ContextHarness):
+    def __init__(self, *, bot: FakeBot | None = None) -> None:
+        super().__init__(message=message_harness(), bot=FakeBot() if bot is None else bot, user_id=1)
+        self.send_help = AsyncMock()
+
+
 def make_context(*, bot: FakeBot | None = None) -> Any:
-    return SimpleNamespace(
-        interaction=None,
-        author=SimpleNamespace(id=1),
-        send=AsyncMock(return_value=message_harness()),
-        send_help=AsyncMock(),
-        bot=FakeBot() if bot is None else bot,
-    )
+    return cast(Any, DevContext(bot=bot))
 
 
 async def run(command: Any, cog: DevTools[Any], ctx: Any, *args: Any) -> None:
