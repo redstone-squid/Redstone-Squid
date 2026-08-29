@@ -22,10 +22,12 @@ from squid.accounts.domain import (
     PublicCreatorProfile,
 )
 from squid.bot.account_view import AccountScreen
+from squid.bot.account_workspace import AccountWorkspace
 from squid.bot.verify import VerifyCog
+from squid.permissions.domain import PermissionNode
+from squid_ui.testing import labels
 from squid_ui.text import NEUTRAL, resolve_text
 from squid_ui_discord.testing import commit_render, fake_interaction
-from tests.helpers.discord import make_layout_bot
 
 ACCOUNT_ID = 42
 AUTHOR_ID = 555
@@ -40,63 +42,112 @@ def text_of(view: discord.ui.LayoutView) -> str:
     return "\n".join(child.content for child in view.walk_children() if isinstance(child, discord.ui.TextDisplay))
 
 
-async def test_someone_with_no_account_is_told_how_to_get_one() -> None:
-    """There is no panel to open for an account that does not exist yet."""
-    cog = VerifyCog.__new__(VerifyCog)
-    cog.bot = cast(
-        Any,
-        make_layout_bot(services=SimpleNamespace(settings=SimpleNamespace(get_locale=AsyncMock(return_value=None)))),
+async def test_someone_with_no_account_gets_consent_and_linking_workspace() -> None:
+    accounts = SimpleNamespace(get_account_by_identity=AsyncMock(return_value=None))
+
+    async def authorize(_node: PermissionNode) -> bool:
+        return False
+
+    workspace = AccountWorkspace(
+        accounts=cast(Any, accounts),
+        actor_id=AUTHOR_ID,
+        account=None,
+        request_consent=AsyncMock(),
+        can_review_claims=False,
+        can_approve_claims=False,
+        can_reject_claims=False,
+        authorize_claim=authorize,
     )
-    cog.account_service = cast(Any, SimpleNamespace(get_account_by_identity=AsyncMock(return_value=None)))
-    ctx = SimpleNamespace(
-        interaction=None,
-        guild=SimpleNamespace(id=5, preferred_locale="en-US"),
-        author=SimpleNamespace(id=AUTHOR_ID),
-        send=AsyncMock(),
-        bot=cog.bot,
-    )
 
-    await VerifyCog.account_group.callback(cog, cast(Any, ctx))  # type: ignore[arg-type]
+    await workspace.on_load()
 
-    assert "/account link" in text_of(ctx.send.await_args.kwargs["view"])
+    assert workspace._tabs is not None
+    assert {"Link and refresh", "Review privacy notice"} <= set(labels(workspace._tabs.render()))
 
 
-async def test_somebody_elses_creator_page_is_a_public_read() -> None:
-    """Rule 2 of the ephemerality policy: a read of shared content answers in the channel.
-
-    `profile` answered privately whoever it was about, which the rule 5.7 wrote down does not.
-    """
+async def test_somebody_elses_creator_page_uses_the_public_profile_projection() -> None:
     page = UUID(int=7)
     cog = VerifyCog.__new__(VerifyCog)
-    cog.bot = cast(
-        Any,
-        make_layout_bot(services=SimpleNamespace(settings=SimpleNamespace(get_locale=AsyncMock(return_value=None)))),
-    )
     cog.account_service = cast(
         Any,
-        SimpleNamespace(
-            get_account_by_identity=AsyncMock(return_value=Account((JAVA,), None, 9, NOW, page)),
-            get_public_profile=AsyncMock(return_value=PublicCreatorProfile(public_id=page, hidden=False)),
-        ),
+        SimpleNamespace(get_public_profile=AsyncMock(return_value=PublicCreatorProfile(public_id=page, hidden=False))),
     )
-    ctx = SimpleNamespace(
-        interaction=SimpleNamespace(
-            guild_locale=None,
-            locale="en-US",
-            response=SimpleNamespace(is_done=lambda: False),
-            is_expired=lambda: False,
-            expires_at=None,
-        ),
-        guild=SimpleNamespace(id=5, preferred_locale="en-US"),
-        author=SimpleNamespace(id=AUTHOR_ID),
-        send=AsyncMock(),
-        bot=cog.bot,
+
+    card = await cog._public_profile_card(page, "Someone", "en-US")
+
+    assert "Someone" in str(card)
+
+
+async def test_linking_runs_inside_the_workspace_and_refreshes_it() -> None:
+    account = Account((DISCORD,), AccountConsent.grant_current(), ACCOUNT_ID, NOW)
+    refresh = SimpleNamespace(current_name="Notch")
+    accounts = SimpleNamespace(
+        reserve_minecraft_link=AsyncMock(return_value=SimpleNamespace()),
+        link_minecraft_account=AsyncMock(return_value=refresh),
+        release_minecraft_link=AsyncMock(),
     )
-    other = SimpleNamespace(id=999, display_name="Someone")
 
-    await VerifyCog.account_group.callback(cog, cast(Any, ctx), cast(Any, other))  # type: ignore[arg-type]
+    async def authorize(_node: PermissionNode) -> bool:
+        return False
 
-    assert ctx.send.await_args.kwargs.get("ephemeral") is not True
+    workspace = AccountWorkspace(
+        accounts=cast(Any, accounts),
+        actor_id=AUTHOR_ID,
+        account=account,
+        request_consent=AsyncMock(),
+        can_review_claims=False,
+        can_approve_claims=False,
+        can_reject_claims=False,
+        authorize_claim=authorize,
+    )
+    workspace._rebuild = AsyncMock()  # type: ignore[method-assign]
+    event = SimpleNamespace(values={"code": "abcd"}, notice=AsyncMock())
+
+    await workspace._link(cast(sl.SubmitEvent, event))
+
+    accounts.link_minecraft_account.assert_awaited_once()
+    accounts.release_minecraft_link.assert_not_awaited()
+    event.notice.assert_awaited_once()
+
+
+async def test_merge_requires_the_workspace_decision() -> None:
+    account = Account((DISCORD,), AccountConsent.grant_current(), ACCOUNT_ID, NOW)
+    accounts = SimpleNamespace(
+        preview_merge=AsyncMock(
+            return_value=SimpleNamespace(alias_names=("Notch",), identity_count=2, build_count=3)
+        ),
+        complete_merge=AsyncMock(return_value=SimpleNamespace(redirected_public_creator_id=UUID(int=9))),
+    )
+
+    async def authorize(_node: PermissionNode) -> bool:
+        return False
+
+    workspace = AccountWorkspace(
+        accounts=cast(Any, accounts),
+        actor_id=AUTHOR_ID,
+        account=account,
+        request_consent=AsyncMock(),
+        can_review_claims=False,
+        can_approve_claims=False,
+        can_reject_claims=False,
+        authorize_claim=authorize,
+    )
+    submit = SimpleNamespace(values={"code": "merge-me"})
+
+    await workspace._request_merge(cast(sl.SubmitEvent, submit))
+
+    accounts.complete_merge.assert_not_awaited()
+    assert workspace._merge_decision is not None
+    workspace._rebuild = AsyncMock()  # type: ignore[method-assign]
+    source = SimpleNamespace(notice=AsyncMock())
+    await workspace._finish_merge(cast(Any, SimpleNamespace(source=source)), "confirm")
+    accounts.complete_merge.assert_awaited_once_with(ACCOUNT_ID, "merge-me")
+
+
+def test_account_is_one_app_only_workspace() -> None:
+    cog = cast(Any, VerifyCog)
+    assert all(command.name != "account" for command in cog.__cog_commands__)
+    assert "account" in {command.name for command in cog.__cog_app_commands__}
 
 
 def _account_panel(profile: AccountProfile) -> AccountScreen:

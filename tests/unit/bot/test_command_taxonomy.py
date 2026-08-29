@@ -25,16 +25,6 @@ type AnyCommand = Command[Any, ..., Any]
 UNGATED_COMMANDS = frozenset(
     {
         # Public: anyone may run these.
-        "account",
-        "account claim",
-        "account consent",
-        "account link",
-        "account merge",
-        "account merge-code",
-        # Refreshing your own Minecraft name is default-allow, so the command declares no
-        # node. Its `user:` form checks `account.identity.refresh_any` inline instead, which
-        # a decorator could not express without gating the self case too.
-        "account refresh",
         "build",
         "build queue",
         "build schematic",
@@ -83,15 +73,6 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
     # `show` fallback, so bare `account` opens the panel that `identities`, `visibility`,
     # `unlink`, `profile` and `profile-edit` used to answer a piece at a time
     # (docs/plans/command-redesign/07-account.md).
-    "account": (
-        "claim",
-        "claims",
-        "consent",
-        "link",
-        "merge",
-        "merge-code",
-        "refresh",
-    ),
     # The schematic tools all sit under `build schematic`, which is what their
     # permission nodes always said (docs/plans/command-redesign/06-build.md).
     "build": (
@@ -259,10 +240,6 @@ def test_sensitive_commands_declare_the_intended_permission_nodes() -> None:
     assert _nodes(search.__cog_commands__, "build debug") == {"build.submission.debug"}
     assert _nodes(search.__cog_commands__, "build schematic measure-timing") == {"build.schematic.measure_timing"}
     assert _nodes(search.__cog_commands__, "build schematic detect-lattice") == {"build.schematic.detect_lattice"}
-
-    verify = VerifyCog.__new__(VerifyCog)
-    assert _nodes(verify.__cog_commands__, "account claims") == {"account.claim.list"}
-    assert _nodes(verify.__cog_commands__, "account claim") == set()
 
 def test_every_privileged_command_declares_a_node() -> None:
     """A privileged command shipped with no gate fails CI.
