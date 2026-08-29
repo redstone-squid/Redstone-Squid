@@ -5,7 +5,7 @@ from dataclasses import replace
 from typing import assert_never
 
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.factories import is_layout_node
+from squid_ui.factories import is_builtin_layout_node
 from squid_ui.planning.limits import MessageLimits
 from squid_ui.planning.search import StrategyAxis, StrategyCandidate
 from squid_ui.planning.semantic_adaptation.model import FallbackAxis, SemanticDecisions
@@ -146,7 +146,7 @@ def nominate_decisions(
             walk(child, child_path)
 
     def walk(node: AnyLayoutNode, path: str) -> None:
-        if not is_layout_node(node):
+        if not is_builtin_layout_node(node):
             message = f"{path}: {type(node).__name__} is neither a semantic node nor a Discord primitive"
             raise LayoutInvariantError(message)
         match node:

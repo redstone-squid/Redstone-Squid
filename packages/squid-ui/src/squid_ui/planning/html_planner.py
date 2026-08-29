@@ -13,7 +13,7 @@ from squid_ui.chrome import Chrome
 from squid_ui.document import DocumentLike, as_document
 from squid_ui.entity import EntityRef, encode_entity_ref
 from squid_ui.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
-from squid_ui.factories import is_layout_node, is_portable_node
+from squid_ui.factories import is_builtin_layout_node, is_portable_node
 from squid_ui.forms import FormBinding
 from squid_ui.guards import Guard
 from squid_ui.interactions import ActionBinding, ActionEvent, ActionMode, BusySpec
@@ -273,7 +273,7 @@ class _Compiler:
         before the match, so the match is over the closed union and provably exhaustive.
         """
         if not is_portable_node(node):
-            if is_layout_node(node):
+            if is_builtin_layout_node(node):
                 message = (
                     f"{path}: HTML planning accepts semantic nodes, not Discord-shaped primitive "
                     f"{type(node).__name__}; author the portable vocabulary, or give the primitive "
