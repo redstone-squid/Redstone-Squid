@@ -1,9 +1,7 @@
 """What `/account` answers with, and to whom."""
 
 from dataclasses import replace
-from types import SimpleNamespace
-from typing import Any, cast
-from unittest.mock import AsyncMock
+from typing import Any, cast, override
 from uuid import UUID
 
 import discord
@@ -13,12 +11,20 @@ from whenever import Instant
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
+from squid.accounts.application import AccountService
 from squid.accounts.domain import (
     Account,
     AccountConsent,
     AccountIdentity,
+    AccountMerge,
     AccountProfile,
+    IdentityProvider,
+    IdentityRefresh,
+    LinkPreview,
+    LinkReservation,
+    MergePreview,
     ProfileLink,
+    ProfileUpdate,
     PublicCreatorProfile,
 )
 from squid.bot.account_view import AccountScreen
@@ -38,21 +44,172 @@ DISCORD = replace(AccountIdentity.discord(AUTHOR_ID), id=1, verified_at=NOW)
 JAVA = replace(AccountIdentity.java(JAVA_UUID, username="Notch"), id=2, verified_at=NOW)
 
 
+async def no_consent_request(_event: sl.ActionEvent, _callback: Any) -> None:
+    pass
+
+
+async def no_refresh() -> None:
+    pass
+
+
+class NoticeSource:
+    def __init__(self, **values: object) -> None:
+        self.values = values
+        self.notices: list[object] = []
+
+    async def notice(self, text: object, **_kwargs: object) -> None:
+        self.notices.append(text)
+
+
+class ScheduleRoot:
+    def __init__(self) -> None:
+        self.scheduled = 0
+        self.localization = NEUTRAL
+
+    async def schedule(self) -> None:
+        self.scheduled += 1
+
+
+class EventResponder:
+    def __init__(self, message_root: ScheduleRoot) -> None:
+        self.interaction = interaction_harness(user_id=AUTHOR_ID).source
+        self.message_root = message_root
+
+
+class PressSource:
+    def __init__(self, message_root: ScheduleRoot) -> None:
+        self.responder = EventResponder(message_root)
+        self.value = True
+
+
+class TransitionSource:
+    def __init__(self, source: NoticeSource) -> None:
+        self.source = source
+
+
+class NoAccountService(AccountService):
+    def __init__(self) -> None:
+        pass
+
+    @override
+    async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
+        del provider, subject
+        return None
+
+
+class PublicProfileService(AccountService):
+    def __init__(self, profile: PublicCreatorProfile) -> None:
+        self.profile = profile
+
+    @override
+    async def get_public_profile(self, public_id: UUID) -> PublicCreatorProfile | None:
+        del public_id
+        return self.profile
+
+
+class LinkAccountService(AccountService):
+    def __init__(self) -> None:
+        self.linked: list[tuple[int, str]] = []
+        self.released: list[str] = []
+        self.reservation = LinkReservation("held", NOW.add(minutes=5), LinkPreview(JAVA_UUID, "Notch"))
+
+    @override
+    async def reserve_minecraft_link(
+        self,
+        code: str,
+        *,
+        attempted_by: tuple[IdentityProvider, str],
+        ttl_seconds: int = 120,
+    ) -> LinkReservation:
+        del attempted_by, ttl_seconds
+        assert code == "abcd"
+        return self.reservation
+
+    @override
+    async def link_minecraft_account(
+        self,
+        account_id: int,
+        code: str,
+        *,
+        consent: AccountConsent,
+        attempted_by: tuple[IdentityProvider, str],
+        reservation: LinkReservation | None = None,
+    ) -> IdentityRefresh:
+        del consent, attempted_by
+        assert reservation is self.reservation
+        self.linked.append((account_id, code))
+        return IdentityRefresh(account_id, JAVA_UUID, "Notch")
+
+    @override
+    async def release_minecraft_link(self, code: str, reservation: LinkReservation) -> None:
+        assert reservation is self.reservation
+        self.released.append(code)
+
+
+class MergeAccountService(AccountService):
+    def __init__(self) -> None:
+        self.completed: list[tuple[int, str]] = []
+
+    @override
+    async def preview_merge(self, surviving_account_id: int, code: str) -> MergePreview:
+        del surviving_account_id, code
+        return MergePreview(UUID(int=8), ("Notch",), identity_count=2, build_count=3)
+
+    @override
+    async def complete_merge(
+        self, surviving_account_id: int, code: str, *, now: Instant | None = None
+    ) -> AccountMerge:
+        del now
+        self.completed.append((surviving_account_id, code))
+        return AccountMerge(surviving_account_id, 9, UUID(int=8), UUID(int=9))
+
+
+class AccountMutationService(AccountService):
+    def __init__(self, *, unlinked: AccountIdentity = JAVA) -> None:
+        self.unlinked = unlinked
+        self.profile_updates: list[tuple[int, ProfileUpdate]] = []
+        self.consent_grants: list[int] = []
+        self.visibility_writes: list[tuple[int, int, bool]] = []
+        self.unlinks: list[tuple[int, int]] = []
+
+    @override
+    async def update_profile(self, account_id: int, update: ProfileUpdate) -> AccountProfile:
+        self.profile_updates.append((account_id, update))
+        return AccountProfile.empty(account_id)
+
+    @override
+    async def grant_current_consent(self, account_id: int) -> Account:
+        self.consent_grants.append(account_id)
+        return Account((), AccountConsent.grant_current(), account_id, NOW)
+
+    @override
+    async def set_identity_visibility(
+        self, account_id: int, identity_id: int, *, is_public: bool
+    ) -> AccountIdentity:
+        self.visibility_writes.append((account_id, identity_id, is_public))
+        return DISCORD
+
+    @override
+    async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity:
+        self.unlinks.append((account_id, identity_id))
+        return self.unlinked
+
+
 def text_of(view: discord.ui.LayoutView) -> str:
     return "\n".join(child.content for child in view.walk_children() if isinstance(child, discord.ui.TextDisplay))
 
 
 async def test_someone_with_no_account_gets_consent_and_linking_workspace() -> None:
-    accounts = SimpleNamespace(get_account_by_identity=AsyncMock(return_value=None))
+    accounts = NoAccountService()
 
     async def authorize(_node: PermissionNode) -> bool:
         return False
 
     workspace = AccountWorkspace(
-        accounts=cast(Any, accounts),
+        accounts=accounts,
         actor_id=AUTHOR_ID,
         account=None,
-        request_consent=AsyncMock(),
+        request_consent=no_consent_request,
         can_review_claims=False,
         can_approve_claims=False,
         can_reject_claims=False,
@@ -68,10 +225,7 @@ async def test_someone_with_no_account_gets_consent_and_linking_workspace() -> N
 async def test_somebody_elses_creator_page_uses_the_public_profile_projection() -> None:
     page = UUID(int=7)
     cog = VerifyCog.__new__(VerifyCog)
-    cog.account_service = cast(
-        Any,
-        SimpleNamespace(get_public_profile=AsyncMock(return_value=PublicCreatorProfile(public_id=page, hidden=False))),
-    )
+    cog.account_service = PublicProfileService(PublicCreatorProfile(public_id=page, hidden=False))
 
     card = await cog._public_profile_card(page, "Someone")
 
@@ -80,66 +234,58 @@ async def test_somebody_elses_creator_page_uses_the_public_profile_projection() 
 
 async def test_linking_runs_inside_the_workspace_and_refreshes_it() -> None:
     account = Account((DISCORD,), AccountConsent.grant_current(), ACCOUNT_ID, NOW)
-    refresh = SimpleNamespace(current_name="Notch")
-    accounts = SimpleNamespace(
-        reserve_minecraft_link=AsyncMock(return_value=SimpleNamespace()),
-        link_minecraft_account=AsyncMock(return_value=refresh),
-        release_minecraft_link=AsyncMock(),
-    )
+    accounts = LinkAccountService()
 
     async def authorize(_node: PermissionNode) -> bool:
         return False
 
     workspace = AccountWorkspace(
-        accounts=cast(Any, accounts),
+        accounts=accounts,
         actor_id=AUTHOR_ID,
         account=account,
-        request_consent=AsyncMock(),
+        request_consent=no_consent_request,
         can_review_claims=False,
         can_approve_claims=False,
         can_reject_claims=False,
         authorize_claim=authorize,
     )
-    workspace._rebuild = AsyncMock()  # type: ignore[method-assign]
-    event = SimpleNamespace(values={"code": "abcd"}, notice=AsyncMock())
+    workspace._rebuild = no_refresh  # type: ignore[method-assign]
+    event = NoticeSource(code="abcd")
 
     await workspace._link(cast(sl.SubmitEvent, event))
 
-    accounts.link_minecraft_account.assert_awaited_once()
-    accounts.release_minecraft_link.assert_not_awaited()
-    event.notice.assert_awaited_once()
+    assert accounts.linked == [(ACCOUNT_ID, "abcd")]
+    assert accounts.released == []
+    assert len(event.notices) == 1
 
 
 async def test_merge_requires_the_workspace_decision() -> None:
     account = Account((DISCORD,), AccountConsent.grant_current(), ACCOUNT_ID, NOW)
-    accounts = SimpleNamespace(
-        preview_merge=AsyncMock(return_value=SimpleNamespace(alias_names=("Notch",), identity_count=2, build_count=3)),
-        complete_merge=AsyncMock(return_value=SimpleNamespace(redirected_public_creator_id=UUID(int=9))),
-    )
+    accounts = MergeAccountService()
 
     async def authorize(_node: PermissionNode) -> bool:
         return False
 
     workspace = AccountWorkspace(
-        accounts=cast(Any, accounts),
+        accounts=accounts,
         actor_id=AUTHOR_ID,
         account=account,
-        request_consent=AsyncMock(),
+        request_consent=no_consent_request,
         can_review_claims=False,
         can_approve_claims=False,
         can_reject_claims=False,
         authorize_claim=authorize,
     )
-    submit = SimpleNamespace(values={"code": "merge-me"})
+    submit = NoticeSource(code="merge-me")
 
     await workspace._request_merge(cast(sl.SubmitEvent, submit))
 
-    accounts.complete_merge.assert_not_awaited()
+    assert accounts.completed == []
     assert workspace._merge_decision is not None
-    workspace._rebuild = AsyncMock()  # type: ignore[method-assign]
-    source = SimpleNamespace(notice=AsyncMock())
-    await workspace._finish_merge(cast(Any, SimpleNamespace(source=source)), "confirm")
-    accounts.complete_merge.assert_awaited_once_with(ACCOUNT_ID, "merge-me")
+    workspace._rebuild = no_refresh  # type: ignore[method-assign]
+    source = NoticeSource()
+    await workspace._finish_merge(cast(Any, TransitionSource(source)), "confirm")
+    assert accounts.completed == [(ACCOUNT_ID, "merge-me")]
 
 
 def test_account_is_one_app_only_workspace() -> None:
@@ -149,11 +295,12 @@ def test_account_is_one_app_only_workspace() -> None:
 
 
 def _account_panel(profile: AccountProfile) -> AccountScreen:
+    accounts = AccountMutationService()
     panel = AccountScreen(
-        accounts=cast(Any, SimpleNamespace(update_profile=AsyncMock())),
+        accounts=accounts,
         account_id=ACCOUNT_ID,
         actor_id=AUTHOR_ID,
-        request_consent=AsyncMock(),
+        request_consent=no_consent_request,
     )
     panel._profile = profile
     return panel
@@ -190,7 +337,7 @@ def test_profile_editor_rejects_non_https_links_before_staging() -> None:
 
 async def test_profile_editor_commit_persists_and_returns_to_account_panel() -> None:
     panel = _account_panel(AccountProfile.empty(ACCOUNT_ID))
-    panel._refresh = AsyncMock()  # type: ignore[method-assign]
+    panel._refresh = no_refresh  # type: ignore[method-assign]
     component = panel._build_profile_editor()
     panel._profile_editor = component
     editor = cast(sp.Editor, component.machine)
@@ -200,14 +347,15 @@ async def test_profile_editor_commit_persists_and_returns_to_account_panel() -> 
         submitted={"display_name": "Builder", "pronouns": None, "bio": "Hello"},
     )
     committed = editor.transition(staged, "save")
-    source = SimpleNamespace(notice=AsyncMock())
+    source = NoticeSource()
 
     assert component.on_change is not None
     await component.on_change(sp.TransitionEvent(cast(Any, source), "save", staged, committed))
 
-    cast(AsyncMock, panel._accounts.update_profile).assert_awaited_once()
+    accounts = cast(AccountMutationService, panel._accounts)
+    assert len(accounts.profile_updates) == 1
     assert panel._profile_editor is None
-    source.notice.assert_awaited_once()
+    assert len(source.notices) == 1
 
 
 def _gated_panel(monkeypatch: pytest.MonkeyPatch) -> tuple[AccountScreen, dict[str, Any]]:
@@ -228,31 +376,21 @@ def _gated_panel(monkeypatch: pytest.MonkeyPatch) -> tuple[AccountScreen, dict[s
         opened["on_answer"] = answer
 
     panel = AccountScreen(
-        accounts=cast(
-            Any,
-            SimpleNamespace(
-                update_profile=AsyncMock(),
-                set_identity_visibility=AsyncMock(),
-                grant_current_consent=AsyncMock(),
-            ),
-        ),
+        accounts=AccountMutationService(),
         account_id=ACCOUNT_ID,
         actor_id=AUTHOR_ID,
         request_consent=cast(Any, request),
     )
     panel._profile = AccountProfile.empty(ACCOUNT_ID)
     panel._needs_consent = True
-    panel._refresh = AsyncMock()  # type: ignore[method-assign]
+    panel._refresh = no_refresh  # type: ignore[method-assign]
 
     return panel, opened
 
 
 def _press(message_root: Any) -> Any:
     """A press double carrying the Discord facts `_with_consent` reads off an event."""
-    responder = SimpleNamespace(
-        interaction=SimpleNamespace(user=SimpleNamespace(id=AUTHOR_ID)), message_root=message_root
-    )
-    return SimpleNamespace(responder=responder, value=True)
+    return PressSource(message_root)
 
 
 async def test_a_press_needing_consent_ends_instead_of_holding_the_panel(
@@ -267,19 +405,19 @@ async def test_a_press_needing_consent_ends_instead_of_holding_the_panel(
     panel, opened = _gated_panel(monkeypatch)
     monkeypatch.setattr("squid_ui_discord.native", lambda event: event.responder.interaction)
     monkeypatch.setattr("squid_ui_discord.responder", lambda event: event.responder)
-    message_root = SimpleNamespace(schedule=AsyncMock(), localization=NEUTRAL)
+    message_root = ScheduleRoot()
 
     await panel._edit_page(cast(Any, _press(message_root)))
 
     assert panel._profile_editor is None
-    message_root.schedule.assert_not_awaited()
+    assert message_root.scheduled == 0
 
     await opened["on_answer"](AccountConsent.grant_current())
 
     # The press resumes where the reader left it, on the panel's own message.
     assert panel._profile_editor is not None
-    cast(AsyncMock, panel._accounts.grant_current_consent).assert_awaited_once()
-    message_root.schedule.assert_awaited_once()
+    assert cast(AccountMutationService, panel._accounts).consent_grants == [ACCOUNT_ID]
+    assert message_root.scheduled == 1
 
 
 async def test_declining_leaves_the_panel_exactly_as_it_was(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -287,15 +425,15 @@ async def test_declining_leaves_the_panel_exactly_as_it_was(monkeypatch: pytest.
     panel, opened = _gated_panel(monkeypatch)
     monkeypatch.setattr("squid_ui_discord.native", lambda event: event.responder.interaction)
     monkeypatch.setattr("squid_ui_discord.responder", lambda event: event.responder)
-    message_root = SimpleNamespace(schedule=AsyncMock(), localization=NEUTRAL)
+    message_root = ScheduleRoot()
 
     await panel._edit_page(cast(Any, _press(message_root)))
     await opened["on_answer"](None)
 
     assert panel._profile_editor is None
     assert panel._needs_consent
-    cast(AsyncMock, panel._accounts.grant_current_consent).assert_not_awaited()
-    message_root.schedule.assert_not_awaited()
+    assert cast(AccountMutationService, panel._accounts).consent_grants == []
+    assert message_root.scheduled == 0
 
 
 async def test_a_toggle_needing_consent_still_applies_once_the_reader_agrees(
@@ -311,18 +449,17 @@ async def test_a_toggle_needing_consent_still_applies_once_the_reader_agrees(
     monkeypatch.setattr("squid_ui_discord.responder", lambda event: event.responder)
     panel._identities = (DISCORD,)
     panel.selected_id = DISCORD.id
-    message_root = SimpleNamespace(schedule=AsyncMock(), localization=NEUTRAL)
+    message_root = ScheduleRoot()
 
     await panel._toggle_identity(cast(Any, _press(message_root)))
 
-    cast(AsyncMock, panel._accounts.set_identity_visibility).assert_not_awaited()
+    accounts = cast(AccountMutationService, panel._accounts)
+    assert accounts.visibility_writes == []
 
     await opened["on_answer"](AccountConsent.grant_current())
 
-    cast(AsyncMock, panel._accounts.set_identity_visibility).assert_awaited_once_with(
-        ACCOUNT_ID, DISCORD.id, is_public=True
-    )
-    message_root.schedule.assert_awaited_once()
+    assert accounts.visibility_writes == [(ACCOUNT_ID, DISCORD.id, True)]
+    assert message_root.scheduled == 1
 
 
 class _Recorder:
@@ -335,22 +472,22 @@ class _Recorder:
         self.requests.append(request)
 
 
-def _linked_panel() -> tuple[AccountScreen, _Recorder, AsyncMock, sd.MessageRoot]:
-    unlink = AsyncMock(return_value=JAVA)
+def _linked_panel() -> tuple[AccountScreen, _Recorder, AccountMutationService, sd.MessageRoot]:
+    accounts = AccountMutationService()
     panel = AccountScreen(
-        accounts=cast(Any, SimpleNamespace(unlink_identity=unlink)),
+        accounts=accounts,
         account_id=ACCOUNT_ID,
         actor_id=AUTHOR_ID,
-        request_consent=AsyncMock(),
+        request_consent=no_consent_request,
     )
     panel._profile = AccountProfile.empty(ACCOUNT_ID)
     panel._identities = (DISCORD, JAVA)
     panel.selected_id = JAVA.id
-    panel._refresh = AsyncMock()  # type: ignore[method-assign]
+    panel._refresh = no_refresh  # type: ignore[method-assign]
     presenter = _Recorder()
     message_root = sd.MessageRoot(panel, access=sd.Everyone(), timeout=None, challenge=presenter)
     commit_render(message_root)
-    return panel, presenter, unlink, message_root
+    return panel, presenter, accounts, message_root
 
 
 async def test_unlinking_asks_before_it_removes_anything() -> None:
@@ -359,31 +496,31 @@ async def test_unlinking_asks_before_it_removes_anything() -> None:
     What used to be three pieces of view state, an early return and a relabelled button is now
     `guard=sp.guards.confirm(...)`, and the warning is in the question instead of the footer.
     """
-    panel, presenter, unlink, message_root = _linked_panel()
+    panel, presenter, accounts, message_root = _linked_panel()
 
     await message_root.dispatch("unlink", interaction_harness(user_id=AUTHOR_ID))
 
-    unlink.assert_not_awaited()
+    assert accounts.unlinks == []
     assert len(presenter.requests) == 1
     assert presenter.requests[0].key == "unlink"
 
 
 async def test_agreeing_to_the_question_removes_the_identity() -> None:
-    panel, presenter, unlink, message_root = _linked_panel()
+    panel, presenter, accounts, message_root = _linked_panel()
     await message_root.dispatch("unlink", interaction_harness(user_id=AUTHOR_ID))
 
     await presenter.requests[0].approve()
 
-    unlink.assert_awaited_once_with(ACCOUNT_ID, JAVA.id)
+    assert accounts.unlinks == [(ACCOUNT_ID, JAVA.id)]
 
 
 async def test_declining_the_question_removes_nothing() -> None:
-    panel, presenter, unlink, message_root = _linked_panel()
+    panel, presenter, accounts, message_root = _linked_panel()
     await message_root.dispatch("unlink", interaction_harness(user_id=AUTHOR_ID))
 
     await presenter.requests[0].decline()
 
-    unlink.assert_not_awaited()
+    assert accounts.unlinks == []
 
 
 def test_unlinking_your_own_discord_account_says_what_that_costs() -> None:
