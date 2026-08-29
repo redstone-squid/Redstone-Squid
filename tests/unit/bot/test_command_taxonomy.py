@@ -5,7 +5,7 @@ from typing import Any, cast
 
 import discord
 from discord import app_commands
-from discord.ext.commands import Command, HybridCommand, HybridGroup
+from discord.ext.commands import Command, HybridGroup
 
 from squid.bot.admin import Admin
 from squid.bot.diagnostics import Diagnostics
@@ -47,7 +47,6 @@ UNGATED_COMMANDS = frozenset(
         "layout demo",
         "layout lobby",
         "layout shared",
-        "search",
         "tag",
         "tag apply",
         "tag propose",
@@ -140,7 +139,6 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "show",
         "unassign",
     ),
-    "search": (),
     "starboard": (
         "create",
         "delete",
@@ -261,10 +259,9 @@ def test_guided_submit_puts_attachments_last() -> None:
 
 
 def test_search_modes_have_user_friendly_labels() -> None:
-    cog = SearchCog.__new__(SearchCog)
-    search = cast(HybridCommand, _command(cog.__cog_commands__, "search"))
-    assert search.app_command is not None
-    mode = next(parameter for parameter in search.app_command.parameters if parameter.name == "mode")
+    cog = cast(Any, SearchCog)
+    search = next(command for command in cog.__cog_app_commands__ if command.qualified_name == "search")
+    mode = next(parameter for parameter in cast(app_commands.Command[Any, ..., Any], search).parameters if parameter.name == "mode")
     assert [(choice.name, choice.value) for choice in mode.choices] == [
         ("keyword", "keyword"),
         ("smart", "smart"),

@@ -57,7 +57,7 @@ def _context() -> commands.Context[Any]:
 
 
 async def _run(cog: SearchCog[Any], **kwargs: Any) -> None:
-    await SearchCog.search_records.callback(cog, _context(), **kwargs)  # type: ignore[arg-type]
+    await cog._show_search(_context(), **kwargs)
 
 
 async def test_a_descending_sort_suggestion_survives_the_trip() -> None:
