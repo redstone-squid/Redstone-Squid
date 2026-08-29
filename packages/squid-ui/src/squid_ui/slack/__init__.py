@@ -1,0 +1,43 @@
+"""Slack Block Kit compile targets."""
+
+from squid_ui.slack.target import (
+    SLACK_COMPONENT_LIMITS,
+    SLACK_HOME_DIALECT,
+    SLACK_HOME_LIMITS,
+    SLACK_MESSAGE_DIALECT,
+    SLACK_MESSAGE_LIMITS,
+    SLACK_MODAL_DIALECT,
+    SLACK_MODAL_LIMITS,
+    SlackComponentLimits,
+    SlackHomeDialect,
+    SlackHomeLimits,
+    SlackLimits,
+    SlackMessageDialect,
+    SlackMessageLimits,
+    SlackModalDialect,
+    SlackModalLimits,
+    home_target,
+    message_target,
+    modal_target,
+)
+
+__all__ = [
+    "SLACK_COMPONENT_LIMITS",
+    "SLACK_HOME_DIALECT",
+    "SLACK_HOME_LIMITS",
+    "SLACK_MESSAGE_DIALECT",
+    "SLACK_MESSAGE_LIMITS",
+    "SLACK_MODAL_DIALECT",
+    "SLACK_MODAL_LIMITS",
+    "SlackComponentLimits",
+    "SlackHomeDialect",
+    "SlackHomeLimits",
+    "SlackLimits",
+    "SlackMessageDialect",
+    "SlackMessageLimits",
+    "SlackModalDialect",
+    "SlackModalLimits",
+    "home_target",
+    "message_target",
+    "modal_target",
+]
