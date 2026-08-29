@@ -53,7 +53,7 @@ class DiscordUiVisitor(ast.NodeVisitor):
             legacy = {
                 keyword.arg for keyword in node.keywords if keyword.arg is not None and keyword.arg in LEGACY_KEYWORDS
             }
-            is_archive_relay = self.path.name == "admin.py" and self.function_names[-1:] == ["archive_message"]
+            is_archive_relay = self.path.name == "admin.py" and self.function_names[-1:] == ["_archive_message"]
             # The framework delivery module is the only place that translates a payload
             # into discord.py's message kwargs.
             is_conversion_boundary = self.path.name == "delivery.py" and self.function_names[-1:] in [
