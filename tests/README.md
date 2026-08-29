@@ -52,8 +52,8 @@ API exploration is a maintained standalone campaign, not part of `just test`. `j
 starts the disposable API stack and runs the pinned Schemathesis CLI with a bounded generated-example
 and wall-clock budget. `tests/unit/fuzz/` tests the launcher, safety policy, event classification, and
 applicability manifest deterministically; `tests/integration/fuzz/` tests the disposable stack lifecycle.
-The old in-process `tests/unit/api/test_openapi_fuzz.py` experiment is quarantined and will be removed
-as part of the workspace test-suite audit.
+The old in-process Schemathesis experiment was removed: it hung during collection and duplicated a
+less faithful transport topology without exercising the maintained campaign lifecycle.
 
 ## What to test
 
