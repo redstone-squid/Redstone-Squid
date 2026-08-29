@@ -10,7 +10,7 @@ from enum import StrEnum
 from uuid import UUID
 
 from squid.core.errors import InvalidStateError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 from squid.minecraft_auth.errors import InvalidPkceError
 
 INSTALLATION_TOKEN_PREFIX = "sqpi"
@@ -42,7 +42,7 @@ class MinecraftSecretCodec:
     ) -> None:
         self._pepper = pepper.encode() if isinstance(pepper, str) else pepper
         if not self._pepper:
-            msg = _("Minecraft authorization pepper must not be empty.")
+            msg = tr(t"Minecraft authorization pepper must not be empty.")
             raise InvalidStateError(msg)
         self._token_bytes = token_bytes
 

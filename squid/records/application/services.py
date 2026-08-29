@@ -8,7 +8,7 @@ from decimal import Decimal
 from itertools import combinations, groupby, product
 
 from squid.core.errors import DataIntegrityError, InvalidStateError, ValidationError
-from squid.core.i18n import _, tr
+from squid.core.i18n import tr
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 from squid.records.application.models import (
     CandidateFacet,
@@ -441,7 +441,7 @@ def _serialize_category_value(value: Decimal | str | bool | None) -> str:
         return str(value).lower()
     if isinstance(value, str):
         return value
-    msg = _("Parameterized record restriction is missing a category value.")
+    msg = tr(t"Parameterized record restriction is missing a category value.")
     raise DataIntegrityError(msg)
 
 

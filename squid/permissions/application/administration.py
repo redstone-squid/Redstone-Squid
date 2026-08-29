@@ -23,7 +23,7 @@ from collections.abc import Iterable, Sequence
 from whenever import Instant
 
 from squid.core.errors import AuthorizationError, ConflictError, NotFoundError, ValidationError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 from squid.permissions.application.ports import (
     AssignmentRow,
     AuditEntry,
@@ -59,19 +59,19 @@ MAX_ROLE_RANK = 999
 class PermissionAuthorityError(AuthorizationError):
     """The actor does not hold everything they are trying to give away."""
 
-    default_title = _("Outside your authority")
+    default_title = tr(t"Outside your authority")
 
 
 class PermissionRankError(AuthorizationError):
     """The target role is at or above the actor's own highest role."""
 
-    default_title = _("Role is not yours to manage")
+    default_title = tr(t"Role is not yours to manage")
 
 
 class ProtectedRoleError(AuthorizationError):
     """A built-in role cannot be restructured by anyone but the owner."""
 
-    default_title = _("Built-in role")
+    default_title = tr(t"Built-in role")
 
 
 class Actor:

@@ -8,10 +8,9 @@ from typing import Any
 
 from beartype.door import is_bearable
 
-from squid.bot.i18n import t
 from squid.bot.submission.parse import get_formatter_and_parser_for_type
 from squid.builds.domain import Build, BuildCategory, DoorBuild
-from squid.core.i18n import _
+from squid.core.i18n import tr
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +105,7 @@ class BoundBuildField:
         try:
             value = self.spec.parser(text)
         except Exception as error:
-            self.validation_error = str(error) or t(None, _("Invalid value"))
+            self.validation_error = str(error) or tr("Invalid value")
             return
         self.actual_value = value
         self.current_text = text

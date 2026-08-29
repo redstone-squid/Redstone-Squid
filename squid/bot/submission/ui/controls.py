@@ -5,10 +5,10 @@ from typing import TYPE_CHECKING
 from discord import Interaction
 
 import squid_ui_discord as sd
-from squid.bot.i18n import resolve_locale, t
+from squid.bot.i18n import resolve_locale
 from squid.bot.routes._root import _feature_group, _feature_route
 from squid.bot.ui import text_node
-from squid.core.i18n import _
+from squid.core.i18n import tr
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
@@ -25,9 +25,9 @@ async def edit_build(interaction: Interaction[RedstoneSquid], build_id: int) -> 
 
     build = await interaction.client.services.builds.get(build_id)
     if build is None:
-        locale = await resolve_locale(interaction, interaction.client.services.settings)
+        await resolve_locale(interaction, interaction.client.services.settings)
         invocation = await sd.Invocation.of(interaction)
-        await invocation.reply(text_node(t(locale, _("That build no longer exists."))), visibility="personal")
+        await invocation.reply(text_node(tr("That build no longer exists.")), visibility="personal")
         return
     await open_build_editor(interaction, build)
 

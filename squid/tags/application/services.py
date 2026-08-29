@@ -7,7 +7,7 @@ from typing import Protocol
 from uuid import uuid4
 
 from squid.core.errors import ValidationError
-from squid.core.i18n import _, tr
+from squid.core.i18n import tr
 from squid.tags.domain import TagDefinition, TagModerationStatus, TagValue, TagValueType
 from squid.tags.errors import TagNotFoundError
 
@@ -62,13 +62,13 @@ class TagService:
     ) -> TagDefinition:
         normalized_name = " ".join(display_name.casefold().split())
         if not 1 <= len(normalized_name) <= 80:
-            msg = _("Tag names must contain between 1 and 80 characters.")
+            msg = tr(t"Tag names must contain between 1 and 80 characters.")
             raise ValidationError(msg)
         normalized_query = query_name.casefold().strip() if query_name is not None else None
         if normalized_query == "":
             normalized_query = None
         if normalized_query is not None and _QUERY_NAME.fullmatch(normalized_query) is None:
-            msg = _("query names must start with a letter and contain only lowercase letters, digits, or underscores")
+            msg = tr(t"query names must start with a letter and contain only lowercase letters, digits, or underscores")
             raise ValidationError(msg)
         return await self._repository.create_showcase(
             # No submitter identity in the key. It is never parsed -- the only literal
@@ -125,7 +125,7 @@ class TagService:
             or definition.semantic_kind.value != "showcase"
             or definition.moderation_status is not TagModerationStatus.APPROVED
         ):
-            msg = _("An approved user showcase tag is required.")
+            msg = tr(t"An approved user showcase tag is required.")
             raise ValidationError(msg)
         value = _coerce_assignment_value(definition, raw_value)
         assigned = await self._repository.assign_showcase(
@@ -135,7 +135,7 @@ class TagService:
             actor_account_id=actor_account_id,
         )
         if not assigned:
-            msg = _("The build does not exist or was not submitted by you.")
+            msg = tr(t"The build does not exist or was not submitted by you.")
             raise ValidationError(msg)
         return definition
 

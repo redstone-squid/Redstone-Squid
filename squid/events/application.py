@@ -8,7 +8,7 @@ from uuid import UUID
 from whenever import Instant
 
 from squid.core.errors import DataIntegrityError, InvalidStateError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,7 +62,7 @@ class DomainEventService:
 
     def __init__(self, repository: DomainEventRepository, *, max_attempts: int = 8) -> None:
         if max_attempts < 1:
-            msg = _("max_attempts must be positive")
+            msg = tr(t"max_attempts must be positive")
             raise InvalidStateError(msg)
         self._repository = repository
         self._max_attempts = max_attempts
@@ -70,10 +70,10 @@ class DomainEventService:
     async def claim(self, consumer: str, limit: int = 20) -> Sequence[DomainEventDelivery]:
         """Claim ready deliveries, reclaiming those abandoned by crashed workers."""
         if not consumer:
-            msg = _("consumer must be a non-empty name")
+            msg = tr(t"consumer must be a non-empty name")
             raise InvalidStateError(msg)
         if not 1 <= limit <= 100:
-            msg = _("claim limit must be between 1 and 100")
+            msg = tr(t"claim limit must be between 1 and 100")
             raise InvalidStateError(msg)
         return await self._repository.claim(consumer=consumer, limit=limit)
 

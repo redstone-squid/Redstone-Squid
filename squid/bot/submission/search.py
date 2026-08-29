@@ -20,7 +20,6 @@ from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.permissions import allows, subject_for_interaction
 from squid.builds.domain import Build
-from squid.core.i18n import _
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     BUILD_SCHEMATIC_DETECT_LATTICE,
@@ -121,10 +120,10 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](
     @autocompletes(sort="search_sorts", query="search_query")
     @app_commands.command(name="search", description="Search builds, records, and taxonomy metadata")
     @app_commands.describe(
-        query=app_commands.locale_str(_("Search text and filters, e.g. `width:5`.")),
-        scope=app_commands.locale_str(_("What to look through: records, builds, patterns, restrictions, or all.")),
-        sort=app_commands.locale_str(_("Order results by a field, ascending or descending.")),
-        mode=app_commands.locale_str(_("Use keyword matching or smart meaning-based matching.")),
+        query=app_commands.locale_str("Search text and filters, e.g. `width:5`."),
+        scope=app_commands.locale_str("What to look through: records, builds, patterns, restrictions, or all."),
+        sort=app_commands.locale_str("Order results by a field, ascending or descending."),
+        mode=app_commands.locale_str("Use keyword matching or smart meaning-based matching."),
     )
     async def search_records(
         self,
@@ -167,7 +166,7 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](
     @autocompletes(build_id="builds")
     @BuildCommandGroup.build_group.command(name="browse")
     @app_commands.rename(build_id="id")
-    @app_commands.describe(build_id=app_commands.locale_str(_("Open this build directly.")))
+    @app_commands.describe(build_id=app_commands.locale_str("Open this build directly."))
     async def browse_builds(self, interaction: discord.Interaction[BotT], build_id: int | None = None) -> None:
         """Browse searchable build details, review actions, and schematic tools."""
         subject = await subject_for_interaction(interaction)

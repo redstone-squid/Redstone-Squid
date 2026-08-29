@@ -8,6 +8,7 @@ import pytest
 from whenever import Instant
 
 from squid.core.errors import DataIntegrityError
+from squid.core.i18n import tr
 from squid.schematics.application import (
     CachedRender,
     ConvertRequest,
@@ -636,7 +637,7 @@ async def test_rendering_now_refuses_with_the_reason_rather_than_a_blank_image()
     assert refusal.value.reason == RenderSkipReason.NOT_SANITIZED.value
     assert refusal.value.public_context == {"reason": "not_sanitized"}
     # The sentence a user is shown is the skip reason's own, not a generic conflict message.
-    assert refusal.value.localized_public_detail(None) == RenderSkipReason.NOT_SANITIZED.description
+    assert refusal.value.public_detail() == tr(RenderSkipReason.NOT_SANITIZED.description)
     assert analyzer.render_calls == []
 
 

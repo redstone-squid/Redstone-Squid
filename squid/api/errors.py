@@ -183,11 +183,14 @@ async def handle_squid_error(request: Request, exc: Exception) -> Response:
     locale = locale_for_request(request)
     status_code = _status_for_error(exc)
     if isinstance(exc, DomainError):
+        with localization_scope(localization_for(locale)):
+            title = tr(exc.title)
+            detail = exc.public_detail()
         return _problem_response(
             ProblemDetail(
-                title=exc.localized_title(locale),
+                title=title,
                 status=status_code,
-                detail=exc.localized_public_detail(locale),
+                detail=detail,
                 instance=str(request.url),
                 code=exc.code,
                 resource=exc.resource,

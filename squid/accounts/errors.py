@@ -13,6 +13,7 @@ from squid.core.errors import (
     ValidationError,
 )
 from squid.core.i18n import tr
+from squid_ui.text import Message
 
 
 class InvalidAccountError(ValidationError):
@@ -288,7 +289,7 @@ class AliasAlreadyClaimedError(ConflictError):
         *,
         holder_public_creator_id: UUID | None = None,
         holder_account_id: int | None = None,
-        end_user_action: str | None = None,
+        end_user_action: str | Message | None = None,
     ) -> None:
         public_context: dict[str, JSONValue] = {"name": name}
         if holder_public_creator_id is not None:

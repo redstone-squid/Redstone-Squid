@@ -9,7 +9,7 @@ from uuid import uuid4
 from whenever import Instant
 
 from squid.core.errors import InvalidStateError, JSONValue, SquidError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 from squid.diagnostics.domain import MAX_REFERENCE_LENGTH, ErrorReport, ErrorReportNotFoundError
 
 logger = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ class ErrorReportService:
         now: Callable[[], Instant] = Instant.now,
     ) -> None:
         if retention_hours < 1:
-            msg = _("Error report retention must be at least one hour.")
+            msg = tr(t"Error report retention must be at least one hour.")
             raise InvalidStateError(msg)
         self._repository = repository
         self._retention_hours = retention_hours

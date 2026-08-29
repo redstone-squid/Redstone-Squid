@@ -21,11 +21,11 @@ import discord
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.i18n import resolve_locale, t
+from squid.bot.i18n import resolve_locale
 from squid.bot.routes._root import _feature_group, _feature_route
 from squid.bot.ui import text_node
 from squid.bot.voting.actors import describe_rejection, resolve_actor
-from squid.core.i18n import _
+from squid.core.i18n import tr
 from squid.voting.domain import VoteActor, VoteRejection, VoteSessionSnapshot
 
 if TYPE_CHECKING:
@@ -61,7 +61,7 @@ async def close_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSqui
         return
     await bot.refresh_posts("vote_session", str(result.session.id))
     invocation = await sd.Invocation.of(interaction)
-    await invocation.reply(text_node(t(locale, _("Poll closed."))), visibility="personal")
+    await invocation.reply(text_node(tr("Poll closed.")), visibility="personal")
 
 
 @polls.route(poll_refresh)
@@ -70,18 +70,17 @@ async def refresh_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSq
     authorized = await _authorize(interaction)
     if authorized is None:
         return
-    locale, _snapshot, _actor = authorized
+    _locale, _snapshot, _actor = authorized
     bot = interaction.client
     assert interaction.message is not None
     result = await bot.services.votes.refresh(interaction.message.id)
     if result.session is not None:
         await bot.refresh_posts("vote_session", str(result.session.id))
-    text = t(locale, _("Poll weights refreshed."))
+    text = tr("Poll weights refreshed.")
     if not result.complete:
         # A count, not the raw account ids the command used to print (audit C5).
-        text += " " + t(
-            locale,
-            _("{count} voter(s) could not be resolved, so their cached weight was kept."),
+        text += " " + tr(
+            "{count} voter(s) could not be resolved, so their cached weight was kept.",
             count=len(result.unresolved_account_ids),
         )
     invocation = await sd.Invocation.of(interaction)

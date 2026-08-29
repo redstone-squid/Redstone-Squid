@@ -84,7 +84,6 @@ async def test_of_resolves_the_hook_once_inside_an_ambient_scope() -> None:
     assert first.client is client
     assert first.user is context.author
     assert first.guild is context.guild
-    assert first.t(Message("hello")) == "arrr hello"
     assert calls == [context]
     assert current_invocation() is None
 

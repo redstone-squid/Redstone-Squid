@@ -12,7 +12,7 @@ import squid_ui_discord as sd
 from squid.accounts.domain import IdentityProvider
 from squid.bot._types import GuildMessageable
 from squid.bot.consent import ensure_consented_account
-from squid.bot.i18n import resolve_locale, t
+from squid.bot.i18n import resolve_locale
 from squid.bot.operations import run_command_operation
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
 from squid.bot.ui import error_node, info_node, render_payload, text_node
@@ -20,7 +20,7 @@ from squid.bot.voting.actors import describe_rejection, resolve_actor
 from squid.bot.voting.poll_wizard import PollDraft, PollScreen
 from squid.bot.voting.publisher import DiscordPollPublisher
 from squid.bot.voting.sessions import start_delete_log_vote
-from squid.core.i18n import _
+from squid.core.i18n import tr
 from squid.runtime import JobHandle
 from squid.voting.domain import PollScope, VoteActor, VoteKind, VoteOption, VoteRejection
 from squid.voting.errors import InvalidVoteConfigurationError
@@ -195,7 +195,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     @app_commands.guild_only()
     async def poll(self, interaction: discord.Interaction[BotT]) -> None:
         """Create a multi-option poll through an ephemeral preview wizard."""
-        locale = await resolve_locale(interaction, self.bot.services.settings)
+        await resolve_locale(interaction, self.bot.services.settings)
         # A modal has to open on an unspent interaction, and showing the notice spends this one,
         # so an unconsented author is asked here and re-runs to get the editor.
         account = await self.bot.services.accounts.get_account_by_identity(
@@ -206,7 +206,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 return
             invocation = await sd.Invocation.of(interaction)
             await invocation.reply(
-                text_node(t(locale, _("Thanks. Run `/poll` again to open the editor."))),
+                text_node(tr("Thanks. Run `/poll` again to open the editor.")),
                 visibility="personal",
             )
             return
@@ -226,7 +226,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 isinstance(interaction.user, discord.Member)
                 and await self.publisher.may_create_network(interaction.user)
             ):
-                raise InvalidVoteConfigurationError(_("You may no longer publish a poll to every server."))
+                raise InvalidVoteConfigurationError(tr(t"You may no longer publish a poll to every server."))
             message = await self.publisher.create_and_publish(
                 author_account_id=account.id,
                 channel=cast(GuildMessageable, channel),
@@ -248,12 +248,12 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         """
         await interaction.response.defer(ephemeral=True)
         invocation = await sd.Invocation.of(interaction)
-        locale = await resolve_locale(interaction, self.bot.services.settings)
+        await resolve_locale(interaction, self.bot.services.settings)
         if interaction.guild is None or message.guild != interaction.guild:
             await invocation.reply(
                 error_node(
-                    t(locale, _("Cannot vote on this message")),
-                    t(locale, _("The message is not from this guild.")),
+                    tr("Cannot vote on this message"),
+                    tr("The message is not from this guild."),
                 ),
                 visibility="personal",
             )
@@ -279,14 +279,14 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             # The reconciler has replaced the progress card with the authoritative vote card.
             # Keeping the operation's terminal scene equal to its initial scene suppresses a
             # mount edit that would otherwise overwrite that adopted message.
-            return info_node(t(locale, _("Working")), t(locale, _("Getting information...")))
+            return info_node(tr("Working"), tr("Getting information..."))
 
         await run_command_operation(
             invocation,
             publish,
             destination=sd.send_to(message.channel),
         )
-        await invocation.reply(text_node(t(locale, _("Deletion vote opened."))), visibility="personal")
+        await invocation.reply(text_node(tr("Deletion vote opened.")), visibility="personal")
 
     async def _consented_account_id(self, discord_id: int) -> int | None:
         """Resolve a voter's account without creating one.
@@ -313,15 +313,14 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         gap it closes.
         """
         await self._remove_reaction(message, emoji, user)
-        locale = await resolve_locale(message, self.bot.services.settings)
+        await resolve_locale(message, self.bot.services.settings)
         with contextlib.suppress(discord.HTTPException):
             await send_to(message.channel, delete_after=30)(
                 render_payload(
                     [
                         text_node(
-                            t(
-                                locale,
-                                _("{user}, voting stores your Discord user ID. Run `/account consent` first."),
+                            tr(
+                                "{user}, voting stores your Discord user ID. Run `/account consent` first.",
                                 user=user.mention,
                             )
                         )

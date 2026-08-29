@@ -8,7 +8,7 @@ from enum import StrEnum
 from uuid import UUID
 
 from squid.core.errors import JSONValue, ValidationError
-from squid.core.i18n import _, tr
+from squid.core.i18n import tr
 from squid.sponsors import PublicSponsor
 from squid.submissions.domain.forms import SubmissionOrigin
 
@@ -127,7 +127,7 @@ class SubmissionDimensions:
 
     def __post_init__(self) -> None:
         if min(self.width, self.height, self.depth) < 1:
-            msg = _("submission dimensions must be positive")
+            msg = tr(t"submission dimensions must be positive")
             raise ValidationError(msg)
 
 
@@ -157,10 +157,10 @@ class SchematicRightsPolicy:
     def __post_init__(self) -> None:
         if self.visibility is SubmissionSchematicVisibility.PUBLIC_DOWNLOAD:
             if self.license is None or not self.rights_attested:
-                msg = _("public schematics require a license and rights attestation")
+                msg = tr(t"public schematics require a license and rights attestation")
                 raise ValidationError(msg)
         elif self.license is not None or self.rights_attested:
-            msg = _("reviewer-only schematics cannot carry a public distribution grant")
+            msg = tr(t"reviewer-only schematics cannot carry a public distribution grant")
             raise ValidationError(msg)
 
 
@@ -174,10 +174,10 @@ class VerifiedSubmissionArtifacts:
     def __post_init__(self) -> None:
         identifiers = (*self.normalized_media_upload_ids, self.sanitized_schematic_id)
         if any(identifier is not None and identifier.int == 0 for identifier in identifiers):
-            msg = _("verified artifact identifiers cannot be nil UUIDs")
+            msg = tr(t"verified artifact identifiers cannot be nil UUIDs")
             raise ValidationError(msg)
         if len(self.normalized_media_upload_ids) != len(set(self.normalized_media_upload_ids)):
-            msg = _("normalized media upload identifiers must be unique")
+            msg = tr(t"normalized media upload identifiers must be unique")
             raise ValidationError(msg)
 
 
@@ -192,7 +192,7 @@ class SubmissionArtifactReadiness:
 
     def __post_init__(self) -> None:
         if (self.schematic_state is SchematicArtifactState.SANITIZED) != (self.sanitized_schematic_id is not None):
-            msg = _("only a sanitized schematic assessment may expose an artifact ID")
+            msg = tr(t"only a sanitized schematic assessment may expose an artifact ID")
             raise ValidationError(msg)
         VerifiedSubmissionArtifacts(self.normalized_media_upload_ids, self.sanitized_schematic_id)
 
@@ -252,7 +252,7 @@ class ExtenderSubmissionDetails:
 
     def __post_init__(self) -> None:
         if self.extension_length < 1:
-            msg = _("extender length must be positive")
+            msg = tr(t"extender length must be positive")
             raise ValidationError(msg)
         _require_stable_keys(self.pattern_keys, "pattern")
 
@@ -293,13 +293,13 @@ class NormalizedSubmission:
 
     def __post_init__(self) -> None:
         if self.source_draft_id.int == 0 or self.owner_account_id < 1:
-            msg = _("normalized submission provenance is invalid")
+            msg = tr(t"normalized submission provenance is invalid")
             raise ValidationError(msg)
         if self.schema_revision < 1 or not self.schema_id:
-            msg = _("normalized submission schema provenance is invalid")
+            msg = tr(t"normalized submission schema provenance is invalid")
             raise ValidationError(msg)
         if not self.creators or not self.source_version:
-            msg = _("normalized submissions require creators and an exact source version")
+            msg = tr(t"normalized submissions require creators and an exact source version")
             raise ValidationError(msg)
         compatible = (
             (self.category is SubmissionCategory.DOOR and isinstance(self.details, DoorSubmissionDetails))
@@ -313,7 +313,7 @@ class NormalizedSubmission:
             category = self.category.value
             raise ValidationError(tr(t"{category} submission has incompatible category details"))
         if self.origin is not SubmissionOrigin.PAPER and self.source_installation_id is not None:
-            msg = _("Only Paper submissions may retain an installation provenance ID.")
+            msg = tr(t"Only Paper submissions may retain an installation provenance ID.")
             raise ValidationError(msg)
         if self.sponsor_attribution:
             if (
@@ -322,10 +322,10 @@ class NormalizedSubmission:
                 or self.sponsor is None
                 or self.sponsor.installation_id != self.source_installation_id
             ):
-                msg = _("Sponsor attribution requires a matching Paper installation projection.")
+                msg = tr(t"Sponsor attribution requires a matching Paper installation projection.")
                 raise ValidationError(msg)
         elif self.sponsor is not None:
-            msg = _("A submission cannot retain a sponsor projection when attribution was not requested.")
+            msg = tr(t"A submission cannot retain a sponsor projection when attribution was not requested.")
             raise ValidationError(msg)
 
 
@@ -339,7 +339,7 @@ class SubmissionTargetResult:
 
     def __post_init__(self) -> None:
         if self.build_id < 1 or _STABLE_KEY.fullmatch(self.target_key) is None:
-            msg = _("submission target result identity is invalid")
+            msg = tr(t"submission target result identity is invalid")
             raise ValidationError(msg)
         object.__setattr__(self, "provenance", deepcopy(dict(self.provenance)))
 
@@ -353,5 +353,5 @@ def _require_stable_keys(values: tuple[str, ...], label: str) -> None:
 
 def _require_nonnegative_optional(values: tuple[int | None, ...]) -> None:
     if any(value is not None and value < 0 for value in values):
-        msg = _("submission timings cannot be negative")
+        msg = tr(t"submission timings cannot be negative")
         raise ValidationError(msg)

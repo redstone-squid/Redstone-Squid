@@ -7,7 +7,7 @@ from typing import Literal
 from whenever import Instant
 
 from squid.core.errors import DataIntegrityError, JSONValue
-from squid.core.i18n import _
+from squid.core.i18n import tr
 from squid.schematics.domain.models import (
     SchematicAnalysis,
     SchematicFormat,
@@ -15,6 +15,7 @@ from squid.schematics.domain.models import (
     SchematicVisibility,
     SimulationResult,
 )
+from squid_ui.text import Message
 
 type DuplicateTier = Literal["identical", "structural-match", "near"]
 
@@ -40,11 +41,11 @@ class SchematicPublication:
             and self.rights_attested_by_account_id is not None
         )
         if self.visibility is SchematicVisibility.PUBLIC_DOWNLOAD and not rights_complete:
-            msg = _("public schematic downloads require a license and rights attestation")
+            msg = tr(t"public schematic downloads require a license and rights attestation")
             raise DataIntegrityError(msg)
         sanitization_parts = (self.sanitized_at, self.sanitizer_version, self.sanitization_report)
         if any(part is not None for part in sanitization_parts) and any(part is None for part in sanitization_parts):
-            msg = _("sanitization requires a timestamp, sanitizer version, and audit report")
+            msg = tr(t"sanitization requires a timestamp, sanitizer version, and audit report")
             raise DataIntegrityError(msg)
 
     @property
@@ -142,7 +143,7 @@ class RenderSkipReason(StrEnum):
     MISSING_FILE = "missing_file"
 
     @property
-    def description(self) -> str:
+    def description(self) -> Message:
         """A translatable sentence a moderator can be shown verbatim.
 
         Deliberately says nothing about the engine, the adapter, or the cap's value: the
@@ -152,14 +153,14 @@ class RenderSkipReason(StrEnum):
         return _RENDER_SKIP_DESCRIPTIONS[self]
 
 
-_RENDER_SKIP_DESCRIPTIONS: dict[RenderSkipReason, str] = {
-    RenderSkipReason.RENDERING_DISABLED: _("Schematic previews are not enabled on this instance."),
-    RenderSkipReason.NO_PRIMARY_SCHEMATIC: _("This build has no primary schematic to preview."),
-    RenderSkipReason.NOT_SANITIZED: _("This schematic has not been sanitized, so it is never rendered."),
-    RenderSkipReason.POISONED_FILE: _("This schematic file already crashed the engine on this instance."),
-    RenderSkipReason.OVER_BLOCK_BUDGET: _("This schematic has too many blocks to preview."),
-    RenderSkipReason.OVER_VOLUME_BUDGET: _("This schematic is too large to preview."),
-    RenderSkipReason.MISSING_FILE: _("The stored schematic file is missing, so it cannot be previewed."),
+_RENDER_SKIP_DESCRIPTIONS: dict[RenderSkipReason, Message] = {
+    RenderSkipReason.RENDERING_DISABLED: tr(t"Schematic previews are not enabled on this instance."),
+    RenderSkipReason.NO_PRIMARY_SCHEMATIC: tr(t"This build has no primary schematic to preview."),
+    RenderSkipReason.NOT_SANITIZED: tr(t"This schematic has not been sanitized, so it is never rendered."),
+    RenderSkipReason.POISONED_FILE: tr(t"This schematic file already crashed the engine on this instance."),
+    RenderSkipReason.OVER_BLOCK_BUDGET: tr(t"This schematic has too many blocks to preview."),
+    RenderSkipReason.OVER_VOLUME_BUDGET: tr(t"This schematic is too large to preview."),
+    RenderSkipReason.MISSING_FILE: tr(t"The stored schematic file is missing, so it cannot be previewed."),
 }
 
 

@@ -7,7 +7,7 @@ from enum import StrEnum
 from typing import Protocol
 
 from squid.core.errors import InvalidStateError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 from squid.posts.domain import ResourceKind as PostResourceKind
 
 
@@ -82,7 +82,7 @@ class DiscordReconciliationService:
 
     def __init__(self, repository: ReconciliationQueue, *, max_attempts: int = 8) -> None:
         if max_attempts < 1:
-            msg = _("max_attempts must be positive")
+            msg = tr(t"max_attempts must be positive")
             raise InvalidStateError(msg)
         self._repository = repository
         self._max_attempts = max_attempts
@@ -90,7 +90,7 @@ class DiscordReconciliationService:
     async def claim(self, limit: int = 20) -> Sequence[ReconciliationJob]:
         """Claim ready work, reclaiming jobs abandoned by crashed workers."""
         if not 1 <= limit <= 100:
-            msg = _("claim limit must be between 1 and 100")
+            msg = tr(t"claim limit must be between 1 and 100")
             raise InvalidStateError(msg)
         return await self._repository.claim(limit=limit)
 

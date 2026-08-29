@@ -10,7 +10,7 @@ from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from squid.core.errors import ConfigurationError, DataIntegrityError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 
 _NONCE_BYTES = 12
 _AAD_DOMAIN = b"redstone-squid:idempotency-response:v1"
@@ -52,10 +52,10 @@ class IdempotencyResponseCipher:
 
     def __init__(self, *, active_key_id: str, keys: Mapping[str, bytes]) -> None:
         if active_key_id not in keys:
-            msg = _("The active idempotency encryption key is absent from the keyring.")
+            msg = tr(t"The active idempotency encryption key is absent from the keyring.")
             raise IdempotencyEncryptionUnavailableError(msg)
         if any(len(key) != 32 for key in keys.values()):
-            msg = _("Idempotency encryption keys must be exactly 32 bytes.")
+            msg = tr(t"Idempotency encryption keys must be exactly 32 bytes.")
             raise IdempotencyEncryptionUnavailableError(msg)
         self._active_key_id = active_key_id
         self._keys = dict(keys)
