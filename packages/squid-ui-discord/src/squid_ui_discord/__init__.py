@@ -77,6 +77,8 @@ from squid_ui_discord.delivery import (
     respond_to,
     send_to,
 )
+from squid_ui_discord.devtools import open_devtools
+from squid_ui_discord.devtools_view import DevToolsSection
 from squid_ui_discord.fragments import contribute
 from squid_ui_discord.grids import button_grid
 from squid_ui_discord.invocation import Invocation, Private, Visibility, current_invocation, invocation_scope
@@ -205,6 +207,7 @@ __all__ = [
     "ChallengeSupervisor",
     "ClientRuntime",
     "ClientRuntimeMissing",
+    "DevToolsSection",
     "DialogPresenter",
     "ErrorObserver",
     "ErrorRenderer",
@@ -295,6 +298,7 @@ __all__ = [
     "native",
     "navigation",
     "navigation_controls",
+    "open_devtools",
     "owner_message_root",
     "render_item",
     "render_message",

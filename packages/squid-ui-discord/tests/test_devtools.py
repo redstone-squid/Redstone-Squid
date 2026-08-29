@@ -3,11 +3,12 @@
 import json
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import discord
 import pytest
+from discord.ext import commands
 
 import squid_ui as sl
 import squid_ui_discord
@@ -15,7 +16,7 @@ from squid_reactivity import ActionLedger, OperationEventSnapshot, add_action_re
 from squid_ui.primitives import Button, Heading, Row
 from squid_ui.profiling import MemoryProfiler, OperationKind
 from squid_ui_discord import Everyone, MessageRoot, Owner, live
-from squid_ui_discord.devtools import DevTools
+from squid_ui_discord.devtools import DevTools, open_devtools
 from squid_ui_discord.devtools_runtime import DevToolsRuntime
 from squid_ui_discord.routing import Router
 from squid_ui_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
@@ -77,6 +78,18 @@ class TestGate:
 
 
 class TestMountCommands:
+    def test_default_command_tree_is_hybrid(self) -> None:
+        assert isinstance(cast(Any, DevTools).dev_group, commands.HybridGroup)
+        assert isinstance(cast(Any, DevTools).ui_group, commands.HybridGroup)
+
+    async def test_host_command_can_open_the_shared_dashboard(self) -> None:
+        ctx = make_context()
+
+        message_root = await open_devtools(ctx, runtime=DevToolsRuntime())
+
+        assert message_root.snapshot().access == Owner(1)
+        assert message_root in live.message_roots()
+
     async def test_list_opens_an_inspector_owned_by_the_caller(self) -> None:
         ctx = make_context()
         cog = DevTools()

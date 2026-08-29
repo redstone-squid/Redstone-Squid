@@ -44,7 +44,7 @@ async def open_panel(registry: SessionManager, *, key: SessionKey | None = None)
 async def test_snapshot_and_message_root_inspection_include_sessions_history_and_middleware() -> None:
     registry = SessionManager()
     opened = await open_panel(registry, key=SessionKey.global_("devtools"))
-    runtime = DevToolsRuntime(sessions=registry)
+    runtime = DevToolsRuntime(sessions=registry, policy=DevToolsPolicy.full_access())
 
     snapshot = runtime.snapshot()
     assert snapshot.sessions[0].id == opened.session.id
@@ -83,7 +83,7 @@ async def test_session_inspection_reports_membership_and_capacity() -> None:
 async def test_close_session_requires_confirmation_and_finishes_all_roots() -> None:
     registry = SessionManager()
     opened = await open_panel(registry, key=SessionKey.global_("devtools"))
-    runtime = DevToolsRuntime(sessions=registry)
+    runtime = DevToolsRuntime(sessions=registry, policy=DevToolsPolicy.full_access())
 
     with pytest.raises(ConfirmationRequired):
         await runtime.close_session(opened.session.id)
@@ -103,7 +103,7 @@ async def test_wait_idle_observes_sync_topics_and_clear_profile_resets_bounded_d
     bus.publish(sl.runtime.Topic("devtools", "test"))
     with profiler.operation(OperationKind.DISPATCH, name="devtools-test"):
         pass
-    runtime = DevToolsRuntime(bus=bus, profiler=profiler)
+    runtime = DevToolsRuntime(bus=bus, profiler=profiler, policy=DevToolsPolicy.full_access())
 
     await runtime.wait_idle()
     callback.assert_called_once_with(sl.runtime.Topic("devtools", "test"))
@@ -165,7 +165,11 @@ async def test_wait_idle_reaches_a_fixed_point_when_bus_schedules_scheduler() ->
 
     bus.on_wait = bus_delivery
 
-    runtime = DevToolsRuntime(bus=bus, scheduler=scheduler)  # type: ignore[arg-type]
+    runtime = DevToolsRuntime(  # type: ignore[arg-type]
+        bus=bus,  # type: ignore[arg-type]
+        scheduler=scheduler,  # type: ignore[arg-type]
+        policy=DevToolsPolicy.full_access(),
+    )
 
     await runtime.wait_idle()
 
@@ -185,7 +189,11 @@ async def test_wait_idle_reaches_a_fixed_point_when_reactor_publishes_to_bus() -
 
     scheduler.on_wait = scheduler_delivery
 
-    runtime = DevToolsRuntime(bus=bus, scheduler=scheduler)  # type: ignore[arg-type]
+    runtime = DevToolsRuntime(  # type: ignore[arg-type]
+        bus=bus,  # type: ignore[arg-type]
+        scheduler=scheduler,  # type: ignore[arg-type]
+        policy=DevToolsPolicy.full_access(),
+    )
 
     await runtime.wait_idle()
 
@@ -202,6 +210,27 @@ async def test_policy_can_disable_confirmation_required_actions() -> None:
 
     with pytest.raises(ActionDisabled):
         await runtime.wait_idle()
+
+
+async def test_default_policy_is_read_only() -> None:
+    runtime = DevToolsRuntime()
+
+    with pytest.raises(ActionDisabled):
+        runtime.clear_profile()
+
+
+def test_full_access_enables_every_action_and_keeps_destructive_confirmations() -> None:
+    policy = DevToolsPolicy.full_access()
+
+    assert policy.enabled == frozenset(DevToolsAction)
+    assert policy.requires_confirmation(DevToolsAction.CLOSE_SESSION)
+    assert policy.requires_confirmation(DevToolsAction.RECOVER_PERSISTENCE)
+    assert policy.requires_confirmation(DevToolsAction.PURGE_PERSISTENCE)
+
+
+def test_policy_rejects_confirmation_for_a_disabled_action() -> None:
+    with pytest.raises(ValueError, match="require disabled devtools actions"):
+        DevToolsPolicy.allow(confirmations=frozenset({DevToolsAction.CLOSE_SESSION}))
 
 
 async def test_purge_persistence_requires_confirmation_and_returns_store_results() -> None:

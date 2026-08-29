@@ -1,5 +1,6 @@
 """The owner-only mount inspector: what it lists, what it opens, and what it refuses."""
 
+import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -11,11 +12,12 @@ import squid_ui_discord
 from squid_ui.primitives import Button, Heading, Row, Text
 from squid_ui_discord import Everyone, MessageRoot, Owner
 from squid_ui_discord import testing as sd
-from squid_ui_discord.devtools_runtime import DevToolsRuntime
+from squid_ui_discord.devtools_runtime import DevToolsPolicy, DevToolsRuntime
 from squid_ui_discord.devtools_view import (
     MessageRootInspector,
     OperationalInspector,
     metrics_text,
+    operational_attachment,
     plan_text,
     scene_attachment,
 )
@@ -240,7 +242,7 @@ class TestOperationalInspectorSections:
 
     @pytest.mark.parametrize(
         "section",
-        ["overview", "roots", "sessions", "queues", "profile", "persistence"],
+        ["overview", "roots", "sessions", "routes", "activity", "queues", "profile", "persistence"],
     )
     async def test_each_dashboard_section_renders(self, section: str) -> None:
         inspector = OperationalInspector(DevToolsRuntime())
@@ -262,3 +264,25 @@ class TestOperationalInspectorSections:
             inspector.section = "sessions"
             inspector.session_id = snapshot.sessions[0].id
             assert list(inspector.render())
+
+    def test_overview_snapshot_download_is_round_trippable_json(self) -> None:
+        asset = operational_attachment(DevToolsRuntime().snapshot())
+
+        assert isinstance(asset.source, sl.document.InlineAsset)
+        payload = json.loads(asset.source.data)
+        assert payload["sessions"] == []
+        assert payload["message_roots"] == []
+
+    def test_mutation_controls_are_omitted_by_default_and_explicitly_enabled(self) -> None:
+        read_only = OperationalInspector(DevToolsRuntime())
+        read_only.section = "queues"
+        writable = OperationalInspector(DevToolsRuntime(policy=DevToolsPolicy.full_access()))
+        writable.section = "queues"
+
+        read_only_view = commit_render(MessageRoot(read_only, access=Owner(1)))
+        writable_view = commit_render(MessageRoot(writable, access=Owner(1)))
+
+        read_only_labels = {item.label for item in read_only_view.walk_children() if isinstance(item, discord.ui.Button)}
+        writable_labels = {item.label for item in writable_view.walk_children() if isinstance(item, discord.ui.Button)}
+        assert "Wait for idle" not in read_only_labels
+        assert "Wait for idle" in writable_labels
