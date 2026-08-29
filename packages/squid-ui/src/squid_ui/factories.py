@@ -23,7 +23,7 @@ from types import UnionType
 from typing import TYPE_CHECKING, Any, Literal, NoReturn, TypeAliasType, TypeIs, get_args, get_origin
 
 from squid_ui.assets import Asset
-from squid_ui.entity import ChannelType, EntityRef, EntityType
+from squid_ui.entity import ConversationType, EntityRef, EntityType
 from squid_ui.forms import FormLike, SubmitHandler, bind_form
 from squid_ui.grids import GridCell
 from squid_ui.guards import Guard
@@ -797,7 +797,7 @@ def entities(
     selection: EntityOwnership = NO_ENTITIES,
     minimum: int = 1,
     maximum: int = 1,
-    channel_types: tuple[ChannelType, ...] = (),
+    conversation_types: tuple[ConversationType, ...] = (),
     placeholder: TextValue | None = None,
     flexibility: Flexibility = Flexibility.NORMAL,
 ) -> Entities:
@@ -809,7 +809,7 @@ def entities(
         selection,
         minimum,
         maximum,
-        channel_types,
+        conversation_types,
         _opt_text(placeholder),
         flexibility,
     )

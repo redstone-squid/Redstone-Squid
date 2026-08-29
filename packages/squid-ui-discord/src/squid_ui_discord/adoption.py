@@ -51,7 +51,7 @@ from squid_ui.runtime.component import Component
 from squid_ui.runtime.reactivity import state
 from squid_ui.target_types import ComponentsV2Target
 from squid_ui_discord.actions import ActionResponder, responder, selected_entities
-from squid_ui_discord.message_root_wiring import _CHANNEL_TYPES
+from squid_ui_discord.message_root_wiring import _CONVERSATION_TYPES
 
 type Item = discord.ui.Item[Any]
 type KeyFactory = Callable[[Item], str]
@@ -76,7 +76,7 @@ _STYLES = {
 _ENTITY_FAMILIES: tuple[tuple[type, EntityType], ...] = (
     (discord.ui.UserSelect, EntityType.USER),
     (discord.ui.RoleSelect, EntityType.ROLE),
-    (discord.ui.ChannelSelect, EntityType.CHANNEL),
+    (discord.ui.ChannelSelect, EntityType.CONVERSATION),
     (discord.ui.MentionableSelect, EntityType.MENTIONABLE),
 )
 
@@ -86,12 +86,12 @@ _ENTITY_SELECTS = tuple(cls for cls, _ in _ENTITY_FAMILIES)
 _SELECTS = (discord.ui.Select, *_ENTITY_SELECTS)
 
 # Inverted rather than written out a second time: one table cannot drift from itself.
-_PORTABLE_CHANNEL_TYPES = {native: portable for portable, native in _CHANNEL_TYPES.items()}
+_PORTABLE_CONVERSATION_TYPES = {native: portable for portable, native in _CONVERSATION_TYPES.items()}
 
 _DEFAULT_KINDS = {
     discord.SelectDefaultValueType.user: EntityKind.USER,
     discord.SelectDefaultValueType.role: EntityKind.ROLE,
-    discord.SelectDefaultValueType.channel: EntityKind.CHANNEL,
+    discord.SelectDefaultValueType.channel: EntityKind.CONVERSATION,
 }
 
 
@@ -529,12 +529,12 @@ class _AdoptedView(Component[Any]):
         if entity_type is None:
             message = f"select {key!r} is a {type(item).__name__}, which has no portable entity family"
             raise AdoptionError(message)
-        channel_types: tuple[Any, ...] = ()
-        if entity_type is EntityType.CHANNEL:
-            channel_types = tuple(
-                _PORTABLE_CHANNEL_TYPES[native]
+        conversation_types: tuple[Any, ...] = ()
+        if entity_type is EntityType.CONVERSATION:
+            conversation_types = tuple(
+                _PORTABLE_CONVERSATION_TYPES[native]
                 for native in getattr(item, "channel_types", ())
-                if native in _PORTABLE_CHANNEL_TYPES
+                if native in _PORTABLE_CONVERSATION_TYPES
             )
         return EntitySelect(
             entity_type=entity_type,
@@ -546,7 +546,7 @@ class _AdoptedView(Component[Any]):
                 for value in item._underlying.default_values
                 if value.type in _DEFAULT_KINDS
             ),
-            channel_types=channel_types,
+            conversation_types=conversation_types,
             min_values=item.min_values,
             max_values=item.max_values,
             disabled=item.disabled,

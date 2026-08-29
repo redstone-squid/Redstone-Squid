@@ -12,7 +12,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Any, cast, overload
 
 from squid_ui.emoji import EmojiLike, normalize_emoji
-from squid_ui.entity import ChannelType, EntityRef, EntityType, supports_entity
+from squid_ui.entity import ConversationType, EntityRef, EntityType, supports_entity
 from squid_ui.forms import FormBinding
 from squid_ui.guards import Guard
 from squid_ui.interactions import (
@@ -227,15 +227,15 @@ class EntitySelect(Renderable[DiscordTarget]):
     key: str
     placeholder: TextLike | None = None
     default_values: tuple[EntityRef, ...] = ()
-    channel_types: tuple[ChannelType, ...] = ()
+    conversation_types: tuple[ConversationType, ...] = ()
     min_values: int = 1
     max_values: int = 1
     disabled: bool = False
     mode: ActionMode = ActionMode.EXCLUSIVE
 
     def __post_init__(self) -> None:
-        if self.channel_types and self.entity_type is not EntityType.CHANNEL:
-            message = "channel_types is only valid for channel entity selects"
+        if self.conversation_types and self.entity_type is not EntityType.CONVERSATION:
+            message = "conversation_types is only valid for conversation entity selects"
             raise ValueError(message)
         if any(not supports_entity(self.entity_type, value.kind) for value in self.default_values):
             message = f"default value is incompatible with {self.entity_type.value} entity select"

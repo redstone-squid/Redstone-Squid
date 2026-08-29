@@ -244,7 +244,7 @@ async def test_each_channel_picker_writes_its_own_setting(monkeypatch: pytest.Mo
             cast(
                 Any,
                 SimpleNamespace(
-                    selected=(sl.entity.EntityRef(sl.entity.EntityKind.CHANNEL, 12),),
+                    selected=(sl.entity.EntityRef(sl.entity.EntityKind.CONVERSATION, 12),),
                     context={},
                 ),
             ),

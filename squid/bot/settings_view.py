@@ -30,14 +30,14 @@ FOLLOW_DISCORD = "-"
 CHANNEL_SETTINGS: tuple[ScalarChannelSetting, ...] = ("Smallest", "Fastest", "First", "Builds", "Vote")
 """Every channel setting, in the order the panel offers them."""
 
-CHANNEL_TYPES = (
-    sl.entity.ChannelType.TEXT,
-    sl.entity.ChannelType.ANNOUNCEMENT,
-    sl.entity.ChannelType.VOICE,
-    sl.entity.ChannelType.STAGE_VOICE,
-    sl.entity.ChannelType.PUBLIC_THREAD,
-    sl.entity.ChannelType.PRIVATE_THREAD,
-    sl.entity.ChannelType.ANNOUNCEMENT_THREAD,
+CONVERSATION_TYPES = (
+    sl.entity.ConversationType.GUILD_TEXT,
+    sl.entity.ConversationType.GUILD_ANNOUNCEMENT,
+    sl.entity.ConversationType.GUILD_VOICE,
+    sl.entity.ConversationType.GUILD_STAGE_VOICE,
+    sl.entity.ConversationType.GUILD_PUBLIC_THREAD,
+    sl.entity.ConversationType.GUILD_PRIVATE_THREAD,
+    sl.entity.ConversationType.GUILD_ANNOUNCEMENT_THREAD,
 )
 """What `GuildMessageable` admits, as channel types a picker can offer."""
 
@@ -183,14 +183,16 @@ class SettingsPanel(sd.Screen):
                 children.append(
                     sl.entities(
                         key=f"channel-{setting}",
-                        entity_type=sl.entity.EntityType.CHANNEL,
+                        entity_type=sl.entity.EntityType.CONVERSATION,
                         selection=sl.controlled(
-                            () if selected is None else (sl.entity.EntityRef(sl.entity.EntityKind.CHANNEL, selected),),
+                            ()
+                            if selected is None
+                            else (sl.entity.EntityRef(sl.entity.EntityKind.CONVERSATION, selected),),
                             change,
                         ),
                         minimum=0,
                         maximum=1,
-                        channel_types=CHANNEL_TYPES,
+                        conversation_types=CONVERSATION_TYPES,
                         placeholder=L(SETTING_LABELS[setting]),
                     )
                 )
@@ -284,7 +286,11 @@ class SettingsPanel(sd.Screen):
     async def _channel_changed(self, event: sl.EntityEvent, setting: ScalarChannelSetting) -> None:
         if not await self._may_event(event, SETTINGS_SERVER_EDIT):
             return
-        await self.set_channel(setting, event.selected[0].id if event.selected else None)
+        channel_id = event.selected[0].id if event.selected else None
+        if channel_id is not None and not isinstance(channel_id, int):
+            await event.notice(L("That channel selection is invalid."))
+            return
+        await self.set_channel(setting, channel_id)
 
     async def _locale_changed(self, event: sl.ChoiceEvent) -> None:
         if not await self._may_event(event, SETTINGS_SERVER_EDIT):
@@ -301,6 +307,9 @@ class SettingsPanel(sd.Screen):
         if not await self._may_event(event, SETTINGS_VOTING_EDIT):
             return
         role_id = event.selected[0].id
+        if not isinstance(role_id, int):
+            await event.notice(L("That role selection is invalid."))
+            return
         role = self._guild.get_role(role_id)
         if role is None:
             await event.notice(L(t"That role has been deleted."))
