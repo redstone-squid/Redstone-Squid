@@ -1,9 +1,6 @@
 """Build mutation route tests."""
 
 from dataclasses import replace
-from types import SimpleNamespace
-from typing import Any, cast
-from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import Response
@@ -13,11 +10,12 @@ from squid.accounts.errors import ConsentRequiredError
 from squid.api.security import Caller, subject_for
 from squid.api.v1.builds import edit_build, submit_build
 from squid.api.v1.schemas.builds import BuildPatch, DoorPatch, DoorSubmission
-from squid.builds.application import BuildEditor
+from squid.builds.application import BuildEditor, BuildService
+from squid.builds.application.commands import DoorSubmissionInput
+from squid.builds.application.editing import BuildEditPatch
 from squid.builds.domain import Build, DoorBuild, Status
 from squid.builds.errors import BuildRevisionRequiredError, InvalidBuildError
 from squid.core.errors import AuthorizationError
-from squid.runtime import ApiServices
 from tests.unit.api.fakes import credential_nodes
 
 ACCOUNT = Caller(
@@ -49,103 +47,120 @@ CLI = Caller(
 )
 
 
+class BuildRecorder(BuildService):
+    def __init__(self, *, result: Build | None = None, edit_error: Exception | None = None) -> None:
+        self.result = result or persisted_build()
+        self.edit_error = edit_error
+        self.submissions: list[DoorSubmissionInput] = []
+        self.edits: list[tuple[BuildEditor, int, BuildEditPatch, int | None]] = []
+
+    async def submit_door(self, submission: DoorSubmissionInput) -> DoorBuild:
+        self.submissions.append(submission)
+        assert isinstance(self.result, DoorBuild)
+        return self.result
+
+    async def apply_edit(
+        self,
+        actor: BuildEditor,
+        build_id: int,
+        patch: BuildEditPatch,
+        *,
+        expected_revision: int | None = None,
+    ) -> Build:
+        self.edits.append((actor, build_id, patch, expected_revision))
+        if self.edit_error is not None:
+            raise self.edit_error
+        return self.result
+
+
 @pytest.mark.asyncio
 async def test_a_cli_caller_with_no_discord_identity_can_submit() -> None:
     """Refused before: the gate demanded a snowflake the submission never used."""
-    submit_door = AsyncMock(return_value=persisted_build())
-    services = cast(ApiServices, SimpleNamespace(builds=SimpleNamespace(submit_door=submit_door)))
+    builds = BuildRecorder()
 
-    response = await submit_build(DoorSubmission(door_size=(2, 2, None)), Response(), services.builds, CLI)
+    response = await submit_build(DoorSubmission(door_size=(2, 2, None)), Response(), builds, CLI)
 
     assert response.id == 42
-    assert submit_door.await_args is not None
-    assert submit_door.await_args.args[0].submitter_account_id == 1
+    assert builds.submissions[0].submitter_account_id == 1
 
 
 @pytest.mark.asyncio
 async def test_submit_maps_authenticated_identity_and_rejects_other_categories() -> None:
-    submit_door = AsyncMock(return_value=persisted_build())
-    services = cast(ApiServices, SimpleNamespace(builds=SimpleNamespace(submit_door=submit_door)))
+    builds = BuildRecorder()
 
     http_response = Response()
-    response = await submit_build(DoorSubmission(door_size=(2, 2, None)), http_response, services.builds, ACCOUNT)
+    response = await submit_build(DoorSubmission(door_size=(2, 2, None)), http_response, builds, ACCOUNT)
 
     assert response.id == 42
-    assert submit_door.await_args is not None
-    submission = submit_door.await_args.args[0]
+    submission = builds.submissions[0]
     assert submission.submitter_account_id == 1
     assert not submission.ai_generated
     assert http_response.headers["etag"] == '"build-42-r1"'
 
     with pytest.raises(InvalidBuildError):
         await submit_build(
-            DoorSubmission(category="extender", door_size=(2, 2, None)), Response(), services.builds, ACCOUNT
+            DoorSubmission(category="extender", door_size=(2, 2, None)), Response(), builds, ACCOUNT
         )
 
 
 @pytest.mark.asyncio
 async def test_submit_gates_new_accounts_on_current_consent() -> None:
-    services = cast(ApiServices, SimpleNamespace(builds=SimpleNamespace(submit_door=AsyncMock())))
+    builds = BuildRecorder()
     pending = replace(ACCOUNT, consent_pending=True)
 
     with pytest.raises(ConsentRequiredError) as error:
-        await submit_build(DoorSubmission(door_size=(2, 2, None)), Response(), services.builds, pending)
+        await submit_build(DoorSubmission(door_size=(2, 2, None)), Response(), builds, pending)
 
     assert error.value.public_context == {
         "consent_url": "/v1/users/me/consent",
         "notice_url": "/v1/consent/notice",
     }
+    assert builds.submissions == []
 
 
 @pytest.mark.asyncio
 async def test_edit_hands_the_authorization_decision_to_the_service() -> None:
     """Who may edit is a build policy, not a transport one: the route validates
     the request, names the caller, and calls one method."""
-    build = persisted_build()
-    apply_edit = AsyncMock(return_value=build)
-    services = cast(ApiServices, SimpleNamespace(builds=SimpleNamespace(apply_edit=apply_edit)))
+    builds = BuildRecorder()
 
     http_response = Response()
     response = await edit_build(
         42,
         BuildPatch(extra_user_info="changed"),
         http_response,
-        services.builds,
+        builds,
         ACCOUNT,
         '"build-42-r1"',
     )
 
     assert response.id == 42
     assert http_response.headers["etag"] == '"build-42-r1"'
-    call = apply_edit.await_args
-    assert call is not None
-    actor, build_id, patch = call.args
+    actor, build_id, patch, expected_revision = builds.edits[0]
     assert actor == BuildEditor(subject=subject_for(ACCOUNT))
     assert build_id == 42
     assert patch.extra_user_info == "changed"
-    assert call.kwargs == {"expected_revision": 1}
+    assert expected_revision == 1
 
 
 @pytest.mark.asyncio
 async def test_edit_surfaces_the_service_authorization_refusal() -> None:
-    apply_edit = AsyncMock(side_effect=AuthorizationError)
-    services = cast(ApiServices, SimpleNamespace(builds=SimpleNamespace(apply_edit=apply_edit)))
+    builds = BuildRecorder(edit_error=AuthorizationError())
 
     with pytest.raises(AuthorizationError):
-        await edit_build(42, BuildPatch(), Response(), services.builds, ACCOUNT, '"build-42-r1"')
+        await edit_build(42, BuildPatch(), Response(), builds, ACCOUNT, '"build-42-r1"')
 
 
 @pytest.mark.asyncio
 async def test_edit_requires_an_if_match_revision() -> None:
     """Checked before the service is reached: a blind overwrite is a bad request,
     not an authorization question."""
-    apply_edit = AsyncMock()
-    builds = cast(Any, SimpleNamespace(apply_edit=apply_edit))
+    builds = BuildRecorder()
 
     with pytest.raises(BuildRevisionRequiredError):
         await edit_build(42, BuildPatch(), Response(), builds, ACCOUNT)
 
-    apply_edit.assert_not_awaited()
+    assert builds.edits == []
 
 
 def test_door_patch_flattens_onto_the_application_patch_names() -> None:
