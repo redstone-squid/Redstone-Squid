@@ -42,7 +42,7 @@ from squid.permissions.domain.catalogue import (
     RESTRICTION_ALIAS_CREATE,
 )
 from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
-from squid_ui.runtime.component import RenderResult
+from squid_ui.document import DocumentLike
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -232,7 +232,7 @@ class SearchCog[
     @managed_result
     async def add_restriction_alias(
         self, ctx: Context[BotT], restriction: str, alias: str
-    ) -> RenderResult[sl.ComponentsV2Target]:
+    ) -> DocumentLike[sl.ComponentsV2Target]:
         """Add another name for a restriction."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
 
@@ -301,7 +301,7 @@ class SearchCog[
         await self._view_build_prefix(ctx, build_id)
 
     @managed_result
-    async def _view_build_prefix(self, ctx: Context[BotT], build_id: int) -> RenderResult[sl.ComponentsV2Target]:
+    async def _view_build_prefix(self, ctx: Context[BotT], build_id: int) -> DocumentLike[sl.ComponentsV2Target]:
         """Render a prefix-command build view through a managed result mount."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
         build = await self.queries.get(build_id)
@@ -317,7 +317,7 @@ class SearchCog[
     @app_commands.rename(build_id="id")
     @app_commands.describe(build_id=app_commands.locale_str(_("The ID of the build you want to confirm.")))
     @managed_result
-    async def confirm_build(self, ctx: Context[BotT], build_id: int) -> RenderResult[sl.ComponentsV2Target]:
+    async def confirm_build(self, ctx: Context[BotT], build_id: int) -> DocumentLike[sl.ComponentsV2Target]:
         """Mark a submission as confirmed and publish it."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
 
@@ -330,7 +330,7 @@ class SearchCog[
     @app_commands.rename(build_id="id")
     @app_commands.describe(build_id=app_commands.locale_str(_("The ID of the build you want to deny.")))
     @managed_result
-    async def deny_build(self, ctx: Context[BotT], build_id: int) -> RenderResult[sl.ComponentsV2Target]:
+    async def deny_build(self, ctx: Context[BotT], build_id: int) -> DocumentLike[sl.ComponentsV2Target]:
         """Mark a submission as denied."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
 

@@ -26,7 +26,7 @@ from squid.permissions.domain.catalogue import (
     TAG_PROPOSAL_REJECT,
 )
 from squid.tags.domain import TagValueType
-from squid_ui.runtime.component import RenderResult
+from squid_ui.document import DocumentLike
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -315,7 +315,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     @commands.command(name="raise-error", aliases=["e"], hidden=True)
     @commands.is_owner()
     @managed_result(dismiss_on_success=True)
-    async def raise_error(self, ctx: Context[BotT]) -> RenderResult[sl.ComponentsV2Target]:
+    async def raise_error(self, ctx: Context[BotT]) -> DocumentLike[sl.ComponentsV2Target]:
         """Raises an error for testing purposes."""
         msg = "This is a test error."
         raise ValueError(msg)

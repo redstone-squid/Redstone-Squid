@@ -9,15 +9,15 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.errors import build_error_notice, record_operation_error
 from squid.bot.ui import L, error_node, info_node
-from squid_ui.runtime.component import RenderResult
+from squid_ui.document import DocumentLike
 
 type OperationWork = Callable[
-    [sl.operations.ProgressReporter[RenderResult[sl.ComponentsV2Target] | None], sd.delivery.DeliveryResult],
-    Awaitable[RenderResult[sl.ComponentsV2Target]],
+    [sl.operations.ProgressReporter[DocumentLike[sl.ComponentsV2Target] | None], sd.delivery.DeliveryResult],
+    Awaitable[DocumentLike[sl.ComponentsV2Target]],
 ]
-_INITIAL_PROGRESS: RenderResult[sl.ComponentsV2Target] | None = None
+_INITIAL_PROGRESS: DocumentLike[sl.ComponentsV2Target] | None = None
 
-type ManagedResultHandler[**P] = Callable[P, Awaitable[RenderResult[sl.ComponentsV2Target]]]
+type ManagedResultHandler[**P] = Callable[P, Awaitable[DocumentLike[sl.ComponentsV2Target]]]
 type ManagedResultCallback[**P] = Callable[P, Coroutine[Any, Any, None]]
 
 
@@ -46,7 +46,7 @@ def _make_root(
     return make_root
 
 
-def _render_error(invocation: sd.Invocation, error: Exception) -> RenderResult[sl.ComponentsV2Target]:
+def _render_error(invocation: sd.Invocation, error: Exception) -> DocumentLike[sl.ComponentsV2Target]:
     notice = build_error_notice(error, invocation.localization.locale)
     return error_node(notice.title, notice.detail)
 
@@ -68,7 +68,7 @@ class CommandOperation(sl.Component[sl.ComponentsV2Target]):
     """A command effect whose progress and terminal outcome are its rendered state."""
 
     execution: sl.operations.OperationExecution[
-        RenderResult[sl.ComponentsV2Target], RenderResult[sl.ComponentsV2Target] | None
+        DocumentLike[sl.ComponentsV2Target], DocumentLike[sl.ComponentsV2Target] | None
     ]
 
     def __init__(self, invocation: sd.Invocation, work: OperationWork) -> None:
@@ -81,8 +81,8 @@ class CommandOperation(sl.Component[sl.ComponentsV2Target]):
     @sl.operation(initial=_INITIAL_PROGRESS)
     async def _execute(
         self,
-        progress: sl.operations.ProgressReporter[RenderResult[sl.ComponentsV2Target] | None],
-    ) -> RenderResult[sl.ComponentsV2Target]:
+        progress: sl.operations.ProgressReporter[DocumentLike[sl.ComponentsV2Target] | None],
+    ) -> DocumentLike[sl.ComponentsV2Target]:
         result = self._result
         if result is None:
             message = "a command operation cannot start before its initial delivery"
@@ -90,7 +90,7 @@ class CommandOperation(sl.Component[sl.ComponentsV2Target]):
 
         return await self._work(progress, result)
 
-    def render(self) -> RenderResult[sl.ComponentsV2Target]:
+    def render(self) -> DocumentLike[sl.ComponentsV2Target]:
         match self.execution.status:
             case sl.operations.Pending(progress=progress):
                 return self._initial if progress is None else progress
@@ -134,8 +134,8 @@ def managed_result[**P](
         async def invoke(*args: P.args, **kwargs: P.kwargs) -> None:
             invocation = await _command_invocation(args)
 
-            async def work() -> RenderResult:
-                return cast(RenderResult, await handler(*args, **kwargs))
+            async def work() -> DocumentLike:
+                return cast(DocumentLike, await handler(*args, **kwargs))
 
             async def on_error(error: sd.ManagedError) -> None:
                 await _record_error(invocation, error)
@@ -144,7 +144,7 @@ def managed_result[**P](
                 work,
                 message_destination=invocation.destination(),
                 make_root=cast(sd.MessageRootFactory, _make_root(invocation)),
-                initial=cast(RenderResult, info_node(L("Working"), L("Getting information..."))),
+                initial=cast(DocumentLike, info_node(L("Working"), L("Getting information..."))),
                 render_error=cast(sd.ErrorRenderer, lambda error: _render_error(invocation, error)),
                 on_error=on_error,
                 dismiss_on_success=dismiss_on_success,

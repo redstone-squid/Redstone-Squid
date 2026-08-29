@@ -3,9 +3,9 @@
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
 
+from squid_ui.document import DocumentLike
 from squid_ui.factories import action_controls, heading, paragraph, stack, status
 from squid_ui.forms import ChoiceOption, FormSpec, MultiChoiceField
-from squid_ui.runtime.component import RenderResult
 from squid_ui.semantic import Choice, ControlDisplay, FormTrigger, Tone, fallback
 from squid_ui.text import TextLike
 from squid_ui_widgets._actions import (
@@ -281,7 +281,7 @@ class MultiChoice:
             prefill={"selection": state.staged},
         )
 
-    def render(self, state: MultiChoiceState, controls: MachineControls[MultiChoiceState]) -> RenderResult:
+    def render(self, state: MultiChoiceState, controls: MachineControls[MultiChoiceState]) -> DocumentLike:
         group_nodes = []
         staged = set(state.staged)
         for group in self.groups:

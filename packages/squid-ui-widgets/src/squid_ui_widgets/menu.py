@@ -3,8 +3,8 @@
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
+from squid_ui.document import DocumentLike
 from squid_ui.factories import action_controls, choice, heading, stack
-from squid_ui.runtime.component import RenderResult
 from squid_ui.semantic import ControlDisplay
 from squid_ui.target_types import RenderTarget
 from squid_ui.text import Message, ResolvedText, TextLike
@@ -145,7 +145,7 @@ class Menu[RenderTargetT: RenderTarget = RenderTarget]:
 
     def render(
         self, state: MenuState, controls: MachineControls[MenuState, RenderTargetT]
-    ) -> RenderResult[RenderTargetT]:
+    ) -> DocumentLike[RenderTargetT]:
         current, entries = self._resolve_path(state.path)
         if len(entries) <= 5:
             destinations = (
