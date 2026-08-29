@@ -10,7 +10,7 @@ from enum import StrEnum
 
 class Capability(StrEnum):
     ACTIONS_BUTTONS = "actions.buttons"
-    ACTIONS_DISCORD_ENTITY = "actions.discord.entity"
+    ACTIONS_ENTITY = "actions.entity"
     ACTIONS_DISCORD_PREMIUM = "actions.discord.premium"
     ACTIONS_SELECT = "actions.select"
     FORMS_DISCORD_CHECKBOX_GROUP = "forms.discord.checkbox_group"

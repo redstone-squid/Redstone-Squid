@@ -268,13 +268,13 @@ def _text_input(
 _ENTITY_DEFAULT_TYPES: dict[EntityKind, discord.SelectDefaultValueType] = {
     EntityKind.USER: discord.SelectDefaultValueType.user,
     EntityKind.ROLE: discord.SelectDefaultValueType.role,
-    EntityKind.CHANNEL: discord.SelectDefaultValueType.channel,
+    EntityKind.CONVERSATION: discord.SelectDefaultValueType.channel,
 }
 
 _FIELD_DEFAULT_TYPES: dict[EntityType, discord.SelectDefaultValueType] = {
     EntityType.USER: discord.SelectDefaultValueType.user,
     EntityType.ROLE: discord.SelectDefaultValueType.role,
-    EntityType.CHANNEL: discord.SelectDefaultValueType.channel,
+    EntityType.CONVERSATION: discord.SelectDefaultValueType.channel,
 }
 
 
@@ -295,7 +295,7 @@ def _entity_defaults(prefill: object, entity_type: EntityType) -> list[discord.S
         match value:
             case discord.SelectDefaultValue():
                 defaults.append(value)
-            case EntityRef():
+            case EntityRef(id=int()):
                 defaults.append(discord.SelectDefaultValue(id=value.id, type=_ENTITY_DEFAULT_TYPES[value.kind]))
             case discord.Role():
                 defaults.append(discord.SelectDefaultValue(id=value.id, type=discord.SelectDefaultValueType.role))
@@ -441,7 +441,7 @@ def _form_component(
         select_type = {
             EntityType.USER: discord.ui.UserSelect,
             EntityType.ROLE: discord.ui.RoleSelect,
-            EntityType.CHANNEL: discord.ui.ChannelSelect,
+            EntityType.CONVERSATION: discord.ui.ChannelSelect,
             EntityType.MENTIONABLE: discord.ui.MentionableSelect,
         }[field.entity_type]
         placeholder = _resolve(field.placeholder, localization) if field.placeholder is not None else None

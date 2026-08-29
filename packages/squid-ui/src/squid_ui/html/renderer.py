@@ -44,7 +44,7 @@ _BOOLEAN_ATTRIBUTES = frozenset(
     }
 )
 _DATA_ATTRIBUTES = {
-    scene.HtmlAttributeName.CHANNEL_TYPES: "data-squid-channel-types",
+    scene.HtmlAttributeName.CONVERSATION_TYPES: "data-squid-conversation-types",
     scene.HtmlAttributeName.DISPLAY: "data-squid-display",
     scene.HtmlAttributeName.EMPHASIS: "data-squid-emphasis",
     scene.HtmlAttributeName.ENTITY_TYPE: "data-squid-entity-type",

@@ -4,7 +4,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import replace
 
 from squid_ui.capabilities import Capability
-from squid_ui.entity import EntityKind, EntityRef
+from squid_ui.entity import decode_entity_ref, encode_entity_ref
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.forms import FormBinding
 from squid_ui.planning.semantic_adaptation.common import (
@@ -199,27 +199,18 @@ def _choices(node: Choices, path: str, context: _Context) -> list[Node]:
     return result
 
 
-def _entity_key(ref: EntityRef) -> str:
-    return f"{ref.kind.value}:{ref.id}"
-
-
-def _entity_ref(key: str) -> EntityRef:
-    kind, raw_id = key.split(":", 1)
-    return EntityRef(EntityKind(kind), int(raw_id))
-
-
 def _entities(node: Entities, path: str, context: _Context) -> list[Node]:
     match node.selection:
         case Controlled(value=value):
             previous = tuple(value)
         case Uncontrolled(initial=initial):
-            initial_keys = tuple(_entity_key(value) for value in initial)
+            initial_keys = tuple(encode_entity_ref(value) for value in initial)
             stored = context.session.selection(node.key, initial=initial_keys).selected
-            previous = tuple(_entity_ref(key) for key in stored)
+            previous = tuple(decode_entity_ref(key) for key in stored)
 
     commit = EntityCommit(node.selection, node.key, previous, context.session)
 
-    if Capability.ACTIONS_DISCORD_ENTITY in context.capabilities:
+    if Capability.ACTIONS_ENTITY in context.capabilities:
         return [
             EntitySelect(
                 node.entity_type,
@@ -227,28 +218,28 @@ def _entities(node: Entities, path: str, context: _Context) -> list[Node]:
                 node.key,
                 placeholder=_resolve(node.placeholder, context) if node.placeholder is not None else None,
                 default_values=previous,
-                channel_types=node.channel_types,
+                conversation_types=node.conversation_types,
                 min_values=node.minimum,
                 max_values=node.maximum,
             )
         ]
     if not node.choices:
-        message = f"{path}: Entities requires actions.discord.entity or enumerated fallback choices"
+        message = f"{path}: Entities requires actions.entity or enumerated fallback choices"
         raise LayoutInvariantError(message)
 
     available = tuple(choice for choice in node.choices if choice.available)
-    by_key = {_entity_key(choice.ref): choice.ref for choice in available}
-    previous = tuple(value for value in previous if _entity_key(value) in by_key)
+    by_key = {encode_entity_ref(choice.ref): choice.ref for choice in available}
+    previous = tuple(value for value in previous if encode_entity_ref(value) in by_key)
     commit = EntityCommit(node.selection, node.key, previous, context.session)
 
     fallback = Choices(
         key=node.key,
         choices=tuple(
-            Choice(_entity_key(choice.ref), choice.label, choice.description, choice.available)
+            Choice(encode_entity_ref(choice.ref), choice.label, choice.description, choice.available)
             for choice in node.choices
         ),
         selection=Controlled(
-            tuple(_entity_key(value) for value in previous),
+            tuple(encode_entity_ref(value) for value in previous),
             SelectEntityFallback(commit, by_key),
         ),
         minimum=node.minimum,
