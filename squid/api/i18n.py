@@ -1,8 +1,11 @@
-"""REST API locale negotiation from the `Accept-Language` header."""
+"""REST API locale negotiation and ambient request binding."""
 
 from fastapi import Request
+from starlette.datastructures import Headers
+from starlette.types import ASGIApp, Receive, Scope, Send
 
-from squid.core.i18n import DEFAULT_LOCALE, negotiate_locale_candidates
+from squid.core.i18n import DEFAULT_LOCALE, localization_for, negotiate_locale_candidates
+from squid_ui.text import localization_scope
 
 
 def _parse_accept_language(header: str) -> list[str]:
@@ -39,3 +42,21 @@ def locale_for_request(request: Request) -> str:
     if not preferred:
         return DEFAULT_LOCALE
     return negotiate_locale_candidates(preferred)
+
+
+class LocaleContextMiddleware:
+    """Bind the negotiated localization for the duration of one HTTP request."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self._app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self._app(scope, receive, send)
+            return
+
+        header = Headers(scope=scope).get("accept-language")
+        preferred = [] if not header else _parse_accept_language(header)
+        locale = negotiate_locale_candidates(preferred) if preferred else DEFAULT_LOCALE
+        with localization_scope(localization_for(locale)):
+            await self._app(scope, receive, send)
