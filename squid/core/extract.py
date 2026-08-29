@@ -10,7 +10,7 @@ from babel.messages.extract import extract_python
 
 def deferred_msgid(call: ast.Call) -> str | tuple[str, str] | None:
     """Derive the msgid carried by a deferred translation call, if statically known."""
-    if not isinstance(call.func, ast.Name) or call.func.id not in {"L", "tr"} or not call.args:
+    if not isinstance(call.func, ast.Name) or call.func.id != "tr" or not call.args:
         return None
 
     singular = _template_msgid(call.args[0])
@@ -64,7 +64,10 @@ def extract_squid(
             and node.args
             and isinstance(node.args[0], ast.TemplateStr)
             and isinstance(node.func, ast.Name)
-            and node.func.id in {"L", "tr"}
+            and node.func.id == "tr"
             and (msgid := deferred_msgid(node)) is not None
         ):
-            yield node.lineno, node.func.id, msgid, []
+            if isinstance(msgid, tuple):
+                yield node.lineno, "ngettext", (*msgid, None), []
+            else:
+                yield node.lineno, node.func.id, msgid, []

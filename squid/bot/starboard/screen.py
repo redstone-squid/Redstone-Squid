@@ -6,7 +6,7 @@ from typing import Protocol, cast
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
-from squid.bot.ui import L
+from squid.bot.ui import tr
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     STARBOARD_BOARD_CREATE,
@@ -77,47 +77,47 @@ class StarboardScreen(sd.Screen):
             summary=lambda board: f"{board.name} · #{board.channel_id} · {board.required:g} votes",
             detail=_board_detail,
             page_size=10,
-            title=L(t"Starboards"),
-            empty=L(t"No starboards are configured."),
+            title=tr(t"Starboards"),
+            empty=tr(t"No starboards are configured."),
         )
-        tabs = [sp.Tab("boards", L(t"Boards"), self._browser)]
+        tabs = [sp.Tab("boards", tr(t"Boards"), self._browser)]
         if STARBOARD_BOARD_CREATE in self._capabilities:
-            tabs.append(sp.Tab("create", L(t"Create"), self._create_nodes()))
+            tabs.append(sp.Tab("create", tr(t"Create"), self._create_nodes()))
         if STARBOARD_BOARD_EDIT in self._capabilities or STARBOARD_BOARD_DELETE in self._capabilities:
-            tabs.append(sp.Tab("settings", L(t"Settings"), self._settings_nodes()))
+            tabs.append(sp.Tab("settings", tr(t"Settings"), self._settings_nodes()))
         if STARBOARD_EMOJI_EDIT in self._capabilities:
-            tabs.append(sp.Tab("emojis", L(t"Emojis"), self._emoji_nodes()))
+            tabs.append(sp.Tab("emojis", tr(t"Emojis"), self._emoji_nodes()))
         if STARBOARD_WEIGHT_EDIT in self._capabilities:
-            tabs.append(sp.Tab("weights", L(t"Role weights"), self._weight_nodes()))
-        self._tabs = sp.Tabs(tabs, key="starboard-tabs", title=L(t"Starboard configuration")).build_component()
+            tabs.append(sp.Tab("weights", tr(t"Role weights"), self._weight_nodes()))
+        self._tabs = sp.Tabs(tabs, key="starboard-tabs", title=tr(t"Starboard configuration")).build_component()
 
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self._deleting is not None and self._decision is not None:
             board_name = self._deleting
             return (
                 sl.section(
-                    sl.heading(L(t"Delete starboard")),
-                    sl.paragraph(L(t"Delete **{board_name}** and stop mirroring new entries?")),
+                    sl.heading(tr(t"Delete starboard")),
+                    sl.paragraph(tr(t"Delete **{board_name}** and stop mirroring new entries?")),
                 ),
                 self.boundary(self._decision, key="delete-decision"),
             )
         if self._tabs is None:
-            return (sl.status(L(t"Loading starboards.")),)
+            return (sl.status(tr(t"Loading starboards.")),)
         return (
             self.boundary(self._tabs, key="tabs"),
-            sl.action_controls(sl.action_control(L(t"Close"), self._close, key="close"), key="starboard-actions"),
+            sl.action_controls(sl.action_control(tr(t"Close"), self._close, key="close"), key="starboard-actions"),
         )
 
     def _create_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         return (
             sl.form(
-                L(t"Create starboard"),
+                tr(t"Create starboard"),
                 sl.forms.FormSpec(
-                    L(t"Create starboard"),
+                    tr(t"Create starboard"),
                     (
-                        sl.forms.TextField(key="name", label=L(t"Name"), default="main", maximum=100),
-                        sl.forms.IntField(key="channel_id", label=L(t"Destination channel ID"), minimum=1),
-                        sl.forms.FloatField(key="required", label=L(t"Post threshold"), default=3.0),
+                        sl.forms.TextField(key="name", label=tr(t"Name"), default="main", maximum=100),
+                        sl.forms.IntField(key="channel_id", label=tr(t"Destination channel ID"), minimum=1),
+                        sl.forms.FloatField(key="required", label=tr(t"Post threshold"), default=3.0),
                     ),
                 ),
                 key="create-board",
@@ -130,20 +130,20 @@ class StarboardScreen(sd.Screen):
         if STARBOARD_BOARD_EDIT in self._capabilities:
             nodes.append(
                 sl.form(
-                    L(t"Edit setting"),
+                    tr(t"Edit setting"),
                     sl.forms.FormSpec(
-                        L(t"Edit starboard setting"),
+                        tr(t"Edit starboard setting"),
                         (
-                            sl.forms.TextField(key="name", label=L(t"Starboard name"), maximum=100),
+                            sl.forms.TextField(key="name", label=tr(t"Starboard name"), maximum=100),
                             sl.forms.ChoiceField(
                                 key="setting",
-                                label=L(t"Setting"),
+                                label=tr(t"Setting"),
                                 options=tuple(
                                     sl.forms.ChoiceOption(key, key.replace("_", " ").title(), key)
                                     for key in EDITABLE_SETTINGS
                                 ),
                             ),
-                            sl.forms.TextField(key="value", label=L(t"Value"), maximum=200),
+                            sl.forms.TextField(key="value", label=tr(t"Value"), maximum=200),
                         ),
                     ),
                     key="edit-setting",
@@ -153,10 +153,10 @@ class StarboardScreen(sd.Screen):
         if STARBOARD_BOARD_DELETE in self._capabilities:
             nodes.append(
                 sl.form(
-                    L(t"Delete board"),
+                    tr(t"Delete board"),
                     sl.forms.FormSpec(
-                        L(t"Choose starboard to delete"),
-                        (sl.forms.TextField(key="name", label=L(t"Starboard name"), maximum=100),),
+                        tr(t"Choose starboard to delete"),
+                        (sl.forms.TextField(key="name", label=tr(t"Starboard name"), maximum=100),),
                     ),
                     key="delete-board",
                     on_submit=self._request_delete,
@@ -167,30 +167,30 @@ class StarboardScreen(sd.Screen):
     def _emoji_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         return (
             sl.form(
-                L(t"Edit emoji"),
+                tr(t"Edit emoji"),
                 sl.forms.FormSpec(
-                    L(t"Add or remove starboard emoji"),
+                    tr(t"Add or remove starboard emoji"),
                     (
-                        sl.forms.TextField(key="name", label=L(t"Starboard name"), maximum=100),
+                        sl.forms.TextField(key="name", label=tr(t"Starboard name"), maximum=100),
                         sl.forms.ChoiceField(
                             key="operation",
-                            label=L(t"Operation"),
+                            label=tr(t"Operation"),
                             options=(
-                                sl.forms.ChoiceOption("add", L(t"Add or replace"), "add"),
-                                sl.forms.ChoiceOption("remove", L(t"Remove"), "remove"),
+                                sl.forms.ChoiceOption("add", tr(t"Add or replace"), "add"),
+                                sl.forms.ChoiceOption("remove", tr(t"Remove"), "remove"),
                             ),
                         ),
-                        sl.forms.TextField(key="emoji", label=L(t"Emoji"), maximum=100),
+                        sl.forms.TextField(key="emoji", label=tr(t"Emoji"), maximum=100),
                         sl.forms.ChoiceField(
                             key="direction",
-                            label=L(t"Direction"),
+                            label=tr(t"Direction"),
                             default="up",
                             options=(
-                                sl.forms.ChoiceOption("up", L(t"Up"), "up"),
-                                sl.forms.ChoiceOption("down", L(t"Down"), "down"),
+                                sl.forms.ChoiceOption("up", tr(t"Up"), "up"),
+                                sl.forms.ChoiceOption("down", tr(t"Down"), "down"),
                             ),
                         ),
-                        sl.forms.FloatField(key="multiplier", label=L(t"Multiplier"), default=1.0),
+                        sl.forms.FloatField(key="multiplier", label=tr(t"Multiplier"), default=1.0),
                     ),
                 ),
                 key="edit-emoji",
@@ -201,15 +201,15 @@ class StarboardScreen(sd.Screen):
     def _weight_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         return (
             sl.form(
-                L(t"Edit role weight"),
+                tr(t"Edit role weight"),
                 sl.forms.FormSpec(
-                    L(t"Set or remove role multiplier"),
+                    tr(t"Set or remove role multiplier"),
                     (
-                        sl.forms.TextField(key="name", label=L(t"Starboard name"), maximum=100),
-                        sl.forms.IntField(key="role_id", label=L(t"Role ID"), minimum=1),
+                        sl.forms.TextField(key="name", label=tr(t"Starboard name"), maximum=100),
+                        sl.forms.IntField(key="role_id", label=tr(t"Role ID"), minimum=1),
                         sl.forms.FloatField(
                             key="multiplier",
-                            label=L(t"Multiplier; leave empty to remove"),
+                            label=tr(t"Multiplier; leave empty to remove"),
                             required=False,
                         ),
                     ),
@@ -228,7 +228,7 @@ class StarboardScreen(sd.Screen):
         created = await self._create_board(channel_id, name, required)
         await self._refresh()
         created_name = created.name
-        await event.notice(L(t"Created starboard **{created_name}**."))
+        await event.notice(tr(t"Created starboard **{created_name}**."))
 
     async def _edit(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, STARBOARD_BOARD_EDIT):
@@ -238,10 +238,10 @@ class StarboardScreen(sd.Screen):
         value = _parse_setting(setting, cast(str, event.values["value"]))
         updated = await self._operations.update_settings(self._guild_id, name, **{setting: value})
         if updated is None:
-            await event.notice(L(t"No starboard with that name exists."))
+            await event.notice(tr(t"No starboard with that name exists."))
             return
         await self._refresh()
-        await event.notice(L(t"Starboard updated."))
+        await event.notice(tr(t"Starboard updated."))
 
     async def _edit_emoji(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, STARBOARD_EMOJI_EDIT):
@@ -258,7 +258,7 @@ class StarboardScreen(sd.Screen):
             aliases += (StarboardEmoji(emoji, cast(StarboardDirection, direction), multiplier, len(aliases)),)
         await self._operations.set_emojis(config, aliases)
         await self._refresh()
-        await event.notice(L(t"Starboard emojis updated."))
+        await event.notice(tr(t"Starboard emojis updated."))
 
     async def _edit_weight(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, STARBOARD_WEIGHT_EDIT):
@@ -269,17 +269,17 @@ class StarboardScreen(sd.Screen):
         role_id = cast(int, event.values["role_id"])
         multiplier = cast(float | None, event.values.get("multiplier"))
         await self._operations.set_role_multiplier(config, role_id, multiplier)
-        await event.notice(L(t"Starboard role weight updated."))
+        await event.notice(tr(t"Starboard role weight updated."))
 
     async def _request_delete(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, STARBOARD_BOARD_DELETE):
             return
         self._deleting = cast(str, event.values["name"])
         self._decision = sp.Decision[sl.ComponentsV2Target](
-            L(t"Deleting a starboard keeps its audit history but disables its configuration."),
+            tr(t"Deleting a starboard keeps its audit history but disables its configuration."),
             (
-                sp.DecisionOption("confirm", L(t"Delete"), sl.Tone.DANGER),
-                sp.DecisionOption("cancel", L(t"Cancel")),
+                sp.DecisionOption("confirm", tr(t"Delete"), sl.Tone.DANGER),
+                sp.DecisionOption("cancel", tr(t"Cancel")),
             ),
             key="delete-starboard",
         ).build_component(on_decide=self._delete)
@@ -298,18 +298,18 @@ class StarboardScreen(sd.Screen):
         self._deleting = None
         self._decision = None
         await self._refresh()
-        await event.source.notice(L(t"Starboard deleted.") if deleted else L(t"No starboard with that name exists."))
+        await event.source.notice(tr(t"Starboard deleted.") if deleted else tr(t"No starboard with that name exists."))
 
     async def _named(self, event: sl.ActionEvent, name: str) -> StarboardConfig | None:
         config = await self._operations.get(self._guild_id, name)
         if config is None:
-            await event.notice(L(t"No starboard with that name exists."))
+            await event.notice(tr(t"No starboard with that name exists."))
         return config
 
     async def _may(self, event: sl.ActionEvent, node: PermissionNode) -> bool:
         if await self._authorize(node):
             return True
-        await event.notice(L(t"You are no longer allowed to perform this starboard operation."))
+        await event.notice(tr(t"You are no longer allowed to perform this starboard operation."))
         return False
 
     async def _close(self, event: sl.PressEvent) -> None:
@@ -319,10 +319,10 @@ class StarboardScreen(sd.Screen):
 def _board_detail(board: StarboardConfig) -> sl.semantic.Fields:
     emojis = " ".join(f"{item.emoji} ({item.direction}, {item.multiplier:g}x)" for item in board.emojis) or "—"
     return sl.fields(
-        sl.field(L(t"Channel"), str(board.channel_id)),
-        sl.field(L(t"Post threshold"), f"{board.required:g}"),
-        sl.field(L(t"Removal threshold"), f"{board.required_remove:g}"),
-        sl.field(L(t"Emojis"), emojis),
+        sl.field(tr(t"Channel"), str(board.channel_id)),
+        sl.field(tr(t"Post threshold"), f"{board.required:g}"),
+        sl.field(tr(t"Removal threshold"), f"{board.required_remove:g}"),
+        sl.field(tr(t"Emojis"), emojis),
     )
 
 

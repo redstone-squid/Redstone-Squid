@@ -138,7 +138,7 @@ fuzz-search-parser seconds="20":
     uv run --locked --group fuzz python -m scripts.run_fuzz_target target=search_parser seconds={{seconds}}
 
 i18n-extract:
-    PYTHONPATH=. uv run pybabel extract -k L -F babel.cfg -o locales/squid.pot --sort-output --project=redstone-squid --version=$(uv run python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])") --msgid-bugs-address=https://github.com/redstone-squid/Redstone-Squid/issues .
+    PYTHONPATH=. uv run pybabel extract -k tr -F babel.cfg -o locales/squid.pot --sort-output --project=redstone-squid --version=$(uv run python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])") --msgid-bugs-address=https://github.com/redstone-squid/Redstone-Squid/issues .
 
 i18n-update: i18n-extract
     uv run pybabel update -i locales/squid.pot -d locales -D squid --no-fuzzy-matching
