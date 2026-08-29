@@ -91,7 +91,8 @@ class AccessScreen(sd.Screen):
         if PERM_AUDIT_VIEW in self._capabilities:
             audit = await self._admin.audit(guild_id=self._guild_id, limit=50)
             tabs.append(sp.Tab("audit", L(t"Audit"), self._audit(audit)))
-        self._tabs = sp.Tabs(tabs, key="access-tabs", title=L(t"Access for {self._subject_label}")).build_component()
+        subject_label = self._subject_label
+        self._tabs = sp.Tabs(tabs, key="access-tabs", title=L(t"Access for {subject_label}")).build_component()
 
     @property
     def _may_grant(self) -> bool:
