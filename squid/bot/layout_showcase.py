@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Literal, Never
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Context, guild_only
-from squid_replicated import ReplicatedDocument, ReplicatedScope
 
 import squid_layouts as sl
 from squid.bot.i18n import resolve_locale
@@ -27,6 +26,7 @@ from squid.core.i18n import _
 from squid_layouts.discord import SessionKey
 from squid_layouts.discord.screens import Opener
 from squid_layouts.discord.sessions import UserScope
+from squid_replicated import ReplicatedDocument, ReplicatedScope
 
 if TYPE_CHECKING:
     import squid.bot.app
