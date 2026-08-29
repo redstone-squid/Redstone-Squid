@@ -11,7 +11,6 @@ from squid.bot.admin import Admin
 from squid.bot.diagnostics import Diagnostics
 from squid.bot.give_redstoner import GiveRedstoner
 from squid.bot.layout_showcase import LayoutShowcaseCog
-from squid.bot.misc_commands import Miscellaneous
 from squid.bot.permissions import PermissionCog
 from squid.bot.settings import SettingsCog
 from squid.bot.starboard import StarboardCog
@@ -44,11 +43,6 @@ UNGATED_COMMANDS = frozenset(
         "build schematic info",
         "build schematic render",
         "build view",
-        "info",
-        "info docs",
-        "info form",
-        "info invite",
-        "info source",
         "layout",
         "layout demo",
         "layout lobby",
@@ -76,7 +70,6 @@ PUBLIC_COGS = (
     VerifyCog,
     VersionTracker,
     SettingsCog,
-    Miscellaneous,
     LayoutShowcaseCog,
     GiveRedstoner,
     StarboardCog,
@@ -124,7 +117,6 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "schematic render",
         "view",
     ),
-    "info": ("docs", "form", "invite", "source"),
     "layout": ("demo", "lobby", "shared"),
     # `whoami`, `test` and `explain` were three spellings of "what may this person do";
     # `can` is the one (docs/plans/command-redesign/05-condensation.md).
