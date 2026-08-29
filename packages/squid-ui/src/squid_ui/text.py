@@ -1,6 +1,8 @@
 """Resolved text values and safe Discord Markdown interpolation."""
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
@@ -59,6 +61,23 @@ class Localization:
 
 
 NEUTRAL = Localization()
+
+_CURRENT_LOCALIZATION: ContextVar[Localization] = ContextVar("squid_ui_localization", default=NEUTRAL)
+
+
+def current_localization() -> Localization:
+    """Return the localization bound to the current execution context."""
+    return _CURRENT_LOCALIZATION.get()
+
+
+@contextmanager
+def localization_scope(localization: Localization) -> Iterator[None]:
+    """Bind one localization until the surrounding context exits."""
+    token = _CURRENT_LOCALIZATION.set(localization)
+    try:
+        yield
+    finally:
+        _CURRENT_LOCALIZATION.reset(token)
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,12 +161,31 @@ def _resolve_template(template: Template, markup: Markup) -> str:
 
 
 def _resolve_named(template: str, values: Mapping[str, object], markup: Markup) -> str:
-    escaped = {key: _safe_value(value, markup) for key, value in values.items()}
+    escaped = {key: _SafeFormatValue(value, markup) for key, value in values.items()}
     try:
         return template.format_map(escaped)
     except (KeyError, ValueError) as error:
         message = f"invalid Markdown format template: {error}"
         raise ValueError(message) from error
+
+
+@dataclass(frozen=True, slots=True)
+class _SafeFormatValue:
+    value: object
+    markup: Markup
+
+    def __str__(self) -> str:
+        return _safe_value(self.value, self.markup)
+
+    def __repr__(self) -> str:
+        return _safe_value(repr(self.value), self.markup)
+
+    def __format__(self, format_spec: str) -> str:
+        if not format_spec:
+            return _safe_value(self.value, self.markup)
+        if isinstance(self.value, RawMarkdown):
+            return format(self.value.content, format_spec)
+        return _safe_value(format(self.value, format_spec), self.markup)
 
 
 def _interpolation(interpolation: Interpolation, markup: Markup) -> str:
@@ -213,7 +251,9 @@ __all__ = [
     "RawMarkdown",
     "ResolvedText",
     "TextLike",
+    "current_localization",
     "discord_text",
+    "localization_scope",
     "md",
     "plain",
     "raw_md",
