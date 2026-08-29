@@ -26,6 +26,29 @@ Initial public alpha of the suite.
 - `squid-replication`: replicated-state containers over a reference backend, Loro, and an
   experimental pycrdt backend.
 
+Node-vocabulary and typing cleanup, still pre-release:
+
+- Every semantic node now inherits `Renderable`, which only the containers did before, and
+  `LayoutNode` is exactly `Renderable` as a result. `Renderable` also gained an empty
+  `__slots__`, so the `slots=True` on every node class finally takes effect.
+- `is_layout_node` now answers the open question — `isinstance(value, Renderable)` — so a
+  frontend's own `Renderable` is accepted as content. It previously tested membership of a
+  fixed tuple and answered False for one, disagreeing with the `LayoutNode` type. The closed
+  test is `is_builtin_layout_node`, which is what the Discord and HTML lowering use.
+- `Component.render` is abstract. A component that does not describe a message can no longer
+  be mounted, and an intermediate base that leaves `render` to its subclasses needs no
+  annotation to say so. `MessageLimits` and `FormField.parse` are likewise abstract.
+- `RenderResult` and `RenderNode` are gone. `RenderResult` was byte-identical to
+  `DocumentLike`, which is the public name; `RenderNode` was a synonym for `LayoutNode`.
+- `render()` returning a bare string is now refused. It used to fall into the sequence branch
+  and be drawn as one node per character.
+- `GuardLedger.read`/`.write` take a typed `GuardKey` from `GuardLedger.bucket`, so a value
+  written as one type and read back as another is a type error. `approvals()` returns one.
+- Target extensions carry an `ExtensionKind[PayloadT, ResourceT]` instead of a bare string,
+  so an extension's payload is checked against the adapter that consumes it.
+- `FormField.format` answers in `PrefillValue` rather than `object`. A stored value no
+  control could be seeded with now yields no prefill instead of being passed through.
+
 Late pre-release hardening, after the version was first aligned:
 
 - Every deliberate failure now derives from a per-distribution error root:
