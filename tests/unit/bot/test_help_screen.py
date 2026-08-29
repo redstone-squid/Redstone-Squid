@@ -1,6 +1,6 @@
 """The public command browser and information surface."""
 
-from types import SimpleNamespace
+from dataclasses import dataclass
 from typing import Any, cast
 
 from discord import app_commands
@@ -15,8 +15,19 @@ async def example(_interaction: Any) -> None:
     """Explain the example command."""
 
 
+@dataclass(frozen=True, slots=True)
+class User:
+    id: int = 42
+
+
+@dataclass(frozen=True, slots=True)
+class Client:
+    source_code_url: str = "https://example.invalid/project"
+    user: User = User()
+
+
 def _client() -> Any:
-    return SimpleNamespace(source_code_url="https://example.invalid/project", user=SimpleNamespace(id=42))
+    return cast(Any, Client())
 
 
 def test_help_screen_owns_one_public_session() -> None:
