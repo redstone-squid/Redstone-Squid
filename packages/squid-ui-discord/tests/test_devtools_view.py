@@ -19,7 +19,7 @@ from squid_ui_discord.devtools_view import (
     plan_text,
     scene_attachment,
 )
-from squid_ui_discord.testing import assert_within_limits, commit_render, delivered_to, fake_interaction
+from squid_ui_discord.testing import assert_within_limits, commit_render, delivered_to, interaction_harness
 
 
 class Subject(sl.Component[sl.ComponentsV2Target]):
@@ -49,7 +49,7 @@ class Subject(sl.Component[sl.ComponentsV2Target]):
 
 async def live_subject(**kwargs: Any) -> MessageRoot:
     message_root = MessageRoot(Subject(), access=kwargs.pop("access", Everyone()), **kwargs)
-    await message_root.send(delivered_to(squid_ui_discord.testing.fake_message(message_id=42)))
+    await message_root.send(delivered_to(squid_ui_discord.testing.message_harness(message_id=42)))
     return message_root
 
 
@@ -85,7 +85,7 @@ class TestList:
         inspector = MessageRootInspector()
         message_root, _ = message_root_inspector(inspector)
 
-        await message_root.dispatch("open", fake_interaction(), [subject.id])
+        await message_root.dispatch("open", interaction_harness(), [subject.id])
 
         assert inspector.focus == subject.id
         assert f"MessageRoot {subject.id}" in "\n".join(sd.payload_texts(commit_render(message_root)))
@@ -114,7 +114,7 @@ class TestDetail:
     async def test_a_detail_view_distinguishes_an_armed_dirty_application(self) -> None:
         now = datetime.now(UTC)
         scheduler = squid_ui_discord.MessageRootScheduler(clock=lambda: now)
-        interaction = fake_interaction(message_id=42)
+        interaction = interaction_harness(message_id=42)
         interaction.expires_at = now + timedelta(seconds=30)
         subject = MessageRoot(
             Subject(),
@@ -125,7 +125,7 @@ class TestDetail:
         )
         await subject.send(
             delivered_to(
-                squid_ui_discord.testing.fake_message(message_id=42, ephemeral=True),
+                squid_ui_discord.testing.message_harness(message_id=42, ephemeral=True),
                 handle=squid_ui_discord.delivery.handle_from(interaction),
             )
         )
@@ -143,7 +143,7 @@ class TestDetail:
 
     async def test_a_detail_view_reports_cell_versions_and_computed_sources(self) -> None:
         subject = await live_subject()
-        await subject.dispatch("open", fake_interaction(message_id=42))
+        await subject.dispatch("open", interaction_harness(message_id=42))
         _, view = message_root_inspector(MessageRootInspector(focus=subject.id))
 
         body = "\n".join(sd.payload_texts(view))
@@ -155,11 +155,11 @@ class TestDetail:
         subject = await live_subject()
         inspector = MessageRootInspector(focus=subject.id)
         message_root, _ = message_root_inspector(inspector)
-        await subject.dispatch("open", fake_interaction(message_id=42))
+        await subject.dispatch("open", interaction_harness(message_id=42))
 
         # A handler that changes nothing leaves the mount clean, so Refresh has to be a
         # state change of its own or the message would keep showing the old dump.
-        await message_root.dispatch("refresh", fake_interaction())
+        await message_root.dispatch("refresh", interaction_harness())
 
         assert "'opened': True" in "\n".join(sd.payload_texts(commit_render(message_root)))
 
@@ -169,7 +169,7 @@ class TestDetail:
         message_root, _ = message_root_inspector(inspector)
         await subject.finish(disable=False)
 
-        await message_root.dispatch("refresh", fake_interaction())
+        await message_root.dispatch("refresh", interaction_harness())
         body = "\n".join(sd.payload_texts(commit_render(message_root)))
 
         assert "no longer live" in body
@@ -180,7 +180,7 @@ class TestDetail:
         inspector = MessageRootInspector(focus=subject.id)
         message_root, _ = message_root_inspector(inspector)
 
-        await message_root.dispatch("back", fake_interaction())
+        await message_root.dispatch("back", interaction_harness())
 
         assert inspector.focus is None
 
@@ -193,7 +193,7 @@ class TestDetail:
     async def test_a_manager_key_labels_its_root(self) -> None:
         manager = squid_ui_discord.SessionManager()
         subject = MessageRoot(Subject(), access=Everyone())
-        await manager.open(subject, delivered_to(squid_ui_discord.testing.fake_message()), key=("editor", 7))
+        await manager.open(subject, delivered_to(squid_ui_discord.testing.message_harness()), key=("editor", 7))
 
         _, view = message_root_inspector(MessageRootInspector(manager=manager))
 

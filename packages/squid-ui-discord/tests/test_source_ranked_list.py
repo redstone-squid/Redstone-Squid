@@ -18,7 +18,7 @@ from squid_ui.primitives import Button, Row
 from squid_ui.sources import Position, Window
 from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord import testing as sd
-from squid_ui_discord.testing import delivered_to, fake_interaction, fake_message
+from squid_ui_discord.testing import delivered_to, interaction_harness, message_harness
 
 
 def _texts(view: discord.ui.View | discord.ui.LayoutView) -> list[str]:
@@ -109,7 +109,7 @@ async def test_source_ranked_list_gates_numeric_chrome_by_capability(
     ranked = sp.SourceRankedList(source, key="leaderboard", identity=lambda entry: entry[0], page_size=2)
     message_root = MessageRoot(ranked, access=Everyone(), timeout=None)
 
-    await message_root.send(delivered_to(fake_message()))
+    await message_root.send(delivered_to(message_harness()))
 
     assert message_root._view is not None
     numeric = [text for text in _texts(message_root._view) if text.startswith("-#")]
@@ -128,11 +128,11 @@ async def test_source_ranked_list_fetches_in_handlers_and_uses_source_navigation
     )
     ranked = sp.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], page_size=2)
     message_root = MessageRoot(ranked, access=Everyone(), timeout=None)
-    await message_root.send(delivered_to(fake_message()))
+    await message_root.send(delivered_to(message_harness()))
 
     assert message_root._view is not None
     assert _labels(message_root._view) == ["Newer"]
-    interaction = fake_interaction()
+    interaction = interaction_harness()
     await message_root.dispatch("stream.next", interaction)
 
     pending = interaction.response.edit_message.await_args.kwargs["view"]
@@ -160,10 +160,10 @@ async def test_source_ranked_list_retains_stale_rows_and_retries_the_failed_requ
         access=Everyone(),
         timeout=None,
     )
-    await message_root.send(delivered_to(fake_message()))
+    await message_root.send(delivered_to(message_harness()))
 
     source.fail_next = True
-    failed_interaction = fake_interaction()
+    failed_interaction = interaction_harness()
     await message_root.dispatch("stream.next", failed_interaction)
 
     failed = failed_interaction.followup.edit_message.await_args.kwargs["view"]
@@ -171,7 +171,7 @@ async def test_source_ranked_list_retains_stale_rows_and_retries_the_failed_requ
     assert "-# Could not load entries." in _texts(failed)
     assert "Retry" in _labels(failed)
 
-    retry_interaction = fake_interaction()
+    retry_interaction = interaction_harness()
     await message_root.dispatch("stream.retry", retry_interaction)
 
     pending = retry_interaction.response.edit_message.await_args.kwargs["view"]
@@ -192,9 +192,9 @@ async def test_a_jumpable_source_seeks_by_page() -> None:
         timeout=None,
         nav=page_select_nav,
     )
-    await message_root.send(delivered_to(fake_message()))
+    await message_root.send(delivered_to(message_harness()))
 
-    interaction = fake_interaction()
+    interaction = interaction_harness()
     await message_root.dispatch("stream.seek", interaction, ["2"])
 
     # Page 2 of a page_size=2 source is item offset 4, not item offset 2.
@@ -223,7 +223,7 @@ async def test_a_sequential_source_offers_no_jump_control() -> None:
         timeout=None,
         nav=nav,
     )
-    await message_root.send(delivered_to(fake_message()))
+    await message_root.send(delivered_to(message_harness()))
 
     assert seen[-1].on_seek is None
     assert message_root._view is not None
@@ -247,7 +247,7 @@ async def test_source_ranked_list_uses_the_message_root_navigation_factory() -> 
         timeout=None,
         nav=nav,
     )
-    await message_root.send(delivered_to(fake_message()))
+    await message_root.send(delivered_to(message_harness()))
 
     assert seen[-1].key == "leaderboard"
     assert seen[-1].visible_range == (1, 2)

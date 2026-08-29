@@ -9,7 +9,7 @@ from typing import Any
 
 import squid_ui_discord
 import squid_ui_widgets as sp
-from squid_ui_discord.testing import commit_render, fake_interaction
+from squid_ui_discord.testing import commit_render, interaction_harness
 
 
 def _agreement(**overrides: Any) -> sp.Agreement:
@@ -28,7 +28,7 @@ async def test_an_outsider_admitted_by_access_is_still_refused_by_the_participan
     agreement = _agreement(require=1)
     message_root = squid_ui_discord.MessageRoot(agreement, access=squid_ui_discord.Everyone(), timeout=None)
     commit_render(message_root)
-    interaction = fake_interaction(user_id=99)
+    interaction = interaction_harness(user_id=99)
 
     await message_root.dispatch("agreement.approve", interaction)
 
@@ -42,7 +42,7 @@ async def test_users_access_refuses_before_the_agreement_is_reached_at_all() -> 
     agreement = _agreement(require=1)
     message_root = squid_ui_discord.MessageRoot(agreement, access=squid_ui_discord.Users({1, 2}), timeout=None)
     commit_render(message_root)
-    interaction = fake_interaction(user_id=99)
+    interaction = interaction_harness(user_id=99)
 
     await message_root.dispatch("agreement.approve", interaction)
 

@@ -15,7 +15,7 @@ from squid_ui.primitives import Heading
 from squid_ui.runtime.topics import Topic
 from squid_ui_discord import ClientRuntime, install
 from squid_ui_discord.runtime import _INSTALLED, ClientRuntimeMissing
-from squid_ui_discord.testing import delivered_to, fake_interaction, fake_message
+from squid_ui_discord.testing import delivered_to, interaction_harness, message_harness
 
 
 class Panel(sl.Component[sl.ComponentsV2Target]):
@@ -86,7 +86,7 @@ def test_install_keeps_the_optional_localization_resolver() -> None:
 def test_of_resolves_from_a_client_an_interaction_and_a_command_context() -> None:
     client = fake_client()
     runtime = install(cast(discord.Client, client))
-    interaction = fake_interaction(user_id=7)
+    interaction = interaction_harness(user_id=7)
     interaction.client = client
     context = SimpleNamespace(bot=client, author=SimpleNamespace(id=7), send=AsyncMock())
 
@@ -120,7 +120,7 @@ async def test_close_finishes_every_session_and_stops_answering_of() -> None:
     client = fake_client()
     runtime = install(cast(discord.Client, client))
     message_root = runtime.mount(Panel(), access=sd.Everyone(), timeout=None)
-    opened = await runtime.sessions.open(message_root, delivered_to(fake_message()))
+    opened = await runtime.sessions.open(message_root, delivered_to(message_harness()))
     assert isinstance(opened, sd.sessions.Opened)
 
     await runtime.close()

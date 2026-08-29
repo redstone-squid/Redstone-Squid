@@ -17,7 +17,7 @@ from squid_ui import Component, computed, state
 from squid_ui.primitives import Panel, Text
 from squid_ui.profiling import MemoryProfiler, OperationKind, PresentationStatus
 from squid_ui_discord import Everyone, MessageRoot
-from squid_ui_discord.testing import commit_render, delivered_to, fake_message
+from squid_ui_discord.testing import commit_render, delivered_to, message_harness
 
 
 class _Leaf(Component):
@@ -395,7 +395,7 @@ async def _measure_resource_resolution(components: int, samples: int) -> ChangeS
     leaf = _ResourceLeaf()
     root = _root_with_special(components, leaf)
     message_root = MessageRoot(root, access=Everyone(), timeout=None)
-    await message_root.send(delivered_to(fake_message()))
+    await message_root.send(delivered_to(message_harness()))
 
     def prepare(index: int) -> None:
         leaf.key = index + 1
@@ -428,7 +428,7 @@ async def measure_resource_pipeline(
     leaf = _ResourceLeaf()
     root = _root_with_special(components, leaf)
     message_root = MessageRoot(root, access=Everyone(), timeout=None)
-    await message_root.send(delivered_to(fake_message()))
+    await message_root.send(delivered_to(message_harness()))
     profiler = MemoryProfiler(recent=samples, slow=0, failed=0, deadline_misses=0)
     operations: list[int] = []
     phase_samples: dict[str, list[int]] = {}

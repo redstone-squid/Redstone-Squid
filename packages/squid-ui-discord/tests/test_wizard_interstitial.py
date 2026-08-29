@@ -11,7 +11,7 @@ import discord
 import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui_discord import Everyone, MessageRoot
-from squid_ui_discord.testing import commit_render, fake_interaction
+from squid_ui_discord.testing import commit_render, interaction_harness
 
 
 def _form(title: str, key: str) -> sl.forms.FormSpec:
@@ -33,12 +33,12 @@ def _text_input(modal: discord.ui.Modal) -> discord.ui.TextInput:
 
 
 async def _submit_form(message_root: MessageRoot, key: str, value: str) -> None:
-    opened = fake_interaction()
+    opened = interaction_harness()
     await message_root.dispatch(key, opened)
     modal = opened.response.send_modal.await_args.args[0]
     assert isinstance(modal, discord.ui.Modal)
     _text_input(modal)._value = value  # pyrefly: ignore[missing-attribute]
-    await modal.on_submit(fake_interaction())
+    await modal.on_submit(interaction_harness())
 
 
 async def test_consecutive_forms_use_the_framework_owned_interstitial_hop() -> None:
@@ -68,7 +68,7 @@ async def test_plain_next_opens_the_following_form_without_an_intermediate_rende
     message_root = MessageRoot(wizard, access=Everyone(), timeout=None)
     commit_render(message_root)
 
-    opened = fake_interaction()
+    opened = interaction_harness()
     await message_root.dispatch("wizard.name", opened)
 
     assert opened.response.send_modal.await_count == 1

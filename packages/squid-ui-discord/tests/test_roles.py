@@ -17,7 +17,7 @@ from squid_ui_discord.roles import (
     RoleTransitionResult,
 )
 from squid_ui_discord.routing import Router
-from squid_ui_discord.testing import fake_interaction
+from squid_ui_discord.testing import interaction_harness
 
 
 class FakeRole:
@@ -79,7 +79,7 @@ def interaction_for(
         get_role=lambda role_id: roles.get(role_id),
         fetch_member=AsyncMock(return_value=member),
     )
-    interaction = cast(discord.Interaction[Any], fake_interaction())
+    interaction = cast(discord.Interaction[Any], interaction_harness())
     cast(Any, interaction).user = actor
     cast(Any, interaction).guild = guild
     return interaction, member, guild.fetch_member, member.edit
