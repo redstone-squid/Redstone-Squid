@@ -25,6 +25,12 @@ One runtime per Discord client. `install()` starts no background work; supervise
 
 ::: squid_ui_discord.Screen
 
+::: squid_ui_discord.UserSessionScreen
+
+::: squid_ui_discord.UserGuildSessionScreen
+
+::: squid_ui_discord.SharedGuildSessionScreen
+
 ::: squid_ui_discord.Invocation
 
 ::: squid_ui_discord.current_invocation
@@ -38,6 +44,10 @@ One runtime per Discord client. `install()` starts no background work; supervise
 ::: squid_ui_discord.InvocationSource
 
 ::: squid_ui_discord.StackNavigator
+
+::: squid_ui_discord.open_devtools
+
+::: squid_ui_discord.DevToolsSection
 
 ## Access policies
 
