@@ -52,7 +52,8 @@ from squid.topics import TopicPublisher, open_topic_bridge, resource_topic
 from squid_reactivity import LocalTopicBus
 from squid_storage import PostgresTopicBridge
 from squid_ui.profiling import MemoryProfiler
-from squid_ui_discord import SessionManager, install, invocation_scope
+from squid_ui.text import localization_scope
+from squid_ui_discord import Invocation, SessionManager, install, invocation_scope
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -195,7 +196,9 @@ class RedstoneSquid(Bot):
         reaching here from the application command tree keeps the ID that tree already bound.
         """
         with correlation_scope(), invocation_scope(ctx):
-            await super().invoke(ctx)
+            invocation = await Invocation.of(ctx)
+            with localization_scope(invocation.localization):
+                await super().invoke(ctx)
 
     @override
     async def close(self) -> None:

@@ -92,7 +92,7 @@ from squid_ui.scene.model import PlanResult
 from squid_ui.semantic import Status
 from squid_ui.sources import Position
 from squid_ui.target_types import ComponentsV2Target, DiscordPy27Adapter, DiscordPyAdapter, DiscordTarget
-from squid_ui.text import Localization, TextLike, resolve_text
+from squid_ui.text import Localization, TextLike, localization_scope, resolve_text
 from squid_ui_discord import delivery as deliver
 from squid_ui_discord import live
 from squid_ui_discord._invocation_context import invocation_scope
@@ -1723,6 +1723,7 @@ class MessageRoot[
         kind = InteractionKind.PRESS if values is None else InteractionKind.SELECTION
         with (
             invocation_scope(interaction),
+            localization_scope(self.localization),
             self.profiler.operation(
                 OperationKind.DISPATCH,
                 name=key,
@@ -1882,6 +1883,7 @@ class MessageRoot[
         """
         with (
             invocation_scope(interaction),
+            localization_scope(self.localization),
             self.profiler.operation(
                 OperationKind.DISPATCH,
                 name=key,
