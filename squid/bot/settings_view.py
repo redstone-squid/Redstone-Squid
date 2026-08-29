@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Protocol, cast
+from typing import TYPE_CHECKING, cast
 
 import discord
 
@@ -13,10 +13,14 @@ from squid.bot.ui import CardField, tr
 from squid.core.i18n import SUPPORTED_LOCALES
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import SETTINGS_SERVER_EDIT, SETTINGS_VOTING_EDIT
-from squid.settings.domain import ScalarChannelSetting, SettingOptions
+from squid.settings.domain import ScalarChannelSetting
 from squid.voting.domain import EmojiPreset, RoleWeight, VoteChoice, VoteKind, VoteOption
 from squid.voting.errors import InvalidVoteConfigurationError
 from squid_ui.text import Message
+
+if TYPE_CHECKING:
+    from squid.settings.application import SettingsService
+    from squid.voting.application import VoteService
 
 SESSION_SECONDS = 300
 
@@ -69,36 +73,6 @@ class SettingsCapabilities:
 type SettingsAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
-class SettingsOperations(Protocol):
-    """Server-setting reads and writes used by the settings workspace."""
-
-    async def get_all(self, server_id: int) -> SettingOptions: ...
-
-    async def set_channel(self, server_id: int, setting: ScalarChannelSetting, channel_id: int) -> None: ...
-
-    async def clear(self, server_id: int, setting: ScalarChannelSetting) -> None: ...
-
-    async def get_locale(self, server_id: int) -> str | None: ...
-
-    async def set_locale(self, server_id: int, locale: str | None) -> None: ...
-
-
-class VoteConfigurationOperations(Protocol):
-    """Vote-configuration reads and writes used by the settings workspace."""
-
-    async def emoji_preset(self, guild_id: int, kind: VoteKind) -> EmojiPreset: ...
-
-    async def get_role_weights(self, guild_id: int, kind: VoteKind) -> Sequence[RoleWeight]: ...
-
-    async def set_role_weight(self, weight: RoleWeight) -> None: ...
-
-    async def remove_role_weight(self, guild_id: int, kind: VoteKind, role_id: int) -> None: ...
-
-    async def set_emoji_preset(self, guild_id: int, kind: VoteKind, options: Sequence[VoteOption]) -> None: ...
-
-    async def reset_configuration(self, guild_id: int, kind: VoteKind | None = None) -> None: ...
-
-
 class SettingsPanel(sd.Screen):
     """A semantic, mount-owned settings workspace."""
 
@@ -122,8 +96,8 @@ class SettingsPanel(sd.Screen):
     def __init__(
         self,
         *,
-        settings: SettingsOperations,
-        votes: VoteConfigurationOperations,
+        settings: SettingsService,
+        votes: VoteService,
         guild: discord.Guild,
         capabilities: SettingsCapabilities,
         authorize: SettingsAuthorizer,
