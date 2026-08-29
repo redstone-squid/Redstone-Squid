@@ -8,7 +8,7 @@ from babel.messages.pofile import read_po
 from packaging.requirements import Requirement
 from pytest_archon import archrule
 
-from squid.core.extract import deferred_msgid
+from squid.core.extract import deferred_msgid, locale_str_msgid
 
 # Roots for the AST scans that state repo-wide invariants. The squid-ui workspace member
 # is held to the same rules as squid itself.
@@ -368,18 +368,29 @@ def test_tr_is_the_only_direct_translation_entry_point() -> None:
     assert violations == []
 
 
-def test_deferred_messages_are_present_in_the_catalog_template() -> None:
+def test_localized_messages_are_present_in_the_catalog_template() -> None:
     with Path("locales/squid.pot").open(encoding="utf-8") as fileobj:
         catalog = read_po(fileobj)
-    msgids = {message.id for message in catalog}
-    deferred = {
-        msgid
+    msgids = {
+        extracted
+        for message in catalog
+        for extracted in (message.id if isinstance(message.id, tuple) else (message.id,))
+    }
+    authored = {
+        extracted
         for path in Path("squid").rglob("*.py")
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
         if isinstance(node, ast.Call) and (msgid := deferred_msgid(node)) is not None
+        for extracted in (msgid if isinstance(msgid, tuple) else (msgid,))
     }
+    authored.update(
+        msgid
+        for path in Path("squid").rglob("*.py")
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        if isinstance(node, ast.Call) and (msgid := locale_str_msgid(node)) is not None
+    )
 
-    assert deferred - msgids == set()
+    assert authored - msgids == set()
 
 
 def test_static_layout_rendering_stays_behind_the_host_wrapper() -> None:

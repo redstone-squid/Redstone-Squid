@@ -23,6 +23,21 @@ def deferred_msgid(call: ast.Call) -> str | tuple[str, str] | None:
     return None if plural_msgid is None else (singular, plural_msgid)
 
 
+def locale_str_msgid(call: ast.Call) -> str | None:
+    """Derive a discord.py command-localization msgid."""
+    name = (
+        call.func.id
+        if isinstance(call.func, ast.Name)
+        else call.func.attr
+        if isinstance(call.func, ast.Attribute)
+        else None
+    )
+    if name != "locale_str" or len(call.args) != 1 or call.keywords:
+        return None
+    value = call.args[0]
+    return value.value if isinstance(value, ast.Constant) and isinstance(value.value, str) else None
+
+
 def _template_msgid(message: ast.expr) -> str | None:
     if isinstance(message, ast.Constant) and isinstance(message.value, str):
         return message.value
@@ -59,6 +74,8 @@ def extract_squid(
     data = fileobj.read()
     yield from extract_python(io.BytesIO(data), keywords, comment_tags, options)
     for node in ast.walk(ast.parse(data.decode("utf-8"))):
+        if isinstance(node, ast.Call) and (msgid := locale_str_msgid(node)) is not None:
+            yield node.lineno, "tr", msgid, []
         if (
             isinstance(node, ast.Call)
             and node.args
