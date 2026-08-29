@@ -190,6 +190,11 @@ def test_html_planner_preserves_semantic_structures_and_metadata() -> None:
 class _PortableExtension(ExtensionField[str]):
     capability = "forms.test.native"
 
+    def parse(self, raw: object) -> str | None:
+        # Never reached in this test: the target lacks the capability, so the portable
+        # fallback stands in and it is the fallback's parse that runs.
+        return None if raw is None else str(raw)
+
 
 def test_html_planner_renders_portable_forms_inline_with_prefill() -> None:
     spec = FormSpec(
