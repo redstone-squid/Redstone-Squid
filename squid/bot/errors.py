@@ -27,6 +27,7 @@ from squid.observability import (
     trace_span,
 )
 from squid.permissions.domain import CATALOGUE
+from squid_ui.text import NEUTRAL, localization_scope
 
 logger = logging.getLogger(__name__)
 
@@ -432,9 +433,14 @@ class SquidCommandTree[ClientT: discord.Client](app_commands.CommandTree[ClientT
             correlation_scope(),
             sd.invocation_scope(interaction),
         ):
-            await super()._call(interaction)  # pyright: ignore[reportPrivateUsage]
-            if interaction.command_failed:
-                span.set_error()
+            try:
+                localization = (await sd.Invocation.of(interaction)).localization
+            except sd.ClientRuntimeMissing:
+                localization = NEUTRAL
+            with localization_scope(localization):
+                await super()._call(interaction)  # pyright: ignore[reportPrivateUsage]
+                if interaction.command_failed:
+                    span.set_error()
 
     @override
     async def on_error(
