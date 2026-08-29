@@ -96,7 +96,6 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "merge-code",
         "refresh",
     ),
-    "archive": (),
     # The schematic tools all sit under `build schematic`, which is what their
     # permission nodes always said (docs/plans/command-redesign/06-build.md).
     "build": (
@@ -126,7 +125,6 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "nodes",
         "revoke",
     ),
-    "redstoner": ("panel", "resync"),
     "restrictions": ("add-alias",),
     "role": (
         "add-role",
@@ -173,7 +171,6 @@ PICKER_VISIBILITY: dict[str, frozenset[str]] = {
     # These are visibility hints, never gates. `requires(...)` decides, and a guild
     # admin can override any of these per command in Server Settings; the bits below
     # are chosen to match the operation, so the override is rarely needed.
-    "archive": frozenset({"manage_messages"}),
     "errors": frozenset({"manage_guild"}),
     "perm": frozenset({"manage_guild"}),
     "records": frozenset({"manage_guild"}),
@@ -296,15 +293,10 @@ def test_sensitive_commands_declare_the_intended_permission_nodes() -> None:
 
     admin = Admin.__new__(Admin)
     assert _nodes(admin.__cog_commands__, "tag approve") == {"tag.proposal.approve"}
-    assert _nodes(admin.__cog_commands__, "archive") == {"message.archive.create"}
 
     verify = VerifyCog.__new__(VerifyCog)
     assert _nodes(verify.__cog_commands__, "account claims") == {"account.claim.list"}
     assert _nodes(verify.__cog_commands__, "account claim") == set()
-
-    redstoner = GiveRedstoner.__new__(GiveRedstoner)
-    assert _nodes(redstoner.__cog_commands__, "redstoner panel") == {"redstoner.panel.manage"}
-
 
 def test_group_gates_admit_anyone_holding_one_of_their_commands_nodes() -> None:
     """A group gate must not be narrower than the commands inside it.
