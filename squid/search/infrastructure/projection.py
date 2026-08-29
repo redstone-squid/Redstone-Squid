@@ -83,6 +83,47 @@ class SearchProjection:
     facets: tuple[ProjectionFacet, ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class RecordProjectionSource:
+    """Application-owned fields needed to project one computed record."""
+
+    result_id: int
+    definition_id: int
+    status: str
+    history_complete: bool
+    gap_reasons: dict[str, object]
+    record_class: str
+    build_kind: str
+    version_scope: str
+    category_key: str
+    title: str
+    subtitle: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class RecordHolderProjectionSource:
+    """Searchable fields from one ranked record holder."""
+
+    build_id: int
+    title: str
+    subtitle: str | None
+    metric: dict[str, object]
+
+
+@dataclass(frozen=True, slots=True)
+class TagProjectionSource:
+    """Application-owned fields needed to project one taxonomy tag."""
+
+    tag_id: int
+    display_name: str
+    semantic_kind: str
+    moderation_status: str
+    authority: str
+    value_type: str
+    query_name: str | None
+    aliases: tuple[str, ...] = ()
+
+
 class SearchProjectionStore:
     """Claim projection work and atomically replace indexed documents."""
 
@@ -272,15 +313,16 @@ class SearchProjectionLoader:
 
     async def load(self, resource_kind: str, source_key: str) -> SearchProjection | None:
         """Load the requested resource, returning None when its source was deleted."""
+        parsed = parse_projection_key(resource_kind, source_key)
+        if parsed is None:
+            return None
+        subtype, source_id = parsed
         if resource_kind == "build":
-            return await self._build(int(source_key))
-        if resource_kind == "record" and source_key.startswith("result:"):
-            return await self._computed_record(int(source_key.partition(":")[2]))
+            return await self._build(source_id)
+        if resource_kind == "record":
+            return await self._computed_record(source_id)
         if resource_kind == "metadata":
-            subtype, separator, raw_id = source_key.partition(":")
-            if not separator:
-                return None
-            return await self._metadata(subtype, int(raw_id))
+            return await self._metadata(subtype, source_id)
         return None
 
     async def _build(self, build_id: int) -> SearchProjection | None:
@@ -437,39 +479,29 @@ class SearchProjectionLoader:
                 )
             ).all()
         )
-        first_holder = holders[0] if holders else None
-        title = first_holder.title if first_holder is not None else definition.title
-        subtitle = first_holder.subtitle if first_holder is not None else definition.subtitle
-        holder_ids = tuple(holder.build_id for holder in holders)
-        metric = first_holder.metric_snapshot if first_holder is not None else {}
-        tags = (definition.record_class, definition.build_kind, definition.version_scope)
-        facets = (
-            ProjectionFacet("record_class", definition.record_class),
-            ProjectionFacet("record_state", "current"),
-            ProjectionFacet("kind", definition.build_kind),
-            ProjectionFacet("version_scope", definition.version_scope),
-            *(ProjectionFacet("holder", str(build_id)) for build_id in holder_ids),
-        )
-        return SearchProjection(
-            resource_kind="record",
-            source_key=f"result:{result_id}",
-            title=title,
-            subtitle=subtitle,
-            status=result.status,
-            tags=tags,
-            document_data={
-                "result_id": result.id,
-                "definition_id": definition.id,
-                "record_class": definition.record_class,
-                "build_kind": definition.build_kind,
-                "version_scope": definition.version_scope,
-                "category_key": definition.category_key,
-                "holder_build_ids": holder_ids,
-                "metric": metric,
-                "history_complete": result.history_complete,
-                "gap_reasons": result.gap_reasons,
-            },
-            facets=facets,
+        return build_record_projection(
+            RecordProjectionSource(
+                result_id=result.id,
+                definition_id=definition.id,
+                status=result.status,
+                history_complete=result.history_complete,
+                gap_reasons=result.gap_reasons,
+                record_class=definition.record_class,
+                build_kind=definition.build_kind,
+                version_scope=definition.version_scope,
+                category_key=definition.category_key,
+                title=definition.title,
+                subtitle=definition.subtitle,
+            ),
+            tuple(
+                RecordHolderProjectionSource(
+                    build_id=holder.build_id,
+                    title=holder.title,
+                    subtitle=holder.subtitle,
+                    metric=holder.metric_snapshot,
+                )
+                for holder in holders
+            ),
         )
 
     async def _metadata(self, subtype: str, source_id: int) -> SearchProjection | None:
@@ -484,22 +516,17 @@ class SearchProjectionLoader:
                     )
                 ).all()
             )
-            # The kind is projected so `kind:pattern` and `kind:restriction` are answerable;
-            # `kind:tag` is kept alongside because it used to be the only answer.
-            return _metadata_projection(
-                source_key=f"tag:{source_id}",
-                title=definition.display_name,
-                subtype=TagSemanticKind(definition.semantic_kind).value,
-                tags=aliases,
-                extra_facets=(ProjectionFacet("kind", "tag"),),
-                data={
-                    "tag_id": source_id,
-                    "aliases": aliases,
-                    "authority": definition.authority,
-                    "semantic_kind": definition.semantic_kind,
-                    "value_type": definition.value_type,
-                    "query_name": definition.query_name,
-                },
+            return build_tag_projection(
+                TagProjectionSource(
+                    tag_id=source_id,
+                    display_name=definition.display_name,
+                    semantic_kind=TagSemanticKind(definition.semantic_kind).value,
+                    moderation_status=definition.moderation_status,
+                    authority=definition.authority,
+                    value_type=definition.value_type,
+                    query_name=definition.query_name,
+                    aliases=aliases,
+                )
             )
         if subtype == "creator":
             creator = await self._session.get(CreatorAlias, source_id)
@@ -586,6 +613,82 @@ async def run_projection_batch(
     """Run and commit one bounded worker batch using an application session factory."""
     async with session_factory() as session, session.begin():
         return await SearchProjectionWorker(session).process_batch(limit=limit)
+
+
+def parse_projection_key(resource_kind: str, source_key: str) -> tuple[str, int] | None:
+    """Parse one durable projection key without touching persistence."""
+    if resource_kind == "build" and source_key.isdecimal():
+        return "build", int(source_key)
+    if resource_kind == "record":
+        subtype, separator, raw_id = source_key.partition(":")
+        if separator and subtype == "result" and raw_id.isdecimal():
+            return subtype, int(raw_id)
+        return None
+    if resource_kind == "metadata":
+        subtype, separator, raw_id = source_key.partition(":")
+        if separator and raw_id.isdecimal():
+            return subtype, int(raw_id)
+    return None
+
+
+def build_record_projection(
+    source: RecordProjectionSource,
+    holders: Sequence[RecordHolderProjectionSource] = (),
+) -> SearchProjection:
+    """Compile one computed-record search document from loaded application data."""
+    first_holder = holders[0] if holders else None
+    holder_ids = tuple(holder.build_id for holder in holders)
+    tags = (source.record_class, source.build_kind, source.version_scope)
+    return SearchProjection(
+        resource_kind="record",
+        source_key=f"result:{source.result_id}",
+        title=first_holder.title if first_holder is not None else source.title,
+        subtitle=first_holder.subtitle if first_holder is not None else source.subtitle,
+        status=source.status,
+        tags=tags,
+        document_data={
+            "result_id": source.result_id,
+            "definition_id": source.definition_id,
+            "record_class": source.record_class,
+            "build_kind": source.build_kind,
+            "version_scope": source.version_scope,
+            "category_key": source.category_key,
+            "holder_build_ids": holder_ids,
+            "metric": first_holder.metric if first_holder is not None else {},
+            "history_complete": source.history_complete,
+            "gap_reasons": source.gap_reasons,
+        },
+        facets=(
+            ProjectionFacet("record_class", source.record_class),
+            ProjectionFacet("record_state", "current"),
+            ProjectionFacet("kind", source.build_kind),
+            ProjectionFacet("version_scope", source.version_scope),
+            *(ProjectionFacet("holder", str(build_id)) for build_id in holder_ids),
+        ),
+    )
+
+
+def build_tag_projection(source: TagProjectionSource) -> SearchProjection | None:
+    """Compile one approved taxonomy-tag search document from loaded application data."""
+    if source.moderation_status != "approved":
+        return None
+    # The semantic kind makes `kind:pattern` and `kind:restriction` answerable;
+    # `kind:tag` remains alongside for clients that used the original taxonomy query.
+    return _metadata_projection(
+        source_key=f"tag:{source.tag_id}",
+        title=source.display_name,
+        subtype=source.semantic_kind,
+        tags=source.aliases,
+        extra_facets=(ProjectionFacet("kind", "tag"),),
+        data={
+            "tag_id": source.tag_id,
+            "aliases": source.aliases,
+            "authority": source.authority,
+            "semantic_kind": source.semantic_kind,
+            "value_type": source.value_type,
+            "query_name": source.query_name,
+        },
+    )
 
 
 def _metadata_projection(
