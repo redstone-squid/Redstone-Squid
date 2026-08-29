@@ -126,6 +126,11 @@ def test_extension_list_has_no_duplicates() -> None:
     assert len(EXTENSIONS) == len(set(EXTENSIONS))
 
 
+def test_layout_showcase_is_development_only() -> None:
+    assert "squid.bot.layout_showcase" not in EXTENSIONS
+    assert "squid.bot.layout_showcase" in DEVELOPMENT_EXTENSIONS
+
+
 async def test_the_help_directory_names_commands_that_exist(loaded_bot: commands.Bot) -> None:
     """Every category entry has to resolve, in either tree.
 
