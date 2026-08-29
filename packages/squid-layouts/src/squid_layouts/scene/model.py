@@ -4,11 +4,11 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from squid_layouts.interactions import ActionBinding, ActionPolicy
 from squid_layouts.emoji import Emoji
 from squid_layouts.entity import ChannelType, EntityRef, EntityType
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import FormBinding
+from squid_layouts.interactions import ActionBinding, ActionPolicy
 from squid_layouts.primitives.styles import ActionStyle, Color
 from squid_layouts.runtime.presentation import SessionUpdate
 from squid_layouts.text import TextDialect
@@ -335,8 +335,7 @@ class SceneDocument[BodyT = SceneBody]:
         """Narrow a broadly decoded scene at an explicit frontend boundary."""
         if not isinstance(self.body, body_type):
             message = (
-                f"scene for target {self.target!r} has a {type(self.body).__name__} body, "
-                f"not {body_type.__name__}"
+                f"scene for target {self.target!r} has a {type(self.body).__name__} body, not {body_type.__name__}"
             )
             raise LayoutInvariantError(message)
         return self.body

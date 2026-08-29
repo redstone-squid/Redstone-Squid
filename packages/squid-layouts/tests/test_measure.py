@@ -5,13 +5,13 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.discord import conform, render_static
-from squid_layouts.discord.conformance import ELLIPSIS
 from squid_layouts.discord import (
     V2_LIMITS as LIMITS,
 )
+from squid_layouts.discord import conform, render_static
+from squid_layouts.discord.conformance import ELLIPSIS
 from squid_layouts.discord.testing import assert_within_limits
+from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning import (
     LayoutOverflowError,
     SolveNoteCode,

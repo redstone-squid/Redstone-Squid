@@ -12,11 +12,11 @@ import pytest
 
 import squid_layouts as sl
 from squid_layouts import Component, PressEvent, state
-from squid_layouts.runtime import CellAddress, Shared, TopicBus, transaction
 from squid_layouts.discord import Everyone, Mount, Reactor
 from squid_layouts.discord.testing import delivered_to, fake_interaction, fake_message
 from squid_layouts.primitives import Button, Row, Text
 from squid_layouts.profiling import PresentationOutcome
+from squid_layouts.runtime import CellAddress, Shared, TopicBus, transaction
 
 
 @dataclass(frozen=True, slots=True)

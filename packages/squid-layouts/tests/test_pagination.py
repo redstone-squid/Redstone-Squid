@@ -194,7 +194,12 @@ class Catalog(Component):
 
     def render(self):
         keys = (*self.lead, *(str(index) for index in range(36)))
-        return [Items("catalog", tuple(Item(key, sl.semantic.ItemLabel(f"Item {key}"), (Paragraph("detail"),)) for key in keys))]
+        return [
+            Items(
+                "catalog",
+                tuple(Item(key, sl.semantic.ItemLabel(f"Item {key}"), (Paragraph("detail"),)) for key in keys),
+            )
+        ]
 
 
 class TestMountPagination:

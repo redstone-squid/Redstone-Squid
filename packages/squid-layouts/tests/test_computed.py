@@ -6,8 +6,8 @@ import weakref
 import pytest
 
 from squid_layouts import Component, computed, state
-from squid_layouts.runtime import ReactiveCycleError, untracked
 from squid_layouts.primitives import Text
+from squid_layouts.runtime import ReactiveCycleError, untracked
 
 
 class Counter(Component):

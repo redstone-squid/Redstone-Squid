@@ -108,13 +108,19 @@ class TestParity:
         assert sl.stack("a") == sl.semantic.Stack((sl.semantic.Paragraph("a"),))
         assert sl.cluster("a") == sl.semantic.Cluster((sl.semantic.Paragraph("a"),))
         assert sl.block("a") == sl.semantic.Block((sl.semantic.Paragraph("a"),))
-        assert sl.section(sl.heading("H"), "a") == sl.semantic.Section(sl.semantic.Heading("H"), (sl.semantic.Paragraph("a"),))
-        assert sl.article(sl.heading("H"), "a") == sl.semantic.Article(sl.semantic.Heading("H"), (sl.semantic.Paragraph("a"),))
+        assert sl.section(sl.heading("H"), "a") == sl.semantic.Section(
+            sl.semantic.Heading("H"), (sl.semantic.Paragraph("a"),)
+        )
+        assert sl.article(sl.heading("H"), "a") == sl.semantic.Article(
+            sl.semantic.Heading("H"), (sl.semantic.Paragraph("a"),)
+        )
         assert sl.aside("a", tone=sl.Tone.WARNING) == sl.semantic.Aside((sl.semantic.Paragraph("a"),), sl.Tone.WARNING)
         assert sl.details(sl.summary("S"), "a", key="k", open=sl.managed(initial=True)) == sl.semantic.Details(
             "k", sl.semantic.Summary("S"), (sl.semantic.Paragraph("a"),), sl.semantic.Managed(initial=True)
         )
-        assert sl.item(sl.item_label("L"), "a", key="k") == sl.semantic.Item("k", sl.semantic.ItemLabel("L"), (sl.semantic.Paragraph("a"),))
+        assert sl.item(sl.item_label("L"), "a", key="k") == sl.semantic.Item(
+            "k", sl.semantic.ItemLabel("L"), (sl.semantic.Paragraph("a"),)
+        )
 
     def test_leaves(self) -> None:
         assert sl.heading("H", level=3) == sl.semantic.Heading("H", 3)
@@ -140,8 +146,12 @@ class TestParity:
         assert sl.media("https://example.invalid/a.png", key="k") == sl.semantic.Media(
             (sl.semantic.MediaItem("", "https://example.invalid/a.png"),), "k"
         )
-        assert sl.table(sl.columns(sl.column("A"), sl.column("B")), sl.table_row("1", "2"), key="k") == sl.semantic.Table(
-            sl.semantic.Columns((sl.semantic.Column("", "A"), sl.semantic.Column("", "B"))), (sl.semantic.TableRow("", ("1", "2")),), "k"
+        assert sl.table(
+            sl.columns(sl.column("A"), sl.column("B")), sl.table_row("1", "2"), key="k"
+        ) == sl.semantic.Table(
+            sl.semantic.Columns((sl.semantic.Column("", "A"), sl.semantic.Column("", "B"))),
+            (sl.semantic.TableRow("", ("1", "2")),),
+            "k",
         )
         assert sl.items(sl.item(sl.item_label("L"), key="i"), key="k") == sl.semantic.Items(
             "k", (sl.semantic.Item("i", sl.semantic.ItemLabel("L"), ()),)
@@ -167,16 +177,18 @@ class TestParity:
             (sl.semantic.Action("vote", "Vote", _noop),), "a"
         )
         assert sl.choice("Yes", key="y", description="d") == sl.semantic.Choice("y", "Yes", "d")
-        assert sl.choices(sl.choice("Yes", key="y"), key="c", selection=sl.controlled(("y",), _noop)) == sl.semantic.Choices(
-            "c", (sl.semantic.Choice("y", "Yes"),), sl.semantic.Controlled(("y",), _noop)
-        )
+        assert sl.choices(
+            sl.choice("Yes", key="y"), key="c", selection=sl.controlled(("y",), _noop)
+        ) == sl.semantic.Choices("c", (sl.semantic.Choice("y", "Yes"),), sl.semantic.Controlled(("y",), _noop))
         assert sl.routed_choices(sl.choice("Yes", key="y"), key="c", route_id="r:choices") == sl.semantic.RoutedChoices(
             "c", (sl.semantic.Choice("y", "Yes"),), "r:choices"
         )
         assert sl.destination("Home", key="home") == sl.semantic.Destination("home", "Home")
         assert sl.navigation(
             sl.destination("Home", key="home"), key="n", current=sl.controlled("home", _noop)
-        ) == sl.semantic.Navigation("n", (sl.semantic.Destination("home", "Home"),), sl.semantic.Controlled("home", _noop))
+        ) == sl.semantic.Navigation(
+            "n", (sl.semantic.Destination("home", "Home"),), sl.semantic.Controlled("home", _noop)
+        )
 
 
 class TestDrift:

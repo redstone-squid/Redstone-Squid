@@ -6,10 +6,9 @@ from squid_layouts.planning.adapter import AdapterProfile
 from squid_layouts.planning.classic import CLASSIC_DIALECT
 from squid_layouts.planning.limits import CLASSIC_LIMITS, LIMITS, ClassicLimits, V2Limits
 from squid_layouts.planning.target import TargetProfile
-from squid_layouts.target_types import ClassicTarget, ComponentsV2Target, DiscordAdapter
 from squid_layouts.planning.v2 import V2_DIALECT
 from squid_layouts.scene.model import SceneClassicMessage, SceneComponentsV2
-
+from squid_layouts.target_types import ClassicTarget, ComponentsV2Target, DiscordAdapter
 
 V2_PROTOCOL_CAPABILITIES = frozenset(
     {

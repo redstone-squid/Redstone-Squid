@@ -6,10 +6,10 @@ from datetime import UTC, datetime, timedelta, timezone
 import jsonschema
 import pytest
 
-from squid_layouts.interactions import ActionPolicy
 from squid_layouts.document import Asset, Document, InlineAsset, as_document
 from squid_layouts.emoji import Emoji
 from squid_layouts.errors import LayoutInvariantError
+from squid_layouts.interactions import ActionPolicy
 from squid_layouts.primitives.nodes import Text
 from squid_layouts.primitives.styles import ActionStyle
 from squid_layouts.scene.codec import SceneCodec, SceneCodecError

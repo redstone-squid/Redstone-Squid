@@ -11,8 +11,18 @@ import pytest
 import squid_layouts as sl
 from squid_layouts.discord import Everyone, MountDefaults, Owner, SessionKey, SessionRegistry
 from squid_layouts.discord.delivery import Abandoned
-from squid_layouts.discord.sessions import Opened, ProtectCrossUserAttachments, Reject, Rejected, RejectionReason, Replace, SessionPolicy, Unprotected, open_personal
-from squid_layouts.discord.sessions import OpeningRequest
+from squid_layouts.discord.sessions import (
+    Opened,
+    OpeningRequest,
+    ProtectCrossUserAttachments,
+    Reject,
+    Rejected,
+    RejectionReason,
+    Replace,
+    SessionPolicy,
+    Unprotected,
+    open_personal,
+)
 from squid_layouts.discord.testing import fake_interaction, fake_message
 from squid_layouts.primitives import Button, Heading, Row
 

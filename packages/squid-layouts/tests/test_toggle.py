@@ -3,9 +3,9 @@
 from collections.abc import Awaitable, Callable
 
 import squid_layouts as sl
-from squid_layouts.interactions import ActionPolicy, Actor, PressEvent, Visibility
 from squid_layouts.discord import V2_TARGET
 from squid_layouts.forms import FormLike, SubmitHandler
+from squid_layouts.interactions import ActionPolicy, Actor, PressEvent, Visibility
 from squid_layouts.primitives.styles import ActionStyle
 from squid_layouts.runtime import PresentationSession
 from squid_layouts.runtime.component import render_component_tree

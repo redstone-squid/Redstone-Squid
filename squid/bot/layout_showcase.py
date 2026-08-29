@@ -334,7 +334,9 @@ class LayoutShowcase(sl.Component):
         return sl.semantic.Section(
             sl.semantic.Heading(L(t"Declaration source")),
             (
-                sl.semantic.Paragraph(L(t"This is the author-facing declaration; planning chooses the legal Discord shape.")),
+                sl.semantic.Paragraph(
+                    L(t"This is the author-facing declaration; planning chooses the legal Discord shape.")
+                ),
                 sl.semantic.Code(_SOURCE_EXAMPLES.get(self.section, _SOURCE_EXAMPLES["tour"]), language="python"),
             ),
         )

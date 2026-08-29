@@ -4,10 +4,10 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol
 
-from squid_layouts.interactions import ActionEvent, SubmitEvent
 from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME, Chrome
 from squid_layouts.factories import action, choice, choices, controlled, form, routed_action, routed_choices
 from squid_layouts.forms import Form, FormLike
+from squid_layouts.interactions import ActionEvent, SubmitEvent
 from squid_layouts.patterns._content import ContentItem
 from squid_layouts.runtime.component import Component, RenderResult
 from squid_layouts.runtime.reactivity import state

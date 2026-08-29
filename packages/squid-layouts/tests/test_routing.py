@@ -8,8 +8,7 @@ import pytest
 
 import squid_layouts as sl
 from squid_layouts.discord import render_static
-from squid_layouts.discord.routing import Router
-from squid_layouts.discord.routing import _dispatch_item
+from squid_layouts.discord.routing import Router, _dispatch_item
 from squid_layouts.discord.testing import fake_interaction
 from squid_layouts.errors import DrawInvariantError, LayoutInvariantError
 from squid_layouts.primitives import Option, Panel, RoutedButton, RoutedSelect, Row
@@ -340,7 +339,9 @@ class TestRouter:
             (sl.routing.Route("new:one:{value}", aliases=("old:{value}:one",)), sl.routing.Route("old:fixed:{other}")),
         ],
     )
-    def test_aliases_participate_in_exact_overlap_detection(self, first: sl.routing.Route, second: sl.routing.Route) -> None:
+    def test_aliases_participate_in_exact_overlap_detection(
+        self, first: sl.routing.Route, second: sl.routing.Route
+    ) -> None:
         router = Router()
         router.add(first, _noop)
 

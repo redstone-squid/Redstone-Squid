@@ -39,8 +39,8 @@ from squid_layouts.forms import (
     UploadedFile,
     ZonedDateTimeField,
 )
-from squid_layouts.planning.limits import LIMITS, V2Limits
 from squid_layouts.planning.adapter import ADAPTER_MODAL_FORMS, AdapterProfile
+from squid_layouts.planning.limits import LIMITS, V2Limits
 from squid_layouts.target_types import DiscordPyAdapter
 from squid_layouts.text import NEUTRAL, Localization, TextLike, resolve_text
 

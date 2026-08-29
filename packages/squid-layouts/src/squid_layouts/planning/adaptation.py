@@ -3,12 +3,12 @@
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 
-from squid_layouts.interactions import ActionBinding, ActionEvent, EntitySelectionEvent, PressEvent, SelectionEvent
 from squid_layouts.assets import Asset
 from squid_layouts.chrome import Chrome
 from squid_layouts.entity import EntityRef
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.forms import FormBinding
+from squid_layouts.interactions import ActionBinding, ActionEvent, EntitySelectionEvent, PressEvent, SelectionEvent
 from squid_layouts.palette import DEFAULT_PALETTE, AccentDefault, Palette
 from squid_layouts.planning.breaking import BreakItem, balanced_breaks
 from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursorRequest, content_fingerprint
@@ -491,7 +491,9 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             return [PrimitiveCode(content, language, overflow=Never())]
         case Figure(media=media, caption=caption):
             if media.spoiler and _cards(context):
-                message = f"{path}: classic targets cannot preserve media spoilers; provide an explicit Variants fallback"
+                message = (
+                    f"{path}: classic targets cannot preserve media spoilers; provide an explicit Variants fallback"
+                )
                 raise LayoutInvariantError(message)
             if _cards(context):
                 # The description rides along even where Discord will not show it: it is the

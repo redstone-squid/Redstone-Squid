@@ -6,13 +6,23 @@ import pytest
 
 import squid_layouts as sl
 from squid_layouts import ActionEvent, Component, state
-from squid_layouts.runtime import CellAddress, History, HistoryError, ReactiveWriteError, Shared, TopicBus, history, history_actions, transaction
-from squid_layouts.semantic import Action
 from squid_layouts.discord import Everyone, Mount
 from squid_layouts.discord.testing import commit_render, fake_interaction
 from squid_layouts.primitives import Text
-from squid_layouts.runtime import ComponentRuntime
+from squid_layouts.runtime import (
+    CellAddress,
+    ComponentRuntime,
+    History,
+    HistoryError,
+    ReactiveWriteError,
+    Shared,
+    TopicBus,
+    history,
+    history_actions,
+    transaction,
+)
 from squid_layouts.runtime.reactivity import readonly_transaction
+from squid_layouts.semantic import Action
 
 
 class World:
@@ -614,4 +624,6 @@ class TestDeclaredRecording:
         async def act(event: ActionEvent) -> None: ...
 
         with pytest.raises(ValueError, match="nothing to record"):
-            sl.action("Peek", act, key="peek", policy=sl.interactions.ActionPolicy.PARALLEL_READ, record=panel().history)
+            sl.action(
+                "Peek", act, key="peek", policy=sl.interactions.ActionPolicy.PARALLEL_READ, record=panel().history
+            )

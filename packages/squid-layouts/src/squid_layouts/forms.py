@@ -13,9 +13,9 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Any, ClassVar, NoReturn, Self, overload
 
-from squid_layouts.interactions import ActionPolicy, SubmitEvent
 from squid_layouts.emoji import EmojiLike, normalize_emoji
 from squid_layouts.errors import LayoutInvariantError
+from squid_layouts.interactions import ActionPolicy, SubmitEvent
 from squid_layouts.temporal import (
     AmbiguousLocalTimeError,
     AmbiguousTimePolicy,

@@ -6,10 +6,8 @@ from typing import Any, Self, cast
 
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning.adapter import (
-    EMPTY_COST,
     AdapterProfile,
     ExtensionAdapter,
-    PreparedExtension,
     ResourceCost,
 )
 from squid_layouts.target_types import DiscordTarget
@@ -67,9 +65,7 @@ class TargetProfile[ModeT = DiscordTarget, AdapterT = Any, BodyT = Any]:
             return self
         protocol = self.capabilities - self.adapter_capabilities
         extensions = {
-            kind: extension
-            for kind, extension in self.extensions.items()
-            if f"extension.{kind}" in capabilities
+            kind: extension for kind, extension in self.extensions.items() if f"extension.{kind}" in capabilities
         }
         return replace(
             self,

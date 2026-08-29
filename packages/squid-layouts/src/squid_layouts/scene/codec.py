@@ -6,9 +6,9 @@ from collections.abc import Mapping
 from copy import deepcopy
 from typing import Any, cast
 
-from squid_layouts.interactions import ActionPolicy
 from squid_layouts.emoji import Emoji
 from squid_layouts.entity import ChannelType, EntityKind, EntityRef, EntityType
+from squid_layouts.interactions import ActionPolicy
 from squid_layouts.primitives.styles import ActionStyle
 from squid_layouts.scene.model import (
     SceneAsset,
@@ -431,7 +431,9 @@ def _node_to_dict(node: SceneNode | SceneLink | ScenePremiumButton | SceneButton
             return {"kind": "extension", "extension": kind, "version": version, "payload": normalized}
 
 
-def _node_from_dict(raw: Mapping[str, Any]) -> SceneNode | SceneLink | ScenePremiumButton | SceneButton | SceneRoutedButton:
+def _node_from_dict(
+    raw: Mapping[str, Any],
+) -> SceneNode | SceneLink | ScenePremiumButton | SceneButton | SceneRoutedButton:
     kind = _string(raw, "kind")
     match kind:
         case "text":
