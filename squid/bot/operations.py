@@ -6,14 +6,13 @@ from collections.abc import Awaitable, Callable, Coroutine
 from functools import wraps
 from typing import Any, overload
 
-from discord import Webhook
 from discord.abc import Messageable
 from discord.ext.commands import Context
 
 import squid_layouts as sl
 from squid.bot.errors import build_error_presentation, record_operation_error
 from squid.bot.i18n import resolve_locale
-from squid.bot.ui import create_mount, destination, error_node, info_node, send_to
+from squid.bot.ui import create_mount, destination, error_node, info_node
 from squid.core.i18n import _, translate
 from squid_layouts.runtime.component import RenderResult
 
@@ -30,6 +29,8 @@ type ManagedResultCallback[**P] = Callable[P, Coroutine[Any, Any, None]]
 class CommandOperation(sl.Component):
     """A command effect whose progress and terminal outcome are its rendered state."""
 
+    execution: sl.operations.OperationExecution[RenderResult, RenderResult | None]
+
     def __init__(
         self,
         work: OperationWork,
@@ -41,9 +42,10 @@ class CommandOperation(sl.Component):
         self._initial = initial
         self._locale = locale
         self._receipt: sl.discord.delivery.DeliveryReceipt | None = None
+        self.execution = self._execute.start()
 
     @sl.operation(initial=_INITIAL_PROGRESS)
-    async def execution(
+    async def _execute(
         self,
         progress: sl.operations.Progress[RenderResult | None],
     ) -> RenderResult:
@@ -70,6 +72,8 @@ class CommandOperation(sl.Component):
 class _ManagedResultComponent(sl.Component):
     """Run one command callback after its initial layout has been delivered."""
 
+    execution: sl.operations.OperationExecution[RenderResult, None]
+
     def __init__(
         self,
         callback: Callable[..., Awaitable[RenderResult]],
@@ -84,9 +88,10 @@ class _ManagedResultComponent(sl.Component):
         self._kwargs = kwargs
         self._initial = initial
         self._locale = locale
+        self.execution = self._execute.start()
 
     @sl.operation(initial=None)
-    async def execution(self, _progress: sl.operations.Progress[None]) -> RenderResult:
+    async def _execute(self, _progress: sl.operations.Progress[None]) -> RenderResult:
         """Evaluate the command callback once the mount has committed its initial delivery."""
         return await self._callback(*self._args, **self._kwargs)
 
@@ -150,7 +155,7 @@ def managed_result[**P](
                 initial=info_node(translate(locale, title), translate(locale, description)),
                 locale=locale,
             )
-            mount = create_mount(component, access=sl.discord.Everyone(), locale=locale, timeout=900)
+            mount = create_mount(component, source=ctx, access=sl.discord.Everyone(), locale=locale, timeout=900)
             delivered = await mount.send(destination(ctx, locale=locale))
             match component.execution.status:
                 case sl.operations.Succeeded():
@@ -214,9 +219,10 @@ def _error_reports(arguments: dict[str, object]) -> Any:
 
 
 async def run_command_operation(
-    target: Messageable | Webhook,
+    target: Messageable,
     work: OperationWork,
     *,
+    source: sl.discord.host.HostSource,
     title: str = _("Working"),
     description: str = _("Getting information..."),
     locale: str | None = None,
@@ -229,8 +235,8 @@ async def run_command_operation(
         initial=info_node(translate(locale, title), translate(locale, description)),
         locale=locale,
     )
-    mount = create_mount(component, access=sl.discord.Everyone(), locale=locale, timeout=900)
-    destination = send_to(target)
+    mount = create_mount(component, source=source, access=sl.discord.Everyone(), locale=locale, timeout=900)
+    destination = sl.discord.send_to(target)
 
     async def capture(
         presentation: sl.discord.presentation.DiscordPresentation,

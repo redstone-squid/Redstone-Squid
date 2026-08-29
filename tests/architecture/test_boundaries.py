@@ -9,7 +9,12 @@ from squid.core.extract import deferred_msgid
 
 # Roots for the AST scans that state repo-wide invariants. The squid-layouts workspace member
 # is held to the same rules as squid itself.
-SCAN_ROOTS = (Path("squid"), Path("packages/squid-reactive/src"), Path("packages/squid-layouts/src"))
+SCAN_ROOTS = (
+    Path("squid"),
+    Path("packages/squid-reactive/src"),
+    Path("packages/squid-layouts/src"),
+    Path("packages/squid-replicated/src"),
+)
 
 
 def _scanned_files() -> list[Path]:

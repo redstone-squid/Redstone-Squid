@@ -17,6 +17,7 @@ from squid.search.domain import SearchMode, SearchPage, SearchRequest, SearchSco
 from squid.topics import resource_topic
 from squid_layouts.discord import Everyone
 from squid_layouts.discord.testing import fake_interaction, fake_message
+from tests.helpers.discord import make_layout_bot
 
 
 class RecordingSearch:
@@ -43,6 +44,7 @@ def _context() -> commands.Context[Any]:
         cast(
             Any,
             SimpleNamespace(
+                bot=make_layout_bot(),
                 defer=AsyncMock(),
                 send=AsyncMock(return_value=fake_message(message_id=1)),
                 guild=None,

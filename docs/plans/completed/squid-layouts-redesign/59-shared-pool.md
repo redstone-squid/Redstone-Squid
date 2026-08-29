@@ -2,7 +2,7 @@
 
 ## Problem
 
-[`Shared`](../completed/squid-layouts-redesign/40-shared-state.md) deliberately has no registry. A
+[`Shared`](40-shared-state.md) deliberately has no registry. A
 handle is the state, and an ordinary owner decides its lifetime by retaining that handle. That
 remains the precise model, but a host that wants one handle per application scope has to repeat the
 same cache around every namespace. `squid/bot/layout_showcase.py:728` declares one and `:759` reads
@@ -62,7 +62,7 @@ looking at it, and that is the correct lifetime."*). The migration pools `Appear
 
 ## Where it lives
 
-`SharedPool` lands in a new `packages/squid-reactive/src/squid_reactive/pool.py`, is exported from
+`SharedPool` lands in a new `../../../../packages/squid-reactive/src/squid_reactive/pool.py`, is exported from
 `squid_reactive`, and is re-exported through `squid_layouts.runtime.shared` and
 `squid_layouts.runtime`.
 
@@ -72,7 +72,7 @@ Two facts force this, and the first is why the placement changed:
   "anyio"]`, and `PersistedPool` — which already keeps a keyed dict of `Shared` handles — lives
   there. A pool implemented in `squid_layouts` could never be the one `PersistedPool` uses, so the
   duplication below would be permanent by construction rather than by oversight.
-- **The shim is load-bearing.** `packages/squid-layouts/src/squid_layouts/runtime/shared.py` is five
+- **The shim is load-bearing.** `../../../../packages/squid-layouts/src/squid_layouts/runtime/shared.py` is five
   lines of re-export, and `packages/squid-layouts/tests/test_public_api.py:247-269` imports it in a
   subprocess with `discord` **and** `anyio` blocked at the meta-path. `squid_reactive` satisfies
   that today. Anything in `squid-stores` never could.
@@ -86,12 +86,12 @@ The spelling throughout this document is `sl.runtime.SharedPool`, matching `sl.r
 which is what `layout_showcase.py:596` writes. Root `squid_layouts` exports no `Shared` today
 (`test_public_api.py:242` pins it to `sl.runtime.__all__`), and promoting the pool to the root
 authoring vocabulary while its own base class stays a level down would be incoherent. Promotion is
-[58](../completed/squid-layouts-redesign/58-public-api-narrowing.md)'s rule to apply to both names
+[58](58-public-api-narrowing.md)'s rule to apply to both names
 at once, later, if qualifying them becomes demonstrable noise.
 
 ## Relation to `PersistedPool`
 
-[63](../completed/squid-layouts-redesign/63-stores-package.md) closed with *"Unit 2's
+[63](63-stores-package.md) closed with *"Unit 2's
 `PersistedPool` needs 59's `SharedPool` to exist first"*, then shipped without it.
 `packages/squid-stores/src/squid_stores/persisted.py:15-92` is therefore already most of this plan:
 the same `[ScopeT, SharedT: Shared[ScopeT]]` spelling, the same `namespace`/`bus`/`factory`
@@ -166,10 +166,10 @@ The repo already has the vocabulary this wants, one layer over, and it has it **
 
 - `packages/squid-layouts/src/squid_layouts/discord/sessions.py:20-54` — `UserScope`, `GuildScope`,
   `UserGuildScope`, `GlobalScope` and `CustomScope`, frozen and hashable, unioned as `SessionScope`.
-  This is the taxonomy CascadeUI is credited for; [90](90-deferred.md)'s Redux entry is the only
+  This is the taxonomy CascadeUI is credited for; [90](../../squid-layouts-redesign/90-deferred.md)'s Redux entry is the only
   in-repo rendering of that finding.
 - `packages/squid-layouts/src/squid_layouts/discord/screens.py:38-44` — `Scope`, a `StrEnum` of the
-  same four kinds, used by [51](../completed/squid-layouts-redesign/51-screens.md)'s `Screen`.
+  same four kinds, used by [51](51-screens.md)'s `Screen`.
 
 So the earlier draft of this section, which proposed a new `sl.discord.scopes` module of free
 functions, was wrong twice over: "one scope taxonomy, not two" was already false, and a third
@@ -209,7 +209,7 @@ The ergonomics still come from the class statement rather than from lookup metho
 namespace declares `Shared[UserGuildScope]`, the scope kind is fixed, and `pool.user(id)` would be a
 second spelling for it.
 
-This does not reopen [90](90-deferred.md)'s rejection of class-body operational policy, which killed
+This does not reopen [90](../../squid-layouts-redesign/90-deferred.md)'s rejection of class-body operational policy, which killed
 Cascade's `instance_scope`/`instance_policy` because *"a class attribute would couple portable
 components to Discord session vocabulary"*. The coupled class here is a host's own namespace
 subclass, not a portable component, and what it declares is a type parameter the pool keys on, not a
@@ -223,7 +223,7 @@ means.
 
 **No new exports.** `test_public_api.py:243-244` asserts that `Opener` and `Scope` are absent from
 `sl.discord.__all__`, which is
-[58](../completed/squid-layouts-redesign/58-public-api-narrowing.md)'s deliberate narrowing; their
+[58](58-public-api-narrowing.md)'s deliberate narrowing; their
 public spelling is the submodule path `sl.discord.screens.Scope`, pinned at `:226-227`. The five
 scope values stay reachable as `sl.discord.sessions.UserScope` and friends. Promoting any of them
 is 58's rule to apply, not this plan's.
@@ -264,7 +264,7 @@ The two overloads and the `Shared[Any]` bound are what the spike chose; the sect
 why the obvious spelling -- `SharedT: Shared[ScopeT]`, `namespace: type[SharedT]` -- cannot be used.
 The relationship they carry is the one that matters: the namespace's `Shared[ScopeT]`, the lookup
 scope, the factory argument and the returned handle are one inferred pair, pinned by
-`packages/squid-reactive/tests/typing_pool.py`.
+`../../../../packages/squid-reactive/tests/typing_pool.py`.
 
 Only a namespace *class* is accepted at runtime. The callable spelling exists so a checker can read
 the scope off the constructor; a bare function that happens to match the signature is refused at
@@ -362,7 +362,7 @@ In `SharedPool(Preferences, bus)`, the solver gets one informative argument -- `
 type at all**, only inside the bound `SharedT: Shared[ScopeT]`, so recovering it would need the
 checker to solve *from* a bound rather than verify it afterwards.
 
-`docs/plans/squid-layouts-redesign/spikes/59/` ran it against Pyrefly 1.2.0. Two findings, and the
+`../../squid-layouts-redesign/spikes/59` ran it against Pyrefly 1.2.0. Two findings, and the
 first was not the question asked:
 
 1. **Pyrefly rejects a bound that references a sibling type parameter, full stop** --
@@ -390,7 +390,7 @@ takes its parameter types from the expected type, which still holds the unsolved
 on `Unknown`. The spelling is an annotated function, which is why the example above names one.
 Explicit parameterisation remains the escape hatch.
 
-`packages/squid-reactive/tests/typing_pool.py` pins all of it, including the wrong-scope negative --
+`../../../../packages/squid-reactive/tests/typing_pool.py` pins all of it, including the wrong-scope negative --
 if that suppression ever goes unused, inference has regressed to `Any` and the pin has stopped
 meaning anything.
 
@@ -410,13 +410,13 @@ meaning anything.
   the spelling, and adding free functions beside it would have made three taxonomies where the
   complaint was that there were two.
 - No new names in `sl.discord.__all__` or the root authoring vocabulary. Both are
-  [58](../completed/squid-layouts-redesign/58-public-api-narrowing.md)'s to decide.
+  [58](58-public-api-narrowing.md)'s to decide.
 - No `pool.at(interaction)`, resolving the scope from the declared `ScopeT` through a `classmethod
   of(source)` protocol. It was the nicest spelling on offer and was gated on the spike's first
   question passing as written. It did not: `ScopeT` now comes from a constructor parameter rather
   than from `SharedT`'s bound, and `at()` would need exactly the bound-directed solving that
   finding 1 rules out. Deferred on a measured basis rather than an assumed one, which is the same
-  footing as [90](90-deferred.md)'s neighbouring `Unpack`-on-a-TypeVar rejection.
+  footing as [90](../../squid-layouts-redesign/90-deferred.md)'s neighbouring `Unpack`-on-a-TypeVar rejection.
 - No automatic pool on a bot, registry, mount, or session.
 - No guarantee that separately constructed handles with equal diagnostic scopes converge.
 
@@ -460,15 +460,15 @@ Then the focused shared-pool, shared-state, persisted-pool, screens and public A
 
 **Recorded baselines**, so a later reader can tell what was already broken. Pyrefly: 287 errors
 before and after, with none in any file this touched -- and four fewer in `persisted.py`, which the
-dependent bound had been failing. `packages/squid-layouts/tests`: seven failures before and after,
-unchanged. `tests/unit/bot/test_layout_showcase.py`: one, unchanged.
+dependent bound had been failing. `../../../../packages/squid-layouts/tests`: seven failures before and after,
+unchanged. `../../../../tests/unit/bot/test_layout_showcase.py`: one, unchanged.
 
 **Two pre-existing defects found on the way, one fixed and one not.** Fixed:
-`packages/squid-stores/tests` was absent from `[tool.pytest.ini_options] testpaths`
+`../../../../packages/squid-stores/tests` was absent from `[tool.pytest.ini_options] testpaths`
 (`pyproject.toml:380-385`) and `squid_stores` from `--cov`, so every `PersistedPool` assertion
 above would have been vacuous; that entry lands first, in its own commit. Not fixed: a bare
-`pytest` run cannot collect at all, because `packages/squid-reactive/tests` and
-`packages/squid-layouts/tests` each define `test_operations.py`,
+`pytest` run cannot collect at all, because `../../../../packages/squid-reactive/tests` and
+`../../../../packages/squid-layouts/tests` each define `test_operations.py`,
 `test_resources.py` and `test_topics.py` and neither is a package. Both were already in `testpaths`,
 so this predates the work here. `--import-mode=importlib` resolves the collision but fails eight
 otherwise-passing tests, so it is left alone and recorded rather than half-fixed. The suites are run
@@ -479,7 +479,7 @@ one directory at a time until someone takes it on.
 **Shipped 2026-08-24.** `SharedPool` lives in `squid_reactive.pool`, `PersistedPool` composes one
 across the `_create`/`_adopt` seam and gained `drop`/`clear`/`get_existing`/`active`, `Opener`
 gained the four scope constructors, `Screen.key` collapsed to one line, and the showcase pools
-`Appearance` while leaving `Session` alone. `spikes/59/` chose the signature and is kept as the
+`Appearance` while leaving `Session` alone. `../../squid-layouts-redesign/spikes/59` chose the signature and is kept as the
 record of why the obvious one is unavailable.
 
 Two things the implementation changed from this design, both recorded above rather than quietly:
@@ -491,10 +491,10 @@ listener leak on `close()` was not in the design and was fixed because the drop 
 Amended 2026-08-23 with a scope vocabulary, folding in the CascadeUI comparison's "steal the
 scoping/keying ergonomics" finding — a pool without a scope vocabulary and a scope vocabulary
 without a pool being two halves of one unbuilt decision. That comparison is not a document in this
-repo; [90](90-deferred.md)'s Redux entry is the only in-repo rendering of the finding.
+repo; [90](../../squid-layouts-redesign/90-deferred.md)'s Redux entry is the only in-repo rendering of the finding.
 
 Rewritten 2026-08-24, because the plan had gone stale in a way that would have misled an
-implementer. [63](../completed/squid-layouts-redesign/63-stores-package.md) shipped `PersistedPool`
+implementer. [63](63-stores-package.md) shipped `PersistedPool`
 without waiting for this, so most of the machinery designed here already exists one package over and
 this plan is now partly a consolidation. That moved `SharedPool` from `squid_layouts` to
 `squid_reactive` — `squid-stores` cannot import `squid_layouts`, so the old placement made the
@@ -504,6 +504,6 @@ in the other direction: the proposed `sl.discord.scopes` module was deleted in f
 already existed in `screens.py`. The spike gate moved from `pool.at()` to the inference the plan
 depends on. No longer independent: 63 is a real dependency, and 61 and 62 have shipped.
 
-It reopens nothing in [90](90-deferred.md) — there is still no store, no keyed global, and no
+It reopens nothing in [90](../../squid-layouts-redesign/90-deferred.md) — there is still no store, no keyed global, and no
 singleton; what is keyed is a lifetime owner the host constructs and holds, and the class-body
 rejection stands for the thing it was about.

@@ -68,6 +68,7 @@ ROOT_API = frozenset(
         "figure",
         "form",
         "forms",
+        "grid",
         "group",
         "guards",
         "heading",
@@ -86,6 +87,8 @@ ROOT_API = frozenset(
         "navigation",
         "note",
         "optional",
+        "operation",
+        "operations",
         "paged",
         "paragraph",
         "patterns",
@@ -98,6 +101,8 @@ ROOT_API = frozenset(
         "rating",
         "raw_md",
         "resource",
+        "resources",
+        "roster",
         "routed_action",
         "routed_choices",
         "routing",
@@ -113,6 +118,7 @@ ROOT_API = frozenset(
         "summary",
         "table",
         "table_row",
+        "tally",
         "temporal",
         "text",
         "themed",
@@ -130,11 +136,13 @@ ROOT_NAMESPACES = (
     "guards",
     "html",
     "interactions",
+    "operations",
     "patterns",
     "planning",
     "primitives",
     "profiling",
     "routing",
+    "resources",
     "runtime",
     "scene",
     "semantic",
@@ -152,6 +160,8 @@ RENAMED_SUBMODULES = (
 )
 
 SPECIALIST_SAMPLES = {
+    "Agreement": sl.patterns,
+    "AgreementParticipant": sl.patterns,
     "Wizard": sl.patterns,
     "WizardState": sl.patterns,
     "FormSpec": sl.forms,
@@ -167,6 +177,9 @@ SPECIALIST_SAMPLES = {
     "Guard": sl.guards,
     "LayoutError": sl.errors,
     "ZonedDateTime": sl.temporal,
+    "RosterPlacement": sl.patterns,
+    "TallyOption": sl.patterns,
+    "GridCell": sl.patterns,
     "Message": sl.text,
 }
 
@@ -213,6 +226,7 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert sl.scene.SceneFile
     assert sl.html.Renderer
     assert sl.discord.Mount
+    assert sl.discord.button_grid
     assert sl.discord.modals.CheckboxGroupField
     assert sl.discord.MountDefaults
     assert sl.discord.SessionRegistry
@@ -239,11 +253,26 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert not hasattr(sl.discord.durability, "MountManager")
     assert sl.runtime.TopicBus
     assert sl.discord.Reactor.follow
-    assert {"Shared", "SharedPool", "SharedFactory", "SharedStateConflictError", "state", "addresses"} <= set(
+    assert {"Shared", "SharedPool", "SharedFactory", "ReactiveConflictError", "state", "addresses"} <= set(
         sl.runtime.__all__
     )
     for removed in ("SessionPolicy", "Opener", "Scope", "Router", "V2Renderer", "ClassicRenderer", "AuditReport"):
         assert removed not in sl.discord.__all__ and not hasattr(sl.discord, removed)
+
+
+def test_testing_helpers_are_a_declared_namespace_not_an_accident() -> None:
+    """A consumer's tests import these, so they are versioned surface, not a private module."""
+    from types import ModuleType
+
+    assert "testing" in sl.discord.__all__
+    assert isinstance(sl.discord.testing, ModuleType)
+    assert {"fake_interaction", "delivered_to", "commit_render", "assert_within_limits"} <= set(
+        sl.discord.testing.__all__
+    )
+    assert [name for name in sl.discord.testing.__all__ if not hasattr(sl.discord.testing, name)] == []
+    # The doubles stay one tier down; nothing here belongs beside Mount and Screen.
+    for name in sl.discord.testing.__all__:
+        assert name not in sl.discord.__all__
 
 
 def test_core_and_html_import_without_discord_dependencies() -> None:

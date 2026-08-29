@@ -1,17 +1,23 @@
 """Composable components: embedding, key namespacing, and where invalidation travels."""
 
+from collections.abc import Callable
+
 import discord
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+import squid_layouts as sl
 from squid_layouts import Component, ContextKey, PressEvent, state
 from squid_layouts.discord import Everyone, Mount
 from squid_layouts.discord.testing import commit_render, fake_interaction
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.primitives import (
     Boundary,
+    Break,
+    Budget,
     Button,
+    Card,
     Heading,
     Lines,
     Node,
@@ -20,6 +26,7 @@ from squid_layouts.primitives import (
     Row,
     Text,
 )
+from squid_layouts.runtime.component import render_component_tree
 from squid_layouts.semantic import Action, Actions, Choice, Choices, Controlled, Group, List, ListItem
 
 
@@ -108,6 +115,42 @@ class TestBoundaries:
         button = row.items[0]
         assert isinstance(button, Button)
         assert button.key == "inc"
+
+
+@pytest.mark.parametrize(
+    "wrap",
+    (
+        lambda children: Card(children=children),
+        lambda children: Budget(children=children, minimum=0, preferred=100),
+        lambda children: Break(children=children),
+    ),
+)
+def test_boundaries_expand_and_namespace_inside_every_primitive_child_container(
+    wrap: Callable[[tuple[Node | Boundary, ...]], Node],
+) -> None:
+    child = Counter("nested")
+
+    class Parent(Component):
+        def render(self) -> Node:
+            return wrap((self.boundary(child, key="child"),))
+
+    container = render_component_tree(Parent()).nodes[0]
+    assert isinstance(container, Card | Budget | Break)
+    row = next(node for node in container.children if isinstance(node, Row))
+    button = row.items[0]
+    assert isinstance(button, Button)
+    assert button.key == "child.inc"
+
+
+def test_component_expansion_preserves_container_metadata() -> None:
+    class Parent(Component):
+        def render(self) -> Panel:
+            return Panel((Text("body"),), accent=0x123456, spoiler=True)
+
+    panel = render_component_tree(Parent()).nodes[0]
+    assert isinstance(panel, Panel)
+    assert panel.accent == 0x123456
+    assert panel.spoiler is True
 
 
 class Nest(Component):
@@ -309,3 +352,27 @@ def test_all_keyed_semantics_are_namespaced_through_semantic_containers() -> Non
     assert {"left.choice", "right.choice"} <= mount._handlers.keys()
     assert "__cursor_next.left.entries" in mount._handlers
     assert "__cursor_next.right.entries" in mount._handlers
+
+
+class TestRenderItem:
+    """One node, drawn to an item a host places into a view it assembles itself."""
+
+    def test_the_item_is_detached_from_the_view_the_renderer_built(self) -> None:
+        item = sl.discord.render_item(sl.heading("Title"))
+
+        assert isinstance(item, discord.ui.TextDisplay)
+        assert item._view is None
+        assert item._parent is None
+
+    def test_the_surrounding_view_is_the_hosts_to_build(self) -> None:
+        """Nothing half-built survives the call: the renderer's view is discarded here."""
+        host = discord.ui.LayoutView(timeout=None)
+
+        host.add_item(sl.discord.render_item(sl.section(sl.heading("Title"), sl.paragraph("Body"))))
+
+        assert len(host.children) == 1
+        assert host.children[0]._view is host
+
+    def test_a_node_that_draws_nothing_is_refused_rather_than_indexed(self) -> None:
+        with pytest.raises(sl.discord.DiscordModeError, match="produced no item"):
+            sl.discord.render_item(sl.group())

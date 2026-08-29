@@ -4,6 +4,25 @@ squid-layouts separates UI intent, target planning, and drawing. Discord is one 
 not the data model: the same resolved scene can be drawn as Discord Components V2 or safe
 HTML, serialized to JSON, and handed to another process.
 
+## Concepts at a glance
+
+Seven buckets, and every API in the package belongs to one of them. The rest of this document
+expands them in roughly this order.
+
+| Bucket | What it decides | Principal APIs | Expanded in |
+|---|---|---|---|
+| Rendering | what the user sees | `Document`, `plan`, target adapters, `SceneDocument`, `Renderer` | [Semantic authoring](#semantic-authoring-adaptation-and-exact-primitives), [Scenes and renderers](#scenes-and-renderers) |
+| State | what one component knows | `sl.state`, `sl.computed`, `sl.resource` | [Components and reactivity](#components-and-vue-inspired-reactivity) |
+| Shared state | what several panels agree on | `Shared`, `SharedPool`, `TopicBus` | [Shared state across mounts](#shared-state-across-mounts) |
+| Actions | what a press is allowed to do | `sl.action`, `Guard`, `history`, `ActionMiddleware` | [Actions and frontend adapters](#actions-and-frontend-adapters) |
+| Lifetime | how long a panel lives and who may use it | `Mount`, `Screen`, `SessionRegistry`, `AccessPolicy` | [Which entry point to use](#which-entry-point-to-use), [Ownership and lifetime](#ownership-and-lifetime) |
+| Durability | what survives a restart | `DurableSessionRuntime`, `Router`, `PersistedPool` | [Durable sessions](#durable-sessions), [Durable route graph](#durable-route-graph-and-dispatch-onion) |
+| Diagnostics | what happened | `Profiler`, `DevTools`, `sl.discord.testing` | package `README.md` |
+
+The two rules that decide which bucket something lands in are in
+[Ownership and lifetime](#ownership-and-lifetime): identity is never authority, and anything
+owning background work ends through one named method.
+
 ## End-to-end flow
 
     Component state
@@ -35,9 +54,13 @@ planning, that is a DrawInvariantError, not a second degradation mechanism.
 
 | Need | API | Result |
 |---|---|---|
+| Runtime for one discord.py client | sl.discord.install(client, defaults=..., bus=...) | LayoutHost: registry, reactor, challenge runner |
+| That runtime, from an interaction or context | sl.discord.LayoutHost.of(source) | the installed host, or `LayoutHostMissing` |
 | Stateful Discord interaction | sl.discord.Mount(component, access=...) | lifecycle, access, events, paging, edits |
 | Scoped live UI lifetime | sl.discord.SessionRegistry | root/child cascade, cardinality, replacement |
+| Per-open policy for one screen | sl.discord.Screen(name, scope=..., policy=...) | session key, cardinality, capacity, quota, access |
 | Static Components V2 message | sl.discord.render_static(document) | DiscordPresentation |
+| One node as a detached item | sl.discord.render_item(node, reservation=...) | discord.ui.Item for a host-built view |
 | Static classic message | sl.discord.classic.render_static(document) | DiscordPresentation |
 | Region in a host-owned classic message | sl.discord.classic.contribute(document, to=...) | AttachedClassicContribution |
 | Discord message plus diagnostics | sl.discord.compose(document) | Composition |
@@ -45,6 +68,7 @@ planning, that is a DrawInvariantError, not a second degradation mechanism.
 | Browser or preview drawing | sl.html.Renderer().draw(scene) | HTML string |
 | Cross-process transport | sl.scene.Codec.dumps and loads | canonical protocol JSON |
 | Resume an opted-in session | sl.discord.durability.DurableSessionRuntime | recovered Session graph |
+| Mount onto a message the bot owns | sl.discord.edit_to(message) | Destination writing that message |
 
 sl.discord.compose is the Components V2 convenience path: plan for `V2_TARGET`, draw with
 `V2Renderer`, then strictly audit the result. `sl.discord.classic.compose` is its counterpart
@@ -56,12 +80,24 @@ document is preferable because the planner can see every cost. A reservation is 
 planning against a reduced target, so adaptation and measurement agree on the room available. It never adopts an arbitrary existing `discord.py` view: renderers own their
 output object, so unknown pre-existing controls cannot undermine measurement.
 
+`sl.discord.Screen` is the per-open policy for one logical screen, written once and shared by
+every opening of it: `scope` picks the key an opening collides on, `policy` decides what happens
+when it does, `capacity` caps members per session, `quota` caps how many sessions in `domain` one
+user may be in, and `access` builds the mount's access policy from the opener. `Screen.open` and
+`Screen.respond` construct the mount and hand it to the `SessionRegistry`, which still owns
+lifetime -- a screen owns the policy, not the sessions. Either accepts the registry itself or
+anything an installed `LayoutHost` can be found from, and `Screen.respond` defaults it to the
+interaction's own client, so a caller holding neither does not dispatch over the two invocation
+surfaces to find one. The two are separate values because a
+component is not intrinsically a session policy: the same component can be opened under more than
+one screen, or under none at all.
+
 ## Semantic authoring, adaptation, and exact primitives
 
 The package root is semantic-first. Structural nodes are `Group`, `Stack`, `Cluster`,
 `Section`, `Article`, and `Aside`; content includes `Heading`, `Paragraph`, `List`, `Fields`,
-`Table`, `Quote`, `Code`, `Media`, `Details`, and measures; interactions are `Actions`,
-`Choices`, `Items`, and `Navigation`. These say what the information means and preserve
+`Table`, `Roster`, `Quote`, `Code`, `Media`, `Details`, and measures; interactions are `Actions`,
+`Choices`, `Items`, `Navigation`, and `Grid`. These say what the information means and preserve
 stable string keys, not which Discord widget must appear.
 
 Author them through the lowercase factories — `sl.section(sl.heading(...), *children)`,
@@ -91,6 +127,19 @@ grouped pickers, or a paged picker. Thirty-six ungrouped actions become 25 and 1
 author-declared groups never merge. Choices, Items, and Navigation use keyed 25-option
 windows. Cross-page multi-selection is rejected because a page-local Discord select cannot
 honestly express that domain operation without an explicit grouping or commit model.
+
+Host-owned ledgers remain values outside the renderer. `place_roster` is a pure, stable
+allocator over immutable declarations; `sl.roster` renders its result with active localized
+chrome. `sl.tally` similarly renders host-computed counts and composes existing Progress and
+Choices semantics instead of storing votes. Mounted tally controls adapt between buttons and
+selects, while routed tally controls use one `RoutedChoices` route for all option keys.
+
+Spatial data has three explicit contracts. `sl.semantic.TableDisplay.MATRIX` is an authoritative dense
+code-block representation. `sl.discord.button_grid(*cells, ...)` returns exact Discord rows
+and fails planning when that chosen shape exceeds Discord limits. `sl.grid(*cells, ...)` is
+semantic: its sticky `discord.grid` strategy moves from button rows to a coordinate matrix and
+select, then to a paged select. Every rung submits the same stable cell key in a
+`SelectionEvent`; unavailable cells remain visible but cannot be selected.
 
 Strategy ranking is lexicographic rather than scalar: representation stability by
 `Flexibility`, author display preference, pager count, transition distance, then stable path
@@ -181,6 +230,13 @@ stored cursors and are clamped by the same policy as planner-owned lists. The cu
   Apply edge dispatches only when the committed set changes. Panels with at most five options expose
   a form alternate to the planner.
 
+`Agreement` deliberately sits beside the pure pattern catalogue rather than inside it. Its
+transition is actor-keyed, so it is a mounted component with two explicitly non-persistent
+state cells (`approved` and `resolved`). Participant display names are host data, actor identity
+comes from the event, and `ActionPolicy.EXCLUSIVE` serializes approval and withdrawal. Discord
+hosts should mount it under `sl.discord.Users(...)`; the component repeats membership validation
+as a frontend-neutral safety boundary and calls its resolution hook once at the threshold.
+
 `SourceRankedList` is intentionally outside the two-shell catalogue. It is an async component whose
 visible resource owns one immutable `LoadedWindow`; `WindowLoader` owns source-position ordering. Its
 `SourceCapabilities` determine whether navigation is backward, whether numeric ranges are meaningful,
@@ -238,6 +294,28 @@ when the action commits. The action reads its own writes, and so do the computed
 of them; another task reading the same component across an `await` sees the committed value
 until then. Rolling back is dropping the overlay.
 
+Every transaction has a stable `ActionContext` and exactly one terminal outcome. A publishing
+transaction validates every strong shared/replicated read by version, freezes its cell patches,
+and prepares all participants under the runtime commit gate. Installing patches and synchronously
+applying the prepared participants is the commit point. Reactive notifications, participant
+finalizers, ledger sinks, and aftermath hooks run after the gate and cannot veto that truth. An
+apply-phase exception is an adapter integrity defect and is reported as such, never disguised as
+a safe rollback.
+
+A read is **strong** -- it becomes a commit precondition -- when the action also writes that cell,
+or when it was taken inside `strong_read()`. Read-and-write is compare-and-set and needs no opt-in.
+Read-only reads are not validated by default: handlers routinely consult shared state to decide
+something and then write something unrelated, and aborting those costs more than the write skew it
+prevents. An action that does branch on shared state it will not write says so with
+`strong_read()`, which makes it serializable over what it read. `relaxed_read()` is the way back
+out of a strong read; `untracked()` independently opts out of dependency capture.
+
+History consumes the immutable commit event. Physical inverses require the committed slot version;
+semantic participants plan their own inverses. Undo and redo are fresh actions, and redo is based on
+the actual undo commit. External effects use an idempotent compensation execution whose failure or
+partial success remains inspectable. The complete pipeline and examples are in
+[`docs/action-ledger.md`](action-ledger.md).
+
 ## Shared state across mounts
 
 `sl.state()` is per-component and per-mount. When two live panels must agree on something the
@@ -252,21 +330,50 @@ until then. Rolling back is dropping the overlay.
 State on a namespace is `sl.state()` one level out and is literally the same storage, so replacement,
 the equality no-op, `opaque=`, staging and rollback all behave identically. Two differences:
 a write publishes the cell's `(handle, descriptor)` address on the bus instead of invalidating
-one component, and a cell an action both **read and wrote** carries the value it read as a
-commit precondition -- if someone else moved it meanwhile the action raises
-`sl.runtime.SharedStateConflictError` and publishes nothing. `Chrome.changed_elsewhere` is the wording
+one component, and a strongly read shared cell -- one the action also writes, or reads inside
+`strong_read()` -- carries its version as a commit precondition when the action publishes anything.
+If someone else moves it meanwhile -- including A→B→A -- the
+action raises `sl.runtime.ReactiveConflictError` and publishes nothing. `Chrome.changed_elsewhere` is the wording
 for that, shown through `handle_error` or an `ActionMiddleware`.
 
-There is no store and no lookup: two panels converge because something handed them the same
-object, by constructor injection or `ContextKey`. That also settles lifetime -- the handle *is*
-the state, so panels holding it means it dies with the last panel, and a cog or session holding
-it means it survives every panel opening and closing. A mount subscribes to exactly the cells
+There is no global store and no lookup by type: two panels converge because something handed
+them the same object, by constructor injection or `ContextKey`. That also settles lifetime -- the
+handle *is* the state, so panels holding it means it dies with the last panel, and a cog or session
+holding it means it survives every panel opening and closing. When what a host holds is *one handle
+per scope*, `sl.runtime.SharedPool` writes that lifetime down where it is known instead of leaving a
+`setdefault` cache around every namespace; see below. A mount subscribes to exactly the cells
 its latest render read, reconciled at stage time, and `sl.runtime.addresses(lambda: appearance.accent)`
 names an address by hand for a host that wants to follow one itself. A mount repaints its own
 writes inside the interaction that made them -- `Mount.observed` is what it rendered,
 `Mount.followed` what it managed to subscribe to -- so a missing reactor costs live updates
 from *other* mounts and nothing else. Nothing durable belongs
 here; anything the application would still want with nobody looking at it is a service.
+
+### Pooling one namespace per scope
+
+A pool is strong and single-typed: it owns one `Shared` subclass and retains one canonical handle
+per hashable scope until that scope is dropped, the pool is cleared, or the pool itself is released.
+
+    self._appearance = sl.runtime.SharedPool(Appearance, bot.topic_bus)
+    ...
+    appearance = self._appearance.get(scope)
+
+`get(scope)` is get-or-create and synchronous, so nothing awaits between the miss and the insert.
+`get_existing`, `drop`, `clear` and `active` are the rest of the surface. Where the pool is held *is*
+the retention policy -- on the bot for process lifetime, on a cog for extension lifetime, on a
+session for that session's. `squid/bot/layout_showcase.py` keeps one on the cog for exactly that
+reason. None of this changes `Shared` itself: constructing a handle and passing it directly stays
+supported, and a scope used outside a pool may still be mutable or unhashable.
+
+The scope a pool keys on is the one a `Screen` already computes. `Opener.of(interaction)` yields the
+opener, and asking it for a kind statically -- `opener.user_guild()` is a `UserGuildScope` -- is what
+lets a `Shared[UserGuildScope]` pool refuse the wrong scope at the call site. A panel holding its
+session key reaches a pool through `key.scope` with nothing to convert. `Opener` and `Scope` are
+deliberately not on `sl.discord`; import them from `squid_layouts.discord.screens`.
+
+`squid_stores.PersistedPool` is the hydrating variant, for a namespace that should survive a
+restart: `await load(scope)` in place of `get(scope)`, `run()` as the background writer, and
+`flush`/`close` to end it.
 
 `sl.resource` is a descriptor-owned, runtime-only state machine rather than snapshot state:
 
@@ -293,10 +400,11 @@ delivery. Siblings settle concurrently under the frontend's task group, and newl
 are discovered on the next bounded render pass. `.reload()` is awaited sugar over the same transition;
 `.replace(value)` publishes an authoritative local result.
 
-`sl.operation` shares resource discovery, caller-owned completion, and mount settlement, but
-models a one-shot effect instead of repeatable data. Its explicit progress capability updates a
-`Pending` status, and `Succeeded`, `Failed`, or `Cancelled` is terminal. Components render those
-statuses with a `match`; there is no hidden state slot and no detached operation task.
+`sl.operation` declares a repeatable definition. `.start()` creates a fresh execution ID and one-shot
+status machine, causally linked to the current action when present. Its explicit progress capability
+updates `Pending`, and `Succeeded`, `Failed`, or `Cancelled` is terminal for that execution. Components
+store and render an execution with a `match`; retries start another execution, and there is no detached
+operation task.
 
 A plain attribute assigned during a transaction is therefore uncovered, and the framework
 refuses it: `UndeclaredStateError`, or `ReactiveWriteError` in a read-only action. It raises
@@ -376,6 +484,35 @@ Each runtime keeps a small callback-free plan LRU. Cache keys include semantic s
 assets, target/version/limits, chrome, reservation, presentation/position state, nav factory
 version, strictness, and search budget. Cache hits always recollect current callbacks,
 including planner-generated pager controls.
+
+## What each primitive promises
+
+Four primitives carry the whole model, and each owes one thing:
+
+    computed     repeatable synchronous derivation
+    resource     repeatable asynchronous derivation; safe to cancel and restart
+    operation    effectful execution; never implicitly restarted
+    action       atomic over reactive state and enlisted participants -- and nothing else
+
+The obligations are what make the rest follow. A loader may run zero times, once, or many
+times -- a hidden resource never loads, a moved dependency re-pends one that did, and a
+superseded load is discarded, or stopped outright where a host installs
+`abandon_superseded_loads` as `sl.discord` does -- so an irreversible effect inside a loader is
+programmer error, not a supported pattern. Supersession is not failure: `Failed` is reserved for a loader that
+raised. That is why effects belong in an operation, which the runtime never re-arms on its own;
+retrying is the author starting another execution.
+
+`action` is where the promise is narrowest and most often misread. **External effects are not
+rolled back.** An action is atomic over cells and over participants that enlisted in the commit
+gate, and a network call is neither. The supported shape is that the transaction commits the
+*intent* and an operation the action arms reaches the terminal outcome, which a later action
+records; `on_action_rollback` is how an author finds out that the effect already happened and
+the commit did not.
+
+The same narrowness explains why transactional state cannot be a loading indicator. Writing
+`self.saving = True` inside a handler stages it, so it is invisible until commit -- by which
+point it means nothing. `sl.Feedback` covers the fixed case from outside the transaction, and an
+operation's progress covers the author-controlled one, for the same reason.
 
 ## Actions and frontend adapters
 

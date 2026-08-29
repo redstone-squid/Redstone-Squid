@@ -33,7 +33,7 @@ and action rows, from the same semantic document.
 ## The layers
 
 1. **Semantic documents** describe author intent with `Section`, `Paragraph`, `List`,
-   `Fields`, `Table`, `Media`, `Details`, `Actions`, `Choices`, `Items`, and `Navigation`.
+   `Fields`, `Table`, `Roster`, `Media`, `Details`, `Actions`, `Choices`, `Items`, `Navigation`, and `Grid`.
    Authors may express a display preference and flexibility, but never an exact Discord shape.
    The lowercase factories (`sl.section`, `sl.actions`, `sl.field`, …) are the recommended
    authoring surface; the uppercase dataclasses are the IR they build and stay fully public.
@@ -102,6 +102,67 @@ Presentation colours are an immutable `sl.Palette`, supplied to `sl.planning.pla
 Semantic tones resolve through the palette. `sl.themed(palette, *children)` scopes an override to a
 subtree, so a component may select a palette from reactive state while the final scene still contains
 only exact colours. Discord buttons retain Discord's platform-owned style colours.
+
+### Host-owned ledgers and selectable grids
+
+Roster and tally declarations render domain data without taking ownership of it:
+
+```python
+placement = sl.patterns.place_roster(
+    tuple(sl.patterns.RosterEntry(str(member.id), member.name, member.team) for member in members),
+    (
+        sl.patterns.RosterSlot("builders", "Builders", capacity=4),
+        sl.patterns.RosterSlot("reviewers", "Reviewers", capacity=2),
+    ),
+    overflow=sl.patterns.RosterOverflow.WAITLIST,
+)
+roster = sl.roster(placement, key="teams", on_join=move_member)
+
+tally = sl.tally(
+    tuple(sl.patterns.TallyOption(option.key, option.label, counts[option.key]) for option in options),
+    key="poll",
+    on_vote=cast_vote,
+)
+```
+
+Grid cells are variadic, matching the other collection factories. The semantic factory
+preserves one callback contract while adapting its Discord shape:
+
+```python
+board = sl.grid(
+    sl.patterns.GridCell("a1", "A1"),
+    sl.patterns.GridCell("b1", "B1", available=False),
+    sl.patterns.GridCell("a2", "A2", tone=sl.Tone.SUCCESS),
+    sl.patterns.GridCell("b2", "B2"),
+    key="board",
+    columns=2,
+    on_pick=pick_cell,  # SelectionEvent.values contains the stable cell key
+)
+```
+
+Use `sl.discord.button_grid(*cells, ...)` only when exact button rows are part of the
+contract and exceeding Discord's row or message budget should be an error. Use
+`sl.semantic.TableDisplay.MATRIX` for a non-interactive dense matrix.
+
+`sl.patterns.Agreement` is a mounted, actor-keyed component. Its approval state ends with the
+mount and is never a substitute for a durable host ledger:
+
+```python
+participants = tuple(
+    sl.patterns.AgreementParticipant(str(member.id), member.name) for member in reviewers
+)
+agreement = sl.patterns.Agreement(
+    "Approve this release?",
+    participants,
+    require="all",
+    on_resolve=release,
+)
+mount = sl.discord.Mount(
+    agreement,
+    access=sl.discord.Users({member.id for member in reviewers}),
+    timeout=900,
+)
+```
 
 ### Discord component parity
 
@@ -297,10 +358,17 @@ have dedicated bounded retention. `profiler.snapshot()` returns frozen data, and
 objects. The profiler starts no tasks and performs no I/O; keep exporters under the host's own
 supervisor.
 
-The owner-only devtools cog adds `dev profile actions`, `dev profile queues`,
-`dev ui profile <mount-id>`, and `dev profile export`. Trace attributes may retain a mount ID in
-these bounded buffers, but mount IDs, topics, users, message IDs, route values, and form payloads
-never become aggregate keys.
+The owner-only devtools cog reads all of this back: `dev ui actions [limit]` for the bounded causal
+action ledger (including rollbacks even when profiling is disabled), `dev ui profile` for latency aggregates,
+`dev ui profile <mount-id>` for one mount's retained traces, `dev ui timeline [limit] [target]`
+for every retained dispatch in the order it happened, `dev ui queues` for the bus, and
+`dev ui export` for the whole snapshot as JSON. A timeline entry names the action key, the actor,
+the mount and the disposition, and `target` narrows it to `mount:<id>` or `actor:<user_id>`.
+
+Trace attributes may retain a mount ID and the acting user ID in these bounded buffers, and
+`dev ui export` will dump both. Neither ever becomes an aggregate key: mount IDs, topics, users,
+message IDs, route values, and form payloads are excluded from those by construction, so the
+unbounded half of the profiler stays free of identifiers.
 
 ## Interaction patterns and two shells
 
@@ -437,7 +505,7 @@ committed value until then, and a rollback is dropping the overlay.
 ### Action history
 
 History is opt-in and component-owned. Declare a bounded stack like state, then pass it to
-state-changing actions; the framework records the whole state delta only when the action commits:
+state-changing actions; the framework retains the whole immutable commit only when the action commits:
 
 ```python
 class Editor(sl.Component):
@@ -455,9 +523,21 @@ class Editor(sl.Component):
         self.title = "New title"
 ```
 
-For an action that also changes a database or API, call `self.history.record("Rename", undo=..., redo=...)`
-inside the handler. The framework restores component state; the supplied async callbacks reverse
-external work. A failed action creates no entry, and a new recorded action clears redo history.
+Undo and redo are new actions. Each ordinary state inverse requires the exact version written by the
+action; a later write to the same slot returns a typed conflict without changing anything, while later
+work elsewhere is preserved. Redo is derived from the committed undo and therefore uses its fresh
+versions. For an external effect, record a `CompensationSpec` whose operation receives an idempotency
+key. Compensation failure and external-success/local-conflict are visible as `FAILED` and
+`NEEDS_RECONCILIATION`; neither is described as rollback.
+
+Every admitted transaction has an `ActionContext` before middleware runs and produces exactly one immutable
+`ActionCommit` or `ActionRollback`. Commit, rollback, and outcome hooks run only after the transaction is dead.
+They cannot mutate it or change its result; use `aftermath.start_action(...)` for a separately identified recovery.
+Portable ledger snapshots retain IDs, causality, timing, classifications, and change counts—not state values,
+owners, tracebacks, or closures. See [the action ledger guide](../../docs/action-ledger.md) for the commit point,
+hook rules, compensation, and replicated-state examples.
+The coordinated breaking signatures and direct before/after examples are in
+[the Plan 68 migration guide](../../docs/plan68-migration.md).
 
 ### Shared state
 
@@ -479,15 +559,34 @@ state invalidates its one owner, while a namespace's publishes an address on the
 Every mount whose render read that field refreshes; a mount subscribes to exactly what it
 rendered, reconciled each time it stages one. The mount that *made* the write repaints in the
 click itself rather than waiting for the bus, so a panel writing shared state feels no
-different from one writing local state — and needs no reactor to do it. A field an action both read and
-wrote carries the value it read as a commit precondition, so a lost update raises
-`sl.runtime.SharedStateConflictError` rather than overwriting — derived from what the handler did, with
-no `compare_and_set` to remember. `sl.runtime.history` covers shared writes in the same entry as local
-ones and restores them blindly.
+different from one writing local state — and needs no reactor to do it. Every shared value an action
+strongly reads is guarded by its version when that action publishes anything, so write skew and
+A→B→A lineage changes raise `sl.runtime.ReactiveConflictError` rather than overwriting. A read is
+strong when the action also writes that cell, or when it was taken inside `strong_read()`; a
+read-only read is not validated by default. Use `relaxed_read()` to opt back out of a strong read;
+`untracked()` controls reactive subscription and is independent. History covers shared and local writes in one atomic,
+version-conditional inverse.
 
-There is no store: two panels converge because something gave them the same object, so the
-handle is the state and its lifetime is whoever holds it. Keep domain truth in your data layer;
-a namespace is for what only the screen wants.
+Collaborative/offline data is a separate optional `squid-replicated` package. `state()` and `Shared`
+remain transactional registers. Replicated handles expose immutable snapshots and semantic mutation
+methods, route local and remote changes through the same runtime commit gate, and never expose mutable
+backend containers.
+
+There is no global store and no lookup by type: two panels converge because something gave them
+the same object, so the handle is the state and its lifetime is whoever holds it. When what a host
+holds is one handle per scope, `sl.runtime.SharedPool` is that lifetime written down instead of a
+`setdefault` cache around every namespace:
+
+```python
+workspaces = sl.runtime.SharedPool(Workspace, bus)
+workspace = workspaces.get(guild.id)
+```
+
+`get` is get-or-create and synchronous; `get_existing`, `drop`, `clear` and `active` are the rest of
+it. Put the pool where the lifetime is — on the bot for the process, on a cog for the extension, on
+a session for that session. `squid_stores.PersistedPool` is the hydrating variant, `await load(scope)`
+for a namespace that should survive a restart. Keep domain truth in your data layer; a namespace is
+for what only the screen wants.
 
 ### Computed values
 
@@ -552,15 +651,21 @@ background work.
 new value without immediately loading it, and `replace(value)` publishes an authoritative local
 result. Resource state is runtime-only and is not included in durable component snapshots.
 
-### One-shot operations
+### Operation definitions and executions
 
-`sl.operation` is a component-bound effect that runs once under the mount's caller-owned task.
-Progress is explicit, reactive current state; it is not an event stream:
+`sl.operation` declares a repeatable component-bound definition. Each `start()` creates a fresh,
+causally identified one-shot execution under the mount's caller-owned task. Store the execution that
+the component renders; progress is explicit reactive current state, not an event stream:
 
 ```python
 class PublishVote(sl.Component):
+    publication: sl.operations.OperationExecution[VoteId, PublishProgress]
+
+    def __init__(self) -> None:
+        self.publication = self._publish.start()
+
     @sl.operation(initial=PublishProgress.CREATING)
-    async def publication(
+    async def _publish(
         self,
         progress: sl.operations.Progress[PublishProgress],
     ) -> VoteId:
@@ -579,8 +684,9 @@ class PublishVote(sl.Component):
                 return cancelled_vote(progress)
 ```
 
-Unlike a resource, an operation has no `reload`, `invalidate`, or `replace`: success, failure,
-and cancellation are terminal. Mounts coalesce progress invalidations through their ordinary
+Unlike a resource, an execution has no `reload`, `invalidate`, or `replace`: success, failure,
+and cancellation are terminal for that execution. A retry is `self._publish.start()` and receives a
+new execution ID while keeping the initiating action as its cause. Mounts coalesce progress invalidations through their ordinary
 stage/deliver/commit path while the operation runs. Resources remain repeatable and intentionally
 have no cancelled status; cancelling one load attempt leaves it pending and retryable.
 
@@ -620,11 +726,51 @@ range totals; offset-only sources get a range; keyset-only sources get no numeri
 declares no count must return `total=None`. Source-backed rankings are components because fetching stays
 outside planning and cannot run in `RouterShell.render()`.
 
+## Testing a panel with no Discord attached
+
+`sl.discord.testing` is public surface, not a private test helper. Send a mount to nowhere,
+then drive it through `Mount.dispatch` — the same funnel a real press takes, so access
+policies, guards, the action transaction and the repaint all run:
+
+```python
+from squid_layouts.discord.testing import commit_render, delivered_to, fake_interaction, fake_message
+
+mount = sl.discord.Mount(Settings(), access=sl.discord.Everyone())
+await mount.send(delivered_to(fake_message()))
+
+await mount.dispatch("save", fake_interaction(user_id=AUTHOR_ID))
+
+assert mount.component.saved
+```
+
+`commit_render(mount)` is the shortcut when the load path is not what is under test: it stages
+and commits a render with no delivery and does not run `on_load`. Modal submissions go through
+`Mount.dispatch_submit`. There is no `press("save")` sugar on purpose — `dispatch` is the real
+entry point, and a second spelling of it would be one more thing to keep true.
+
+The other half of the module checks the wire payload rather than the Python objects:
+`assert_within_limits(built)`, or `payload_problems` / `modal_problems` when a test wants the
+list rather than an assertion.
+
 ## Host integration rules
 
 - The base package depends only on the zero-dependency `squid-reactive` kernel. Install the
   `discord` extra for discord.py and anyio. The adapter never starts background work on its own;
   start `sl.discord.Reactor.run()` and any external bridge under your own supervisor.
+- `sl.discord.install(client)` performs the assembly whose construction is circular -- the
+  session registry, the challenge runner, and the dialog presenter that needs both -- and records
+  the `LayoutHost` against the client, so anything carrying that client reaches it again through
+  `LayoutHost.of(source)`. Once per client; a second install is refused.
+
+  ```python
+  host = sl.discord.install(bot, defaults=MountDefaults(chrome=CHROME), bus=topic_bus)
+  ```
+
+  **`install` starts nothing.** Nothing refreshes and no approved press resumes until
+  `host.run()` is supervised, or until `host.reactor.run()` and `host.challenges.run()` are
+  started as separate jobs -- which is what a host wanting per-job health granularity does.
+  `host.close()` ends it: every session is finished, and the client stops answering
+  `LayoutHost.of`.
 - Factories take content positionally and everything else by keyword. `None` and `False`
   children are skipped, so `cond and node` is the way to include something conditionally;
   `True` is rejected because `and` can never produce it. Collections are unpacked by the

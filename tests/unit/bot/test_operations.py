@@ -11,6 +11,7 @@ from squid.bot.operations import managed_result, run_command_operation
 from squid.bot.ui import info_node
 from squid_layouts.discord.testing import fake_message
 from squid_layouts.runtime.component import RenderResult
+from tests.helpers.discord import make_layout_bot
 
 
 def _target(message: object) -> tuple[Messageable, AsyncMock]:
@@ -28,7 +29,7 @@ async def test_command_operation_receives_the_initial_delivery_before_work_start
         progress.set(info_node("Working", "Halfway"))
         return info_node("Done", "Complete")
 
-    await run_command_operation(target, work)
+    await run_command_operation(target, work, source=make_layout_bot())
 
     assert seen == [message]
     send.assert_awaited_once()
@@ -44,7 +45,7 @@ async def test_command_operation_renders_and_rethrows_failure_once() -> None:
         raise error
 
     with pytest.raises(RuntimeError, match="private"):
-        await run_command_operation(target, fail)
+        await run_command_operation(target, fail, source=make_layout_bot())
 
     assert "Something went wrong" in str(message.edit.await_args.kwargs["view"].to_components())
     assert is_error_presented(error)
@@ -57,7 +58,7 @@ async def test_command_operation_suppresses_a_terminal_scene_equal_to_its_initia
     async def adopt_external_card(_progress, _receipt):
         return info_node("Working", "Getting information...")
 
-    await run_command_operation(target, adopt_external_card)
+    await run_command_operation(target, adopt_external_card, source=make_layout_bot())
 
     message.edit.assert_not_awaited()
 
@@ -65,7 +66,7 @@ async def test_command_operation_suppresses_a_terminal_scene_equal_to_its_initia
 async def test_managed_result_keeps_the_command_signature_and_renders_its_return_value() -> None:
     message = fake_message()
     send = AsyncMock(return_value=message)
-    ctx = SimpleNamespace(send=send, interaction=None, guild=None)
+    ctx = SimpleNamespace(bot=make_layout_bot(), send=send, interaction=None, guild=None)
     seen: list[tuple[object, int]] = []
 
     class Handler:

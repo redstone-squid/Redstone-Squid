@@ -31,8 +31,9 @@ from discord.ext.commands import Context
 
 import squid_layouts as sl
 from squid.bot.i18n import t
-from squid.bot.ui import error_layout, info_layout, reply_presentation, send_to
+from squid.bot.ui import error_layout, info_layout, reply_presentation
 from squid.core.i18n import _
+from squid_layouts.discord import send_to
 
 
 def personal(ctx: Context[Any]) -> bool:

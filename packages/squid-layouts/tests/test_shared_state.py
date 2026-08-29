@@ -11,7 +11,7 @@ import pytest
 
 from squid_layouts import Component, computed, state
 from squid_layouts.primitives import Text
-from squid_layouts.runtime import CellAddress, Shared, SharedStateConflictError, transaction
+from squid_layouts.runtime import CellAddress, ReactiveConflictError, Shared, transaction
 from squid_layouts.runtime.topics import LocalTopicBus
 
 
@@ -238,6 +238,35 @@ async def test_only_the_cells_that_moved_publish(bus: LocalTopicBus, here: Membe
     assert seen == [CellAddress(preferences, "theme")]
 
 
+async def test_an_in_place_mutation_publishes_with_its_action(bus: LocalTopicBus) -> None:
+    """`mutated()` is a write like any other, and a rolled-back one was never published.
+
+    The list itself keeps the appended item -- in place means in place -- but no other mount
+    is told to re-read a namespace on behalf of an action that failed.
+    """
+
+    class Draft(Shared):
+        body: list[str] = state(factory=list, opaque=True)
+
+    draft = Draft(bus)
+    seen: list[object] = []
+    bus.subscribe(CellAddress(draft, "body"), _record(seen))
+
+    with pytest.raises(RuntimeError, match="abort"), transaction():
+        draft.body.append("first")
+        draft.mutated(draft.body)
+        assert seen == [], "nothing is published while the action can still fail"
+        message = "abort"
+        raise RuntimeError(message)
+
+    assert seen == []
+
+    with transaction():
+        draft.body.append("second")
+        draft.mutated(draft.body)
+    assert seen == [CellAddress(draft, "body")]
+
+
 # --- Actions ----------------------------------------------------------------------------
 
 
@@ -302,7 +331,7 @@ def test_one_action_spans_several_namespaces(bus: LocalTopicBus, here: Member) -
 def test_a_read_and_written_cell_conflicts_when_it_moves(bus: LocalTopicBus, here: Member) -> None:
     workspace = Workspace(bus, here)
     conflict = r"Workspace\(Member\(user_id=1, guild_id=2\)\)\.filters"
-    with pytest.raises(SharedStateConflictError, match=conflict), transaction():
+    with pytest.raises(ReactiveConflictError, match=conflict), transaction():
         workspace.filters = (*workspace.filters, "mine")
         _write_from_elsewhere(workspace, "filters", ("theirs",))
     assert workspace.filters == ("theirs",), "the losing action published nothing"
@@ -342,27 +371,27 @@ def test_reading_a_staged_value_does_not_enter_the_read_set(bus: LocalTopicBus, 
 
 def test_a_later_write_does_not_clear_the_guard(bus: LocalTopicBus, here: Member) -> None:
     preferences = Preferences(bus, here)
-    with pytest.raises(SharedStateConflictError), transaction():
+    with pytest.raises(ReactiveConflictError), transaction():
         seen = preferences.theme
         preferences.theme = f"{seen}+"
         preferences.theme = "final"
         _write_from_elsewhere(preferences, "theme", "moved")
 
 
-def test_a_b_a_does_not_conflict(bus: LocalTopicBus, here: Member) -> None:
+def test_a_b_a_conflicts_by_version_lineage(bus: LocalTopicBus, here: Member) -> None:
     preferences = Preferences(bus, here)
-    with transaction():
+    with pytest.raises(ReactiveConflictError), transaction():
         seen = preferences.theme
         preferences.theme = f"{seen}!"
         _write_from_elsewhere(preferences, "theme", "dark")
         _write_from_elsewhere(preferences, "theme", "system")
-    assert preferences.theme == "system!"
+    assert preferences.theme == "system"
 
 
 def test_a_conflict_publishes_nothing_at_all(bus: LocalTopicBus, here: Member) -> None:
     preferences = Preferences(bus, here)
     workspace = Workspace(bus, here)
-    with pytest.raises(SharedStateConflictError), transaction():
+    with pytest.raises(ReactiveConflictError), transaction():
         workspace.selected = 9
         preferences.theme = f"{preferences.theme}!"
         _write_from_elsewhere(preferences, "theme", "dark")
@@ -376,7 +405,7 @@ def test_local_state_rolls_back_with_a_conflict(bus: LocalTopicBus, here: Member
         open: bool = state(default=False)
 
     panel = Panel()
-    with pytest.raises(SharedStateConflictError), transaction():
+    with pytest.raises(ReactiveConflictError), transaction():
         panel.open = True
         preferences.theme = f"{preferences.theme}!"
         _write_from_elsewhere(preferences, "theme", "dark")

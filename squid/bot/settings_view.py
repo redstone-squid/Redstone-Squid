@@ -406,14 +406,20 @@ class SettingsPanel(sl.Component):
         # a moderator who lost the permission mid-session may not reverse their own change.
         if not await self._may_event(event, SETTINGS_SERVER_EDIT):
             return
-        if (entry := await self.history.undo()) is not None:
-            await event.notice(L("Undid: {change}", change=entry.label))
+        result = await self.history.undo()
+        if result.applied and result.entry is not None:
+            await event.notice(L("Undid: {change}", change=result.entry.label))
+        elif result.status is sl.runtime.HistoryResultStatus.CONFLICT:
+            await event.notice(L(t"That change was modified elsewhere and cannot be undone safely."))
 
     async def _redo(self, event: sl.PressEvent) -> None:
         if not await self._may_event(event, SETTINGS_SERVER_EDIT):
             return
-        if (entry := await self.history.redo()) is not None:
-            await event.notice(L("Redid: {change}", change=entry.label))
+        result = await self.history.redo()
+        if result.applied and result.entry is not None:
+            await event.notice(L("Redid: {change}", change=result.entry.label))
+        elif result.status is sl.runtime.HistoryResultStatus.CONFLICT:
+            await event.notice(L(t"That change was modified elsewhere and cannot be redone safely."))
 
     async def _show_voting(self, event: sl.PressEvent) -> None:
         await self.open_voting()
@@ -436,8 +442,10 @@ class SettingsPanel(sl.Component):
         self._channels = {**self._channels, setting: channel_id}
         self.history.record(
             L("Changed {setting}", setting=L(SETTING_LABELS[setting])),
-            undo=lambda: self._write_channel(setting, previous),
-            redo=lambda: self._write_channel(setting, channel_id),
+            compensate=sl.runtime.CompensationSpec(
+                lambda _key: self._write_channel(setting, previous),
+                lambda commit: f"settings:{self._guild.id}:channel:{setting}:{commit.context.action_id}",
+            ),
         )
 
     async def _write_channel(self, setting: ScalarChannelSetting, channel_id: int | None) -> None:
@@ -454,8 +462,10 @@ class SettingsPanel(sl.Component):
         self.locale = locale or self.locale
         self.history.record(
             L(t"Changed the bot language"),
-            undo=lambda: self._write_locale(previous_override, previous_locale),
-            redo=lambda: self._write_locale(locale, locale or previous_locale),
+            compensate=sl.runtime.CompensationSpec(
+                lambda _key: self._write_locale(previous_override, previous_locale),
+                lambda commit: f"settings:{self._guild.id}:locale:{commit.context.action_id}",
+            ),
         )
 
     async def _write_locale(self, override: str | None, effective: str | None) -> None:
@@ -533,9 +543,13 @@ class SettingsPanel(sl.Component):
             return None
         return L(t"Build reviews are weighted by the network's own server, so these multipliers do not apply here.")
 
-    def mount(self) -> sl.discord.Mount:
+    def mount(self, *, source: sl.discord.host.HostSource) -> sl.discord.Mount:
         """Create the production mount with author lock and shared error handling."""
         self._mount = create_mount(
-            self, access=sl.discord.Owner(self._author_id), locale=self.locale, timeout=SESSION_SECONDS
+            self,
+            source=source,
+            access=sl.discord.Owner(self._author_id),
+            locale=self.locale,
+            timeout=SESSION_SECONDS,
         )
         return self._mount

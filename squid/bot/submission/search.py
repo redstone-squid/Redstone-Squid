@@ -218,7 +218,7 @@ class SearchCog[
             load_build=load_build,
             render_build=lambda build: self.bot.for_build(build).render_node(),
         )
-        mount = view.mount()
+        mount = view.mount(source=ctx)
         await mount.send(destination(ctx, locale=locale))
 
     @commands.hybrid_group(name="restrictions")
@@ -295,6 +295,7 @@ class SearchCog[
             navigator = sl.discord.navigation.Navigator(component)
             mount = create_mount(
                 navigator,
+                source=interaction,
                 access=sl.discord.Everyone(),
                 locale=locale,
                 timeout=300,

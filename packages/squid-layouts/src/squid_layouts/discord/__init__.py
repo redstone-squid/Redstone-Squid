@@ -16,7 +16,9 @@ from squid_layouts.discord import (
     devtools,
     durability,
     fragments,
+    grids,
     guards,
+    host,
     inspection,
     live,
     mount,
@@ -30,6 +32,7 @@ from squid_layouts.discord import (
     sessions,
     target,
     targets,
+    testing,
 )
 from squid_layouts.discord import (
     modal as modals,
@@ -52,6 +55,7 @@ from squid_layouts.discord.challenges import ChallengeRunner, DialogPresenter
 from squid_layouts.discord.composition import (
     Composition,
     compose,
+    render_item,
     render_static,
 )
 from squid_layouts.discord.conformance import conform
@@ -61,10 +65,19 @@ from squid_layouts.discord.defaults import (
 )
 from squid_layouts.discord.delivery import (
     Destination,
+    deliver_to,
+    edit_to,
     reply_to,
     respond_to,
+    send_to,
 )
 from squid_layouts.discord.fragments import contribute
+from squid_layouts.discord.grids import button_grid
+from squid_layouts.discord.host import (
+    LayoutHost,
+    LayoutHostMissing,
+    install,
+)
 from squid_layouts.discord.live import mounts
 from squid_layouts.discord.managed import (
     ErrorObserver,
@@ -159,6 +172,8 @@ __all__ = [
     "ErrorRenderer",
     "Everyone",
     "ExistingLayoutError",
+    "LayoutHost",
+    "LayoutHostMissing",
     "LimitViolationError",
     "ManagedDelivery",
     "ManagedError",
@@ -194,6 +209,7 @@ __all__ = [
     "actions",
     "adapter",
     "adopt",
+    "button_grid",
     "challenges",
     "classic",
     "classic_renderer",
@@ -201,12 +217,17 @@ __all__ = [
     "conform",
     "conformance",
     "contribute",
+    "deliver_to",
     "delivery",
     "devtools",
     "durability",
+    "edit_to",
     "fragments",
+    "grids",
     "guards",
+    "host",
     "inspection",
+    "install",
     "limits",
     "live",
     "modals",
@@ -219,6 +240,7 @@ __all__ = [
     "operations",
     "owned_mount",
     "presentation",
+    "render_item",
     "render_static",
     "renderer",
     "reply_to",
@@ -228,7 +250,9 @@ __all__ = [
     "routing",
     "run_managed_result",
     "screens",
+    "send_to",
     "sessions",
     "target",
     "targets",
+    "testing",
 ]

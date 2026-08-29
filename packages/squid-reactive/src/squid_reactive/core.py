@@ -10,14 +10,42 @@ reference points from reader to source, which is what lets a per-message compone
 collected while the state it read lives on.
 """
 
+import asyncio
 import functools
+import inspect
 import logging
+import threading
+import uuid
+import weakref
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from contextlib import contextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from datetime import UTC, datetime
 from typing import Any, ClassVar, Protocol, Self, overload
+
+from squid_reactive.actions import (
+    ActionCommit,
+    ActionContext,
+    ActionOutcome,
+    ActionRollback,
+    Aftermath,
+    ChangeSummary,
+    ConflictDetail,
+    ExceptionSummary,
+    ObservedRead,
+    ParticipantChange,
+    RollbackReason,
+    action_scope,
+    aftermath_callback,
+    current_action,
+    current_causality,
+    emit_aftermath_failure,
+    emit_outcome,
+    in_aftermath,
+    next_commit_sequence,
+)
 
 _log = logging.getLogger(__name__)
 
@@ -33,6 +61,17 @@ class ReactiveOwner(Protocol):
     def _state_rolled_back(self) -> None: ...
 
 
+class TransactionView(Protocol):
+    """Read-only access to the frozen overlay during participant preparation."""
+
+    def read_staged(self, target: CellTarget) -> SlotValue: ...
+
+    def read_committed(self, target: CellTarget) -> SlotValue: ...
+
+    @property
+    def context(self) -> ActionContext: ...
+
+
 class ActionParticipant[PreparedT](Protocol):
     """A subsystem that publishes its own writes when the action in flight commits.
 
@@ -45,7 +84,7 @@ class ActionParticipant[PreparedT](Protocol):
     fact of the signatures instead of an assertion inside a body.
     """
 
-    def prepare(self) -> PreparedT:
+    def prepare(self, view: TransactionView) -> PreparedT:
         """Validate the staged writes and return what `apply` needs, publishing none of them.
 
         Raise to abort the action: every participant is aborted, component state is
@@ -55,10 +94,13 @@ class ActionParticipant[PreparedT](Protocol):
     def apply(self, prepared: PreparedT) -> None:
         """Publish what `prepare` returned. Synchronous, and past the point of failure."""
 
-    def abort(self) -> None:
-        """Discard the staged writes. Called once, on rollback or a failed prepare."""
+    def describe_change(self, prepared: PreparedT) -> ParticipantChange | None:
+        """Return the participant's reversible token, or no history contribution."""
 
-    def finalize(self) -> None:
+    def abort(self, prepared: PreparedT | None, cause: BaseException) -> None:
+        """Discard staged work after failure. Called once in reverse participant order."""
+
+    def finalize(self, prepared: PreparedT) -> None:
         """React to a commit that has fully landed -- notify watchers, publish addresses.
 
         Every participant has applied by now, so a subscriber this wakes cannot observe a
@@ -68,6 +110,18 @@ class ActionParticipant[PreparedT](Protocol):
 
 class ReactiveWriteError(RuntimeError):
     """A state mutation was attempted inside a read-only action."""
+
+
+class ActionValidationError(ValueError):
+    """An admitted action failed application validation before publication."""
+
+
+class FrameworkIntegrityError(RuntimeError):
+    """An infallible publication adapter failed after the local commit point."""
+
+
+class FreshActionError(RuntimeError):
+    """A distinct action was requested after its admitting transaction staged work."""
 
 
 class UndeclaredStateError(RuntimeError):
@@ -90,12 +144,30 @@ class ReactiveCycleError(RuntimeError):
         super().__init__(message)
 
 
-class SharedStateConflictError(RuntimeError):
-    """An action read a shared cell, wrote it, and someone else moved it in between.
+class StaleReactiveContextError(RuntimeError):
+    """A transaction was written through from outside the scope or the task that owns it.
+
+    Two mistakes with one shape, because a transaction travels in a `ContextVar` and a task
+    inherits a copy of it. A task spawned inside a handler still holds the handler's
+    transaction after that `with` block has committed, so a write through it stages into an
+    action that is over. Sibling tasks under one `gather` hold the *same* transaction, and
+    interleaving their staging into one overlay makes what commits a matter of scheduling.
+
+    Reads are left alone either way: a closed transaction reads as though absent, which is
+    what its cells already say, and reading an open one from a branch is what branches do.
+    """
+
+
+class ReactiveConflictError(RuntimeError):
+    """An action's strong input or explicit inverse precondition moved before commit.
 
     Nothing was published: the action rolls back whole and travels the ordinary failed-handler
     path. A handler cannot catch this, because the check runs when its transaction exits.
     """
+
+    def __init__(self, detail: ConflictDetail, message: str) -> None:
+        self.detail = detail
+        super().__init__(message)
 
 
 def _equal(left: Any, right: Any) -> bool:
@@ -120,6 +192,43 @@ def _frozen(value: Any) -> Any:
 
 
 _CURRENT: ContextVar[_Transaction | None] = ContextVar("squid_reactive_transaction", default=None)
+_RELAXED_READS: ContextVar[int] = ContextVar("squid_reactive_relaxed_reads", default=0)
+_STRONG_READS: ContextVar[int] = ContextVar("squid_reactive_strong_reads", default=0)
+_INTERLEAVER: ContextVar[Callable[[str], None] | None] = ContextVar(
+    "squid_reactive_deterministic_interleaver", default=None
+)
+_INTERLEAVER_USERS = 0
+
+
+def _checkpoint(name: str) -> None:
+    if _INTERLEAVER_USERS == 0:
+        return
+    interleaver = _INTERLEAVER.get()
+    if interleaver is not None:
+        interleaver(name)
+
+
+def _current_task() -> object | None:
+    """The task a write is happening on, or `None` when nothing is running one.
+
+    Synchronous use has no tasks to confuse, so it reports `None` and every transaction
+    counts as confined to it.
+    """
+    try:
+        return asyncio.current_task()
+    except RuntimeError:
+        return None
+
+
+def _active() -> _Transaction | None:
+    """The transaction a *read* should consult: the open one, or none at all.
+
+    A closed transaction is not an error to read through -- it is simply over, and the cells
+    now hold what it decided. Answering `None` for one is what makes an inherited copy
+    harmless to a reader while `_write` stays loud about it.
+    """
+    current = _CURRENT.get()
+    return None if current is None or current.closed else current
 
 
 class _Cell:
@@ -132,16 +241,17 @@ class _Cell:
     presence rather than off a second cell type.
     """
 
-    __slots__ = ("address", "value", "version")
+    __slots__ = ("__weakref__", "address", "identity", "value", "version")
 
     def __init__(self, value: Any = _MISSING, version: int = 0, address: Any = None) -> None:
+        self.identity = uuid.uuid7()
         self.value = value
         self.version = version
         self.address = address
 
     def settle(self) -> int:
         """Return the version a reader should compare against. A cell is always settled."""
-        current = _CURRENT.get()
+        current = _active()
         if current is not None:
             entry = current.staged(self)
             if entry is not None:
@@ -156,7 +266,7 @@ class _Cell:
 
     def read(self) -> Any:
         """Return the value this reader should see, staged write included, and record it."""
-        current = _CURRENT.get()
+        current = _active()
         if current is not None:
             entry = current.staged(self)
             if entry is not None:
@@ -164,8 +274,8 @@ class _Cell:
                 # "what is the world", so it is not an observation and carries no precondition.
                 self.track(entry.version)
                 return entry.value
-            if self.address is not None:
-                current.observe(self)
+            if self.address is not None and _RELAXED_READS.get() == 0:
+                current.observe(self, strong=_STRONG_READS.get() > 0)
         self.track(self.version)
         return self.value
 
@@ -193,7 +303,7 @@ class _Cell:
 
 def _staged_value(cell: _Cell) -> Any:
     """This action's pending value for `cell`, or `_MISSING` if it has not written one."""
-    current = _CURRENT.get()
+    current = _active()
     if current is None:
         return _MISSING
     entry = current.staged(cell)
@@ -309,6 +419,37 @@ def untracked() -> Iterator[None]:
         _CONSUMER.reset(token)
 
 
+@contextmanager
+def relaxed_read() -> Iterator[None]:
+    """Read shared state without adding a commit-time consistency precondition.
+
+    Only reads a precondition would otherwise cover are affected: a cell this action also
+    writes, and any read taken inside :func:`strong_read`. Unlike :func:`untracked`, this
+    does not change reactive dependency tracking.
+    """
+    token = _RELAXED_READS.set(_RELAXED_READS.get() + 1)
+    try:
+        yield
+    finally:
+        _RELAXED_READS.reset(token)
+
+
+@contextmanager
+def strong_read() -> Iterator[None]:
+    """Require every shared read taken inside to still hold its version at commit.
+
+    The upgrade an action opts into when it branches on shared state it does not write --
+    read A, write B, and by default nothing says A was still true. Wrap the whole handler
+    body to make one action serializable over what it read; wrap one read to guard just that
+    one. :func:`relaxed_read` nested inside opts a read back out.
+    """
+    token = _STRONG_READS.set(_STRONG_READS.get() + 1)
+    try:
+        yield
+    finally:
+        _STRONG_READS.reset(token)
+
+
 @dataclass(slots=True)
 class _Staged:
     """One cell an action has written, holding both halves of the change.
@@ -327,60 +468,127 @@ class _Staged:
 
 
 @dataclass(frozen=True, slots=True)
-class StateChange:
-    """One declared attribute as an action found it and as it left it."""
+class SlotValue:
+    """A state slot value that distinguishes absence from a present ``None``."""
 
-    owner: ReactiveOwner
+    present: bool
+    value: Any = None
+
+    @classmethod
+    def from_raw(cls, value: Any) -> SlotValue:
+        return cls(value is not _MISSING, None if value is _MISSING else value)
+
+    def raw(self) -> Any:
+        return self.value if self.present else _MISSING
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class CellTarget:
+    """A weak runtime capability for one stable reversible state slot."""
+
+    _owner: weakref.ReferenceType[ReactiveOwner]
+    _cell: weakref.ReferenceType[_Cell]
     name: str
-    existed_before: bool
-    before: Any
-    existed_after: bool
-    after: Any
+    identity: str
+
+    def __init__(self, owner: ReactiveOwner, name: str, cell: _Cell) -> None:
+        object.__setattr__(self, "_owner", weakref.ref(owner))
+        object.__setattr__(self, "_cell", weakref.ref(cell))
+        object.__setattr__(self, "name", name)
+        object.__setattr__(self, "identity", f"slot:{cell.identity}")
+
+    def resolve(self, expected_version: int) -> tuple[ReactiveOwner, _Cell]:
+        """Return the live slot or report an expired conditional inverse."""
+        owner = self._owner()
+        cell = self._cell()
+        if owner is None or cell is None:
+            detail = ConflictDetail(self.identity, expected_version, -1)
+            raise ReactiveConflictError(detail, f"{self.identity} no longer exists; nothing was published")
+        return owner, cell
+
+    def live_cell(self) -> _Cell | None:
+        """Return the slot for non-mutating diagnostics, or ``None`` after collection."""
+        return self._cell()
 
 
 @dataclass(frozen=True, slots=True)
-class StateDelta:
-    """Every state write one action made, in both directions.
+class CellPatch:
+    """One state replacement with exact before/after version lineage."""
 
-    Restoring goes through the ambient transaction rather than around it, so an undo that
-    fails after this point rolls the restore back with everything else it did.
-    """
+    target: CellTarget
+    before: SlotValue
+    after: SlotValue
+    before_version: int
+    after_version: int
 
-    changes: tuple[StateChange, ...] = ()
+    def inverse(self) -> ConditionalCellPatch:
+        return ConditionalCellPatch(self.target, self.before, self.after_version)
+
+
+@dataclass(frozen=True, slots=True)
+class ConditionalCellPatch:
+    """A replacement applicable only while the target has the expected version."""
+
+    target: CellTarget
+    value: SlotValue
+    expected_version: int
+
+
+@dataclass(frozen=True, slots=True)
+class CellPatchSet:
+    """Immutable physical changes from one committed action."""
+
+    patches: tuple[CellPatch, ...] = ()
+
+    def __iter__(self) -> Iterator[CellPatch]:
+        return iter(self.patches)
+
+    def __len__(self) -> int:
+        return len(self.patches)
 
     def addresses(self) -> tuple[Any, ...]:
-        """Every shared cell address this action wrote, deduplicated, in write order.
-
-        What a frontend needs to answer "did this action change anything I am looking at",
-        which is a question about its own commit rather than about the bus. A component's
-        cell has no address and does not appear.
-        """
         found: list[Any] = []
         seen: set[int] = set()
-        for change in self.changes:
-            address = _cell_for(change.owner, change.name).address
+        for patch in self.patches:
+            cell = patch.target.live_cell()
+            address = None if cell is None else cell.address
             if address is None or id(address) in seen:
                 continue
             seen.add(id(address))
             found.append(address)
         return tuple(found)
 
-    def restore_before(self) -> None:
-        """Return every attribute to the value the action found."""
-        self._apply(before=True)
+    def inverse(self) -> tuple[ConditionalCellPatch, ...]:
+        return tuple(patch.inverse() for patch in reversed(self.patches))
 
-    def restore_after(self) -> None:
-        """Return every attribute to the value the action left."""
-        self._apply(before=False)
 
-    def _apply(self, *, before: bool) -> None:
-        ordered = tuple(reversed(self.changes)) if before else self.changes
-        for change in ordered:
-            existed = change.existed_before if before else change.existed_after
-            value = (change.before if before else change.after) if existed else _MISSING
-            # Nothing is copied on the way out either. A delta outlives its action and may be
-            # replayed, and an immutable value is safe to hand back as many times as asked.
-            _write(change.owner, change.name, _cell_for(change.owner, change.name), value)
+def apply_conditional_patches(patches: Sequence[ConditionalCellPatch]) -> None:
+    """Stage an all-or-nothing conditional patch set in the active transaction."""
+    current = _CURRENT.get()
+    if current is None or not current.writable():
+        message = "conditional patches require an active writable transaction"
+        raise RuntimeError(message)
+    resolved = tuple((patch, *patch.target.resolve(patch.expected_version)) for patch in patches)
+    for patch, _, cell in resolved:
+        current.require_version(cell, patch.expected_version)
+    for patch, owner, cell in resolved:
+        _write(owner, patch.target.name, cell, patch.value.raw())
+
+
+def apply_local_overwrite_patches(patches: Sequence[ConditionalCellPatch]) -> None:
+    """Stage an explicitly unsafe overwrite, refusing shared or participant-backed targets."""
+    current = _CURRENT.get()
+    if current is None or not current.writable():
+        message = "local overwrite patches require an active writable transaction"
+        raise RuntimeError(message)
+    resolved = tuple((patch, *patch.target.resolve(patch.expected_version)) for patch in patches)
+    for patch, _, cell in resolved:
+        if cell.address is None:
+            continue
+        detail = ConflictDetail(patch.target.identity, patch.expected_version, cell.version)
+        raise ReactiveConflictError(detail, "local overwrite policy cannot target Shared state")
+    for patch, owner, cell in resolved:
+        _write(owner, patch.target.name, cell, patch.value.raw())
 
 
 def _cell_for(owner: ReactiveOwner, name: str) -> _Cell:
@@ -403,6 +611,11 @@ def _write(owner: ReactiveOwner, name: str, cell: _Cell, value: Any) -> None:
     its construction lands immediately too.
     """
     current = _CURRENT.get()
+    if current is None and in_aftermath():
+        message = "direct reactive mutation in an aftermath hook is forbidden; use aftermath.start_action(...)"
+        raise ReactiveWriteError(message)
+    if current is not None and not current.writable():
+        current.reject_stale(f"{type(owner).__name__}.{name}")
     if current is None or not current.protects(owner):
         cell.write(value)
         owner._state_changed(frozenset((name,)))
@@ -413,17 +626,35 @@ def _write(owner: ReactiveOwner, name: str, cell: _Cell, value: Any) -> None:
 @dataclass(slots=True)
 class _Transaction:
     readonly: bool = False
+    closed: bool = False
+    """Whether this transaction has finished, successfully or not.
+
+    Set once the commit or the rollback is done, so a task still holding an inherited copy
+    finds out rather than staging into an action nobody will publish.
+    """
+    owner_task: object | None = None
+    """The task that opened this transaction, or `None` outside a running loop."""
     writes: dict[_Cell, _Staged] = field(default_factory=dict)
-    observed: dict[_Cell, Any] = field(default_factory=dict)
-    """Committed values this action read out of addressed cells, first read per cell.
+    observed: dict[_Cell, int] = field(default_factory=dict)
+    """Committed versions this action read out of addressed cells, first read per cell.
 
     Only shared cells are recorded, because only they can move under a running action.
+    Recorded whether or not the read carries a precondition, because the ledger reports what
+    an action looked at and that is true either way.
     """
+    strong: dict[_Cell, int] = field(default_factory=dict)
+    """The subset of `observed` taken inside `strong_read()`, which must still hold at commit."""
+    preconditions: dict[_Cell, int] = field(default_factory=dict)
     changed: dict[int, ReactiveOwner] = field(default_factory=dict)
     changed_names: dict[int, set[str]] = field(default_factory=dict)
     # Held by strong reference, so an id cannot be recycled while this transaction runs.
     born: dict[int, object] = field(default_factory=dict)
-    hooks: list[tuple[object | None, Callable[[StateDelta], None]]] = field(default_factory=list)
+    commit_hooks: list[tuple[object | None, Callable[[ActionCommit, Aftermath], None]]] = field(default_factory=list)
+    rollback_hooks: list[tuple[object | None, Callable[[ActionRollback, Aftermath], None]]] = field(
+        default_factory=list
+    )
+    outcome_hooks: list[tuple[object | None, Callable[[ActionOutcome, Aftermath], None]]] = field(default_factory=list)
+    context: ActionContext = field(default_factory=ActionContext.create)
     participants: dict[object, ActionParticipant[Any]] = field(default_factory=dict)
     applied: bool = False
     """Whether `publish` has put the staged values into the cells.
@@ -436,10 +667,38 @@ class _Transaction:
     """Whether the commit reached the point where this action's writes became visible."""
     write_block: str | None = None
     """Why state may not be written right now, while the transaction itself stays open."""
+    aborted: bool = False
+    cleanup_errors: list[ExceptionSummary] = field(default_factory=list)
+    prepared_participants: tuple[tuple[ActionParticipant[Any], Any], ...] = ()
+    commit_record: ActionCommit | None = None
 
     def note_born(self, owner: object) -> None:
         """Record an object created after this transaction began."""
         self.born[id(owner)] = owner
+
+    def writable(self) -> bool:
+        """Whether this caller may stage into this transaction at all.
+
+        Prior to every policy question `stage` asks: those are about what the action is
+        allowed to do, this is about whether the caller is part of the action.
+        """
+        return not self.closed and (self.owner_task is None or self.owner_task is _current_task())
+
+    def reject_stale(self, what: str) -> None:
+        """Refuse a write from a caller with no standing to make it, saying which mistake."""
+        if self.closed:
+            message = (
+                f"{what} was written through a transaction that has already finished. The write "
+                f"came from a task that outlived the action which opened it, so nothing would "
+                f"publish it: give the task an owner inside the handler, or write in the handler."
+            )
+        else:
+            message = (
+                f"{what} was written from a task other than the one that opened its transaction. "
+                f"Sibling tasks staging into one overlay make what commits depend on scheduling: "
+                f"write from the handler's own task, or give each branch its own transaction."
+            )
+        raise StaleReactiveContextError(message)
 
     def protects(self, owner: object) -> bool:
         """Whether this transaction is responsible for the owner's state.
@@ -453,32 +712,57 @@ class _Transaction:
         """This action's pending write to `cell`, if it has made one."""
         return self.writes.get(cell)
 
-    def observe(self, cell: _Cell) -> None:
+    def observe(self, cell: _Cell, *, strong: bool) -> None:
         """Note that this action looked at a shared cell's committed value.
 
         The first read is the one kept: a later write does not clear it, because the action
-        has already branched on what it saw.
+        has already branched on what it saw. `strong` marks a read taken inside
+        `strong_read()` and is kept separately, at the version *that* read returned: an
+        earlier unguarded read of the same cell was disclaimed by not being guarded, so it
+        cannot be what the commit requires.
         """
         if cell not in self.observed:
-            self.observed[cell] = cell.value
+            self.observed[cell] = cell.version
+        if strong and cell not in self.strong:
+            self.strong[cell] = cell.version
 
     def check_preconditions(self) -> None:
-        """Reject the action if a cell it both read and wrote no longer holds what it read.
+        """Reject a publishing action if any strong input or explicit precondition moved.
 
-        Compare-and-set, derived from what the handler did rather than declared beside it.
-        A cell that was only written carries no precondition, and last commit wins; a cell
-        that was only read carries none either, because nothing was lost by looking.
+        A read is strong -- it guards the commit -- when the action also wrote that cell, or
+        when it was taken inside `strong_read()`. Read-only reads carry no precondition by
+        default, because handlers routinely consult shared state for a decision and write
+        something unrelated, and aborting those costs more than the write skew it prevents.
+        `strong_read()` is how an action that does branch on shared state says so. Blind
+        writes remain last-commit-wins.
         """
-        for cell, seen in self.observed.items():
-            if cell not in self.writes or _equal(cell.value, seen):
+        _checkpoint("commit.before_validation")
+        if not (self.writes or self.participants):
+            _checkpoint("commit.after_validation")
+            return
+        required = {cell: version for cell, version in self.observed.items() if cell in self.writes}
+        required.update(self.strong)
+        required.update(self.preconditions)
+        for cell, version in required.items():
+            if cell.version == version:
                 continue
-            address = cell.address
+            detail = ConflictDetail(self.target_id(cell), version, cell.version)
             message = (
-                f"{address.owner!r}.{address.name} changed while this action was running: it "
-                f"was read and then written, and the value it read is no longer there. Nothing "
-                f"was published."
+                f"{detail.target_id} changed while this action was running: expected version "
+                f"{version}, found {cell.version}. Nothing was published."
             )
-            raise SharedStateConflictError(message)
+            raise ReactiveConflictError(detail, message)
+        _checkpoint("commit.after_validation")
+
+    def target_id(self, cell: _Cell) -> str:
+        return f"slot:{cell.identity}"
+
+    def require_version(self, cell: _Cell, version: int) -> None:
+        existing = self.preconditions.get(cell)
+        if existing is not None and existing != version:
+            detail = ConflictDetail(self.target_id(cell), existing, version)
+            raise ReactiveConflictError(detail, "incompatible inverse preconditions")
+        self.preconditions[cell] = version
 
     def stage(self, owner: ReactiveOwner, name: str, cell: _Cell, value: Any) -> None:
         """Hold a write until this action commits, so nothing else can read it meanwhile."""
@@ -500,11 +784,21 @@ class _Transaction:
         _bump_epoch()
 
     def publish(self) -> None:
-        """Make this action's writes visible. The staged version becomes the cell's, so a
-        reader that already sampled it inside the action stays valid across the commit."""
+        """Make this action's writes visible, never leaving a cell's version where it was.
+
+        The staged version is used where it still leads, so a reader that already sampled the
+        cell inside the action stays valid across the commit. It no longer leads once another
+        action published to the same cell while this one was staging: a blind write staged at
+        `version + 1` would then land on the version that action already took, and every
+        reader settled against it would keep reporting a value the cell no longer holds.
+        Last-commit-wins is about which value survives, not about standing still.
+        """
+        if not self.writes:
+            self.applied = True
+            return
         for entry in self.writes.values():
             entry.cell.value = entry.value
-            entry.cell.version = entry.version
+            entry.cell.version = max(entry.version, entry.cell.version + 1)
         self.applied = True
         _bump_epoch()
 
@@ -533,6 +827,8 @@ class _Transaction:
         The guards run on every call, not just the first: a participant enlisted before a
         `block_writes` region may not keep staging writes inside one.
         """
+        if not self.writable():
+            self.reject_stale("a transaction participant")
         if self.write_block is not None:
             raise ReactiveWriteError(self.write_block)
         if self.readonly:
@@ -545,63 +841,169 @@ class _Transaction:
         self.participants[key] = created
         return created
 
-    def delta(self) -> StateDelta:
-        """What this action changed, both directions, from the overlay it already holds."""
-        return StateDelta(
+    def patches(self) -> CellPatchSet:
+        """Freeze the physical slot lineage written by this action."""
+        if not self.writes:
+            return CellPatchSet()
+        return CellPatchSet(
             tuple(
-                StateChange(
-                    entry.owner,
-                    entry.name,
-                    entry.before is not _MISSING,
-                    None if entry.before is _MISSING else entry.before,
-                    entry.value is not _MISSING,
-                    None if entry.value is _MISSING else entry.value,
+                CellPatch(
+                    CellTarget(entry.owner, entry.name, entry.cell),
+                    SlotValue.from_raw(entry.before),
+                    SlotValue.from_raw(entry.value),
+                    entry.before_version,
+                    entry.version,
                 )
                 for entry in self.writes.values()
             )
         )
 
-    def commit(self) -> None:
-        """Publish the action, fallible half first.
+    def reads(self) -> tuple[ObservedRead, ...]:
+        return tuple(ObservedRead(self.target_id(cell), version) for cell, version in self.observed.items())
 
-        Everything that can fail runs while nothing is visible yet, so a caller that
-        catches this can still roll the whole action back. `published` marks the crossing:
-        past it the action has happened, and a later error is a failure to *report* it, not
-        a reason to undo it.
+    @contextmanager
+    def preparing(self) -> Iterator[None]:
+        """Re-enter this transaction's overlay, read-only, for the prepare phase.
 
-        Commit hooks run last for that reason. A recorder's effect can reach outside the
-        transaction, and a record describing an action that a later failure rolled back
-        would be worse than a missing one.
+        `transaction()` closes staging before the commit gate, so by the time a participant
+        is asked to validate what the action staged, an ordinary read answers with the
+        committed value instead -- the one thing prepare must not be told. Reinstating the
+        overlay is what makes "everything fallible happens before publication" true of reads
+        as well as of writes.
+
+        Read-only, through the two mechanisms that already exist. `block_writes` stops
+        anything staging a write or enlisting a further participant, so prepare cannot grow
+        the action it is validating. `relaxed_read` keeps these reads out of `observed`,
+        which is already frozen: `check_preconditions` has run and `reads()` is about to be
+        called, and neither should be told about a read the framework itself provoked.
         """
-        # Before publication, because the guard compares against the value another action
-        # left in the cell, and publishing would overwrite it with this action's own.
-        self.check_preconditions()
-        # Published before prepare, so a participant validates against the state the action
-        # actually left. Nothing awaits between here and `published`, so no other task can
-        # observe the window, and a failed prepare still rolls the whole action back.
-        self.publish()
-        prepared = [(participant, participant.prepare()) for participant in self.participants.values()]
-        delta = self.delta() if self.hooks else None
-        self.published = True
-        for participant, staged in prepared:
-            participant.apply(staged)
-        for owner in self.changed.values():
-            owner._state_changed(frozenset(self.changed_names[id(owner)]))
-        for participant in self.participants.values():
-            participant.finalize()
-        if delta is not None:
-            for _, callback in self.hooks:
-                callback(delta)
+        token = _CURRENT.set(self)
+        try:
+            with block_writes("a transaction participant cannot write while preparing"), relaxed_read():
+                yield
+        finally:
+            _CURRENT.reset(token)
 
-    def rollback(self) -> None:
-        for participant in self.participants.values():
+    def commit(self) -> ActionCommit:
+        """Prepare everything, publish synchronously, and return the immutable commit."""
+        self.check_preconditions()
+        view = _FrozenTransactionView(self)
+        prepared: list[tuple[ActionParticipant[Any], Any]] = []
+        try:
+            with self.preparing():
+                for participant in self.participants.values():
+                    _checkpoint("commit.before_participant_prepare")
+                    prepared.append((participant, participant.prepare(view)))
+                    _checkpoint("commit.after_participant_prepare")
+        except BaseException as error:
+            self.abort(error, prepared)
+            raise
+        self.prepared_participants = tuple(prepared)
+        changes = tuple(
+            change for participant, value in prepared if (change := participant.describe_change(value)) is not None
+        )
+        committed_at = datetime.now(UTC)
+        commit = ActionCommit(
+            self.context,
+            next_commit_sequence(),
+            committed_at,
+            committed_at - self.context.started_at,
+            self.reads(),
+            self.patches(),
+            changes,
+        )
+        self.commit_record = commit
+        _checkpoint("commit.before_publication")
+        self.publish()
+        _checkpoint("commit.after_cell_publication")
+        # Cell installation begins the infallible publication phase. An adapter that raises
+        # from apply has violated the participant contract; rolling cells back could not undo
+        # a participant that applied only partly, so preserve the committed diagnostic truth.
+        self.published = True
+        try:
+            for participant, value in prepared:
+                participant.apply(value)
+                _checkpoint("commit.after_participant_apply")
+        except BaseException:
+            _log.critical("an infallible transaction participant apply failed", exc_info=True)
+            raise
+
+        return commit
+
+    def finalize_commit(self) -> None:
+        """Notify reactive consumers after the commit gate, isolating aftermath failures."""
+        assert self.commit_record is not None
+        if not self.changed and not self.prepared_participants:
+            return
+        _checkpoint("aftermath.before_notification")
+        for owner in self.changed.values():
             try:
-                participant.abort()
-            except Exception:
-                # Whatever failed the action is the error worth propagating; a cleanup
-                # failure raised over it would hide why the action failed at all.
+                owner._state_changed(frozenset(self.changed_names[id(owner)]))
+            except Exception as error:
+                _log.exception("a reactive owner failed to process its committed state")
+                emit_aftermath_failure(
+                    self.commit_record,
+                    "notification",
+                    f"{type(owner).__qualname__}._state_changed",
+                    error,
+                )
+        for participant, value in self.prepared_participants:
+            _checkpoint("aftermath.before_participant_finalize")
+            try:
+                participant.finalize(value)
+            except Exception as error:
+                _log.exception("a transaction participant failed to finalize")
+                emit_aftermath_failure(
+                    self.commit_record,
+                    "participant_finalize",
+                    f"{type(participant).__qualname__}.finalize",
+                    error,
+                )
+
+    def abort(
+        self,
+        cause: BaseException,
+        prepared: Sequence[tuple[ActionParticipant[Any], Any]] | None = None,
+    ) -> tuple[ExceptionSummary, ...]:
+        if self.aborted:
+            return tuple(self.cleanup_errors)
+        self.aborted = True
+        _checkpoint("rollback.before_abort")
+        values = {
+            id(participant): value
+            for participant, value in (self.prepared_participants if prepared is None else prepared)
+        }
+        failures: list[ExceptionSummary] = []
+        for participant in reversed(tuple(self.participants.values())):
+            try:
+                participant.abort(values.get(id(participant)), cause)
+            except Exception as error:
+                summary = ExceptionSummary.capture(error)
+                failures.append(summary)
+                self.cleanup_errors.append(summary)
                 _log.exception("a transaction participant failed to abort")
         self.restore()
+        return tuple(failures)
+
+
+@dataclass(frozen=True, slots=True)
+class _FrozenTransactionView:
+    """The immutable overlay exposed only during participant preparation."""
+
+    transaction: _Transaction
+
+    @property
+    def context(self) -> ActionContext:
+        return self.transaction.context
+
+    def read_staged(self, target: CellTarget) -> SlotValue:
+        _, cell = target.resolve(-1)
+        staged = self.transaction.staged(cell)
+        return SlotValue.from_raw(cell.value if staged is None else staged.value)
+
+    def read_committed(self, target: CellTarget) -> SlotValue:
+        _, cell = target.resolve(-1)
+        return SlotValue.from_raw(cell.value)
 
 
 def report_undeclared_write(owner: object, name: str) -> None:
@@ -614,7 +1016,7 @@ def report_undeclared_write(owner: object, name: str) -> None:
     A component built during the action is exempt; assigning to something the action created
     is construction, not mutation.
     """
-    current = _CURRENT.get()
+    current = _active()
     if current is None or not current.protects(owner):
         return
     label = f"{type(owner).__name__}.{name}"
@@ -632,30 +1034,151 @@ def report_undeclared_write(owner: object, name: str) -> None:
     raise UndeclaredStateError(message)
 
 
+_COMMIT_GATE = threading.RLock()
+
+
+def _rollback_reason(error: BaseException, *, during_commit: bool) -> RollbackReason:
+    if isinstance(error, asyncio.CancelledError):
+        return RollbackReason.CANCELLED
+    if isinstance(error, ReactiveConflictError):
+        return RollbackReason.CONFLICT
+    if isinstance(error, ActionValidationError):
+        return RollbackReason.VALIDATION_FAILED
+    if during_commit:
+        return RollbackReason.PARTICIPANT_PREPARE_FAILED
+    return RollbackReason.HANDLER_EXCEPTION
+
+
+def _notify_hooks(
+    outcome: ActionOutcome,
+    hooks: Sequence[tuple[object | None, Callable[[Any, Aftermath], None]]],
+) -> None:
+    if not hooks:
+        return
+    aftermath = Aftermath(outcome)
+    with aftermath_callback():
+        for _, callback in hooks:
+            _checkpoint("aftermath.before_hook")
+            try:
+                result = callback(outcome, aftermath)
+                if inspect.isawaitable(result):
+                    if inspect.iscoroutine(result):
+                        result.close()
+                    message = "action aftermath hooks must be synchronous; start an operation instead"
+                    raise TypeError(message)  # noqa: TRY301
+            except Exception as error:
+                _log.exception("an action aftermath hook failed")
+                emit_aftermath_failure(
+                    outcome,
+                    "hook",
+                    getattr(callback, "__qualname__", type(callback).__qualname__),
+                    error,
+                )
+
+
+def _emit_commit(current: _Transaction, commit: ActionCommit) -> None:
+    emit_outcome(commit)
+    _notify_hooks(commit, current.commit_hooks)
+    _notify_hooks(commit, current.outcome_hooks)
+
+
+def _emit_rollback(current: _Transaction, error: BaseException, *, during_commit: bool) -> ActionRollback:
+    cleanup_errors = current.abort(error)
+    rolled_back_at = datetime.now(UTC)
+    rollback = ActionRollback(
+        current.context,
+        rolled_back_at,
+        rolled_back_at - current.context.started_at,
+        _rollback_reason(error, during_commit=during_commit),
+        current.reads(),
+        error.detail if isinstance(error, ReactiveConflictError) else None,
+        ExceptionSummary.capture(error),
+        ChangeSummary(len(current.writes), len(current.participants)),
+        cleanup_errors,
+    )
+    emit_outcome(rollback)
+    _notify_hooks(rollback, current.rollback_hooks)
+    _notify_hooks(rollback, current.outcome_hooks)
+    return rollback
+
+
 @contextmanager
-def transaction() -> Iterator[None]:
-    """Coalesce state writes and roll all of them back when the block raises."""
-    if _CURRENT.get() is not None:
+def transaction(*, action_context: ActionContext | None = None) -> Iterator[None]:
+    """Commit one identified action atomically or emit one immutable rollback outcome."""
+    outer = _CURRENT.get()
+    if outer is not None:
+        # Checked at the `with`, not at the first write inside it, so a task that inherited
+        # someone else's transaction is told where it went wrong rather than where it showed.
+        if not outer.writable():
+            outer.reject_stale("a nested transaction")
         yield
         return
-    current = _Transaction()
-    token = _CURRENT.set(current)
-    try:
-        yield
-    except BaseException:
+    causality = current_causality()
+    context = (
+        action_context
+        or current_action()
+        or ActionContext.create(
+            cause=None if causality is None else causality[0],
+            root_action_id=None if causality is None else causality[1],
+        )
+    )
+    current = _Transaction(owner_task=_current_task(), context=context)
+    with action_scope(context):
+        token = _CURRENT.set(current)
+        try:
+            _checkpoint("transaction.enter_body")
+            yield
+        except BaseException as error:
+            _CURRENT.reset(token)
+            current.closed = True
+            _emit_rollback(current, error, during_commit=False)
+            raise
         _CURRENT.reset(token)
-        current.rollback()
-        raise
-    # Reset before committing, not after: the commit notifies owners, and a notification
-    # that writes state must not be recorded by the transaction reporting on it.
-    _CURRENT.reset(token)
+        try:
+            _checkpoint("transaction.close_staging")
+            with _COMMIT_GATE:
+                commit = current.commit()
+        except BaseException as error:
+            current.closed = True
+            if current.published:
+                # Publication is the commit point. An apply failure is an adapter integrity
+                # defect, not a user rollback; retain the commit truth and fail loudly.
+                assert current.commit_record is not None
+                integrity_commit = replace(
+                    current.commit_record,
+                    tags=frozenset({RollbackReason.FRAMEWORK_INTEGRITY_FAILURE.value}),
+                )
+                emit_outcome(integrity_commit)
+                message = f"an infallible transaction adapter failed after the commit point: {error}"
+                raise FrameworkIntegrityError(message) from error
+            else:
+                _emit_rollback(current, error, during_commit=True)
+            raise
+        _checkpoint("commit.gate_released")
+        current.finalize_commit()
+        current.closed = True
+        _emit_commit(current, commit)
+
+
+@contextmanager
+def fresh_action_transaction(*, action_context: ActionContext) -> Iterator[None]:
+    """Start a distinct causal transaction while an empty admitting transaction is open.
+
+    Mounted undo/redo handlers are admitted inside the dispatch transaction. Suspending that
+    empty envelope lets the history operation remain a real action with its own identity. An
+    outer transaction that already staged work is rejected because committing the inner action
+    could not then be rolled back with the outer one.
+    """
+    outer = _CURRENT.get()
+    if outer is not None and (outer.writes or outer.participants or outer.preconditions):
+        message = "a fresh action cannot start after the admitting transaction staged changes"
+        raise FreshActionError(message)
+    token = _CURRENT.set(None)
     try:
-        current.commit()
-    except BaseException:
-        # A commit that failed before publication is an action that did not happen.
-        if not current.published:
-            current.rollback()
-        raise
+        with transaction(action_context=action_context):
+            yield
+    finally:
+        _CURRENT.reset(token)
 
 
 @contextmanager
@@ -667,49 +1190,76 @@ def batch() -> Iterator[None]:
 
 @contextmanager
 def readonly_transaction() -> Iterator[None]:
-    """Roll back and reject any state mutation within the block."""
+    """Run an identified read-only action and reject any state mutation."""
     if _CURRENT.get() is not None:
         message = "a read-only transaction cannot nest inside a writable transaction"
         raise RuntimeError(message)
-    current = _Transaction(readonly=True)
-    token = _CURRENT.set(current)
-    try:
-        yield
-    except BaseException:
+    causality = current_causality()
+    context = current_action() or ActionContext.create(
+        "read-only action",
+        cause=None if causality is None else causality[0],
+        root_action_id=None if causality is None else causality[1],
+    )
+    current = _Transaction(readonly=True, owner_task=_current_task(), context=context)
+    with action_scope(context):
+        token = _CURRENT.set(current)
+        try:
+            _checkpoint("transaction.enter_body")
+            yield
+        except BaseException as error:
+            _CURRENT.reset(token)
+            current.closed = True
+            _emit_rollback(current, error, during_commit=False)
+            raise
         _CURRENT.reset(token)
-        current.rollback()
-        raise
-    # Reset before committing, not after: the commit notifies owners, and a notification
-    # that writes state must not be recorded by the transaction reporting on it.
-    _CURRENT.reset(token)
-    try:
-        current.commit()
-    except BaseException:
-        # A commit that failed before publication is an action that did not happen.
-        if not current.published:
-            current.rollback()
-        raise
+        try:
+            _checkpoint("transaction.close_staging")
+            with _COMMIT_GATE:
+                commit = current.commit()
+        except BaseException as error:
+            current.closed = True
+            _emit_rollback(current, error, during_commit=True)
+            raise
+        _checkpoint("commit.gate_released")
+        current.finalize_commit()
+        current.closed = True
+        _emit_commit(current, commit)
 
 
-def on_action_commit(callback: Callable[[StateDelta], None], *, key: object | None = None) -> None:
-    """Hand `callback` the action's whole state delta if this transaction commits.
+def on_action_commit(callback: Callable[[ActionCommit, Aftermath], None], *, key: object | None = None) -> None:
+    """Run a failure-isolated synchronous callback after definitive commit."""
+    _add_action_hook("commit", callback, key=key)
 
-    The capture an undo entry needs is the one the transaction already took, completed with
-    the post-action values at commit. A rolled-back action never reaches here, so a recorder
-    needs no cleanup path. `key` identifies the recorder, and one recorder may register only
-    once per action -- two hooks from the same owner would describe the same delta twice.
-    """
+
+def on_action_rollback(callback: Callable[[ActionRollback, Aftermath], None], *, key: object | None = None) -> None:
+    """Run a failure-isolated callback after staged state is dead."""
+    _add_action_hook("rollback", callback, key=key)
+
+
+def on_action_outcome(callback: Callable[[ActionOutcome, Aftermath], None], *, key: object | None = None) -> None:
+    """Run a failure-isolated callback after either terminal outcome."""
+    _add_action_hook("outcome", callback, key=key)
+
+
+def _add_action_hook(kind: str, callback: Callable[..., None], *, key: object | None) -> None:
     current = _CURRENT.get()
     if current is None:
         message = "commit hooks are only available inside an action's transaction"
         raise RuntimeError(message)
+    if not current.writable():
+        current.reject_stale("a commit hook")
     if current.readonly:
         message = "a read-only action changed nothing, so it has nothing to record"
         raise ReactiveWriteError(message)
     if key is not None and has_action_hook(key):
         message = f"{key!r} already registered a commit hook for this action"
         raise RuntimeError(message)
-    current.hooks.append((key, callback))
+    hooks = {
+        "commit": current.commit_hooks,
+        "rollback": current.rollback_hooks,
+        "outcome": current.outcome_hooks,
+    }[kind]
+    hooks.append((key, callback))
 
 
 def join_action[ParticipantT: ActionParticipant[Any]](
@@ -739,9 +1289,15 @@ def action_participant(key: object) -> ActionParticipant[Any] | None:
 
 
 def has_action_hook(key: object) -> bool:
-    """Whether `key` already registered a commit hook for the action in flight."""
+    """Whether `key` already registered any outcome hook for the action in flight."""
     current = _CURRENT.get()
-    return current is not None and any(registered is key for registered, _ in current.hooks)
+    if current is None:
+        return False
+    return any(
+        registered is key
+        for hooks in (current.commit_hooks, current.rollback_hooks, current.outcome_hooks)
+        for registered, _ in hooks
+    )
 
 
 @contextmanager
@@ -830,8 +1386,22 @@ class _State:
         return cell is not None and (cell.value is not _MISSING or _staged_value(cell) is not _MISSING)
 
     def mutated(self, instance: ReactiveOwner) -> None:
-        """Note that the held value changed in place: the version moves, the value does not."""
-        self.cell(instance).touch()
+        """Note that the held value changed in place: the version moves, the value does not.
+
+        Staged like any other write when an action is open. The change to the object itself
+        is already irreversible -- that is what "in place" means -- but *saying so* is not,
+        and a version bump that lands immediately publishes a shared namespace to every
+        other mount from inside a transaction that may still fail.
+
+        Re-staging the value it already holds is what moves the version: `__set__` is
+        deliberately not used, because its settled-value check would see the same object and
+        decline the write it is being asked to record.
+        """
+        cell = self.cell(instance)
+        held = _staged_value(cell)
+        if held is _MISSING:
+            held = cell.value
+        _write(instance, self._name, cell, held)
 
     def __get__(self, instance: ReactiveOwner | None, owner: type | None = None) -> Any:
         if instance is None:
@@ -881,6 +1451,17 @@ class _State:
             if held is value if self.opaque else _equal(held, value):
                 return
         _write(instance, self._name, self.cell(instance), value)
+
+    def __delete__(self, instance: ReactiveOwner) -> None:
+        """Stage removal while retaining the slot's identity and version lineage."""
+        cell = instance.__dict__.get(self._name)
+        held = _MISSING if cell is None else _staged_value(cell)
+        if cell is not None and held is _MISSING:
+            held = cell.value
+        if cell is None or held is _MISSING:
+            message = f"{type(instance).__name__}.{self.public_name} was never assigned"
+            raise AttributeError(message)
+        _write(instance, self._name, cell, _MISSING)
 
 
 @overload
@@ -1346,7 +1927,7 @@ class Reactive:
 
     def __setattr__(self, name: str, value: Any) -> None:
         if (
-            _CURRENT.get() is not None
+            _active() is not None
             and name not in type(self)._reactive_internal_attributes
             and name not in type(self)._state_names
         ):
@@ -1369,7 +1950,12 @@ class Reactive:
         """Invalidate projections owned by this object, if it has any."""
 
     def mutated(self, collaborator: object) -> None:
-        """Signal an in-place change to the object held by one opaque state field."""
+        """Signal an in-place change to the object held by one opaque state field.
+
+        Inside an action the signal stages with it, so a handler that fails publishes no
+        notification and a namespace does not tell other mounts to re-read halfway through
+        a transaction that is about to roll back.
+        """
         with untracked():
             holders = [
                 (name, descriptor)
@@ -1384,5 +1970,6 @@ class Reactive:
             message = f"{type(self).__name__} holds {collaborator!r} in more than one field ({names})"
             raise TypeError(message)
         _, descriptor = holders[0]
+        # No notification of its own: the staged write carries one, delivered at the commit
+        # outside an action and at `finalize_commit` inside one.
         descriptor.mutated(self)
-        self._state_changed(frozenset((descriptor._name,)))

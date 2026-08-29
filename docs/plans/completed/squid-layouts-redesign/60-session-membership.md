@@ -1,18 +1,19 @@
-# 60 — Session membership: members and per-session capacity
+# 60 — Session membership: members, capacity, and per-member quota
 
 ## Status
 
 Shipped. Membership is `sessions.py`; the record protocol is `durability/session_records.py`;
 the durable path is `durability/runtime.py`; the worked consumer is `/layout lobby` in
-`squid/bot/layout_showcase.py`. This closes [90](90-deferred.md)'s "Participant tracking /
-shared sessions" entry on [34](../completed/squid-layouts-redesign/34-safe-session-runtime.md)
+`../../../../squid/bot/layout_showcase.py`. This closes [90](../../squid-layouts-redesign/90-deferred.md)'s "Participant tracking /
+shared sessions" entry on [34](34-safe-session-runtime.md)
 §B.4's terms.
 
-The build differs from the first draft in four places, and each difference is a section below:
+The build differs from the first draft in five places, and each difference is a section below:
 capacity is an `int` rather than a `ParticipantPolicy` (§2), the durable write follows `_attach`
-instead of fencing inside the lock (§4), the four result types collapsed to two (§3), and the
-worked consumer is a real command rather than a test fixture (§6). Writing that consumer found
-a framework defect the draft could not have predicted (§7).
+instead of fencing inside the lock (§4), the four result types collapsed to two (§3), the worked
+consumer is a real command rather than a test fixture (§6), and 34 §B.4's cross-session rule
+shipped after all, as a quota (§8). Writing that consumer found a framework defect the draft
+could not have predicted (§7).
 
 ## The problem
 
@@ -22,7 +23,11 @@ controlled how many users may participate in one session:
 ```text
 SessionPolicy  = how many sessions may occupy this key?
 capacity       = how many users may join this session?
+quota          = how many sessions in this family may one user hold?
 ```
+
+Membership is a many-to-many relation between users and sessions. `capacity` caps one axis and
+`quota` caps the other; §8 is the second.
 
 Worse, `SessionSummary.participants` carried no information. `Session.__init__` set it to
 `{actor_id}` and nothing ever changed it, so `victim.participants - {actor_id}` in
@@ -183,6 +188,46 @@ the lobby rendered its "closed" branch and stayed there. Fixed by indexing befor
 unindexing on an abandoned delivery. No amount of reading would have produced this; a test fixture
 that constructs its session first would not have either.
 
+## 8. The quota, which was nearly deferred a third time
+
+34 §B.4 also asked that admission be atomic across every scope a member occupies, so a session
+could refuse a user already in another one. The first pass recorded it as deferred on the series'
+usual bar — no consumer needs it. That was wrong, and the reasoning is worth keeping because the
+same mistake is easy to repeat: [59](59-shared-pool.md) shipped `SharedPool`, which adds no
+capability an application could not hand-roll, purely so hosts stop re-deriving one. The bar
+against *speculation* is not a bar against *completeness*. A library user building a game bot
+expects "one game at a time" in the box.
+
+Three findings shaped it.
+
+**It is not an index.** 34 said "index", and an index needs invalidating on finish, claim loss and
+recovery — the staleness argument that had justified framework ownership in the first place. A
+linear scan over live sessions cannot go stale, and the population is small. So the feature is a
+*lock*, not a data structure, and `SessionRegistry.sessions_for_member` is a public query worth
+having on its own: it answers "what is this user in right now?" for a jump-back affordance and for
+devtools, not only for the quota.
+
+**It binds at opening, not only at joining.** The opener joins by opening, so a rule enforced only
+in `join` is evaded by opening a second session. That is the argument for declaring the quota on
+the session rather than passing it per call the way `when=` is passed: a per-call predicate would
+have to be repeated at two call sites and kept in sync by hand, which is the load-bearing-comment
+failure [51](51-screens.md) was written about.
+
+**Opening cannot hold the lock across delivery**, because that is network I/O under a lock — the
+thing this whole plan has been avoiding. So the check before `mount.send` is advisory, sparing a
+doomed open its Discord message, and the authoritative check runs under the member lock at
+registration where the count and the append are one step. `test_racing_opens_for_one_user_admit_
+exactly_one` fails when the second check is removed; the advisory one alone loses the race.
+
+Locks are keyed by user and reuse the registry's refcounted lock table, so one user's concurrent
+admissions serialize while unrelated users never contend. The order is key lock → member lock →
+lifecycle lock, with no path taking them the other way.
+
+`domain` groups the sessions a quota counts, defaulting to `key.name`, which is right whenever the
+family is one screen. Set it explicitly when a family spans key names — a lobby and the match it
+becomes are one "game". Both fields persist, by the same argument that made capacity persistable,
+so a recovered session keeps counting.
+
 ## Not included
 
 - No invitation, role, team, ready-state, ban, or member-metadata model.
@@ -192,15 +237,17 @@ that constructs its session first would not have either.
 - No member-specific mount access changes.
 - No waiting queue when capacity is full.
 - No transfer of membership between sessions.
-- **No cross-session member index.** 34 §B.4 also asked that joining be atomic across every scope
-  a member occupies, so a session could refuse a user already in another one. That is the part
-  only the registry can do — per-session capacity needs one lock, this needs two — and it is a
-  lock-ordering problem with no consumer today. Recorded rather than dropped.
+- **No cross-process quota.** `store.inspect` is scoped by session key, so there is no "records
+  where user X is a member" query and a quota holds only across the sessions one registry owns.
+  Unlike keyed cardinality, which consults remote summaries at open, this does not survive
+  sharding. The multi-process answer is a per-user lease scope (`member:123:game`) in the durable
+  store; recorded, not built, because no deployment here is sharded.
 - No database schema migration; only versioned durable JSON payloads change.
 
 ## Verification
 
-`tests/test_sessions.py::TestMembership`, `tests/test_screens.py`,
+`tests/test_sessions.py::TestMembership`, `tests/test_sessions.py::TestQuota`,
+`tests/test_screens.py`,
 `tests/test_durable_runtime.py`, `tests/test_operations.py`, and
 `tests/unit/bot/test_layout_showcase.py::TestLobby`.
 

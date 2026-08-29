@@ -12,11 +12,12 @@ import squid_layouts as sl
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.routes.redstoner_roles import redstoner_roles, remove_redstoner_role
-from squid.bot.ui import render_presentation, reply_presentation, respond_presentation, send_to, text_layout
+from squid.bot.ui import render_presentation, reply_presentation, respond_presentation, text_layout
 from squid.bot.utils.permissions import check_is_home_server, hide_unless, requires
 from squid.community.domain import RedstonerDecisionKind
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import REDSTONER_PANEL_MANAGE, REDSTONER_ROLE_RESYNC
+from squid_layouts.discord import send_to
 
 if TYPE_CHECKING:
     import squid.bot.app

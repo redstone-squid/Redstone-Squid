@@ -10,11 +10,12 @@ from discord.ext import commands
 from discord.ext.commands import Cog, Command, Group
 
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.ui import CardField, CardSection, error_layout, help_layout, respond_presentation, send_to
+from squid.bot.ui import CardField, CardSection, error_layout, help_layout, respond_presentation
 from squid.config import BuildConfig
 from squid.core.i18n import _
 from squid.suggestions.application import candidate, rank
 from squid.suggestions.domain import MAX_SUGGESTIONS
+from squid_layouts.discord import send_to
 
 if TYPE_CHECKING:
     import squid.bot.app

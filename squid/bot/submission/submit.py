@@ -199,7 +199,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             locale=locale,
             on_submit=persist_draft,
         )
-        mount = component.mount()
+        mount = component.mount(source=interaction)
         delivered = await mount.send(sl.discord.respond_to(interaction, ephemeral=True, wait=True))
         # `wait=True` fetches the message back, and a delivery that produced none would have
         # raised. The form edits this message three times below, so it needs the handle.

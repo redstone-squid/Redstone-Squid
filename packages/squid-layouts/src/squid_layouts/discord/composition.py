@@ -4,7 +4,7 @@ import logging
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import cast
+from typing import Any, cast
 
 import discord
 
@@ -28,6 +28,7 @@ from squid_layouts.profiling import OperationRecorder, SpanRecorder
 from squid_layouts.runtime.component import Component
 from squid_layouts.runtime.presentation import PresentationSession
 from squid_layouts.scene.model import PlanResult, SceneComponentsV2
+from squid_layouts.semantic import LayoutNode
 from squid_layouts.sources import Position
 from squid_layouts.target_types import ComponentsV2Target, DiscordPyAdapter
 from squid_layouts.text import NEUTRAL, Localization
@@ -159,3 +160,37 @@ def render_static(
         strict=strict,
         reservation=reservation,
     ).presentation
+
+
+def render_item(
+    node: LayoutNode,
+    *,
+    target: Target[ComponentsV2Target, DiscordPyAdapter, SceneComponentsV2] = V2_TARGET,
+    chrome: Chrome = DEFAULT_CHROME,
+    localization: Localization = NEUTRAL,
+    palette: Palette = DEFAULT_PALETTE,
+    reservation: ResourceCost = EMPTY_RESERVATION,
+) -> discord.ui.Item[Any]:
+    """Render one node to a detached item, for composition into a host-assembled view.
+
+    Prefer `contribute`, which measures the host view and places the region atomically.
+    This is for a caller assembling the surrounding view itself and knowing its own budget,
+    which is what `reservation` states.
+
+    Detaching the item from the view the renderer built is legal only here: the renderer owns
+    that object, and it is discarded on the way out, so nothing half-built survives the call.
+
+    Raises:
+        DiscordModeError: The node rendered to no item at all.
+    """
+    presentation = render_static(
+        [node], target=target, chrome=chrome, localization=localization, palette=palette, reservation=reservation
+    )
+    layout = presentation.layout
+    children = layout.children
+    if not children:
+        message = "render_item needs a node that draws something; this one produced no item"
+        raise DiscordModeError(message)
+    item = children[0]
+    layout.remove_item(item)
+    return item

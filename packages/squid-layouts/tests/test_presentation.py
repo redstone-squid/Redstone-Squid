@@ -248,6 +248,12 @@ def _http_error() -> discord.HTTPException:
     return discord.HTTPException(response, {"code": 0, "message": "nope"})  # type: ignore[arg-type]
 
 
+def _stale_error() -> discord.HTTPException:
+    """Discord's way of saying the credentials behind a write are gone."""
+    response = SimpleNamespace(status=404, reason="not found")
+    return discord.HTTPException(response, {"code": 10015, "message": "Unknown Webhook"})  # type: ignore[arg-type]
+
+
 class _Replyable:
     """A `Context`-shaped double that records exactly what was asked of Discord."""
 
@@ -306,6 +312,72 @@ class TestDestinations:
 
         assert receipt.handle is not None
         assert receipt.handle.mode is V2
+
+    async def test_edit_to_writes_a_message_the_bot_already_owns(self) -> None:
+        message = fake_message()
+
+        receipt = await delivery.edit_to(message)(v2())
+
+        assert receipt.message is message
+        assert isinstance(message.edit.await_args.kwargs["view"], discord.ui.LayoutView)
+
+    async def test_edit_to_hands_back_a_handle_carrying_the_presentations_mode(self) -> None:
+        """The bare `handle_for` a host would reach for reads the flag, which is now stale."""
+        message = fake_message(components_v2=False)
+
+        receipt = await delivery.edit_to(message)(v2())
+
+        assert receipt.handle is not None
+        assert receipt.handle.mode is V2
+        assert delivery.handle_for(message).mode is DiscordMode.CLASSIC
+
+    async def test_edit_to_runs_the_transition_matrix_for_the_message_it_edits(self) -> None:
+        message = fake_message(components_v2=False)
+
+        await delivery.edit_to(message)(v2())
+
+        # The one transition with legacy fields to clear, chosen from the message's own flag.
+        assert message.edit.await_args.kwargs["content"] is None
+        assert message.edit.await_args.kwargs["embeds"] == []
+
+    async def test_edit_to_refuses_a_transition_discord_does_not_offer(self) -> None:
+        message = fake_message()
+
+        with pytest.raises(DiscordModeError):
+            await delivery.edit_to(message)(DiscordPresentation.classic(content="body"))
+
+        message.edit.assert_not_awaited()
+
+    async def test_edit_to_merges_host_files_ahead_of_the_presentations_own(self) -> None:
+        message = fake_message()
+        host = discord.File(io.BytesIO(b"host"), filename="host.txt")
+
+        await delivery.edit_to(message, files=[host])(v2(assets=(an_asset(),)))
+
+        attachments = message.edit.await_args.kwargs["attachments"]
+        assert [file.filename for file in attachments] == ["host.txt", "report.txt"]
+
+    async def test_edit_to_translates_expired_authority(self) -> None:
+        message = fake_message()
+        message.edit.side_effect = _stale_error()
+
+        with pytest.raises(delivery.StaleHandleError):
+            await delivery.edit_to(message)(v2())
+
+    async def test_deliver_to_answers_a_command_through_reply_to(self) -> None:
+        ctx = _Replyable()
+
+        receipt = await delivery.deliver_to(ctx, ephemeral=True)(v2())
+
+        assert ctx.sent["ephemeral"] is True
+        assert receipt.handle is not None
+
+    async def test_deliver_to_answers_an_interaction_through_respond_to(self) -> None:
+        interaction = fake_interaction(user_id=7)
+
+        await delivery.deliver_to(interaction, ephemeral=True, wait=False)(v2())
+
+        assert interaction.response.send_message.await_args.kwargs["ephemeral"] is True
 
 
 class _Channel:
