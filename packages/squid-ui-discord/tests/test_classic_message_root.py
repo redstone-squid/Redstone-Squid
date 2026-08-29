@@ -22,8 +22,8 @@ from squid_ui_discord.testing import (
     commit_classic_render,
     commit_render,
     delivered_to,
-    fake_interaction,
-    fake_message,
+    interaction_harness,
+    message_harness,
 )
 
 TARGETS = [pytest.param(DISCORD_V2_DPY27, id="v2"), pytest.param(DISCORD_V1_DPY27, id="classic")]
@@ -49,7 +49,7 @@ def message_root_for(target, **options) -> AnyMessageRoot:
 
 def message_for(target) -> Any:
     """A sent message already in the mode this target writes, as Discord would report it."""
-    return fake_message(components_v2=target is DISCORD_V2_DPY27)
+    return message_harness(components_v2=target is DISCORD_V2_DPY27)
 
 
 def render_for(target, message_root: AnyMessageRoot):
@@ -59,7 +59,7 @@ def render_for(target, message_root: AnyMessageRoot):
 
 def interaction_for(target, **options) -> Any:
     """An interaction arriving from a message in the mode this target writes."""
-    return fake_interaction(components_v2=target is DISCORD_V2_DPY27, **options)
+    return interaction_harness(components_v2=target is DISCORD_V2_DPY27, **options)
 
 
 class TestViewType:

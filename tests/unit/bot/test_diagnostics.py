@@ -17,7 +17,7 @@ from squid_ui_discord import (
     V2_LIMITS as LIMITS,
 )
 from squid_ui_discord import MessageRoot, Owner, Private
-from squid_ui_discord.testing import assert_within_limits, commit_render, fake_interaction
+from squid_ui_discord.testing import assert_within_limits, commit_render, interaction_harness
 from tests.helpers.discord import make_layout_bot
 
 
@@ -116,7 +116,7 @@ async def test_recent_list_offers_every_entry_for_opening() -> None:
 async def test_opening_a_listed_report_replaces_the_list_in_place() -> None:
     browser = make_screen((make_report("aaa111"),))
     message_root, _ = await message_root_browser(browser)
-    interaction = fake_interaction()
+    interaction = interaction_harness()
 
     await open_report(message_root, interaction, "aaa111")
 
@@ -160,7 +160,7 @@ async def test_paging_stops_at_both_ends() -> None:
     nav = [item for item in view.walk_children() if isinstance(item, discord.ui.Button) and item.custom_id]
     later = next(item for item in nav if ":__cursor_next" in (item.custom_id or ""))
     assert later.disabled  # opened at the end
-    interaction = fake_interaction()
+    interaction = interaction_harness()
     await message_root.dispatch("__cursor_next.traceback", interaction)
     interaction.response.defer.assert_awaited_once()  # nothing to advance to
 
@@ -197,7 +197,7 @@ async def test_every_page_fits_the_real_display_budget() -> None:
 async def test_choosing_a_report_attaches_its_full_text() -> None:
     browser = make_screen((make_report("aaa111"),))
     message_root, _ = await message_root_browser(browser)
-    interaction = fake_interaction()
+    interaction = interaction_harness()
 
     await open_report(message_root, interaction, "aaa111")
 
@@ -208,9 +208,9 @@ async def test_choosing_a_report_attaches_its_full_text() -> None:
 async def test_going_back_removes_the_attachment() -> None:
     browser = make_screen((make_report("aaa111"),))
     message_root, _ = await message_root_browser(browser)
-    opened = fake_interaction()
+    opened = interaction_harness()
     await open_report(message_root, opened, "aaa111")
-    interaction = fake_interaction()
+    interaction = interaction_harness()
     back_key = next(key for key in message_root._handlers if key.endswith("error-reports.back"))
 
     await message_root.dispatch(back_key, interaction)

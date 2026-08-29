@@ -11,7 +11,7 @@ import squid_ui as sl
 from squid_ui.runtime.shared import describe
 from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler
 from squid_ui_discord import testing as sd
-from squid_ui_discord.testing import delivered_to, fake_message
+from squid_ui_discord.testing import delivered_to, message_harness
 
 
 class Prefs(sl.runtime.SharedState[int]):
@@ -97,7 +97,7 @@ async def test_a_message_root_reading_a_namespace_computed_follows_the_cells_beh
         def render(self):
             return sl.paragraph(prefs.full)
 
-    message = fake_message()
+    message = message_harness()
     message_root = MessageRoot(Panel(), access=Everyone(), scheduler=scheduler, timeout=None)
     await message_root.send(delivered_to(message))
 
@@ -120,7 +120,7 @@ async def test_one_namespace_resource_loads_once_for_every_message_root_holding_
     scheduler = MessageRootScheduler(bus)
     catalog = Catalog(bus, 1)
 
-    message_roots = [await mounted(catalog, scheduler, fake_message(message_id=message_id)) for message_id in (1, 2)]
+    message_roots = [await mounted(catalog, scheduler, message_harness(message_id=message_id)) for message_id in (1, 2)]
 
     assert catalog._loads == 1, "the second mount shared the value rather than loading its own"
     assert len(message_roots) == 2
@@ -130,7 +130,7 @@ async def test_a_namespace_resource_is_followed_by_its_own_address(bus: sl.runti
     scheduler = MessageRootScheduler(bus)
     catalog = Catalog(bus, 1)
     message_root = MessageRoot(Reader(catalog), access=Everyone(), scheduler=scheduler, timeout=None)
-    await message_root.send(delivered_to(fake_message()))
+    await message_root.send(delivered_to(message_harness()))
 
     followed = {describe(address) for address in message_root.followed}
 
@@ -142,7 +142,7 @@ async def test_a_namespace_resource_is_followed_by_its_own_address(bus: sl.runti
 async def test_an_out_of_band_reload_redraws_every_root(bus: sl.runtime.LocalTopicBus) -> None:
     scheduler = MessageRootScheduler(bus)
     catalog = Catalog(bus, 1)
-    messages = [fake_message(message_id=1), fake_message(message_id=2)]
+    messages = [message_harness(message_id=1), message_harness(message_id=2)]
     message_roots = [await mounted(catalog, scheduler, message) for message in messages]
 
     await catalog.entries.reload()
@@ -155,7 +155,7 @@ async def test_an_out_of_band_reload_redraws_every_root(bus: sl.runtime.LocalTop
 async def test_a_write_to_a_cell_the_loader_read_reloads_once_for_everyone(bus: sl.runtime.LocalTopicBus) -> None:
     scheduler = MessageRootScheduler(bus)
     catalog = Catalog(bus, 1)
-    messages = [fake_message(message_id=1), fake_message(message_id=2)]
+    messages = [message_harness(message_id=1), message_harness(message_id=2)]
     message_roots = [await mounted(catalog, scheduler, message) for message in messages]
 
     with sl.runtime.transaction():
@@ -171,7 +171,7 @@ async def test_a_write_to_a_cell_the_loader_read_reloads_once_for_everyone(bus: 
 async def test_a_replace_publishes_when_its_action_commits(bus: sl.runtime.LocalTopicBus) -> None:
     scheduler = MessageRootScheduler(bus)
     catalog = Catalog(bus, 1)
-    message = fake_message()
+    message = message_harness()
     message_root = await mounted(catalog, scheduler, message)
 
     with sl.runtime.transaction():
@@ -186,7 +186,7 @@ async def test_a_rolled_back_replace_publishes_nothing(bus: sl.runtime.LocalTopi
     """Doc 48 staging, seen from the bus: an action that failed must not wake other mounts."""
     scheduler = MessageRootScheduler(bus)
     catalog = Catalog(bus, 1)
-    message = fake_message()
+    message = message_harness()
     message_root = await mounted(catalog, scheduler, message)
     edits = message.edit.await_count
 

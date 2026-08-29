@@ -20,7 +20,7 @@ from squid_ui_discord.devtools_runtime import (
 from squid_ui_discord.durability import PurgeResult
 from squid_ui_discord.message_root_scheduler import MessageRootSchedulerSnapshot
 from squid_ui_discord.sessions import Opened
-from squid_ui_discord.testing import delivered_to, fake_message
+from squid_ui_discord.testing import delivered_to, message_harness
 
 
 class Panel(sl.Component[sl.ComponentsV2Target]):
@@ -34,7 +34,7 @@ class Panel(sl.Component[sl.ComponentsV2Target]):
 async def open_panel(registry: SessionManager, *, key: SessionKey | None = None) -> Opened:
     result = await registry.open(
         squid_ui_discord.MessageRoot(Panel(), access=Everyone(), timeout=None),
-        delivered_to(fake_message()),
+        delivered_to(message_harness()),
         key=key,
     )
     assert isinstance(result, Opened)
@@ -60,7 +60,7 @@ async def test_session_inspection_reports_membership_and_capacity() -> None:
     registry = SessionManager()
     opened = await registry.open(
         squid_ui_discord.MessageRoot(Panel(), access=Everyone(), timeout=None),
-        delivered_to(fake_message()),
+        delivered_to(message_harness()),
         key=SessionKey.global_("devtools"),
         actor_id=7,
         capacity=3,

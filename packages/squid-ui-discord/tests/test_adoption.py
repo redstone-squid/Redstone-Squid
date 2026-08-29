@@ -34,7 +34,7 @@ from squid_ui.primitives import (
 from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord.adoption import AdoptionError, adopt
 from squid_ui_discord.message_root_wiring import _EntityValues
-from squid_ui_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
+from squid_ui_discord.testing import commit_render, delivered_to, interaction_harness, message_harness
 
 
 class Paginator(discord.ui.View):
@@ -245,7 +245,7 @@ async def test_layout_view_dispatches_original_callback_and_reconstructs_the_tre
     button.callback = callback
     layout.add_item(discord.ui.Container(text, discord.ui.ActionRow(button)))
     message_root, errors = _mounted_layout(layout)
-    interaction = fake_interaction()
+    interaction = interaction_harness()
 
     await message_root.dispatch("run", interaction)
 
@@ -387,7 +387,7 @@ async def test_keys_override_both_defaults() -> None:
 async def test_the_paginator_re_renders_and_disables_with_no_http_of_its_own() -> None:
     view = Paginator()
     message_root, errors = _mounted(view)
-    interaction = fake_interaction()
+    interaction = interaction_harness()
 
     await message_root.dispatch("next", interaction)
 
@@ -400,7 +400,7 @@ async def test_the_paginator_re_renders_and_disables_with_no_http_of_its_own() -
     assert [button.label for button in buttons] == ["Previous", "Next"]
     assert [button.disabled for button in buttons] == [False, False]
 
-    await message_root.dispatch("next", fake_interaction())
+    await message_root.dispatch("next", interaction_harness())
 
     assert view.page == 2
     assert view.next.disabled
@@ -420,7 +420,7 @@ async def test_a_string_selects_values_reach_the_legacy_callback() -> None:
 
     message_root, errors = _mounted(Picker())
 
-    await message_root.dispatch("pick", fake_interaction(), ["b"])
+    await message_root.dispatch("pick", interaction_harness(), ["b"])
 
     assert seen == [["b"]]
 
@@ -437,7 +437,7 @@ async def test_an_entity_selects_resolved_objects_reach_the_legacy_callback() ->
     message_root, errors = _mounted(Picker())
     member = discord.Object(id=5)
 
-    await message_root.dispatch("who", fake_interaction(), _EntityValues((EntityRef(EntityKind.USER, 5),), (member,)))
+    await message_root.dispatch("who", interaction_harness(), _EntityValues((EntityRef(EntityKind.USER, 5),), (member,)))
 
     assert seen == [[member]]
 
@@ -452,7 +452,7 @@ async def test_editing_with_a_different_view_refuses() -> None:
             await interaction.response.edit_message(view=discord.ui.View(timeout=None))
 
     message_root, errors = _mounted(Swapper())
-    await message_root.dispatch("go", fake_interaction())
+    await message_root.dispatch("go", interaction_harness())
 
     assert isinstance(errors[0], AdoptionError)
     assert "different screen" in str(errors[0])
@@ -465,7 +465,7 @@ async def test_editing_with_a_payload_the_message_root_owns_refuses() -> None:
             await interaction.response.edit_message(content="hello", view=self)
 
     message_root, errors = _mounted(Chatty())
-    await message_root.dispatch("go", fake_interaction())
+    await message_root.dispatch("go", interaction_harness())
 
     assert isinstance(errors[0], AdoptionError)
     assert "content" in str(errors[0])
@@ -491,7 +491,7 @@ async def test_the_second_writer_calls_all_refuse() -> None:
         errors: list[BaseException] = []
         message_root.on_error = _record(errors)
 
-        await message_root.dispatch(key, fake_interaction())
+        await message_root.dispatch(key, interaction_harness())
 
         assert isinstance(errors[0], AdoptionError), key
         assert fragment in str(errors[0]), key
@@ -504,7 +504,7 @@ async def test_an_unsupported_response_call_refuses_by_name() -> None:
             await interaction.response.pong()
 
     message_root, errors = _mounted(Odd())
-    await message_root.dispatch("go", fake_interaction())
+    await message_root.dispatch("go", interaction_harness())
 
     assert isinstance(errors[0], AdoptionError)
     assert "pong" in str(errors[0])
@@ -524,12 +524,12 @@ async def test_defer_and_ephemeral_send_message_go_through_the_responder() -> No
             await interaction.response.send_message("only you", ephemeral=True)
 
     message_root, errors = _mounted(Answering())
-    deferred = fake_interaction()
+    deferred = interaction_harness()
     await message_root.dispatch("defer", deferred)
     assert deferred.response.defer.await_count == 1
 
     message_root, errors = _mounted(Answering())
-    noticed = fake_interaction()
+    noticed = interaction_harness()
     await message_root.dispatch("notice", noticed)
     assert noticed.response.send_message.await_args.kwargs["ephemeral"] is True
 
@@ -546,7 +546,7 @@ async def test_is_done_reports_the_swallowed_edit() -> None:
 
     message_root, errors = _mounted(Checking())
 
-    await message_root.dispatch("go", fake_interaction())
+    await message_root.dispatch("go", interaction_harness())
 
     assert seen == [False, True]
 
@@ -559,7 +559,7 @@ async def test_followup_passes_through_after_acknowledging_the_real_interaction(
             await interaction.followup.send("aside", ephemeral=True)
 
     message_root, errors = _mounted(Talkative())
-    interaction = fake_interaction()
+    interaction = interaction_harness()
 
     await message_root.dispatch("go", interaction)
 
@@ -579,9 +579,9 @@ async def test_stop_inside_a_callback_finishes_the_root() -> None:
             self.stop()
 
     message_root = MessageRoot(adopt(Closing()), access=Everyone(), timeout=None)
-    await message_root.send(delivered_to(fake_message()))
+    await message_root.send(delivered_to(message_harness()))
 
-    await message_root.dispatch("done", fake_interaction())
+    await message_root.dispatch("done", interaction_harness())
 
     assert message_root.finished
 
@@ -599,7 +599,7 @@ async def test_an_overridden_interaction_check_can_refuse_the_press() -> None:
 
     message_root, errors = _mounted(Guarded())
 
-    await message_root.dispatch("go", fake_interaction())
+    await message_root.dispatch("go", interaction_harness())
 
     assert ran == []
 
@@ -618,7 +618,7 @@ async def test_a_refusing_interaction_check_still_reports_mutation_and_finishes(
     view = Guarded()
     message_root, errors = _mounted(view)
 
-    await message_root.dispatch("go", fake_interaction())
+    await message_root.dispatch("go", interaction_harness())
 
     button = view.children[0]
     assert isinstance(button, discord.ui.Button)
@@ -643,7 +643,7 @@ async def test_an_interaction_check_error_uses_the_legacy_error_hook() -> None:
 
     message_root, errors = _mounted(Failing())
 
-    await message_root.dispatch("go", fake_interaction())
+    await message_root.dispatch("go", interaction_harness())
 
     assert [type(error) for error in caught] == [RuntimeError]
     assert errors == []
@@ -660,7 +660,7 @@ async def test_without_a_legacy_error_hook_an_interaction_check_error_reaches_th
 
     message_root, errors = _mounted(Failing())
 
-    await message_root.dispatch("go", fake_interaction())
+    await message_root.dispatch("go", interaction_harness())
 
     assert [type(error) for error in errors] == [RuntimeError]
 
@@ -677,7 +677,7 @@ async def test_an_overridden_on_error_intercepts_before_the_message_root_sees_it
             raise RuntimeError("legacy")
 
     message_root, errors = _mounted(Failing())
-    await message_root.dispatch("go", fake_interaction())
+    await message_root.dispatch("go", interaction_harness())
 
     assert [type(error) for error in caught] == [RuntimeError]
     assert errors == []
@@ -692,7 +692,7 @@ async def test_without_an_override_the_error_reaches_the_mounts_hook() -> None:
 
     view = Failing()
     message_root, errors = _mounted(view)
-    await message_root.dispatch("go", fake_interaction())
+    await message_root.dispatch("go", interaction_harness())
 
     assert [type(error) for error in errors] == [RuntimeError]
     # `mutated` cannot roll an in-place write back, and the docstring says so rather than
@@ -726,13 +726,13 @@ async def test_a_modal_submit_refreshes_the_message_root_and_issues_no_edit_of_i
 
     view = Named()
     message_root = MessageRoot(adopt(view), access=Everyone(), timeout=None)
-    await message_root.send(delivered_to(fake_message()))
-    press = fake_interaction()
+    await message_root.send(delivered_to(message_harness()))
+    press = interaction_harness()
 
     await message_root.dispatch("rename", press)
 
     modal = press.response.send_modal.await_args.args[0]
-    submit = fake_interaction()
+    submit = interaction_harness()
     await modal.on_submit(submit)
 
     assert view.name == "renamed"
@@ -750,7 +750,7 @@ async def test_a_modal_after_the_response_is_spent_refuses_with_an_adoption_erro
             await interaction.response.send_modal(discord.ui.Modal(title="too late"))
 
     message_root, errors = _mounted(Late())
-    await message_root.dispatch("go", fake_interaction())
+    await message_root.dispatch("go", interaction_harness())
 
     assert isinstance(errors[0], AdoptionError)
     assert "first response" in str(errors[0])
@@ -761,7 +761,7 @@ async def test_a_modal_after_the_response_is_spent_refuses_with_an_adoption_erro
 
 async def test_the_adopted_scene_conforms_strictly() -> None:
     message_root, errors = _mounted(Paginator())
-    interaction = fake_interaction()
+    interaction = interaction_harness()
 
     await message_root.dispatch("next", interaction)
 
@@ -779,7 +779,7 @@ async def test_an_adopted_view_embeds_in_a_larger_squid_screen() -> None:
 
     message_root = MessageRoot(Screen(adopt(Paginator())), access=Everyone(), timeout=None)
     commit_render(message_root)
-    interaction = fake_interaction()
+    interaction = interaction_harness()
 
     await message_root.dispatch("legacy.next", interaction)
 

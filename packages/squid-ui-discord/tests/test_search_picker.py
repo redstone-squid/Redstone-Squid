@@ -14,7 +14,7 @@ import discord
 import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui_discord import Everyone, MessageRoot
-from squid_ui_discord.testing import commit_render, fake_interaction
+from squid_ui_discord.testing import commit_render, interaction_harness
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,7 +51,7 @@ async def _search(message_root: MessageRoot, lookup: sp.SearchPicker[Entry], que
     spec = sl.forms.FormSpec("Search", (sl.forms.TextField(key="query", label="Search"),))
     await message_root.dispatch_submit(
         "lookup.search",
-        fake_interaction(),
+        interaction_harness(),
         spec,
         {"query": query},
         lookup._searched,
@@ -67,12 +67,12 @@ async def test_lookup_searches_picks_resolved_items_and_removes_them() -> None:
 
     assert isinstance(lookup.results.status, sl.resources.Ready)
     commit_render(message_root)
-    await message_root.dispatch("lookup.results.a", fake_interaction())
+    await message_root.dispatch("lookup.results.a", interaction_harness())
     assert lookup.picked == (Entry("a", "Alpha"),)
     assert commits == [(Entry("a", "Alpha"),)]
 
     commit_render(message_root)
-    await message_root.dispatch("lookup.remove.a", fake_interaction())
+    await message_root.dispatch("lookup.remove.a", interaction_harness())
     assert lookup.picked == ()
     assert commits[-1] == ()
 
@@ -85,7 +85,7 @@ async def test_single_lookup_replaces_and_minimum_gates_removal() -> None:
 
     await _search(message_root, lookup, "Beta")
     commit_render(message_root)
-    await message_root.dispatch("lookup.results", fake_interaction(), ["b"])
+    await message_root.dispatch("lookup.results", interaction_harness(), ["b"])
 
     assert lookup.picked == (Entry("b", "Beta"),)
     assert commits == [(Entry("b", "Beta"),)]
@@ -106,7 +106,7 @@ async def test_lookup_pages_with_the_query_source_and_renders_no_results() -> No
 
     await _search(message_root, lookup, "a")
     commit_render(message_root)
-    await message_root.dispatch("lookup.next", fake_interaction())
+    await message_root.dispatch("lookup.next", interaction_harness())
     assert isinstance(lookup.results.status, sl.resources.Ready)
     assert lookup.results.value.loaded.window.items == (Entry("c", "Gamma"),)
 

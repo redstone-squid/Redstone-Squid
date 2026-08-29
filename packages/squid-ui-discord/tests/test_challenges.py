@@ -20,7 +20,7 @@ from squid_ui_discord import Everyone, MessageRoot, delivery
 from squid_ui_discord.challenges import ChallengeRunner, DialogPresenter
 from squid_ui_discord.message_root_contracts import ChallengeRequest
 from squid_ui_discord.sessions import SessionManager
-from squid_ui_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
+from squid_ui_discord.testing import commit_render, delivered_to, interaction_harness, message_harness
 
 
 class _Panel(Component[sl.ComponentsV2Target]):
@@ -92,7 +92,7 @@ class TestIssuing:
         panel, message_root, presenter = _panel(sp.guards.confirm("Delete everything?"))
         generation = message_root.generation
 
-        await message_root.dispatch("go", fake_interaction())
+        await message_root.dispatch("go", interaction_harness())
 
         assert panel.count == 0
         assert message_root.generation == generation
@@ -102,9 +102,9 @@ class TestIssuing:
     async def test_a_second_press_does_not_wait_behind_an_outstanding_challenge(self):
         panel, message_root, presenter = _panel(sp.guards.confirm("Sure?"))
 
-        await message_root.dispatch("go", fake_interaction())
+        await message_root.dispatch("go", interaction_harness())
         with anyio.fail_after(2):
-            await message_root.dispatch("go", fake_interaction())
+            await message_root.dispatch("go", interaction_harness())
 
         assert panel.count == 0
         assert len(presenter.requests) == 2
@@ -120,7 +120,7 @@ class TestIssuing:
         )
         commit_render(message_root)
 
-        await message_root.dispatch("go", fake_interaction())
+        await message_root.dispatch("go", interaction_harness())
 
         assert _dispositions(profiler) == [DispatchDisposition.CHALLENGE_ISSUED]
 
@@ -135,7 +135,7 @@ class TestIssuing:
         message_root = MessageRoot(panel, access=Everyone(), timeout=None, on_error=hook, profiler=profiler)
         commit_render(message_root)
 
-        await message_root.dispatch("go", fake_interaction())
+        await message_root.dispatch("go", interaction_harness())
 
         assert panel.count == 0
         assert [source for _, _, source in recorded] == ["guard:go"]
@@ -163,7 +163,7 @@ class TestIssuing:
         message_root = MessageRoot(Panel(), access=Everyone(), timeout=None, on_error=hook, challenge=_Recorder())
         commit_render(message_root)
 
-        await message_root.dispatch("rename", fake_interaction())
+        await message_root.dispatch("rename", interaction_harness())
 
         assert recorded == ["a form trigger cannot be challenged, and the guard on 'rename' did"]
 
@@ -171,7 +171,7 @@ class TestIssuing:
 class TestResuming:
     async def test_approval_runs_the_press_the_actor_confirmed(self):
         panel, message_root, presenter = _panel(sp.guards.confirm("Sure?"))
-        await message_root.dispatch("go", fake_interaction())
+        await message_root.dispatch("go", interaction_harness())
 
         await presenter.only.approve()
 
@@ -179,7 +179,7 @@ class TestResuming:
 
     async def test_approval_admits_exactly_one_press(self):
         panel, message_root, presenter = _panel(sp.guards.confirm("Sure?"))
-        await message_root.dispatch("go", fake_interaction())
+        await message_root.dispatch("go", interaction_harness())
         request = presenter.only
 
         await request.approve()
@@ -188,7 +188,7 @@ class TestResuming:
         # Two approvals are two presses, and each spends its own: what must not happen is one
         # approval admitting a later, unasked press.
         assert panel.count == 2
-        await message_root.dispatch("go", fake_interaction())
+        await message_root.dispatch("go", interaction_harness())
         assert panel.count == 2
 
     async def test_an_approval_for_one_action_does_not_admit_another(self):
@@ -215,19 +215,19 @@ class TestResuming:
         message_root = MessageRoot(panel, access=Everyone(), timeout=None, challenge=presenter)
         commit_render(message_root)
 
-        await message_root.dispatch("go", fake_interaction())
+        await message_root.dispatch("go", interaction_harness())
         await presenter.only.approve()
-        await message_root.dispatch("stop", fake_interaction())
+        await message_root.dispatch("stop", interaction_harness())
 
         assert panel.pressed == ["go"]
         assert len(presenter.requests) == 2
 
     async def test_a_challenge_answered_by_the_wrong_actor_admits_nothing(self):
         panel, message_root, presenter = _panel(sp.guards.confirm("Sure?"))
-        await message_root.dispatch("go", fake_interaction(user_id=11))
+        await message_root.dispatch("go", interaction_harness(user_id=11))
 
         await presenter.only.approve()
-        await message_root.dispatch("go", fake_interaction(user_id=22))
+        await message_root.dispatch("go", interaction_harness(user_id=22))
 
         assert panel.count == 1
         assert len(presenter.requests) == 2
@@ -241,7 +241,7 @@ class TestResuming:
         panel, message_root, presenter = _panel(
             sl.guards.all_of(sl.guards.permission(check), sp.guards.confirm("Sure?"))
         )
-        await message_root.dispatch("go", fake_interaction())
+        await message_root.dispatch("go", interaction_harness())
         allowed = False
 
         await presenter.only.approve()
@@ -250,7 +250,7 @@ class TestResuming:
 
     async def test_a_finished_message_root_refuses_the_press_it_asked_about(self):
         panel, message_root, presenter = _panel(sp.guards.confirm("Sure?"))
-        await message_root.dispatch("go", fake_interaction())
+        await message_root.dispatch("go", interaction_harness())
         await message_root.finish(disable=False)
 
         await presenter.only.approve()
@@ -263,15 +263,15 @@ class TestResuming:
         message_root = MessageRoot(panel, access=Everyone(), timeout=None, challenge=presenter)
         # A handle the mount could be tempted to trade away: not the bot's own, so `_renew`
         # would replace it with any fresher one a click carried.
-        opening = fake_interaction(message_id=99)
+        opening = interaction_harness(message_id=99)
         handle = delivery.handle_from(opening)
         assert handle is not None and not handle.permanent
-        await message_root.send(delivered_to(fake_message(message_id=99), handle=handle))
-        await message_root.dispatch("go", fake_interaction(message_id=99))
+        await message_root.send(delivered_to(message_harness(message_id=99), handle=handle))
+        await message_root.dispatch("go", interaction_harness(message_id=99))
         address = message_root.address
 
         # Deliberately a click from somewhere else, which is what a dialog's answer would be.
-        elsewhere = fake_interaction(message_id=4242)
+        elsewhere = interaction_harness(message_id=4242)
         await message_root._approve_challenge("go", elsewhere, None, "1")
 
         assert panel.count == 1
@@ -305,7 +305,7 @@ class TestResuming:
         panel = Reader()
         message_root = MessageRoot(panel, access=Everyone(), timeout=None, challenge=presenter)
         commit_render(message_root)
-        await message_root.dispatch("go", fake_interaction())
+        await message_root.dispatch("go", interaction_harness())
 
         # `readonly_transaction()` raises when nested, so a resumption that had joined the
         # approving press's transaction would fail here rather than merely misbehave.
@@ -317,17 +317,17 @@ class TestResuming:
 class TestDeclining:
     async def test_a_decline_runs_nothing_and_leaves_no_approval_behind(self):
         panel, message_root, presenter = _panel(sp.guards.confirm("Sure?"))
-        await message_root.dispatch("go", fake_interaction())
+        await message_root.dispatch("go", interaction_harness())
 
         await presenter.only.decline()
-        await message_root.dispatch("go", fake_interaction())
+        await message_root.dispatch("go", interaction_harness())
 
         assert panel.count == 0
         assert len(presenter.requests) == 2, "the next press asks again"
 
     async def test_a_decline_says_so_when_the_challenge_asked_for_wording(self):
         panel, message_root, presenter = _panel(sp.guards.confirm("Sure?", on_decline="Nothing was changed."))
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         await message_root.dispatch("go", interaction)
 
         await presenter.only.decline()
@@ -345,7 +345,7 @@ class TestDeclining:
             profiler=profiler,
         )
         commit_render(message_root)
-        await message_root.dispatch("go", fake_interaction())
+        await message_root.dispatch("go", interaction_harness())
 
         await presenter.only.decline()
 
@@ -363,11 +363,11 @@ class TestLedger:
         message_root = MessageRoot(panel, access=Everyone(), timeout=None, challenge=presenter, clock=clock)
         commit_render(message_root)
 
-        await message_root.dispatch("go", fake_interaction())
+        await message_root.dispatch("go", interaction_harness())
         await presenter.only.decline()
 
         # The cooldown was never spent, so asking again is possible immediately.
-        await message_root.dispatch("go", fake_interaction())
+        await message_root.dispatch("go", interaction_harness())
         assert len(presenter.requests) == 2
         assert panel.count == 0
 
@@ -377,12 +377,12 @@ class TestLedger:
         presenter = _Recorder()
         message_root = MessageRoot(panel, access=Everyone(), timeout=None, challenge=presenter, clock=clock)
         commit_render(message_root)
-        await message_root.dispatch("go", fake_interaction())
+        await message_root.dispatch("go", interaction_harness())
 
         await presenter.only.approve()
 
         assert panel.count == 1
-        denied = fake_interaction()
+        denied = interaction_harness()
         await message_root.dispatch("go", denied)
         assert _notice_text(denied) == ["Try again in 30 seconds."]
 
@@ -449,7 +449,7 @@ class TestComposition:
             sl.guards.all_of(sp.guards.confirm("First?"), sp.guards.confirm("Second?"))
         )
 
-        await message_root.dispatch("go", fake_interaction())
+        await message_root.dispatch("go", interaction_harness())
         await presenter.requests[0].approve()
         assert panel.count == 0, "the second question has not been answered yet"
         await presenter.requests[1].approve()
@@ -575,9 +575,9 @@ class TestDialog:
         runner = ChallengeRunner()
         registry.defaults = registry.defaults.replace(challenge=DialogPresenter(registry, runner))
         panel = _Panel(guard=sp.guards.confirm("Delete everything?"))
-        opening = fake_interaction(message_id=99)
+        opening = interaction_harness(message_id=99)
         message_root = registry.defaults.mount(panel, access=Everyone(), timeout=None)
-        await registry.open(message_root, delivered_to(fake_message(message_id=99)), key="panel", actor_id=1)
+        await registry.open(message_root, delivered_to(message_harness(message_id=99)), key="panel", actor_id=1)
 
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(runner.run)
@@ -590,7 +590,7 @@ class TestDialog:
             assert panel.count == 0
 
             with anyio.fail_after(2):
-                await dialog.dispatch("confirm.confirm", fake_interaction(message_id=99))
+                await dialog.dispatch("confirm.confirm", interaction_harness(message_id=99))
                 while panel.count == 0:
                     await anyio.sleep(0)
             tasks.cancel_scope.cancel()

@@ -18,7 +18,7 @@ from squid_ui.runtime import LocalTopicBus, PendingMode, Topic
 from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler
 from squid_ui_discord import testing as sd
 from squid_ui_discord.delivery import DeliveryResult, handle_for
-from squid_ui_discord.testing import delivered_to, fake_message
+from squid_ui_discord.testing import delivered_to, message_harness
 
 BUILD = Topic("build", "1")
 OTHER = Topic("build", "2")
@@ -65,7 +65,7 @@ def texts(view: discord.ui.LayoutView) -> str:
 async def mounted(
     panel: Component[Any], bus: LocalTopicBus, scheduler: MessageRootScheduler
 ) -> tuple[MessageRoot, Any]:
-    message: Any = fake_message()
+    message: Any = message_harness()
     message_root = MessageRoot(panel, access=Everyone(), scheduler=scheduler, timeout=None)
     await message_root.send(delivered_to(message))
     return message_root, message
@@ -163,7 +163,7 @@ async def test_a_message_root_with_no_reactor_still_refetches_on_its_next_render
     load, loads = counting_loader(["first", "second"])
     panel = Watcher(load)
     message_root = MessageRoot(panel, access=Everyone(), timeout=None)
-    await message_root.send(delivered_to(fake_message()))
+    await message_root.send(delivered_to(message_harness()))
     assert loads() == 1
 
     bus.publish(BUILD)
@@ -191,7 +191,7 @@ async def test_a_publish_during_the_load_is_not_lost() -> None:
             released.set()
         return f"load{loads}"
 
-    message: Any = fake_message()
+    message: Any = message_harness()
     sent: list[discord.ui.LayoutView] = []
 
     async def destination(presentation) -> Any:

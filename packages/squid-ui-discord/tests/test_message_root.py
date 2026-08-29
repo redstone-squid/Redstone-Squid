@@ -88,8 +88,8 @@ from squid_ui_discord.testing import (
     assert_within_limits,
     commit_render,
     delivered_to,
-    fake_interaction,
-    fake_message,
+    interaction_harness,
+    message_harness,
 )
 
 
@@ -113,7 +113,7 @@ async def test_dispatch_and_submit_establish_invocation_scope_inside_the_handler
 
     client = FakeClient()
     runtime = squid_ui_discord.install(cast(discord.Client, client))
-    interaction = fake_interaction()
+    interaction = interaction_harness()
     interaction.client = client
     seen: list[squid_ui_discord.Invocation] = []
 
@@ -131,7 +131,7 @@ async def test_dispatch_and_submit_establish_invocation_scope_inside_the_handler
     commit_render(message_root)
     await message_root.dispatch("inspect", interaction)
 
-    submitted = fake_interaction()
+    submitted = interaction_harness()
     submitted.client = client
     spec = FormSpec("Rename", (TextField(key="name", label="Name"),))
 
@@ -164,10 +164,10 @@ def test_renewal_policy_requires_an_expiry_supervisor() -> None:
 async def test_message_root_snapshot_reports_lifecycle_and_handle_expiry() -> None:
     now = datetime.now(UTC)
     scheduler = MessageRootScheduler(clock=lambda: now)
-    interaction = fake_interaction()
+    interaction = interaction_harness()
     interaction.expires_at = now + timedelta(seconds=45)
     message_root = MessageRoot(Counter(), access=Everyone(), scheduler=scheduler)
-    await message_root.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
+    await message_root.send(delivered_to(message_harness(ephemeral=True), handle=delivery.handle_from(interaction)))
 
     snapshot = message_root.snapshot()
 
@@ -180,7 +180,7 @@ class TestCandidateSettlement:
 
     async def test_a_candidate_cannot_be_rolled_back_twice(self) -> None:
         message_root = MessageRoot(Counter(), access=Everyone())
-        await message_root.send(delivered_to(fake_message()))
+        await message_root.send(delivered_to(message_harness()))
         candidate = message_root._stage()
 
         message_root._rollback(candidate)
@@ -190,7 +190,7 @@ class TestCandidateSettlement:
 
     async def test_a_committed_candidate_cannot_be_rolled_back(self) -> None:
         message_root = MessageRoot(Counter(), access=Everyone())
-        await message_root.send(delivered_to(fake_message()))
+        await message_root.send(delivered_to(message_harness()))
         candidate = message_root._stage()
 
         message_root._commit(candidate)
@@ -201,7 +201,7 @@ class TestCandidateSettlement:
     async def test_only_one_candidate_may_be_outstanding_at_a_time(self) -> None:
         """The reconciler owns this half: a second draw cannot stage over the first."""
         message_root = MessageRoot(Counter(), access=Everyone())
-        await message_root.send(delivered_to(fake_message()))
+        await message_root.send(delivered_to(message_harness()))
         message_root._stage()
 
         with pytest.raises(RuntimeError, match="already staged"):
@@ -216,7 +216,7 @@ async def _armed_root(
 ) -> tuple[MessageRoot, Any, MessageRootScheduler]:
     now = datetime.now(UTC)
     scheduler = MessageRootScheduler(clock=lambda: now)
-    interaction = fake_interaction()
+    interaction = interaction_harness()
     interaction.expires_at = now + timedelta(seconds=30)
     message_root = MessageRoot(
         Counter() if component is None else component,
@@ -226,7 +226,7 @@ async def _armed_root(
         expiry=RenewEphemeral(warning=60),
         on_error=on_error,
     )
-    await message_root.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
+    await message_root.send(delivered_to(message_harness(ephemeral=True), handle=delivery.handle_from(interaction)))
     assert message_root.handle is not None
     message_root._queue_expiry_arm(message_root.handle)
     await message_root.refresh()
@@ -262,7 +262,7 @@ class TestEphemeralRenewal:
         component = Counting()
         message_root, interaction, _ = await _armed_root(component)
         rendered = component.renders
-        interaction.response.edit_message.reset_mock()
+        interaction.response.edit_message.records.clear()
 
         message_root.invalidate()
         await message_root.refresh()
@@ -277,7 +277,7 @@ class TestEphemeralRenewal:
         message_root, _, _ = await _armed_root(component)
         component.count = 7
         generation = message_root.generation
-        interaction = fake_interaction(message_id=99)
+        interaction = interaction_harness(message_id=99)
 
         await message_root.dispatch("__squid_continue_session", interaction, generation=generation)
 
@@ -290,7 +290,7 @@ class TestEphemeralRenewal:
     async def test_denied_renewal_keeps_the_screen_and_old_authority(self) -> None:
         message_root, _, _ = await _armed_root(access=Owner(1))
         original = message_root.handle
-        interaction = fake_interaction(user_id=2)
+        interaction = interaction_harness(user_id=2)
 
         await message_root.dispatch("__squid_continue_session", interaction, generation=message_root.generation)
 
@@ -302,7 +302,7 @@ class TestEphemeralRenewal:
         errors = AsyncMock()
         message_root, _, _ = await _armed_root(on_error=errors)
         generation = message_root.generation
-        failed = fake_interaction()
+        failed = interaction_harness()
         failed.response.edit_message.side_effect = RuntimeError("Discord refused the restore")
 
         await message_root.dispatch("__squid_continue_session", failed, generation=generation)
@@ -312,7 +312,7 @@ class TestEphemeralRenewal:
         assert errors.await_args.args[2] == "renewal"
         assert message_root.handle is not None and message_root.handle.expires_at == failed.expires_at
         assert message_root.snapshot().lifecycle is MessageRootStatus.RENEWAL_ARMED
-        retry = fake_interaction()
+        retry = interaction_harness()
         await message_root.dispatch("__squid_continue_session", retry, generation=generation)
         retry.response.edit_message.assert_awaited_once()
         assert message_root.snapshot().lifecycle is MessageRootStatus.ACTIVE
@@ -320,10 +320,10 @@ class TestEphemeralRenewal:
     async def test_repeated_renewal_click_is_acknowledged_without_a_second_commit(self) -> None:
         message_root, _, _ = await _armed_root()
         generation = message_root.generation
-        first = fake_interaction()
+        first = interaction_harness()
         await message_root.dispatch("__squid_continue_session", first, generation=generation)
         active_generation = message_root.generation
-        repeated = fake_interaction()
+        repeated = interaction_harness()
 
         await message_root.dispatch("__squid_continue_session", repeated, generation=generation)
 
@@ -335,7 +335,7 @@ class TestEphemeralRenewal:
         component = Counter()
         message_root, _, _ = await _armed_root(component)
         component.count = 4
-        message = fake_message(ephemeral=False)
+        message = message_harness(ephemeral=False)
 
         await message_root.adopt_handle(delivery.handle_for(message))
 
@@ -365,7 +365,7 @@ class TestEphemeralRenewal:
     async def test_stale_arming_leaves_the_application_generation_pending(self) -> None:
         message_root, interaction, _ = await _armed_root()
         # Restore active state so this test can exercise the stale arm branch independently.
-        await message_root.dispatch("__squid_continue_session", fake_interaction(), generation=message_root.generation)
+        await message_root.dispatch("__squid_continue_session", interaction_harness(), generation=message_root.generation)
         active_generation = message_root.generation
 
         class StaleHandle:
@@ -382,7 +382,7 @@ class TestEphemeralRenewal:
         stale = StaleHandle()
         message_root._handle = stale
         message_root._queue_expiry_arm(stale)
-        interaction.response.edit_message.reset_mock()
+        interaction.response.edit_message.records.clear()
 
         await message_root.refresh()
 
@@ -484,7 +484,7 @@ class TestDispatchProfiling:
         message_root = MessageRoot(Counter(), access=Everyone(), profiler=profiler, timeout=None)
         commit_render(message_root)
 
-        await message_root.dispatch("inc", fake_interaction(user_id=77))
+        await message_root.dispatch("inc", interaction_harness(user_id=77))
 
         root = next(span for span in _profile_trace(profiler).spans if span.parent_span_id is None)
         assert ("actor", 77) in {(attribute.key, attribute.value) for attribute in root.attributes}
@@ -497,7 +497,7 @@ class TestDispatchProfiling:
         commit_render(message_root)
 
         try:
-            await message_root.dispatch("inc", fake_interaction())
+            await message_root.dispatch("inc", interaction_harness())
         finally:
             ledger.close()
 
@@ -512,7 +512,7 @@ class TestDispatchProfiling:
         commit_render(message_root)
         submitted = message_root.generation
 
-        await message_root.dispatch("inc", fake_interaction(), generation=submitted)
+        await message_root.dispatch("inc", interaction_harness(), generation=submitted)
 
         trace = _profile_trace(profiler)
         result = trace.result.dispatch
@@ -559,7 +559,7 @@ class TestDispatchProfiling:
         submitted = stale_root.generation
         commit_render(stale_root)
 
-        await stale_root.dispatch("inc", fake_interaction(), generation=submitted)
+        await stale_root.dispatch("inc", interaction_harness(), generation=submitted)
 
         stale = _profile_trace(stale_profiler).result.dispatch
         assert stale is not None
@@ -578,7 +578,7 @@ class TestDispatchProfiling:
         submitted = rebase_root.generation
         commit_render(rebase_root)
 
-        await rebase_root.dispatch("run", fake_interaction(), generation=submitted)
+        await rebase_root.dispatch("run", interaction_harness(), generation=submitted)
 
         rebased = _profile_trace(rebase_profiler).result.dispatch
         assert rebased is not None
@@ -598,7 +598,7 @@ class TestDispatchProfiling:
             timeout=None,
         )
         commit_render(stopped)
-        await stopped.dispatch("inc", fake_interaction())
+        await stopped.dispatch("inc", interaction_harness())
 
         stopped_result = _profile_trace(stopped_profiler).result.dispatch
         assert stopped_result is not None
@@ -623,7 +623,7 @@ class TestDispatchProfiling:
             timeout=None,
         )
         commit_render(recovered)
-        await recovered.dispatch("inc", fake_interaction())
+        await recovered.dispatch("inc", interaction_harness())
 
         recovered_trace = _profile_trace(recovered_profiler)
         recovered_result = recovered_trace.result.dispatch
@@ -647,7 +647,7 @@ class TestDispatchProfiling:
             timeout=None,
         )
         commit_render(failed_action)
-        await failed_action.dispatch("inc", fake_interaction())
+        await failed_action.dispatch("inc", interaction_harness())
 
         action = _profile_trace(action_profiler).result.dispatch
         assert action is not None
@@ -659,7 +659,7 @@ class TestDispatchProfiling:
         commit_render(failed_delivery)
         monkeypatch.setattr(delivery, "handle_from", _refuse_handle)
         with pytest.raises(discord.HTTPException):
-            await failed_delivery.dispatch("inc", fake_interaction())
+            await failed_delivery.dispatch("inc", interaction_harness())
 
         delivered = _profile_trace(delivery_profiler).result.dispatch
         assert delivered is not None
@@ -688,7 +688,7 @@ class TestDispatchProfiling:
             acknowledgement_timeout=0.01,
         )
         commit_render(message_root)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         async def dispatch() -> None:
             await message_root.dispatch("slow", interaction)
@@ -738,14 +738,14 @@ class TestRenderAndWire:
         commit_render(message_root)
 
         assert message_root.presentation.cursor("toolbar").extent > 1
-        await message_root.dispatch("__cursor_next.toolbar", fake_interaction())
+        await message_root.dispatch("__cursor_next.toolbar", interaction_harness())
         assert message_root.presentation.cursor("toolbar").position.offset == 1
 
     async def test_click_mutates_state_and_edits(self):
         component = Counter()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
         commit_render(message_root)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         await message_root.dispatch("inc", interaction)
 
@@ -767,7 +767,7 @@ class TestRenderAndWire:
         message_root = MessageRoot(Inspect(), access=Everyone(), timeout=None)
         commit_render(message_root)
 
-        await message_root.dispatch("inspect", fake_interaction(user_id=42))
+        await message_root.dispatch("inspect", interaction_harness(user_id=42))
 
         assert seen[0].actor.id == "42"
         assert seen[0].context == {"frontend": "discord"}
@@ -785,7 +785,7 @@ class TestRenderAndWire:
         message_root = MessageRoot(Inspect(), access=Everyone(), localization=Localization("zh-CN"), timeout=None)
         commit_render(message_root)
 
-        await message_root.dispatch("inspect", fake_interaction())
+        await message_root.dispatch("inspect", interaction_harness())
 
         assert seen[0].locale == "zh-CN"
 
@@ -825,7 +825,7 @@ class TestRenderAndWire:
         localization = Localization("fr", gettext=lambda message: "Avis" if message == "Notice" else message)
         message_root = MessageRoot(Notify(), access=Everyone(), localization=localization, timeout=None)
         commit_render(message_root)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         await message_root.dispatch("notify", interaction)
 
@@ -840,7 +840,7 @@ class TestRenderAndWire:
 
         message_root = MessageRoot(Static(), access=Everyone(), timeout=None)
         commit_render(message_root)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         await message_root.dispatch("inc", interaction)
 
@@ -850,7 +850,7 @@ class TestRenderAndWire:
     async def test_stale_key_is_acknowledged_not_crashed(self):
         message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
         commit_render(message_root)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         await message_root.dispatch("gone", interaction)
 
@@ -870,7 +870,7 @@ class TestRenderAndWire:
 
         message_root = MessageRoot(Slow(), access=Everyone(), timeout=None, acknowledgement_timeout=0.01)
         commit_render(message_root)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         async def dispatch() -> None:
             await message_root.dispatch("slow", interaction)
@@ -893,7 +893,7 @@ class TestAccessPolicy:
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
         commit_render(message_root)
 
-        await message_root.dispatch("inc", fake_interaction(user_id=99))
+        await message_root.dispatch("inc", interaction_harness(user_id=99))
 
         assert component.count == 1
 
@@ -903,7 +903,7 @@ class TestAccessPolicy:
         message_root = MessageRoot(component, access=Owner(42), timeout=30, clock=lambda: now)
         commit_render(message_root)
         now = 10.0
-        interaction = fake_interaction(user_id=99)
+        interaction = interaction_harness(user_id=99)
 
         await message_root.dispatch("inc", interaction)
 
@@ -917,7 +917,7 @@ class TestAccessPolicy:
         message_root = MessageRoot(component, access=Owner(42), timeout=None)
         commit_render(message_root)
 
-        await message_root.dispatch("inc", fake_interaction(user_id=42))
+        await message_root.dispatch("inc", interaction_harness(user_id=42))
 
         assert component.count == 1
 
@@ -926,8 +926,8 @@ class TestAccessPolicy:
         message_root = MessageRoot(component, access=Users({42, 43}), timeout=None)
         commit_render(message_root)
 
-        await message_root.dispatch("inc", fake_interaction(user_id=42))
-        await message_root.dispatch("inc", fake_interaction(user_id=43))
+        await message_root.dispatch("inc", interaction_harness(user_id=42))
+        await message_root.dispatch("inc", interaction_harness(user_id=43))
 
         assert component.count == 2
 
@@ -936,7 +936,7 @@ class TestAccessPolicy:
         message_root = MessageRoot(component, access=Users({42, 43}), timeout=None)
         commit_render(message_root)
 
-        await message_root.dispatch("inc", fake_interaction(user_id=99))
+        await message_root.dispatch("inc", interaction_harness(user_id=99))
 
         assert component.count == 0
 
@@ -949,7 +949,7 @@ class TestAccessPolicy:
         component = Counter()
         message_root = MessageRoot(component, access=Check(check), timeout=None)
         commit_render(message_root)
-        interaction = fake_interaction(user_id=42)
+        interaction = interaction_harness(user_id=42)
 
         await message_root.dispatch("inc", interaction)
 
@@ -963,7 +963,7 @@ class TestAccessPolicy:
         localization = Localization("fr", gettext=lambda text: "Refusé" if text == "Policy denied" else text)
         message_root = MessageRoot(Counter(), access=Check(deny), localization=localization, timeout=None)
         commit_render(message_root)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         await message_root.dispatch("inc", interaction)
 
@@ -977,7 +977,7 @@ class TestAccessPolicy:
         component = Counter()
         message_root = MessageRoot(component, access=Check(check), timeout=None, on_error=hook)
         commit_render(message_root)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         await message_root.dispatch("inc", interaction)
 
@@ -988,7 +988,7 @@ class TestAccessPolicy:
         submitted = AsyncMock()
         spec = FormSpec("Rename", (TextField(key="name", label="Name"),))
         message_root = MessageRoot(Counter(), access=Owner(42), timeout=None)
-        interaction = fake_interaction(user_id=99)
+        interaction = interaction_harness(user_id=99)
 
         await message_root.dispatch_submit("rename", interaction, spec, {"name": "Ada"}, submitted)
 
@@ -1012,7 +1012,7 @@ class TestFinishHooks:
         message_root.on_finish(lambda finished: _record(seen, finished))
         commit_render(message_root)
 
-        await message_root.finish_via(fake_interaction())
+        await message_root.finish_via(interaction_harness())
 
         assert seen == [message_root]
 
@@ -1072,7 +1072,7 @@ class TestFinishHooks:
         seen: list[MessageRoot] = []
         message_root.on_finish(lambda finished: _record(seen, finished))
         commit_render(message_root)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         interaction.response.edit_message = AsyncMock(side_effect=RuntimeError("gateway is down"))
 
         with pytest.raises(RuntimeError):
@@ -1090,7 +1090,7 @@ class TestFinishHooks:
         message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
         seen: list[MessageRoot] = []
         message_root.on_finish(lambda finished: _record(seen, finished))
-        message: Any = fake_message()
+        message: Any = message_harness()
         message.edit = AsyncMock(side_effect=RuntimeError("message is gone"))
         await message_root.send(delivered_to(message))
 
@@ -1130,7 +1130,7 @@ class TestFinishHooks:
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
         commit_render(message_root)
         await message_root.finish(disable=False)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         await message_root.dispatch("inc", interaction)
 
@@ -1146,7 +1146,7 @@ class TestPresentedHooks:
         message_root.on_committed(committed.append)
         message_root.on_presented(presented.append)
 
-        await message_root.send(delivered_to(fake_message()))
+        await message_root.send(delivered_to(message_harness()))
 
         assert committed == [message_root]
         assert presented == [message_root]
@@ -1159,7 +1159,7 @@ class TestPresentedHooks:
 
     async def test_a_hook_can_invalidate_and_the_message_root_remains_usable(self) -> None:
         message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
-        message = fake_message()
+        message = message_harness()
         calls = 0
 
         def invalidate_once(presented: MessageRoot) -> None:
@@ -1183,7 +1183,7 @@ class TestPresentedHooks:
         message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
         presented: list[MessageRoot] = []
         message_root.on_presented(presented.append)
-        await message_root.send(delivered_to(fake_message()))
+        await message_root.send(delivered_to(message_harness()))
         presented.clear()
 
         assert await message_root.refresh() is PresentationStatus.UNCHANGED
@@ -1203,7 +1203,7 @@ class TestPresentedHooks:
         message_root.on_presented(seen.append)
 
         with caplog.at_level("ERROR"):
-            await message_root.send(delivered_to(fake_message()))
+            await message_root.send(delivered_to(message_harness()))
 
         assert seen == [message_root]
         assert "presented hook failed" in caplog.text
@@ -1225,7 +1225,7 @@ class TestActionPolicy:
         commit_render(message_root)
         stale_generation = message_root.generation
         commit_render(message_root)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         await message_root.dispatch("inc", interaction, generation=stale_generation)
 
@@ -1255,7 +1255,7 @@ class TestActionPolicy:
         component.current = True
         commit_render(message_root)
 
-        await message_root.dispatch("run", fake_interaction(), generation=stale_generation)
+        await message_root.dispatch("run", interaction_harness(), generation=stale_generation)
 
         assert calls == ["new"]
 
@@ -1285,7 +1285,7 @@ class TestActionPolicy:
 
         await message_root.dispatch_submit(
             "rename",
-            fake_interaction(),
+            interaction_harness(),
             spec,
             {"name": "Ada"},
             component.old,
@@ -1321,7 +1321,7 @@ class TestActionPolicy:
 
         await message_root.dispatch_submit(
             "rename",
-            fake_interaction(),
+            interaction_harness(),
             spec,
             {"name": "new"},
             binding.on_submit,
@@ -1349,7 +1349,7 @@ class TestActionPolicy:
         component = Trigger()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
         commit_render(message_root)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         await message_root.dispatch_submit(
             "rename",
@@ -1386,7 +1386,7 @@ class TestActionPolicy:
 
         await message_root.dispatch_submit(
             "rename",
-            fake_interaction(),
+            interaction_harness(),
             filled,
             {"name": "Ada"},
             component.old,
@@ -1408,7 +1408,7 @@ class TestActionPolicy:
         commit_render(message_root)
         stale = message_root.generation
         commit_render(message_root)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         await message_root.dispatch_submit("rename", interaction, spec, {"name": "Ada"}, submit, generation=stale)
 
@@ -1437,8 +1437,8 @@ class TestActionPolicy:
             await message_root.dispatch("run", interaction)
 
         async with anyio.create_task_group() as tasks:
-            tasks.start_soon(dispatch, fake_interaction())
-            tasks.start_soon(dispatch, fake_interaction())
+            tasks.start_soon(dispatch, interaction_harness())
+            tasks.start_soon(dispatch, interaction_harness())
 
         assert maximum == 1
 
@@ -1457,7 +1457,7 @@ class TestActionPolicy:
         message_root = MessageRoot(component, access=Everyone(), timeout=None, on_error=hook)
         commit_render(message_root)
 
-        await message_root.dispatch("read", fake_interaction())
+        await message_root.dispatch("read", interaction_harness())
 
         assert component.count == 0
         assert hook.await_args is not None
@@ -1495,7 +1495,7 @@ class TestActionMiddleware:
         )
         commit_render(message_root)
 
-        await message_root.dispatch("inc", fake_interaction())
+        await message_root.dispatch("inc", interaction_harness())
 
         assert seen == ["first:before", "second:before", "handler", "second:after", "first:after"]
 
@@ -1506,7 +1506,7 @@ class TestActionMiddleware:
         component = Counter()
         message_root = MessageRoot(component, access=Everyone(), middleware=(Stop(),), timeout=None)
         commit_render(message_root)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         await message_root.dispatch("inc", interaction)
 
@@ -1538,7 +1538,7 @@ class TestActionMiddleware:
         message_root = MessageRoot(component, access=Everyone(), middleware=(Catch(),), on_error=hook, timeout=None)
         commit_render(message_root)
 
-        await message_root.dispatch("break", fake_interaction())
+        await message_root.dispatch("break", interaction_harness())
 
         assert seen == ["caught"]
         assert component.count == 0
@@ -1554,7 +1554,7 @@ class TestActionMiddleware:
         hook = AsyncMock()
         message_root = MessageRoot(Counter(), access=Everyone(), middleware=(Fail(),), on_error=hook, timeout=None)
         commit_render(message_root)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         await message_root.dispatch("inc", interaction)
 
@@ -1576,7 +1576,7 @@ class TestActionMiddleware:
         )
         commit_render(message_root)
 
-        await message_root.dispatch("inc", fake_interaction())
+        await message_root.dispatch("inc", interaction_harness())
 
         assert component.count == 1
         assert hook.await_args is not None
@@ -1611,7 +1611,7 @@ class TestActionMiddleware:
         commit_render(message_root)
         active = message_root.generation
 
-        await message_root.dispatch("run", fake_interaction(), generation=submitted)
+        await message_root.dispatch("run", interaction_harness(), generation=submitted)
 
         assert requests == [
             ActionRequest(
@@ -1640,7 +1640,7 @@ class TestActionMiddleware:
         stale = message_root.generation
         commit_render(message_root)
 
-        await message_root.dispatch("inc", fake_interaction(), generation=stale)
+        await message_root.dispatch("inc", interaction_harness(), generation=stale)
 
         assert not entered
 
@@ -1661,12 +1661,12 @@ class TestActionMiddleware:
         middleware = Capture()
         picker = MessageRoot(Picker(), access=Everyone(), middleware=(middleware,), timeout=None)
         commit_render(picker)
-        await picker.dispatch("pick", fake_interaction(), ["a"])
+        await picker.dispatch("pick", interaction_harness(), ["a"])
 
         submit = AsyncMock()
         form_root = MessageRoot(text_component(), access=Everyone(), middleware=(middleware,), timeout=None)
         spec = FormSpec("Rename", (TextField(key="name", label="Name"),))
-        await form_root.dispatch_submit("rename", fake_interaction(), spec, {"name": "Ada"}, submit)
+        await form_root.dispatch_submit("rename", interaction_harness(), spec, {"name": "Ada"}, submit)
 
         assert kinds == [InteractionKind.SELECTION, InteractionKind.SUBMIT]
 
@@ -1685,7 +1685,7 @@ class TestErrors:
         message_root = MessageRoot(Boom(), access=Everyone(), timeout=None, on_error=hook)
         commit_render(message_root)
 
-        await message_root.dispatch("x", fake_interaction())
+        await message_root.dispatch("x", interaction_harness())
 
         assert hook.await_args is not None
         (_interaction, error, source), _ = hook.await_args
@@ -1704,7 +1704,7 @@ class TestErrors:
         hook = AsyncMock()
         message_root = MessageRoot(text_component(), access=Everyone(), timeout=None, on_error=hook)
 
-        await message_root.dispatch_submit("f", fake_interaction(), spec, {"broken": "x"}, AsyncMock())
+        await message_root.dispatch_submit("f", interaction_harness(), spec, {"broken": "x"}, AsyncMock())
 
         assert hook.await_args is not None
         (_interaction, error, source), _ = hook.await_args
@@ -1730,7 +1730,7 @@ class TestErrors:
         message_root = MessageRoot(component, access=Everyone(), timeout=None, on_error=hook)
         commit_render(message_root)
 
-        await message_root.dispatch("x", fake_interaction())
+        await message_root.dispatch("x", interaction_harness())
 
         assert component.count == 0
         assert component.entries == ()
@@ -1758,7 +1758,7 @@ class TestSelect:
         view = commit_render(message_root)
         assert any(isinstance(item, discord.ui.Select) for item in view.walk_children())
 
-        await message_root.dispatch("pick", fake_interaction(), ["b"])
+        await message_root.dispatch("pick", interaction_harness(), ["b"])
 
         assert picked == ["b"]
 
@@ -1766,21 +1766,21 @@ class TestSelect:
 class TestLifecycle:
     async def test_finish_disables_controls(self):
         message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
-        message: Any = fake_message()
+        message: Any = message_harness()
         await message_root.send(delivered_to(message))
 
         await message_root.finish()
 
         disabled_view = message.edit.await_args.kwargs["view"]
         assert _button(disabled_view).disabled
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         await message_root.dispatch("inc", interaction)  # finished mounts ignore late clicks
         interaction.response.edit_message.assert_not_awaited()
 
     async def test_refresh_edits_bound_message(self):
         component = Counter()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
-        message: Any = fake_message()
+        message: Any = message_harness()
         await message_root.send(delivered_to(message))
         component.count = 7
 
@@ -1810,9 +1810,9 @@ class TestLifecycle:
 
         component = Loaded()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
-        await message_root.send(delivered_to(fake_message()))
+        await message_root.send(delivered_to(message_harness()))
         component._loaded = False
-        message_root._handle = delivery.handle_from(fake_interaction(expired=True))
+        message_root._handle = delivery.handle_from(interaction_harness(expired=True))
         issued = message_root._issued
 
         await message_root.refresh()
@@ -1823,10 +1823,10 @@ class TestLifecycle:
 
     async def test_accepted_click_clears_status_and_flushes_without_it(self):
         message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
-        await message_root.send(delivered_to(fake_message()))
+        await message_root.send(delivered_to(message_harness()))
         message_root.status = "Live updates paused"
         message_root.invalidate()
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         await message_root.dispatch("inc", interaction)
 
@@ -1837,7 +1837,7 @@ class TestLifecycle:
     async def test_background_refreshes_preserve_the_interaction_idle_budget(self):
         now = 100.0
         message_root = MessageRoot(Counter(), access=Everyone(), timeout=30, clock=lambda: now)
-        message: Any = fake_message()
+        message: Any = message_harness()
         await message_root.send(delivered_to(message))
 
         for elapsed in range(1, 11):
@@ -1870,7 +1870,7 @@ class TestDeliveryAtomicity:
         panel = Panel(mounted)
         message_root = MessageRoot(panel, access=Everyone(), timeout=None)
         commit_render(message_root)
-        await message_root.dispatch("__cursor_next.entries", fake_interaction())
+        await message_root.dispatch("__cursor_next.entries", interaction_harness())
         assert message_root.presentation.cursor("entries").position.offset == 1
 
         live_generation = message_root.generation
@@ -1884,7 +1884,7 @@ class TestDeliveryAtomicity:
 
         monkeypatch.setattr(delivery, "handle_from", _refuse_handle)
         with pytest.raises(discord.HTTPException):
-            await message_root.refresh(fake_interaction())
+            await message_root.refresh(interaction_harness())
 
         assert message_root.generation == live_generation
         assert message_root._handlers is live_handlers
@@ -1905,12 +1905,12 @@ class TestDeliveryAtomicity:
 
         monkeypatch.setattr(delivery, "handle_from", _refuse_handle)
         with pytest.raises(discord.HTTPException):
-            await message_root.refresh(fake_interaction())
+            await message_root.refresh(interaction_harness())
         monkeypatch.undo()
 
         # The stale-generation guard would silently defer this click if the mount had
         # advanced past the generation the message is still showing.
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         await message_root.dispatch("add", interaction, generation=live_generation)
 
         assert panel.entries[-1] == "added"
@@ -1922,7 +1922,7 @@ class TestDeliveryAtomicity:
     async def test_failed_refresh_leaves_the_message_root_repairable(self, monkeypatch):
         component = Counter()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
-        message: Any = fake_message()
+        message: Any = message_harness()
         message.edit = AsyncMock(side_effect=sd.http_error(message="edit refused"))
         await message_root.send(delivered_to(message))
         component.count = 7
@@ -1943,7 +1943,7 @@ class TestDeliveryAtomicity:
     async def test_refresh_commit_preserves_invalidation_during_delivery(self):
         component = Counter()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
-        message: Any = fake_message()
+        message: Any = message_harness()
         await message_root.send(delivered_to(message))
 
         started = asyncio.Event()
@@ -1970,7 +1970,7 @@ class TestDeliveryAtomicity:
     async def test_two_refreshes_deliver_in_generation_order(self):
         component = Counter()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
-        message: Any = fake_message()
+        message: Any = message_harness()
         await message_root.send(delivered_to(message))
 
         started = asyncio.Event()
@@ -1994,7 +1994,7 @@ class TestDeliveryAtomicity:
             tasks.start_soon(message_root.refresh)
             await started.wait()
             component.count = 2
-            interaction = fake_interaction()
+            interaction = interaction_harness()
             interaction.response.edit_message = AsyncMock(side_effect=edit)
             tasks.start_soon(message_root.refresh, interaction)
             await anyio.sleep(0)
@@ -2036,7 +2036,7 @@ class TestDeliveryAtomicity:
 
         component = ImmediatePanel()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
-        message: Any = fake_message()
+        message: Any = message_harness()
         await message_root.send(delivered_to(message))
 
         async def edit(*args: Any, **kwargs: Any) -> Any:
@@ -2047,8 +2047,8 @@ class TestDeliveryAtomicity:
             active -= 1
             return message
 
-        first = fake_interaction()
-        second = fake_interaction()
+        first = interaction_harness()
+        second = interaction_harness()
         first.response.edit_message = AsyncMock(side_effect=edit)
         second.response.edit_message = AsyncMock(side_effect=edit)
 
@@ -2071,7 +2071,7 @@ class TestDeliveryAtomicity:
     async def test_finish_waits_for_an_in_flight_refresh(self):
         component = Counter()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
-        message: Any = fake_message()
+        message: Any = message_harness()
         await message_root.send(delivered_to(message))
 
         started = asyncio.Event()
@@ -2149,7 +2149,7 @@ class TestSend:
 
     async def test_a_successful_send_commits_and_keeps_the_message_handle(self):
         message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
-        message = fake_message()
+        message = message_harness()
         destination = _Destination(message)
 
         sent = await message_root.send(destination)
@@ -2167,7 +2167,7 @@ class TestSend:
         profiler = MemoryProfiler()
         component = Counter()
         message_root = MessageRoot(component, access=Everyone(), profiler=profiler, timeout=None)
-        message = fake_message()
+        message = message_harness()
 
         await message_root.send(delivered_to(message))
 
@@ -2198,7 +2198,7 @@ class TestSend:
 
     async def test_a_successful_send_keeps_the_receipts_handle_without_reconstructing_it(self):
         message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
-        message = fake_message()
+        message = message_harness()
         authority = _RefusingHandle()
 
         await message_root.send(_Destination(message, handle=authority))
@@ -2219,7 +2219,7 @@ class TestSend:
         assert message_root.handle is None
 
         # The first click renews the mount, exactly as an ephemeral send relies on.
-        await message_root.dispatch("inc", fake_interaction())
+        await message_root.dispatch("inc", interaction_harness())
 
         assert component.count == 1
         assert message_root.handle is not None
@@ -2235,7 +2235,7 @@ class TestSend:
         assert panel.publication.status == sl.operations.Succeeded(42)
 
     async def test_dismiss_deletes_the_message_and_finishes_the_root(self) -> None:
-        message = fake_message()
+        message = message_harness()
         message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
         await message_root.send(delivered_to(message))
 
@@ -2257,7 +2257,7 @@ class TestSend:
         assert message_root.handle is None
         assert message_root.pending
 
-        message = fake_message()
+        message = message_harness()
         resent = await message_root.send(_Destination(message))
         assert isinstance(resent, delivery.Delivered)
         assert resent.result.message is message
@@ -2280,7 +2280,7 @@ class TestSend:
         # A candidate that was never delivered must not fire its lifecycle hooks.
         assert mounted == []
 
-        await message_root.send(_Destination(fake_message()))
+        await message_root.send(_Destination(message_harness()))
 
         assert message_root.generation > 0
         assert not message_root.pending
@@ -2288,7 +2288,7 @@ class TestSend:
 
     async def test_the_staged_assets_reach_the_destination(self):
         message_root = MessageRoot(Report(), access=Everyone(), timeout=None)
-        destination = _Destination(fake_message())
+        destination = _Destination(message_harness())
 
         await message_root.send(destination)
 
@@ -2297,7 +2297,7 @@ class TestSend:
 
     async def test_changed_asset_content_prevents_scene_suppression(self) -> None:
         component = MutableReport()
-        message: Any = fake_message()
+        message: Any = message_harness()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
         await message_root.send(_Destination(message))
         component.contents = b"second"
@@ -2320,7 +2320,7 @@ class TestSend:
 
                 return Row((Button("same", click, "same"),))
 
-        message: Any = fake_message()
+        message: Any = message_harness()
         component = FreshHandler()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
         await message_root.send(_Destination(message))
@@ -2336,13 +2336,13 @@ class TestSend:
         assert message_root.generation == generation
         assert message_root._view is view
 
-        await message_root.dispatch("same", fake_interaction(), generation=generation)
+        await message_root.dispatch("same", interaction_harness(), generation=generation)
 
         assert component.invoked == [1]
 
     async def test_identical_refresh_is_suppressed_before_renderer_or_generation(self, monkeypatch) -> None:
         message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
-        message: Any = fake_message()
+        message: Any = message_harness()
         await message_root.send(_Destination(message))
         issued = message_root._issued
 
@@ -2376,7 +2376,7 @@ class TestSend:
                 )
 
         component = Guarded()
-        message: Any = fake_message()
+        message: Any = message_harness()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
         await message_root.send(_Destination(message))
         component.allowed = False
@@ -2384,7 +2384,7 @@ class TestSend:
 
         assert await message_root.refresh() is PresentationStatus.UNCHANGED
 
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         await message_root.dispatch("same", interaction, generation=message_root.generation)
 
         assert component.invoked == 0
@@ -2396,7 +2396,7 @@ class TestSend:
         staged = message_root._stage_view()
         component.count = 5
 
-        destination = _Destination(fake_message())
+        destination = _Destination(message_harness())
         await message_root.send(destination)
 
         delivered, _ = destination.calls[0]
@@ -2409,7 +2409,7 @@ class TestSend:
     async def test_a_finished_message_root_does_not_send(self):
         message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
         await message_root.finish(disable=False)
-        destination = _Destination(fake_message())
+        destination = _Destination(message_harness())
 
         assert isinstance(await message_root.send(destination), delivery.Abandoned)
         assert destination.calls == []
@@ -2608,18 +2608,18 @@ class Notifier(Component[sl.ComponentsV2Target]):
 
 class TestEditHandles:
     def test_handle_from_refuses_an_interaction_spent_on_another_message(self):
-        spent = fake_interaction()
+        spent = interaction_harness()
         spent.response.type = discord.InteractionResponseType.channel_message
         assert delivery.handle_from(spent) is None
 
-        modal = fake_interaction()
+        modal = interaction_harness()
         modal.response.type = discord.InteractionResponseType.modal
         assert delivery.handle_from(modal) is None
 
     def test_handle_from_accepts_an_unspent_or_update_shaped_interaction(self):
-        assert delivery.handle_from(fake_interaction()) is not None
+        assert delivery.handle_from(interaction_harness()) is not None
 
-        deferred = fake_interaction()
+        deferred = interaction_harness()
         deferred.response.type = discord.InteractionResponseType.deferred_message_update
         handle = delivery.handle_from(deferred)
         assert handle is not None
@@ -2627,8 +2627,8 @@ class TestEditHandles:
         assert handle.expires_at == deferred.expires_at
 
     def test_channel_message_handle_is_permanent_regardless_of_message_flags(self):
-        assert delivery.handle_for(fake_message()).permanent
-        assert delivery.handle_for(fake_message(ephemeral=True)).permanent
+        assert delivery.handle_for(message_harness()).permanent
+        assert delivery.handle_for(message_harness(ephemeral=True)).permanent
 
     async def test_interaction_message_edit_is_pinned_to_the_original_response_endpoint(self):
         expected = object()
@@ -2705,11 +2705,11 @@ class TestEditHandles:
         # `notice` answers with a new message, which moves the interaction's original
         # response off the panel. Editing through it would overwrite the notice and leave
         # the panel stale, so the mount falls back to the message it holds.
-        message = fake_message()
+        message = message_harness()
         message_root = MessageRoot(Notifier(), access=Everyone(), timeout=None)
         await message_root.send(delivered_to(message))
 
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         await message_root.dispatch("go", interaction)
 
         interaction.response.send_message.assert_awaited_once()
@@ -2723,13 +2723,13 @@ class TestEditHandles:
         # so `handle_from` has nothing to build on and the edit goes through the mount's own
         # handle. Only the interaction's handle answers the click by editing through it, so
         # the flush owes an acknowledgement -- without one Discord reports a failure at 3s.
-        message = fake_message()
+        message = message_harness()
         component = Counter()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
         await message_root.send(delivered_to(message))
 
         component.count = 3
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         interaction.message = None
 
         await message_root.refresh(interaction)
@@ -2741,11 +2741,11 @@ class TestEditHandles:
     async def test_a_click_renews_an_ephemeral_message_root_for_background_refreshes(self):
         component = Counter()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
-        initial = fake_interaction()
-        await message_root.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(initial)))
+        initial = interaction_harness()
+        await message_root.send(delivered_to(message_harness(ephemeral=True), handle=delivery.handle_from(initial)))
         assert message_root.handle is not None and not message_root.handle.permanent
 
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         await message_root.dispatch("inc", interaction)
         assert message_root.handle is not None
         assert message_root.handle.expires_at == interaction.expires_at
@@ -2758,12 +2758,12 @@ class TestEditHandles:
         assert not message_root.pending
 
     async def test_a_click_does_not_trade_away_the_bots_own_credentials(self):
-        message = fake_message()
+        message = message_harness()
         message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
         await message_root.send(delivered_to(message))
         permanent = message_root.handle
 
-        await message_root.dispatch("inc", fake_interaction())
+        await message_root.dispatch("inc", interaction_harness())
 
         assert message_root.handle is permanent
 
@@ -2771,9 +2771,9 @@ class TestEditHandles:
         component = Counter()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
         await message_root.send(
-            delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(fake_interaction()))
+            delivered_to(message_harness(ephemeral=True), handle=delivery.handle_from(interaction_harness()))
         )
-        message_root._handle = delivery.handle_from(fake_interaction(expired=True))
+        message_root._handle = delivery.handle_from(interaction_harness(expired=True))
         component.count += 1
 
         await message_root.refresh()
@@ -2783,7 +2783,7 @@ class TestEditHandles:
         assert message_root.pending
         assert not message_root.finished
 
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         await message_root.dispatch("inc", interaction)
 
         interaction.response.edit_message.assert_awaited_once()
@@ -2807,7 +2807,7 @@ class TestEditHandles:
         component = Counter()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
         await message_root.send(
-            delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(fake_interaction()))
+            delivered_to(message_harness(ephemeral=True), handle=delivery.handle_from(interaction_harness()))
         )
         message_root._handle = _Stale()
         component.count += 1
@@ -2822,7 +2822,7 @@ class TestEditHandles:
 
 class TestDestinations:
     async def test_fresh_unwaited_response_commits_an_original_response_handle_without_fetching(self):
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         component = Counter()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
 
@@ -2841,9 +2841,9 @@ class TestDestinations:
         assert not message_root.pending
 
     async def test_fresh_waited_public_response_keeps_token_authority_not_message_authority(self):
-        interaction = fake_interaction()
-        message = fake_message(ephemeral=False)
-        interaction.original_response.return_value = message
+        interaction = interaction_harness()
+        message = message_harness(ephemeral=False)
+        interaction.original_response.result = message
         component = Counter()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
 
@@ -2861,10 +2861,10 @@ class TestDestinations:
         message.edit.assert_not_awaited()
 
     async def test_waited_followup_keeps_webhook_message_authority(self):
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         interaction.response._done = True
-        message = fake_message(message_id=42)
-        interaction.followup.send.return_value = message
+        message = message_harness(message_id=42)
+        interaction.followup.send.result = message
         component = Counter()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
 
@@ -2877,10 +2877,10 @@ class TestDestinations:
         message.edit.assert_not_awaited()
 
     async def test_followup_exposes_the_message_and_handle_even_when_wait_was_not_requested(self):
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         interaction.response._done = True
-        message = fake_message(message_id=42)
-        interaction.followup.send.return_value = message
+        message = message_harness(message_id=42)
+        interaction.followup.send.result = message
         message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
 
         sent = await message_root.send(delivery.respond_to(interaction, wait=False))
@@ -2891,7 +2891,7 @@ class TestDestinations:
         assert not message_root.handle.permanent
 
     async def test_plain_command_reply_keeps_permanent_channel_authority(self):
-        message = fake_message()
+        message = message_harness()
         ctx = cast(delivery.Replyable, SimpleNamespace(send=AsyncMock(return_value=message)))
         message_root = MessageRoot(Counter(), access=Everyone(), timeout=None)
 
@@ -2900,8 +2900,8 @@ class TestDestinations:
         assert message_root.handle is not None and message_root.handle.permanent
 
     async def test_interaction_backed_context_reply_keeps_original_response_authority(self):
-        interaction = fake_interaction()
-        message = fake_message()
+        interaction = interaction_harness()
+        message = message_harness()
         ctx = cast(
             delivery.Replyable,
             SimpleNamespace(interaction=interaction, send=AsyncMock(return_value=message)),
@@ -2917,9 +2917,9 @@ class TestDestinations:
         interaction.edit_original_response.assert_awaited_once()
 
     async def test_stale_public_response_drops_then_renews_for_the_pending_render(self):
-        interaction = fake_interaction()
-        interaction.original_response.return_value = fake_message(ephemeral=False)
-        interaction.edit_original_response.side_effect = sd.stale_http_error()
+        interaction = interaction_harness()
+        interaction.original_response.result = message_harness(ephemeral=False)
+        interaction.edit_original_response.error = sd.stale_http_error()
         component = Counter()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
         await message_root.send(delivery.respond_to(interaction, ephemeral=False, wait=True))
@@ -2930,7 +2930,7 @@ class TestDestinations:
         assert message_root.handle is None
         assert message_root.pending
 
-        click = fake_interaction()
+        click = interaction_harness()
         await message_root.dispatch("inc", click)
 
         assert message_root.handle is not None
@@ -3042,7 +3042,7 @@ class ProgressiveOperationPanel(OperationPanel):
 
 class TestResourceLoading:
     async def test_operation_delivers_pending_then_succeeded(self) -> None:
-        message: Any = fake_message()
+        message: Any = message_harness()
         destination = _Destination(message)
         message_root = MessageRoot(OperationPanel(), access=Everyone(), timeout=None)
 
@@ -3056,13 +3056,13 @@ class TestResourceLoading:
         progressed = asyncio.Event()
         resume = asyncio.Event()
         painted = asyncio.Event()
-        message: Any = fake_message()
+        message: Any = message_harness()
 
         def record_edit(**_kwargs: object) -> object:
             painted.set()
             return message
 
-        message.edit.side_effect = record_edit
+        message.edit.callback = record_edit
         message_root = MessageRoot(ProgressiveOperationPanel(progressed, resume), access=Everyone(), timeout=None)
 
         async with anyio.create_task_group() as tasks:
@@ -3080,7 +3080,7 @@ class TestResourceLoading:
             return "loaded"
 
         panel = VisibleResourcePanel(load)
-        message: Any = fake_message()
+        message: Any = message_harness()
         destination = _Destination(message)
         profiler = MemoryProfiler()
         message_root = MessageRoot(panel, access=Everyone(), profiler=profiler, timeout=None)
@@ -3105,7 +3105,7 @@ class TestResourceLoading:
                 _ = self.value.status
                 return Text("constant")
 
-        message: Any = fake_message()
+        message: Any = message_harness()
         message_root = MessageRoot(UnprojectedResource(), access=Everyone(), timeout=None)
 
         await message_root.send(_Destination(message))
@@ -3118,7 +3118,7 @@ class TestResourceLoading:
         async def load() -> str:
             return "loaded"
 
-        message: Any = fake_message()
+        message: Any = message_harness()
         destination = _Destination(message)
         profiler = MemoryProfiler()
         message_root = MessageRoot(AtomicResourcePanel(load), access=Everyone(), profiler=profiler, timeout=None)
@@ -3151,7 +3151,7 @@ class TestResourceLoading:
                 return Text(status.value)
 
         panel = KeyedAtomic()
-        message: Any = fake_message()
+        message: Any = message_harness()
         profiler = MemoryProfiler()
         message_root = MessageRoot(panel, access=Everyone(), profiler=profiler, timeout=None)
         await message_root.send(_Destination(message))
@@ -3197,7 +3197,7 @@ class TestResourceLoading:
 
         panel = Parent()
         message_root = MessageRoot(panel, access=Everyone(), timeout=None)
-        await message_root.send(_Destination(fake_message()))
+        await message_root.send(_Destination(message_harness()))
 
         panel.child.key = 1
         panel.visible = False
@@ -3232,7 +3232,7 @@ class TestResourceLoading:
         panel = Parent()
         profiler = MemoryProfiler()
         message_root = MessageRoot(panel, access=Everyone(), profiler=profiler, timeout=None)
-        await message_root.send(_Destination(fake_message()))
+        await message_root.send(_Destination(message_harness()))
         profiler.clear()
         starting_renders = tuple(child.renders for child in panel.children)
 
@@ -3269,7 +3269,7 @@ class TestResourceLoading:
         panel = Mixed()
         profiler = MemoryProfiler()
         message_root = MessageRoot(panel, access=Everyone(), profiler=profiler, timeout=None)
-        await message_root.send(_Destination(fake_message()))
+        await message_root.send(_Destination(message_harness()))
         profiler.clear()
 
         panel.key = 1
@@ -3301,7 +3301,7 @@ class TestResourceLoading:
             message = "offline"
             raise RuntimeError(message)
 
-        message: Any = fake_message()
+        message: Any = message_harness()
         message_root = MessageRoot(VisibleResourcePanel(load), access=Everyone(), timeout=None)
 
         await message_root.send(_Destination(message))
@@ -3327,7 +3327,7 @@ class TestResourceLoading:
             def render(self):
                 return Text(f"{type(self.first.status).__name__}:{type(self.second.status).__name__}")
 
-        message: Any = fake_message()
+        message: Any = message_harness()
         message_root = MessageRoot(Pair(), access=Everyone(), timeout=None)
 
         with anyio.fail_after(5):
@@ -3366,7 +3366,7 @@ class TestResourceLoading:
                     case Ready():
                         return [Text("parent:Ready"), self.boundary(self.child, key="child")]
 
-        message: Any = fake_message()
+        message: Any = message_harness()
         message_root = MessageRoot(Parent(), access=Everyone(), timeout=None)
 
         await message_root.send(_Destination(message))
@@ -3391,7 +3391,7 @@ class TestResourceLoading:
                 return Text(type(self.value.status).__name__) if self.shown else Text("hidden")
 
         panel = Conditional()
-        message: Any = fake_message()
+        message: Any = message_harness()
         message_root = MessageRoot(panel, access=Everyone(), timeout=None)
         await message_root.send(_Destination(message))
 
@@ -3425,8 +3425,8 @@ class TestResourceLoading:
 
         panel = VisibleResourcePanel(load)
         message_root = MessageRoot(panel, access=Everyone(), timeout=None)
-        await message_root.send(_Destination(fake_message()))
-        interaction = fake_interaction()
+        await message_root.send(_Destination(message_harness()))
+        interaction = interaction_harness()
 
         await message_root.dispatch("change", interaction)
 
@@ -3440,8 +3440,8 @@ class TestResourceLoading:
             return "loaded"
 
         panel = VisibleResourcePanel(load)
-        message: Any = fake_message()
-        message.edit.side_effect = sd.http_error(message="edit refused")
+        message: Any = message_harness()
+        message.edit.error = sd.http_error(message="edit refused")
         message_root = MessageRoot(panel, access=Everyone(), timeout=None)
 
         await message_root.send(_Destination(message))
@@ -3451,8 +3451,8 @@ class TestResourceLoading:
         assert message_root._view is not None
         assert "pending" in str(message_root._view.to_components())
 
-        message.edit.side_effect = None
-        message.edit.return_value = message
+        message.edit.error = None
+        message.edit.result = message
         await message_root.refresh()
 
         assert not message_root.pending
@@ -3462,7 +3462,7 @@ class TestResourceLoading:
     async def test_a_load_superseded_mid_settle_is_abandoned(self) -> None:
         """The mount supplies the cancellation `abandon_superseded_loads` asks for."""
         panel = CheckpointedResourcePanel()
-        message: Any = fake_message()
+        message: Any = message_harness()
         destination = _Destination(message)
         message_root = MessageRoot(panel, access=Everyone(), timeout=None)
 
@@ -3617,7 +3617,7 @@ class TestLoading:
     async def test_the_delivered_render_is_the_loaded_one(self):
         log: list[str] = []
         message_root = MessageRoot(Leaf(log, "panel"), access=Everyone(), timeout=None)
-        destination = _Destination(fake_message())
+        destination = _Destination(message_harness())
 
         await message_root.send(destination)
 
@@ -3631,7 +3631,7 @@ class TestLoading:
         log: list[str] = []
         message_root = MessageRoot(Nested(log), access=Everyone(), timeout=None)
 
-        await message_root.send(delivered_to(fake_message()))
+        await message_root.send(delivered_to(message_harness()))
 
         # The parent's loaded render is what reveals the child, so the tiers are serial —
         # but no component renders before its own load.
@@ -3655,7 +3655,7 @@ class TestLoading:
 
         component = Siblings(log, first=Waits(log, "waits"), second=Slow(log, "slow"))
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
-        destination = _Destination(fake_message())
+        destination = _Destination(message_harness())
 
         with anyio.fail_after(5):
             await message_root.send(destination)
@@ -3684,10 +3684,10 @@ class TestLoading:
                 self.open = True
 
         message_root = MessageRoot(OpenContext(), access=Everyone(), timeout=None)
-        await message_root.send(delivered_to(fake_message()))
+        await message_root.send(delivered_to(message_harness()))
         assert log == []
 
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         await message_root.dispatch("open", interaction)
 
         assert log.index("load:child") < log.index("render:child")
@@ -3710,7 +3710,7 @@ class TestLoading:
                 return Text(self.label)
 
         message_root = MessageRoot(Flaky(), access=Everyone(), timeout=None)
-        destination = _Destination(fake_message())
+        destination = _Destination(message_harness())
 
         with pytest.raises(RuntimeError, match="the database is down"):
             await message_root.send(destination)
@@ -3736,7 +3736,7 @@ class TestLoading:
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
 
         with pytest.raises(LookupError, match="no such account"):
-            await message_root.send(_Destination(fake_message()))
+            await message_root.send(_Destination(message_harness()))
 
     async def test_several_failures_at_once_stay_a_group(self):
         class Boom(Leaf):
@@ -3750,7 +3750,7 @@ class TestLoading:
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
 
         with pytest.raises(BaseExceptionGroup) as caught:
-            await message_root.send(_Destination(fake_message()))
+            await message_root.send(_Destination(message_harness()))
 
         assert len(caught.value.exceptions) == 2
 
@@ -3758,7 +3758,7 @@ class TestLoading:
         log: list[str] = []
         component = Leaf(log, "panel")
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
-        destination = _Destination(fake_message(), raises=sd.http_error(message="edit refused"))
+        destination = _Destination(message_harness(), raises=sd.http_error(message="edit refused"))
 
         with pytest.raises(discord.HTTPException):
             await message_root.send(destination)
@@ -3783,7 +3783,7 @@ class TestLoading:
         log: list[str] = []
         component = Nested(log)
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
-        await message_root.send(delivered_to(fake_message()))
+        await message_root.send(delivered_to(message_harness()))
         component.child = Leaf(log, "late")
         log.clear()
 
@@ -3803,7 +3803,7 @@ class TestLoading:
 
         message_root = MessageRoot(Plain(), access=Everyone(), timeout=None)
 
-        await message_root.send(delivered_to(fake_message()))
+        await message_root.send(delivered_to(message_harness()))
 
         assert len(renders) == 1
 
@@ -3823,7 +3823,7 @@ class TestLoading:
                 return Text(self.label)
 
         message_root = MessageRoot(Reader(), access=Everyone(), timeout=None)
-        await message_root.send(delivered_to(fake_message()))
+        await message_root.send(delivered_to(message_harness()))
 
         assert seen == [False]
 
@@ -3847,7 +3847,7 @@ class TestLoading:
         message_root = MessageRoot(Endless(), access=Everyone(), timeout=None)
 
         with pytest.raises(LayoutInvariantError, match="did not settle"):
-            await message_root.send(delivered_to(fake_message()))
+            await message_root.send(delivered_to(message_harness()))
 
 
 class _GuardedPanel(Component[sl.ComponentsV2Target]):
@@ -3898,7 +3898,7 @@ class TestGuards:
         message_root = MessageRoot(panel, access=Everyone(), timeout=None)
         commit_render(message_root)
         generation = message_root.generation
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         await message_root.dispatch("go", interaction)
 
@@ -3910,9 +3910,9 @@ class TestGuards:
     async def test_a_reasonless_denial_falls_back_to_chrome(self):
         message_root = MessageRoot(_GuardedPanel(guard=sl.guards.once()), access=Everyone(), timeout=None)
         commit_render(message_root)
-        await message_root.dispatch("go", fake_interaction())
+        await message_root.dispatch("go", interaction_harness())
 
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         await message_root.dispatch("go", interaction)
 
         assert _notice_text(interaction) == [Chrome().not_now]
@@ -3920,9 +3920,9 @@ class TestGuards:
     async def test_a_delay_bearing_denial_says_how_long_to_wait(self):
         message_root = MessageRoot(_GuardedPanel(guard=sl.guards.cooldown(30)), access=Everyone(), timeout=None)
         commit_render(message_root)
-        await message_root.dispatch("go", fake_interaction())
+        await message_root.dispatch("go", interaction_harness())
 
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         await message_root.dispatch("go", interaction)
 
         assert _notice_text(interaction) == ["Try again in 30 seconds."]
@@ -3937,7 +3937,7 @@ class TestGuards:
         )
         commit_render(message_root)
 
-        await message_root.dispatch("go", fake_interaction())
+        await message_root.dispatch("go", interaction_harness())
 
         dispatch = _profile_trace(profiler).result.dispatch
         assert dispatch is not None
@@ -3955,7 +3955,7 @@ class TestGuards:
         panel = _GuardedPanel(guard=sl.guards.permission(broken))
         message_root = MessageRoot(panel, access=Everyone(), timeout=None, on_error=hook, profiler=profiler)
         commit_render(message_root)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         await message_root.dispatch("go", interaction)
 
@@ -3987,8 +3987,8 @@ class TestGuards:
             message_root = MessageRoot(panel, access=Everyone(), timeout=None)
             commit_render(message_root)
 
-            await message_root.dispatch("go", fake_interaction())
-            await message_root.dispatch("go", fake_interaction())
+            await message_root.dispatch("go", interaction_harness())
+            await message_root.dispatch("go", interaction_harness())
 
             assert panel.presses == ["1"], policy
 
@@ -3998,8 +3998,8 @@ class TestGuards:
         commit_render(message_root)
         stale = message_root.generation - 1
 
-        await message_root.dispatch("go", fake_interaction(), generation=stale)
-        await message_root.dispatch("go", fake_interaction())
+        await message_root.dispatch("go", interaction_harness(), generation=stale)
+        await message_root.dispatch("go", interaction_harness())
 
         assert panel.count == 1
 
@@ -4025,9 +4025,9 @@ class TestGuards:
         commit_render(message_root)
         (picker,) = set(message_root.snapshot().handler_keys) - {f"act{index}" for index in range(8)}
 
-        await message_root.dispatch(picker, fake_interaction(), ["act3"])
-        await message_root.dispatch(picker, fake_interaction(), ["act3"])
-        await message_root.dispatch(picker, fake_interaction(), ["act4"])
+        await message_root.dispatch(picker, interaction_harness(), ["act3"])
+        await message_root.dispatch(picker, interaction_harness(), ["act3"])
+        await message_root.dispatch(picker, interaction_harness(), ["act4"])
 
         assert crowd.pressed == 2
 
@@ -4044,16 +4044,16 @@ class TestGuards:
         message_root = MessageRoot(Panel(), access=Everyone(), timeout=None)
         commit_render(message_root)
 
-        opened = fake_interaction()
+        opened = interaction_harness()
         await message_root.dispatch("rename", opened)
         assert opened.response.send_modal.await_count == 1
 
-        refused = fake_interaction()
+        refused = interaction_harness()
         await message_root.dispatch("rename", refused)
         assert refused.response.send_modal.await_count == 0
 
         # The submission completes a press already admitted, so `once` does not eat it.
-        await message_root.dispatch_submit("rename", fake_interaction(), spec, {"name": "Ada"}, submitted)
+        await message_root.dispatch_submit("rename", interaction_harness(), spec, {"name": "Ada"}, submitted)
         submitted.assert_awaited_once()
 
 
@@ -4079,7 +4079,7 @@ class TestBusyFeedback:
         panel = _GuardedPanel(busy=sl.interactions.BusySpec())
         message_root = MessageRoot(panel, access=Everyone(), timeout=None, pending_after=30)
         commit_render(message_root)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         await message_root.dispatch("go", interaction)
 
@@ -4093,7 +4093,7 @@ class TestBusyFeedback:
         panel = _GuardedPanel(busy=sl.interactions.BusySpec(pending="Rendering…"), run=release.wait)
         message_root = MessageRoot(panel, access=Everyone(), timeout=None, pending_after=0)
         commit_render(message_root)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         await self._press(message_root, interaction, release)
 
@@ -4127,7 +4127,7 @@ class TestBusyFeedback:
             acknowledgement_timeout=0.01,
         )
         commit_render(message_root)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         lock_held = asyncio.Event()
 
         async def hold_render_lock() -> None:
@@ -4174,7 +4174,7 @@ class TestBusyFeedback:
         panel = _GuardedPanel(busy=sl.interactions.BusySpec(), run=release.wait)
         message_root = MessageRoot(panel, access=Everyone(), timeout=None, pending_after=0)
         commit_render(message_root)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         await self._press(message_root, interaction, release)
 
@@ -4195,7 +4195,7 @@ class TestBusyFeedback:
         panel = _GuardedPanel(busy=sl.interactions.BusySpec(), run=fail)
         message_root = MessageRoot(panel, access=Everyone(), timeout=None, pending_after=0, on_error=hook)
         commit_render(message_root)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         await self._press(message_root, interaction, release)
 
@@ -4214,7 +4214,7 @@ class TestBusyFeedback:
         panel = _GuardedPanel(busy=sl.interactions.BusySpec(restore_on_error=False), run=fail)
         message_root = MessageRoot(panel, access=Everyone(), timeout=None, pending_after=0, on_error=AsyncMock())
         commit_render(message_root)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         await self._press(message_root, interaction, release)
 
@@ -4238,7 +4238,7 @@ class TestBusyFeedback:
         panel = Idle()
         message_root = MessageRoot(panel, access=Everyone(), timeout=None, pending_after=0)
         commit_render(message_root)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         await self._press(message_root, interaction, release)
 
@@ -4251,7 +4251,7 @@ class TestBusyFeedback:
         panel = _GuardedPanel(busy=sl.interactions.BusySpec())
         message_root = MessageRoot(panel, access=Everyone(), timeout=None, pending_after=0)
         commit_render(message_root)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         busy = _BusyPaint(message_root, "go", sl.interactions.BusySpec(), interaction)
         profile = SimpleNamespace(acknowledge=lambda source: None)
 
