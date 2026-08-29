@@ -18,7 +18,7 @@ from squid.bot.consent import NOT_ASKED, ensure_consented_account, prompt_for_co
 from squid_ui_discord import Everyone, SessionKey, SessionManager
 from squid_ui_discord.sessions import Opened
 from squid_ui_discord.testing import commit_render, delivered_to, interaction_harness, message_harness
-from tests.helpers.discord import make_layout_bot
+from tests.support.discord import make_layout_bot
 
 AFTER_CUTOFF = Instant.from_utc(2026, 8, 5)
 USER_ID = 123

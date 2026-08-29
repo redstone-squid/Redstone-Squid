@@ -28,7 +28,7 @@ from squid_ui_discord.testing import (
     interaction_harness,
     message_harness,
 )
-from tests.helpers.discord import make_layout_bot
+from tests.support.discord import make_layout_bot
 
 
 def _buttons(view: discord.ui.LayoutView) -> list[discord.ui.Button[Any]]:

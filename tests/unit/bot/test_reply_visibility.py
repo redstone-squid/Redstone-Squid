@@ -10,7 +10,7 @@ from discord.ext.commands import Context
 
 import squid_ui_discord as sd
 from squid.bot.ui import text_node
-from tests.helpers.discord import make_layout_bot
+from tests.support.discord import make_layout_bot
 
 
 def make_context(bot: Any, *, slash: bool = False, in_guild: bool = True, dm_raises: Exception | None = None) -> Any:

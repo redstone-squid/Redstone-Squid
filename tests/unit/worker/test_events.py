@@ -8,7 +8,7 @@ from squid.builds.domain import Build
 from squid.events import DomainEvent, DomainEventDelivery, UnsupportedEventVersionError
 from squid.voting.domain import BuildVoteTarget, VoteSessionResult, VoteSessionSnapshot, VoteStatus
 from squid.worker.events import ApplyBuildVoteOutcomeHandler, CoreDomainEventRunner, MaterializeNotificationHandler
-from tests.helpers.voting import build_snapshot
+from tests.support.voting import build_snapshot
 from tests.unit.worker.fakes import StubBuildService, StubEventService, StubNotificationService, StubVoteService
 
 

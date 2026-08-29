@@ -19,7 +19,7 @@ from squid.search.application import SearchService
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
 from squid.sponsors import PublicSponsor
 from squid_ui_discord.testing import commit_render, delivered_to, message_harness
-from tests.helpers.discord import make_layout_bot
+from tests.support.discord import make_layout_bot
 
 if TYPE_CHECKING:
     import squid.bot.app

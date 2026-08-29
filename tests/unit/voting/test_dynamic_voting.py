@@ -27,7 +27,7 @@ from squid.voting.domain import (
 )
 from squid.voting.errors import InvalidVoteConfigurationError
 from squid_ui.text import NEUTRAL, resolve_text
-from tests.helpers.voting import GENERIC_OPTIONS, build_snapshot, poll_snapshot
+from tests.support.voting import GENERIC_OPTIONS, build_snapshot, poll_snapshot
 
 STAFF = frozenset({VOTE_WEIGHT_STAFF.name})
 DELETE_LOG = frozenset({VOTE_LOG_DELETE_CAST.name})

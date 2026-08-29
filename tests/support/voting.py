@@ -1,4 +1,4 @@
-"""Shared builders for voting tests.
+"""Shared support builders for voting tests.
 
 Snapshots and seeded sessions are needed by the domain, application, API, bot and
 persistence suites alike, and every one of them used to hand-roll its own. Keeping

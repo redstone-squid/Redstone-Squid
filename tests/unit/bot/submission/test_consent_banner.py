@@ -17,7 +17,7 @@ from squid.bot.submission.consent_banner import (
 )
 from squid.bot.submission.submit import BuildSubmitCommands
 from squid_ui_discord.testing import message_harness
-from tests.helpers.discord import make_layout_bot
+from tests.support.discord import make_layout_bot
 
 BUILD_LOG_CHANNEL = 500
 USER_ID = 42

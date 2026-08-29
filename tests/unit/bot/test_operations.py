@@ -6,7 +6,7 @@ from squid.bot.ui import info_node
 from squid_ui import ComponentsV2Target
 from squid_ui.document import DocumentLike
 from squid_ui_discord.testing import ContextHarness, MessageHarness, message_harness
-from tests.helpers.discord import invocation_scope, make_layout_bot
+from tests.support.discord import invocation_scope, make_layout_bot
 
 
 def _context(message: MessageHarness) -> ContextHarness:
