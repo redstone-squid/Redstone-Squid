@@ -5,12 +5,10 @@ import logging
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
-import anyio
 import discord
 from discord import Message, app_commands
 from discord.ext.commands import Cog
 
-import squid_ui as sl
 import squid_ui_discord as sd
 from squid.accounts.domain import IdentityProvider
 from squid.bot.consent import ensure_consented_account
@@ -20,9 +18,8 @@ from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.ingestion import ingest_message_bundle
 from squid.bot.submission.media import CatboxMirror
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
-from squid.bot.submission.ui.controls import build_edit
-from squid.bot.submission.ui.views import SubmissionFormComponent
-from squid.bot.ui import L, error_node, text_node
+from squid.bot.submission.ui.views import SubmissionOutcome, SubmissionScreen
+from squid.bot.ui import error_node, text_node
 from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.bot.utils.permissions import enforce
 from squid.bot.utils.sticky_message import StickyMessage
@@ -178,73 +175,26 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             measured = analyses[0][1].analysis.metrics.dimensions
             draft.dimensions = (measured.width, measured.height, measured.length)
 
-        submitted: Build | None = None
-
-        async def persist_draft() -> None:
+        async def persist_draft() -> SubmissionOutcome:
             """Commit the draft from inside the form's submit button.
 
             Anything raised here leaves the workspace message alive and clickable, so the user
             retries from the draft they already filled in instead of rerunning the command.
             """
-            nonlocal submitted
             build = draft.finalize()
             self._note_dimension_mismatch(build, analyses)
             await self._note_schematic_duplicates(build, analyses)
             await self.builds.submit(build, submitter_account_id=uploader_account_id, ai_generated=False)
             await self._record_analyses(build, analyses, uploader_account_id=uploader_account_id)
-            submitted = build
+            node = await self.bot.for_build(build).render_node()
+            await self.bot.for_build(build).post_for_voting()
+            return SubmissionOutcome(build, node)
 
-        component = SubmissionFormComponent(
+        await SubmissionScreen(
             draft,
             self.builds,
-            author_id=interaction.user.id,
             on_submit=persist_draft,
-        )
-        message_root = invocation.runtime.mount(
-            component,
-            access=sd.Owner(interaction.user.id),
-            localization=invocation.localization,
-            timeout=300,
-        )
-        component._root = message_root
-        delivered = await message_root.send(invocation.destination("personal", wait=True))
-        # `wait=True` fetches the message back, and a delivery that produced none would have
-        # raised. The form edits this message three times below, so it needs the handle.
-        assert isinstance(delivered, sd.delivery.Delivered), "the interaction response cannot be abandoned"
-        workspace_message = delivered.result.message
-        assert workspace_message is not None, "a waited response always hands back its message"
-        await component.wait()
-        if component.value is None:
-            expired = invocation.render(text_node(t(locale, _("Submission expired. Nothing was saved."))))
-            await sd.delivery.handle_for(workspace_message, mode=expired.mode).write(expired)
-            return
-        if component.value is False:
-            cancelled = invocation.render(text_node(t(locale, _("Submission cancelled. Nothing was saved."))))
-            await sd.delivery.handle_for(workspace_message, mode=cancelled.mode).write(cancelled)
-            return
-
-        assert submitted is not None, "The form only reports success once the build is persisted."
-        build = submitted
-
-        heading = t(
-            locale,
-            _("## Submitted for review\nSubmission ID: `{id}`\nStaff can now review and vote on this build."),
-            id=build.id,
-        )
-        preview = invocation.render(
-            sl.primitives.Text(heading),
-            await self.bot.for_build(build).render_node(),
-            sl.primitives.Section(
-                (sl.primitives.Text(L("Edit this build."), priority=-10),),
-                sl.primitives.RoutedButton(L("Edit"), build_edit.id(build_id=build.id)),
-            ),
-        )
-        async with anyio.create_task_group() as tasks:
-            tasks.start_soon(
-                sd.delivery.handle_for(workspace_message, mode=preview.mode).write,
-                preview,
-            )
-            tasks.start_soon(self.bot.for_build(build).post_for_voting)
+        ).show(interaction, wait=True)
 
     async def _analyse_attachments(
         self, pending: Sequence[tuple[str, bytes]], *, uploader_account_id: int

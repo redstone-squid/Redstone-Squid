@@ -97,9 +97,6 @@ class BuildInfoComponent(sl.Component[sl.ComponentsV2Target]):
 
     async def _edit(self, event: sl.PressEvent) -> None:
         interaction = sd.native(event)
-        from squid.bot.submission.ui.views import BuildEditComponent
+        from squid.bot.submission.ui.opening import open_build_editor
 
-        await BuildEditComponent(
-            self.build,
-            interaction.client.services.builds,
-        ).send(interaction, ephemeral=self._ephemeral, parent=sd.responder(event).message_root)
+        await open_build_editor(interaction, self.build)
