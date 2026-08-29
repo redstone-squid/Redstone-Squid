@@ -6,7 +6,6 @@ coherence at construction and about which mode transitions reach Discord at all.
 """
 
 import io
-from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -381,6 +380,15 @@ class _Channel:
         return self._message
 
 
+class _Client:
+    def __init__(self, message: Any) -> None:
+        self.channel = _Channel(message)
+        self.fetch_channel = AsyncMock()
+
+    def get_channel(self, _channel_id: int) -> _Channel:
+        return self.channel
+
+
 class TestDurableMode:
     """The mode is recorded beside the address, so recovery does not have to re-derive it."""
 
@@ -389,7 +397,7 @@ class TestDurableMode:
         message_root = squid_ui_discord.MessageRoot(Panel(), access=squid_ui_discord.Everyone(), timeout=None)
         sent = await message_root.send(delivered_to(message))
         assert isinstance(sent, delivery.Delivered)
-        client = SimpleNamespace(get_channel=lambda _id: _Channel(message), fetch_channel=AsyncMock())
+        client = _Client(message)
         frontend = DiscordFrontend(client)  # type: ignore[arg-type]
 
         promoted = await frontend.promote(message_root, sent.result)
@@ -412,7 +420,7 @@ class TestDurableMode:
     async def test_a_record_written_before_the_mode_existed_falls_back_to_the_flag(self) -> None:
         message = message_harness()
         message_root = squid_ui_discord.MessageRoot(Panel(), access=squid_ui_discord.Everyone(), timeout=None)
-        client = SimpleNamespace(get_channel=lambda _id: _Channel(message), fetch_channel=AsyncMock())
+        client = _Client(message)
         frontend = DiscordFrontend(client)  # type: ignore[arg-type]
         address = FrontendAddress("discord", {"channel_id": message.channel.id, "message_id": message.id})
 
