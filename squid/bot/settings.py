@@ -8,9 +8,10 @@ from discord.ext.commands import Cog, Context, guild_only, hybrid_group
 
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.settings_view import FOLLOW_DISCORD, SettingsCapabilities, SettingsPanelView
+from squid.bot.settings_view import FOLLOW_DISCORD, SettingsCapabilities, SettingsPanel
 from squid.bot.utils.components import edit_layout, error_layout, info_layout, no_mentions
 from squid.bot.utils.permissions import hide_unless, requires, subject_for
+from squid.bot.utils.visibility import personal
 from squid.core.i18n import SUPPORTED_LOCALES, _
 from squid.permissions.domain.catalogue import (
     SETTINGS_SERVER_EDIT,
@@ -38,7 +39,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         """Open this server's settings panel."""
         assert ctx.guild is not None
         locale = await resolve_locale(ctx, self.settings_service)
-        view = SettingsPanelView(
+        view = SettingsPanel(
             settings=self.settings_service,
             votes=self.bot.services.votes,
             guild=ctx.guild,
@@ -48,8 +49,14 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
             owner_guild_id=self.bot.owner_server_id,
         )
         await view.load()
-        message = await ctx.send(view=view, allowed_mentions=no_mentions(), ephemeral=True)
-        view.bind_message(message)
+        mount = view.mount()
+        rendered = mount.build_view()
+        message = await ctx.send(
+            view=rendered,
+            allowed_mentions=no_mentions(),
+            ephemeral=personal(ctx),
+        )
+        mount.bind(message, rendered)
 
     async def _capabilities(self, ctx: Context[BotT]) -> SettingsCapabilities:
         """What this caller may do, asked once so the panel can render only that.
@@ -245,7 +252,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
 
     async def _reply(self, ctx: Context[BotT], layout: discord.ui.LayoutView) -> None:
         """Answer the caller privately, in the layout system the rest of the bot uses."""
-        await ctx.send(view=layout, allowed_mentions=no_mentions(), ephemeral=True)
+        await ctx.send(view=layout, allowed_mentions=no_mentions(), ephemeral=personal(ctx))
 
     def _weight_scope_note(self, guild_id: int, kind: VoteKind, locale: str | None) -> str:
         """Warn when this server's multipliers bind nothing it can see."""

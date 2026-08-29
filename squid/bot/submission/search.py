@@ -1,22 +1,29 @@
 """Everything related to querying the database for information."""
 
+import io
+import json
 import logging
-from enum import StrEnum
-from typing import TYPE_CHECKING
+from dataclasses import asdict
+from enum import Enum, StrEnum
+from typing import TYPE_CHECKING, Any, override
 
+import discord
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Context, when_mentioned
 from discord.utils import escape_markdown
 
+import squid_layouts as sl
 from squid.bot.i18n import resolve_locale, t
+from squid.bot.submission.build_info import BuildInfoComponent
+from squid.bot.submission.consent_banner import BuildLogConsentStickyMessage
 from squid.bot.submission.edit import BuildEditCommands
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.schematics import BuildSchematicCommands
 from squid.bot.submission.search_view import SearchResultsView
 from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.submission.ui.components import DynamicBuildEditButton
-from squid.bot.submission.ui.views import BuildInfoView
+from squid.bot.ui import PagedList, create_mount
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.components import (
     edit_layout,
@@ -26,6 +33,8 @@ from squid.bot.utils.components import (
     text_layout,
 )
 from squid.bot.utils.permissions import hide_unless, requires
+from squid.bot.utils.visibility import personal
+from squid.builds.domain import Build
 from squid.builds.errors import AliasAlreadyAddedError
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import (
@@ -88,6 +97,58 @@ def _targeted(target: SearchTarget, query: str) -> tuple[SearchScope, str]:
     return scope, f"{narrowing} ({query})"
 
 
+def _pending_entry(build: Build, locale: str | None) -> str:
+    """One line of the review queue: what it is, who made it, who sent it.
+
+    The submitter is a mention rather than the snowflake the old list printed (audit C5).
+    It can be absent: `submitter_discord_id` is derived from the account, and an account with
+    no Discord identity linked has none.
+    """
+    creators = ", ".join(sorted(build.creators_ign))
+    submitter = (
+        f"<@{build.submitter_discord_id}>"
+        if build.submitter_discord_id is not None
+        else t(locale, _("someone unlinked"))
+    )
+    return t(
+        locale,
+        _("**#{id}** {title}\n-# by {creators} · submitted by {submitter}"),
+        id=build.id,
+        title=escape_markdown(build.title),
+        creators=escape_markdown(creators) if creators else t(locale, _("unknown")),
+        submitter=submitter,
+    )
+
+
+def _debug_dump(build: Build) -> str:
+    """Serialize a build's internal state as readable JSON.
+
+    This used to be `str(build.__dict__)` pasted into a message body, which Discord truncates
+    at exactly the builds worth debugging and which renders enums as their repr. A file
+    survives the length limit and opens in something that can fold it.
+
+    `embedding` is dropped: a few thousand floats tell a reader nothing and would dominate the
+    file. Its length is kept, because "is this build embedded at all" is a real question.
+    """
+    state: dict[str, Any] = {key: value for key, value in asdict(build).items() if key != "embedding"}
+    state["category"] = build.category
+    state["embedding_dimensions"] = len(build.embedding) if build.embedding is not None else None
+    return json.dumps(_jsonable(state), indent=2, sort_keys=True, default=str)
+
+
+def _jsonable(value: Any) -> Any:
+    """Render enums by name, since an IntEnum otherwise serializes as the integer."""
+    match value:
+        case Enum():
+            return value.name
+        case dict():
+            return {str(key): _jsonable(item) for key, item in value.items()}
+        case list() | tuple():
+            return [_jsonable(item) for item in value]
+        case _:
+            return value
+
+
 class SearchCog[
     BotT: "squid.bot.app.RedstoneSquid",
 ](
@@ -103,7 +164,16 @@ class SearchCog[
         self.inference = bot.services.build_inference
         self.messages = bot.services.messages
         self.restrictions = bot.services.restrictions
+        self.consent_sticky = BuildLogConsentStickyMessage()
         self.register_edit_context_menu()
+        self.register_recalc_context_menu()
+
+    @override
+    async def cog_unload(self) -> None:
+        # The tree is the bot's, not the cog's, so a reload leaves both menus registered and
+        # the second `add_command` raises rather than replacing them.
+        for menu in (self.edit_ctx_menu, self.recalc_ctx_menu):
+            self.bot.tree.remove_command(menu.name, type=menu.type)
 
     @autocompletes(sort="search_sorts", query="search_query")
     @commands.hybrid_command("search")
@@ -134,12 +204,25 @@ class SearchCog[
             sort=SearchSort.parse(sort),
         )
         page = await self.search.search(request)
-        view = SearchResultsView(self.search, request, page, author_id=ctx.author.id, locale=locale)
+        queries = getattr(self, "queries", None)
+        load_build = queries.get if queries is not None else None
+        view = SearchResultsView(
+            self.search,
+            request,
+            page,
+            author_id=ctx.author.id,
+            locale=locale,
+            load_build=load_build,
+            render_build=lambda build: self.bot.for_build(build).render_node(),
+        )
+        mount = view.mount()
+        rendered = mount.build_view()
         message = await ctx.send(
-            view=view,
+            view=rendered,
+            files=mount.attachment_files(),
             allowed_mentions=no_mentions(),
         )
-        view.bind_message(message)
+        mount.bind(message, rendered)
 
     @commands.hybrid_group(name="restrictions")
     @requires(RESTRICTION_ALIAS_CREATE)
@@ -177,27 +260,17 @@ class SearchCog[
     @BuildCommandGroup.build_hybrid_group.command(name="queue")  # type: ignore
     async def get_pending_submissions(self, ctx: Context[BotT]):
         """Shows an overview of all submitted builds pending review."""
+        await ctx.defer()
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
-            pending_submissions = await self.queries.pending()
-
-            if len(pending_submissions) == 0:
-                desc = t(locale, _("No open submissions."))
-            else:
-                desc = []
-                for sub in pending_submissions:
-                    # ID - Title
-                    # by Creators - submitted by Submitter
-                    desc.append(
-                        f"**{sub.id}** - {sub.title}\n_by {', '.join(sorted(sub.creators_ign))}_ - _submitted by {sub.submitter_discord_id}_"
-                    )
-                desc = "\n\n".join(desc)
-
-            await edit_layout(
-                sent_message,
-                info_layout(title=t(locale, _("Open Records")), description=desc),
-                allowed_mentions=no_mentions(),
-            )
+        pending = await self.queries.pending()
+        paginator = PagedList(
+            t(locale, _("Pending submissions")),
+            [_pending_entry(build, locale) for build in pending],
+            empty=t(locale, _("Nothing is waiting for review.")),
+            locale=locale,
+            page_size=None,
+        )
+        await paginator.send(ctx)
 
     @autocompletes(build_id="builds")
     @BuildCommandGroup.build_hybrid_group.command(name="view")  # type: ignore
@@ -218,8 +291,17 @@ class SearchCog[
                 )
                 return None
 
-            view = BuildInfoView[BotT](build)
-            await view.send(interaction)
+            node = await self.bot.for_build(build).render_node()
+            navigator = sl.discord.Navigator(BuildInfoComponent(build, node, locale=locale))
+            mount = create_mount(navigator, locale=locale, timeout=300)
+            rendered = mount.build_view()
+            message = await interaction.followup.send(
+                view=rendered,
+                files=mount.attachment_files(),
+                allowed_mentions=no_mentions(),
+                wait=True,
+            )
+            mount.bind(message, rendered)
             return None
         async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
             build = await self.queries.get(build_id)
@@ -285,23 +367,25 @@ class SearchCog[
     )
     async def debug_build(self, ctx: Context[BotT], build_id: int):
         """Display internal details for a build."""
+        await ctx.defer(ephemeral=personal(ctx))
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
-            build = await self.queries.get(build_id)
-
-            if build is None:
-                return await edit_layout(
-                    sent_message,
-                    error_layout(t(locale, _("Error")), t(locale, _("No build with that ID."))),
-                    allowed_mentions=no_mentions(),
-                )
-
-            await edit_layout(
-                sent_message,
-                text_layout(escape_markdown(str(build.__dict__))),
+        build = await self.queries.get(build_id)
+        if build is None:
+            await ctx.send(
+                view=error_layout(t(locale, _("Error")), t(locale, _("No build with that ID."))),
+                ephemeral=personal(ctx),
                 allowed_mentions=no_mentions(),
             )
-        return None
+            return
+
+        # One message carrying the file, rather than a running message that would then have to
+        # be edited into holding an attachment it was not sent with.
+        await ctx.send(
+            view=text_layout(t(locale, _("Internal state for build #{id} is attached."), id=build_id)),
+            file=discord.File(io.BytesIO(_debug_dump(build).encode()), filename=f"build-{build_id}-debug.json"),
+            ephemeral=personal(ctx),
+            allowed_mentions=no_mentions(),
+        )
 
     @Cog.listener("on_command_error")
     async def mention_fallback_search(self, ctx: Context[BotT], exception: commands.CommandError, /) -> None:  # type: ignore[override]

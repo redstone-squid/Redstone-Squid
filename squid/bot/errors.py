@@ -10,7 +10,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from squid.accounts.errors import ConsentRequiredError
-from squid.bot.utils.components import StaticLayout, edit_layout, error_layout, no_mentions
+from squid.bot.utils.components import edit_layout, error_layout, no_mentions
 from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.core.errors import DomainError, JSONValue, SquidError
 from squid.core.i18n import _, translate
@@ -25,11 +25,12 @@ from squid.observability import (
     trace_span,
 )
 from squid.permissions.domain import CATALOGUE
+from squid_layouts.discord import conform_modal
 
 logger = logging.getLogger(__name__)
 
 _PRESENTED_ATTRIBUTE = "_squid_error_presented"
-type ErrorResponder = Callable[[StaticLayout], Awaitable[None]]
+type ErrorResponder = Callable[[discord.ui.LayoutView], Awaitable[None]]
 
 _reporter: ErrorReportService | None = None
 
@@ -66,7 +67,7 @@ class ErrorPresentation:
     ID, while a moderator looking one up will be quoting whatever the card showed.
     """
 
-    def to_layout(self) -> StaticLayout:
+    def to_layout(self) -> discord.ui.LayoutView:
         """Build the Components V2 layout for this presentation."""
         return error_layout(self.title, self.detail)
 
@@ -332,7 +333,7 @@ async def handle_context_error[BotT: commands.Bot](
 ) -> None:
     """Handle an exception raised by a prefix or hybrid command."""
 
-    async def respond(layout: StaticLayout) -> None:
+    async def respond(layout: discord.ui.LayoutView) -> None:
         await context.send(
             view=layout,
             ephemeral=context.interaction is not None,
@@ -362,7 +363,7 @@ async def handle_interaction_error(
 ) -> None:
     """Handle an exception raised by an application command or UI interaction."""
 
-    async def respond(layout: StaticLayout) -> None:
+    async def respond(layout: discord.ui.LayoutView) -> None:
         if interaction.response.is_done():
             await interaction.followup.send(view=layout, ephemeral=True, allowed_mentions=no_mentions())
         else:
@@ -397,7 +398,7 @@ async def handle_message_error(
     its own.
     """
 
-    async def respond(layout: StaticLayout) -> None:
+    async def respond(layout: discord.ui.LayoutView) -> None:
         await edit_layout(message, layout, allowed_mentions=no_mentions())
 
     await _handle_discord_error(
@@ -509,6 +510,16 @@ class ExpiringLayoutView(ErrorHandledLayoutView):
 
 class ErrorHandledModal(discord.ui.Modal):
     """Discord modal that delegates submission failures to the shared handler."""
+
+    @override
+    def to_dict(self) -> dict[str, Any]:
+        # Every send_modal serializes through here. discord.py validates no string lengths,
+        # so an oversized title or a default joined from unbounded user data (e.g. a build's
+        # image URLs) would fail at send time with HTTP 50035; clamp instead of crashing.
+        interventions = conform_modal(self)
+        if interventions:
+            logger.warning("modal clamped before send: %s", "; ".join(interventions))
+        return super().to_dict()
 
     @override
     async def on_error[ClientT: discord.Client](

@@ -138,7 +138,7 @@ class PostgresSuggestionRepository:
         """Return definition ids with the title an admin recognizes them by.
 
         Only the all-time scope is offered: every current-scope category has an all-time twin, and
-        `/admin records-lookup` materializes the all-time definition regardless of which id it gets.
+        `/records lookup` materializes the all-time definition regardless of which id it gets.
         """
         statement = select(RecordDefinition.id, RecordDefinition.title, RecordDefinition.build_kind).where(
             RecordDefinition.version_scope == VersionScope.ALL_TIME.value

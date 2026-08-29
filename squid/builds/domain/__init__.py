@@ -26,6 +26,7 @@ from squid.builds.domain.models import (
     UnknownRestrictions,
     UtilityBuild,
     parse_time_string,
+    sort_restrictions,
 )
 
 __all__ = [
@@ -54,4 +55,5 @@ __all__ = [
     "UnknownRestrictions",
     "UtilityBuild",
     "parse_time_string",
+    "sort_restrictions",
 ]

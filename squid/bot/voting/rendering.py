@@ -10,15 +10,9 @@ from textwrap import dedent
 
 import discord
 
-from squid.bot.utils.components import (
-    DISCORD_GREEN,
-    DISCORD_RED,
-    DISCORD_YELLOW,
-    CardField,
-    StaticLayout,
-    card_layout,
-    text_layout,
-)
+import squid_layouts as sl
+from squid.bot.ui import DISCORD_GREEN, DISCORD_RED, DISCORD_YELLOW, CardField, card_layout
+from squid.bot.voting.controls import poll_controls
 from squid.voting.domain import VoteChoice, VoteSessionResult, VoteSessionSnapshot, VoteStatus
 
 
@@ -29,12 +23,16 @@ def primary_emoji(snapshot: VoteSessionSnapshot, choice: VoteChoice, guild_id: i
 
 
 def render_build_review(
-    container: discord.ui.Container[discord.ui.LayoutView],
+    card: sl.primitives.Node,
     snapshot: VoteSessionSnapshot,
     guild_id: int | None,
-) -> StaticLayout:
-    """Compose a build card with the review vote state beneath it."""
-    container.add_item(discord.ui.Separator())
+) -> discord.ui.LayoutView:
+    """Compose a build card with the review vote state beneath it.
+
+    The card arrives as IR rather than as a built container so the whole post is solved in
+    one pass: the vote text competes for the display budget instead of being appended to an
+    already-solved card and overflowing it.
+    """
     if snapshot.status == "closed":
         result_label = {
             "approved": "Approved",
@@ -56,11 +54,17 @@ def render_build_review(
             f"**Accept:** {snapshot.upvotes:g}/{snapshot.pass_threshold}  •  "
             f"**Deny:** {snapshot.downvotes:g}/{-snapshot.fail_threshold}"
         )
-    container.add_item(discord.ui.TextDisplay(vote_text))
-    return StaticLayout(container)
+    # The vote state is Never: a review whose tallies were trimmed away is worse than a
+    # review whose build description was.
+    state = (sl.primitives.Sep(), sl.primitives.Text(vote_text, overflow=sl.primitives.Never()))
+    if isinstance(card, sl.primitives.Panel):
+        post = sl.primitives.Panel(children=(*card.children, *state), accent=card.accent)
+    else:
+        post = sl.primitives.Panel(children=(card, *state))
+    return sl.discord.render_static([post])
 
 
-def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> StaticLayout:
+def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> discord.ui.LayoutView:
     """Render the card asking whether a logged message should be deleted."""
     # Compare enum members rather than their string values: `status == "closed"` is true at
     # runtime for a StrEnum but reads as a non-overlapping comparison to a type checker, which
@@ -104,9 +108,19 @@ def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> Sta
     )
 
 
-def render_generic_poll(snapshot: VoteSessionSnapshot, voter_discord_ids: Mapping[int, int] = {}) -> StaticLayout:
-    """Render a user-created poll, honouring its visibility setting."""
-    return text_layout(generic_poll_text(snapshot, voter_discord_ids))
+def render_generic_poll(
+    snapshot: VoteSessionSnapshot,
+    voter_discord_ids: Mapping[int, int] = {},
+) -> discord.ui.LayoutView:
+    """Render a user-created poll, honouring its visibility setting.
+
+    An open poll carries its own close and refresh controls; a closed one has nothing left
+    to do, so its card is inert and stays readable as a record.
+    """
+    nodes: list[sl.LayoutNode] = [sl.primitives.Text(generic_poll_text(snapshot, voter_discord_ids))]
+    if snapshot.status is not VoteStatus.CLOSED:
+        nodes.append(sl.primitives.RawItem(poll_controls, kind="discord.item", version=1))
+    return sl.discord.render_static(nodes)
 
 
 def generic_poll_text(snapshot: VoteSessionSnapshot, voter_discord_ids: Mapping[int, int] = {}) -> str:

@@ -21,19 +21,46 @@ if TYPE_CHECKING:
 
 MORE_INFORMATION = _("Use `/help <command>` to get more information.")
 
+DIRECTORY_CATEGORIES: tuple[tuple[Any, frozenset[str]], ...] = (
+    (_("Build"), frozenset({"build"})),
+    (_("Discover"), frozenset({"search", "restrictions"})),
+    (_("Account"), frozenset({"account", "notifications", "redstoner"})),
+    (_("Community"), frozenset({"poll", "archive"})),
+    (_("Administration & setup"), frozenset({"records", "settings", "tag", "version"})),
+    (_("Information"), frozenset({"help", "info"})),
+)
+"""How the directory groups top-level commands, by command name.
+
+Out here rather than inline so a name that no longer exists is a failing test instead of a
+silently empty category — `patterns` and `vote` both outlived their commands in this map.
+Staff groups are deliberately absent: they are hidden from non-staff pickers anyway, and a
+directory that lists what most readers cannot run is the surface phase 5 is shrinking.
+"""
+
+
+type AnyCommand = Command[Any, ..., Any] | app_commands.Command[Any, ..., Any] | app_commands.Group
+
+
+def _summary(command: AnyCommand, locale: str | None) -> str:
+    """One line about a command, from wherever that surface keeps it.
+
+    A prefix command carries `short_doc`, an app command a `description`. The directory
+    lists both, because the app-only ones are exactly the commands a user cannot discover
+    any other way.
+    """
+    text = getattr(command, "short_doc", None) or getattr(command, "description", "")
+    return text or t(locale, _("No details provided"))
+
 
 def _command_section(
     title: str,
-    commands_: Sequence[Command[Any, ..., Any]],
+    commands_: Sequence[AnyCommand],
     locale: str | None,
 ) -> CardSection:
     """Render a compact command category for the slash-help directory."""
     return CardSection(
         title,
-        tuple(
-            CardField(f"/{command.qualified_name}", command.short_doc or t(locale, _("No details provided")))
-            for command in commands_
-        ),
+        tuple(CardField(f"/{command.qualified_name}", _summary(command, locale)) for command in commands_),
     )
 
 
@@ -84,17 +111,10 @@ class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                     footer=t(locale, _("Command names and options also autocomplete in Discord.")),
                 )
         else:
-            categories = {
-                t(locale, _("Build")): {"build"},
-                t(locale, _("Discover")): {"search", "patterns", "restrictions"},
-                t(locale, _("Account")): {"account", "redstoner"},
-                t(locale, _("Administration & setup")): {"admin", "settings", "tag", "vote", "version"},
-                t(locale, _("Information")): {"info", "archive"},
-            }
-            root_commands = [item for item in self.bot.commands if not item.hidden]
+            root_commands = self._root_commands()
             sections = tuple(
-                _command_section(title, [item for item in root_commands if item.name in names], locale)
-                for title, names in categories.items()
+                _command_section(t(locale, title), [item for item in root_commands if item.name in names], locale)
+                for title, names in DIRECTORY_CATEGORIES
             )
             layout = help_layout(
                 t(locale, _("Redstone Squid help")),
@@ -103,6 +123,20 @@ class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 footer=t(locale, MORE_INFORMATION),
             )
         await interaction.response.send_message(view=layout, allowed_mentions=no_mentions())
+
+    def _root_commands(self) -> list[AnyCommand]:
+        """Every top-level command a user could run, prefix tree and app tree alike.
+
+        The directory used to read `bot.commands` alone, which meant an app-only command
+        was undiscoverable from the one surface built for discovery — `/poll`, `/help`
+        and `/notifications` were all missing. Hybrid commands appear in both trees, so the
+        prefix spelling wins and the app tree only contributes what it alone has.
+        """
+        prefix_commands = [item for item in self.bot.commands if not item.hidden]
+        named = {item.name for item in prefix_commands}
+        app_tree = self.bot.tree.get_commands(type=discord.AppCommandType.chat_input)
+        app_only = [item for item in app_tree if item.name not in named]
+        return [*prefix_commands, *app_only]
 
     @help.autocomplete("command")
     async def command_autocomplete(

@@ -3,6 +3,51 @@ from pathlib import Path
 
 from pytest_archon import archrule
 
+# Roots for the AST scans that state repo-wide invariants. The squid-layouts workspace member
+# is held to the same rules as squid itself.
+SCAN_ROOTS = (Path("squid"), Path("packages/squid-layouts/src"))
+
+
+def _scanned_files() -> list[Path]:
+    return [path for root in SCAN_ROOTS for path in root.rglob("*.py")]
+
+
+def test_layouts_package_stays_standalone() -> None:
+    """The UI framework package must remain publishable: no host-project or adapter imports."""
+    (
+        archrule("squid-layouts stays independent from the host application")
+        .match("squid_layouts*")
+        .should_not_import("squid")
+        .should_not_import("squid.*")
+        .should_not_import("sqlalchemy*")
+        .should_not_import("fastapi*")
+        .should_not_import("nucleation*")
+        .check("squid_layouts", only_direct_imports=True)
+    )
+
+
+def test_only_the_discord_transport_uses_the_layouts_package() -> None:
+    (
+        archrule("squid-layouts is a Discord presentation concern")
+        .match("squid*")
+        .exclude("squid.bot*")
+        .should_not_import("squid_layouts*")
+        .check("squid", only_direct_imports=True)
+    )
+
+
+def test_layouts_package_carries_no_translation_markers() -> None:
+    """Babel only extracts from squid/**, so a `_(...)` literal in the package would silently
+    drop out of the catalogue. All user-facing text must enter through Chrome, pre-translated."""
+    violations = [
+        f"{path}:{node.lineno}"
+        for path in Path("packages/squid-layouts/src").rglob("*.py")
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_"
+    ]
+
+    assert violations == []
+
 
 def test_exception_model_imports_no_transport() -> None:
     (
@@ -83,7 +128,7 @@ def test_production_modules_do_not_import_fuzz_engines() -> None:
     """Keep generators, native instrumentation, and their runtime costs test-only."""
     fuzz_packages = ("atheris", "hypothesis", "schemathesis")
     violations: list[tuple[Path, int, str]] = []
-    for path in Path("squid").rglob("*.py"):
+    for path in _scanned_files():
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if isinstance(node, ast.Import):
                 violations.extend(
@@ -108,7 +153,7 @@ ENGINE_REFERENCE_ALLOWLIST = frozenset(
 
 def test_no_module_outside_the_adapter_names_the_native_engine() -> None:
     violations: list[tuple[Path, int, str]] = []
-    for path in Path("squid").rglob("*.py"):
+    for path in _scanned_files():
         if path in ENGINE_REFERENCE_ALLOWLIST:
             continue
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
@@ -132,7 +177,7 @@ def test_no_module_outside_the_adapter_names_the_native_engine() -> None:
 
 def test_application_modules_do_not_read_process_environment_directly() -> None:
     violations: list[tuple[Path, int, str]] = []
-    for path in Path("squid").rglob("*.py"):
+    for path in _scanned_files():
         if path == Path("squid/config.py"):
             continue
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
@@ -151,7 +196,7 @@ def test_logging_calls_keep_message_templates_stable() -> None:
     """Keep log messages lazily formatted so aggregators can group by template."""
     violations: list[tuple[Path, int]] = []
     log_methods = {"debug", "info", "warning", "error", "exception", "critical", "log"}
-    for path in Path("squid").rglob("*.py"):
+    for path in _scanned_files():
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
                 continue
@@ -358,3 +403,23 @@ def test_application_and_domain_layers_raise_only_structured_errors() -> None:
         if counts.get(key, 0) < allowed
     }
     assert stale == {}, f"lower or drop these BARE_RAISE_ALLOWLIST entries (allowed, found): {stale}"
+
+
+def test_only_the_discord_adapter_imports_adapter_dependencies() -> None:
+    """Portable authoring, planning, runtime, scenes, and HTML need no Discord install."""
+    root = Path("packages/squid-layouts/src/squid_layouts")
+    violations: list[str] = []
+    for path in root.rglob("*.py"):
+        if path.relative_to(root).parts[0] == "discord":
+            continue
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Import):
+                imported = {alias.name.split(".", 1)[0] for alias in node.names}
+            elif isinstance(node, ast.ImportFrom) and node.module is not None:
+                imported = {node.module.split(".", 1)[0]}
+            else:
+                continue
+            if blocked := imported & {"anyio", "discord"}:
+                violations.append(f"{path}:{node.lineno}: {sorted(blocked)}")
+
+    assert violations == []

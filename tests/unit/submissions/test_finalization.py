@@ -50,6 +50,12 @@ CLAIM_TOKEN = UUID("00000000-0000-4000-8000-000000000403")
 SCHEMATIC_ID = UUID("00000000-0000-4000-8000-000000000404")
 INSTALLATION_ID = UUID("00000000-0000-4000-8000-000000000405")
 NOW = Instant.parse_iso("2026-08-11T16:00:00Z")
+"""The instant every fixture here is pinned to.
+
+The draft service reads its own clock unless given one, so a fixture dated in the past expires
+against the real time of day — these tests passed until seven days after the date above and then
+failed together. `_drafts` hands the service this instant so the suite tests the code rather than
+the calendar."""
 
 
 class FakeManifestRegistry:
@@ -328,6 +334,11 @@ def _stored(
     )
 
 
+def _drafts(repository: FakeDraftRepository) -> SubmissionDraftService:
+    """A draft service frozen at `NOW`, so a fixture's expiry never depends on the wall clock."""
+    return SubmissionDraftService(repository, FakeManifestRegistry(), now=lambda: NOW)
+
+
 def _snapshot(status: FinalizationJobStatus) -> FinalizationJobSnapshot:
     return FinalizationJobSnapshot(
         job_id=JOB_ID,
@@ -348,7 +359,7 @@ async def _submit(
     sponsor: PublicSponsor | None = None,
 ) -> tuple[FinalizationJobSnapshot, FakeFinalizationJobs]:
     repository = FakeDraftRepository(_stored(origin, category=category, answers=answers))
-    drafts = SubmissionDraftService(repository, FakeManifestRegistry())
+    drafts = _drafts(repository)
     jobs = FakeFinalizationJobs()
     service = SubmissionFinalizationService(drafts, FakeArtifacts(readiness), jobs, FakeSponsors(sponsor))
     return await service.submit(DRAFT_ID, 7, locale="en", now=NOW), jobs
@@ -576,7 +587,7 @@ async def test_manifest_failures_are_retained_as_stable_attention_codes() -> Non
 @pytest.mark.asyncio
 async def test_status_rechecks_draft_ownership_before_returning_job() -> None:
     repository = FakeDraftRepository(_stored(SubmissionOrigin.WEB))
-    drafts = SubmissionDraftService(repository, FakeManifestRegistry())
+    drafts = _drafts(repository)
     jobs = FakeFinalizationJobs()
     jobs.snapshot = _snapshot(FinalizationJobStatus.PENDING)
     service = SubmissionFinalizationService(drafts, FakeArtifacts(SubmissionArtifactReadiness()), jobs)
@@ -589,7 +600,7 @@ async def test_status_rechecks_draft_ownership_before_returning_job() -> None:
 
 async def _payload() -> NormalizedSubmission:
     repository = FakeDraftRepository(_stored(SubmissionOrigin.WEB))
-    drafts = SubmissionDraftService(repository, FakeManifestRegistry())
+    drafts = _drafts(repository)
     jobs = FakeFinalizationJobs()
     service = SubmissionFinalizationService(drafts, FakeArtifacts(SubmissionArtifactReadiness()), jobs)
 
