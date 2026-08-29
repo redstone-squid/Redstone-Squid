@@ -1497,6 +1497,33 @@
         "action": {
           "$ref": "#/$defs/slack_action"
         },
+        "asset": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "media_type": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "key",
+                "name",
+                "media_type"
+              ],
+              "type": "object"
+            }
+          ]
+        },
         "kind": {
           "const": "button"
         },
@@ -1534,6 +1561,7 @@
         "action",
         "route",
         "url",
+        "asset",
         "value",
         "style"
       ],
@@ -2125,6 +2153,13 @@
         "action": {
           "$ref": "#/$defs/slack_action"
         },
+        "action_id": {
+          "maxLength": 255,
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "conversation_types": {
           "items": {
             "enum": [
@@ -2195,6 +2230,7 @@
         "kind",
         "action",
         "route",
+        "action_id",
         "select_kind",
         "placeholder",
         "options",
