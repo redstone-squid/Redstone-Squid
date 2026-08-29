@@ -1,7 +1,7 @@
 """Focused contracts for the remaining public read resources."""
 
 from collections.abc import Sequence
-from types import SimpleNamespace
+from dataclasses import dataclass
 from typing import cast, override
 from uuid import UUID
 
@@ -141,13 +141,42 @@ class VoteFake(VoteService):
         return self.session if vote_session_id == self.session.id else None
 
 
-def _override(app: FastAPI, **services: object) -> None:
+@dataclass(frozen=True, slots=True)
+class PartialReadServices:
+    tags: TagService | None = None
+    versions: VersionService | None = None
+    accounts: AccountService | None = None
+    build_queries: BuildQueryService | None = None
+    schematics: SchematicService | None = None
+    votes: VoteService | None = None
+
+
+def _override(
+    app: FastAPI,
+    *,
+    tags: TagService | None = None,
+    versions: VersionService | None = None,
+    accounts: AccountService | None = None,
+    build_queries: BuildQueryService | None = None,
+    schematics: SchematicService | None = None,
+    votes: VoteService | None = None,
+) -> None:
     """Install partial services for the routes under test.
 
     `ApiServices` has two dozen required capabilities and a route reaches one of them, so
-    the namespace stays partial; the fakes above are where the shape is actually checked.
+    this record stays partial; the service subclasses above are where behavior is checked.
     """
-    fake_services = cast(ApiServices, SimpleNamespace(**services))
+    fake_services = cast(
+        ApiServices,
+        PartialReadServices(
+            tags=tags,
+            versions=versions,
+            accounts=accounts,
+            build_queries=build_queries,
+            schematics=schematics,
+            votes=votes,
+        ),
+    )
     app.dependency_overrides[get_services] = lambda: fake_services
 
 
