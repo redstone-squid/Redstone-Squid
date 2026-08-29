@@ -9,7 +9,7 @@ import discord
 
 from squid_ui import ComponentsV2Target, LayoutNode, paragraph
 from squid_ui.runtime.component import Component
-from squid_ui.text import Localization, TextLike, resolve_text
+from squid_ui.text import Localization, TextLike
 from squid_ui_discord._invocation_context import current_cell
 from squid_ui_discord._invocation_context import invocation_scope as _invocation_scope
 from squid_ui_discord.access import AccessPolicy
@@ -106,10 +106,6 @@ class Invocation:
         object.__setattr__(invocation, "user", user)
         object.__setattr__(invocation, "guild", guild)
         return invocation
-
-    def t(self, message: TextLike) -> str:
-        """Resolve deferred text immediately for a surface outside the layout system."""
-        return resolve_text(message, self.localization).content
 
     def render(self, *nodes: LayoutNode[ComponentsV2Target]) -> MessagePayload:
         """Render nodes through the installed host defaults and invocation localization."""

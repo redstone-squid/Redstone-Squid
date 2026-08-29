@@ -5,7 +5,7 @@ from decimal import Decimal
 from enum import StrEnum
 
 from squid.core.errors import ValidationError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 
 
 class BooleanOperator(StrEnum):
@@ -72,7 +72,7 @@ class BooleanExpression:
 
     def __post_init__(self) -> None:
         if len(self.operands) < 2:
-            msg = _("Boolean expressions require at least two operands")
+            msg = tr(t"Boolean expressions require at least two operands")
             raise ValidationError(msg)
 
 

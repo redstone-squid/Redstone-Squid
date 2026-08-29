@@ -12,12 +12,11 @@ from discord.ext.commands import Cog
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot._types import GuildMessageable
-from squid.bot.i18n import resolve_locale, t
+from squid.bot.i18n import resolve_locale
 from squid.bot.routes._root import _feature_group, _feature_route
 from squid.bot.ui import render_payload, text_node, tr
 from squid.bot.utils.permissions import allows, enforce, hide_unless
 from squid.community.domain import RedstonerDecisionKind
-from squid.core.i18n import _
 from squid.permissions.domain.catalogue import REDSTONER_PANEL_MANAGE, REDSTONER_ROLE_RESYNC
 from squid_ui_discord import send_to
 
@@ -60,7 +59,7 @@ async def remove_own_redstoner_role(interaction: Interaction[squid.bot.app.Redst
     if redstoner_role is None or redstoner_role not in member.roles:
         return
 
-    locale = await resolve_locale(interaction, interaction.client.services.settings)
+    await resolve_locale(interaction, interaction.client.services.settings)
     invocation = await sd.Invocation.of(interaction)
     await member.remove_roles(redstoner_role)
     owner = interaction.client.get_user(interaction.client.owner_id)
@@ -79,9 +78,8 @@ async def remove_own_redstoner_role(interaction: Interaction[squid.bot.app.Redst
         render_payload(
             [
                 text_node(
-                    t(
-                        locale,
-                        _("{owner}, {member} has removed their own redstoner role."),
+                    tr(
+                        "{owner}, {member} has removed their own redstoner role.",
                         owner=owner.mention,
                         member=member.mention,
                     )
@@ -93,7 +91,7 @@ async def remove_own_redstoner_role(interaction: Interaction[squid.bot.app.Redst
 
     await member.add_roles(redstoner_role)
     await invocation.reply(
-        text_node(t(locale, _("{member} — just kidding, here is your role back."), member=member.mention)),
+        text_node(tr("{member} — just kidding, here is your role back.", member=member.mention)),
         visibility="personal",
     )
 
@@ -253,9 +251,7 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         locale = await resolve_locale(message, self.bot.services.settings)
         if decision.kind is RedstonerDecisionKind.MALFORMED:
             await send_to(message.channel)(
-                render_payload(
-                    [text_node(t(locale, _("{reason} in {url}"), reason=decision.reason, url=message.jump_url))]
-                )
+                render_payload([text_node(tr("{reason} in {url}", reason=decision.reason, url=message.jump_url))])
             )
             return
 
@@ -265,21 +261,18 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         assert message.guild is not None
         redstoner_role = message.guild.get_role(self.bot.community_config.redstoner_role_id)
         if redstoner_role is None:
-            await send_to(message.channel)(
-                render_payload([text_node(t(locale, _("Could not find the redstoner role.")))])
-            )
+            await send_to(message.channel)(render_payload([text_node(tr("Could not find the redstoner role."))]))
             return
         await member.add_roles(redstoner_role)
         await send_to(message.channel)(
-            render_payload([text_node(t(locale, _("Gave {member} the redstoner role."), member=member.mention))])
+            render_payload([text_node(tr("Gave {member} the redstoner role.", member=member.mention))])
         )
 
         presentation = render_payload(
             [
                 sl.primitives.Text(
-                    t(
-                        locale,
-                        _("Hi {member}, you received the {role} role after reaching 15 upvotes in {url}."),
+                    tr(
+                        "Hi {member}, you received the {role} role after reaching 15 upvotes in {url}.",
                         member=member.mention,
                         role=redstoner_role.mention,
                         url=decision.source_message_url,

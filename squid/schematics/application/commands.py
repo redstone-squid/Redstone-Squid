@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from squid.core.errors import ValidationError
-from squid.core.i18n import _, tr
+from squid.core.i18n import tr
 from squid.schematics.domain.models import SchematicFormat, Vector3
 
 
@@ -60,10 +60,10 @@ class RenderRequest:
                 maximum = MAX_RENDER_EXTENT
                 raise ValidationError(tr(t"Render {axis} must be between {minimum} and {maximum} pixels."))
         if self.zoom is not None and self.zoom <= 0:
-            msg = _("Render zoom must be positive.")
+            msg = tr(t"Render zoom must be positive.")
             raise ValidationError(msg)
         if not all(0.0 <= channel <= 1.0 for channel in self.background):
-            msg = _("Render background channels must be between 0 and 1.")
+            msg = tr(t"Render background channels must be between 0 and 1.")
             raise ValidationError(msg)
 
     def recipe_fields(self) -> tuple[object, ...]:

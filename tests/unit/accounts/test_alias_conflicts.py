@@ -12,6 +12,7 @@ import pytest
 from squid.accounts.errors import AliasAlreadyClaimedError
 from squid.api.errors import ProblemDetail, _status_for_error
 from squid.bot.errors import build_error_notice
+from squid.core.i18n import tr
 
 PUBLIC_CREATOR = UUID("33333333-3333-3333-3333-333333333333")
 HOLDER_ACCOUNT_ID = 4242
@@ -46,9 +47,9 @@ def test_the_internal_account_id_never_reaches_a_public_surface() -> None:
 
     bot_text = build_error_notice(error, "en").detail
     problem = ProblemDetail(
-        title=error.localized_title("en"),
+        title=tr(error.title),
         status=_status_for_error(error),
-        detail=error.localized_public_detail("en"),
+        detail=error.public_detail(),
         code=error.code,
         resource=error.resource,
         context=error.public_context or None,
@@ -66,8 +67,8 @@ def test_the_internal_account_id_never_reaches_a_public_surface() -> None:
 def test_naming_the_holder_rewrites_the_user_facing_message() -> None:
     error = AliasAlreadyClaimedError("Notch", holder_public_creator_id=PUBLIC_CREATOR)
 
-    before = error.localized_public_detail("en")
-    named = error.with_holder_name("Herobrine").localized_public_detail("en")
+    before = error.public_detail()
+    named = error.with_holder_name("Herobrine").public_detail()
 
     assert "another account" in before
     assert "Herobrine" in named
@@ -89,4 +90,4 @@ def test_each_raise_site_can_give_its_own_next_action(action: str | None, expect
     """A user is told to ask staff; a reviewer is told about the flag that already exists."""
     error = AliasAlreadyClaimedError("Notch", end_user_action=action)
 
-    assert expected in error.localized_public_detail("en")
+    assert expected in error.public_detail()

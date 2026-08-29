@@ -6,7 +6,7 @@ from enum import StrEnum
 from typing import Final
 
 from squid.core.errors import ValidationError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 
 
 class TitleSection(StrEnum):
@@ -52,7 +52,7 @@ class TitleToken:
 
     def __post_init__(self) -> None:
         if not self.value.strip():
-            msg = _("A title token cannot be blank.")
+            msg = tr(t"A title token cannot be blank.")
             raise ValidationError(msg)
         if not self.source_value:
             object.__setattr__(self, "source_value", self.value)
@@ -118,7 +118,7 @@ class ExtenderCategory:
 
     def __post_init__(self) -> None:
         if self.length <= 0:
-            msg = _("Piston extender length must be positive.")
+            msg = tr(t"Piston extender length must be positive.")
             raise ValidationError(msg)
 
 

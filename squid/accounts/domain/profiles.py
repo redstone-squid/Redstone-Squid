@@ -18,7 +18,8 @@ from whenever import Instant
 
 from squid.accounts.domain.models import AccountIdentity, IdentityProvider
 from squid.core.errors import ValidationError
-from squid.core.i18n import _, tr
+from squid.core.i18n import tr
+from squid_ui.text import Message
 
 MAX_PROFILE_LINKS: Final = 10
 """Links per profile. A profile is an introduction, not a link tree."""
@@ -50,7 +51,7 @@ long as the proof it stands for is accepted. Two windows that could disagree wou
 waiting for someone to tune one of them."""
 
 
-def _reject_control_characters(value: str, *, field_name: str, allow_newlines: bool = False) -> None:
+def _reject_control_characters(value: str, *, field_name: str | Message, allow_newlines: bool = False) -> None:
     """Refuse characters that would let profile text escape whatever renders it."""
     for character in value:
         if character in "\n\r" and allow_newlines:
@@ -60,7 +61,9 @@ def _reject_control_characters(value: str, *, field_name: str, allow_newlines: b
             raise ValidationError(tr(t"{field} may not contain control characters."))
 
 
-def _normalize_text(value: str | None, *, field_name: str, limit: int, allow_newlines: bool = False) -> str | None:
+def _normalize_text(
+    value: str | None, *, field_name: str | Message, limit: int, allow_newlines: bool = False
+) -> str | None:
     """Normalize one free-text profile field, returning `None` when it is effectively empty.
 
     Empty and absent are the same thing for profile text: somebody who clears their bio wants it
@@ -89,26 +92,26 @@ class ProfileLink:
     @classmethod
     def parse(cls, label: str, url: str) -> ProfileLink:
         """Build a validated link, or raise `ValidationError` explaining which half is wrong."""
-        clean_label = _normalize_text(label, field_name=_("Link label"), limit=MAX_LINK_LABEL_LENGTH)
+        clean_label = _normalize_text(label, field_name=tr(t"Link label"), limit=MAX_LINK_LABEL_LENGTH)
         if clean_label is None:
-            raise ValidationError(_("Every link needs a label."))
+            raise ValidationError(tr(t"Every link needs a label."))
         clean_url = url.strip()
         if not clean_url:
-            raise ValidationError(_("Every link needs a URL."))
+            raise ValidationError(tr(t"Every link needs a URL."))
         if len(clean_url) > MAX_LINK_URL_LENGTH:
             limit = MAX_LINK_URL_LENGTH
             raise ValidationError(tr(t"Link URLs may be at most {limit} characters."))
-        _reject_control_characters(clean_url, field_name=_("Link URL"))
+        _reject_control_characters(clean_url, field_name=tr(t"Link URL"))
         parts = urlsplit(clean_url)
         if parts.scheme not in PROFILE_LINK_SCHEMES:
             scheme = parts.scheme or ""
             raise ValidationError(tr(t"Links must be https URLs, got {scheme!r}."))
         if not parts.hostname:
-            raise ValidationError(_("Links must include a hostname."))
+            raise ValidationError(tr(t"Links must include a hostname."))
         if "@" in parts.netloc:
             # Credentials in the authority are the classic way to make a link read as one host
             # while resolving to another.
-            raise ValidationError(_("Links may not carry credentials."))
+            raise ValidationError(tr(t"Links may not carry credentials."))
         return cls(label=clean_label, url=clean_url)
 
 
@@ -179,12 +182,12 @@ class ProfileUpdate:
         changes: dict[str, object] = {}
         if not isinstance(self.display_name, _Unset):
             changes["display_name"] = _normalize_text(
-                self.display_name, field_name=_("Display name"), limit=MAX_DISPLAY_NAME_LENGTH
+                self.display_name, field_name=tr(t"Display name"), limit=MAX_DISPLAY_NAME_LENGTH
             )
         if not isinstance(self.bio, _Unset):
-            changes["bio"] = _normalize_text(self.bio, field_name=_("Bio"), limit=MAX_BIO_LENGTH, allow_newlines=True)
+            changes["bio"] = _normalize_text(self.bio, field_name=tr(t"Bio"), limit=MAX_BIO_LENGTH, allow_newlines=True)
         if not isinstance(self.pronouns, _Unset):
-            changes["pronouns"] = _normalize_text(self.pronouns, field_name=_("Pronouns"), limit=MAX_PRONOUNS_LENGTH)
+            changes["pronouns"] = _normalize_text(self.pronouns, field_name=tr(t"Pronouns"), limit=MAX_PRONOUNS_LENGTH)
         if not isinstance(self.links, _Unset):
             links = tuple(self.links)
             if len(links) > MAX_PROFILE_LINKS:

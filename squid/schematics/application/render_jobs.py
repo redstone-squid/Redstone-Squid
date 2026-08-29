@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from squid.core.errors import InvalidStateError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,14 +34,14 @@ class SchematicRenderJobService:
 
     def __init__(self, repository: SchematicRenderJobRepository, *, max_attempts: int = 5) -> None:
         if max_attempts < 1:
-            msg = _("Render max_attempts must be positive.")
+            msg = tr(t"Render max_attempts must be positive.")
             raise InvalidStateError(msg)
         self._repository = repository
         self._max_attempts = max_attempts
 
     async def claim(self, *, limit: int = 8) -> Sequence[ClaimedRenderJob]:
         if not 1 <= limit <= 32:
-            msg = _("Render claim limit must be between 1 and 32.")
+            msg = tr(t"Render claim limit must be between 1 and 32.")
             raise InvalidStateError(msg)
         return await self._repository.claim(limit=limit)
 

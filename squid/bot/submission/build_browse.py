@@ -296,7 +296,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target]):
         try:
             rendered = await self._schematics.render_now(self._build_id, request=self._schematics.render_recipe())
         except SchematicRenderRefusedError as error:
-            await event.notice(error.localized_public_detail(event.locale))
+            await event.notice(error.public_detail())
             return
         self._asset = sl.document.Asset(
             "schematic-render",

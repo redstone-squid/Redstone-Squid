@@ -53,7 +53,7 @@ from squid.accounts.infrastructure.models import PublicCreatorRedirect
 from squid.accounts.infrastructure.models import VerificationAttempt as VerificationAttemptModel
 from squid.accounts.infrastructure.models import VerificationCode as VerificationCodeModel
 from squid.core.errors import DataIntegrityError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 from squid.persistence.types import InstantUTC, now
 from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
 from squid.submissions.infrastructure.models import SubmissionDraft
@@ -690,7 +690,7 @@ class AccountRepository:
                         holder_account_id=alias.account_id,
                         # Staff audience: the flag that moves a held credit already exists, so say so
                         # rather than telling a reviewer to ask staff.
-                        end_user_action=_("Approve with `reassign: True` to move the name to the claimant."),
+                        end_user_action=tr(t"Approve with `reassign: True` to move the name to the claimant."),
                     )
                 alias.account_id = claim.account_id
                 alias.claimed_at = _now()
