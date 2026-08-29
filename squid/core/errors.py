@@ -1,7 +1,6 @@
 """Application errors, shaped for HTTP, Discord, and the CLI alike."""
 
 from collections.abc import Mapping, Sequence
-from dataclasses import replace
 from enum import StrEnum
 from typing import ClassVar, Self, override
 
@@ -109,7 +108,6 @@ class SquidError(Exception):
         resource: str | None = None,
         context: Mapping[str, JSONValue] | None = None,
         public_context: Mapping[str, JSONValue] | None = None,
-        message_params: Mapping[str, JSONValue] | None = None,
         developer_action: str | None = None,
         end_user_action: str | Message | None = None,
         title: str | Message | None = None,
@@ -120,9 +118,6 @@ class SquidError(Exception):
         self.resource = resource or self.default_resource
         self.context = dict(context or {})
         self.public_context = dict(public_context or {})
-        self.message_params = dict(message_params or {})
-        if isinstance(self.message, Message) and self.message_params:
-            self.message = replace(self.message, params={**self.message.params, **self.message_params})
         self.developer_action = developer_action or self.default_developer_action
         self.end_user_action = end_user_action or self.default_end_user_action
         super().__init__(self.backend_detail())
@@ -134,7 +129,7 @@ class SquidError(Exception):
     def _rendered_message(self) -> str:
         if isinstance(self.message, Message):
             return _source_message(self.message)
-        return self.message.format(**self.message_params) if self.message_params else self.message
+        return self.message
 
     def backend_detail(self) -> str:
         """Return diagnostic (English) text suitable for logs."""
@@ -161,7 +156,7 @@ class SquidError(Exception):
     def localized_public_detail(self, locale: str | None) -> str:
         """Return safe user-facing text translated into `locale`."""
         with localization_scope(localization_for(locale)):
-            message = tr(self.message) if isinstance(self.message, Message) else tr(self.message, **self.message_params)
+            message = tr(self.message)
             if self.end_user_action:
                 return f"{message} {_translated_text(self.end_user_action)}"
             return message
@@ -172,17 +167,15 @@ class SquidError(Exception):
         context: Mapping[str, JSONValue] | None = None,
         public_context: Mapping[str, JSONValue] | None = None,
         message: str | Message | None = None,
-        message_params: Mapping[str, JSONValue] | None = None,
         developer_action: str | None = None,
-        end_user_action: str | None = None,
+        end_user_action: str | Message | None = None,
     ) -> Self:
         """Enrich this exception in place while preserving its traceback.
 
         `message` is here because enrichment that cannot restate the message is only half a helper:
         a layer that resolves *what* the conflict was usually wants to say so, and assigning
-        `self.message` by hand skips the `args` refresh at the bottom. Pass the untranslated msgid,
-        as a constructor would; `message_params` merges, so a caller can add one placeholder without
-        repeating the others.
+        `self.message` by hand skips the `args` refresh at the bottom. Pass deferred text as a
+        constructor would.
         """
         if context:
             self.context = {**self.context, **context}
@@ -190,10 +183,6 @@ class SquidError(Exception):
             self.public_context = {**self.public_context, **public_context}
         if message is not None:
             self.message = message
-        if message_params:
-            self.message_params = {**self.message_params, **message_params}
-            if isinstance(self.message, Message):
-                self.message = replace(self.message, params={**self.message.params, **message_params})
         if developer_action is not None:
             self.developer_action = developer_action
         if end_user_action is not None:
