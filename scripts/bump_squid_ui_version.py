@@ -21,6 +21,7 @@ DISTRIBUTIONS = (
     "squid-storage",
     "squid-ui",
     "squid-ui-discord",
+    "squid-ui-slack",
     "squid-ui-widgets",
 )
 # Final releases and alpha/beta/rc pre-releases, matching check_squid_ui_release.py.
@@ -33,6 +34,7 @@ REQUIRED_FILES = (
     *(Path("packages") / name / "pyproject.toml" for name in DISTRIBUTIONS),
     Path("packages/squid-ui/tests/test_public_api.py"),
     Path("packages/squid-ui-discord/tests/test_public_api.py"),
+    Path("packages/squid-ui-slack/tests/test_public_api.py"),
     Path("packages/squid-ui-widgets/tests/test_public_api.py"),
     Path("tests/architecture/test_boundaries.py"),
 )
@@ -41,6 +43,7 @@ OPTIONAL_FILES = (
     *(Path("packages") / name / "README.md" for name in DISTRIBUTIONS),
     Path("docs/squid-ui.md"),
     Path("docs/squid-ui-quickstart.md"),
+    Path("docs/squid-ui-slack-quickstart.md"),
 )
 # Files that legitimately carry the literal without pinning the release: adapter
 # profiles state a compatibility *floor*, which does not move on every bump.
