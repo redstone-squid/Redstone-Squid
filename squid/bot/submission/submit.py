@@ -12,7 +12,6 @@ from discord.ext.commands import Cog
 import squid_ui_discord as sd
 from squid.accounts.domain import IdentityProvider
 from squid.bot.consent import ensure_consented_account
-from squid.bot.i18n import resolve_locale
 from squid.bot.submission.attachments import AttachmentKind, classify_attachment
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.ingestion import ingest_message_bundle
@@ -101,7 +100,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         """Submit a build. Every field is optional; a guided form picks up whatever you skip."""
         await interaction.response.defer(ephemeral=True)
         invocation = await sd.Invocation.of(interaction)
-        await resolve_locale(interaction, self.bot.services.settings)
+
         # Before the uploads, not after: declining should not cost the user an attachment round
         # trip, and the notice describes exactly what submitting a build publishes.
         uploader_account_id = await ensure_consented_account(interaction, self.bot.services.accounts)
@@ -349,7 +348,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         """
         await interaction.response.defer(ephemeral=True)
         invocation = await sd.Invocation.of(interaction)
-        await resolve_locale(interaction, self.bot.services.settings)
+
         # A context menu cannot carry `requires(...)`, so the same denial is raised by hand.
         await enforce(interaction, BUILD_SUBMISSION_RECALC)
         if not self._is_build_log_message(message):

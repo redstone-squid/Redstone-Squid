@@ -12,12 +12,13 @@ from discord.ext.commands import Cog
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot._types import GuildMessageable
-from squid.bot.i18n import resolve_locale
+from squid.bot.i18n import localization_for, resolve_locale
 from squid.bot.routes._root import _feature_group, _feature_route
 from squid.bot.ui import render_payload, text_node, tr
 from squid.bot.utils.permissions import allows, enforce, hide_unless
 from squid.community.domain import RedstonerDecisionKind
 from squid.permissions.domain.catalogue import REDSTONER_PANEL_MANAGE, REDSTONER_ROLE_RESYNC
+from squid_ui.text import localization_scope
 from squid_ui_discord import send_to
 
 if TYPE_CHECKING:
@@ -59,7 +60,6 @@ async def remove_own_redstoner_role(interaction: Interaction[squid.bot.app.Redst
     if redstoner_role is None or redstoner_role not in member.roles:
         return
 
-    await resolve_locale(interaction, interaction.client.services.settings)
     invocation = await sd.Invocation.of(interaction)
     await member.remove_roles(redstoner_role)
     owner = interaction.client.get_user(interaction.client.owner_id)
@@ -250,9 +250,11 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
 
         locale = await resolve_locale(message, self.bot.services.settings)
         if decision.kind is RedstonerDecisionKind.MALFORMED:
-            await send_to(message.channel)(
-                render_payload([text_node(tr("{reason} in {url}", reason=decision.reason, url=message.jump_url))])
-            )
+            with localization_scope(localization_for(locale)):
+                payload = render_payload(
+                    [text_node(tr("{reason} in {url}", reason=decision.reason, url=message.jump_url))]
+                )
+            await send_to(message.channel)(payload)
             return
 
         assert decision.member_id is not None
@@ -261,26 +263,29 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         assert message.guild is not None
         redstoner_role = message.guild.get_role(self.bot.community_config.redstoner_role_id)
         if redstoner_role is None:
-            await send_to(message.channel)(render_payload([text_node(tr("Could not find the redstoner role."))]))
+            with localization_scope(localization_for(locale)):
+                payload = render_payload([text_node(tr("Could not find the redstoner role."))])
+            await send_to(message.channel)(payload)
             return
         await member.add_roles(redstoner_role)
-        await send_to(message.channel)(
-            render_payload([text_node(tr("Gave {member} the redstoner role.", member=member.mention))])
-        )
+        with localization_scope(localization_for(locale)):
+            payload = render_payload([text_node(tr("Gave {member} the redstoner role.", member=member.mention))])
+        await send_to(message.channel)(payload)
 
-        presentation = render_payload(
-            [
-                sl.primitives.Text(
-                    tr(
-                        "Hi {member}, you received the {role} role after reaching 15 upvotes in {url}.",
-                        member=member.mention,
-                        role=redstoner_role.mention,
-                        url=decision.source_message_url,
+        with localization_scope(localization_for(locale)):
+            presentation = render_payload(
+                [
+                    sl.primitives.Text(
+                        tr(
+                            "Hi {member}, you received the {role} role after reaching 15 upvotes in {url}.",
+                            member=member.mention,
+                            role=redstoner_role.mention,
+                            url=decision.source_message_url,
+                        )
                     )
-                )
-            ],
-            locale=locale,
-        )
+                ],
+                locale=locale,
+            )
         await send_to(
             self.bot.get_channel(self.bot.community_config.redstoner_announcement_channel_id),
             allowed_mentions=discord.AllowedMentions(roles=False, users=(member,), everyone=False),

@@ -60,12 +60,11 @@ class TraceRoutes[BotT: discord.Client](sd.routing.Middleware[BotT]):
 
 
 async def _route_gone_hook(interaction: discord.Interaction[RedstoneSquid]) -> None:
-    from squid.bot.i18n import resolve_locale
     from squid.bot.ui import text_node
     from squid.core.i18n import tr
 
     invocation = await sd.Invocation.of(interaction)
-    await resolve_locale(interaction, interaction.client.services.settings)
+
     await invocation.reply(text_node(tr("This control is no longer available.")), visibility="personal")
 
 

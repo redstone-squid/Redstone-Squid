@@ -35,8 +35,8 @@ fails the lookup here instead of leaking `not_eligible` into a user's channel.
 """
 
 
-def describe_rejection(locale: str | None, rejection: VoteRejection) -> str:
-    """Render a typed rejection as a localized sentence."""
+def describe_rejection(rejection: VoteRejection) -> str:
+    """Render a typed rejection using the ambient localization."""
     return tr(REJECTION_MESSAGES[rejection])
 
 
