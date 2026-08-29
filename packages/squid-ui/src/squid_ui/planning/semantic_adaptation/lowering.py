@@ -139,7 +139,7 @@ from squid_ui.semantic import (
     Choices,
     Cluster,
     Code,
-    ConcreteLayoutNode,
+    BuiltinLayoutNode,
     Details,
     Download,
     Emphasis,
@@ -246,7 +246,7 @@ def _node(node: AnyLayoutNode, path: str, context: _Context) -> list[Node]:
     return _concrete(node, path, context)
 
 
-def _concrete(node: ConcreteLayoutNode, path: str, context: _Context) -> list[Node]:
+def _concrete(node: BuiltinLayoutNode, path: str, context: _Context) -> list[Node]:
     match node:
         case Truncated(node=child, keep=keep):
             return [
