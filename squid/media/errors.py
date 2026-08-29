@@ -15,8 +15,9 @@ from squid.core.errors import (
     ServiceUnavailableError,
     ValidationError,
 )
-from squid.core.i18n import _
+from squid.core.i18n import tr
 from squid.media.domain.models import MediaViolation
+from squid_ui.text import Message
 
 
 class MediaFailureReason(StrEnum):
@@ -39,19 +40,17 @@ class MediaFailureReason(StrEnum):
 class MediaLimitExceededError(ValidationError):
     """An upload, output, or decoded-work budget was exceeded."""
 
-    default_message = _("The media exceeds a processing limit.")
+    default_message = tr(t"The media exceeds a processing limit.")
     default_code = ErrorCode.INVALID_REQUEST
     default_resource = "media"
-    default_end_user_action = _("Choose a smaller or less resource-intensive file and try again.")
+    default_end_user_action = tr(t"Choose a smaller or less resource-intensive file and try again.")
 
     def __init__(self, violation: MediaViolation) -> None:
+        measure = violation.measure.value
+        actual = violation.actual
+        limit = violation.limit
         super().__init__(
-            _("The media exceeds the {measure} limit: {actual} is greater than {limit}."),
-            message_params={
-                "measure": violation.measure.value,
-                "actual": violation.actual,
-                "limit": violation.limit,
-            },
+            tr(t"The media exceeds the {measure} limit: {actual} is greater than {limit}."),
             context={
                 "reason": "limit_exceeded",
                 "measure": violation.measure.value,
@@ -66,10 +65,10 @@ class MediaLimitExceededError(ValidationError):
 class MediaDraftStateConflictError(ConflictError):
     """A media mutation lost a race with submission finalization."""
 
-    default_message = _("Media cannot be changed while this submission draft is locked.")
-    default_title = _("Draft media locked")
+    default_message = tr(t"Media cannot be changed while this submission draft is locked.")
+    default_title = tr(t"Draft media locked")
     default_resource = "media"
-    default_end_user_action = _("Reload the draft before trying again.")
+    default_end_user_action = tr(t"Reload the draft before trying again.")
 
     def __init__(self, status: str) -> None:
         super().__init__(public_context={"reason": "draft_state", "status": status})
@@ -78,8 +77,8 @@ class MediaDraftStateConflictError(ConflictError):
 class MediaDraftNotFoundError(NotFoundError):
     """A media mutation cannot re-establish ownership after draft deletion."""
 
-    default_message = _("Submission draft not found.")
-    default_title = _("Draft not found")
+    default_message = tr(t"Submission draft not found.")
+    default_title = tr(t"Draft not found")
     default_resource = "submission_draft"
 
     def __init__(self, draft_id: UUID) -> None:
@@ -89,10 +88,10 @@ class MediaDraftNotFoundError(NotFoundError):
 class InvalidMediaError(ValidationError):
     """The file or requested transformation is not safe and well-formed."""
 
-    default_message = _("The media file cannot be normalized.")
+    default_message = tr(t"The media file cannot be normalized.")
     default_code = ErrorCode.INVALID_REQUEST
     default_resource = "media"
-    default_end_user_action = _("Export the file again in a common image or video format and retry.")
+    default_end_user_action = tr(t"Export the file again in a common image or video format and retry.")
 
     def __init__(self, reason: MediaFailureReason) -> None:
         super().__init__(
@@ -105,7 +104,7 @@ class InvalidMediaError(ValidationError):
 class MediaToolUnavailableError(ServiceUnavailableError):
     """FFmpeg or ffprobe is absent from the media-worker image."""
 
-    default_message = _("Media processing is temporarily unavailable.")
+    default_message = tr(t"Media processing is temporarily unavailable.")
     default_code = ErrorCode.INFRASTRUCTURE_ERROR
     default_resource = "media"
     default_developer_action = "Install the pinned FFmpeg toolchain in the media-worker image."
@@ -118,9 +117,9 @@ class MediaToolUnavailableError(ServiceUnavailableError):
 class MediaProcessingError(InfrastructureError):
     """A bounded media subprocess or its output failed validation."""
 
-    default_message = _("Media processing failed.")
+    default_message = tr(t"Media processing failed.")
     default_resource = "media"
-    default_end_user_action = _("Export the file again and retry, or remove it from the submission.")
+    default_end_user_action = tr(t"Export the file again and retry, or remove it from the submission.")
 
     def __init__(
         self,
@@ -145,10 +144,14 @@ class MediaProcessingTimeoutError(MediaProcessingError, TimeoutError):
         super().__init__(MediaFailureReason.TOOL_TIMED_OUT, operation=operation)
 
 
+def _upload_conflict_message(upload_id: object) -> Message:
+    upload_id = str(upload_id)
+    return tr(t"Media upload {upload_id} already exists with different metadata.")
+
+
 class MediaUploadConflictError(ConflictError):
     """An upload UUID was retried with different immutable metadata."""
 
-    default_message = _("Media upload {upload_id} already exists with different metadata.")
     default_resource = "media_upload"
 
     def __init__(
@@ -158,7 +161,7 @@ class MediaUploadConflictError(ConflictError):
         existing_source_object_key: str,
         existing_status: object,
     ) -> None:
-        super().__init__(message_params={"upload_id": str(upload_id)})
+        super().__init__(_upload_conflict_message(upload_id))
         self.upload_id = upload_id
         self.existing_source_object_key = existing_source_object_key
         self.existing_status = existing_status
@@ -167,21 +170,21 @@ class MediaUploadConflictError(ConflictError):
 class MediaJobSourceError(DataIntegrityError):
     """A queued raw object is absent, oversized, or no longer matches its metadata."""
 
-    default_message = _("The queued raw media object is inconsistent with its metadata.")
+    default_message = tr(t"The queued raw media object is inconsistent with its metadata.")
     default_resource = "media_upload"
 
 
 class MediaJobArtifactError(DataIntegrityError):
     """Object storage did not confirm a content-addressed normalized artifact."""
 
-    default_message = _("Object storage did not confirm a normalized media artifact.")
+    default_message = tr(t"Object storage did not confirm a normalized media artifact.")
     default_resource = "media_artifact"
 
 
 class MediaArtifactCleanupInProgressError(ConflictError):
     """A retryable publication conflict with a token-fenced object deletion."""
 
-    default_message = _("A normalized media object is being cleaned up.")
+    default_message = tr(t"A normalized media object is being cleaned up.")
     default_resource = "media_artifact"
 
     def __init__(self, retry_at: Instant) -> None:
@@ -192,5 +195,5 @@ class MediaArtifactCleanupInProgressError(ConflictError):
 class MediaJobClaimLostError(InvalidStateError):
     """A worker must stop after its durable claim token is revoked or reclaimed."""
 
-    default_message = _("The media job claim is no longer valid.")
+    default_message = tr(t"The media job claim is no longer valid.")
     default_resource = "media_job"

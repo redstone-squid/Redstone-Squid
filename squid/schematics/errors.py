@@ -10,17 +10,17 @@ from squid.core.errors import (
     ServiceUnavailableError,
     ValidationError,
 )
-from squid.core.i18n import _
+from squid.core.i18n import tr
 from squid.schematics.domain.models import Vector3
 
 
 class InvalidSchematicError(ValidationError):
     """A file is not a schematic this application can read."""
 
-    default_message = _("The file is not a readable Minecraft schematic.")
+    default_message = tr(t"The file is not a readable Minecraft schematic.")
     default_code = ErrorCode.SCHEMATIC_INVALID
     default_resource = "schematic"
-    default_end_user_action = _("Upload a .litematic, .schem, .schematic, .nbt, or .mcstructure file.")
+    default_end_user_action = tr(t"Upload a .litematic, .schem, .schematic, .nbt, or .mcstructure file.")
 
 
 class AmbiguousSimulationInputError(InvalidSchematicError):
@@ -40,14 +40,14 @@ class AmbiguousSimulationInputError(InvalidSchematicError):
     ) -> None:
         ordered = tuple(sorted(candidates))
         if rejected is not None:
-            message = _("The input coordinate you gave is not a lever or button in this schematic.")
-            action = _("Pick one of the coordinates listed below.")
+            message = tr(t"The input coordinate you gave is not a lever or button in this schematic.")
+            action = tr(t"Pick one of the coordinates listed below.")
         elif ordered:
-            message = _("This schematic has several possible inputs, so choosing one for you would be unsafe.")
-            action = _("Run the command again with one of the coordinates listed below.")
+            message = tr(t"This schematic has several possible inputs, so choosing one for you would be unsafe.")
+            action = tr(t"Run the command again with one of the coordinates listed below.")
         else:
-            message = _("This schematic has no input annotation and no lever or button to actuate.")
-            action = _("Add an @io.* input sign, or use a schematic with an interactable input.")
+            message = tr(t"This schematic has no input annotation and no lever or button to actuate.")
+            action = tr(t"Add an @io.* input sign, or use a schematic with an interactable input.")
         encoded = [list(candidate) for candidate in ordered]
         super().__init__(
             message,
@@ -62,15 +62,14 @@ class AmbiguousSimulationInputError(InvalidSchematicError):
 class SchematicTooLargeError(ValidationError):
     """A schematic exceeds a configured size budget."""
 
-    default_message = _("The schematic is too large to process.")
+    default_message = tr(t"The schematic is too large to process.")
     default_code = ErrorCode.SCHEMATIC_TOO_LARGE
     default_resource = "schematic"
-    default_end_user_action = _("Crop the schematic to the build itself and try again.")
+    default_end_user_action = tr(t"Crop the schematic to the build itself and try again.")
 
     def __init__(self, *, actual: int, limit: int, measure: str) -> None:
         super().__init__(
-            _("The schematic is too large: {measure} is {actual}, limit is {limit}."),
-            message_params={"measure": measure, "actual": actual, "limit": limit},
+            tr(t"The schematic is too large: {measure} is {actual}, limit is {limit}."),
             context={"measure": measure, "actual": actual, "limit": limit},
             public_context={"measure": measure, "limit": limit},
         )
@@ -93,7 +92,7 @@ class DecompressionBudgetExceededError(SchematicTooLargeError):
 class SchematicNotFoundError(NotFoundError):
     """A stored schematic could not be found."""
 
-    default_message = _("Schematic not found.")
+    default_message = tr(t"Schematic not found.")
     default_code = ErrorCode.SCHEMATIC_NOT_FOUND
     default_resource = "schematic"
 
@@ -101,7 +100,7 @@ class SchematicNotFoundError(NotFoundError):
 class SchematicSupportUnavailableError(ServiceUnavailableError):
     """The native schematic engine is not installed on this instance."""
 
-    default_message = _("Schematic support is not available on this instance.")
+    default_message = tr(t"Schematic support is not available on this instance.")
     default_code = ErrorCode.SCHEMATIC_SUPPORT_UNAVAILABLE
     default_resource = "schematic"
     default_developer_action = "Install the optional 'schematics' extra to enable this feature."
@@ -116,7 +115,7 @@ class SchematicRenderRefusedError(ConflictError):
     that tells a caller whether to fix something or to stop asking.
     """
 
-    default_message = _("This build's schematic cannot be previewed.")
+    default_message = tr(t"This build's schematic cannot be previewed.")
     default_code = ErrorCode.SCHEMATIC_RENDER_REFUSED
     default_resource = "schematic"
 
@@ -128,7 +127,7 @@ class SchematicRenderRefusedError(ConflictError):
 class SchematicRenderUnavailableError(ServiceUnavailableError):
     """Rendering is disabled, unconfigured, or has no usable GPU adapter."""
 
-    default_message = _("Schematic rendering is unavailable.")
+    default_message = tr(t"Schematic rendering is unavailable.")
     default_code = ErrorCode.SCHEMATIC_RENDER_UNAVAILABLE
     default_resource = "schematic"
     default_developer_action = "Check the schematic render configuration and worker logs for the cause."
@@ -137,7 +136,7 @@ class SchematicRenderUnavailableError(ServiceUnavailableError):
 class SchematicTimeoutError(InfrastructureError, TimeoutError):
     """A schematic operation exceeded its deadline and its worker was killed."""
 
-    default_message = _("The schematic operation took too long and was cancelled.")
+    default_message = tr(t"The schematic operation took too long and was cancelled.")
     default_code = ErrorCode.SCHEMATIC_TIMEOUT
     default_resource = "schematic"
 
@@ -157,7 +156,7 @@ class SchematicWorkerCrashedError(InfrastructureError, RuntimeError):
     retrying a payload that just killed a process is how you build a crash loop.
     """
 
-    default_message = _("The schematic engine failed while reading this file.")
+    default_message = tr(t"The schematic engine failed while reading this file.")
     default_code = ErrorCode.SCHEMATIC_WORKER_CRASHED
     default_resource = "schematic"
 
