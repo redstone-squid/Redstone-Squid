@@ -52,9 +52,10 @@ async def test_command_log_carries_only_low_cardinality_fields(
 
 
 async def test_ready_log_reports_bot_identity_and_guild_count(caplog: pytest.LogCaptureFixture) -> None:
-    """`on_ready` fires again on every failed RESUME, so it must stay identifier-free."""
+    """`on_ready` fires again on every failed RESUME; the bot's own identity is constant across those retries."""
     bot = Mock()
     bot.user.id = 111
+    bot.user.__str__ = Mock(return_value="SquidBot#0000")
     bot.guilds = [Mock(), Mock()]
     cog = LoggingCog(bot)
 
@@ -62,7 +63,7 @@ async def test_ready_log_reports_bot_identity_and_guild_count(caplog: pytest.Log
         await cog.log_on_ready()
 
     (record,) = caplog.records
-    assert record.getMessage() == "Discord gateway ready"
+    assert record.getMessage() == "Discord gateway ready, logged in as SquidBot#0000"
     assert _squid_fields(record) == {"squid.discord.bot_id": 111, "squid.discord.guild_count": 2}
 
 

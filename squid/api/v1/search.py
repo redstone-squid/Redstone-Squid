@@ -21,8 +21,8 @@ from squid.api.v1.schemas.search import (
     SearchSuggestions,
 )
 from squid.builds.application import BuildQueryService
-from squid.core.errors import ErrorCode, ValidationError
-from squid.search.domain import SearchHit, SearchMode, SearchRequest, SearchScope, SearchSort, SortDirection
+from squid.core.errors import DataIntegrityError
+from squid.search.domain import SearchHit, SearchMode, SearchRequest, SearchScope, SearchSort
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/search", tags=["search"])
@@ -67,7 +67,7 @@ async def search(
             mode=SearchMode.LEXICAL,
             page_size=page_size,
             offset=offset or 0,
-            sort=parse_sort(sort),
+            sort=SearchSort.parse(sort),
             visible_statuses=PUBLIC_SEARCH_STATUSES,
         )
     )
@@ -93,25 +93,20 @@ async def search(
     )
 
 
-def parse_sort(value: str | None) -> SearchSort | None:
-    """Parse a `-field` or `field` sort parameter into a domain sort."""
-    if value is None:
-        return None
-    direction = SortDirection.DESCENDING if value.startswith("-") else SortDirection.ASCENDING
-    field = value.removeprefix("-")
-    if not field:
-        msg = "sort field is required"
-        raise ValidationError(msg, code=ErrorCode.INVALID_QUERY)
-    return SearchSort(field, direction)
-
-
 def build_hit_id(source_id: str) -> int:
-    """Parse the build identifier a build projection is keyed by."""
+    """Parse the build identifier a build projection is keyed by.
+
+    An unparsable projection key is the index lying about itself, not a bad
+    request: the caller supplied a query, and nothing they could send would fix
+    this. It used to raise `ValidationError`, so a stale index blamed the caller
+    with a 400. `hydrate_builds` already logs the milder version of the same
+    drift, where the key parses but the build is gone.
+    """
     try:
         return int(source_id)
     except ValueError as error:
-        msg = "search returned an invalid build identifier"
-        raise ValidationError(msg) from error
+        msg = "A search projection is keyed by an unparsable build identifier."
+        raise DataIntegrityError(msg, context={"source_id": source_id}) from error
 
 
 async def hydrate_builds(build_queries: BuildQueryService, hits: Sequence[SearchHit]) -> dict[int, BuildSummary]:

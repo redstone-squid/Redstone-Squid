@@ -1,7 +1,7 @@
 """Build application service tests."""
 
 import asyncio
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager
 from typing import Literal, cast
 from unittest.mock import AsyncMock
@@ -12,12 +12,16 @@ from whenever import Instant
 
 from squid.builds.application import BuildEditPatch, DoorSubmissionInput, RestrictionDefinition
 from squid.builds.application.services import (
+    BuildEditor,
     BuildService,
 )
 from squid.builds.application.taxonomy import TaxonomyResolution, normalize_tag_name
 from squid.builds.domain import Build, BuildCategory, DoorBuild, OtherBuild, Status, UtilityBuild
 from squid.builds.errors import BuildBusyError, BuildNotFoundError, BuildRevisionMismatchError
-from squid.core.errors import InvalidStateError
+from squid.core.errors import AuthorizationError, InvalidStateError
+from squid.permissions.application import PermissionService
+from squid.permissions.application.ports import GrantRecord, SubjectRecords
+from squid.permissions.domain import Subject
 from squid.sponsors import PublicSponsor
 from squid.tags.domain import (
     TagAssignment,
@@ -67,7 +71,7 @@ class FakeBuildLocks:
         self.clean_stale = AsyncMock()
 
     @asynccontextmanager
-    async def locked(self, build_id: int, *, timeout: float = 30) -> AsyncIterator[None]:
+    async def locked(self, build_id: int, *, timeout: float = 30) -> AsyncGenerator[None]:
         if not await self.acquire(build_id, blocking=True, timeout=timeout):
             raise BuildBusyError(build_id)
         try:
@@ -179,7 +183,12 @@ class FakeTaxonomyResolver:
         )
 
 
-def build_service(repository: FakeBuildRepository, locks: FakeBuildLocks | None = None) -> BuildService:
+def build_service(
+    repository: FakeBuildRepository,
+    locks: FakeBuildLocks | None = None,
+    *,
+    permissions: PermissionService | None = None,
+) -> BuildService:
     return BuildService(
         repository,
         locks or FakeBuildLocks(),
@@ -187,6 +196,7 @@ def build_service(repository: FakeBuildRepository, locks: FakeBuildLocks | None 
         FakeVersions(),
         FakeEmbeddings(),
         FakeTaxonomyResolver(),
+        permissions=permissions,
     )
 
 
@@ -194,7 +204,7 @@ def build_service(repository: FakeBuildRepository, locks: FakeBuildLocks | None 
 def existing_build() -> DoorBuild:
     return DoorBuild(
         id=42,
-        submitter_id=1,
+        submitter_account_id=1,
         submission_status=Status.PENDING,
         miscellaneous_restrictions=["Locational", "Directional with fixes", "Other"],
         extra_info={
@@ -355,7 +365,7 @@ async def test_submit_door_maps_input_and_saves() -> None:
     repository = FakeBuildRepository()
     service = build_service(repository)
     submission = DoorSubmissionInput(
-        submitter_id=123,
+        submitter_account_id=123,
         door_size=(2, 3, None),
         build_size=(8, 9, 10),
         restrictions=("Seamless",),
@@ -368,7 +378,7 @@ async def test_submit_door_maps_input_and_saves() -> None:
 
     assert build.category is BuildCategory.DOOR
     assert build.submission_status is Status.PENDING
-    assert build.submitter_id == 123
+    assert build.submitter_account_id == 123
     assert build.door_dimensions == (2, 3, None)
     assert build.dimensions == (8, 9, 10)
     assert build.wiring_placement_restrictions == ["Seamless"]
@@ -397,7 +407,7 @@ async def test_submit_for_account_does_not_require_a_discord_identity() -> None:
     draft_id = UUID("11111111-1111-1111-1111-111111111111")
 
     build = await service.submit_for_account(
-        OtherBuild(description="A transport-neutral submission"),
+        OtherBuild(description="A submission with no chat client attached"),
         submitter_account_id=17,
         source_submission_draft_id=draft_id,
         display_name="  Workshop prototype  ",
@@ -405,7 +415,7 @@ async def test_submit_for_account_does_not_require_a_discord_identity() -> None:
     )
 
     assert build.submitter_account_id == 17
-    assert build.submitter_id is None
+    assert build.submitter_discord_id is None
     assert build.source_submission_draft_id == draft_id
     assert build.display_name == "Workshop prototype"
     assert build.category is BuildCategory.OTHER
@@ -486,3 +496,82 @@ async def test_save_prepares_defaults_then_indexes_after_relational_persistence(
     locks.release.assert_awaited_once_with(42)
     assert embeddings.prepared == [build]
     assert embeddings.indexed == [build]
+
+
+class TestAuthorizedEditing:
+    """The edit policy the HTTP route used to hold.
+
+    It lived in the transport layer, reading the leased build's status and
+    submitter there, so the bot's two edit paths could not reuse it. Ownership is
+    now the account comparison it always meant, rather than a snowflake one made
+    while a perfectly good account id sat one attribute away.
+    """
+
+    OWNER = BuildEditor(subject=Subject(account_id=1))
+    STRANGER = BuildEditor(subject=Subject(account_id=2))
+
+    @staticmethod
+    def _permissions(*held: str) -> PermissionService:
+        class Store:
+            async def load_for_subject(self, **_kwargs: object) -> SubjectRecords:
+                return SubjectRecords(
+                    epoch=1,
+                    grants=tuple(GrantRecord(pattern=node, effect=1, subject_account_id=2) for node in held),
+                )
+
+            async def epoch(self) -> int:
+                return 1
+
+        return PermissionService(Store())
+
+    async def test_the_owner_may_edit_their_pending_build(self, existing_build: DoorBuild) -> None:
+        repository = FakeBuildRepository(existing_build)
+        service = build_service(repository, permissions=self._permissions())
+
+        build = await service.apply_edit(self.OWNER, 42, BuildEditPatch(extra_user_info="mine"))
+
+        assert build.extra_info.get("user") == "mine"
+        repository.save.assert_awaited_once()
+
+    async def test_a_non_owner_without_the_node_is_refused_without_committing(self, existing_build: DoorBuild) -> None:
+        repository = FakeBuildRepository(existing_build)
+        service = build_service(repository, permissions=self._permissions())
+
+        with pytest.raises(AuthorizationError):
+            await service.apply_edit(self.STRANGER, 42, BuildEditPatch(extra_user_info="theirs"))
+
+        repository.save.assert_not_awaited()
+
+    async def test_a_non_owner_holding_the_node_may_edit(self, existing_build: DoorBuild) -> None:
+        repository = FakeBuildRepository(existing_build)
+        service = build_service(repository, permissions=self._permissions("build.submission.edit"))
+
+        build = await service.apply_edit(self.STRANGER, 42, BuildEditPatch(extra_user_info="moderated"))
+
+        assert build.extra_info.get("user") == "moderated"
+
+    async def test_ownership_does_not_survive_confirmation(self, existing_build: DoorBuild) -> None:
+        """A submitter edits their build while it is pending; once it is
+        confirmed it is catalogue data, and changing it needs the node."""
+        existing_build.submission_status = Status.CONFIRMED
+        repository = FakeBuildRepository(existing_build)
+        service = build_service(repository, permissions=self._permissions())
+
+        with pytest.raises(AuthorizationError):
+            await service.apply_edit(self.OWNER, 42, BuildEditPatch(extra_user_info="mine"))
+
+        repository.save.assert_not_awaited()
+
+    async def test_a_missing_build_is_reported_before_authorization(self) -> None:
+        service = build_service(FakeBuildRepository(), permissions=self._permissions())
+
+        with pytest.raises(BuildNotFoundError):
+            await service.apply_edit(self.OWNER, 42, BuildEditPatch(extra_user_info="mine"))
+
+    async def test_authorized_editing_requires_a_permission_service(self, existing_build: DoorBuild) -> None:
+        """The bot builds the same service; wiring it without permissions must
+        fail loudly rather than authorize everything."""
+        service = build_service(FakeBuildRepository(existing_build))
+
+        with pytest.raises(InvalidStateError):
+            await service.apply_edit(self.OWNER, 42, BuildEditPatch(extra_user_info="mine"))

@@ -4,12 +4,11 @@ from collections.abc import Mapping, Sequence
 from datetime import timedelta
 from typing import Any, cast
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.persistence.queue import ClaimedRowQueue, retry_delay
+from squid.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.schematics.application.jobs import (
     ClaimedSchematicJob,
     SchematicJobErrorKind,
@@ -18,19 +17,28 @@ from squid.schematics.application.jobs import (
 )
 from squid.schematics.infrastructure.models import SchematicJob
 
+SCHEMATIC_JOB_SPEC = QueueSpec(
+    name="schematic_jobs",
+    model=SchematicJob,
+    key=(SchematicJob.id,),
+    available_at=SchematicJob.available_at,
+    claimed_at=SchematicJob.claimed_at,
+    claim_token=SchematicJob.claim_token,
+    attempts=SchematicJob.attempts,
+    last_error=SchematicJob.last_error,
+    dead_at=SchematicJob.dead_at,
+    # The only queue that retains acknowledged rows, so readiness has to exclude
+    # the completed ones every other queue deletes.
+    pending=SchematicJob.completed_at.is_(None),
+)
+
 
 class PostgresSchematicJobRepository:
     """Claim, fence, and retain native-engine jobs in PostgreSQL."""
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
-        self._queue = ClaimedRowQueue(
-            session_factory,
-            SchematicJob,
-            ready_at=SchematicJob.available_at,
-            claimed_at=SchematicJob.claimed_at,
-            dead_at=SchematicJob.dead_at,
-        )
+        self._queue = ClaimedRowQueue(SCHEMATIC_JOB_SPEC, session_factory)
 
     async def submit(
         self,
@@ -65,23 +73,6 @@ class PostgresSchematicJobRepository:
         )
 
     async def claim(self, *, limit: int) -> Sequence[ClaimedSchematicJob]:
-        async with self._session_factory() as session:
-            rows = tuple(
-                (
-                    await session.scalars(
-                        select(SchematicJob)
-                        .where(
-                            SchematicJob.available_at <= func.now(),
-                            SchematicJob.completed_at.is_(None),
-                            self._queue.reclaimable(),
-                        )
-                        .order_by(SchematicJob.available_at, SchematicJob.id)
-                        .limit(limit)
-                        .with_for_update(skip_locked=True)
-                    )
-                ).all()
-            )
-            claimed_at = await self._queue.stamp(rows, session)
         return tuple(
             ClaimedSchematicJob(
                 id=row.id,
@@ -89,9 +80,9 @@ class PostgresSchematicJobRepository:
                 params=cast(Mapping[str, Any], row.params),
                 input_keys=tuple(row.input_keys),
                 attempts=row.attempts,
-                claimed_at=claimed_at,
+                claim_token=self._queue.token_of(row),
             )
-            for row in rows
+            for row in await self._queue.claim(limit=limit)
         )
 
     async def complete(
@@ -102,23 +93,22 @@ class PostgresSchematicJobRepository:
         *,
         retention_hours: int,
     ) -> bool:
-        statement = (
-            update(SchematicJob)
-            .where(SchematicJob.id == job.id, SchematicJob.claimed_at == job.claimed_at)
-            .values(
-                result=dict(result),
-                result_object_key=result_object_key,
-                completed_at=func.now(),
-                claimed_at=None,
-                expires_at=func.now() + timedelta(hours=retention_hours),
-                last_error=None,
-                error_kind=None,
-                error_context={},
-            )
+        # This queue answers client polls from the row, so acknowledging it means
+        # writing the terminal state rather than deleting the work.
+        outcome = await self._queue.complete(
+            (SchematicJob.id == job.id,),
+            job.claim_token,
+            values={
+                "result": dict(result),
+                "result_object_key": result_object_key,
+                "completed_at": func.now(),
+                "expires_at": func.now() + timedelta(hours=retention_hours),
+                "last_error": None,
+                "error_kind": None,
+                "error_context": {},
+            },
         )
-        async with self._session_factory.begin() as session:
-            outcome = cast(CursorResult[Any], await session.execute(statement))
-        return bool(outcome.rowcount)
+        return outcome.applied
 
     async def fail(
         self,
@@ -131,30 +121,18 @@ class PostgresSchematicJobRepository:
         terminal: bool,
         retention_hours: int,
     ) -> bool:
-        attempts = job.attempts + 1
-        values: dict[str, object] = {
-            "attempts": attempts,
-            "claimed_at": None,
-            "last_error": error[:4000],
-            "error_kind": error_kind,
-            "error_context": dict(error_context),
-        }
-        dead = terminal or attempts >= max_attempts
-        if dead:
-            values.update(
-                dead_at=func.now(),
-                expires_at=func.now() + timedelta(hours=retention_hours),
-            )
-        else:
-            values["available_at"] = func.now() + retry_delay(attempts)
-        statement = (
-            update(SchematicJob)
-            .where(SchematicJob.id == job.id, SchematicJob.claimed_at == job.claimed_at)
-            .values(**values)
+        diagnostics: dict[str, Any] = {"error_kind": error_kind, "error_context": dict(error_context)}
+        outcome = await self._queue.fail(
+            (SchematicJob.id == job.id,),
+            job.claim_token,
+            attempts=job.attempts,
+            error=error,
+            max_attempts=max_attempts,
+            terminal=terminal,
+            values=diagnostics,
+            dead_values={**diagnostics, "expires_at": func.now() + timedelta(hours=retention_hours)},
         )
-        async with self._session_factory.begin() as session:
-            outcome = cast(CursorResult[Any], await session.execute(statement))
-        return dead and bool(outcome.rowcount)
+        return outcome.dead_lettered
 
     async def cleanup(self, *, limit: int) -> Sequence[str]:
         candidates = (

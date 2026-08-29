@@ -1,13 +1,16 @@
 """Schematic application services."""
 
 import asyncio
+import contextlib
+import dataclasses
 import hashlib
 import json
 import logging
-from collections.abc import Iterable, Sequence
+from collections.abc import Generator, Iterable, Sequence
 from dataclasses import dataclass
 
-from squid.core.errors import SquidError
+from squid.core.errors import DataIntegrityError, SquidError
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
 from squid.schematics.application.commands import ConvertRequest, IngestRequest, RenderRequest, SimulationRequest
 from squid.schematics.application.ports import (
     SchematicAnalyzer,
@@ -16,10 +19,16 @@ from squid.schematics.application.ports import (
     SchematicVersionResolver,
 )
 from squid.schematics.application.queries import (
+    CachedRender,
     DuplicateCandidate,
     DuplicateTier,
-    PreparedRender,
+    FreshRender,
+    PublicSchematicDownload,
+    RenderedSchematic,
+    RenderPreparation,
+    RenderSkipReason,
     SchematicPublication,
+    SkippedRender,
     StoredRender,
     StoredSchematic,
 )
@@ -38,6 +47,7 @@ from squid.schematics.domain.models import (
 from squid.schematics.errors import (
     InvalidSchematicError,
     SchematicNotFoundError,
+    SchematicRenderRefusedError,
     SchematicRenderUnavailableError,
     SchematicSupportUnavailableError,
     SchematicTooLargeError,
@@ -45,6 +55,9 @@ from squid.schematics.errors import (
 )
 
 logger = logging.getLogger(__name__)
+
+_MAX_RENDER_CONTENT_BYTES = 8 * 1024 * 1024
+"""The largest stored preview worth loading into a response or a Discord upload."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,24 +142,15 @@ class SchematicService:
         source_format = self._vet(request.data, filename=request.filename)
         sha256 = await self._store.put_file(request.data, source_format=source_format)
 
-        if sha256 in self._poisoned:
-            msg = "This file has already crashed the schematic engine on this instance."
-            raise InvalidSchematicError(
-                msg,
-                context={"sha256": sha256},
-                end_user_action="Re-export the schematic and try again.",
-            )
+        self._refuse_poisoned(sha256)
 
-        try:
+        with self._quarantining(sha256, operation="analyze"):
             analysis = await self._analyzer.analyze(
                 request.data,
                 limits=self._limits,
                 with_lattice=request.with_lattice,
                 source_format=source_format,
             )
-        except SchematicWorkerCrashedError:
-            self._poisoned.add(sha256)
-            raise
         return IngestedSchematic(sha256, analysis)
 
     async def attach(
@@ -183,7 +187,7 @@ class SchematicService:
             ingested.analysis,
             primary=primary,
             original_filename=request.filename,
-            uploaded_by_discord_id=request.uploaded_by_discord_id,
+            uploaded_by_account_id=request.uploaded_by_account_id,
             publication=publication,
         )
 
@@ -198,7 +202,33 @@ class SchematicService:
             if schematic.publication.is_public_downloadable
         ]
 
-    async def public_content(self, build_id: int, schematic_id: int) -> tuple[bytes, StoredSchematic]:
+    async def list_public_page(
+        self,
+        build_id: int,
+        *,
+        selector: PageSelector = FIRST_PAGE,
+        page_size: int = 50,
+    ) -> Page[StoredSchematic]:
+        """Return one page of a build's publicly downloadable attachments.
+
+        Paging belongs here rather than in the route, which was the last list
+        endpoint slicing its own results after builds, records, and notifications
+        moved theirs into their services.
+
+        Slicing in memory is deliberate for now: a single build's attachment
+        count is small and bounded in practice, and the store port has no
+        offset/limit. The trigger to change that is one build's attachments no
+        longer fitting comfortably in one query -- then `list_for_build` gains
+        `offset`/`limit` and a count, and this body changes without the route
+        noticing.
+        """
+        return offset_page(
+            await self.list_public_for_build(build_id),
+            offset=selector.offset,
+            page_size=page_size,
+        )
+
+    async def public_download(self, build_id: int, schematic_id: int) -> PublicSchematicDownload:
         """Return canonical bytes only through an attachment's explicit publication policy."""
         stored = await self._store.get_for_build(build_id, schematic_id)
         if stored is None or not stored.publication.is_public_downloadable:
@@ -206,7 +236,18 @@ class SchematicService:
         content = await self._store.get_file(stored.file_sha256)
         if content is None:
             raise SchematicNotFoundError
-        return content, stored
+        license_ = stored.publication.license
+        if license_ is None:
+            # `SchematicPublication` rejects a public attachment without a license, so a
+            # row reaching here means persistence bypassed the domain constructor.
+            msg = "A publicly downloadable schematic carries no license."
+            raise DataIntegrityError(msg, context={"build_id": build_id, "schematic_id": schematic_id})
+        return PublicSchematicDownload(
+            content=content,
+            schematic=stored,
+            license=license_,
+            source_format=stored.analysis.metrics.source_format,
+        )
 
     async def primary_for_build(self, build_id: int) -> StoredSchematic | None:
         return await self._store.get_primary(build_id)
@@ -322,14 +363,145 @@ class SchematicService:
 
         return _rank_duplicates(found.values(), self._duplicate_result_limit)
 
-    async def prepare_render(self, build_id: int) -> PreparedRender | None:
-        """Render a primary schematic once, or return its recipe-matched cached URL.
+    async def prepare_render(self, build_id: int) -> RenderPreparation:
+        """Decide what a build's preview should be: a fresh PNG, a cached URL, or a skip.
 
-        Disabled support and deliberately skipped oversized builds return ``None``. Operational
-        failures propagate so the durable render queue can retry or dead-letter the intent.
+        Every permanent outcome is named by a `RenderSkipReason` so the durable render queue
+        can acknowledge it and a moderator surface can explain it. Operational failures — no
+        resource pack, a dead worker, a renderer that answered with something other than a
+        PNG — propagate instead, so the queue retries or dead-letters the intent.
         """
         if not self._render_enabled:
-            return None
+            return SkippedRender(RenderSkipReason.RENDERING_DISABLED)
+        pack_data, pack_sha256 = await self._render_resources()
+
+        stored = await self._store.get_primary(build_id)
+        if stored is None:
+            return SkippedRender(RenderSkipReason.NO_PRIMARY_SCHEMATIC)
+        reason = self._render_skip_reason(stored)
+        if reason is not None:
+            self._log_render_skip(stored, reason)
+            return SkippedRender(reason)
+
+        recipe_hash = _render_recipe_hash(stored, self._render_request, pack_sha256)
+        cached = await self._store.get_render(stored.id, recipe_hash)
+        if cached is not None:
+            return CachedRender(
+                schematic_id=stored.id,
+                recipe_hash=recipe_hash,
+                width=cached.width,
+                height=cached.height,
+                url=cached.url,
+            )
+
+        data = await self._store.get_file(stored.file_sha256)
+        if data is None:
+            self._log_render_skip(stored, RenderSkipReason.MISSING_FILE)
+            return SkippedRender(RenderSkipReason.MISSING_FILE)
+        png = await self._render_png(stored, data, pack_data, self._render_request)
+        return FreshRender(
+            schematic_id=stored.id,
+            recipe_hash=recipe_hash,
+            width=self._render_request.width,
+            height=self._render_request.height,
+            png=png,
+        )
+
+    def render_recipe(
+        self,
+        *,
+        width: int | None = None,
+        height: int | None = None,
+        yaw: float | None = None,
+        pitch: float | None = None,
+        zoom: float | None = None,
+    ) -> RenderRequest:
+        """Return this instance's configured framing with the caller's overrides applied.
+
+        Transports build their request through here rather than constructing one, so a caller
+        who asks for nothing in particular reproduces the recipe the durable queue renders
+        with — and therefore hits its cached preview instead of paying for an identical image
+        under a different hash.
+        """
+        base = self._render_request
+        return dataclasses.replace(
+            base,
+            width=base.width if width is None else width,
+            height=base.height if height is None else height,
+            yaw=base.yaw if yaw is None else yaw,
+            pitch=base.pitch if pitch is None else pitch,
+            zoom=base.zoom if zoom is None else zoom,
+        )
+
+    async def render_now(self, build_id: int, *, request: RenderRequest | None = None) -> RenderedSchematic:
+        """Render a build's primary schematic for a caller who is waiting for the image.
+
+        Distinct from `prepare_render`, which serves the durable projection queue: that path
+        decides what a build's *published* preview should be and hands its transport a PNG to
+        upload, while this one answers one request and publishes nothing. A recipe the queue
+        has already rendered is served from its stored artifact, so the default framing costs
+        an object-storage read rather than a render.
+
+        Deliberately not written back to the cache. Recording a render also projects it onto
+        the build as its preview, and a request whose only claim to authority is that somebody
+        asked for it must not decide what a build looks like to everyone else.
+        """
+        self._require_available()
+        if not self._render_enabled:
+            raise SchematicRenderUnavailableError
+
+        stored = await self._store.get_primary(build_id)
+        if stored is None:
+            raise SchematicNotFoundError(context={"build_id": build_id}, public_context={"build_id": build_id})
+        # Judged before the resource pack is acquired: a build that can never be previewed
+        # should not make this process fetch a pack to find that out.
+        reason = self._render_skip_reason(stored)
+        if reason is not None:
+            raise _refused(reason)
+
+        render_request = request or self._render_request
+        pack_data, pack_sha256 = await self._render_resources()
+        recipe_hash = _render_recipe_hash(stored, render_request, pack_sha256)
+        if await self._store.get_render(stored.id, recipe_hash) is not None:
+            cached = await self._store.get_render_content(recipe_hash, max_bytes=_MAX_RENDER_CONTENT_BYTES)
+            if cached is not None:
+                return RenderedSchematic(
+                    build_id=stored.build_id,
+                    schematic_id=stored.id,
+                    recipe_hash=recipe_hash,
+                    width=render_request.width,
+                    height=render_request.height,
+                    png=cached,
+                    from_cache=True,
+                )
+
+        data = await self._store.get_file(stored.file_sha256)
+        if data is None:
+            raise SchematicNotFoundError(context={"sha256": stored.file_sha256})
+        png = await self._render_png(stored, data, pack_data, render_request)
+        return RenderedSchematic(
+            build_id=stored.build_id,
+            schematic_id=stored.id,
+            recipe_hash=recipe_hash,
+            width=render_request.width,
+            height=render_request.height,
+            png=png,
+            from_cache=False,
+        )
+
+    def explain_render_skip(self, stored: StoredSchematic) -> RenderSkipReason | None:
+        """Say why this attachment will never be previewed, or `None` if it is eligible.
+
+        Pure and free on purpose. A moderator asking what the bot knows about a build must not
+        set a GPU render going, so this answers from configuration and the stored analysis
+        alone — it cannot report the cache, the resource pack, or the renderer's own health.
+        """
+        if not self._render_enabled:
+            return RenderSkipReason.RENDERING_DISABLED
+        return self._render_skip_reason(stored)
+
+    async def _render_resources(self) -> tuple[bytes, str]:
+        """Acquire the capability and resource pack a render needs, or refuse operationally."""
         if self._resource_pack is None or not self._available:
             msg = "Schematic rendering is enabled but its worker resources are unavailable."
             raise SchematicRenderUnavailableError(msg)
@@ -338,110 +510,62 @@ class SchematicService:
             if not capabilities.can_render:
                 msg = capabilities.unavailable_reason or "The schematic engine has no rendering adapter."
                 raise SchematicRenderUnavailableError(msg)
-            pack_data, pack_sha256 = await self._resource_pack.load()
+            return await self._resource_pack.load()
         except SquidError:
             self._warn_render_once("The configured schematic resource pack is unavailable.", exc_info=True)
             raise
 
-        stored = await self._store.get_primary(build_id)
-        if stored is None:
-            return None
+    def _render_skip_reason(self, stored: StoredSchematic) -> RenderSkipReason | None:
+        """Judge one attachment's eligibility, with no I/O and no engine involved."""
         if not stored.publication.is_sanitized:
-            return None
+            return RenderSkipReason.NOT_SANITIZED
         if stored.file_sha256 in self._poisoned:
-            return None
+            return RenderSkipReason.POISONED_FILE
         metrics = stored.analysis.metrics
         if metrics.block_count > self._render_max_block_count:
-            logger.info(
-                "Skipping render for schematic %s: block count %s exceeds cap %s.",
-                stored.id,
-                metrics.block_count,
-                self._render_max_block_count,
-                extra={
-                    "squid.build.id": stored.build_id,
-                    "squid.schematic.format": stored.analysis.metrics.source_format.value,
-                    "squid.schematic.operation": "render",
-                },
-            )
-            return None
+            return RenderSkipReason.OVER_BLOCK_BUDGET
         if metrics.bounding_volume > self._render_max_bounding_volume:
-            logger.info(
-                "Skipping render for schematic %s: bounding volume %s exceeds cap %s.",
-                stored.id,
-                metrics.bounding_volume,
-                self._render_max_bounding_volume,
-                extra={
-                    "squid.build.id": stored.build_id,
-                    "squid.schematic.format": stored.analysis.metrics.source_format.value,
-                    "squid.schematic.operation": "render",
-                },
-            )
-            return None
+            return RenderSkipReason.OVER_VOLUME_BUDGET
+        return None
 
-        recipe_hash = _render_recipe_hash(stored, self._render_request, pack_sha256)
-        cached = await self._store.get_render(stored.id, recipe_hash)
-        if cached is not None:
-            return PreparedRender(
-                schematic_id=stored.id,
-                recipe_hash=recipe_hash,
-                width=cached.width,
-                height=cached.height,
-                cached_url=cached.url,
-            )
-
-        data = await self._store.get_file(stored.file_sha256)
-        if data is None:
-            return None
-        try:
-            png = await self._analyzer.render(data, request=self._render_request, resource_pack=pack_data)
-        except SchematicWorkerCrashedError:
-            self._poisoned.add(stored.file_sha256)
-            logger.warning(
-                "The schematic worker crashed while rendering build %s; skipping preview.",
-                build_id,
-                extra={
-                    "squid.build.id": build_id,
-                    "squid.schematic.format": stored.analysis.metrics.source_format.value,
-                    "squid.schematic.operation": "render",
-                },
-            )
-            raise
-        except SquidError:
-            logger.warning(
-                "Could not render the schematic for build %s; skipping preview.",
-                build_id,
-                exc_info=True,
-                extra={
-                    "squid.build.id": build_id,
-                    "squid.schematic.format": stored.analysis.metrics.source_format.value,
-                    "squid.schematic.operation": "render",
-                },
-            )
-            raise
+    async def _render_png(
+        self, stored: StoredSchematic, data: bytes, pack_data: bytes, request: RenderRequest
+    ) -> bytes:
+        """Run one native render and prove its output is really a PNG."""
+        with self._quarantining(stored.file_sha256, operation="render", stored=stored):
+            try:
+                png = await self._analyzer.render(data, request=request, resource_pack=pack_data)
+            except SchematicWorkerCrashedError:
+                # Already logged and quarantined by the context manager; re-raised here only so
+                # a crash does not also fall into the generic operational branch below.
+                raise
+            except SquidError:
+                logger.warning(
+                    "Could not render the schematic for build %s; the durable queue will retry.",
+                    stored.build_id,
+                    exc_info=True,
+                    extra=_log_fields(stored, "render"),
+                )
+                raise
         if not png.startswith(b"\x89PNG\r\n\x1a\n"):
             logger.warning(
                 "The schematic renderer returned a non-PNG payload for build %s.",
-                build_id,
-                extra={
-                    "squid.build.id": build_id,
-                    "squid.schematic.format": stored.analysis.metrics.source_format.value,
-                    "squid.schematic.operation": "render",
-                },
+                stored.build_id,
+                extra=_log_fields(stored, "render"),
             )
             raise SchematicRenderUnavailableError()
-        return PreparedRender(
-            schematic_id=stored.id,
-            recipe_hash=recipe_hash,
-            width=self._render_request.width,
-            height=self._render_request.height,
-            png=png,
+        return png
+
+    def _log_render_skip(self, stored: StoredSchematic, reason: RenderSkipReason) -> None:
+        logger.info(
+            "Skipping the render for schematic %s: %s.",
+            stored.id,
+            reason.value,
+            extra={**_log_fields(stored, "render"), "squid.schematic.render_skip_reason": reason.value},
         )
 
-    async def record_render(self, render: PreparedRender, url: str, object_key: str) -> StoredRender | None:
+    async def record_render(self, render: FreshRender, url: str, object_key: str) -> StoredRender | None:
         """Persist and project a fresh render if its source is still the primary schematic."""
-        if render.png is None:
-            msg = "Only a fresh render can be recorded."
-            raise ValueError(msg)
         return await self._store.record_render(
             render.schematic_id,
             render.recipe_hash,
@@ -452,19 +576,54 @@ class SchematicService:
             byte_size=len(render.png),
         )
 
-    async def project_render(self, render: PreparedRender) -> bool:
+    async def project_render(self, render: CachedRender) -> bool:
         """Project a cached render if its source is still the primary schematic."""
-        if render.cached_url is None:
-            msg = "Only a cached render can be projected without recording it."
-            raise ValueError(msg)
-        return await self._store.project_render(render.schematic_id, render.recipe_hash, render.cached_url)
+        return await self._store.project_render(render.schematic_id, render.recipe_hash, render.url)
 
-    async def render_content(self, recipe_hash: str, *, max_bytes: int = 8 * 1024 * 1024) -> bytes:
+    async def render_content(self, recipe_hash: str, *, max_bytes: int = _MAX_RENDER_CONTENT_BYTES) -> bytes:
         """Return one registered PNG preview from private object storage."""
         content = await self._store.get_render_content(recipe_hash, max_bytes=max_bytes)
         if content is None:
             raise SchematicNotFoundError(context={"recipe_hash": recipe_hash})
         return content
+
+    @contextlib.contextmanager
+    def _quarantining(
+        self,
+        sha256: str,
+        *,
+        operation: str,
+        stored: StoredSchematic | None = None,
+    ) -> Generator[None]:
+        """Quarantine a file that kills a worker, so the next request refuses it outright.
+
+        Analysis, rendering, and simulation all have to do this, and all three used to spell
+        it out themselves. Only the log line differs per operation, so only that is a
+        parameter; whether the caller then skips, retries, or fails is left to the caller,
+        because that policy genuinely does differ — a render is durable work the queue will
+        retry, an upload is a user waiting on an answer.
+        """
+        try:
+            yield
+        except SchematicWorkerCrashedError:
+            self._poisoned.add(sha256)
+            fields = _log_fields(stored, operation) if stored is not None else {"squid.schematic.operation": operation}
+            logger.warning(
+                "The schematic worker crashed during %s; the file is quarantined on this instance.",
+                operation,
+                extra=fields,
+            )
+            raise
+
+    def _refuse_poisoned(self, sha256: str) -> None:
+        """Refuse a file that has already killed a worker here, rather than killing another."""
+        if sha256 in self._poisoned:
+            msg = "This file has already crashed the schematic engine on this instance."
+            raise InvalidSchematicError(
+                msg,
+                context={"sha256": sha256},
+                end_user_action="Re-export the schematic and try again.",
+            )
 
     def _warn_render_once(self, message: str, *, exc_info: bool = False) -> None:
         if self._render_warning_emitted:
@@ -524,20 +683,15 @@ class SchematicService:
         stored = await self._store.get_primary(build_id)
         if stored is None:
             raise SchematicNotFoundError(context={"build_id": build_id}, public_context={"build_id": build_id})
-        if stored.file_sha256 in self._poisoned:
-            msg = "This file has already crashed the schematic engine on this instance."
-            raise InvalidSchematicError(msg)
+        self._refuse_poisoned(stored.file_sha256)
         data = await self._store.get_file(stored.file_sha256)
         if data is None:
             raise SchematicNotFoundError(context={"sha256": stored.file_sha256})
-        try:
+        with self._quarantining(stored.file_sha256, operation="simulate", stored=stored):
             result = await self._analyzer.simulate(
                 data,
                 request=SimulationRequest(input_position=input_position, max_ticks=max_ticks),
             )
-        except SchematicWorkerCrashedError:
-            self._poisoned.add(stored.file_sha256)
-            raise
         await self._store.record_simulation(stored.id, result)
         return result
 
@@ -586,6 +740,24 @@ def summarise_losses(losses: Sequence[VersionLossEntry], *, limit: int = 10) -> 
     if len(losses) > limit:
         lines.append(f"- …and {len(losses) - limit} more.")
     return "\n".join(lines)
+
+
+def _refused(reason: RenderSkipReason) -> SchematicRenderRefusedError:
+    """Turn a permanent skip into the refusal a waiting caller is owed.
+
+    The queue treats these as "acknowledge and move on"; someone who asked for the image has
+    to be told which of them happened, and `description` is already the sentence to tell them.
+    """
+    return SchematicRenderRefusedError(reason.value, reason.description)
+
+
+def _log_fields(stored: StoredSchematic, operation: str) -> dict[str, str | int]:
+    """The structured fields every schematic-operation log line here carries."""
+    return {
+        "squid.build.id": stored.build_id,
+        "squid.schematic.format": stored.analysis.metrics.source_format.value,
+        "squid.schematic.operation": operation,
+    }
 
 
 def _render_recipe_hash(stored: StoredSchematic, request: RenderRequest, pack_sha256: str) -> str:

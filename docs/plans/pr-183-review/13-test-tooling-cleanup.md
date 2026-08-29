@@ -32,6 +32,10 @@ deleting coverage.
    include useful IDs or payloads in failures from worker/process tests.
 8. Classify each low-value test as delete, strengthen, or retain-with-rationale, then close the
    matching review thread with that disposition.
+9. Replace the hand-maintained entity counts in `squid/persistence/alembic_entities.py` with a
+   self-checking parse assertion, and remove the bump instructions the counts forced into two other
+   plan documents. Detailed in [the dispositions](13-test-tooling-dispositions.md#tooling); this is
+   the one thread here that lands on a source file rather than a test.
 
 ## Validation
 
@@ -39,5 +43,5 @@ deleting coverage.
   coverage of a named product invariant.
 - Run architecture tests after fixture/import-surface changes and `alembic heads` plus migration
   integration tests after migration-harness changes.
-- Run changed-file Ruff and BasedPyright checks and `git diff --check` before each reviewable
-  commit.
+- Run changed-file Ruff, `just typecheck` (pyrefly), and `git diff --check` before each
+  reviewable commit.

@@ -20,8 +20,8 @@ from squid.accounts.errors import (
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 
 
-def test_discord_id_is_recorded_as_a_provider_and_subject() -> None:
-    error = AccountNotFoundError(discord_id=7)
+def test_a_discord_identity_names_its_own_provider_like_every_other() -> None:
+    error = AccountNotFoundError(provider=IdentityProvider.DISCORD, subject="7")
 
     assert error.context["provider"] == IdentityProvider.DISCORD
     assert error.context["subject"] == "7"
@@ -45,27 +45,29 @@ def test_an_account_id_alone_carries_no_provider() -> None:
 
 
 def test_consent_errors_carry_both_the_account_and_the_identity() -> None:
-    error = ConsentRequiredError(7, account_id=42)
+    error = ConsentRequiredError(account_id=42, provider=IdentityProvider.JAVA, subject=str(JAVA_UUID))
 
-    assert error.context == {"account_id": 42, "provider": IdentityProvider.DISCORD, "subject": "7"}
+    assert error.context == {"account_id": 42, "provider": IdentityProvider.JAVA, "subject": str(JAVA_UUID)}
 
 
-def test_consent_errors_work_for_a_caller_with_no_discord_identity() -> None:
-    error = ConsentRequiredError(None, account_id=42)
+def test_consent_errors_work_for_a_caller_known_only_by_its_account() -> None:
+    error = ConsentRequiredError(account_id=42)
 
     assert error.context == {"account_id": 42}
 
 
 def test_already_linked_names_the_conflicting_minecraft_account() -> None:
-    error = AccountAlreadyLinkedError(discord_id=7, minecraft_uuid=JAVA_UUID)
+    """Raised for any provider conflict, so it names the one it means."""
+    error = AccountAlreadyLinkedError(provider=IdentityProvider.JAVA, subject=str(JAVA_UUID), minecraft_uuid=JAVA_UUID)
 
     assert error.context["minecraft_uuid"] == str(JAVA_UUID)
-    assert error.context["provider"] == IdentityProvider.DISCORD
+    assert error.context["provider"] == IdentityProvider.JAVA
     assert error.minecraft_uuid == JAVA_UUID
+    assert "Discord" not in error.default_message
 
 
 def test_already_linked_requires_keywords() -> None:
-    """The positional `discord_id` is gone, so a Discord-shaped call cannot slip through."""
+    """No positional identity, so a provider-shaped call cannot slip through unnamed."""
     with pytest.raises(TypeError):
         AccountAlreadyLinkedError(7, JAVA_UUID)  # type: ignore[misc]
 
@@ -81,10 +83,10 @@ def test_no_linked_account_is_distinct_from_an_unknown_uuid() -> None:
 def test_no_public_context_leaks_internal_identifiers() -> None:
     """Identity context is for logs. None of it may reach an unauthenticated reader."""
     errors = (
-        AccountNotFoundError(discord_id=7),
+        AccountNotFoundError(provider=IdentityProvider.DISCORD, subject="7"),
         AccountNotFoundError(42),
-        ConsentRequiredError(7, account_id=42),
-        AccountAlreadyLinkedError(discord_id=7, minecraft_uuid=JAVA_UUID),
+        ConsentRequiredError(account_id=42),
+        AccountAlreadyLinkedError(account_id=42, minecraft_uuid=JAVA_UUID),
         NoLinkedMinecraftAccountError(account_id=42),
     )
     for error in errors:

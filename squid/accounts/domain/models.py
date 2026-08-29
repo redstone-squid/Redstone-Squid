@@ -1,8 +1,9 @@
-"""Provider-neutral account domain values."""
+"""Account domain values: one account, many identities."""
 
 # ruff: noqa: RUF002  Confusable and compatibility characters are the subject
 # matter here: they are the inputs whose folding this file exists to pin.
 
+import re
 import unicodedata
 from dataclasses import dataclass
 from enum import StrEnum
@@ -10,7 +11,14 @@ from uuid import UUID
 
 from whenever import Instant
 
+from squid.core.errors import ValidationError
+from squid.core.i18n import _
+
 CURRENT_CONSENT_VERSION = "2026-08-04"
+
+_POSITIVE_DECIMAL = re.compile(r"[1-9][0-9]*")
+"""ASCII decimal without a leading zero. Deliberately not `str.isdigit`, which accepts
+non-ASCII digits such as U+0661 that `int()` then happily parses into a different string."""
 
 CONSENT_CUTOFF = "2026-08-04T00:00:00+00:00"
 """Accounts created before this instant predate consent receipts and are grandfathered."""
@@ -56,12 +64,46 @@ class AccountIdentity:
     id: int | None = None
 
     @classmethod
+    def for_provider(
+        cls,
+        provider: IdentityProvider,
+        subject: str,
+        *,
+        display_name: str | None = None,
+        verified_at: Instant | None = None,
+    ) -> AccountIdentity:
+        """Build an identity in *provider*'s canonical subject form.
+
+        This is the only authority on subject format; the database carries no format
+        constraint. The `match` is exhaustive by construction, so adding a member to
+        `IdentityProvider` is a type error here until its subject format is stated — which
+        is the reason the enum stays closed.
+        """
+        match provider:
+            case IdentityProvider.DISCORD:
+                if _POSITIVE_DECIMAL.fullmatch(subject) is None or int(subject) >= 2**63:
+                    msg = _("Discord identity subjects must be positive signed 64-bit integers, got {subject!r}.")
+                    raise ValidationError(msg, message_params={"subject": subject})
+                return cls(provider, subject, display_name, verified_at)
+            case IdentityProvider.BEDROCK:
+                if _POSITIVE_DECIMAL.fullmatch(subject) is None or int(subject) >= 2**64:
+                    msg = _("Bedrock XUIDs must be unsigned 64-bit integers, got {subject!r}.")
+                    raise ValidationError(msg, message_params={"subject": subject})
+                return cls(provider, subject, display_name, verified_at)
+            case IdentityProvider.JAVA:
+                # `UUID` also lowercases and hyphenates, so an uppercase or bare-hex
+                # subject from an external API normalizes rather than being rejected.
+                try:
+                    canonical = str(UUID(subject))
+                except ValueError as error:
+                    msg = _("Java identity subjects must be UUIDs, got {subject!r}.")
+                    raise ValidationError(msg, message_params={"subject": subject}) from error
+                return cls(provider, canonical, display_name, verified_at)
+
+    @classmethod
     def discord(cls, discord_id: int, *, verified_at: Instant | None = None) -> AccountIdentity:
         """Create a canonical Discord identity."""
-        if discord_id <= 0:
-            msg = "Discord identity subjects must be positive integers."
-            raise ValueError(msg)
-        return cls(IdentityProvider.DISCORD, str(discord_id), verified_at=verified_at)
+        return cls.for_provider(IdentityProvider.DISCORD, str(discord_id), verified_at=verified_at)
 
     @classmethod
     def java(
@@ -72,7 +114,9 @@ class AccountIdentity:
         verified_at: Instant | None = None,
     ) -> AccountIdentity:
         """Create a canonical Java Edition identity."""
-        return cls(IdentityProvider.JAVA, str(minecraft_uuid), username, verified_at)
+        return cls.for_provider(
+            IdentityProvider.JAVA, str(minecraft_uuid), display_name=username, verified_at=verified_at
+        )
 
     @classmethod
     def bedrock(
@@ -83,10 +127,7 @@ class AccountIdentity:
         verified_at: Instant | None = None,
     ) -> AccountIdentity:
         """Create a canonical Bedrock identity from an unsigned XUID."""
-        if not 0 < xuid < 2**64:
-            msg = "Bedrock XUIDs must be unsigned 64-bit integers."
-            raise ValueError(msg)
-        return cls(IdentityProvider.BEDROCK, str(xuid), gamertag, verified_at)
+        return cls.for_provider(IdentityProvider.BEDROCK, str(xuid), display_name=gamertag, verified_at=verified_at)
 
     @property
     def discord_id(self) -> int | None:
@@ -114,7 +155,7 @@ class AccountConsent:
 
 @dataclass(frozen=True, slots=True)
 class Account:
-    """One internal principal with any number of verified external identities."""
+    """One internal caller with any number of verified external identities."""
 
     identities: tuple[AccountIdentity, ...] = ()
     consent: AccountConsent | None = None
@@ -256,3 +297,56 @@ class VerificationCode:
 
     minecraft_uuid: UUID
     username: str
+
+
+@dataclass(frozen=True, slots=True)
+class CreditPreview:
+    """The creator credit a link is about to affect."""
+
+    name: str
+    build_count: int
+    held_by_public_creator_id: UUID | None = None
+    """`None` means unclaimed, so agreeing attributes the credit to the caller.
+
+    Set means another creator holds it, and agreeing moves nothing: the reconcile never transfers a
+    held name, it opens a staff claim. The prompt has to say so before the button is pressed.
+    """
+
+    @property
+    def is_contested(self) -> bool:
+        """Whether another creator already holds this name."""
+        return self.held_by_public_creator_id is not None
+
+
+@dataclass(frozen=True, slots=True)
+class LinkPreview:
+    """What redeeming a held code will do, knowable without spending it.
+
+    Everything here is a fact about the *code*, which is what lets the reservation stay anonymous.
+    "You already linked a different Minecraft account" is a fact about the caller instead, so it
+    stays a check at the entry point.
+    """
+
+    java_uuid: UUID
+    username: str
+    credit: CreditPreview | None = None
+    """`None` when no build credits this name yet, so there is nothing to move."""
+
+    java_uuid_held_elsewhere: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class LinkReservation:
+    """A held verification code, plus the one-time token that commits or releases it.
+
+    A reservation exists because the consent prompt has to show what it is asking about, and the
+    only way to learn that used to be to spend the code. Holding it means the previewed facts are
+    the facts that commit, and it gives the attempt cap a write to count rather than a free read.
+
+    The token is the whole authority: nothing here identifies the reserver, so cancelling still
+    stores nothing about them.
+    """
+
+    token: str
+    expires_at: Instant
+    preview: LinkPreview

@@ -104,7 +104,15 @@ What remains is real:
    - Any change to this transport updates `compose.yml`, `deploy/otel-collector.yaml`,
      `squid/logging_config.py` defaults, `.env.example`, and the deployment documentation together.
 
-2. **Separate the correlation ID from its display reference**
+2. **Separate the correlation ID from its display reference** — *done*, alongside error-report
+   storage. Two corrections found while implementing:
+   - `ProblemDetail` never had an `error_id` field and `X-Error-ID` no longer exists; the full value
+     travels in the `Request-Id` response header, which is what the detail route accepts as the long
+     form of a reference. Nothing needed un-truncating.
+   - The reference alone was not enough to be useful. The bot never called `bind_correlation_id`, so
+     the ID was minted inside `build_error_presentation` and nothing the command had already logged
+     carried it. `SquidCommandTree._call` and `Bot.invoke` now open a re-entrant `correlation_scope`
+     around the whole invocation, which is what makes a stored report's log tail non-empty.
    - Add `correlation_reference(correlation_id) -> str` to `squid/observability.py`: the first 12
      hex characters of a trace ID, and the identity function for the untraced fallback, which is
      already `uuid4().hex[:12]`. Both paths then look identical to a user and to support.
@@ -305,8 +313,8 @@ Subplans 3 and 4 touch the same module and should land together, ahead of 5, whi
 
 ## Validation
 
-- Focused modules while developing, with `--no-cov`; changed-file Ruff and BasedPyright afterwards,
-  plus `git diff --check`.
+- Focused modules while developing, with `--no-cov`; changed-file Ruff and `just typecheck`
+  (pyrefly) afterwards, plus `git diff --check`.
 - `tests/architecture/test_import_surfaces.py` and `test_boundaries.py` after the
   `squid/api/errors.py` revert.
 - `tests/integration/observability/test_traces.py` needs the observability extra, and the worker

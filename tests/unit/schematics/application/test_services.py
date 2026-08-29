@@ -7,10 +7,20 @@ import zlib
 import pytest
 from whenever import Instant
 
-from squid.schematics.application import ConvertRequest, IngestRequest, SchematicPublication, SchematicService
+from squid.schematics.application import (
+    CachedRender,
+    ConvertRequest,
+    FreshRender,
+    IngestRequest,
+    RenderSkipReason,
+    SchematicPublication,
+    SchematicService,
+    SkippedRender,
+)
 from squid.schematics.domain.models import (
     AutostackLattice,
     FingerprintPreset,
+    SchematicAnalysis,
     SchematicComparison,
     SchematicFormat,
     SchematicLicense,
@@ -21,6 +31,8 @@ from squid.schematics.errors import (
     DecompressionBudgetExceededError,
     InvalidSchematicError,
     SchematicNotFoundError,
+    SchematicRenderRefusedError,
+    SchematicRenderUnavailableError,
     SchematicSupportUnavailableError,
     SchematicTooLargeError,
     SchematicWorkerCrashedError,
@@ -67,6 +79,7 @@ def service(
     render_enabled: bool = False,
     resource_pack: FakeResourcePack | None = None,
     render_max_block_count: int = 400_000,
+    render_max_bounding_volume: int = 2_000_000,
 ) -> tuple[SchematicService, FakeSchematicAnalyzer, FakeSchematicStore]:
     analyzer = analyzer or FakeSchematicAnalyzer()
     store = store or FakeSchematicStore()
@@ -80,6 +93,7 @@ def service(
             render_enabled=render_enabled,
             resource_pack=resource_pack,
             render_max_block_count=render_max_block_count,
+            render_max_bounding_volume=render_max_bounding_volume,
         ),
         analyzer,
         store,
@@ -157,16 +171,19 @@ async def test_public_content_requires_the_build_attachment_and_complete_publica
         publication=sanitized_publication(public=True),
     )
 
-    content, stored = await schematics.public_content(7, public_id)
+    download = await schematics.public_download(7, public_id)
 
-    assert content == b"stored"
-    assert stored.publication.license is SchematicLicense.CC_BY_4_0
+    assert download.content == b"stored"
+    # Carried on the result rather than asserted in the route: the domain already
+    # guarantees a public attachment has a license.
+    assert download.license is SchematicLicense.CC_BY_4_0
+    assert download.source_format is make_analysis().metrics.source_format
     with pytest.raises(SchematicNotFoundError):
-        await schematics.public_content(8, public_id)
+        await schematics.public_download(8, public_id)
 
     private_id = await store.record_analysis(7, digest, make_analysis(), primary=False)
     with pytest.raises(SchematicNotFoundError):
-        await schematics.public_content(7, private_id)
+        await schematics.public_download(7, private_id)
 
 
 async def test_public_listing_hides_legacy_and_withdrawn_attachments() -> None:
@@ -194,6 +211,9 @@ async def test_public_listing_hides_legacy_and_withdrawn_attachments() -> None:
     )
 
     assert [item.id for item in await schematics.list_public_for_build(7)] == [1]
+    page = await schematics.list_public_page(7)
+    assert [item.id for item in page.items] == [1]
+    assert page.total == 1
 
 
 async def test_ingest_refuses_an_oversized_upload_before_reaching_the_analyzer() -> None:
@@ -394,23 +414,78 @@ async def test_render_prepares_png_then_reuses_the_persisted_recipe() -> None:
 
     prepared = await schematics.prepare_render(7)
 
-    assert prepared is not None
+    assert isinstance(prepared, FreshRender)
     assert prepared.png == analyzer.render_output
     assert analyzer.render_calls[0][2] == b"resource-pack"
     assert await schematics.record_render(prepared, "https://cdn.example/render.png", "renders/recipe.png") is not None
 
     cached = await schematics.prepare_render(7)
-    assert cached is not None
-    assert cached.cached_url == "https://cdn.example/render.png"
+    assert isinstance(cached, CachedRender)
+    assert cached.url == "https://cdn.example/render.png"
     assert len(analyzer.render_calls) == 1
 
 
-async def test_render_does_not_process_an_unsanitized_legacy_attachment() -> None:
+async def test_render_names_the_reason_a_build_is_skipped() -> None:
+    """The durable worker and moderator surfaces both need the reason, not just "nothing"."""
     schematics, analyzer, _ = service(render_enabled=True, resource_pack=FakeResourcePack())
     await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="legacy.litematic"))
 
-    assert await schematics.prepare_render(7) is None
+    assert await schematics.prepare_render(404) == SkippedRender(RenderSkipReason.NO_PRIMARY_SCHEMATIC)
+    assert await schematics.prepare_render(7) == SkippedRender(RenderSkipReason.NOT_SANITIZED)
     assert analyzer.render_calls == []
+
+
+async def test_render_is_skipped_wholesale_when_previews_are_disabled() -> None:
+    schematics, analyzer, _ = service(resource_pack=FakeResourcePack())
+    await schematics.attach(
+        7,
+        IngestRequest(data=litematic_bytes(), filename="door.litematic"),
+        publication=sanitized_publication(),
+    )
+
+    assert await schematics.prepare_render(7) == SkippedRender(RenderSkipReason.RENDERING_DISABLED)
+    assert analyzer.render_calls == []
+
+
+async def test_render_is_skipped_when_the_stored_file_has_gone_missing() -> None:
+    schematics, analyzer, store = service(render_enabled=True, resource_pack=FakeResourcePack())
+    await schematics.attach(
+        7,
+        IngestRequest(data=litematic_bytes(), filename="door.litematic"),
+        publication=sanitized_publication(),
+    )
+    store.files.clear()
+
+    assert await schematics.prepare_render(7) == SkippedRender(RenderSkipReason.MISSING_FILE)
+    assert analyzer.render_calls == []
+
+
+async def test_explaining_a_render_skip_costs_nothing(caplog: pytest.LogCaptureFixture) -> None:
+    """A moderator asking about a build must not set a render going to get an answer."""
+    schematics, analyzer, _ = service(render_enabled=True, resource_pack=FakeResourcePack())
+    await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="legacy.litematic"))
+    stored = await schematics.primary_for_build(7)
+    assert stored is not None
+
+    with caplog.at_level(logging.INFO, logger="squid.schematics.application.services"):
+        assert schematics.explain_render_skip(stored) is RenderSkipReason.NOT_SANITIZED
+
+    assert analyzer.render_calls == []
+    assert analyzer.capabilities_calls == 0
+    assert caplog.records == []
+
+
+async def test_a_sanitized_schematic_within_budget_has_no_skip_to_explain() -> None:
+    schematics, _, _ = service(render_enabled=True, resource_pack=FakeResourcePack())
+    await schematics.attach(
+        7,
+        IngestRequest(data=litematic_bytes(), filename="door.litematic"),
+        publication=sanitized_publication(),
+    )
+    stored = await schematics.primary_for_build(7)
+    assert stored is not None
+
+    assert schematics.explain_render_skip(stored) is None
 
 
 async def test_render_recipe_includes_the_schematic_content_identity() -> None:
@@ -429,18 +504,28 @@ async def test_render_recipe_includes_the_schematic_content_identity() -> None:
     first = await schematics.prepare_render(7)
     second = await schematics.prepare_render(8)
 
-    assert first is not None
-    assert second is not None
+    assert isinstance(first, FreshRender)
+    assert isinstance(second, FreshRender)
     assert first.recipe_hash != second.recipe_hash
 
 
-async def test_render_skips_a_schematic_over_the_block_cap(caplog: pytest.LogCaptureFixture) -> None:
-    analyzer = FakeSchematicAnalyzer(make_analysis(block_count=401))
+@pytest.mark.parametrize(
+    ("analysis", "reason"),
+    [
+        (make_analysis(block_count=401), RenderSkipReason.OVER_BLOCK_BUDGET),
+        (make_analysis(dimensions=(10, 10, 11)), RenderSkipReason.OVER_VOLUME_BUDGET),
+    ],
+)
+async def test_render_skips_a_schematic_over_a_budget(
+    analysis: SchematicAnalysis, reason: RenderSkipReason, caplog: pytest.LogCaptureFixture
+) -> None:
+    analyzer = FakeSchematicAnalyzer(analysis)
     schematics, _, _ = service(
         analyzer,
         render_enabled=True,
         resource_pack=FakeResourcePack(),
         render_max_block_count=400,
+        render_max_bounding_volume=1000,
     )
     await schematics.attach(
         7,
@@ -449,12 +534,13 @@ async def test_render_skips_a_schematic_over_the_block_cap(caplog: pytest.LogCap
     )
 
     with caplog.at_level(logging.INFO, logger="squid.schematics.application.services"):
-        assert await schematics.prepare_render(7) is None
+        assert await schematics.prepare_render(7) == SkippedRender(reason)
 
     assert analyzer.render_calls == []
     assert vars(caplog.records[-1])["squid.build.id"] == 7
     assert vars(caplog.records[-1])["squid.schematic.format"] == "litematic"
     assert vars(caplog.records[-1])["squid.schematic.operation"] == "render"
+    assert vars(caplog.records[-1])["squid.schematic.render_skip_reason"] == reason.value
 
 
 async def test_render_worker_crash_is_retried_by_the_durable_queue() -> None:
@@ -469,7 +555,7 @@ async def test_render_worker_crash_is_retried_by_the_durable_queue() -> None:
 
     with pytest.raises(SchematicWorkerCrashedError):
         await schematics.prepare_render(7)
-    assert await schematics.prepare_render(7) is None
+    assert await schematics.prepare_render(7) == SkippedRender(RenderSkipReason.POISONED_FILE)
     await store.record_analysis(
         8,
         store.records[0][1],
@@ -477,8 +563,101 @@ async def test_render_worker_crash_is_retried_by_the_durable_queue() -> None:
         primary=True,
         publication=sanitized_publication(),
     )
-    assert await schematics.prepare_render(8) is None
+    assert await schematics.prepare_render(8) == SkippedRender(RenderSkipReason.POISONED_FILE)
     assert len(analyzer.render_calls) == 1
+
+
+async def test_a_renderer_that_does_not_return_a_png_is_an_operational_failure() -> None:
+    """A non-PNG payload is a broken renderer, not a build the queue should give up on."""
+    analyzer = FakeSchematicAnalyzer()
+    analyzer.render_output = b"<html>not a png</html>"
+    schematics, _, _ = service(analyzer, render_enabled=True, resource_pack=FakeResourcePack())
+    await schematics.attach(
+        7,
+        IngestRequest(data=litematic_bytes(), filename="door.litematic"),
+        publication=sanitized_publication(),
+    )
+
+    with pytest.raises(SchematicRenderUnavailableError):
+        await schematics.prepare_render(7)
+
+
+async def test_rendering_now_serves_the_recipe_the_queue_already_rendered() -> None:
+    """Asking for the default view must not re-render the preview the build already has."""
+    schematics, analyzer, store = service(render_enabled=True, resource_pack=FakeResourcePack())
+    await schematics.attach(
+        7,
+        IngestRequest(data=litematic_bytes(), filename="door.litematic"),
+        publication=sanitized_publication(),
+    )
+    prepared = await schematics.prepare_render(7)
+    assert isinstance(prepared, FreshRender)
+    await schematics.record_render(prepared, "https://cdn.example/render.png", "renders/recipe.png")
+    store.render_content[prepared.recipe_hash] = b"\x89PNG\r\n\x1a\ncached"
+
+    rendered = await schematics.render_now(7)
+
+    assert rendered.png == b"\x89PNG\r\n\x1a\ncached"
+    assert rendered.recipe_hash == prepared.recipe_hash
+    assert rendered.from_cache is True
+    assert len(analyzer.render_calls) == 1
+
+
+async def test_rendering_now_with_a_different_camera_renders_a_different_recipe() -> None:
+    schematics, analyzer, store = service(render_enabled=True, resource_pack=FakeResourcePack())
+    await schematics.attach(
+        7,
+        IngestRequest(data=litematic_bytes(), filename="door.litematic"),
+        publication=sanitized_publication(),
+    )
+    prepared = await schematics.prepare_render(7)
+    assert isinstance(prepared, FreshRender)
+    await schematics.record_render(prepared, "https://cdn.example/render.png", "renders/recipe.png")
+    store.render_content[prepared.recipe_hash] = b"\x89PNG\r\n\x1a\ncached"
+
+    rendered = await schematics.render_now(7, request=schematics.render_recipe(yaw=45.0))
+
+    assert rendered.from_cache is False
+    assert rendered.png == analyzer.render_output
+    assert rendered.recipe_hash != prepared.recipe_hash
+    assert analyzer.render_calls[-1][1].yaw == 45.0
+    # The overridden camera keeps everything the deployment configured around it.
+    assert analyzer.render_calls[-1][1].width == prepared.width
+
+
+async def test_rendering_now_refuses_with_the_reason_rather_than_a_blank_image() -> None:
+    schematics, analyzer, _ = service(render_enabled=True, resource_pack=FakeResourcePack())
+    await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="legacy.litematic"))
+
+    with pytest.raises(SchematicRenderRefusedError) as refusal:
+        await schematics.render_now(7)
+
+    assert refusal.value.reason == RenderSkipReason.NOT_SANITIZED.value
+    assert refusal.value.public_context == {"reason": "not_sanitized"}
+    # The sentence a user is shown is the skip reason's own, not a generic conflict message.
+    assert refusal.value.localized_public_detail(None) == RenderSkipReason.NOT_SANITIZED.description
+    assert analyzer.render_calls == []
+
+
+async def test_rendering_now_reports_a_build_with_no_schematic_as_missing() -> None:
+    schematics, _, _ = service(render_enabled=True, resource_pack=FakeResourcePack())
+
+    with pytest.raises(SchematicNotFoundError):
+        await schematics.render_now(404)
+
+
+async def test_rendering_now_is_unavailable_where_previews_are_disabled() -> None:
+    """The refusal is operational, not a fact about the build, so it is not a skip reason."""
+    schematics, analyzer, _ = service(resource_pack=FakeResourcePack())
+    await schematics.attach(
+        7,
+        IngestRequest(data=litematic_bytes(), filename="door.litematic"),
+        publication=sanitized_publication(),
+    )
+
+    with pytest.raises(SchematicRenderUnavailableError):
+        await schematics.render_now(7)
+    assert analyzer.render_calls == []
 
 
 async def test_measure_timing_persists_evidence_without_editing_a_build() -> None:

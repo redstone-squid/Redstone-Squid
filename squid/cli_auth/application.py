@@ -35,6 +35,8 @@ from squid.cli_auth.errors import (
     InvalidCliSessionError,
 )
 from squid.cli_auth.ports import AccountConsentReader, CliAuthorizationRepository
+from squid.core.errors import DataIntegrityError, InvalidStateError, ValidationError
+from squid.core.i18n import _
 
 CLI_SESSION_TOKEN_PREFIX = "squid_cli_v1"
 ENROLLMENT_LIFETIME_SECONDS = 10 * 60
@@ -60,8 +62,8 @@ class CliSecretCodec:
 
     def __init__(self, pepper: bytes) -> None:
         if len(pepper) < 32:
-            msg = "CLI authorization pepper must contain at least 32 bytes."
-            raise ValueError(msg)
+            msg = _("CLI authorization pepper must contain at least 32 bytes.")
+            raise InvalidStateError(msg)
         self._pepper = pepper
 
     @staticmethod
@@ -82,8 +84,14 @@ class CliSecretCodec:
         return normalized if len(normalized) == 8 else ""
 
     def digest(self, purpose: CliSecretPurpose, secret: str) -> bytes:
-        """Return a purpose-separated keyed SHA-256 digest."""
-        return hmac.digest(self._pepper, f"cli:{purpose.value}\0{secret}".encode(), "sha256")
+        """Return a purpose-separated keyed SHA-256 digest.
+
+        See `docs/credential-hashing.md`: the inputs are `token_urlsafe(32)`
+        secrets, so keyed SHA-256 is the right primitive and a password KDF
+        would only add per-request work an unauthenticated caller can trigger.
+        """
+        # codeql[py/weak-sensitive-data-hashing]
+        return hmac.digest(self._pepper, f"cli:{purpose.value}\0{secret}".encode(), "sha256")  # 256-bit random secret
 
     @staticmethod
     def session_token(session_id: UUID, secret: str) -> str:
@@ -124,8 +132,8 @@ class CliAuthorizationService:
             )
             <= 0
         ):
-            msg = "CLI authorization limits must be positive."
-            raise ValueError(msg)
+            msg = _("CLI authorization limits must be positive.")
+            raise InvalidStateError(msg)
         self._repository = repository
         self._accounts = accounts
         self._codec = codec
@@ -214,8 +222,8 @@ class CliAuthorizationService:
             exchanged_at=now,
         )
         if persisted_session.device_id != persisted_device.id:
-            msg = "Persisted CLI session does not belong to its device."
-            raise ValueError(msg)
+            msg = _("Persisted CLI session does not belong to its device.")
+            raise DataIntegrityError(msg)
         return IssuedCliSession(persisted_device, persisted_session, token)
 
     async def start_session_challenge(self, device_id: UUID) -> IssuedCliSessionChallenge:
@@ -297,7 +305,7 @@ class CliAuthorizationService:
         return await self._repository.revoke_device(device_id=device_id, account_id=account_id, revoked_at=self._now())
 
     async def revoke_current_session(self, identity: CliIdentity) -> bool:
-        """Revoke the exact session represented by a CLI principal."""
+        """Revoke the exact session represented by a CLI caller."""
         return await self._repository.revoke_session(
             session_id=identity.session_id,
             device_id=identity.device_id,
@@ -416,13 +424,13 @@ def _validate_public_key(public_key: bytes) -> None:
 def _device_label(value: str) -> str:
     normalized = " ".join(value.split())
     if not 1 <= len(normalized) <= 80:
-        msg = "CLI device label must contain 1 to 80 characters."
-        raise ValueError(msg)
+        msg = _("CLI device label must contain 1 to 80 characters.")
+        raise ValidationError(msg)
     return normalized
 
 
 def _length_prefixed(value: bytes) -> bytes:
     if len(value) > 65535:
-        msg = "Signed CLI proof component is too long."
-        raise ValueError(msg)
+        msg = _("Signed CLI proof component is too long.")
+        raise InvalidStateError(msg)
     return len(value).to_bytes(2, byteorder="big") + value

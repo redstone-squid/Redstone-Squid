@@ -1,6 +1,9 @@
 """SQLAlchemy model for durable Discord reconciliation work."""
 
+import uuid
+
 from sqlalchemy import BigInteger, CheckConstraint, Identity, Index, Integer, Text, UniqueConstraint, func, text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
@@ -9,7 +12,23 @@ from squid.persistence.types import InstantUTC
 
 
 class DiscordSyncQueueItem(Base, kw_only=True):
-    """A coalesced request to refresh one Discord-rendered resource."""
+    """A coalesced request to refresh one Discord-rendered resource.
+
+    Not an event queue, despite the shape. Rows are coalesced on
+    `(resource_kind, source_key)` by the six `INSERT ... ON CONFLICT ... DO
+    UPDATE` triggers in `squid/persistence/postgres_entities.sql` — that is where
+    the coalescing actually happens — deleted on acknowledgement, and carry a
+    `generation` compared against a post's applied revision as a staleness token
+    rather than read as an ordering. An event log would be append-only and
+    replayable; this table is neither. A row means "this resource's Discord posts
+    are stale", and re-reading it tells you what the resource should look like
+    now, not what happened to it.
+
+    Discord-specific on purpose: every row exists to repair a Discord post, and
+    the only consumer renders them (`squid/bot/sync/reconciler.py`). The
+    application layer speaks of *reconciliation* rather than *sync* because a
+    sync names a transfer, and nothing here transfers anything.
+    """
 
     __tablename__ = "discord_sync_queue"
     __table_args__ = (
@@ -21,7 +40,7 @@ class DiscordSyncQueueItem(Base, kw_only=True):
         UniqueConstraint("resource_kind", "source_key", name="discord_sync_queue_resource_key"),
         Index(
             "discord_sync_queue_ready_idx",
-            "enqueued_at",
+            "available_at",
             postgresql_where=text("claimed_at IS NULL AND dead_at IS NULL"),
         ),
     )
@@ -33,7 +52,21 @@ class DiscordSyncQueueItem(Base, kw_only=True):
     enqueued_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
+    available_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )
+    """When this row next becomes claimable, and the only column backoff writes.
+
+    Kept separate from `enqueued_at` so a repeatedly failing row keeps its place in
+    FIFO order and still reports its true age to the queue-health gauges.
+    """
     claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
+    """The database-minted fencing token handed to the worker that claimed this row.
+
+    Nullable for now so code from the previous release, which stamps only
+    `claimed_at`, can keep draining the queue across a deploy window.
+    """
     dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     generation: Mapped[int] = mapped_column(
         BigInteger,

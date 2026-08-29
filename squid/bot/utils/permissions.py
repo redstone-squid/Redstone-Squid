@@ -14,6 +14,7 @@ from discord.ext.commands import CheckFailure, Context, NoPrivateMessage, check
 from whenever import Instant
 
 from squid.accounts.application import AccountService
+from squid.accounts.domain import IdentityProvider
 from squid.permissions.domain import CATALOGUE, Decision, PermissionNode, Reason, Subject
 
 if TYPE_CHECKING:
@@ -52,6 +53,11 @@ class AccountIdCache:
     for every unauthenticated caller — so this only ever reads, and caches the
     absence of an account too. Misses expire faster than hits because linking an
     account is exactly the event that invalidates one.
+
+    This is why the read goes through `get_account_by_identity` and not
+    `get_or_create_identity`: observing a snowflake in a permission check is not
+    evidence anybody asked us to remember them. `account_id_for` is the
+    get-or-create counterpart, for the command paths that did.
     """
 
     def __init__(self, *, ttl_seconds: float = 300, miss_ttl_seconds: float = 30, max_entries: int = 4096) -> None:
@@ -67,7 +73,7 @@ class AccountIdCache:
         if cached is not None and cached[1] > now:
             return cached[0]
 
-        account = await accounts.get_account(discord_id)
+        account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(discord_id))
         account_id = account.id if account is not None else None
         ttl = self._ttl_seconds if account_id is not None else self._miss_ttl_seconds
         if len(self._entries) >= self._max_entries:

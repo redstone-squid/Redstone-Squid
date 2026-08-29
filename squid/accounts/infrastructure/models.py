@@ -1,4 +1,4 @@
-"""SQLAlchemy provider-neutral account models."""
+"""SQLAlchemy account models, keyed by account rather than by identity provider."""
 
 import uuid
 
@@ -27,6 +27,9 @@ from squid.accounts.domain import ClaimMethod, ClaimStatus, IdentityProvider, fo
 from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC
 
+_PROVIDER_VALUES = ", ".join(f"'{provider.value}'" for provider in IdentityProvider)
+"""Generated from the enum so the CHECK cannot drift from the domain."""
+
 
 def _fold_from_name(context: DefaultExecutionContext) -> str:
     """Derive `normalized_name` from the `name` being inserted.
@@ -43,7 +46,7 @@ def _fold_from_name(context: DefaultExecutionContext) -> str:
 
 
 class Account(Base):
-    """An internal principal independent of every external identity provider."""
+    """An internal caller independent of every external identity provider."""
 
     __tablename__ = "accounts"
     __table_args__ = (
@@ -68,18 +71,11 @@ class AccountIdentity(Base):
     __tablename__ = "account_identities"
     __table_args__ = (
         UniqueConstraint("provider", "subject", name="account_identities_provider_subject_key"),
-        CheckConstraint(
-            "provider IN ('discord', 'java', 'bedrock')",
-            name="account_identities_provider_check",
-        ),
+        # Membership only. `AccountIdentity.for_provider` is the authority on subject
+        # *format*, so that adding a provider states its format in one exhaustive `match`
+        # rather than in a SQL predicate a migration has to keep in step.
+        CheckConstraint(f"provider IN ({_PROVIDER_VALUES})", name="account_identities_provider_check"),
         CheckConstraint("subject = btrim(subject) AND subject <> ''", name="account_identities_subject_check"),
-        CheckConstraint(
-            "(provider <> 'discord' OR subject ~ '^[1-9][0-9]*$') AND "
-            "(provider <> 'bedrock' OR subject ~ '^[1-9][0-9]*$') AND "
-            "(provider <> 'java' OR subject ~ "
-            "'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')",
-            name="account_identities_subject_format_check",
-        ),
         Index("account_identities_account_provider_idx", "account_id", "provider"),
     )
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
@@ -228,6 +224,13 @@ class VerificationCode(Base):
     """A verification code for linking Java Edition identities."""
 
     __tablename__ = "verification_codes"
+    __table_args__ = (
+        CheckConstraint(
+            "(reserved_token IS NULL) = (reserved_until IS NULL)",
+            name="verification_codes_reservation_complete",
+        ),
+    )
+
     id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, init=False)
     minecraft_uuid: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     code: Mapped[str] = mapped_column(Text, nullable=False)
@@ -241,4 +244,44 @@ class VerificationCode(Base):
         nullable=False,
         server_default=text("(now() + '00:10:00'::interval)"),
         default_factory=lambda: Instant.now().add(minutes=10),
+    )
+    reserved_token: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
+    """Digest of the token held by whoever is currently being shown this code's consent prompt.
+
+    A digest rather than the token, for the same reason `code` is one. Deliberately says nothing
+    about *who* reserved it: the prompt runs before an account exists, and the notice promises that
+    cancelling stores no account information, so a reservation identifies nobody.
+    """
+
+    reserved_until: Mapped[Instant | None] = mapped_column(InstantUTC(), nullable=True, default=None)
+    """When the hold lapses, freeing the code without anything having to reap it.
+
+    A crashed process therefore costs one prompt's worth of delay rather than a stuck code, and the
+    legitimate owner can always mint a fresh one from the game.
+    """
+
+
+class VerificationAttempt(Base):
+    """Consecutive failed code redemptions for one external identity.
+
+    Keyed on `(provider, subject)` rather than on an account, because the guesser may not have an
+    account yet: a redemption is the first thing many callers ever do, and creating a row for
+    someone in order to rate-limit them would defeat the point. No foreign key for the same reason.
+
+    The counter is *consecutive*: a success clears it, so an honest user who mistypes twice and then
+    gets it right is never closer to a lockout than someone who never failed.
+    """
+
+    __tablename__ = "verification_attempts"
+    __table_args__ = (
+        CheckConstraint(f"provider IN ({_PROVIDER_VALUES})", name="verification_attempts_provider_valid"),
+        CheckConstraint("consecutive_failures >= 0", name="verification_attempts_failures_non_negative"),
+    )
+
+    provider: Mapped[IdentityProvider] = mapped_column(Text, primary_key=True)
+    subject: Mapped[str] = mapped_column(Text, primary_key=True)
+    consecutive_failures: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    locked_until: Mapped[Instant | None] = mapped_column(InstantUTC(), nullable=True, default=None)
+    updated_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )

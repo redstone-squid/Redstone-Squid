@@ -9,6 +9,7 @@ from uuid import UUID
 
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, TypeAdapter, ValidationError, model_validator
 
+from squid.api.v1.schemas import FromDomain
 from squid.builds.domain import Build, DoorBuild, ExtenderBuild, Status
 
 type InputDimensions = tuple[int | None, int | None, int | None]
@@ -178,8 +179,12 @@ class Dimensions(BaseModel):
     depth: int | None
 
 
+# The internal `build_tag_assignments.provenance` column keeps its name for now:
+# renaming it reaches the tags repository, the builds mapping, the taxonomy
+# backfill, and a migration, for a word no client ever sees. `source` is the
+# replacement if the ban is meant repo-wide, and that is its own commit.
 class BuildTag(BaseModel):
-    """A public tag assignment without moderation provenance."""
+    """A tag on a build, without who applied it or how."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -198,7 +203,7 @@ class BuildPreview(BaseModel):
     url: str
 
 
-class BuildSummary(BaseModel):
+class BuildSummary(FromDomain[Build]):
     """Stable collection representation of a build."""
 
     model_config = ConfigDict(extra="forbid")
@@ -221,7 +226,7 @@ class BuildSummary(BaseModel):
     updated_at: datetime | None
 
     @classmethod
-    def from_domain(cls, build: Build) -> BuildSummary:
+    def from_domain(cls, build: Build, /) -> Self:
         """Render allowlisted public build fields."""
         if build.id is None:
             msg = "persisted build is missing its identifier"
@@ -357,7 +362,7 @@ class BuildDetail(BuildSummary):
 
     @classmethod
     @override
-    def from_domain(cls, build: Build) -> BuildDetail:
+    def from_domain(cls, build: Build, /) -> Self:
         """Render public detail without raw extra_info or account identifiers."""
         summary = BuildSummary.from_domain(build)
         return cls(

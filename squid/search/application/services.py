@@ -1,4 +1,4 @@
-"""Transport-neutral search orchestration."""
+"""Search orchestration, driven the same way by the bot and the API."""
 
 from typing import Protocol
 

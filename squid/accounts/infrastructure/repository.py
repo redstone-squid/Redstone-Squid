@@ -1,10 +1,12 @@
-"""SQLAlchemy provider-neutral account repository."""
+"""SQLAlchemy account repository, keyed by account rather than by identity provider."""
 
 import hashlib
+import hmac
+import secrets
 import uuid
 from collections.abc import Sequence
 
-from sqlalchemy import delete, select, text, update
+from sqlalchemy import case, column, delete, func, literal, or_, select, table, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
@@ -20,8 +22,11 @@ from squid.accounts.domain import (
     ClaimStatus,
     CreatorAlias,
     CreatorProfile,
+    CreditPreview,
     IdentityProvider,
     IdentityRefresh,
+    LinkPreview,
+    LinkReservation,
     fold_creator_name,
 )
 from squid.accounts.errors import (
@@ -36,11 +41,22 @@ from squid.accounts.infrastructure.models import AccountIdentity as AccountIdent
 from squid.accounts.infrastructure.models import CreatorAlias as CreatorAliasModel
 from squid.accounts.infrastructure.models import CreatorAliasClaim as CreatorAliasClaimModel
 from squid.accounts.infrastructure.models import PublicCreatorRedirect
+from squid.accounts.infrastructure.models import VerificationAttempt as VerificationAttemptModel
 from squid.accounts.infrastructure.models import VerificationCode as VerificationCodeModel
 from squid.core.errors import DataIntegrityError
+from squid.persistence.types import InstantUTC
 from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
 from squid.submissions.infrastructure.models import SubmissionDraft
 from squid.submissions.payload_integrity import submission_payload_digest
+
+_BUILD_CREDITS = table("build_creators", column("alias_id"))
+"""A lightweight handle on the one column of `build_creators` this module reads.
+
+Deliberately not `squid.builds.infrastructure.models.BuildCreator`: importing that mapper pulls the
+whole `Build` relationship graph into the accounts context, which both couples the two contexts and
+makes importing this module depend on the builds taxonomy being imported first. All that is wanted
+here is a count.
+"""
 
 
 def _now() -> Instant:
@@ -163,13 +179,9 @@ class AccountRepository:
             )
             return None if model is None else await self._load_account(session, model)
 
-    async def get_by_discord_id(self, discord_id: int) -> Account | None:
-        """Return the account holding *discord_id*."""
-        return await self.get_by_identity(IdentityProvider.DISCORD, str(discord_id))
-
-    async def get_or_create_discord(self, discord_id: int) -> Account:
-        """Resolve a Discord identity, atomically creating its account when absent."""
-        identity = AccountIdentity.discord(discord_id)
+    async def get_or_create_identity(self, provider: IdentityProvider, subject: str) -> Account:
+        """Resolve one external identity, atomically creating its account when absent."""
+        identity = AccountIdentity.for_provider(provider, subject)
         async with self._session_factory.begin() as session:
             existing = await self._find_account(session, identity.provider, identity.subject)
             if existing is not None:
@@ -208,16 +220,13 @@ class AccountRepository:
             await session.flush()
             return await self._load_account(session, model)
 
-    async def unlink_java_identity(self, discord_id: int) -> bool:
-        """Remove Java identities from the account holding a Discord identity."""
+    async def unlink_java_identity(self, account_id: int) -> bool:
+        """Remove every Java identity from one account."""
         async with self._session_factory.begin() as session:
-            account = await self._find_account(session, IdentityProvider.DISCORD, str(discord_id))
-            if account is None:
-                return False
             removed = await session.execute(
                 delete(AccountIdentityModel)
                 .where(
-                    AccountIdentityModel.account_id == account.id,
+                    AccountIdentityModel.account_id == account_id,
                     AccountIdentityModel.provider == IdentityProvider.JAVA,
                 )
                 .returning(AccountIdentityModel.id)
@@ -415,17 +424,205 @@ class AccountRepository:
             return _to_claim(claim, alias.name)
 
     def hash_verification_code(self, code: str) -> str:
-        """Hash a short-lived verification code with the configured pepper."""
-        return hashlib.sha256(f"{self._verification_code_pepper}{code}".encode()).hexdigest()
+        """Return the digest stored for a short-lived verification code.
+
+        Keyed, not prefixed. The pepper is a key, and `sha256(pepper || code)` is the weaker
+        construction for no saving. Unlike every other credential in this codebase the input here is
+        human-sized, so see `docs/credential-hashing.md` for why the answer is still a keyed digest
+        rather than a KDF: the code is short-lived and attempt-capped, which is what buys the safety
+        margin a work factor would otherwise have to.
+
+        No dual-read path and no backfill. Codes expire in ten minutes, so a deploy invalidates at
+        most one window and the in-game `/link` reissues.
+        """
+        # codeql[py/weak-sensitive-data-hashing]
+        return hmac.digest(self._verification_code_pepper.encode(), code.encode(), hashlib.sha256).hex()
+
+    def _reservation_holds(self, row: VerificationCodeModel, token: str) -> bool:
+        """Whether *token* is the live hold on *row*."""
+        if row.reserved_token is None or row.reserved_until is None:
+            return False
+        return hmac.compare_digest(row.reserved_token, self.hash_verification_code(token)) and (
+            row.reserved_until > Instant.now()
+        )
+
+    async def reserve_verification_code(self, code: str, *, ttl_seconds: int) -> LinkReservation | None:
+        """Hold a valid code for *ttl_seconds* and describe what redeeming it would do.
+
+        Returns `None` for a code that is unknown, expired, spent, or already held by someone else's
+        live prompt. Nothing about the caller is written: the hold is a token digest and a deadline
+        on a row that already existed, so a prompt that is cancelled leaves no trace of whoever saw
+        it.
+        """
+        now = _now()
+        async with self._session_factory.begin() as session:
+            row = await session.scalar(
+                select(VerificationCodeModel)
+                .where(
+                    VerificationCodeModel.expires > now,
+                    VerificationCodeModel.code == self.hash_verification_code(code),
+                    VerificationCodeModel.valid.is_(True),
+                    or_(
+                        VerificationCodeModel.reserved_until.is_(None),
+                        VerificationCodeModel.reserved_until <= now,
+                    ),
+                )
+                .with_for_update()
+            )
+            if row is None:
+                return None
+
+            token = secrets.token_urlsafe(32)
+            expires_at = now.add(seconds=ttl_seconds)
+            row.reserved_token = self.hash_verification_code(token)
+            row.reserved_until = expires_at
+            preview = await self._preview_link(session, row)
+            return LinkReservation(token=token, expires_at=expires_at, preview=preview)
+
+    async def _preview_link(self, session: AsyncSession, row: VerificationCodeModel) -> LinkPreview:
+        """Describe the effects of redeeming *row* without redeeming it."""
+        java_subject = str(row.minecraft_uuid)
+        held_elsewhere = await session.scalar(
+            select(AccountIdentityModel.id).where(
+                AccountIdentityModel.provider == IdentityProvider.JAVA,
+                AccountIdentityModel.subject == java_subject,
+            )
+        )
+        alias_row = (
+            await session.execute(
+                select(CreatorAliasModel, AccountModel.public_creator_id)
+                .outerjoin(AccountModel, CreatorAliasModel.account_id == AccountModel.id)
+                .where(CreatorAliasModel.normalized_name == fold_creator_name(row.username))
+            )
+        ).first()
+
+        credit = None
+        if alias_row is not None:
+            alias, public_creator_id = alias_row
+            build_count = await session.scalar(
+                select(func.count()).select_from(_BUILD_CREDITS).where(_BUILD_CREDITS.c.alias_id == alias.id)
+            )
+            credit = CreditPreview(
+                name=alias.name,
+                build_count=build_count or 0,
+                # Only a *held* alias reports an owner; an unclaimed one has no account to join to.
+                held_by_public_creator_id=public_creator_id if alias.account_id is not None else None,
+            )
+        return LinkPreview(
+            java_uuid=row.minecraft_uuid,
+            username=row.username,
+            credit=credit,
+            java_uuid_held_elsewhere=held_elsewhere is not None,
+        )
+
+    async def release_verification_code(self, code: str, reservation_token: str) -> bool:
+        """Drop a hold so the code is usable again at once rather than after the deadline.
+
+        Idempotent, and safe to call for a hold that already lapsed or was taken over, because it
+        only clears a row whose live token matches.
+        """
+        async with self._session_factory.begin() as session:
+            row = await session.scalar(
+                select(VerificationCodeModel)
+                .where(VerificationCodeModel.code == self.hash_verification_code(code))
+                .with_for_update()
+            )
+            if row is None or not self._reservation_holds(row, reservation_token):
+                return False
+            row.reserved_token = None
+            row.reserved_until = None
+            return True
+
+    async def verification_lockout(self, provider: IdentityProvider, subject: str) -> Instant | None:
+        """Return when an identity's redemption lockout ends, or `None` when it may try."""
+        async with self._session_factory() as session:
+            locked_until = await session.scalar(
+                select(VerificationAttemptModel.locked_until).where(
+                    VerificationAttemptModel.provider == provider,
+                    VerificationAttemptModel.subject == subject,
+                )
+            )
+        return locked_until if locked_until is not None and locked_until > Instant.now() else None
+
+    async def record_verification_failure(
+        self, provider: IdentityProvider, subject: str, *, max_failures: int, lockout_seconds: int
+    ) -> Instant | None:
+        """Count one refused code and return the lockout instant when this failure caused one.
+
+        The increment is a single upsert rather than a read-modify-write, so concurrent guesses
+        cannot each read the same count and overwrite one another — which would have made the cap
+        trivially evadable by sending attempts in parallel.
+        """
+        now = _now()
+        locked_until = now.add(seconds=lockout_seconds)
+        # Reaching the cap resets the count as it starts the cooling-off period, so the window after
+        # a lockout is a fresh budget rather than an instant re-lock on the next single failure.
+        reached_cap = VerificationAttemptModel.consecutive_failures + 1 >= max_failures
+        first_failure_caps = max_failures <= 1
+        # Typed explicitly: inside `case()` the bind is not associated with the column, so it loses
+        # the `InstantUTC` adapter and reaches asyncpg as a bare `Instant` it cannot encode.
+        lockout_bind = literal(locked_until, InstantUTC())
+        statement = (
+            insert(VerificationAttemptModel)
+            .values(
+                provider=provider,
+                subject=subject,
+                consecutive_failures=0 if first_failure_caps else 1,
+                locked_until=lockout_bind if first_failure_caps else None,
+                updated_at=now,
+            )
+            .on_conflict_do_update(
+                index_elements=[VerificationAttemptModel.provider, VerificationAttemptModel.subject],
+                set_={
+                    "consecutive_failures": case(
+                        (reached_cap, 0), else_=VerificationAttemptModel.consecutive_failures + 1
+                    ),
+                    "locked_until": case((reached_cap, lockout_bind), else_=VerificationAttemptModel.locked_until),
+                    "updated_at": now,
+                },
+            )
+            .returning(VerificationAttemptModel.locked_until)
+        )
+        async with self._session_factory.begin() as session:
+            stored_lockout = await session.scalar(statement)
+        # Only report a lockout *this* call started. Comparing for equality rather than for being in
+        # the future distinguishes "I caused this" from "one was already running", which matters both
+        # for the caller's log line and for a race: two attempts crossing the cap together compute
+        # instants a microsecond apart, so exactly one sees its own value survive. Exact comparison is
+        # sound because `_now()` floors to the precision `timestamptz` keeps.
+        return locked_until if stored_lockout == locked_until else None
+
+    async def clear_verification_failures(self, provider: IdentityProvider, subject: str) -> None:
+        """Forget an identity's failures after a successful redemption."""
+        async with self._session_factory.begin() as session:
+            await session.execute(
+                delete(VerificationAttemptModel).where(
+                    VerificationAttemptModel.provider == provider,
+                    VerificationAttemptModel.subject == subject,
+                )
+            )
 
     async def consume_code_and_link_account(
         self,
         *,
-        discord_id: int,
+        account_id: int,
         code: str,
         consent: AccountConsent,
+        reservation_token: str | None = None,
     ) -> VerificationLinkResult:
-        """Consume one code and attach its Java identity atomically."""
+        """Consume one code and attach its Java identity to *account_id* atomically.
+
+        The account must already exist. Redeeming a code is evidence of a *Java* subject and
+        of nothing else, so this path no longer mints an identity in any other namespace;
+        whoever holds evidence of the caller's own provider creates the account before
+        calling. That is what lets a Minecraft-only or CLI-only caller link at all.
+
+        *reservation_token* commits a hold taken by `reserve_verification_code`. The hold is checked
+        after the code is found rather than as part of finding it, so a lapsed prompt can be reported
+        as itself instead of as an invalid code. Everything else is still re-checked under the lock:
+        the reservation freezes the code, not the world, so the creator credit a preview described
+        may have been claimed in the meantime.
+        """
         async with self._session_factory.begin() as session:
             verification_code = await session.scalar(
                 select(VerificationCodeModel)
@@ -438,43 +635,36 @@ class AccountRepository:
             )
             if verification_code is None:
                 return VerificationLinkResult()
+            if reservation_token is not None and not self._reservation_holds(verification_code, reservation_token):
+                return VerificationLinkResult(reservation_expired=True)
 
-            discord_account = await self._find_account(
-                session, IdentityProvider.DISCORD, str(discord_id), for_update=True
-            )
+            account = await session.get(AccountModel, account_id, with_for_update=True)
+            if account is None:
+                raise AccountNotFoundError(account_id)
             java_subject = str(verification_code.minecraft_uuid)
             java_holder = await self._find_account(session, IdentityProvider.JAVA, java_subject, for_update=True)
-            existing_java = None
-            if discord_account is not None:
-                existing_java = await session.scalar(
-                    select(AccountIdentityModel).where(
-                        AccountIdentityModel.account_id == discord_account.id,
-                        AccountIdentityModel.provider == IdentityProvider.JAVA,
-                    )
+            existing_java = await session.scalar(
+                select(AccountIdentityModel).where(
+                    AccountIdentityModel.account_id == account.id,
+                    AccountIdentityModel.provider == IdentityProvider.JAVA,
                 )
-                if existing_java is not None and existing_java.subject != java_subject:
-                    return VerificationLinkResult(
-                        account=await self._load_account(session, discord_account),
-                        conflicting_java_uuid=uuid.UUID(existing_java.subject),
-                    )
-            if java_holder is not None and (discord_account is None or java_holder.id != discord_account.id):
+            )
+            if existing_java is not None and existing_java.subject != java_subject:
                 return VerificationLinkResult(
-                    account=None if discord_account is None else await self._load_account(session, discord_account),
+                    account=await self._load_account(session, account),
+                    conflicting_java_uuid=uuid.UUID(existing_java.subject),
+                )
+            if java_holder is not None and java_holder.id != account.id:
+                return VerificationLinkResult(
+                    account=await self._load_account(session, account),
                     conflicting_java_uuid=verification_code.minecraft_uuid,
                 )
 
-            if discord_account is None:
-                discord_account = AccountModel()
-                session.add(discord_account)
-                await session.flush()
-                session.add(
-                    self._identity_model(discord_account.id, AccountIdentity.discord(discord_id, verified_at=_now()))
-                )
             previous_name = None
             if existing_java is None:
                 session.add(
                     self._identity_model(
-                        discord_account.id,
+                        account.id,
                         AccountIdentity.java(
                             verification_code.minecraft_uuid,
                             username=verification_code.username,
@@ -486,20 +676,20 @@ class AccountRepository:
                 previous_name = existing_java.display_name
                 existing_java.display_name = verification_code.username
                 existing_java.verified_at = _now()
-            discord_account.consent_version = consent.version
-            discord_account.consented_at = consent.granted_at
+            account.consent_version = consent.version
+            account.consented_at = consent.granted_at
             verification_code.valid = False
 
             refresh = await self._reconcile_java_name(
                 session,
-                account=discord_account,
+                account=account,
                 java_uuid=verification_code.minecraft_uuid,
                 username=verification_code.username,
                 previous_name=previous_name,
             )
             await session.flush()
             return VerificationLinkResult(
-                account=await self._load_account(session, discord_account),
+                account=await self._load_account(session, account),
                 claimed_alias=refresh.claimed_alias,
                 refresh=refresh,
             )
@@ -744,7 +934,7 @@ class AccountRepository:
             "UPDATE submission_draft_changes SET actor_account_id = :survivor WHERE actor_account_id = :absorbed",
             "UPDATE build_schematics SET rights_attested_by_account_id = :survivor "
             "WHERE rights_attested_by_account_id = :absorbed",
-            # Keep installation IDs and credential hashes stable; only their provider-neutral owner changes.
+            # Keep installation IDs and credential hashes stable; only the owning account changes.
             "UPDATE minecraft_paper_installations SET owner_account_id = :survivor WHERE owner_account_id = :absorbed",
             "UPDATE minecraft_player_challenges SET approved_by_account_id = :survivor "
             "WHERE approved_by_account_id = :absorbed",

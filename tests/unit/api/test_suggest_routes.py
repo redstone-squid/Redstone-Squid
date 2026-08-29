@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 from fastapi import Response
 
-from squid.api.security import Principal
+from squid.api.security import UNBOUNDED, Caller
 from squid.api.v1.suggest import list_sources, suggest
 from squid.core.errors import NotFoundError
 from squid.suggestions.application import (
@@ -71,10 +71,10 @@ def request_for(*, allowed: bool = False) -> Any:
     )
 
 
-def principal(*, anonymous: bool = True) -> Principal:
+def caller(*, anonymous: bool = True) -> Caller:
     if anonymous:
-        return Principal(kind="anonymous", subject="anonymous")
-    return Principal(kind="account", subject="account:1", nodes=frozenset({"**"}), account_id=1)
+        return Caller(kind="anonymous", subject="anonymous")
+    return Caller(kind="account", subject="account:1", nodes=UNBOUNDED, account_id=1)
 
 
 async def test_a_source_returns_ranked_items() -> None:
@@ -83,7 +83,7 @@ async def test_a_source_returns_ranked_items() -> None:
         request_for(),
         Response(),
         service(restrictions_source()),
-        principal(),
+        caller(),
         q="seam",
     )
     assert [item.value for item in page.items] == ["seamless", "semi_seamless"]
@@ -93,7 +93,7 @@ async def test_a_source_returns_ranked_items() -> None:
 
 async def test_an_unknown_source_is_a_not_found_because_it_is_a_bad_url() -> None:
     with pytest.raises(NotFoundError):
-        await suggest("nope", request_for(), Response(), service(restrictions_source()), principal())
+        await suggest("nope", request_for(), Response(), service(restrictions_source()), caller())
 
 
 async def test_an_enumerable_source_carries_an_etag_a_client_can_cache_on() -> None:
@@ -103,7 +103,7 @@ async def test_an_enumerable_source_carries_an_etag_a_client_can_cache_on() -> N
         request_for(),
         response,
         service(restrictions_source()),
-        principal(),
+        caller(),
     )
     assert page.revision is not None
     assert response.headers["ETag"] == f'"{page.revision:x}"'
@@ -113,13 +113,13 @@ async def test_an_enumerable_source_carries_an_etag_a_client_can_cache_on() -> N
 async def test_a_queried_source_is_not_cached() -> None:
     response = Response()
     queried = SuggestionSource(id="builds", provider=StaticProvider.of(["1"]))
-    page = await suggest("builds", request_for(), response, service(queried), principal())
+    page = await suggest("builds", request_for(), response, service(queried), caller())
     assert page.revision is None
     assert "ETag" not in response.headers
 
 
 async def test_a_gated_source_is_empty_for_an_anonymous_caller() -> None:
-    page = await suggest("builds_pending", request_for(), Response(), service(gated_source()), principal())
+    page = await suggest("builds_pending", request_for(), Response(), service(gated_source()), caller())
     assert page.items == []
 
 
@@ -129,7 +129,7 @@ async def test_a_gated_source_is_served_to_a_caller_holding_the_node() -> None:
         request_for(allowed=True),
         Response(),
         service(gated_source()),
-        principal(anonymous=False),
+        caller(anonymous=False),
     )
     assert [item.value for item in page.items] == ["7"]
 
@@ -137,7 +137,7 @@ async def test_a_gated_source_is_served_to_a_caller_holding_the_node() -> None:
 async def test_the_limit_is_passed_through_and_bounded() -> None:
     provider = RecordingProvider()
     source = SuggestionSource(id="approved_restrictions", provider=provider)
-    await suggest("approved_restrictions", request_for(), Response(), service(source), principal(), q="s", limit=3)
+    await suggest("approved_restrictions", request_for(), Response(), service(source), caller(), q="s", limit=3)
     assert provider.requests[0].limit == 3
 
 
@@ -149,7 +149,7 @@ async def test_the_category_query_parameter_becomes_request_context() -> None:
         request_for(),
         Response(),
         service(source),
-        principal(),
+        caller(),
         q="s",
         category="door",
     )
@@ -163,7 +163,7 @@ async def test_the_signed_in_account_reaches_viewer_scoped_providers() -> None:
         provider=provider,
         visibility=Visibility.VIEWER_SCOPED,
     )
-    await suggest("approved_restrictions", request_for(), Response(), service(source), principal(anonymous=False))
+    await suggest("approved_restrictions", request_for(), Response(), service(source), caller(anonymous=False))
     assert provider.requests[0].viewer.account_id == 1
 
 

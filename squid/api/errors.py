@@ -26,6 +26,7 @@ from squid.core.errors import (
     ValidationError,
 )
 from squid.core.i18n import _, translate
+from squid.diagnostics.log_capture import captured
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,49 @@ def correlation_id() -> str:
     return active_correlation_id()
 
 
+def _route_template(request: Request) -> str | None:
+    """Name the matched route rather than the concrete URL.
+
+    The path template is low cardinality and groups every failure of one endpoint together;
+    `str(request.url)` would put an id, and sometimes a query string, into the stored origin.
+    """
+    route = request.scope.get("route")
+    path = getattr(route, "path", None)
+    return path if isinstance(path, str) else None
+
+
+async def _capture(request: Request, error: Exception, request_id: str) -> None:
+    """Store the failure, if this process was wired with somewhere to store it.
+
+    Reached through `app.state` rather than a dependency because an exception handler runs after
+    dependency resolution has already been unwound, and because the handler must still render a
+    response on a deployment (or a test app) that has no service graph attached.
+
+    Guarded even though `ErrorReportService.record` already swallows: the buffer drain and the
+    service lookup happen out here, and a handler that raises turns a rendered 500 into a bare
+    ASGI failure with no problem document at all.
+    """
+    from squid.observability import correlated_log_buffer, correlation_reference
+
+    try:
+        services = getattr(getattr(request.app.state, "runtime", None), "services", None)
+        reports = getattr(services, "error_reports", None)
+        if reports is None:
+            return
+        buffer = correlated_log_buffer()
+        await reports.record(
+            error,
+            correlation_id=request_id,
+            reference=correlation_reference(request_id),
+            surface="http",
+            origin=f"{request.method} {_route_template(request) or request.url.path}",
+            context={"method": request.method, "route": _route_template(request)},
+            log_tail=buffer.drain(request_id) if buffer is not None else (),
+        )
+    except Exception:
+        logger.exception("Could not capture an HTTP failure [request_id=%s]", request_id)
+
+
 class ProblemDetail(BaseModel):
     """RFC 9457 problem detail response with application extensions."""
 
@@ -62,13 +106,31 @@ class ProblemDetail(BaseModel):
     context: dict[str, JSONValue] | None = None
 
 
-def responses(*statuses: int) -> dict[int | str, dict[str, Any]]:
-    """Declare RFC 9457 responses for a route without duplicating OpenAPI metadata."""
+_PINNED_REASON_PHRASES = {
+    # Python 3.13 renamed 422 from "Unprocessable Entity" to "Unprocessable
+    # Content", so `HTTPStatus.phrase` makes the exported document depend on the
+    # interpreter that generated it. The unit suite runs on 3.12, 3.13 and 3.14,
+    # and the committed-document assertion only catches a forgotten regeneration
+    # if the document is the same on all three.
+    HTTPStatus.UNPROCESSABLE_ENTITY: "Unprocessable Content",
+}
+
+
+def responses(*statuses: int, describe: Mapping[int, str] | None = None) -> dict[int | str, dict[str, Any]]:
+    """Declare RFC 9457 responses for a route without duplicating OpenAPI metadata.
+
+    `describe` replaces a status's reason phrase where the generic one hides
+    something a client has to know -- most often that a 404 also covers a
+    resource the caller may not see.
+    """
+    described = describe or {}
     return {
         status: {
             "model": ProblemDetail,
             "content": {PROBLEM_DETAIL_MEDIA_TYPE: {"schema": {"$ref": "#/components/schemas/ProblemDetail"}}},
-            "description": HTTPStatus(status).phrase,
+            "description": described.get(
+                status, _PINNED_REASON_PHRASES.get(HTTPStatus(status), HTTPStatus(status).phrase)
+            ),
         }
         for status in statuses
     }
@@ -135,12 +197,16 @@ async def handle_squid_error(request: Request, exc: Exception) -> Response:
         )
 
     request_id = correlation_id()
+    # Capture before logging, so the stored tail is what the request was doing before it failed
+    # rather than an echo of the traceback the report already carries.
+    await _capture(request, exc, request_id)
     logger.error(
         "Application failure [request_id=%s code=%s context=%r]",
         request_id,
         exc.code,
         exc.context,
         exc_info=exc,
+        extra=captured(),
     )
     service_unavailable = isinstance(exc, ServiceUnavailableError)
     return _problem_response(
@@ -212,7 +278,8 @@ async def handle_unexpected_error(request: Request, exc: Exception) -> Response:
     """Log and redact an unexpected exception."""
     locale = locale_for_request(request)
     request_id = correlation_id()
-    logger.error("Unhandled HTTP exception [request_id=%s]", request_id, exc_info=exc)
+    await _capture(request, exc, request_id)
+    logger.error("Unhandled HTTP exception [request_id=%s]", request_id, exc_info=exc, extra=captured())
     return _problem_response(
         ProblemDetail(
             title=translate(locale, _("Internal server error")),

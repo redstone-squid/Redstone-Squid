@@ -1,9 +1,11 @@
-"""Provider-neutral account application ports."""
+"""Account application ports, keyed by account rather than by identity provider."""
 
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
+
+from whenever import Instant
 
 from squid.accounts.domain import (
     Account,
@@ -17,6 +19,7 @@ from squid.accounts.domain import (
     CreatorProfile,
     IdentityProvider,
     IdentityRefresh,
+    LinkReservation,
 )
 
 
@@ -27,6 +30,13 @@ class VerificationLinkResult:
     account: Account | None = None
     claimed_alias: CreatorAlias | None = None
     conflicting_java_uuid: UUID | None = None
+    reservation_expired: bool = False
+    """The code was valid but the hold committing it had lapsed or been taken over.
+
+    Kept apart from an empty result so the caller can say the prompt expired rather than claim a
+    correct code was invalid.
+    """
+
     refresh: IdentityRefresh | None = None
     """The full name reconciliation, when the code was consumed.
 
@@ -52,13 +62,11 @@ class AccountRepository(Protocol):
 
     async def get_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None: ...
 
-    async def get_by_discord_id(self, discord_id: int) -> Account | None: ...
-
-    async def get_or_create_discord(self, discord_id: int) -> Account: ...
+    async def get_or_create_identity(self, provider: IdentityProvider, subject: str) -> Account: ...
 
     async def update_consent(self, account_id: int, consent: AccountConsent) -> Account: ...
 
-    async def unlink_java_identity(self, discord_id: int) -> bool: ...
+    async def unlink_java_identity(self, account_id: int) -> bool: ...
 
     async def merge(self, surviving_account_id: int, absorbed_account_id: int) -> AccountMerge: ...
 
@@ -88,11 +96,24 @@ class AccountRepository(Protocol):
     async def consume_code_and_link_account(
         self,
         *,
-        discord_id: int,
+        account_id: int,
         code: str,
         consent: AccountConsent,
+        reservation_token: str | None = None,
     ) -> VerificationLinkResult: ...
+
+    async def reserve_verification_code(self, code: str, *, ttl_seconds: int) -> LinkReservation | None: ...
+
+    async def release_verification_code(self, code: str, reservation_token: str) -> bool: ...
 
     async def refresh_java_identity(self, *, account_id: int, java_uuid: UUID, username: str) -> IdentityRefresh: ...
 
     async def replace_verification_code(self, *, minecraft_uuid: UUID, code: str, username: str) -> None: ...
+
+    async def verification_lockout(self, provider: IdentityProvider, subject: str) -> Instant | None: ...
+
+    async def record_verification_failure(
+        self, provider: IdentityProvider, subject: str, *, max_failures: int, lockout_seconds: int
+    ) -> Instant | None: ...
+
+    async def clear_verification_failures(self, provider: IdentityProvider, subject: str) -> None: ...

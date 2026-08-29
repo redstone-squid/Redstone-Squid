@@ -3,7 +3,7 @@
 import logging
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Self, override
+from typing import Any, Self, cast, override
 
 import discord
 from discord import app_commands
@@ -11,15 +11,44 @@ from discord.ext import commands
 
 from squid.bot.utils.components import StaticLayout, edit_layout, error_layout, no_mentions
 from squid.bot.utils.permissions import PermissionNodeRequired
-from squid.core.errors import DomainError, SquidError
+from squid.core.errors import DomainError, JSONValue, SquidError
 from squid.core.i18n import _, translate
-from squid.observability import correlation_id, record_current_exception, trace_span
+from squid.diagnostics.application import ErrorReportService
+from squid.diagnostics.log_capture import captured
+from squid.observability import (
+    correlated_log_buffer,
+    correlation_id,
+    correlation_reference,
+    correlation_scope,
+    record_current_exception,
+    trace_span,
+)
 from squid.permissions.domain import CATALOGUE
 
 logger = logging.getLogger(__name__)
 
 _PRESENTED_ATTRIBUTE = "_squid_error_presented"
 type ErrorResponder = Callable[[StaticLayout], Awaitable[None]]
+
+_reporter: ErrorReportService | None = None
+
+
+def set_error_reporter(service: ErrorReportService | None) -> None:
+    """Register the process's error report store for surfaces that carry no client reference.
+
+    A command and an interaction both reach the bot through their own arguments, so those
+    handlers resolve the service themselves. A progress message does not: `RunningMessage` is
+    built from a `Messageable` or a `Webhook`, neither of which exposes the client. There is one
+    bot per process, so registering it here is more honest than threading a service through every
+    UI helper that might one day fail.
+    """
+    global _reporter
+    _reporter = service
+
+
+def _reports_from(client: object) -> ErrorReportService | None:
+    """Read the error report store off a bot, tolerating a client that is not one."""
+    return getattr(getattr(client, "services", None), "error_reports", None)
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,6 +58,12 @@ class ErrorPresentation:
     title: str
     detail: str
     error_id: str | None = None
+    reference: str | None = None
+    """The shortened form of `error_id` shown to the user, who has to retype it.
+
+    Both are kept because they index the same report: logs and the stored record carry the full
+    ID, while a moderator looking one up will be quoting whatever the card showed.
+    """
 
     def to_layout(self) -> StaticLayout:
         """Build the Components V2 layout for this presentation."""
@@ -189,11 +224,45 @@ def build_error_presentation(error: BaseException, locale: str | None = None) ->
         )
 
     error_id = correlation_id()
+    reference = correlation_reference(error_id)
     return ErrorPresentation(
         translate(locale, _("Something went wrong")),
-        translate(locale, _("An unexpected error occurred. Reference: `{error_id}`"), error_id=error_id),
+        translate(locale, _("An unexpected error occurred. Reference: `{error_id}`"), error_id=reference),
         error_id,
+        reference,
     )
+
+
+async def _capture(
+    error: BaseException,
+    presentation: ErrorPresentation,
+    *,
+    surface: str,
+    context: Mapping[str, object],
+    reports: ErrorReportService | None,
+) -> None:
+    """Store the failure, if this process was wired with somewhere to store it.
+
+    Guarded even though `ErrorReportService.record` already swallows: the buffer drain and the
+    service lookup happen out here, and this runs inside a handler that owes the user a reply.
+    Losing the diagnostic is survivable; losing the reply is a command that silently does nothing.
+    """
+    if reports is None or presentation.error_id is None or presentation.reference is None:
+        return
+    command = context.get("command")
+    try:
+        buffer = correlated_log_buffer()
+        await reports.record(
+            error,
+            correlation_id=presentation.error_id,
+            reference=presentation.reference,
+            surface=surface,
+            origin=command if isinstance(command, str) else None,
+            context=cast(Mapping[str, JSONValue], context),
+            log_tail=buffer.drain(presentation.error_id) if buffer is not None else (),
+        )
+    except Exception:
+        logger.exception("Could not capture a Discord failure [error_id=%s]", presentation.error_id)
 
 
 async def _handle_discord_error(
@@ -203,6 +272,7 @@ async def _handle_discord_error(
     surface: str,
     context: Mapping[str, object] | None = None,
     locale: str | None = None,
+    reports: ErrorReportService | None = None,
 ) -> None:
     if is_error_presented(error):
         return
@@ -211,13 +281,28 @@ async def _handle_discord_error(
     presentation = build_error_presentation(original, locale)
     if presentation.error_id is not None:
         application_context = _safe_log_context(original.context) if isinstance(original, SquidError) else None
+        safe_context = _safe_log_context(context)
+        # Capture before logging, so the stored tail is what the command was doing before it
+        # failed rather than an echo of the traceback the report already carries. The context is
+        # the redacted one: persisting is more exposing than logging, not less.
+        await _capture(
+            original,
+            presentation,
+            surface=surface,
+            context={**safe_context, "application_context": application_context},
+            reports=reports if reports is not None else _reporter,
+        )
+        # Both widths are logged: a backend that cannot do prefix queries still resolves whichever
+        # one the reporter quoted by exact match.
         logger.error(
-            "Discord failure [error_id=%s surface=%s context=%r application_context=%r]",
+            "Discord failure [error_id=%s error_ref=%s surface=%s context=%r application_context=%r]",
             presentation.error_id,
+            presentation.reference,
             surface,
             _safe_log_context(context),
             application_context,
             exc_info=original,
+            extra=captured(),
         )
 
     try:
@@ -256,6 +341,7 @@ async def handle_context_error[BotT: commands.Bot](
             "channel_id": context.channel.id,
         },
         locale=_presentation_locale(context.interaction),
+        reports=_reports_from(context.bot),
     )
 
 
@@ -284,6 +370,7 @@ async def handle_interaction_error(
             "channel_id": interaction.channel_id,
         },
         locale=_presentation_locale(interaction),
+        reports=_reports_from(interaction.client),
     )
 
 
@@ -292,6 +379,7 @@ async def handle_message_error(
     error: BaseException,
     *,
     locale: str | None = None,
+    reports: ErrorReportService | None = None,
 ) -> None:
     """Render an exception into an existing progress message.
 
@@ -309,6 +397,7 @@ async def handle_message_error(
         surface="running_message",
         context={"channel_id": message.channel.id, "message_id": message.id},
         locale=locale,
+        reports=reports,
     )
 
 
@@ -330,7 +419,10 @@ class SquidCommandTree[ClientT: discord.Client](app_commands.CommandTree[ClientT
             attributes["squid.guild.id"] = interaction.guild_id
         if interaction.channel_id is not None:
             attributes["squid.channel.id"] = interaction.channel_id
-        with trace_span(f"discord.command {command_name}", attributes) as span:
+        # The correlation scope opens inside the span so it adopts the trace id when one exists.
+        # Binding here rather than at presentation time is what lets an error report carry the log
+        # lines the command produced before it failed.
+        with trace_span(f"discord.command {command_name}", attributes) as span, correlation_scope():
             await super()._call(interaction)  # pyright: ignore[reportPrivateUsage]
             if interaction.command_failed:
                 span.set_error()

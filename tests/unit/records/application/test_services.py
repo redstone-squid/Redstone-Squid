@@ -1,3 +1,4 @@
+import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -5,15 +6,16 @@ from decimal import Decimal
 import pytest
 
 from squid.records.application.models import (
-    ActiveRecord,
     CandidateFacet,
     CategoryIdentity,
     ComputationBatch,
+    PublishedRecord,
     RecordGap,
     RecordLookupRequest,
     RecordSourceCandidate,
     TitleDiagnosticGap,
 )
+from squid.records.application.ports import RecomputeLease
 from squid.records.application.services import RecordComputationService, RecordService
 from squid.records.domain import (
     BuildKind,
@@ -23,6 +25,7 @@ from squid.records.domain import (
     ResolutionStatus,
     TimingVariant,
 )
+from squid.records.errors import NoMatchingRecordCategoryError
 
 
 class FakeCandidates:
@@ -43,7 +46,7 @@ class FakeRuns:
         self.completed: tuple[BuildKind, ...] = ()
         self.failed: tuple[tuple[BuildKind, ...], str] | None = None
         self.current_version_id: int | None = None
-        self.active_records: dict[int, ActiveRecord] = {}
+        self.published_records: dict[int, PublishedRecord] = {}
 
     async def active_ruleset_id(self) -> int:
         return 7
@@ -61,10 +64,10 @@ class FakeRuns:
     async def list_title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[TitleDiagnosticGap]:
         return self.title_gap_rows
 
-    async def get_active_record(self, result_id: int) -> ActiveRecord | None:
-        return self.active_records.get(result_id)
+    async def get_published_record(self, result_id: int) -> PublishedRecord | None:
+        return self.published_records.get(result_id)
 
-    async def list_active_records(
+    async def list_published_records(
         self,
         *,
         offset: int = 0,
@@ -72,17 +75,17 @@ class FakeRuns:
         before_id: int | None = None,
         descending: bool = True,
         limit: int,
-    ) -> Sequence[ActiveRecord]:
-        ordered = sorted(self.active_records, reverse=descending)
+    ) -> Sequence[PublishedRecord]:
+        ordered = sorted(self.published_records, reverse=descending)
         if before_id is not None:
             kept = [rid for rid in ordered if (rid > before_id if descending else rid < before_id)]
-            return tuple(self.active_records[rid] for rid in kept[-limit:])
+            return tuple(self.published_records[rid] for rid in kept[-limit:])
         if after_id is not None:
             ordered = [rid for rid in ordered if (rid < after_id if descending else rid > after_id)]
-        return tuple(self.active_records[rid] for rid in ordered[offset : offset + limit])
+        return tuple(self.published_records[rid] for rid in ordered[offset : offset + limit])
 
-    async def count_active_records(self) -> int:
-        return len(self.active_records)
+    async def count_published_records(self) -> int:
+        return len(self.published_records)
 
     async def list_requested_categories(self, kind: BuildKind) -> Sequence[CategoryIdentity]:
         return tuple(self.requested.get(kind, ()))
@@ -94,14 +97,15 @@ class FakeRuns:
     async def enqueue(self, kind: BuildKind, *, build_id: int | None, reason: str) -> None:
         self.queued = (*self.queued, kind)
 
-    async def claim_recompute_kinds(self, *, limit: int) -> Sequence[BuildKind]:
-        return self.queued[:limit]
+    async def claim_recompute_kinds(self, *, limit: int) -> RecomputeLease:
+        kinds = self.queued[:limit]
+        return RecomputeLease(kinds=kinds, claim_tokens=tuple(uuid.uuid4() for _ in kinds))
 
-    async def complete_recompute(self, kinds: Sequence[BuildKind]) -> None:
-        self.completed = tuple(kinds)
+    async def complete_recompute(self, lease: RecomputeLease) -> None:
+        self.completed = lease.kinds
 
-    async def fail_recompute(self, kinds: Sequence[BuildKind], error: str) -> None:
-        self.failed = (tuple(kinds), error)
+    async def fail_recompute(self, lease: RecomputeLease, error: str) -> None:
+        self.failed = (lease.kinds, error)
 
 
 def _door(
@@ -324,7 +328,7 @@ async def test_lookup_rejects_category_without_confirmed_candidate() -> None:
     runs = FakeRuns()
     service = RecordService(candidates, runs, RecordComputationService(candidates, runs))
 
-    with pytest.raises(ValueError, match="No confirmed build"):
+    with pytest.raises(NoMatchingRecordCategoryError, match="No confirmed build"):
         await service.lookup_or_materialize(
             RecordLookupRequest(
                 kind=BuildKind.DOOR,

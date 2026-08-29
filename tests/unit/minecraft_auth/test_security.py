@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from pydantic import SecretStr
 from starlette.requests import Request
 
-from squid.api.security import current_principal
+from squid.api.security import current_caller
 from squid.core.errors import AuthenticationError
 from squid.minecraft_auth.domain import (
     AuthenticatedPaperInstallation,
@@ -87,17 +87,17 @@ def request_with_services(
     )
 
 
-async def test_fabric_player_token_derives_bound_principal_without_installation_headers() -> None:
+async def test_fabric_player_token_derives_bound_caller_without_installation_headers() -> None:
     players = FakePlayers()
     request = request_with_services(players, FakeInstallations())
 
-    principal = await current_principal(request, f"Bearer {PLAYER_TOKEN}")
+    caller = await current_caller(request, f"Bearer {PLAYER_TOKEN}")
 
-    assert principal.kind == "minecraft_player"
-    assert principal.account_id == 42
-    assert principal.minecraft_origin == "fabric"
-    assert principal.java_uuid == JAVA_UUID
-    assert principal.installation_id is None
+    assert caller.kind == "minecraft_player"
+    assert caller.account_id == 42
+    assert caller.minecraft_origin == "fabric"
+    assert caller.java_uuid == JAVA_UUID
+    assert caller.installation_id is None
     assert players.fabric_token == PLAYER_TOKEN
 
 
@@ -113,10 +113,10 @@ async def test_paper_player_token_requires_and_authenticates_both_installation_h
         ),
     )
 
-    principal = await current_principal(request, f"Bearer {PLAYER_TOKEN}")
+    caller = await current_caller(request, f"Bearer {PLAYER_TOKEN}")
 
-    assert principal.minecraft_origin == "paper"
-    assert principal.installation_id == INSTALLATION_ID
+    assert caller.minecraft_origin == "paper"
+    assert caller.installation_id == INSTALLATION_ID
     assert installations.token == f"sqpi_{INSTALLATION_ID.hex}_{INSTALLATION_SECRET}"
     assert players.paper_call is not None
 
@@ -138,9 +138,7 @@ async def test_incomplete_or_oversized_paper_binding_fails_before_authentication
     installations = FakeInstallations()
 
     with pytest.raises(AuthenticationError):
-        await current_principal(
-            request_with_services(players, installations, headers=headers), f"Bearer {PLAYER_TOKEN}"
-        )
+        await current_caller(request_with_services(players, installations, headers=headers), f"Bearer {PLAYER_TOKEN}")
 
     assert players.fabric_token is None
     assert players.paper_call is None

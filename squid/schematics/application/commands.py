@@ -1,8 +1,10 @@
-"""Transport-neutral request objects for schematic operations."""
+"""Schematic request objects, built the same way by the bot, the API, and the worker."""
 
 from dataclasses import dataclass
 from typing import Literal
 
+from squid.core.errors import ValidationError
+from squid.core.i18n import _
 from squid.schematics.domain.models import SchematicFormat, Vector3
 
 
@@ -12,7 +14,7 @@ class IngestRequest:
 
     data: bytes
     filename: str
-    uploaded_by_discord_id: int | None = None
+    uploaded_by_account_id: int | None = None
     with_lattice: bool = True
 
 
@@ -22,6 +24,16 @@ class ConvertRequest:
 
     target_format: SchematicFormat
     target_data_version: int | None = None
+
+
+MIN_RENDER_EXTENT = 64
+MAX_RENDER_EXTENT = 4096
+"""Pixel bounds on a rendered image, matching the deployment's configured render size.
+
+Enforced in the request object rather than at each transport because the framing is now
+caller-chosen: a render is sized in the worker's memory, so an unbounded extent is a way to
+kill the engine from a Discord command or an unauthenticated GET.
+"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +52,21 @@ class RenderRequest:
     pitch: float | None = None
     zoom: float | None = None
     background: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
+
+    def __post_init__(self) -> None:
+        for axis, extent in (("width", self.width), ("height", self.height)):
+            if not MIN_RENDER_EXTENT <= extent <= MAX_RENDER_EXTENT:
+                msg = _("Render {axis} must be between {minimum} and {maximum} pixels.")
+                raise ValidationError(
+                    msg,
+                    message_params={"axis": axis, "minimum": MIN_RENDER_EXTENT, "maximum": MAX_RENDER_EXTENT},
+                )
+        if self.zoom is not None and self.zoom <= 0:
+            msg = _("Render zoom must be positive.")
+            raise ValidationError(msg)
+        if not all(0.0 <= channel <= 1.0 for channel in self.background):
+            msg = _("Render background channels must be between 0 and 1.")
+            raise ValidationError(msg)
 
     def recipe_fields(self) -> tuple[object, ...]:
         """Return the values that identify this render for cache-key purposes."""

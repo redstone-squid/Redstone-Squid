@@ -1,12 +1,15 @@
-"""Framework-neutral reaction weighting values."""
+"""Reaction weighting values, holding no Discord library objects."""
 
 from dataclasses import dataclass
 from math import isfinite
 
+from squid.core.errors import ValidationError
+from squid.core.i18n import _
+
 
 @dataclass(frozen=True, slots=True)
 class ReactionActor:
-    """Framework-neutral member facts used to authorize and weight a reaction."""
+    """The member facts that authorize and weight a reaction, as plain values."""
 
     user_id: int
     guild_id: int = 0
@@ -34,5 +37,5 @@ class RoleMultiplier:
 
     def __post_init__(self) -> None:
         if not isfinite(self.multiplier) or self.multiplier <= 0:
-            msg = "Role multiplier must be finite and greater than zero."
-            raise ValueError(msg)
+            msg = _("Role multiplier must be finite and greater than zero.")
+            raise ValidationError(msg)

@@ -5,6 +5,7 @@ Rendering used to be a method that also fetched and edited its own messages, whi
 why every session had to track the messages it had sent.
 """
 
+from collections.abc import Mapping
 from textwrap import dedent
 
 import discord
@@ -18,7 +19,7 @@ from squid.bot.utils.components import (
     card_layout,
     text_layout,
 )
-from squid.voting.domain import VoteChoice, VoteSessionSnapshot
+from squid.voting.domain import VoteChoice, VoteSessionResult, VoteSessionSnapshot, VoteStatus
 
 
 def primary_emoji(snapshot: VoteSessionSnapshot, choice: VoteChoice, guild_id: int | None = None) -> str:
@@ -61,19 +62,22 @@ def render_build_review(
 
 def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> StaticLayout:
     """Render the card asking whether a logged message should be deleted."""
-    match snapshot.result if snapshot.status == "closed" else "pending":
-        case "pending":
+    # Compare enum members rather than their string values: `status == "closed"` is true at
+    # runtime for a StrEnum but reads as a non-overlapping comparison to a type checker, which
+    # then treats every branch below `pending` as unreachable.
+    match snapshot.result if snapshot.status is VoteStatus.CLOSED else VoteSessionResult.PENDING:
+        case VoteSessionResult.PENDING:
             title = "Vote to Delete Log"
             action = (
                 f"React with {primary_emoji(snapshot, VoteChoice.APPROVE)} to upvote or "
                 f"{primary_emoji(snapshot, VoteChoice.DENY)} to downvote."
             )
             accent_colour = DISCORD_YELLOW
-        case "approved":
+        case VoteSessionResult.APPROVED:
             title = "Vote to Delete Log: Passed"
             action = ""
             accent_colour = DISCORD_GREEN
-        case "denied":
+        case VoteSessionResult.DENIED:
             title = "Vote to Delete Log: Failed"
             action = ""
             accent_colour = DISCORD_RED
@@ -100,13 +104,19 @@ def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> Sta
     )
 
 
-def render_generic_poll(snapshot: VoteSessionSnapshot) -> StaticLayout:
+def render_generic_poll(snapshot: VoteSessionSnapshot, voter_discord_ids: Mapping[int, int] = {}) -> StaticLayout:
     """Render a user-created poll, honouring its visibility setting."""
-    return text_layout(generic_poll_text(snapshot))
+    return text_layout(generic_poll_text(snapshot, voter_discord_ids))
 
 
-def generic_poll_text(snapshot: VoteSessionSnapshot) -> str:
-    """The body of a generic poll card."""
+def generic_poll_text(snapshot: VoteSessionSnapshot, voter_discord_ids: Mapping[int, int] = {}) -> str:
+    """The body of a generic poll card.
+
+    *voter_discord_ids* maps a voting account to the snowflake to mention it by. A
+    ballot records an account, not a snowflake, so the Discord spelling is supplied by
+    the caller that can look it up; an account with no Discord identity is simply not
+    mentioned.
+    """
     poll = snapshot.poll
     assert poll is not None
     closed = snapshot.status == "closed"
@@ -123,7 +133,12 @@ def generic_poll_text(snapshot: VoteSessionSnapshot) -> str:
                 f" — {raw.get(option.identifier or '', 0)} votes, {weighted.get(option.identifier or '', 0):g} weighted"
             )
         if poll.visibility == "visible_live" and show_totals:
-            voters = [f"<@{vote.discord_id}>" for vote in snapshot.selections if vote.option_id == option.identifier]
+            voters = [
+                f"<@{discord_id}>"
+                for vote in snapshot.selections
+                if vote.option_id == option.identifier
+                and (discord_id := voter_discord_ids.get(vote.account_id)) is not None
+            ]
             if voters:
                 line += f" ({', '.join(voters)})"
         lines.append(line)

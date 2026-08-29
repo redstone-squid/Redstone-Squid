@@ -5,11 +5,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, Path
 
-from squid.accounts.errors import CreatorAliasNotFoundError
+from squid.accounts.errors import CreatorAliasNotFoundError, CreatorNotFoundError
 from squid.api.dependencies import Accounts
 from squid.api.errors import responses
 from squid.api.v1.schemas.users import CreatorAliasDetail, CreatorProfileDetail
-from squid.core.errors import NotFoundError
 
 router = APIRouter(prefix="/creator-aliases", tags=["creator aliases"])
 profiles_router = APIRouter(prefix="/creators", tags=["creator aliases"])
@@ -31,5 +30,5 @@ async def get_creator_profile(creator_id: UUID, accounts: Accounts) -> CreatorPr
     """Return every public alias grouped under a stable creator identity."""
     profile = await accounts.get_creator_profile(creator_id)
     if profile is None:
-        raise NotFoundError(resource="creator", public_context={"creator_id": str(creator_id)})
+        raise CreatorNotFoundError(creator_id)
     return CreatorProfileDetail.from_domain(profile)

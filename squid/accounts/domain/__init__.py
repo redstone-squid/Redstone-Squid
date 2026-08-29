@@ -1,4 +1,4 @@
-"""Public provider-neutral account domain API."""
+"""Public account domain API: one account, many identities."""
 
 from squid.accounts.domain.models import (
     CONSENT_CUTOFF,
@@ -13,8 +13,11 @@ from squid.accounts.domain.models import (
     ClaimStatus,
     CreatorAlias,
     CreatorProfile,
+    CreditPreview,
     IdentityProvider,
     IdentityRefresh,
+    LinkPreview,
+    LinkReservation,
     RecentAccountProof,
     VerificationCode,
     fold_creator_name,
@@ -33,8 +36,11 @@ __all__ = [
     "ClaimStatus",
     "CreatorAlias",
     "CreatorProfile",
+    "CreditPreview",
     "IdentityProvider",
     "IdentityRefresh",
+    "LinkPreview",
+    "LinkReservation",
     "RecentAccountProof",
     "VerificationCode",
     "fold_creator_name",

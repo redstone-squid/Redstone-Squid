@@ -1,5 +1,17 @@
 """Durable Discord reconciliation application context."""
 
-from squid.sync.application import DiscordSyncService, SyncJob, SyncQueueRepository
+from squid.sync.application import (
+    DiscordReconciliationService,
+    ReconciliationAction,
+    ReconciliationJob,
+    ReconciliationQueue,
+    ReconciliationResource,
+)
 
-__all__ = ["DiscordSyncService", "SyncJob", "SyncQueueRepository"]
+__all__ = [
+    "DiscordReconciliationService",
+    "ReconciliationAction",
+    "ReconciliationJob",
+    "ReconciliationQueue",
+    "ReconciliationResource",
+]

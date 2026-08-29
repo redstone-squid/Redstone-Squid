@@ -9,6 +9,8 @@ from collections.abc import Callable
 from enum import StrEnum
 from uuid import UUID
 
+from squid.core.errors import InvalidStateError
+from squid.core.i18n import _
 from squid.minecraft_auth.errors import InvalidPkceError
 
 INSTALLATION_TOKEN_PREFIX = "sqpi"
@@ -40,8 +42,8 @@ class MinecraftSecretCodec:
     ) -> None:
         self._pepper = pepper.encode() if isinstance(pepper, str) else pepper
         if not self._pepper:
-            msg = "Minecraft authorization pepper must not be empty."
-            raise ValueError(msg)
+            msg = _("Minecraft authorization pepper must not be empty.")
+            raise InvalidStateError(msg)
         self._token_bytes = token_bytes
 
     def random_secret(self) -> str:
@@ -54,9 +56,15 @@ class MinecraftSecretCodec:
         return "-".join(compact[index : index + 4] for index in range(0, len(compact), 4))
 
     def digest(self, purpose: SecretPurpose, value: str) -> bytes:
-        """Return a keyed digest suitable for persistence and comparison."""
+        """Return a keyed digest suitable for persistence and comparison.
+
+        See `docs/credential-hashing.md`: every value reaching here is CSPRNG
+        output (256-bit secrets, an 80-bit user code), so keyed SHA-256 is the
+        right primitive and a password KDF defends entropy that is not at risk.
+        """
         payload = purpose.value.encode() + b"\0" + value.encode()
-        return hmac.digest(self._pepper, payload, hashlib.sha256)
+        # codeql[py/weak-sensitive-data-hashing]
+        return hmac.digest(self._pepper, payload, hashlib.sha256)  # high-entropy random value, not a password
 
     def installation_token(self, installation_id: UUID, secret: str) -> str:
         """Compose a self-identifying Paper credential."""

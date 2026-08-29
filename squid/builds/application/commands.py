@@ -9,13 +9,13 @@ type Dimensions = tuple[int | None, int | None, int | None]
 
 @dataclass(slots=True, frozen=True)
 class DoorSubmissionInput:
-    """Input for legacy Discord door submission entry points.
+    """Input for the door submission entry points.
 
-    Provider-neutral synchronized submissions use ``BuildService.submit_for_account``.
+    Submissions finalized from a synchronized draft use
+    ``BuildService.submit_for_account`` instead.
     """
 
-    # Discord snowflake retained at this transport boundary for the existing bot/API flow.
-    submitter_id: int
+    submitter_account_id: int
     door_size: Dimensions
     pattern: tuple[str, ...] = ("Regular",)
     door_type: DoorOrientationLiteral = "Door"

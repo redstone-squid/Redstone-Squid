@@ -229,7 +229,6 @@ class VoteRepository:
         self,
         message_id: int,
         account_id: int,
-        discord_id: int,
         guild_id: int,
         option_id: str,
         emoji: str,
@@ -255,7 +254,6 @@ class VoteRepository:
                     .values(
                         vote_session_id=row.id,
                         account_id=account_id,
-                        discord_id=discord_id,
                         guild_id=guild_id,
                         option_id=option_id,
                         emoji=emoji,
@@ -264,7 +262,6 @@ class VoteRepository:
                     .on_conflict_do_update(
                         index_elements=[Vote.vote_session_id, Vote.account_id],
                         set_={
-                            "discord_id": discord_id,
                             "guild_id": guild_id,
                             "option_id": option_id,
                             "emoji": emoji,
@@ -495,7 +492,6 @@ class VoteRepository:
         selections = tuple(
             VoteSelection(
                 vote.account_id,
-                vote.discord_id,
                 vote.guild_id,
                 vote.option_id,
                 vote.emoji,

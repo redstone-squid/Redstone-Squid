@@ -1,6 +1,9 @@
 """Schematic context errors."""
 
+from collections.abc import Iterable
+
 from squid.core.errors import (
+    ConflictError,
     ErrorCode,
     InfrastructureError,
     NotFoundError,
@@ -8,6 +11,7 @@ from squid.core.errors import (
     ValidationError,
 )
 from squid.core.i18n import _
+from squid.schematics.domain.models import Vector3
 
 
 class InvalidSchematicError(ValidationError):
@@ -17,6 +21,42 @@ class InvalidSchematicError(ValidationError):
     default_code = ErrorCode.SCHEMATIC_INVALID
     default_resource = "schematic"
     default_end_user_action = _("Upload a .litematic, .schem, .schematic, .nbt, or .mcstructure file.")
+
+
+class AmbiguousSimulationInputError(InvalidSchematicError):
+    """The tick simulator could not be told which control to actuate.
+
+    Choosing between several levers would silently time a different circuit than the one a
+    moderator meant, so the engine refuses instead. Refusing is only useful if the caller is
+    told what to choose *between*, which is why the candidates travel as public context: they
+    are coordinates inside a file the caller uploaded, so there is nothing to withhold.
+    """
+
+    def __init__(
+        self,
+        *,
+        candidates: Iterable[Vector3] = (),
+        rejected: Vector3 | None = None,
+    ) -> None:
+        ordered = tuple(sorted(candidates))
+        if rejected is not None:
+            message = _("The input coordinate you gave is not a lever or button in this schematic.")
+            action = _("Pick one of the coordinates listed below.")
+        elif ordered:
+            message = _("This schematic has several possible inputs, so choosing one for you would be unsafe.")
+            action = _("Run the command again with one of the coordinates listed below.")
+        else:
+            message = _("This schematic has no input annotation and no lever or button to actuate.")
+            action = _("Add an @io.* input sign, or use a schematic with an interactable input.")
+        encoded = [list(candidate) for candidate in ordered]
+        super().__init__(
+            message,
+            end_user_action=action,
+            context={"input_candidates": encoded, "rejected": list(rejected) if rejected is not None else None},
+            public_context={"input_candidates": encoded},
+        )
+        self.candidates = ordered
+        self.rejected = rejected
 
 
 class SchematicTooLargeError(ValidationError):
@@ -65,6 +105,24 @@ class SchematicSupportUnavailableError(ServiceUnavailableError):
     default_code = ErrorCode.SCHEMATIC_SUPPORT_UNAVAILABLE
     default_resource = "schematic"
     default_developer_action = "Install the optional 'schematics' extra to enable this feature."
+
+
+class SchematicRenderRefusedError(ConflictError):
+    """This attachment will never render under the requested recipe.
+
+    A refusal is about the stored schematic, not about the request: an unsanitized file, one
+    that already crashed the engine, or one past a preview budget answers the same way however
+    the camera is pointed. The reason travels as public context because it is the only thing
+    that tells a caller whether to fix something or to stop asking.
+    """
+
+    default_message = _("This build's schematic cannot be previewed.")
+    default_code = ErrorCode.SCHEMATIC_RENDER_REFUSED
+    default_resource = "schematic"
+
+    def __init__(self, reason: str, description: str) -> None:
+        super().__init__(description, context={"reason": reason}, public_context={"reason": reason})
+        self.reason = reason
 
 
 class SchematicRenderUnavailableError(ServiceUnavailableError):

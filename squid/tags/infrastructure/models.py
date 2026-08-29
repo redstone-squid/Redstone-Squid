@@ -90,18 +90,18 @@ class TagDefinition(Base, kw_only=True):
             name="tag_definitions_restriction_type_check",
         ),
         CheckConstraint(
-            "(value_type = 'numeric') = (canonical_unit_key IS NOT NULL OR numeric_quantum IS NOT NULL) OR "
-            "(value_type = 'numeric' AND canonical_unit_key IS NULL AND numeric_quantum IS NULL)",
+            "(value_type = 'numeric') = (canonical_unit_key IS NOT NULL OR numeric_step IS NOT NULL) OR "
+            "(value_type = 'numeric' AND canonical_unit_key IS NULL AND numeric_step IS NULL)",
             name="tag_definitions_numeric_metadata_check",
         ),
         CheckConstraint(
             "value_type = 'numeric' OR "
-            "(canonical_unit_key IS NULL AND default_display_unit_key IS NULL AND numeric_quantum IS NULL)",
+            "(canonical_unit_key IS NULL AND default_display_unit_key IS NULL AND numeric_step IS NULL)",
             name="tag_definitions_non_numeric_unit_check",
         ),
         CheckConstraint(
-            "numeric_quantum IS NULL OR numeric_quantum > 0",
-            name="tag_definitions_numeric_quantum_check",
+            "numeric_step IS NULL OR numeric_step > 0",
+            name="tag_definitions_numeric_step_check",
         ),
         CheckConstraint(
             "(record_operator = 'present' AND value_type = 'none') OR "
@@ -133,11 +133,14 @@ class TagDefinition(Base, kw_only=True):
         ForeignKey("tag_units.key", name="tag_definitions_display_unit_fkey", ondelete="RESTRICT"),
         default=None,
     )
-    numeric_quantum: Mapped[Decimal | None] = mapped_column(Numeric, default=None)
+    numeric_step: Mapped[Decimal | None] = mapped_column(Numeric, default=None)
     render_template: Mapped[str] = mapped_column(Text, nullable=False, default="{name}")
     default_display_order: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
     moderation_status: Mapped[TagModerationStatus] = mapped_column(Text, nullable=False)
-    created_by_discord_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
+    created_by_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("accounts.id", name="tag_definitions_created_by_account_id_fkey", ondelete="SET NULL"),
+        default=None,
+    )
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
@@ -260,7 +263,10 @@ class BuildTagAssignment(Base, kw_only=True):
     display_order: Mapped[int | None] = mapped_column(SmallInteger, default=None)
     evidence: Mapped[str | None] = mapped_column(Text, default=None)
     provenance: Mapped[str] = mapped_column(Text, nullable=False, default="submitted")
-    created_by_discord_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
+    created_by_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("accounts.id", name="build_tag_assignments_created_by_account_id_fkey", ondelete="SET NULL"),
+        default=None,
+    )
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )

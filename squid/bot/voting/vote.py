@@ -8,8 +8,10 @@ import discord
 from discord import app_commands
 from discord.ext.commands import Cog, Context, guild_only, hybrid_group
 
+from squid.accounts.domain import IdentityProvider
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
+from squid.bot.utils.accounts import account_id_for
 from squid.bot.utils.components import no_mentions, text_layout
 from squid.bot.utils.permissions import build_subject
 from squid.bot.voting.poll_wizard import PollModal
@@ -132,7 +134,10 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         snapshot = await self.vote_service.get_session(payload.message_id)
         if snapshot is None or not snapshot.is_open or snapshot.is_anonymous:
             return
-        selection = next((item for item in snapshot.selections if item.discord_id == payload.user_id), None)
+        # Read-only resolution: someone with no account cannot have a selection here,
+        # and removing a reaction is no reason to write a row for them.
+        account_id = await self.bot.account_ids.resolve(self.bot.services.accounts, payload.user_id)
+        selection = None if account_id is None else snapshot.selection_for(account_id)
         if selection is None or selection.emoji != str(payload.emoji):
             return
         member = await event.resolve_member()
@@ -271,9 +276,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             (VOTE_LOG_DELETE_CAST, VOTE_WEIGHT_STAFF, VOTE_POLL_CLOSE_ANY),
         )
         if account_id is None:
-            account = await self.bot.services.accounts.get_or_create_account(member.id)
-            assert account.id is not None
-            account_id = account.id
+            account_id = await account_id_for(self.bot.services.accounts, member)
         return VoteActor(
             account_id,
             member.id,
@@ -282,11 +285,21 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             capabilities=capabilities,
         )
 
-    async def resolve(self, account_id: int, discord_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
-        """Resolve current member facts for a service-level weight refresh."""
+    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
+        """Resolve current member facts for a service-level weight refresh.
+
+        A ballot records an account, so the snowflake to look the member up by is read
+        here. An account with no Discord identity resolves to `None`, which the caller
+        already reads as "not a member" -- correct, since it has no guild role weight.
+        """
         guild = self.bot.get_guild(guild_id)
         if guild is None:
             return None
+        account = await self.bot.services.accounts.get_account_by_id(account_id)
+        identity = None if account is None else account.identity(IdentityProvider.DISCORD)
+        if identity is None or identity.discord_id is None:
+            return None
+        discord_id = identity.discord_id
         member = guild.get_member(discord_id)
         if member is None:
             try:

@@ -18,7 +18,7 @@ import asyncio
 import dataclasses
 import json
 from collections.abc import Mapping, Sequence
-from typing import Any, Literal, cast
+from typing import Any, Literal, SupportsFloat, SupportsInt, cast
 
 from squid.schematics.domain.models import (
     AnalyzerCapabilities,
@@ -43,7 +43,12 @@ MAX_FRAME_BYTES = 256 * 1024 * 1024
 nonsensical buffer before we notice."""
 
 type Operation = Literal["capabilities", "analyze", "convert", "compare", "render", "simulate", "autostack"]
-type ErrorKind = Literal["invalid", "too_large", "unavailable", "internal"]
+type ErrorKind = Literal["invalid", "ambiguous_simulation_input", "too_large", "unavailable", "internal"]
+"""How the child classifies a failure so the supervisor can rebuild a typed exception.
+
+Deliberately a small closed set rather than a class name: the child's free-form message is
+not shown to users, so anything a caller must actually be told has to be carried by a kind
+the supervisor knows how to reconstruct."""
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -260,11 +265,13 @@ def _vector(value: object) -> Vector3:
 
 
 def _optional_int(value: object) -> int | None:
-    return None if value is None else int(cast(int, value))
+    # The cast names what the wire is expected to carry; the conversion is what actually enforces
+    # it. Casting straight to `int` would make the conversion look redundant and invite its removal.
+    return None if value is None else int(cast(SupportsInt, value))
 
 
 def _optional_float(value: object) -> float | None:
-    return None if value is None else float(cast(float, value))
+    return None if value is None else float(cast(SupportsFloat, value))
 
 
 def _optional_str(value: object) -> str | None:

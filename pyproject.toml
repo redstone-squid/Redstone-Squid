@@ -81,6 +81,11 @@ dev = [
     "testcontainers>=4.10.0",
     "prek>=0.2.28",
     "schemathesis==4.24.2",
+    # Stub-only packages: docker, psycopg2 and markdown ship no type information, so without
+    # these every symbol they export is `Any` and pyrefly reports `untyped-import`.
+    "types-docker>=7.1",
+    "types-Markdown>=3.7",
+    "types-psycopg2>=2.9",
     # Matches the 'schematics' extra so CI (x86_64 Linux) always exercises the real adapter
     # rather than only the fakes.
     #

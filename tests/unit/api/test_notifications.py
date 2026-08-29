@@ -1,5 +1,6 @@
 """Notification REST orchestration contracts."""
 
+from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock
 
@@ -7,7 +8,7 @@ import pytest
 from pydantic import ValidationError as PydanticValidationError
 from whenever import Instant
 
-from squid.api.security import UNBOUNDED, Principal
+from squid.api.security import UNBOUNDED, Caller
 from squid.api.v1.notifications import accept_notice, create_subscription, list_inbox
 from squid.api.v1.schemas.notifications import NotificationPreferenceUpdate, NotificationSubscriptionCreate
 from squid.core.pagination import Page, PageSelector
@@ -22,7 +23,7 @@ from squid.notifications import (
 )
 from squid.notifications.domain import NotificationKind
 
-ACCOUNT = Principal(kind="account", subject="account:7", nodes=UNBOUNDED, discord_id=123, account_id=7)
+ACCOUNT = Caller(kind="account", subject="account:7", nodes=UNBOUNDED, account_id=7)
 
 
 async def test_notification_consent_is_independent_and_defaults_channels_off() -> None:
@@ -84,9 +85,15 @@ def test_empty_record_filter_is_rejected_at_the_api_boundary() -> None:
         NotificationSubscriptionCreate.model_validate({"kind": "record_filter", "filter": {}})
 
 
-async def test_staff_inbox_access_is_rechecked_on_each_read() -> None:
+@pytest.mark.parametrize("holds_node", [True, False])
+async def test_staff_inbox_access_follows_the_pending_submission_node(holds_node: bool) -> None:
+    """Rechecked on each read, and now against a credential rather than a snowflake.
+
+    `caller_allows` intersects the credential's nodes with the permission engine's
+    answer, so a credential that does not carry the node cannot reach staff items at
+    all -- which the retired config allowlist, keyed on a snowflake, could not express.
+    """
     notifications = AsyncMock()
-    notifications.can_view_staff.return_value = True
     item = InboxNotification(
         id=3,
         kind=NotificationKind.STAFF_BUILD_SUBMITTED,
@@ -94,9 +101,9 @@ async def test_staff_inbox_access_is_rechecked_on_each_read() -> None:
         created_at=Instant.now(),
     )
     notifications.inbox.return_value = Page(items=(item,), total=1, next=None, prev=None)
+    permissions = cast(Any, SimpleNamespace(allows=AsyncMock(return_value=holds_node)))
 
-    page = await list_inbox(cast(Any, notifications), ACCOUNT)
+    page = await list_inbox(cast(Any, notifications), permissions, ACCOUNT)
 
     assert page.items[0].kind == "staff_build_submitted"
-    notifications.can_view_staff.assert_awaited_once_with(123)
-    notifications.inbox.assert_awaited_once_with(7, selector=PageSelector(), page_size=20, include_staff=True)
+    notifications.inbox.assert_awaited_once_with(7, selector=PageSelector(), page_size=20, include_staff=holds_node)

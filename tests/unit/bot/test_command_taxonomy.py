@@ -6,6 +6,7 @@ from typing import Any, cast
 from discord.ext.commands import Command, HybridCommand, HybridGroup
 
 from squid.bot.admin import Admin
+from squid.bot.diagnostics import Diagnostics
 from squid.bot.give_redstoner import GiveRedstoner
 from squid.bot.misc_commands import Miscellaneous
 from squid.bot.permissions import PermissionCog
@@ -36,6 +37,7 @@ UNGATED_COMMANDS = frozenset(
         "build schematic convert",
         "build schematic download",
         "build schematic info",
+        "build schematic render",
         "build submit-full",
         "build view",
         "info",
@@ -46,6 +48,15 @@ UNGATED_COMMANDS = frozenset(
         "patterns",
         "patterns list",
         "patterns search",
+        # Anyone in a guild may open a poll, so `poll create` needs no node. Closing and
+        # refreshing one are authorized against the session rather than the caller: both
+        # run `VoteSessionSnapshot.can_close`, which admits the poll's author as well as
+        # holders of `vote.poll.close_any`. A node on the command could not express "or
+        # you opened this one", and would lock authors out of their own polls.
+        "poll",
+        "poll close",
+        "poll create",
+        "poll refresh",
         "restrictions",
         "restrictions search",
         "search",
@@ -56,9 +67,7 @@ UNGATED_COMMANDS = frozenset(
         "version list",
         "vote",
         "vote poll",
-        "vote close",
         "vote delete",
-        "vote refresh",
     }
 )
 """Commands that legitimately declare no permission node: the public ones.
@@ -70,6 +79,7 @@ shipped without a gate fails CI instead of shipping open.
 PUBLIC_COGS = (
     SearchCog,
     Admin,
+    Diagnostics,
     RecordCog,
     VoteCog,
     VerifyCog,
@@ -97,6 +107,8 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "records-title-issues",
     ),
     "archive": (),
+    # `error` is a hybrid group with a `show` fallback, so bare `error <reference>` works.
+    "error": ("recent",),
     "build": (
         "approve",
         "debug",
@@ -110,6 +122,7 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "schematic convert",
         "schematic download",
         "schematic info",
+        "schematic render",
         "submit-full",
         "view",
     ),
@@ -127,6 +140,10 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "test",
         "whoami",
     ),
+    # Polls got their own top-level group in `509406c2`, because a poll is not a vote on
+    # a build: it stands alone, has no submission behind it, and is closed by whoever
+    # opened it. `vote poll` survives only as a deprecated alias for `poll create`.
+    "poll": ("close", "create", "refresh"),
     "redstoner": ("panel", "resync"),
     "restrictions": ("add-alias", "search"),
     "role": (
@@ -175,7 +192,7 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
     ),
     "tag": ("apply", "approve", "archive", "pending", "propose", "reject"),
     "version": ("add", "list"),
-    "vote": ("close", "delete", "poll", "refresh"),
+    "vote": ("delete", "poll"),
 }
 
 
@@ -263,6 +280,10 @@ def test_sensitive_commands_declare_the_intended_permission_nodes() -> None:
     starboard = StarboardCog.__new__(StarboardCog)
     assert _nodes(starboard.__cog_commands__, "starboard create") == {"starboard.board.create"}
     assert _nodes(starboard.__cog_commands__, "starboard recount") == {"starboard.board.recount"}
+
+    diagnostics = Diagnostics.__new__(Diagnostics)
+    assert _nodes(diagnostics.__cog_commands__, "error") == {"diagnostics.error.read"}
+    assert _nodes(diagnostics.__cog_commands__, "error recent") == {"diagnostics.error.read"}
 
     admin = Admin.__new__(Admin)
     assert _nodes(admin.__cog_commands__, "tag approve") == {"tag.proposal.approve"}

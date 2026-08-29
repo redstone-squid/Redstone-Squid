@@ -22,8 +22,16 @@ from squid.bot.utils.permissions import requires
 from squid.builds.application import BuildService
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import BUILD_SCHEMATIC_DETECT_LATTICE, BUILD_SCHEMATIC_MEASURE_TIMING
-from squid.schematics.application import ConvertRequest, SchematicService, StoredSchematic, summarise_losses
+from squid.schematics.application import (
+    ConvertRequest,
+    RenderSkipReason,
+    SchematicService,
+    StoredSchematic,
+    summarise_losses,
+)
+from squid.schematics.application.commands import MIN_RENDER_EXTENT
 from squid.schematics.domain.models import AutostackLattice, SchematicFormat, SimulationResult, Vector3
+from squid.schematics.errors import AmbiguousSimulationInputError, SchematicRenderRefusedError
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -65,7 +73,11 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
         if stored is None:
             return
         await ctx.send(
-            view=StaticLayout(discord.ui.TextDisplay(_describe(stored, locale=locale))),
+            view=StaticLayout(
+                discord.ui.TextDisplay(
+                    _describe(stored, locale=locale, render_skip=self.schematics.explain_render_skip(stored))
+                )
+            ),
             allowed_mentions=no_mentions(),
         )
 
@@ -99,6 +111,44 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
         data, _losses = await self.schematics.convert(build_id, ConvertRequest(target_format=file_format))
         await ctx.send(
             file=discord.File(io.BytesIO(data), filename=f"build-{build_id}.{WRITABLE_EXTENSIONS[file_format]}"),
+            allowed_mentions=no_mentions(),
+        )
+
+    @autocompletes(build_id="builds")
+    @schematic_group.command(name="render")  # type: ignore
+    @app_commands.describe(
+        build_id=app_commands.locale_str(_("The submission ID whose schematic to render.")),
+        yaw=app_commands.locale_str(_("Camera yaw in degrees. Omit for the default view.")),
+        pitch=app_commands.locale_str(_("Camera pitch in degrees. Omit for the default view.")),
+        size=app_commands.locale_str(_("Image width and height in pixels.")),
+    )
+    async def schematic_render(
+        self,
+        ctx: Context[BotT],
+        build_id: int,
+        yaw: app_commands.Range[float, -360.0, 360.0] | None = None,
+        pitch: app_commands.Range[float, -90.0, 90.0] | None = None,
+        size: app_commands.Range[int, MIN_RENDER_EXTENT, 1536] | None = None,
+    ) -> None:
+        """Render the build's schematic and post the image."""
+        await ctx.defer()
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        stored = await self._primary_or_explain(ctx, build_id, locale=locale)
+        if stored is None:
+            return
+        try:
+            rendered = await self.schematics.render_now(
+                build_id,
+                request=self.schematics.render_recipe(width=size, height=size, yaw=yaw, pitch=pitch),
+            )
+        except SchematicRenderRefusedError as error:
+            # A refusal names a fact about the file — unsanitized, too big, already fatal to
+            # the engine — that the user can neither retry away nor act on, so it is a
+            # sentence rather than an error card telling them to report it.
+            await _say(ctx, error.localized_public_detail(locale))
+            return
+        await ctx.send(
+            file=discord.File(io.BytesIO(rendered.png), filename=f"build-{build_id}-render.png"),
             allowed_mentions=no_mentions(),
         )
 
@@ -163,7 +213,13 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
                 ctx, t(locale, _("Input position must contain three integers, for example `12 5 -3`.")), ephemeral=True
             )
             return
-        result = await self.schematics.measure_timing(build_id, input_position=position)
+        try:
+            result = await self.schematics.measure_timing(build_id, input_position=position)
+        except AmbiguousSimulationInputError as error:
+            # The generic error handler would show the refusal without ever naming what to
+            # choose between, leaving the moderator to guess coordinates out of a binary file.
+            await _say(ctx, _describe_input_refusal(error, locale=locale), ephemeral=True)
+            return
         await _say(ctx, _describe_timing(result, locale=locale), ephemeral=True)
 
     @autocompletes(build_id="builds")
@@ -211,7 +267,7 @@ async def _say(ctx: Context[squid.bot.app.RedstoneSquid], message: str, *, ephem
     await ctx.send(view=text_layout(message), ephemeral=ephemeral, allowed_mentions=no_mentions())
 
 
-def _describe(stored: StoredSchematic, *, locale: str | None) -> str:
+def _describe(stored: StoredSchematic, *, locale: str | None, render_skip: RenderSkipReason | None = None) -> str:
     """Render the analysis as a readable card body."""
     metrics = stored.analysis.metrics
     dimensions = metrics.dimensions
@@ -245,6 +301,10 @@ def _describe(stored: StoredSchematic, *, locale: str | None) -> str:
     if metrics.signs:
         joined = " / ".join(sign.text.replace("\n", " ") for sign in metrics.signs[:5])
         lines.append(t(locale, _("**Signs**: {text}"), text=joined))
+    if render_skip is not None:
+        # "There is no preview" is otherwise indistinguishable from "the preview has not been
+        # generated yet", and the two call for completely different responses from a moderator.
+        lines.append(t(locale, _("**No preview**: {reason}"), reason=t(locale, render_skip.description)))
     # Stated on the card because the two numbers are easy to confuse and one of them decides
     # official records: cumulative volume has hallway, frame, and hitbox exceptions that no
     # static read of a file can apply.
@@ -268,6 +328,32 @@ def _parse_position(value: str | None) -> Vector3 | None:
     if len(parts) != 3:
         return None
     return parts
+
+
+_CANDIDATE_LIMIT = 20
+"""How many candidate coordinates are worth listing. A schematic with more controls than this
+is one the moderator has to narrow down by looking at the build, not by reading a wall of
+coordinates that would not fit in a Discord message anyway."""
+
+
+def _describe_input_refusal(error: AmbiguousSimulationInputError, *, locale: str | None) -> str:
+    """Say why the simulator refused, then list the inputs it would accept."""
+    lines = [
+        t(locale, _("### Simulation input not resolved")),
+        error.localized_public_detail(locale),
+    ]
+    if error.candidates:
+        lines.append(t(locale, _("**Inputs found in this schematic**:")))
+        lines.extend(f"- `{x} {y} {z}`" for x, y, z in error.candidates[:_CANDIDATE_LIMIT])
+        if len(error.candidates) > _CANDIDATE_LIMIT:
+            lines.append(
+                t(
+                    locale,
+                    _("-# …and {count} more not listed."),
+                    count=len(error.candidates) - _CANDIDATE_LIMIT,
+                )
+            )
+    return "\n".join(lines)
 
 
 def _describe_timing(result: SimulationResult, *, locale: str | None) -> str:

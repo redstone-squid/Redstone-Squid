@@ -7,7 +7,7 @@ pin the fixed cost so it cannot regress into an N+1 again.
 """
 
 import uuid
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Generator
 from contextlib import contextmanager
 
 import pytest
@@ -35,7 +35,7 @@ _TABLES = [
 
 
 @contextmanager
-def _counting(session_factory: async_sessionmaker[AsyncSession]) -> Iterator[list[str]]:
+def _counting(session_factory: async_sessionmaker[AsyncSession]) -> Generator[list[str]]:
     """Record every statement executed on the factory's engine."""
     statements: list[str] = []
     engine = session_factory.kw["bind"].sync_engine

@@ -1,19 +1,22 @@
-"""Composition root for framework-neutral application services."""
+"""Composition root: wires adapters into services that name no framework themselves."""
 
 import logging
-import secrets
 from collections.abc import Callable
 from contextlib import AsyncExitStack
 from functools import cached_property, partial
 from importlib import resources
 
+import httpx
+
 from squid.accounts.application import AccountService
+from squid.accounts.application.services import generate_verification_code
 from squid.accounts.infrastructure.mojang import MojangClient
 from squid.accounts.infrastructure.repository import AccountRepository
 from squid.artifacts import ArtifactStore
 from squid.artifacts.infrastructure import create_artifact_store
 from squid.auth.application import ApiKeyService
-from squid.auth.application.web import DiscordOAuthService
+from squid.auth.application.providers import PROVIDER_FACTORIES, OAuthProvider
+from squid.auth.application.web import WebSessionService
 from squid.auth.infrastructure import PostgresApiKeyRepository, PostgresWebSessionRepository
 from squid.builds.application import (
     BuildEmbeddingService,
@@ -34,6 +37,8 @@ from squid.cli_auth.repository import PostgresCliAuthorizationRepository
 from squid.community.application import RedstonerService, WelcomeRelayService
 from squid.community.domain import RedstonerPolicy, WelcomeRelayPolicy
 from squid.config import RuntimeConfig, SchematicConfig
+from squid.diagnostics.application import ErrorReportService
+from squid.diagnostics.infrastructure.repository import PostgresErrorReportRepository
 from squid.events.application import DomainEventService
 from squid.events.infrastructure.listener import DomainEventWakeListener
 from squid.events.infrastructure.repository import PostgresDomainEventRepository
@@ -120,13 +125,14 @@ from squid.submissions.infrastructure.sponsors import PaperSponsorResolver
 from squid.submissions.infrastructure.suggestion_options import SuggestionFormOptionCatalog
 from squid.suggestions.application import SuggestionService
 from squid.suggestions.infrastructure.catalogue import build_registry as build_suggestion_registry
-from squid.sync import DiscordSyncService
+from squid.sync import DiscordReconciliationService
 from squid.sync.infrastructure import PostgresDiscordSyncQueue
 from squid.tags.application import TagService
 from squid.tags.infrastructure.repository import PostgresTagDefinitionRepository
 from squid.versions.application.services import VersionService
 from squid.versions.infrastructure.repository import VersionRepository
 from squid.voting.application import VoteService
+from squid.voting.infrastructure.accounts import PostgresVoterDiscordIdLookup
 from squid.voting.infrastructure.discord_rest import DiscordRestActorResolver
 from squid.voting.infrastructure.repository import VoteRepository
 from squid.worker.queue_health import PostgresQueueHealthMonitor
@@ -151,7 +157,14 @@ def create_schematic_service(
     *,
     render_capable: bool = False,
 ) -> SchematicService:
-    """Assemble the schematic service over whichever analyzer this process can run."""
+    """Assemble the schematic service over whichever analyzer this process can run.
+
+    `render_capable` says this process may *ask* for renders, not that it performs them: the
+    native work always happens in the worker behind the durable job queue. What it actually
+    buys is the resource pack, which a process must be able to load before it can name a
+    recipe — so the API and the bot carry it for on-demand renders, and the worker for the
+    previews it publishes.
+    """
     analyzer = create_schematic_analyzer(config, jobs, artifacts)
     resource_pack = None
     if render_capable and config.render_enabled:
@@ -271,6 +284,7 @@ class _ServiceGraph:
             self.version_service,
             self.embedding_service,
             OfficialTagResolver(self.db.async_session),
+            permissions=self.permissions,
         )
 
     @cached_property
@@ -304,10 +318,7 @@ class _ServiceGraph:
     @cached_property
     def notifications(self) -> NotificationService:
         return NotificationService(
-            PostgresNotificationRepository(
-                self.db.async_session,
-                staff_discord_ids=self.config.notifications.staff_discord_ids,
-            ),
+            PostgresNotificationRepository(self.db.async_session),
             retention_days=self.config.notifications.retention_days,
         )
 
@@ -516,6 +527,7 @@ class _ServiceGraph:
         resolver = DiscordRestActorResolver(
             self.config.discord_bot_token.get_secret_value(),
             capabilities=self.permissions,
+            discord_ids=PostgresVoterDiscordIdLookup(self.db.async_session),
             api_url=str(self.config.upstream_http.discord_api_url),
         )
         self.resources.push_async_callback(resolver.aclose)
@@ -529,7 +541,7 @@ class _ServiceGraph:
         return AccountService(
             AccountRepository(self.db.async_session, self.config.verification_code_pepper.get_secret_value()),
             mojang.get_username,
-            lambda: secrets.randbelow(900_000) + 100_000,
+            generate_verification_code,
         )
 
     @cached_property
@@ -561,18 +573,33 @@ class _ServiceGraph:
         )
 
     @cached_property
-    def web_auth(self) -> DiscordOAuthService | None:
+    def web_auth(self) -> WebSessionService | None:
+        """Browser login over every provider this deployment has credentials for.
+
+        The httpx client is owned here rather than by the service, so adding a second
+        provider shares one connection pool instead of opening a second.
+        """
         if self.config.oauth is None or self.config.session_pepper is None:
             return None
-        service = DiscordOAuthService(
+        clients = self.config.oauth.clients()
+        if not clients:
+            return None
+        http = httpx.AsyncClient(timeout=10)
+        self.resources.push_async_callback(http.aclose)
+        providers: dict[str, OAuthProvider] = {}
+        for provider, credentials in clients.items():
+            factory = PROVIDER_FACTORIES.get(provider)
+            if factory is None:
+                continue
+            adapter = factory(credentials, http, upstreams=self.config.upstream_http)
+            providers[adapter.slug] = adapter
+        return WebSessionService(
             PostgresWebSessionRepository(self.db.async_session),
             self.accounts,
-            self.config.oauth,
+            providers,
+            self.config.oauth.session_ttl_hours,
             self.config.session_pepper.get_secret_value(),
-            upstreams=self.config.upstream_http,
         )
-        self.resources.push_async_callback(service.aclose)
-        return service
 
     @cached_property
     def cli_authorization(self) -> CliAuthorizationService | None:
@@ -583,6 +610,14 @@ class _ServiceGraph:
             PostgresCliAuthorizationRepository(self.db.async_session),
             PostgresAccountIdentityAuthorizer(self.db.async_session),
             CliSecretCodec(pepper.get_secret_value().encode()),
+        )
+
+    @cached_property
+    def error_reports(self) -> ErrorReportService:
+        return ErrorReportService(
+            PostgresErrorReportRepository(self.db.async_session),
+            retention_hours=self.config.diagnostics.retention_hours,
+            max_traceback_chars=self.config.diagnostics.max_traceback_chars,
         )
 
     @cached_property
@@ -598,7 +633,7 @@ class _ServiceGraph:
 
 def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_stack: AsyncExitStack) -> ApiServices:
     """Create only capabilities used by the HTTP API."""
-    graph = _ServiceGraph(db, config, resources_stack)
+    graph = _ServiceGraph(db, config, resources_stack, render_capable=True)
     encryption = config.idempotency_encryption
     if encryption is None:
         msg = "The API runtime requires an idempotency response-encryption keyring."
@@ -609,6 +644,7 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
     )
     return ApiServices(
         builds=graph.builds,
+        error_reports=graph.error_reports,
         api_keys=graph.api_keys,
         web_auth=graph.web_auth,
         cli_authorization=graph.cli_authorization,
@@ -637,9 +673,10 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
 
 def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_stack: AsyncExitStack) -> BotServices:
     """Create only capabilities used by Discord gateway features."""
-    graph = _ServiceGraph(db, config, resources_stack)
+    graph = _ServiceGraph(db, config, resources_stack, render_capable=True)
     return BotServices(
         builds=graph.builds,
+        error_reports=graph.error_reports,
         build_inference=graph.build_inference,
         restrictions=RestrictionService(graph.restriction_repository),
         build_queries=graph.build_queries,
@@ -659,7 +696,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         accounts=graph.accounts,
         versions=graph.version_service,
         votes=graph.votes,
-        discord_sync=DiscordSyncService(PostgresDiscordSyncQueue(db.async_session)),
+        discord_reconciliation=DiscordReconciliationService(PostgresDiscordSyncQueue(db.async_session)),
         domain_events=DomainEventService(PostgresDomainEventRepository(db.async_session)),
         notifications=graph.notifications,
         redstoner=RedstonerService(
@@ -680,11 +717,12 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
 def create_worker_services(
     db: DatabaseEngine, config: RuntimeConfig, resources_stack: AsyncExitStack
 ) -> WorkerServices:
-    """Create only capabilities used by transport-neutral background jobs."""
+    """Create only capabilities used by background jobs, which serve no request."""
     graph = _ServiceGraph(db, config, resources_stack, render_capable=True)
     idempotency = IdempotencyService(PostgresIdempotencyRepository(db.async_session))
     return WorkerServices(
         builds=graph.builds,
+        error_reports=graph.error_reports,
         artifacts=graph.artifacts,
         votes=graph.votes,
         records=graph.record_computation,

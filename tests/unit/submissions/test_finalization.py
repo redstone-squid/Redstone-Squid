@@ -1,4 +1,4 @@
-"""Transport-neutral submission finalization tests."""
+"""Submission finalization tests: the same path serves the bot and the API."""
 
 from collections.abc import Sequence
 from dataclasses import replace
@@ -621,7 +621,7 @@ def _claim(payload: NormalizedSubmission, attempts: int = 1) -> ClaimedFinalizat
 
 
 @pytest.mark.asyncio
-async def test_worker_completes_and_emits_transport_neutral_events() -> None:
+async def test_worker_completes_and_emits_events_naming_no_chat_client() -> None:
     payload = await _payload()
     jobs = FakeFinalizationJobs()
     jobs.claimed = (_claim(payload),)

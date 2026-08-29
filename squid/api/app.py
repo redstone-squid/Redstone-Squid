@@ -17,7 +17,7 @@ from squid.api.private_responses import PRIVATE_API_PATH_PREFIXES, PrivateRespon
 from squid.api.rate_limit import RateLimitMiddleware, create_rate_limiter, enforce_route_rate_limits
 from squid.api.request_body import BoundedRequestBodyMiddleware
 from squid.api.request_context import RequestContextMiddleware
-from squid.api.security import Principal, requires
+from squid.api.security import Caller, requires
 from squid.api.v1 import TAGS_METADATA
 from squid.api.v1 import router as v1_router
 from squid.bootstrap import create_api_runtime
@@ -25,7 +25,13 @@ from squid.config import ApiProcessConfig, RuntimeConfig, load_api_process_confi
 from squid.logging_config import configure_api_logging
 from squid.observability import configure_observability, instrument_api_app
 from squid.permissions.domain.catalogue import ACCOUNT_VERIFY_RELAY
-from squid.runtime import ApiServices, ApplicationRuntime, BackgroundTaskSupervisor, start_permission_epoch_watch
+from squid.runtime import (
+    ApiServices,
+    ApplicationRuntime,
+    BackgroundTaskSupervisor,
+    start_log_capture,
+    start_permission_epoch_watch,
+)
 
 RuntimeFactory = Callable[[RuntimeConfig], ApplicationRuntime[ApiServices]]
 ConfigFactory = Callable[[], ApiProcessConfig]
@@ -74,7 +80,7 @@ class User(BaseModel):
 async def get_verification_code(
     user: User,
     accounts: Accounts,
-    _principal: Annotated[Principal, Depends(requires(ACCOUNT_VERIFY_RELAY))],
+    _caller: Annotated[Caller, Depends(requires(ACCOUNT_VERIFY_RELAY))],
 ) -> int:
     """Generate a verification code for a user."""
     return await accounts.generate_verification_code(user.uuid)
@@ -101,9 +107,16 @@ def create_api_app(
                 # The API holds its own rule cache, so it needs its own watcher:
                 # a grant made in Discord has to reach HTTP checks too.
                 supervisor = BackgroundTaskSupervisor()
+                supervisor.capture_failures_into(runtime.services.error_reports)
                 async with supervisor.running():
                     app.state.background_tasks = supervisor
                     start_permission_epoch_watch(supervisor, runtime.services.permission_epoch)
+                    start_log_capture(
+                        supervisor,
+                        runtime.services.error_reports,
+                        enabled=resolved_config.diagnostics.capture_logged_errors,
+                        capacity=resolved_config.diagnostics.log_capture_queue,
+                    )
                     yield
         finally:
             await limiter.aclose()

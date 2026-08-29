@@ -8,6 +8,7 @@ from squid.core.errors import (
     ErrorCode,
     JSONValue,
     NotFoundError,
+    RateLimitedError,
     ServiceUnavailableError,
     ValidationError,
 )
@@ -24,24 +25,18 @@ class InvalidAccountError(ValidationError):
 
 def _identity_context(
     account_id: int | None,
-    discord_id: int | None,
     provider: IdentityProvider | None,
     subject: str | None,
 ) -> dict[str, JSONValue]:
     """Describe whichever identity the caller was known by.
 
-    `discord_id` is the Discord spelling of `(provider, subject)` and is kept because the
-    Discord entry points genuinely have one. Everything else names the provider explicitly,
-    so an error raised for a CLI device or a Minecraft player says which namespace it means
-    rather than implying Discord by omission.
+    Every namespace is named explicitly, so an error raised for a CLI device or a
+    Minecraft player says which one it means rather than implying Discord by omission.
     """
     context: dict[str, JSONValue] = {}
     if account_id is not None:
         context["account_id"] = account_id
-    if discord_id is not None:
-        context["provider"] = IdentityProvider.DISCORD
-        context["subject"] = str(discord_id)
-    elif provider is not None and subject is not None:
+    if provider is not None and subject is not None:
         context["provider"] = provider
         context["subject"] = subject
     return context
@@ -58,15 +53,13 @@ class AccountNotFoundError(NotFoundError):
         self,
         account_id: int | None = None,
         *,
-        discord_id: int | None = None,
         provider: IdentityProvider | None = None,
         subject: str | None = None,
     ) -> None:
-        super().__init__(context=_identity_context(account_id, discord_id, provider, subject))
+        super().__init__(context=_identity_context(account_id, provider, subject))
         self.account_id = account_id
-        self.discord_id = discord_id
-        self.provider = IdentityProvider.DISCORD if discord_id is not None else provider
-        self.subject = str(discord_id) if discord_id is not None else subject
+        self.provider = provider
+        self.subject = subject
 
 
 class InvalidMergeProofError(ValidationError):
@@ -88,10 +81,41 @@ class InvalidVerificationCodeError(ValidationError):
     default_end_user_action = _("Generate a new code and try again.")
 
 
-class AccountAlreadyLinkedError(ConflictError):
-    """A Discord account is linked to a different Minecraft account."""
+class LinkReservationExpiredError(ValidationError):
+    """A held verification code lapsed before its consent prompt was answered.
 
-    default_message = _("This Discord account is already linked to a different Minecraft account.")
+    Distinct from `InvalidVerificationCodeError` on purpose: the code was correct, and telling
+    someone their good code was invalid sends them to fetch a new one for the wrong reason.
+    """
+
+    default_message = _("The linking prompt expired before you answered it.")
+    default_title = _("Prompt expired")
+    default_code = ErrorCode.LINK_RESERVATION_EXPIRED
+    default_resource = "verification_code"
+    default_end_user_action = _("Run /account link again with a fresh code from the game.")
+
+
+class VerificationAttemptsExhaustedError(RateLimitedError):
+    """Too many consecutive verification codes were refused for one identity.
+
+    A `RateLimitedError`, so the API answers 429 with `Retry-After` and the bot renders the wait
+    without any transport-specific handling. The lockout exists because a correct guess links
+    somebody else's Minecraft account to the guesser, which is identity takeover rather than a
+    nuisance: the code is the whole binding, and the redemption never mentions the UUID it was
+    issued for.
+    """
+
+    default_message = _("Too many incorrect verification codes.")
+    default_title = _("Too many attempts")
+    default_code = ErrorCode.VERIFICATION_ATTEMPTS_EXHAUSTED
+    default_resource = "verification_code"
+    default_end_user_action = _("Wait for the cooling-off period to pass, then generate a new code in game.")
+
+
+class AccountAlreadyLinkedError(ConflictError):
+    """An account is already linked to a different Minecraft account."""
+
+    default_message = _("Your account is already linked to a different Minecraft account.")
     default_title = _("Account already linked")
     default_code = ErrorCode.ACCOUNT_ALREADY_LINKED
     default_resource = "account"
@@ -101,15 +125,13 @@ class AccountAlreadyLinkedError(ConflictError):
         self,
         *,
         minecraft_uuid: UUID,
-        discord_id: int | None = None,
         account_id: int | None = None,
         provider: IdentityProvider | None = None,
         subject: str | None = None,
     ) -> None:
-        context = _identity_context(account_id, discord_id, provider, subject)
+        context = _identity_context(account_id, provider, subject)
         context["minecraft_uuid"] = str(minecraft_uuid)
         super().__init__(context=context)
-        self.discord_id = discord_id
         self.account_id = account_id
         self.minecraft_uuid = minecraft_uuid
 
@@ -125,14 +147,12 @@ class ConsentRequiredError(ValidationError):
 
     def __init__(
         self,
-        discord_id: int | None = None,
         *,
         account_id: int | None = None,
         provider: IdentityProvider | None = None,
         subject: str | None = None,
     ) -> None:
-        super().__init__(context=_identity_context(account_id, discord_id, provider, subject))
-        self.discord_id = discord_id
+        super().__init__(context=_identity_context(account_id, provider, subject))
         self.account_id = account_id
 
 
@@ -148,6 +168,21 @@ class CreatorAliasNotFoundError(NotFoundError):
     def __init__(self, name: str) -> None:
         super().__init__(context={"name": name}, public_context={"name": name})
         self.name = name
+
+
+class CreatorNotFoundError(NotFoundError):
+    """No creator profile exists for the requested identifier."""
+
+    default_message = _("Creator not found.")
+    default_title = _("Creator not found")
+    default_code = ErrorCode.CREATOR_NOT_FOUND
+    default_resource = "creator"
+    default_end_user_action = _("Check the creator ID and try again.")
+
+    def __init__(self, creator_id: UUID) -> None:
+        identifier = str(creator_id)
+        super().__init__(context={"creator_id": identifier}, public_context={"creator_id": identifier})
+        self.creator_id = creator_id
 
 
 class AliasAlreadyClaimedError(ConflictError):

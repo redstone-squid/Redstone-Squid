@@ -5,9 +5,10 @@ from typing import Annotated, cast
 from fastapi import Depends, Request
 
 from squid.accounts.application import AccountService
-from squid.api.security import Principal, current_principal
-from squid.auth.application.web import DiscordOAuthService
+from squid.api.security import Caller, current_caller
+from squid.auth.application.web import WebSessionService
 from squid.builds.application import BuildQueryService, BuildService
+from squid.diagnostics.application import ErrorReportService
 from squid.notifications import NotificationService
 from squid.permissions.application import PermissionService
 from squid.records.application import RecordService
@@ -78,7 +79,7 @@ def get_vote_members(services: Services) -> InteractiveVoteActorResolver | None:
     return services.vote_members
 
 
-def get_web_auth(services: Services) -> DiscordOAuthService | None:
+def get_web_auth(services: Services) -> WebSessionService | None:
     return services.web_auth
 
 
@@ -86,10 +87,15 @@ def get_permissions(services: Services) -> PermissionService:
     return services.permissions
 
 
+def get_error_reports(services: Services) -> ErrorReportService:
+    return services.error_reports
+
+
 Permissions = Annotated[PermissionService, Depends(get_permissions)]
+ErrorReports = Annotated[ErrorReportService, Depends(get_error_reports)]
 BuildCommands = Annotated[BuildService, Depends(get_builds)]
 BuildQueries = Annotated[BuildQueryService, Depends(get_build_queries)]
-CurrentPrincipal = Annotated[Principal, Depends(current_principal)]
+CurrentCaller = Annotated[Caller, Depends(current_caller)]
 Records = Annotated[RecordService, Depends(get_records)]
 Notifications = Annotated[NotificationService, Depends(get_notifications)]
 Schematics = Annotated[SchematicService, Depends(get_schematics)]
@@ -100,4 +106,4 @@ Accounts = Annotated[AccountService, Depends(get_accounts)]
 Versions = Annotated[VersionService, Depends(get_versions)]
 VoteMembers = Annotated[InteractiveVoteActorResolver | None, Depends(get_vote_members)]
 Votes = Annotated[VoteService, Depends(get_votes)]
-WebAuth = Annotated[DiscordOAuthService | None, Depends(get_web_auth)]
+WebAuth = Annotated[WebSessionService | None, Depends(get_web_auth)]

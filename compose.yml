@@ -15,7 +15,7 @@ x-app: &app
     - ${SQUID_ENV_FILE:-.env}
   environment: *app-environment
   volumes:
-    - ./logs:/var/log/app
+    - squid-logs:/var/log/app
     - squid-objects:/var/lib/app/objects
   depends_on:
     db:
@@ -31,14 +31,16 @@ services:
       <<: *app-environment
       SQUID_RATE_LIMIT_REDIS_URL: ${SQUID_RATE_LIMIT_REDIS_URL:-redis://redis:6379/0}
     ports:
-      - "8000:8000"
+      # SQUID_API_PORT is the app's own listen port, so it drives the container side; the
+      # published side is separate because a taken host port must be movable on its own.
+      - "${SQUID_API_HOST_PORT:-8000}:${SQUID_API_PORT:-8000}"
     healthcheck:
       test:
         [
           "CMD",
           "python",
           "-c",
-          "import urllib.request; urllib.request.urlopen('http://localhost:8000/readyz', timeout=5).read()",
+          "import urllib.request; urllib.request.urlopen('http://localhost:${SQUID_API_PORT:-8000}/readyz', timeout=5).read()",
         ]
       interval: 30s
       timeout: 10s
@@ -167,8 +169,9 @@ services:
       - "127.0.0.1:13133:13133"
     volumes:
       - ./deploy/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
-      - ./logs:/var/log/app:ro
+      - squid-logs:/var/log/app:ro
 
 volumes:
   squid-objects:
   squid-pgdata:
+  squid-logs:

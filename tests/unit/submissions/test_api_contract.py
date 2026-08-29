@@ -1,4 +1,4 @@
-"""Isolated tests for the renderer-neutral submission HTTP contract."""
+"""Isolated tests for the submission HTTP contract, which no client has to draw one way."""
 
 from dataclasses import replace
 from uuid import UUID, uuid4
@@ -9,9 +9,8 @@ from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError as PydanticValidationError
 from whenever import Instant
 
-from squid.accounts.domain import IdentityProvider
 from squid.accounts.errors import ConsentRequiredError
-from squid.api.security import ANONYMOUS, Principal, current_principal
+from squid.api.security import ANONYMOUS, Caller, current_caller
 from squid.api.v1.schemas.submissions import (
     DraftChangeRequest,
     DraftCreateRequest,
@@ -260,15 +259,15 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
     async def actor_dependency() -> AuthenticatedSubmissionActor:
         return AuthenticatedSubmissionActor(ACCOUNT_ID, SubmissionOrigin.WEB)
 
-    async def principal_dependency() -> Principal:
-        return Principal(kind="account", subject=f"account:{ACCOUNT_ID}", account_id=ACCOUNT_ID)
+    async def caller_dependency() -> Caller:
+        return Caller(kind="account", subject=f"account:{ACCOUNT_ID}", account_id=ACCOUNT_ID)
 
     app.dependency_overrides[get_submission_forms] = form_dependency
     app.dependency_overrides[get_submission_drafts] = draft_dependency
     app.dependency_overrides[get_submission_finalization] = finalization_dependency
     app.dependency_overrides[authenticated_account] = account_dependency
     app.dependency_overrides[authenticated_submission_actor] = actor_dependency
-    app.dependency_overrides[current_principal] = principal_dependency
+    app.dependency_overrides[current_caller] = caller_dependency
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         manifest_response = await client.get("/submissions/form/current", headers={"Accept-Language": "zh-TW"})
@@ -380,26 +379,23 @@ async def test_draft_authentication_requires_a_human_account() -> None:
 
 
 async def test_draft_authentication_requires_current_privacy_consent() -> None:
-    principal = Principal(
+    caller = Caller(
         kind="account",
         subject="account:42",
         account_id=42,
-        discord_id=123,
         consent_pending=True,
     )
 
     with pytest.raises(ConsentRequiredError) as error:
-        await authenticated_account(principal)
+        await authenticated_account(caller)
 
-    assert error.value.context == {
-        "account_id": 42,
-        "provider": IdentityProvider.DISCORD,
-        "subject": "123",
-    }
+    # The account alone. Nothing implies Discord just because this caller happens to
+    # have arrived over it: the same error is raised for a CLI device.
+    assert error.value.context == {"account_id": 42}
 
 
 async def test_player_grant_derives_minecraft_origin() -> None:
-    principal = Principal(
+    caller = Caller(
         kind="minecraft_player",
         subject="minecraft-grant:test",
         account_id=42,
@@ -409,7 +405,7 @@ async def test_player_grant_derives_minecraft_origin() -> None:
         grant_id=GRANT_ID,
     )
 
-    actor = await authenticated_submission_actor(principal)
+    actor = await authenticated_submission_actor(caller)
 
     assert actor == AuthenticatedSubmissionActor(
         42,
@@ -423,7 +419,7 @@ async def test_player_grant_derives_minecraft_origin() -> None:
 async def test_cli_session_derives_distinct_submission_origin() -> None:
     device_id = UUID("ea252a1c-0bcd-47f7-84d8-36e6801eb374")
     session_id = UUID("f5f51999-37c1-4a85-9d7e-f53875428f99")
-    principal = Principal(
+    caller = Caller(
         kind="cli",
         subject=f"cli-session:{session_id}",
         account_id=42,
@@ -431,7 +427,7 @@ async def test_cli_session_derives_distinct_submission_origin() -> None:
         cli_session_id=session_id,
     )
 
-    actor = await authenticated_submission_actor(principal)
+    actor = await authenticated_submission_actor(caller)
 
     assert actor == AuthenticatedSubmissionActor(42, SubmissionOrigin.CLI)
 

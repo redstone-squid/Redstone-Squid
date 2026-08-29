@@ -25,6 +25,7 @@ from squid.builds.domain import (
 )
 from squid.builds.domain.titles import format_build_category, format_build_display_title
 from squid.builds.errors import InvalidBuildError
+from squid.core.errors import InvalidStateError
 
 
 @pytest.fixture
@@ -80,7 +81,7 @@ class TestBuildValidation:
         assert sample_build.door_dimensions == (2, 3, 1)
 
     def test_base_build_cannot_be_instantiated(self) -> None:
-        with pytest.raises(TypeError, match="category subclass"):
+        with pytest.raises(InvalidStateError, match="category subclass"):
             Build()
 
     def test_category_is_a_fact_of_the_type(self, sample_build: DoorBuild) -> None:

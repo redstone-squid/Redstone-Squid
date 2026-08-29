@@ -1,4 +1,4 @@
-"""PostgreSQL coverage for provider-neutral synchronized build targets."""
+"""PostgreSQL coverage for account-keyed synchronized build targets."""
 
 import uuid
 from dataclasses import replace
@@ -158,7 +158,7 @@ async def test_repository_round_trips_and_updates_every_manifest_category(
     loaded = [await repository.get_by_id(build.id) for build in builds if build.id is not None]
     assert [build.category if build is not None else None for build in loaded] == list(BuildCategory)
     assert all(build is not None and build.submitter_account_id == account_id for build in loaded)
-    assert all(build is not None and build.submitter_id is None for build in loaded)
+    assert all(build is not None and build.submitter_discord_id is None for build in loaded)
     other = await repository.get_by_source_submission_draft_id(draft_id)
     assert other is not None
     assert other.category is BuildCategory.OTHER
@@ -167,7 +167,6 @@ async def test_repository_round_trips_and_updates_every_manifest_category(
     assert {build.category for build in pending} == set(BuildCategory)
     account_page = await repository.list_page(
         statuses=frozenset({Status.PENDING}),
-        submitter_id=None,
         submitter_account_id=account_id,
         after_id=None,
         limit=10,

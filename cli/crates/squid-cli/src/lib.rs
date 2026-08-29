@@ -21,6 +21,10 @@ use squid_cli_core::credential::{
     CredentialBackend, CredentialError, CredentialKind, CredentialVault, DeviceIdentity,
     SecretBytes, load_or_create_device_identity, load_or_create_draft_cache_key,
 };
+use squid_cli_core::diagnostics::{
+    DiagnosticsApi, DiagnosticsContractError, ErrorReportDetail, ErrorReportPage,
+    validate_reference,
+};
 use squid_cli_core::encrypted_state::{EncryptedStateError, EncryptedStateStore};
 use squid_cli_core::exit::ExitStatus;
 use squid_cli_core::form::{
@@ -84,6 +88,11 @@ enum Command {
         #[command(subcommand)]
         command: CompletionCommand,
     },
+    /// Read stored error reports by the reference a user was shown.
+    Errors {
+        #[command(subcommand)]
+        command: ErrorsCommand,
+    },
     /// Upload, inspect, wait for, and discard normalized draft media.
     Media {
         #[command(subcommand)]
@@ -107,6 +116,21 @@ enum Command {
     },
     /// Report CLI and submission-protocol compatibility.
     Version,
+}
+
+#[derive(Debug, Subcommand)]
+enum ErrorsCommand {
+    /// Show the stored failure behind a reference.
+    Show {
+        /// The short reference a user was shown, or a full correlation ID from a Request-Id header.
+        reference: String,
+    },
+    /// List the most recent stored failures, newest first.
+    List {
+        /// Show only failures that permanently abandoned work, such as a dead-lettered job.
+        #[arg(long)]
+        work_lost: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -381,6 +405,11 @@ fn run(cli: Cli, locale: Locale, output: &mut impl Write) -> Result<(), RunError
             let store = ProfileStore::discover().map_err(|error| profile_failure(error, None))?;
             let mut session = ConnectedSession::open(locale, &store)?;
             run_draft(command, cli.output, locale, &mut session, output)
+        }
+        Command::Errors { command } => {
+            let store = ProfileStore::discover().map_err(|error| profile_failure(error, None))?;
+            let mut session = ConnectedSession::open(locale, &store)?;
+            run_errors(command, cli.output, locale, &mut session, output)
         }
         Command::Completion {
             command: CompletionCommand::Generate { shell },
@@ -1333,6 +1362,149 @@ fn attach_preserved_draft(error: RunError, draft_id: Uuid) -> RunError {
         }
         error => error,
     }
+}
+
+fn run_errors(
+    command: ErrorsCommand,
+    format: OutputFormat,
+    locale: Locale,
+    session: &mut ConnectedSession,
+    output: &mut impl Write,
+) -> Result<(), RunError> {
+    match command {
+        ErrorsCommand::List { work_lost } => {
+            let response = session.request(|client, token| {
+                DiagnosticsApi::new(client).list_errors(work_lost, token)
+            })?;
+            response
+                .data
+                .validate()
+                .map_err(diagnostics_contract_failure)?;
+            write_error_list(format, locale, &response.data, response.request_id, output)
+        }
+        ErrorsCommand::Show { reference } => {
+            validate_reference(&reference).map_err(diagnostics_contract_failure)?;
+            let response = session.request(|client, token| {
+                DiagnosticsApi::new(client).get_error(&reference, token)
+            })?;
+            write_error_detail(format, locale, &response.data, response.request_id, output)
+        }
+    }
+}
+
+fn write_error_list(
+    format: OutputFormat,
+    locale: Locale,
+    page: &ErrorReportPage,
+    request_id: Option<String>,
+    output: &mut impl Write,
+) -> Result<(), RunError> {
+    match format {
+        OutputFormat::Json => {
+            let mut envelope = SuccessEnvelope::new("errors.list", page);
+            envelope.request_id = request_id;
+            write_json(&envelope, output)?;
+        }
+        OutputFormat::Human if page.items.is_empty() => {
+            writeln!(output, "{}", locale.message(MessageKey::ErrorListEmpty))?;
+        }
+        OutputFormat::Human => {
+            for report in &page.items {
+                writeln!(
+                    output,
+                    "{}{}  {}  {}  {}",
+                    if report.work_lost { "! " } else { "  " },
+                    report.reference,
+                    sanitize_terminal_text(&report.occurred_at),
+                    sanitize_terminal_text(&report.exception_type),
+                    sanitize_terminal_text(report.origin.as_deref().unwrap_or(&report.surface)),
+                )?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn write_error_detail(
+    format: OutputFormat,
+    locale: Locale,
+    report: &ErrorReportDetail,
+    request_id: Option<String>,
+    output: &mut impl Write,
+) -> Result<(), RunError> {
+    match format {
+        OutputFormat::Json => {
+            let mut envelope = SuccessEnvelope::new("errors.show", report);
+            envelope.request_id = request_id;
+            write_json(&envelope, output)?;
+        }
+        OutputFormat::Human => {
+            if report.matching_references > 1 {
+                writeln!(
+                    output,
+                    "{}",
+                    locale.message(MessageKey::ErrorReferenceAmbiguous)
+                )?;
+            }
+            if report.work_lost {
+                writeln!(output, "{}", locale.message(MessageKey::ErrorWorkLost))?;
+            }
+            writeln!(output, "reference:      {}", report.reference)?;
+            writeln!(output, "correlation_id: {}", report.correlation_id)?;
+            writeln!(
+                output,
+                "occurred_at:    {}",
+                sanitize_terminal_text(&report.occurred_at)
+            )?;
+            writeln!(
+                output,
+                "surface:        {}",
+                sanitize_terminal_text(&report.surface)
+            )?;
+            writeln!(
+                output,
+                "origin:         {}",
+                sanitize_terminal_text(report.origin.as_deref().unwrap_or("-"))
+            )?;
+            writeln!(
+                output,
+                "exception:      {}",
+                sanitize_terminal_text(&report.exception_type)
+            )?;
+            writeln!(
+                output,
+                "message:        {}",
+                sanitize_terminal_text(&report.message)
+            )?;
+            // Sanitized like every other server string: a traceback is attacker-influenced text
+            // (an exception message can carry user input) heading for a terminal.
+            writeln!(output, "\n{}", sanitize_terminal_text(&report.traceback))?;
+            if !report.log_tail.is_empty() {
+                writeln!(
+                    output,
+                    "{}",
+                    locale.message(MessageKey::ErrorLogTailHeading)
+                )?;
+                for line in &report.log_tail {
+                    writeln!(output, "  {}", sanitize_terminal_text(line))?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn diagnostics_contract_failure(error: DiagnosticsContractError) -> CommandFailure {
+    let status = match &error {
+        DiagnosticsContractError::InvalidReference => ExitStatus::Usage,
+        DiagnosticsContractError::TooManyReports => ExitStatus::Security,
+    };
+    CommandFailure::new(
+        status,
+        "invalid_diagnostics_contract",
+        MessageKey::InvalidErrorReference,
+    )
+    .with_field_error("reference", sanitize_terminal_text(&error.to_string()))
 }
 
 fn submission_contract_failure(error: SubmissionContractError) -> CommandFailure {
@@ -2743,6 +2915,10 @@ const fn command_name(command: &Command) -> &'static str {
             ProfileCommand::Show { .. } => "profile.show",
             ProfileCommand::Use { .. } => "profile.use",
             ProfileCommand::Remove { .. } => "profile.remove",
+        },
+        Command::Errors { command } => match command {
+            ErrorsCommand::Show { .. } => "errors.show",
+            ErrorsCommand::List { .. } => "errors.list",
         },
         Command::Submit { .. } => "submit",
         Command::Version => "version",

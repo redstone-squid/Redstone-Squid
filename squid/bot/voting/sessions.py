@@ -6,30 +6,38 @@ classes — with their hand-synchronised message sets, ten-message ceiling, and
 two-phase construction — be deleted outright.
 """
 
+import logging
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 import discord
 
 from squid.bot._types import GuildMessageable
+from squid.bot.utils.accounts import account_id_for
 from squid.builds.domain import Build, Status
 from squid.voting.domain import VoteKind, VoteOption
 
 if TYPE_CHECKING:
     import squid.bot.app
 
+logger = logging.getLogger(__name__)
+
 
 async def ensure_build_review(
     bot: squid.bot.app.RedstoneSquid,
     build: Build,
     channels: Sequence[GuildMessageable],
-) -> int:
+) -> int | None:
     """Create or resume a build's initial review session and publish its cards.
 
     Safe to repeat: the session is created under an advisory lock keyed by build, and
     the reconciler posts one card per configured vote channel, filling any that a
     previous attempt missed. This is what replaced the stable-nonce send that used to
     deduplicate a retried delivery.
+
+    Returns:
+        The session id, or None when no guild has a vote channel configured and there is
+        therefore nothing to review against.
     """
     if build.id is None or build.submitter_account_id is None:
         msg = "A persisted build and submitter account are required for review."
@@ -39,8 +47,17 @@ async def ensure_build_review(
         raise ValueError(msg)
     unique_channels = tuple({channel.id: channel for channel in channels}.values())
     if not unique_channels:
-        msg = "No configured Discord vote channel is available for build review."
-        raise RuntimeError(msg)
+        # An unconfigured vote channel is a setup gap, not a failed submission: the build is
+        # already committed by every caller that gets here, and raising would both report a
+        # successful submission as an error and make the event handler retry it forever. The
+        # session is skipped rather than opened empty, since its options come from the guilds
+        # of the channels it would be posted to.
+        logger.warning(
+            "No configured Discord vote channel is available for build review; build %s has no vote card.",
+            build.id,
+            extra={"squid.build.id": build.id},
+        )
+        return None
 
     options: list[VoteOption] = []
     for guild_id in {channel.guild.id for channel in unique_channels}:
@@ -76,10 +93,9 @@ async def start_delete_log_vote(
         raise ValueError(msg)
 
     options = (await bot.services.votes.emoji_preset(target_message.guild.id, VoteKind.DELETE_LOG)).options
-    author = await bot.services.accounts.get_or_create_account(author_id)
-    assert author.id is not None
+    author_account_id = await account_id_for(bot.services.accounts, author_id)
     session_id = await bot.services.votes.start_delete_log_vote(
-        author_account_id=author.id,
+        author_account_id=author_account_id,
         pass_threshold=3,
         fail_threshold=-3,
         message_id=target_message.id,

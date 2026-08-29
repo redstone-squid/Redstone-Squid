@@ -1,4 +1,4 @@
-"""Durable, transport-neutral submission finalization orchestration."""
+"""Durable submission finalization, driven the same way by the bot and the API."""
 
 import logging
 import re
@@ -9,7 +9,8 @@ from uuid import UUID, uuid5
 
 from whenever import Instant
 
-from squid.core.errors import InvalidStateError, JSONValue
+from squid.core.errors import DataIntegrityError, InvalidStateError, JSONValue, ValidationError
+from squid.core.i18n import _
 from squid.sponsors import PublicSponsor
 from squid.submissions.application.drafts import DEFAULT_DRAFT_RETENTION_DAYS, StoredDraft, SubmissionDraftService
 from squid.submissions.domain import DraftStatus, SubmissionOrigin
@@ -58,8 +59,8 @@ class ClaimedFinalizationJob:
 
     def __post_init__(self) -> None:
         if self.job_id.int == 0 or self.claim_token.int == 0 or self.attempts < 1:
-            msg = "claimed submission finalization metadata is invalid"
-            raise ValueError(msg)
+            msg = _("claimed submission finalization metadata is invalid")
+            raise DataIntegrityError(msg)
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,15 +115,15 @@ class SubmissionReviewEvent:
     target_key: str
 
 
-class ActionableSubmissionError(RuntimeError):
+class ActionableSubmissionError(ValidationError):
     """A target rejected fields that the draft owner can repair."""
 
     def __init__(self, issues: Sequence[SubmissionAttentionIssue]) -> None:
         if not issues:
-            msg = "actionable submission errors require at least one issue"
-            raise ValueError(msg)
+            msg = _("actionable submission errors require at least one issue")
+            raise InvalidStateError(msg)
         self.issues = tuple(issues)
-        super().__init__("Submission target rejected actionable fields.")
+        super().__init__(_("Submission target rejected actionable fields."))
 
 
 class DraftArtifactReadiness(Protocol):
@@ -231,8 +232,8 @@ class SubmissionFinalizationService:
         retention_days: int = DEFAULT_DRAFT_RETENTION_DAYS,
     ) -> None:
         if retention_days < 1:
-            msg = "finalization attention retention must be positive"
-            raise ValueError(msg)
+            msg = _("finalization attention retention must be positive")
+            raise InvalidStateError(msg)
         self._drafts = drafts
         self._artifacts = artifacts
         self._jobs = jobs
@@ -256,12 +257,12 @@ class SubmissionFinalizationService:
                 FinalizationJobStatus.CLAIMED,
             }:
                 return existing
-            msg = "processing draft has no active finalization job"
+            msg = _("processing draft has no active finalization job")
             raise InvalidStateError(msg)
         if current.snapshot.status is DraftStatus.SUBMITTED:
             existing = await self._jobs.get(draft_id)
             if existing is None or existing.status is not FinalizationJobStatus.COMPLETED:
-                msg = "submitted draft has no retained finalization result"
+                msg = _("submitted draft has no retained finalization result")
                 raise InvalidStateError(msg)
             return existing
 
@@ -340,8 +341,8 @@ class SubmissionFinalizationWorker:
         retention_days: int = DEFAULT_DRAFT_RETENTION_DAYS,
     ) -> None:
         if max_attempts < 1 or retention_days < 1:
-            msg = "finalization retry and retention limits must be positive"
-            raise ValueError(msg)
+            msg = _("finalization retry and retention limits must be positive")
+            raise InvalidStateError(msg)
         self._jobs = jobs
         self._target = target
         self._notifications = notifications
@@ -352,8 +353,8 @@ class SubmissionFinalizationWorker:
     async def process_batch(self, *, limit: int = 8, now: Instant | None = None) -> None:
         """Claim and process at most ``limit`` jobs sequentially."""
         if not 1 <= limit <= MAX_FINALIZATION_JOB_CLAIM:
-            msg = f"finalization claim limit must be between 1 and {MAX_FINALIZATION_JOB_CLAIM}"
-            raise ValueError(msg)
+            msg = _("finalization claim limit must be between 1 and {maximum}")
+            raise InvalidStateError(msg, message_params={"maximum": MAX_FINALIZATION_JOB_CLAIM})
         claimed_at = now or Instant.now()
         for job in await self._jobs.claim(now=claimed_at, limit=limit):
             await self._process(job, now=claimed_at)
@@ -581,8 +582,8 @@ def _sponsor_unavailable() -> SubmissionAttentionIssue:
 def _required_str(answers: Mapping[str, JSONValue], field_id: str) -> str:
     value = answers.get(field_id)
     if not isinstance(value, str):
-        msg = f"validated field {field_id} is not a string"
-        raise TypeError(msg)
+        msg = _("validated field {field_id} is not a string")
+        raise InvalidStateError(msg, message_params={"field_id": field_id})
     return value
 
 
@@ -591,8 +592,8 @@ def _optional_str(answers: Mapping[str, JSONValue], field_id: str) -> str | None
     if value is None:
         return None
     if not isinstance(value, str):
-        msg = f"validated field {field_id} is not a string"
-        raise TypeError(msg)
+        msg = _("validated field {field_id} is not a string")
+        raise InvalidStateError(msg, message_params={"field_id": field_id})
     return value
 
 
@@ -607,8 +608,8 @@ def _optional_nonblank_str(answers: Mapping[str, JSONValue], field_id: str) -> s
 def _required_int(answers: Mapping[str, JSONValue], field_id: str) -> int:
     value = answers.get(field_id)
     if not isinstance(value, int) or isinstance(value, bool):
-        msg = f"validated field {field_id} is not an integer"
-        raise TypeError(msg)
+        msg = _("validated field {field_id} is not an integer")
+        raise InvalidStateError(msg, message_params={"field_id": field_id})
     return value
 
 
@@ -617,16 +618,16 @@ def _optional_int(answers: Mapping[str, JSONValue], field_id: str) -> int | None
     if value is None:
         return None
     if not isinstance(value, int) or isinstance(value, bool):
-        msg = f"validated field {field_id} is not an integer"
-        raise TypeError(msg)
+        msg = _("validated field {field_id} is not an integer")
+        raise InvalidStateError(msg, message_params={"field_id": field_id})
     return value
 
 
 def _required_bool(answers: Mapping[str, JSONValue], field_id: str) -> bool:
     value = answers.get(field_id)
     if not isinstance(value, bool):
-        msg = f"validated field {field_id} is not a boolean"
-        raise TypeError(msg)
+        msg = _("validated field {field_id} is not a boolean")
+        raise InvalidStateError(msg, message_params={"field_id": field_id})
     return value
 
 
@@ -637,8 +638,8 @@ def _string_tuple(answers: Mapping[str, JSONValue], field_id: str) -> tuple[str,
         or isinstance(value, str | bytes)
         or not all(isinstance(item, str) for item in value)
     ):
-        msg = f"validated field {field_id} is not a string list"
-        raise TypeError(msg)
+        msg = _("validated field {field_id} is not a string list")
+        raise InvalidStateError(msg, message_params={"field_id": field_id})
     return tuple(cast(Sequence[str], value))
 
 
