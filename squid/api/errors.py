@@ -25,14 +25,15 @@ from squid.core.errors import (
     SquidError,
     ValidationError,
 )
-from squid.core.i18n import _, translate
+from squid.core.i18n import localization_for, tr
 from squid.diagnostics.log_capture import captured
+from squid_ui.text import localization_scope
 
 logger = logging.getLogger(__name__)
 
 PROBLEM_DETAIL_MEDIA_TYPE = "application/problem+json"
-INTERNAL_ERROR_DETAIL = _("An internal server error occurred.")
-SERVICE_UNAVAILABLE_DETAIL = _("A required service is temporarily unavailable. Please try again later.")
+INTERNAL_ERROR_DETAIL = tr(t"An internal server error occurred.")
+SERVICE_UNAVAILABLE_DETAIL = tr(t"A required service is temporarily unavailable. Please try again later.")
 
 
 class ExceptionRegistrar(Protocol):
@@ -209,11 +210,14 @@ async def handle_squid_error(request: Request, exc: Exception) -> Response:
         extra=captured(),
     )
     service_unavailable = isinstance(exc, ServiceUnavailableError)
+    with localization_scope(localization_for(locale)):
+        title = tr("Service unavailable") if service_unavailable else tr("Internal server error")
+        detail = tr(SERVICE_UNAVAILABLE_DETAIL if service_unavailable else INTERNAL_ERROR_DETAIL)
     return _problem_response(
         ProblemDetail(
-            title=translate(locale, _("Service unavailable") if service_unavailable else _("Internal server error")),
+            title=title,
             status=status_code,
-            detail=translate(locale, SERVICE_UNAVAILABLE_DETAIL if service_unavailable else INTERNAL_ERROR_DETAIL),
+            detail=detail,
             instance=str(request.url),
             code=exc.code if service_unavailable else ErrorCode.INTERNAL_ERROR,
             resource=exc.resource if service_unavailable else None,
@@ -239,11 +243,14 @@ async def handle_request_validation_error(request: Request, exc: Exception) -> R
         }
         for error in raw_errors
     ]
+    with localization_scope(localization_for(locale)):
+        title = tr("Invalid request")
+        detail = tr("The request did not pass validation.")
     return _problem_response(
         ProblemDetail(
-            title=translate(locale, _("Invalid request")),
+            title=title,
             status=HTTPStatus.UNPROCESSABLE_ENTITY,
-            detail=translate(locale, _("The request did not pass validation.")),
+            detail=detail,
             instance=str(request.url),
             code=ErrorCode.INVALID_REQUEST,
             context={"errors": errors},
@@ -261,7 +268,8 @@ async def handle_http_error(request: Request, exc: Exception) -> Response:
     try:
         title = HTTPStatus(exc.status_code).phrase
     except ValueError:
-        title = translate(locale, _("HTTP error"))
+        with localization_scope(localization_for(locale)):
+            title = tr("HTTP error")
     return _problem_response(
         ProblemDetail(
             title=title,
@@ -280,11 +288,14 @@ async def handle_unexpected_error(request: Request, exc: Exception) -> Response:
     request_id = correlation_id()
     await _capture(request, exc, request_id)
     logger.error("Unhandled HTTP exception [request_id=%s]", request_id, exc_info=exc, extra=captured())
+    with localization_scope(localization_for(locale)):
+        title = tr("Internal server error")
+        detail = tr(INTERNAL_ERROR_DETAIL)
     return _problem_response(
         ProblemDetail(
-            title=translate(locale, _("Internal server error")),
+            title=title,
             status=HTTPStatus.INTERNAL_SERVER_ERROR,
-            detail=translate(locale, INTERNAL_ERROR_DETAIL),
+            detail=detail,
             instance=str(request.url),
             code=ErrorCode.INTERNAL_ERROR,
         ),
