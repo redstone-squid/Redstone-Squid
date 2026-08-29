@@ -12,7 +12,7 @@ from squid.bot.submission.edit import BuildEditCommands
 from squid.bot.submission.ui.views import BuildEditScreen
 from squid.builds.domain import DoorBuild, OtherBuild, Status
 from squid.topics import resource_topic
-from tests.helpers.discord import make_layout_bot
+from tests.support.discord import make_layout_bot
 
 
 class _Response:

@@ -11,7 +11,7 @@ from squid.api.v1.votes import VoteInput, cast_vote
 from squid.core.errors import AuthenticationError, ValidationError
 from squid.runtime import ApiServices
 from squid.voting.domain import CastVoteResult, VoteActor, VoteRejection, VoteSessionSnapshot
-from tests.helpers.voting import build_snapshot
+from tests.support.voting import build_snapshot
 from tests.unit.api.fakes import credential_nodes
 
 

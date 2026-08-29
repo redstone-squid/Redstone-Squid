@@ -10,7 +10,7 @@ import pytest
 from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.permissions.domain import Decision, Reason
-from tests.helpers.discord import make_layout_bot
+from tests.support.discord import make_layout_bot
 
 BUILD_LOG_CHANNEL = 500
 

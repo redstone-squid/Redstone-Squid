@@ -28,7 +28,7 @@ from squid.versions.application.services import VersionService
 from squid.versions.domain import MinecraftVersion
 from squid.voting.application import VoteService
 from squid.voting.domain import VoteChoice, VoteOption, VoteSelection, VoteSessionSnapshot, VoteVisibility
-from tests.helpers.voting import poll_snapshot
+from tests.support.voting import poll_snapshot
 from tests.unit.api.fakes import MockDatabaseManager
 
 CREATOR_PUBLIC_ID = UUID("22222222-2222-2222-2222-222222222222")

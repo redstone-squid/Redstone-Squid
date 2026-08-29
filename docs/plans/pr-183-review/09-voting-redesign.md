@@ -112,7 +112,7 @@ lifecycle abstractions, and test maintainability:
    - Route deadline polling and due-closing through `BackgroundTaskSupervisor`.
 
 5. **Test modernization and cleanup**
-   - Extract shared repository fixtures, test session builders, and poll seed helpers into `tests/helpers/voting.py`.
+   - Extract shared repository fixtures, test session builders, and poll seed helpers into `tests/support/voting.py`.
    - Remove redundant hand-rolled SQL from integration tests, keeping direct SQL queries strictly where asserting DB
      check constraints, foreign key cascades, or concurrency locking (`pg_advisory_xact_lock`, `with_for_update`).
    - Parameterize kind/visibility/target test matrices across domain, application, and API test suites.
@@ -218,7 +218,7 @@ class PollPublisher(Protocol):
 | **Session Architecture** | `AbstractVoteSession` reflection, `_allow_init` flag, `__init_subclass__` metaprogramming, in-memory duplicate vote tracking | **Fix.** Retire `AbstractVoteSession`; standardize thin snapshot-wrapping presentation classes across all vote kinds. |
 | **Discord Recovery** | Missing messages, reaction clears, permission loss, unhandled exceptions during background fan-outs | **Fix.** Graceful handling of `discord.NotFound`/`discord.Forbidden`, safe reaction re-adding, and `BackgroundTaskSupervisor` deadline scheduling. |
 | **API & Ballot Privacy** | API routes exposing aggregate tallies, privacy for hidden polls, stable option ID writes | **Already fixed** in `5edfd3e` and retained; strengthen with typed DTO mappings and enum validation. |
-| **Test Fixtures** | 80-line hand-written DDL in `test_vote_repository.py`, oversized integration test cases | **Already fixed** in `16eb510` and improved; extract reusable session/poll builders in `tests/helpers/voting.py`. |
+| **Test Fixtures** | 80-line hand-written DDL in `test_vote_repository.py`, oversized integration test cases | **Already fixed** in `16eb510` and improved; extract reusable session/poll builders in `tests/support/voting.py`. |
 
 ---
 
@@ -253,10 +253,10 @@ state, checked against actual code and tests, not the plan text.
 
 - **Subplan 5: partially done, not "unverified."** Checked directly against the test files named
   in the Test Suite Matrix:
-  - `tests/helpers/voting.py` exists and is used by all four suites (`build_snapshot`,
+  - `tests/support/voting.py` exists and is used by all four suites (`build_snapshot`,
     `poll_snapshot`, `attach_vote_message`, `seed_delete_log_vote`) — the fixture-extraction bullet
     is done, and per plan 13's disposition table (`3775316974`, `3775329634`), so is the DDL/helper
-    extraction in `test_vote_repository.py` (`tests/helpers/schema.py`, `seed_generic_poll`).
+    extraction in `test_vote_repository.py` (`tests/support/schema.py`, `seed_generic_poll`).
   - Direct SQL remaining in `test_vote_repository.py` is scoped correctly: root-count sanity checks,
     one read-back of sentinel-vs-NULL thresholds ("the domain refuses to represent the sentinels at
     all"), and the parametrized `test_the_schema_rejects_kind_threshold_combinations_the_domain_forbids`

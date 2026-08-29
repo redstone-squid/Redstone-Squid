@@ -11,7 +11,7 @@ from squid.builds.application import BuildService
 from squid.builds.domain import BuildDraft, DoorBuild
 from squid_ui_discord.sessions import Reject
 from squid_ui_discord.testing import commit_render
-from tests.helpers.discord import invocation_scope, make_interaction, make_layout_bot
+from tests.support.discord import invocation_scope, make_interaction, make_layout_bot
 
 
 def _component(**kwargs: Any) -> SubmissionScreen:

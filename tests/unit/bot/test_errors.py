@@ -21,7 +21,7 @@ from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.builds.errors import BuildNotFoundError
 from squid.core.errors import InternalError
 from squid.observability import correlation_id
-from tests.helpers.discord import make_interaction, make_message
+from tests.support.discord import make_interaction, make_message
 
 
 def test_unwrap_error_finds_original_command_exception() -> None:
