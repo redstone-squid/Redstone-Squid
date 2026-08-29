@@ -182,9 +182,7 @@ def test_entity_scene_round_trips_string_ids_and_conversation_filters() -> None:
                 scene.EntitySelect(
                     sl.entity.EntityType.CONVERSATION,
                     "conversation",
-                    default_values=(
-                        sl.entity.EntityRef(sl.entity.EntityKind.CONVERSATION, "C012345"),
-                    ),
+                    default_values=(sl.entity.EntityRef(sl.entity.EntityKind.CONVERSATION, "C012345"),),
                     conversation_types=(sl.entity.ConversationType.WORKSPACE_PUBLIC,),
                 ),
             )

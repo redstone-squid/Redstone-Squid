@@ -691,9 +691,7 @@ def _node_from_dict(
                     EntityRef(EntityKind(_string(_object(value), "kind")), _entity_id(_object(value)))
                     for value in defaults
                 ),
-                conversation_types=tuple(
-                    ConversationType(value) for value in _string_array(raw, "conversation_types")
-                ),
+                conversation_types=tuple(ConversationType(value) for value in _string_array(raw, "conversation_types")),
                 min_values=_integer(raw, "min_values"),
                 max_values=_integer(raw, "max_values"),
                 disabled=_boolean(raw, "disabled"),
