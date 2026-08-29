@@ -1,21 +1,29 @@
 """Semantic submission workspace tests."""
 
-from types import SimpleNamespace
-from typing import Any, cast
-from unittest.mock import AsyncMock
+from typing import Any
 
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.submission.ui.views import SubmissionOutcome, SubmissionScreen, _submission_basics_form
 from squid.builds.application import BuildService
 from squid.builds.domain import BuildDraft, DoorBuild
+from squid_ui.testing import RecordingResponder, choice_event, press, press_event
 from squid_ui_discord.sessions import Reject
 from squid_ui_discord.testing import commit_render
 from tests.support.discord import invocation_scope, make_interaction, make_layout_bot
 
 
+class BuildRecorder(BuildService):
+    def __init__(self) -> None:
+        pass
+
+
+async def _unused_submit() -> SubmissionOutcome:
+    raise AssertionError("this test does not submit the draft")
+
+
 def _component(**kwargs: Any) -> SubmissionScreen:
-    return SubmissionScreen(BuildDraft(**kwargs), cast(BuildService, object()), on_submit=AsyncMock())
+    return SubmissionScreen(BuildDraft(**kwargs), BuildRecorder(), on_submit=_unused_submit)
 
 
 def test_submission_form_uses_semantic_controls() -> None:
@@ -51,7 +59,7 @@ async def test_changing_the_door_type_marks_the_message_root_dirty() -> None:
     message_root = bot.client_runtime.mount(component, access=sd.Everyone(), timeout=300)
     commit_render(message_root)
 
-    await component._door_changed(cast(sl.ChoiceEvent, SimpleNamespace(selected=("Door",))))
+    await component._door_changed(choice_event("Door"))
 
     assert message_root.pending is True
     assert component.build.door_orientation == "Door"
@@ -59,27 +67,37 @@ async def test_changing_the_door_type_marks_the_message_root_dirty() -> None:
 
 async def test_cancel_closes_the_workspace() -> None:
     component = _component()
-    event = SimpleNamespace(finish=AsyncMock())
+    responder = RecordingResponder()
 
-    await component._cancel(cast(sl.PressEvent, event))
+    await press(component, "cancel", responder=responder)
 
     assert component.cancelled is True
-    event.finish.assert_awaited_once()
+    assert responder.finished is True
 
 
 async def test_submission_persists_only_once_after_duplicate_finish() -> None:
     outcome = SubmissionOutcome(DoorBuild(id=7), sl.status("submitted"))
-    persist = AsyncMock(return_value=outcome)
+
+    class SubmitRecorder:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def __call__(self) -> SubmissionOutcome:
+            self.calls += 1
+            return outcome
+
+    persist = SubmitRecorder()
     component = SubmissionScreen(
         BuildDraft(door_orientation="Door", door_width=2, door_height=2),
-        cast(BuildService, object()),
+        BuildRecorder(),
         on_submit=persist,
     )
-    event = SimpleNamespace(acknowledge=AsyncMock(), finish=AsyncMock(), notice=AsyncMock())
+    responder = RecordingResponder()
+    event = press_event(responder=responder)
 
-    await component._submit(cast(sl.PressEvent, event))
-    await component._submit(cast(sl.PressEvent, event))
+    await component._submit(event)
+    await component._submit(event)
 
-    persist.assert_awaited_once()
-    event.finish.assert_awaited_once()
-    event.notice.assert_awaited_once()
+    assert persist.calls == 1
+    assert responder.finished is True
+    assert len(responder.notices) == 1
