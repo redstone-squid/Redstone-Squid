@@ -7,7 +7,7 @@ from typing import Literal
 from whenever import Instant
 
 from squid.core.errors import ValidationError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 from squid.reactions.domain import ReactionActor
 
 type StarboardDirection = Literal["up", "down"]
@@ -55,13 +55,13 @@ class StarboardEmoji:
 
     def __post_init__(self) -> None:
         if not self.emoji.strip():
-            msg = _("Starboard emoji cannot be empty.")
+            msg = tr(t"Starboard emoji cannot be empty.")
             raise ValidationError(msg)
         if not isfinite(self.multiplier) or self.multiplier <= 0:
-            msg = _("Starboard emoji multiplier must be finite and greater than zero.")
+            msg = tr(t"Starboard emoji multiplier must be finite and greater than zero.")
             raise ValidationError(msg)
         if self.position < 0:
-            msg = _("Starboard emoji position cannot be negative.")
+            msg = tr(t"Starboard emoji position cannot be negative.")
             raise ValidationError(msg)
 
 
@@ -96,29 +96,29 @@ class StarboardConfig:
 
     def __post_init__(self) -> None:
         if not self.name.strip():
-            msg = _("Starboard name cannot be empty.")
+            msg = tr(t"Starboard name cannot be empty.")
             raise ValidationError(msg)
         if not isfinite(self.required) or not isfinite(self.required_remove):
-            msg = _("Starboard thresholds must be finite.")
+            msg = tr(t"Starboard thresholds must be finite.")
             raise ValidationError(msg)
         if self.required <= self.required_remove:
-            msg = _("The post threshold must exceed the removal threshold.")
+            msg = tr(t"The post threshold must exceed the removal threshold.")
             raise ValidationError(msg)
         if self.min_age_seconds < 0 or self.max_age_seconds < 0:
-            msg = _("Starboard message ages cannot be negative.")
+            msg = tr(t"Starboard message ages cannot be negative.")
             raise ValidationError(msg)
         if self.max_age_seconds and self.min_age_seconds > self.max_age_seconds:
-            msg = _("The minimum message age cannot exceed the maximum.")
+            msg = tr(t"The minimum message age cannot exceed the maximum.")
             raise ValidationError(msg)
         if not 0 <= self.colour <= 0xFFFFFF:
-            msg = _("Starboard colour must be a valid RGB value.")
+            msg = tr(t"Starboard colour must be a valid RGB value.")
             raise ValidationError(msg)
         if not self.display_emoji.strip():
-            msg = _("Starboard display emoji cannot be empty.")
+            msg = tr(t"Starboard display emoji cannot be empty.")
             raise ValidationError(msg)
         aliases = [item.emoji for item in self.emojis]
         if len(aliases) != len(set(aliases)):
-            msg = _("Starboard emojis must be unique.")
+            msg = tr(t"Starboard emojis must be unique.")
             raise ValidationError(msg)
 
 

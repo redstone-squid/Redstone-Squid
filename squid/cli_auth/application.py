@@ -36,7 +36,7 @@ from squid.cli_auth.errors import (
 )
 from squid.cli_auth.ports import AccountConsentReader, CliAuthorizationRepository
 from squid.core.errors import DataIntegrityError, InvalidStateError, ValidationError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 
 CLI_SESSION_TOKEN_PREFIX = "squid_cli_v1"
 ENROLLMENT_LIFETIME_SECONDS = 10 * 60
@@ -62,7 +62,7 @@ class CliSecretCodec:
 
     def __init__(self, pepper: bytes) -> None:
         if len(pepper) < 32:
-            msg = _("CLI authorization pepper must contain at least 32 bytes.")
+            msg = tr(t"CLI authorization pepper must contain at least 32 bytes.")
             raise InvalidStateError(msg)
         self._pepper = pepper
 
@@ -132,7 +132,7 @@ class CliAuthorizationService:
             )
             <= 0
         ):
-            msg = _("CLI authorization limits must be positive.")
+            msg = tr(t"CLI authorization limits must be positive.")
             raise InvalidStateError(msg)
         self._repository = repository
         self._accounts = accounts
@@ -222,7 +222,7 @@ class CliAuthorizationService:
             exchanged_at=now,
         )
         if persisted_session.device_id != persisted_device.id:
-            msg = _("Persisted CLI session does not belong to its device.")
+            msg = tr(t"Persisted CLI session does not belong to its device.")
             raise DataIntegrityError(msg)
         return IssuedCliSession(persisted_device, persisted_session, token)
 
@@ -424,13 +424,13 @@ def _validate_public_key(public_key: bytes) -> None:
 def _device_label(value: str) -> str:
     normalized = " ".join(value.split())
     if not 1 <= len(normalized) <= 80:
-        msg = _("CLI device label must contain 1 to 80 characters.")
+        msg = tr(t"CLI device label must contain 1 to 80 characters.")
         raise ValidationError(msg)
     return normalized
 
 
 def _length_prefixed(value: bytes) -> bytes:
     if len(value) > 65535:
-        msg = _("Signed CLI proof component is too long.")
+        msg = tr(t"Signed CLI proof component is too long.")
         raise InvalidStateError(msg)
     return len(value).to_bytes(2, byteorder="big") + value

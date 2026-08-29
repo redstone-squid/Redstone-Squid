@@ -9,6 +9,7 @@ from squid.accounts.domain import (
     AccountConsent,
     consent_refresh_required,
 )
+from squid.core.i18n import tr
 
 BEFORE_CUTOFF = Instant.from_utc(2026, 8, 3)
 AFTER_CUTOFF = Instant.from_utc(2026, 8, 5)
@@ -61,7 +62,7 @@ def test_the_notice_names_everything_it_is_consent_to() -> None:
     category quietly dropping out of it turns the receipt into consent to something narrower
     than what actually happens.
     """
-    notice = PRIVACY_NOTICE.casefold()
+    notice = tr(PRIVACY_NOTICE).casefold()
 
     assert "discord user id" in notice  # what is stored
     assert "minecraft uuid" in notice
@@ -77,8 +78,9 @@ def test_the_notice_names_everything_it_is_consent_to() -> None:
 
 def test_the_notice_is_plain_text_in_paragraphs() -> None:
     """It is rendered into a Discord card, an HTML page and a terminal alike."""
-    assert "\n\n" in PRIVACY_NOTICE
-    assert "<" not in PRIVACY_NOTICE
+    notice = tr(PRIVACY_NOTICE)
+    assert "\n\n" in notice
+    assert "<" not in notice
 
 
 def test_the_version_is_an_iso_date() -> None:

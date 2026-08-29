@@ -21,7 +21,6 @@ import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.bot.i18n import localization_for, resolve_locale
 from squid.bot.ui import DISCORD_BLUE, DISCORD_GREEN, DISCORD_YELLOW, tr
-from squid.core.i18n import _
 from squid_replication import ReferenceBackend, Replica, ReplicatedDocument
 from squid_ui_discord import SessionKey
 from squid_ui_discord.session_specs import OpenContext
@@ -1363,8 +1362,8 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
 
     @layout_group.command(name="demo")
     @app_commands.describe(
-        section=app_commands.locale_str(_("Which one to open first.")),
-        entries=app_commands.locale_str(_("How many sample builds the long-list demo should hold.")),
+        section=app_commands.locale_str("Which one to open first."),
+        entries=app_commands.locale_str("How many sample builds the long-list demo should hold."),
     )
     async def demo(
         self,

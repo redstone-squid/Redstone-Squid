@@ -4,8 +4,8 @@ from collections.abc import Mapping, Sequence
 from enum import StrEnum
 from typing import ClassVar, Self, override
 
-from squid.core.i18n import localization_for, tr
-from squid_ui.text import Message, localization_scope
+from squid.core.i18n import tr
+from squid_ui.text import Message
 
 type JSONValue = None | bool | int | float | str | Sequence[JSONValue] | Mapping[str, JSONValue]
 
@@ -22,10 +22,6 @@ def _source_message(message: Message) -> str:
         key: _source_text(value) if isinstance(value, str | Message) else value for key, value in message.params.items()
     }
     return template.format_map(params)
-
-
-def _translated_text(value: str | Message) -> str:
-    return tr(value)
 
 
 class ErrorCode(StrEnum):
@@ -142,24 +138,11 @@ class SquidError(Exception):
         return f"{message}{separator}{self.developer_action}"
 
     def public_detail(self) -> str:
-        """Return safe, untranslated (English) text suitable for users and API clients."""
-        message = self._rendered_message()
+        """Return safe user-facing text using the ambient localization."""
+        message = tr(self.message)
         if self.end_user_action:
-            return f"{message} {_source_text(self.end_user_action)}"
+            return f"{message} {tr(self.end_user_action)}"
         return message
-
-    def localized_title(self, locale: str | None) -> str:
-        """Return the error title translated into `locale`."""
-        with localization_scope(localization_for(locale)):
-            return _translated_text(self.title)
-
-    def localized_public_detail(self, locale: str | None) -> str:
-        """Return safe user-facing text translated into `locale`."""
-        with localization_scope(localization_for(locale)):
-            message = tr(self.message)
-            if self.end_user_action:
-                return f"{message} {_translated_text(self.end_user_action)}"
-            return message
 
     def with_context(
         self,
