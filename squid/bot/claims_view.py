@@ -1,20 +1,20 @@
 """The semantic review workspace for creator credit claims."""
 
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from typing import cast
 
 import squid_ui as sl
-import squid_ui_discord as sd
 from squid.accounts.application import AccountService
 from squid.accounts.domain import AliasClaim, IdentityProvider
 from squid.accounts.errors import AliasAlreadyClaimedError
 from squid.bot.consent import with_consented_account
 from squid.bot.ui import DISCORD_BLUE, L
-from squid.bot.utils.permissions import enforce
+from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import ACCOUNT_CLAIM_APPROVE, ACCOUNT_CLAIM_REJECT
 
 REVIEW_SECONDS = 300
 CLAIMS_PER_PAGE = 5
+type ClaimAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
 class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
@@ -32,6 +32,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
         author_id: int,
         can_approve: bool,
         can_reject: bool,
+        authorize: ClaimAuthorizer,
         timeout: float = REVIEW_SECONDS,
     ) -> None:
         self._accounts = accounts
@@ -39,6 +40,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
         self._author_id = author_id
         self._can_approve = can_approve
         self._can_reject = can_reject
+        self._authorize = authorize
         self._timeout = timeout
 
     @property
@@ -140,8 +142,10 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
         claim = self.selected
         if claim is None:
             return
-        interaction = sd.native(event)
-        await enforce(interaction, ACCOUNT_CLAIM_APPROVE if approve else ACCOUNT_CLAIM_REJECT)
+        node = ACCOUNT_CLAIM_APPROVE if approve else ACCOUNT_CLAIM_REJECT
+        if not await self._authorize(node):
+            await event.notice(L(t"You are no longer allowed to resolve creator claims."))
+            return
 
         async def resolve(live: sl.ActionEvent, staff_account_id: int) -> None:
             await self._resolve(live, claim, staff_account_id, approve=approve)
