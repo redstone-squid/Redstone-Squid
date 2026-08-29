@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, cast, overload
 
 from squid_ui.emoji import EmojiLike, normalize_emoji
 from squid_ui.entity import ConversationType, EntityRef, EntityType, supports_entity
+from squid_ui.extensions import ExtensionKind
 from squid_ui.forms import FormBinding
 from squid_ui.guards import Guard
 from squid_ui.interactions import (
@@ -384,12 +385,12 @@ class Card(Renderable[ClassicTarget]):
 
 
 @dataclass(frozen=True, slots=True)
-class Extension[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
+class Extension[PayloadT = object, RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
     """Target extension with a mandatory portable fallback."""
 
-    kind: str
+    kind: ExtensionKind[PayloadT, Any]
     version: int
-    payload: object
+    payload: PayloadT
     fallback: Node
 
 
