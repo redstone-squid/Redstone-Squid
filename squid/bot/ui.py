@@ -120,7 +120,7 @@ Run the command in a direct message, or allow direct messages and retry."""
     unsaved=L(t"Unsaved changes"),
     search=L(t"Search"),
     no_results=L(t"No results"),
-    decided=lambda label: L(t"You chose {label}.", label=label),
+    decided=lambda label: L(t"You chose {label}."),
     add=L(t"Add"),
     edit=L(t"Edit"),
     remove=L(t"Remove"),

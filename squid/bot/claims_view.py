@@ -76,7 +76,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
                 sl.choices(
                     *(
                         sl.choice(
-                            L("Claim #{id} — {name}", id=claim.id, name=claim.alias_name),
+                            _claim_label(claim),
                             key=str(claim.id),
                             description=_claimant(claim, mention=False),
                         )
@@ -126,7 +126,8 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
         )
 
     def _page_footer(self, page: int, pages: int) -> sl.text.Message:
-        return L("Page {page} of {pages} — {total} in total", page=page, pages=pages, total=len(self._claims))
+        total = len(self._claims)
+        return L(t"Page {page} of {pages} — {total} in total")
 
     async def _select_claim(self, event: sl.ChoiceEvent) -> None:
         self.selected_id = int(event.selected[0])
@@ -174,18 +175,12 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
             await event.notice(_conflict_text(conflict), visibility=sl.interactions.Visibility.PUBLIC)
             return
         await self._reload()
+        name = resolved.alias_name
+        claimant = _claimant(resolved)
         message = (
-            L(
-                "Credited **{name}** to {claimant}.",
-                name=resolved.alias_name,
-                claimant=_claimant(resolved),
-            )
+            L(t"Credited **{name}** to {claimant}.")
             if approve
-            else L(
-                "Closed {claimant}'s claim on **{name}** without crediting it.",
-                name=resolved.alias_name,
-                claimant=_claimant(resolved),
-            )
+            else L(t"Closed {claimant}'s claim on **{name}** without crediting it.")
         )
         await event.notice(message, visibility=sl.interactions.Visibility.PUBLIC)
 
@@ -209,23 +204,33 @@ def _claimant(claim: AliasClaim, *, mention: bool = True) -> sl.TextLike:
         if java is not None and java.display_name is not None:
             return java.display_name
         if claimant.public_creator_id is not None:
-            return L("creator `{creator_id}`", creator_id=claimant.public_creator_id)
+            creator_id = claimant.public_creator_id
+            return L(t"creator `{creator_id}`")
         if discord is not None and discord.discord_id is not None:
-            return L("Discord user `{discord_id}`", discord_id=discord.discord_id)
-    return L("unidentified account (internal ID `{account_id}`)", account_id=claim.account_id)
+            discord_id = discord.discord_id
+            return L(t"Discord user `{discord_id}`")
+    account_id = claim.account_id
+    return L(t"unidentified account (internal ID `{account_id}`)")
 
 
 def _claim_entry(claim: AliasClaim) -> sl.TextLike:
-    heading = L("Claim #{id} — {name}", id=claim.id, name=claim.alias_name)
-    detail = L(
-        "{claimant} — opened {age}",
-        claimant=_claimant(claim),
-        age=sl.md(t"{sl.timestamp(claim.created_at.to_stdlib(), style=sl.semantic.TimeStyle.RELATIVE)}"),
-    )
-    return L("**{heading}**\n{detail}", heading=heading, detail=detail)
+    claim_id = claim.id
+    name = claim.alias_name
+    heading = L(t"Claim #{claim_id} — {name}")
+    claimant = _claimant(claim)
+    age = sl.md(t"{sl.timestamp(claim.created_at.to_stdlib(), style=sl.semantic.TimeStyle.RELATIVE)}")
+    detail = L(t"{claimant} — opened {age}")
+    return L(t"**{heading}**\n{detail}")
+
+
+def _claim_label(claim: AliasClaim) -> sl.text.Message:
+    claim_id = claim.id
+    name = claim.alias_name
+    return L(t"Claim #{claim_id} — {name}")
 
 
 def _conflict_text(conflict: AliasAlreadyClaimedError) -> sl.TextLike:
     """Explain the second deliberate approval click."""
     held = L(conflict.message, **conflict.message_params)
-    return L("{held} {action}", held=held, action=L("Approving again takes the name from them."))
+    action = L(t"Approving again takes the name from them.")
+    return L(t"{held} {action}")

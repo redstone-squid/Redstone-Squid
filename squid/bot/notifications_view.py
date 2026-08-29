@@ -32,11 +32,11 @@ MAX_LISTED = 25
 def _kind_label(kind: SubscriptionKind) -> sl.TextLike:
     match kind:
         case SubscriptionKind.CREATOR:
-            return L("Creator")
+            return L(t"Creator")
         case SubscriptionKind.RECORD:
-            return L("Record")
+            return L(t"Record")
         case SubscriptionKind.RECORD_FILTER:
-            return L("Record filter")
+            return L(t"Record filter")
 
 
 class NotificationScreen(sd.Screen):
@@ -88,18 +88,18 @@ class NotificationScreen(sd.Screen):
 
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self.closed:
-            return (sl.section(sl.heading(L("Notifications closed"))),)
-        on, off = L("On"), L("Off")
+            return (sl.section(sl.heading(L(t"Notifications closed"))),)
+        on, off = L(t"On"), L(t"Off")
         fields = (
-            sl.field(L("Web inbox"), on if self.web_enabled else off),
-            sl.field(L("Discord DMs"), on if self.dm_enabled else off),
-            sl.field(L("Following"), self._subscription_list()),
+            sl.field(L(t"Web inbox"), on if self.web_enabled else off),
+            sl.field(L(t"Discord DMs"), on if self.dm_enabled else off),
+            sl.field(L(t"Following"), self._subscription_list()),
         )
-        description = L("Toggle where notifications arrive, and unfollow what you no longer want.")
+        description = L(t"Toggle where notifications arrive, and unfollow what you no longer want.")
         suspension_note = self._suspension_note()
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
             sl.section(
-                sl.heading(L("Notifications")),
+                sl.heading(L(t"Notifications")),
                 sl.truncate(sl.paragraph(description)),
                 sl.fields(*fields),
                 suspension_note and sl.note(suspension_note),
@@ -125,13 +125,13 @@ class NotificationScreen(sd.Screen):
         nodes.extend(
             (
                 sl.toggle(
-                    L("Web inbox"),
+                    L(t"Web inbox"),
                     key="web",
                     on=sl.controlled(self.web_enabled, self._toggle_web),
                     tone=sl.Tone.SUCCESS if self.web_enabled else sl.Tone.NEUTRAL,
                 ),
                 sl.toggle(
-                    L("Discord DMs"),
+                    L(t"Discord DMs"),
                     key="dm",
                     on=sl.controlled(self.dm_enabled, self._toggle_dm),
                     tone=sl.Tone.SUCCESS if self.dm_enabled else sl.Tone.NEUTRAL,
@@ -181,14 +181,14 @@ class NotificationScreen(sd.Screen):
         nodes.append(
             sl.action_controls(
                 sl.action_control(
-                    L("Unfollow selected"),
+                    L(t"Unfollow selected"),
                     self._unfollow,
                     key="unfollow_selected",
                     tone=sl.Tone.DANGER,
                     available=bool(self.selected_ids),
                 ),
                 sl.action_control(
-                    L("Close"),
+                    L(t"Close"),
                     self._close,
                     key="close",
                 ),
@@ -306,7 +306,7 @@ class NotificationScreen(sd.Screen):
 
     def _subscription_list(self) -> sl.TextLike:
         if not self._subscriptions:
-            return L("_Nothing yet._")
+            return L(t"_Nothing yet._")
         params: dict[str, object] = {}
         lines: list[str] = []
         for index, subscription in enumerate(self.subscriptions):
@@ -318,7 +318,7 @@ class NotificationScreen(sd.Screen):
             count = hidden
             params["remainder"] = L(t"…and {count} more.")
             lines.append("{remainder}")
-        return L("\n".join(lines), **params)
+        return sl.text.Message("\n".join(lines), params)
 
     def describe(self, subscription: NotificationSubscription) -> sl.TextLike:
         return _kind_label(subscription.kind)
@@ -331,7 +331,7 @@ class NotificationScreen(sd.Screen):
     def _suspension_note(self) -> sl.TextLike | None:
         if self._preferences is None or self._preferences.dm_suspended_at is None:
             return None
-        return L("Discord rejected a DM, so DMs are suspended until you re-enable them.")
+        return L(t"Discord rejected a DM, so DMs are suspended until you re-enable them.")
 
 
 def _filter_text(record_filter: RecordSubscriptionFilter) -> str:

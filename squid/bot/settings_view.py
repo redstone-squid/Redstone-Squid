@@ -293,7 +293,7 @@ class SettingsPanel(sd.Screen):
             return
         channel_id = event.selected[0].id if event.selected else None
         if channel_id is not None and not isinstance(channel_id, int):
-            await event.notice(L("That channel selection is invalid."))
+            await event.notice(L(t"That channel selection is invalid."))
             return
         await self.set_channel(setting, channel_id)
 
@@ -313,7 +313,7 @@ class SettingsPanel(sd.Screen):
             return
         role_id = event.selected[0].id
         if not isinstance(role_id, int):
-            await event.notice(L("That role selection is invalid."))
+            await event.notice(L(t"That role selection is invalid."))
             return
         role = self._guild.get_role(role_id)
         if role is None:
@@ -364,7 +364,7 @@ class SettingsPanel(sd.Screen):
         try:
             await self.set_weight(role_id, float(text) if text else None)
         except InvalidVoteConfigurationError, ValueError:
-            await event.notice(L("A vote multiplier must be a positive number, such as 1.5."))
+            await event.notice(L(t"A vote multiplier must be a positive number, such as 1.5."))
 
     async def _emoji_form_submitted(self, event: sl.SubmitEvent) -> None:
         text = cast(str, event.values["aliases"])
@@ -372,7 +372,7 @@ class SettingsPanel(sd.Screen):
         for position, line in enumerate(filter(None, (line.strip() for line in text.splitlines()))):
             parts = [part.strip() for part in line.split("|", 1)]
             if len(parts) != 2:
-                await event.notice(L("Each line must read `choice | emoji`."))
+                await event.notice(L(t"Each line must read `choice | emoji`."))
                 return
             choice_text, emoji = parts
             try:
@@ -540,7 +540,7 @@ class SettingsPanel(sd.Screen):
             key = f"role_{index}"
             weight_params[key] = self._role_display(weight.role_id)
             weight_lines.append(f"{{{key}}} — {weight.multiplier:g}x")
-        weights = L("\n".join(weight_lines), **weight_params) if weight_lines else L(t"_None_")
+        weights = sl.text.Message("\n".join(weight_lines), weight_params) if weight_lines else L(t"_None_")
         return [
             CardField(L(t"Emojis"), emojis),
             CardField(L(t"Role multipliers"), weights),
