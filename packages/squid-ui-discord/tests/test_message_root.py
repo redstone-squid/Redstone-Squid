@@ -67,6 +67,7 @@ from squid_ui.runtime import (
 )
 from squid_ui.runtime.reactivity import _CURRENT
 from squid_ui.semantic import Paragraph
+from squid_ui.testing import text_component
 from squid_ui.text import Localization, Message
 from squid_ui_discord import (
     Everyone,
@@ -1663,7 +1664,7 @@ class TestActionMiddleware:
         await picker.dispatch("pick", fake_interaction(), ["a"])
 
         submit = AsyncMock()
-        form_root = MessageRoot(Component(), access=Everyone(), middleware=(middleware,), timeout=None)
+        form_root = MessageRoot(text_component(), access=Everyone(), middleware=(middleware,), timeout=None)
         spec = FormSpec("Rename", (TextField(key="name", label="Name"),))
         await form_root.dispatch_submit("rename", fake_interaction(), spec, {"name": "Ada"}, submit)
 
@@ -1701,7 +1702,7 @@ class TestErrors:
 
         spec = FormSpec("Broken", (Broken(key="broken", label="Broken"),))
         hook = AsyncMock()
-        message_root = MessageRoot(Component(), access=Everyone(), timeout=None, on_error=hook)
+        message_root = MessageRoot(text_component(), access=Everyone(), timeout=None, on_error=hook)
 
         await message_root.dispatch_submit("f", fake_interaction(), spec, {"broken": "x"}, AsyncMock())
 
