@@ -20,17 +20,16 @@ from typing import Any
 
 import discord
 
-from squid_layouts.interactions import ActionBinding
-from squid_layouts.discord.attachments import attachment_assets
 from squid_layouts.discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
+from squid_layouts.discord.attachments import attachment_assets
 from squid_layouts.discord.emoji import discord_emoji
 from squid_layouts.discord.inspection import audit_classic_payload
 from squid_layouts.discord.presentation import DiscordPresentation
 from squid_layouts.discord.renderer import RoutedItem, RoutedSelectItem
 from squid_layouts.errors import DrawInvariantError
+from squid_layouts.interactions import ActionBinding
 from squid_layouts.planning.adapter import ADAPTER_RENDER_CLASSIC, AdapterProfile
 from squid_layouts.planning.limits import CLASSIC_LIMITS, ClassicLimits
-from squid_layouts.target_types import DiscordPyAdapter
 from squid_layouts.scene.codec import SceneCodec
 from squid_layouts.scene.model import (
     PlanResult,
@@ -48,6 +47,7 @@ from squid_layouts.scene.model import (
     SceneRoutedSelect,
     SceneSelect,
 )
+from squid_layouts.target_types import DiscordPyAdapter
 
 type Control = SceneButton | SceneSelect | SceneEntitySelect
 type Wire = Callable[[Control, ActionBinding], discord.ui.Item[Any]]

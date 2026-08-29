@@ -9,8 +9,6 @@ import dataclasses
 from collections.abc import Mapping
 from textwrap import dedent
 
-import discord
-
 import squid_layouts as sl
 from squid.bot.ui import DISCORD_GREEN, DISCORD_RED, DISCORD_YELLOW, CardField, card_layout, render_presentation
 from squid.bot.voting.controls import poll_controls

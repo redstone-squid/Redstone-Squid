@@ -174,7 +174,8 @@ class TestRegionPagination:
         document = sl.paged(sl.block(sl.paragraph("x" * 120)), key="prose", chars=50)
 
         pages = [
-            sl.planning.plan(document, target=V2_TARGET, positions={"prose": sl.sources.Position(offset=index)}) for index in range(3)
+            sl.planning.plan(document, target=V2_TARGET, positions={"prose": sl.sources.Position(offset=index)})
+            for index in range(3)
         ]
 
         assert pages[0].scene.pagers[0].pages == 3

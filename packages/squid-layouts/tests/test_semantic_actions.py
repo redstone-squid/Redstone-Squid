@@ -5,17 +5,29 @@ from collections.abc import Awaitable, Callable
 import pytest
 
 from squid_layouts import fallback, truncate
-from squid_layouts.planning import plan
-from squid_layouts.semantic import ActionDisplay, Download, List, ListItem, Paragraph
-from squid_layouts.document import Asset, InlineAsset
-from squid_layouts.sources import Position
-from squid_layouts.interactions import ActionEvent, ActionPolicy
 from squid_layouts.discord import V2_TARGET
+from squid_layouts.document import Asset, InlineAsset
+from squid_layouts.interactions import ActionEvent, ActionPolicy
+from squid_layouts.planning import plan
 from squid_layouts.primitives import Lines, Paginate, Panel, Sep, Text, Variant, Variants, alts
 from squid_layouts.runtime import PresentationSession, apply_updates
 from squid_layouts.runtime.presentation import StrategyState
 from squid_layouts.scene.model import SceneButton, ScenePanel, SceneRow, SceneSelect, SceneText
-from squid_layouts.semantic import Action, ActionGroup, Actions, Emphasis, Flexibility, Link, Stack
+from squid_layouts.semantic import (
+    Action,
+    ActionDisplay,
+    ActionGroup,
+    Actions,
+    Download,
+    Emphasis,
+    Flexibility,
+    Link,
+    List,
+    ListItem,
+    Paragraph,
+    Stack,
+)
+from squid_layouts.sources import Position
 
 
 async def _act(event: ActionEvent) -> None: ...

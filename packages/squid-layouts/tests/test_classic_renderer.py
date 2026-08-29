@@ -5,7 +5,6 @@ import re
 import discord
 import pytest
 
-from squid_layouts.semantic import Actions, Link, Note, Paragraph
 from squid_layouts.discord import CLASSIC_TARGET, classic
 from squid_layouts.discord.classic import ClassicRenderer, audit_classic_payload
 from squid_layouts.discord.limits import CLASSIC_LIMITS
@@ -24,6 +23,7 @@ from squid_layouts.scene.model import (
     SceneSelect,
     SceneText,
 )
+from squid_layouts.semantic import Actions, Link, Note, Paragraph
 
 
 def scene(body) -> SceneDocument:

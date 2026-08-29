@@ -6,9 +6,9 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from squid_layouts import Component, ContextKey, PressEvent, state
-from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.discord import Everyone, Mount
 from squid_layouts.discord.testing import commit_render, fake_interaction
+from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.primitives import (
     Boundary,
     Button,

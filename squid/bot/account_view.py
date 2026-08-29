@@ -57,7 +57,9 @@ class AccountPanel(sl.Component):
     _needs_consent: bool = sl.state(default=False, persist=False)
     # No default: the empty profile needs this instance's account id.
     _profile: AccountProfile = sl.state(persist=False)
-    _profile_editor: sl.patterns.ComponentShell[sl.patterns.EditorState] | None = sl.state(None, persist=False, opaque=True)
+    _profile_editor: sl.patterns.ComponentShell[sl.patterns.EditorState] | None = sl.state(
+        None, persist=False, opaque=True
+    )
 
     def __init__(
         self,

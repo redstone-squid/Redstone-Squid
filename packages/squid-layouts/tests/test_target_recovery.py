@@ -7,18 +7,18 @@ import pytest
 
 import squid_layouts as sl
 from squid_layouts.discord import CLASSIC_TARGET, V2_TARGET, Everyone, Mount, Target
-from squid_layouts.discord.targets import TargetRegistry
 from squid_layouts.discord.adapter import discord_py_adapter_profile
 from squid_layouts.discord.durability import DEFAULT_TARGETS, ComponentRegistry, SnapshotCodec
+from squid_layouts.discord.targets import TargetRegistry
 from squid_layouts.discord.testing import commit_classic_render, commit_render
 from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.planning.limits import ClassicLimits
 from squid_layouts.planning.adapter import (
     ADAPTER_DISPATCH,
     ADAPTER_INTERACTION_DELIVERY,
     ADAPTER_MODAL_FORMS,
     ADAPTER_RENDER_CLASSIC,
 )
+from squid_layouts.planning.limits import ClassicLimits
 
 
 class Screen(sl.Component):
@@ -134,12 +134,8 @@ class TestRecovery:
         assert restored.target is custom
 
     def test_a_superset_adapter_recovers_with_the_recorded_planning_capabilities(self) -> None:
-        mount_capabilities = frozenset(
-            {ADAPTER_RENDER_CLASSIC, ADAPTER_DISPATCH, ADAPTER_INTERACTION_DELIVERY}
-        )
-        old_profile = discord_py_adapter_profile(
-            "old", ">=2.7,<3", capabilities=mount_capabilities
-        )
+        mount_capabilities = frozenset({ADAPTER_RENDER_CLASSIC, ADAPTER_DISPATCH, ADAPTER_INTERACTION_DELIVERY})
+        old_profile = discord_py_adapter_profile("old", ">=2.7,<3", capabilities=mount_capabilities)
         current_profile = discord_py_adapter_profile(
             "current",
             ">=2.7,<3",
@@ -155,17 +151,13 @@ class TestRecovery:
         assert ADAPTER_MODAL_FORMS not in restored.target.capabilities
 
     def test_recovery_rejects_a_missing_recorded_adapter_capability(self) -> None:
-        mount_capabilities = frozenset(
-            {ADAPTER_RENDER_CLASSIC, ADAPTER_DISPATCH, ADAPTER_INTERACTION_DELIVERY}
-        )
+        mount_capabilities = frozenset({ADAPTER_RENDER_CLASSIC, ADAPTER_DISPATCH, ADAPTER_INTERACTION_DELIVERY})
         old_profile = discord_py_adapter_profile(
             "old",
             ">=2.7,<3",
             capabilities=mount_capabilities | {ADAPTER_MODAL_FORMS},
         )
-        current_profile = discord_py_adapter_profile(
-            "current", ">=2.7,<3", capabilities=mount_capabilities
-        )
+        current_profile = discord_py_adapter_profile("current", ">=2.7,<3", capabilities=mount_capabilities)
         components, snapshot = captured(Target.classic(adapter=old_profile))
         targets = TargetRegistry(Target.classic(adapter=current_profile), builtins=False)
 

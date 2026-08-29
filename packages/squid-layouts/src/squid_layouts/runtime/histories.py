@@ -11,9 +11,9 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from squid_layouts.interactions import ActionEvent
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.factories import action, action_group
+from squid_layouts.interactions import ActionEvent
 from squid_layouts.runtime.reactivity import (
     StateDelta,
     block_writes,

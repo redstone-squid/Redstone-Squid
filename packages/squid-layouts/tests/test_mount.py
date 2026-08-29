@@ -16,20 +16,22 @@ import pytest
 from discord.webhook.async_ import AsyncWebhookAdapter, async_context
 
 import squid_layouts as sl
-from squid_layouts import ActionEvent, Component, Document, LayoutNode, PressEvent, SelectionEvent, computed, resource, state
-from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.forms import FormField, FormSpec, TextField
-from squid_layouts.interactions import ActionKind, ActionMiddleware, ActionPolicy, ActionProceed, ActionRequest
-from squid_layouts.runtime import Failed, Pending, ReactiveWriteError, Ready, ResourceDelivery, batch, transaction
-from squid_layouts.semantic import Paragraph
-from squid_layouts.document import Asset, InlineAsset
-from squid_layouts.text import Localization, Message
+from squid_layouts import (
+    ActionEvent,
+    Component,
+    Document,
+    LayoutNode,
+    PressEvent,
+    SelectionEvent,
+    computed,
+    resource,
+    state,
+)
 from squid_layouts import form as sl_form
 from squid_layouts.chrome import LOCALIZATION_CONTEXT, Chrome
 from squid_layouts.discord import Everyone, Mount, Owner, PauseUpdates, Reactor, RenewEphemeral, Users, delivery
 from squid_layouts.discord.access import Allowed, Check, Denied
-from squid_layouts.discord.mount import MountLifecycle
-from squid_layouts.discord.mount import _BusyPaint, _custom_id
+from squid_layouts.discord.mount import MountLifecycle, _BusyPaint, _custom_id
 from squid_layouts.discord.testing import (
     assert_within_limits,
     commit_render,
@@ -37,6 +39,10 @@ from squid_layouts.discord.testing import (
     fake_interaction,
     fake_message,
 )
+from squid_layouts.document import Asset, InlineAsset
+from squid_layouts.errors import LayoutInvariantError
+from squid_layouts.forms import FormField, FormSpec, TextField
+from squid_layouts.interactions import ActionKind, ActionMiddleware, ActionPolicy, ActionProceed, ActionRequest
 from squid_layouts.primitives import (
     ActionGroup,
     Button,
@@ -57,8 +63,19 @@ from squid_layouts.profiling import (
     RuntimeTrace,
     TraceOutcome,
 )
-from squid_layouts.runtime import ComponentRuntime
+from squid_layouts.runtime import (
+    ComponentRuntime,
+    Failed,
+    Pending,
+    ReactiveWriteError,
+    Ready,
+    ResourceDelivery,
+    batch,
+    transaction,
+)
 from squid_layouts.runtime.reactivity import _CURRENT
+from squid_layouts.semantic import Paragraph
+from squid_layouts.text import Localization, Message
 
 
 class Counter(Component):
@@ -3630,7 +3647,8 @@ class TestBusyFeedback:
         class Idle(Component):
             def render(self):
                 return sl.actions(
-                    sl.action("Go", self.go, key="go", feedback=sl.interactions.Feedback(pending="Working…")), key="panel"
+                    sl.action("Go", self.go, key="go", feedback=sl.interactions.Feedback(pending="Working…")),
+                    key="panel",
                 )
 
             async def go(self, event: ActionEvent) -> None:

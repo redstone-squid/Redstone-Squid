@@ -22,21 +22,6 @@ from typing import Any, Protocol, cast, runtime_checkable
 import anyio
 import discord
 
-from squid_layouts.interactions import (
-    ActionBinding,
-    ActionEvent,
-    ActionKind,
-    ActionMiddleware,
-    ActionPolicy,
-    ActionProceed,
-    ActionRequest,
-    Actor,
-    EntitySelectionEvent,
-    Feedback,
-    PressEvent,
-    SelectionEvent,
-    SubmitEvent,
-)
 from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME, LOCALIZATION_CONTEXT, Chrome, localize_chrome
 from squid_layouts.discord import delivery as deliver
 from squid_layouts.discord import live
@@ -56,14 +41,29 @@ from squid_layouts.entity import ChannelType, EntityKind, EntityRef, EntityType
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import FormBinding, FormSpec, FormValidationPolicy, SubmitHandler
 from squid_layouts.guards import GuardLedger
+from squid_layouts.interactions import (
+    ActionBinding,
+    ActionEvent,
+    ActionKind,
+    ActionMiddleware,
+    ActionPolicy,
+    ActionProceed,
+    ActionRequest,
+    Actor,
+    EntitySelectionEvent,
+    Feedback,
+    PressEvent,
+    SelectionEvent,
+    SubmitEvent,
+)
 from squid_layouts.palette import DEFAULT_PALETTE, Palette
-from squid_layouts.planning.limits import LIMITS, ClassicLimits, DiscordLimits, V2Limits
 from squid_layouts.planning.adapter import (
     ADAPTER_DISPATCH,
     ADAPTER_INTERACTION_DELIVERY,
     ADAPTER_RENDER_CLASSIC,
     ADAPTER_RENDER_V2,
 )
+from squid_layouts.planning.limits import LIMITS, ClassicLimits, DiscordLimits, V2Limits
 from squid_layouts.planning.navigation import (
     NAV_FACTORY_CONTEXT,
     NavFactory,
@@ -71,7 +71,6 @@ from squid_layouts.planning.navigation import (
     NavigationState,
     default_nav,
 )
-from squid_layouts.target_types import DiscordPyAdapter
 from squid_layouts.primitives.nodes import Button, Node, Row
 from squid_layouts.profiling import (
     ActionOutcome,
@@ -95,6 +94,7 @@ from squid_layouts.runtime.owner import ComponentRuntime
 from squid_layouts.runtime.presentation import PresentationSession, SessionUpdate, apply_updates
 from squid_layouts.runtime.reactivity import StateDelta, on_action_commit, readonly_transaction, transaction
 from squid_layouts.runtime.resources import Resource, ResourceDelivery
+from squid_layouts.runtime.topics import Address
 from squid_layouts.scene.model import (
     PlanMetrics,
     PlanReport,
@@ -106,8 +106,8 @@ from squid_layouts.scene.model import (
 )
 from squid_layouts.semantic import Status
 from squid_layouts.sources import Position
+from squid_layouts.target_types import DiscordPyAdapter
 from squid_layouts.text import NEUTRAL, Localization, TextLike, resolve_text
-from squid_layouts.runtime.topics import Address
 
 logger = logging.getLogger(__name__)
 _NOOP_PROFILER = NoOpProfiler()

@@ -20,8 +20,8 @@ from squid_layouts.planning.adapter import (
     ExtensionAdapter,
     PreparedExtension,
 )
-from squid_layouts.target_types import DiscordPy27Adapter, DiscordPyAdapter
 from squid_layouts.planning.target import TargetProfile
+from squid_layouts.target_types import DiscordPy27Adapter, DiscordPyAdapter
 
 
 class _DiscordItemExtension:
@@ -76,9 +76,7 @@ def discord_py_adapter_profile(
     )
 
 
-def require_discord_py_capability(
-    profile: AdapterProfile[DiscordPyAdapter], capability: str, operation: str
-) -> None:
+def require_discord_py_capability(profile: AdapterProfile[DiscordPyAdapter], capability: str, operation: str) -> None:
     """Verify the selected profile and installed discord.py at an adapter boundary."""
     if capability not in profile.capabilities:
         message = f"adapter profile {profile.name!r} cannot {operation}; it lacks {capability!r}"

@@ -4,7 +4,6 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from typing import TypedDict, Unpack
 
-from squid_layouts.interactions import ActionMiddleware
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.discord.access import AccessPolicy
 from squid_layouts.discord.mount import (
@@ -16,6 +15,7 @@ from squid_layouts.discord.mount import (
     _monotonic,
 )
 from squid_layouts.discord.target import V2_TARGET, Target
+from squid_layouts.interactions import ActionMiddleware
 from squid_layouts.palette import DEFAULT_PALETTE, Palette
 from squid_layouts.planning.navigation import NavFactory
 from squid_layouts.profiling import Profiler

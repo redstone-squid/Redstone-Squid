@@ -14,11 +14,11 @@ import discord
 
 import squid_layouts as sl
 from squid_layouts import Component, resource, state
-from squid_layouts.runtime import ResourceDelivery, Topic, TopicBus
 from squid_layouts.discord import Everyone, Mount, Reactor
 from squid_layouts.discord.delivery import DeliveryReceipt, handle_for
 from squid_layouts.discord.testing import delivered_to, fake_message
 from squid_layouts.primitives import Text
+from squid_layouts.runtime import ResourceDelivery, Topic, TopicBus
 
 BUILD = Topic("build", "1")
 OTHER = Topic("build", "2")

@@ -3,11 +3,10 @@
 import pytest
 
 from squid_layouts import best_effort, optional, truncate
-from squid_layouts.errors import UnsolvableLayoutError
-from squid_layouts.planning import plan
-from squid_layouts.semantic import Importance, Paragraph
 from squid_layouts.discord import V2_TARGET
-from squid_layouts.planning import SolveNoteCode
+from squid_layouts.errors import UnsolvableLayoutError
+from squid_layouts.planning import SolveNoteCode, plan
+from squid_layouts.semantic import Importance, Paragraph
 
 
 def test_semantic_prose_is_lossless_by_default() -> None:

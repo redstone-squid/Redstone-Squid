@@ -4,11 +4,10 @@ from collections.abc import Awaitable, Callable
 
 import squid_layouts as sl
 from squid_layouts import TextLike
-from squid_layouts.forms import FormLike, SubmitHandler
-from squid_layouts.interactions import ActionPolicy
-from squid_layouts.planning import plan
-from squid_layouts.interactions import Actor, SelectionEvent, Visibility
 from squid_layouts.discord import V2_TARGET
+from squid_layouts.forms import FormLike, SubmitHandler
+from squid_layouts.interactions import ActionPolicy, Actor, SelectionEvent, Visibility
+from squid_layouts.planning import plan
 from squid_layouts.runtime import PresentationSession
 from squid_layouts.scene.model import SceneSelect, SceneText
 from squid_layouts.semantic import (
@@ -129,7 +128,9 @@ def _disclosed(result) -> bool:
 
 async def test_a_managed_details_seed_applies_once_and_then_the_session_owns_it() -> None:
     session = PresentationSession()
-    document = Details("debug", sl.semantic.Summary("Debug details"), (Paragraph("hidden body"),), Managed(initial=True))
+    document = Details(
+        "debug", sl.semantic.Summary("Debug details"), (Paragraph("hidden body"),), Managed(initial=True)
+    )
 
     assert _disclosed(plan(document, target=V2_TARGET, session=session))
 
@@ -143,7 +144,10 @@ async def test_a_controlled_details_reports_the_requested_state_and_ignores_the_
     session.disclose("debug", open_=True)
     seen, record = _recorder()
     document = Details(
-        "debug", sl.semantic.Summary("Debug details"), (Paragraph("hidden body"),), Controlled(value=False, on_change=record)
+        "debug",
+        sl.semantic.Summary("Debug details"),
+        (Paragraph("hidden body"),),
+        Controlled(value=False, on_change=record),
     )
 
     result = plan(document, target=V2_TARGET, session=session)

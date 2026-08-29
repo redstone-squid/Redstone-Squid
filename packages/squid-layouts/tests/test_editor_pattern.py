@@ -52,7 +52,9 @@ async def test_immediate_commit_reports_complete_values_and_all_changed_keys() -
     commits: list[tuple[sl.patterns.EditorValues, frozenset[str]]] = []
 
     async def committed(
-        _event: sl.patterns.PatternEvent[sl.patterns.EditorState], values: sl.patterns.EditorValues, changed: frozenset[str]
+        _event: sl.patterns.PatternEvent[sl.patterns.EditorState],
+        values: sl.patterns.EditorValues,
+        changed: frozenset[str],
     ) -> None:
         commits.append((values, changed))
 

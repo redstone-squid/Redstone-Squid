@@ -9,8 +9,12 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
-from typing import Any, TYPE_CHECKING, cast, overload
+from typing import TYPE_CHECKING, Any, cast, overload
 
+from squid_layouts.emoji import EmojiLike, normalize_emoji
+from squid_layouts.entity import ChannelType, EntityRef, EntityType, supports_entity
+from squid_layouts.forms import FormBinding
+from squid_layouts.guards import Guard
 from squid_layouts.interactions import (
     ActionBinding,
     ActionPolicy,
@@ -19,10 +23,6 @@ from squid_layouts.interactions import (
     PressHandler,
     SelectionHandler,
 )
-from squid_layouts.emoji import EmojiLike, normalize_emoji
-from squid_layouts.entity import ChannelType, EntityRef, EntityType, supports_entity
-from squid_layouts.forms import FormBinding
-from squid_layouts.guards import Guard
 from squid_layouts.primitives.constraints import Alt, Never, Overflow, Spill, Truncate
 from squid_layouts.primitives.styles import ActionStyle, Color
 from squid_layouts.target_types import ClassicTarget, ComponentsV2Target, DiscordTarget, Renderable
@@ -429,7 +429,9 @@ class Gallery(Renderable[ComponentsV2Target]):
     items: tuple[str | GalleryItem, ...]
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "items", tuple(GalleryItem(item) if isinstance(item, str) else item for item in self.items))
+        object.__setattr__(
+            self, "items", tuple(GalleryItem(item) if isinstance(item, str) else item for item in self.items)
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -439,7 +441,9 @@ class MediaCollection(Renderable[ComponentsV2Target]):
     items: tuple[str | GalleryItem, ...]
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "items", tuple(GalleryItem(item) if isinstance(item, str) else item for item in self.items))
+        object.__setattr__(
+            self, "items", tuple(GalleryItem(item) if isinstance(item, str) else item for item in self.items)
+        )
 
 
 @dataclass(frozen=True, slots=True)

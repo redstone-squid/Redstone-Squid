@@ -2,6 +2,8 @@
 
 from typing import Any, assert_type
 
+from squid_layouts import fallback
+from squid_layouts.discord import Target
 from squid_layouts.planning import (
     AdapterProfile,
     ClassicTarget,
@@ -11,15 +13,13 @@ from squid_layouts.planning import (
     DiscordPyAdapter,
     DiscordTarget,
     Renderable,
+    TargetProfile,
     classic_target,
     components_v2_target,
+    plan,
 )
-from squid_layouts.discord import Target
-from squid_layouts.scene.model import PlanResult, SceneClassicMessage, SceneComponentsV2
-from squid_layouts.planning import TargetProfile
-from squid_layouts import fallback
-from squid_layouts.planning import plan
 from squid_layouts.primitives import Card, Panel, Text, Variants
+from squid_layouts.scene.model import PlanResult, SceneClassicMessage, SceneComponentsV2
 from squid_layouts.semantic import FallbackContent
 
 
