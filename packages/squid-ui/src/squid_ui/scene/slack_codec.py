@@ -11,6 +11,7 @@ from squid_ui.scene.slack import (
     SlackActions,
     SlackAlert,
     SlackAlertStyle,
+    SlackAssetRef,
     SlackBlock,
     SlackBody,
     SlackButton,
@@ -159,19 +160,23 @@ def _route_from(value: object) -> SlackRouteRef | None:
 
 def _element(value: SlackElement) -> dict[str, object]:
     match value:
-        case SlackButton(label, action, route, url, held_value, style):
+        case SlackButton(label, action, route, url, asset, held_value, style):
             return {
                 "kind": "button",
                 "label": _text(label),
                 "action": _action(action),
                 "route": _route(route),
                 "url": url,
+                "asset": (
+                    None if asset is None else {"key": asset.key, "name": asset.name, "media_type": asset.media_type}
+                ),
                 "value": held_value,
                 "style": style.value,
             }
         case SlackSelect(
             action,
             route,
+            action_id,
             kind,
             placeholder,
             options,
@@ -184,6 +189,7 @@ def _element(value: SlackElement) -> dict[str, object]:
                 "kind": "select",
                 "action": _action(action),
                 "route": _route(route),
+                "action_id": action_id,
                 "select_kind": kind.value,
                 "placeholder": None if placeholder is None else _text(placeholder),
                 "options": [_option(option) for option in options],
@@ -247,11 +253,21 @@ def _element_from(value: object) -> SlackElement:
     placeholder = raw.get("placeholder")
     match kind:
         case "button":
+            asset = _optional_object(raw, "asset")
             return SlackButton(
                 _text_from(raw.get("label")),
                 _action_from(raw.get("action")),
                 _route_from(raw.get("route")),
                 _optional_string(raw, "url"),
+                (
+                    None
+                    if asset is None
+                    else SlackAssetRef(
+                        _string(asset, "key"),
+                        _string(asset, "name"),
+                        _string(asset, "media_type"),
+                    )
+                ),
                 _optional_string(raw, "value"),
                 SlackButtonStyle(_string(raw, "style")),
             )
@@ -259,6 +275,7 @@ def _element_from(value: object) -> SlackElement:
             return SlackSelect(
                 _action_from(raw.get("action")),
                 _route_from(raw.get("route")),
+                _optional_string(raw, "action_id"),
                 SlackSelectKind(_string(raw, "select_kind")),
                 None if placeholder is None else _text_from(placeholder),
                 tuple(_option_from(option) for option in _array(raw, "options")),
