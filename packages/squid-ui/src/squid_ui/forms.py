@@ -3,6 +3,7 @@
 import inspect
 import math
 import re
+from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
 from dataclasses import field as dataclass_field
@@ -79,7 +80,7 @@ def _invalid(message: str) -> NoReturn:
 
 
 @dataclass(frozen=True, slots=True)
-class FormField[ValueT]:
+class FormField[ValueT](ABC):
     """One typed value in a portable form schema.
 
     The same object can be used dynamically in :class:`FormSpec` or as a descriptor on
@@ -118,13 +119,13 @@ class FormField[ValueT]:
         label = self.label if self.label is not None else name.replace("_", " ").capitalize()
         return replace(self, key=self.key or name, label=label)
 
+    @abstractmethod
     def parse(self, raw: object) -> ValueT | None:
         """Parse one submitted adapter value.
 
         Raise :class:`FormValueError` for anything the reader can correct. Every other
         exception is a programmer error and is left to propagate.
         """
-        raise NotImplementedError
 
     def format(self, value: object) -> object:
         """Convert a stored value back to an adapter-neutral prefill value.

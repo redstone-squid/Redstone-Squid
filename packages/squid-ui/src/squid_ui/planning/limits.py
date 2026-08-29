@@ -21,6 +21,7 @@ embed may hold, and a `MessageLimits` subclass the message-wide budgets that mod
 knows. A shared planning layer takes a `MessageLimits` and may touch only what it declares.
 """
 
+from abc import ABC, abstractmethod
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, fields, is_dataclass, replace
 from typing import Self
@@ -108,7 +109,7 @@ def _cap_values(value: object, prefix: str = "") -> Iterator[tuple[str, object]]
 
 
 @dataclass(frozen=True, slots=True)
-class MessageLimits:
+class MessageLimits(ABC):
     """The message-wide budgets every dialect obeys, whichever component mode it is in.
 
     Abstract: message-wide budgets live on the subclasses, because a mode-specific strategy
@@ -129,23 +130,24 @@ class MessageLimits:
     """
 
     @property
+    @abstractmethod
     def capacities(self) -> Mapping[Axis, int]:
         """Every message-wide budget this mode declares, with the room it has left.
 
         The limits own this rather than the target, because the caps and the names for
         them have to agree and there is no way to keep two declarations in step.
         """
-        raise NotImplementedError
 
+    @abstractmethod
     def with_capacities(self, reductions: Mapping[Axis, int]) -> Self:
         """These limits with each named amount withheld from that axis, clamped at zero.
 
         Axes this mode does not budget are ignored; `Target.reserve` rejects those by name
         before it gets here, so reaching this method with one is already a caller's bug.
         """
-        raise NotImplementedError
 
     @property
+    @abstractmethod
     def text_axes(self) -> Mapping[Axis, int]:
         """Every independent text pool this mode budgets, by axis.
 
@@ -153,8 +155,8 @@ class MessageLimits:
         allocator runs once per pool over the units tagged to it rather than once over a
         single total.
         """
-        raise NotImplementedError
 
+    @abstractmethod
     def fits_controls(self, controls: int, rows: int) -> bool:
         """Whether a message of this mode could hold that many controls in that many rows.
 
@@ -163,12 +165,11 @@ class MessageLimits:
         component budget on rows and buttons alike, while a classic message counts view
         children and action rows against separate caps.
         """
-        raise NotImplementedError
 
     @property
+    @abstractmethod
     def component_budget(self) -> int:
         """The most components one page of this mode may spend."""
-        raise NotImplementedError
 
     def digest(self) -> tuple[tuple[str, object], ...]:
         """Every cap these limits hold, by dotted name in name order, for a stable digest.
