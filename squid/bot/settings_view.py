@@ -73,7 +73,7 @@ class SettingsCapabilities:
 class SettingsPanel(sd.Screen):
     """A semantic, mount-owned settings workspace."""
 
-    session = "settings"
+    session_name = "settings"
     scope = sd.ScopeKind.USER_GUILD
     timeout = SESSION_SECONDS
 

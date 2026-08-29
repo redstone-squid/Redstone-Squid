@@ -9,7 +9,7 @@ message a reader gets is the demonstration and not a code listing.
 import asyncio
 from collections.abc import Awaitable, Callable, Iterable, Sequence
 from datetime import UTC, datetime
-from functools import cache, partial
+from functools import partial
 from typing import TYPE_CHECKING, ClassVar, Literal, Never
 
 from discord import app_commands
@@ -1245,27 +1245,13 @@ class Lobby(sd.Screen):
     roster of its own -- it reads `session.members` and asks for a redraw after each change.
     """
 
-    session: ClassVar[str] = "showcase-lobby"
+    session_name: ClassVar[str] = "showcase-lobby"
     scope = sd.ScopeKind.GUILD
     capacity = 4
     quota = 1
+    access = sd.Everyone()
     visibility = "public"
     timeout = None
-
-    @classmethod
-    @cache
-    def spec(cls) -> sd.SessionSpec:
-        """Open the shared roster to everyone while retaining Screen's session policy."""
-        return sd.SessionSpec(
-            cls.session,
-            scope=cls.scope,
-            admission=cls.admission,
-            capacity=cls.capacity,
-            quota=cls.quota,
-            domain=cls.domain,
-            access=lambda _context: sd.Everyone(),
-            options={"timeout": cls.timeout},
-        )
 
     started_with: int | None = sl.state(None)
     """How many players the game began with. The only fact here that *is* view state."""
@@ -1332,7 +1318,7 @@ class Lobby(sd.Screen):
         guild = self.opening.guild
         if guild is None:
             return None
-        sessions = self.opening.runtime.sessions.get(SessionKey.guild(self.session, guild.id))
+        sessions = self.opening.runtime.sessions.get(SessionKey.guild(self.session_name, guild.id))
         return sessions[0] if sessions else None
 
 

@@ -49,7 +49,8 @@ Session policy is present only when `session_name` is not `None`: `scope`, `admi
 policy fails when its class is created. Dedicated root fields may not also appear in
 `root_options`.
 
-`show()` resolves access once and applies that exact policy to either opening path. It rejects
+`show()` keeps every opening option keyword-only, resolves access once, and applies that exact
+policy to either opening path. It rejects
 `parent` and `key` for direct screens, and rejects their ambiguous combination for session
 screens. `wait` reaches both delivery paths; this adds the corresponding keyword to
 `Invocation.mount()`.
