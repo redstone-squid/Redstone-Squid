@@ -10,7 +10,6 @@ from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.ui.opening import open_build_editor, prepare_build_editor, show_build_editor
 from squid.bot.ui import error_node, text_node
-from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.builds.application import BuildService
 from squid.builds.domain import DoorOrientationLiteral
 from squid.core.i18n import _
@@ -41,26 +40,6 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
         )
         self.bot.tree.add_command(self.edit_ctx_menu)
 
-    @autocompletes(
-        build_id="builds",
-        pattern=suggests("approved_patterns", multi=True),
-        versions="approved_source_versions",
-        restrictions=suggests("approved_restrictions", multi=True),
-        creators=suggests("creators", multi=True),
-    )
-    @BuildCommandGroup.build_hybrid_group.app_command.command(name="edit")  # type: ignore
-    @app_commands.rename(build_id="id")
-    @app_commands.describe(
-        build_id=app_commands.locale_str(_("The ID of the build to edit.")),
-        door_size=app_commands.locale_str(_("The door opening, e.g. `2x2`. Width x height (x depth).")),
-        door_type=app_commands.locale_str(_("Door, Skydoor, or Trapdoor.")),
-        pattern=app_commands.locale_str(_("Pattern types, comma separated. For example: full lamp, funnel.")),
-        build_size=app_commands.locale_str(_("The whole build, e.g. `5x7x4`. Width x height (x depth).")),
-        versions=app_commands.locale_str(_("Versions the build works in, like `1.17 - 1.18.1, 1.20+`.")),
-        restrictions=app_commands.locale_str(_("Comma separated. Replaces every restriction on the build.")),
-        creators=app_commands.locale_str(_("In-game names of the creator(s), comma separated.")),
-        notes=app_commands.locale_str(_("Anything a reader should know about the build.")),
-    )
     async def edit_build(
         self,
         interaction: discord.Interaction[BotT],

@@ -86,7 +86,7 @@ def render_delivery(delivery: PendingNotificationDelivery, site_url: str | None)
     if delivery.kind.value == "staff_build_submitted":
         message = "A new build is awaiting staff review."
         if isinstance(build_id, int):
-            return f"{message}\nOpen it in Discord with `/build view id:{build_id}`."
+            return f"{message}\nOpen it in Discord with `/build browse id:{build_id}`."
         return message
     build_link = f"{site_url}/builds/{build_id}" if site_url is not None and isinstance(build_id, int) else None
     if delivery.kind.value == "record_gained":
