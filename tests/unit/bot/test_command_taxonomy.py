@@ -99,8 +99,6 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "refresh",
     ),
     "archive": (),
-    # `error` is a hybrid group with a `show` fallback, so bare `error <reference>` works.
-    "error": ("clear", "recent"),
     # The schematic tools all sit under `build schematic`, which is what their
     # permission nodes always said (docs/plans/command-redesign/06-build.md).
     "build": (
@@ -193,7 +191,7 @@ PICKER_VISIBILITY: dict[str, frozenset[str]] = {
     # admin can override any of these per command in Server Settings; the bits below
     # are chosen to match the operation, so the override is rarely needed.
     "archive": frozenset({"manage_messages"}),
-    "error": frozenset({"manage_guild"}),
+    "errors": frozenset({"manage_guild"}),
     "perm": frozenset({"manage_guild"}),
     "records": frozenset({"manage_guild"}),
     "redstoner": frozenset({"manage_roles"}),
@@ -207,7 +205,8 @@ PICKER_VISIBILITY: dict[str, frozenset[str]] = {
 
 def _default_permissions(command: AnyCommand) -> frozenset[str] | None:
     """The Discord permissions gating a command's visibility, by name."""
-    permissions = getattr(getattr(command, "app_command", None), "default_permissions", None)
+    application = getattr(command, "app_command", None) or command
+    permissions = getattr(application, "default_permissions", None)
     if not isinstance(permissions, discord.Permissions):
         return None
     return frozenset(name for name, enabled in permissions if enabled)
@@ -317,11 +316,6 @@ def test_sensitive_commands_declare_the_intended_permission_nodes() -> None:
     assert _nodes(starboard.__cog_commands__, "starboard create") == {"starboard.board.create"}
     assert _nodes(starboard.__cog_commands__, "starboard recount") == {"starboard.board.recount"}
 
-    diagnostics = Diagnostics.__new__(Diagnostics)
-    assert _nodes(diagnostics.__cog_commands__, "error") == {"diagnostics.error.read"}
-    assert _nodes(diagnostics.__cog_commands__, "error recent") == {"diagnostics.error.read"}
-    assert _nodes(diagnostics.__cog_commands__, "error clear") == {"diagnostics.error.clear"}
-
     admin = Admin.__new__(Admin)
     assert _nodes(admin.__cog_commands__, "tag approve") == {"tag.proposal.approve"}
     assert _nodes(admin.__cog_commands__, "archive") == {"message.archive.create"}
@@ -383,7 +377,7 @@ def test_staff_groups_are_hidden_from_non_staff_pickers() -> None:
     visibility = {
         command.qualified_name: names
         for cog in PUBLIC_COGS
-        for command in _commands_of(cog)
+        for command in (*_commands_of(cog), *cast(Any, cog).__cog_app_commands__)
         if command.parent is None and (names := _default_permissions(command)) is not None
     }
 
@@ -404,22 +398,6 @@ def test_subcommands_do_not_claim_a_visibility_they_would_not_get() -> None:
     }
 
     assert mislabelled == set()
-
-
-def test_the_error_group_binds_a_reference_from_the_prefix_form() -> None:
-    """`!error <reference>` works, contrary to what the redesign audit recorded.
-
-    `HybridGroup.__init__` always sets `invoke_without_command`, and `Group.invoke` rewinds the
-    argument view when the first word is not a subcommand, so the fallback's parameter binds on
-    the prefix side too. Pinned because converting the group away from `hybrid_group` would take
-    the prefix form away with nothing else failing.
-    """
-    cog = Diagnostics.__new__(Diagnostics)
-    error = cast(HybridGroup, _command(cog.__cog_commands__, "error"))
-
-    assert error.invoke_without_command is True
-    assert error.fallback == "show"
-    assert "reference" in error.clean_params
 
 
 def test_polls_are_one_app_only_command() -> None:
