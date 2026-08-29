@@ -7,7 +7,7 @@ import pytest
 from babel.messages.catalog import Catalog
 from babel.messages.mofile import write_mo
 
-from squid.core.extract import deferred_msgid
+from squid.core.extract import deferred_msgid, locale_str_msgid
 from squid.core.i18n import (
     _catalog,
     locales_dir,
@@ -31,6 +31,13 @@ def test_deferred_msgid_preserves_static_format_specifications() -> None:
     call = next(node for node in ast.walk(tree) if isinstance(node, ast.Call))
 
     assert deferred_msgid(call) == "Took {seconds:.1f}s"
+
+
+def test_locale_str_msgid_extracts_discord_command_text() -> None:
+    tree = ast.parse('app_commands.locale_str("Which build to open.")')
+    call = next(node for node in ast.walk(tree) if isinstance(node, ast.Call))
+
+    assert locale_str_msgid(call) == "Which build to open."
 
 
 def test_tr_template_defers_interpolation_until_resolution() -> None:
