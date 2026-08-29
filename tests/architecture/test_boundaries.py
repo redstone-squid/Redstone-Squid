@@ -325,8 +325,8 @@ def test_patterns_package_is_transport_free() -> None:
 
 
 def test_only_the_bot_transport_uses_the_ui_packages() -> None:
-    """Presentation is `squid.bot`'s business; no other host layer may reach for UI packages."""
-    for package in ("squid_ui*", "squid_ui_discord*", "squid_ui_slack*", "squid_ui_widgets*"):
+    """Presentation is `squid.bot`'s business; shared deferred text is the sole exception."""
+    for package in ("squid_ui_discord*", "squid_ui_slack*", "squid_ui_widgets*"):
         (
             archrule(f"{package} is a presentation concern")
             .match("squid*")
@@ -335,15 +335,34 @@ def test_only_the_bot_transport_uses_the_ui_packages() -> None:
             .check("squid", only_direct_imports=True)
         )
 
+    violations: list[str] = []
+    for path in Path("squid").rglob("*.py"):
+        if path.parts[:2] == ("squid", "bot"):
+            continue
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Import):
+                imports = (alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module is not None:
+                imports = (node.module,)
+            else:
+                continue
+            violations.extend(
+                f"{path}:{node.lineno}: {imported}"
+                for imported in imports
+                if imported.startswith("squid_ui") and imported != "squid_ui.text"
+            )
 
-def test_layouts_package_carries_no_translation_markers() -> None:
-    """Babel only extracts from squid/**, so a `_(...)` literal in the package would silently
-    drop out of the catalogue. All user-facing text must enter through Chrome, pre-translated."""
+    assert violations == []
+
+
+def test_tr_is_the_only_direct_translation_entry_point() -> None:
+    """Translation spelling stays uniform across the application and UI packages."""
+    retired = {"_", "t", "translate", "ntranslate", "L"}
     violations = [
-        f"{path}:{node.lineno}"
-        for path in Path("packages/squid-ui/src").rglob("*.py")
+        f"{path}:{node.lineno}: {node.func.id}"
+        for path in _scanned_files()
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_"
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in retired
     ]
 
     assert violations == []

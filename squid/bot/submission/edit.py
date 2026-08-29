@@ -6,7 +6,6 @@ import discord
 from discord import app_commands
 
 import squid_ui_discord as sd
-from squid.bot.i18n import resolve_locale
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.ui.opening import open_build_editor, prepare_build_editor, show_build_editor
 from squid.bot.ui import error_node, text_node
@@ -57,7 +56,7 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
         """Edit a build. Whatever you fill in is staged; the workspace opens for the rest."""
         await interaction.response.defer(ephemeral=True)
         invocation = await sd.Invocation.of(interaction)
-        await resolve_locale(interaction, self.bot.services.settings)
+
         build = await self.builds.get(build_id)
         if build is None:
             await invocation.reply(
@@ -112,7 +111,7 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
         """A context menu command to edit a build."""
         await interaction.response.defer(ephemeral=True)
         invocation = await sd.Invocation.of(interaction)
-        await resolve_locale(interaction, self.bot.services.settings)
+
         if message.author.id != self.bot.user.id:  # type: ignore
             await invocation.reply(text_node(tr("This does not look like a build.")), visibility="personal")
             return
