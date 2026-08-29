@@ -54,7 +54,7 @@ from squid_ui.planning.semantic_adaptation.lowering import (
     lower_semantics,
 )
 from squid_ui.planning.semantic_adaptation.model import FallbackAxis, SemanticDecisions, SemanticLowering
-from squid_ui.planning.target import Target
+from squid_ui.planning.target import AnyTarget, Target
 from squid_ui.primitives.constraints import Paginate
 from squid_ui.primitives.nodes import (
     Break,
@@ -129,17 +129,23 @@ def _dynamic_values(value: object) -> tuple[object, ...]:
 def _program_dynamic_values(
     document: Document[Any],
     *,
-    target: object,
-    limits: object,
+    target: AnyTarget,
+    limits: MessageLimits,
     chrome: Chrome,
-    localization: object,
-    palette: object,
-    presentation: object,
-    positions: object,
+    localization: Localization,
+    palette: Palette,
+    presentation: PresentationState,
+    positions: Mapping[str, Position] | None,
     nav: PlannedNav | None,
-    capabilities: object,
+    capabilities: frozenset[str],
     planned: scene.Scene[Any],
 ) -> tuple[object, ...]:
+    """Every process-local value a compiled template must be handed back to be replayed.
+
+    Typed even though the result is a heterogeneous tuple: seven of these were `object`
+    only because of where they end up, and seven interchangeable `object` keywords is
+    exactly the shape in which a swapped argument goes unnoticed.
+    """
     external = (
         target,
         limits,
