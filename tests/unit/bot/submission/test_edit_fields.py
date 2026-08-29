@@ -7,17 +7,17 @@ from squid.builds.domain import BuildCategory, DoorBuild, ExtenderBuild, Utility
 
 def test_every_edit_field_names_a_patch_field() -> None:
     """A field the patch cannot carry would only fail when the user submits."""
-    unknown = {field.attribute for field in EDIT_FIELDS} - set(BuildEditPatch.__dataclass_fields__)
+    unknown = {field.patch_key for field in EDIT_FIELDS} - set(BuildEditPatch.__dataclass_fields__)
     assert unknown == set()
 
 
 def test_edit_field_names_are_unique() -> None:
-    attributes = [field.attribute for field in EDIT_FIELDS]
+    attributes = [field.patch_key for field in EDIT_FIELDS]
     assert len(attributes) == len(set(attributes))
 
 
 def test_door_only_fields_are_offered_to_doors_alone() -> None:
-    door_only = {field.attribute for field in EDIT_FIELDS if field.categories == frozenset({BuildCategory.DOOR})}
+    door_only = {field.patch_key for field in EDIT_FIELDS if field.categories == frozenset({BuildCategory.DOOR})}
     assert door_only == {
         "door_dimensions",
         "door_orientation_type",
@@ -26,9 +26,9 @@ def test_door_only_fields_are_offered_to_doors_alone() -> None:
     }
 
     door = DoorBuild()
-    assert {field.attribute for field in EDIT_FIELDS if field.applies_to(door)} >= door_only
+    assert {field.patch_key for field in EDIT_FIELDS if field.applies_to(door)} >= door_only
     for build in (ExtenderBuild(), UtilityBuild()):
-        offered = {field.attribute for field in EDIT_FIELDS if field.applies_to(build)}
+        offered = {field.patch_key for field in EDIT_FIELDS if field.applies_to(build)}
         assert offered & door_only == set()
         # The shared fields stay available on every category.
         assert "dimensions" in offered

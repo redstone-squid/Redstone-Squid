@@ -1,7 +1,6 @@
 """Semantic submission and build-edit workspaces."""
 
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass
 from typing import Any, Literal, cast
 
 import anyio
@@ -11,7 +10,7 @@ from whenever import Instant
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
-from squid.bot.submission.ui.components import BuildField, get_text_input
+from squid.bot.submission.ui.fields import BoundBuildField, BuildFieldSpec, FieldDisplay, field_spec
 from squid.bot.ui import DISCORD_YELLOW, L, error_node
 from squid.bot.utils.permissions import allows
 from squid.bot.utils.sentinel import DEFAULT, DefaultType
@@ -21,43 +20,29 @@ from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 from squid.topics import resource_topic
 from squid_ui_discord import SessionKey
 
-
-@dataclass(frozen=True, slots=True)
-class EditFieldSpec:
-    """Describe one portable build-edit field."""
-
-    attribute: str
-    placeholder: str
-    required: bool = False
-    categories: frozenset[BuildCategory] | None = None
-
-    def applies_to(self, build: Build) -> bool:
-        return self.categories is None or build.category in self.categories
-
-
 _DOOR_ONLY = frozenset({BuildCategory.DOOR})
 
-EDIT_FIELDS: tuple[EditFieldSpec, ...] = (
-    EditFieldSpec("dimensions", "Width x Height x Depth", required=True),
-    EditFieldSpec("door_dimensions", "2x2", required=True, categories=_DOOR_ONLY),
-    EditFieldSpec("version_spec", "1.16 - 1.17.3"),
-    EditFieldSpec("door_type", "Full lamp, Funnel"),
-    EditFieldSpec("door_orientation_type", "Door, Trapdoor, Skydoor", categories=_DOOR_ONLY),
-    EditFieldSpec("wiring_placement_restrictions", "Seamless, Full Flush"),
-    EditFieldSpec("animated_restrictions", "Symmetrical, Full Sync"),
-    EditFieldSpec("component_restrictions", "Observerless"),
-    EditFieldSpec("miscellaneous_restrictions", "Directional, Locational"),
-    EditFieldSpec("normal_closing_time", "in gameticks", categories=_DOOR_ONLY),
-    EditFieldSpec("normal_opening_time", "in gameticks", categories=_DOOR_ONLY),
-    EditFieldSpec("creators_ign", "Me, My Dog"),
-    EditFieldSpec("image_urls", "any urls, comma separated"),
-    EditFieldSpec("video_urls", "any urls, comma separated"),
-    EditFieldSpec("world_download_urls", "any urls, comma separated"),
-    EditFieldSpec("completion_time", "Any time format works"),
-    EditFieldSpec("extra_user_info", "Anything a reader should know"),
-    EditFieldSpec("server_ip", "play.example.com"),
-    EditFieldSpec("coordinates", "x y z"),
-    EditFieldSpec("command_to_get_to_build", "/warp door"),
+EDIT_FIELDS: tuple[BuildFieldSpec, ...] = (
+    field_spec("dimensions", "Width x Height x Depth", required=True),
+    field_spec("door_dimensions", "2x2", required=True, categories=_DOOR_ONLY),
+    field_spec("version_spec", "1.16 - 1.17.3"),
+    field_spec("door_type", "Full lamp, Funnel"),
+    field_spec("door_orientation_type", "Door, Trapdoor, Skydoor", categories=_DOOR_ONLY),
+    field_spec("wiring_placement_restrictions", "Seamless, Full Flush"),
+    field_spec("animated_restrictions", "Symmetrical, Full Sync"),
+    field_spec("component_restrictions", "Observerless"),
+    field_spec("miscellaneous_restrictions", "Directional, Locational"),
+    field_spec("normal_closing_time", "in gameticks", categories=_DOOR_ONLY),
+    field_spec("normal_opening_time", "in gameticks", categories=_DOOR_ONLY),
+    field_spec("creators_ign", "Me, My Dog"),
+    field_spec("image_urls", "any urls, comma separated"),
+    field_spec("video_urls", "any urls, comma separated"),
+    field_spec("world_download_urls", "any urls, comma separated"),
+    field_spec("completion_time", "Any time format works"),
+    field_spec("extra_user_info", "Anything a reader should know", display=FieldDisplay.PARAGRAPH),
+    field_spec("server_ip", "play.example.com"),
+    field_spec("coordinates", "x y z"),
+    field_spec("command_to_get_to_build", "/warp door"),
 )
 """Every entry must name a BuildEditPatch field; a test pins that."""
 
@@ -409,18 +394,20 @@ class SubmissionFormComponent(sl.Component[sl.ComponentsV2Target]):
         return None if scope.cancel_called else self.value
 
 
-def _edit_form(items: Sequence[BuildField[Any]], page: int, invocation: sd.Invocation) -> sl.forms.FormSpec:
+def _edit_form(items: Sequence[BoundBuildField], page: int, invocation: sd.Invocation) -> sl.forms.FormSpec:
     fields: list[sl.forms.FormField[Any]] = []
     for item in items[5 * (page - 1) : 5 * page]:
-        field_type = sl.forms.TextAreaField if item.style is discord.TextStyle.paragraph else sl.forms.TextField
+        spec = item.spec
+        field_type = sl.forms.TextAreaField if spec.display is FieldDisplay.PARAGRAPH else sl.forms.TextField
         fields.append(
             field_type(
                 key=item.attribute,
-                label=invocation.t(L(item.display_label)),
-                placeholder=item.placeholder,
-                default=item.current_string_value,
-                required=item.required,
-                maximum=item.max_length,
+                label=invocation.t(L(spec.label)),
+                placeholder=spec.placeholder,
+                default=item.current_text,
+                required=spec.required,
+                minimum=spec.minimum,
+                maximum=spec.maximum,
             )
         )
     return sl.forms.FormSpec(invocation.t(L("Edit build, section {page}", page=page)), tuple(fields))
@@ -438,7 +425,7 @@ class BuildEditComponent(sl.Component[sl.ComponentsV2Target]):
         self,
         build: Build,
         builds: BuildService,
-        items: Sequence[BuildField[Any]] | DefaultType = DEFAULT,
+        items: Sequence[BoundBuildField] | DefaultType = DEFAULT,
         *,
         timeout: float = 300,
         node: sl.LayoutNode[sl.ComponentsV2Target] | None = None,
@@ -453,7 +440,7 @@ class BuildEditComponent(sl.Component[sl.ComponentsV2Target]):
         self.expiry_time = Instant.now().add(seconds=timeout)
         if items is DEFAULT:
             items = [
-                get_text_input(build, field.attribute, placeholder=field.placeholder, required=field.required)
+                field.bind(build)
                 for field in EDIT_FIELDS
                 if field.applies_to(build)
             ]
@@ -600,7 +587,7 @@ class BuildEditComponent(sl.Component[sl.ComponentsV2Target]):
         for item in self.items[5 * (self.page - 1) : 5 * self.page]:
             item.stage(cast(str, event.values[item.attribute]))
             if item.validation_error:
-                errors.append(f"**{item.display_label}:** {item.validation_error}")
+                errors.append(f"**{item.spec.label}:** {item.validation_error}")
         self.validation_error = "\n".join(errors) or None
         if errors:
             await event.notice(L("Fix these values before review:\n{errors}", errors="\n".join(errors)))
