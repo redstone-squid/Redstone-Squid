@@ -6,11 +6,11 @@ import pytest
 import squid_ui_discord as sd
 from squid.bot.ui import (
     CardField,
-    L,
     card_node,
     link_node,
     render_payload,
     text_node,
+    tr,
     truncate_display_text,
 )
 from tests.helpers.discord import make_message
@@ -51,7 +51,7 @@ def test_deferred_template_marker_preserves_msgid_and_values() -> None:
     page = 3
     pages = 7
 
-    message = L(t"Page {page} of {pages}")
+    message = tr(t"Page {page} of {pages}")
 
     assert message.template == "Page {page} of {pages}"
     assert message.params == {"page": 3, "pages": 7}
@@ -61,7 +61,7 @@ def test_deferred_template_marker_rejects_expression_placeholders() -> None:
     page = 3
 
     with pytest.raises(ValueError, match="placeholder name"):
-        L(t"Page {page + 1}")
+        tr(t"Page {page + 1}")
 
 
 def test_text_node_truncates_to_the_v2_display_limit() -> None:

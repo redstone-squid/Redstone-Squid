@@ -92,13 +92,13 @@ def test_localized_ui_literals_use_template_strings() -> None:
             if (
                 not isinstance(node, ast.Call)
                 or not isinstance(node.func, ast.Name)
-                or node.func.id != "L"
+                or node.func.id != "tr"
                 or not node.args
             ):
                 continue
             first = node.args[0]
             if isinstance(first, ast.Constant) and isinstance(first.value, str):
-                violations.append(f'{path}:{node.lineno}: use L(t"…") for literal UI copy')
+                violations.append(f'{path}:{node.lineno}: use tr(t"…") for literal UI copy')
             if isinstance(first, ast.TemplateStr):
                 violations.extend(
                     f"{path}:{node.lineno}: assign {interpolation.str!r} to an identifier before interpolation"

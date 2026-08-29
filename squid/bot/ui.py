@@ -10,13 +10,13 @@ The bot owns only localized chrome and audience policy; rendering and delivery s
 from collections.abc import Sequence
 from dataclasses import dataclass
 from math import ceil
-from string.templatelib import Template
 from typing import Any
 
 import discord
 
 import squid_ui as ui
 import squid_ui_discord as sd
+from squid.core.i18n import tr
 
 DISCORD_RED = 0xF04747
 DISCORD_YELLOW = 0xFAA61A
@@ -35,7 +35,6 @@ __all__ = [
     "PALETTES",
     "CardField",
     "CardSection",
-    "L",
     "card_node",
     "error_node",
     "info_node",
@@ -43,6 +42,7 @@ __all__ = [
     "render_item",
     "render_payload",
     "text_node",
+    "tr",
     "truncate_display_text",
 ]
 
@@ -63,75 +63,54 @@ class CardSection:
     fields: Sequence[CardField]
 
 
-def L(message: str | Template, /, **params: object) -> ui.text.Message:
-    """Mark and defer a translatable string: ``L(t"Page {page} of {pages}")``."""
-    if isinstance(message, str):
-        return ui.text.Message(message, params)
-    if params:
-        detail = "template strings already contain their interpolation values"
-        raise TypeError(detail)
-    values: dict[str, object] = {}
-    parts: list[str] = []
-    for string, interpolation in zip(message.strings, message.interpolations, strict=False):
-        parts.append(string)
-        name = interpolation.expression
-        if not name.isidentifier():
-            detail = f"template string interpolation {name!r} is not a placeholder name"
-            raise ValueError(detail)
-        parts.append("{" + name + "}")
-        values[name] = interpolation.value
-    parts.append(message.strings[-1])
-    return ui.text.Message("".join(parts), values)
-
-
 def _try_again_in(seconds: float) -> ui.text.Message:
     """Round a guard's remaining cooldown up to whole seconds before wording it."""
     whole = max(1, ceil(seconds))
-    return L(t"Try again in {whole} seconds.")
+    return tr(t"Try again in {whole} seconds.")
 
 
 CHROME = ui.chrome.Chrome(
-    and_n_more=lambda count: L(t"…and {count} more."),
-    not_yours=L(t"These list controls belong to someone else."),
-    session_ended=L(t"This session has ended."),
-    not_now=L(t"You can't do that right now."),
+    and_n_more=lambda count: tr(t"…and {count} more."),
+    not_yours=tr(t"These list controls belong to someone else."),
+    session_ended=tr(t"This session has ended."),
+    not_now=tr(t"You can't do that right now."),
     try_again_in=_try_again_in,
-    working=L(t"Working…"),
-    updates_paused=L(t"Live updates paused — press any control to resume."),
-    session_expiring=L(t"This session is about to expire."),
-    continue_session=L(t"Continue Session"),
-    sent_privately=L(t"Sent by direct message."),
-    dm_unavailable=L(
+    working=tr(t"Working…"),
+    updates_paused=tr(t"Live updates paused — press any control to resume."),
+    session_expiring=tr(t"This session is about to expire."),
+    continue_session=tr(t"Continue Session"),
+    sent_privately=tr(t"Sent by direct message."),
+    dm_unavailable=tr(
         t"""This reply is too private for a channel, and your direct messages are closed. \
 Run the command in a direct message, or allow direct messages and retry."""
     ),
-    previous=L(t"Previous"),
-    next=L(t"Next"),
-    back=L(t"Back"),
-    home=L(t"Home"),
-    close=L(t"Close"),
-    on=L(t"On"),
-    off=L(t"Off"),
-    download=L(t"Download"),
-    confirm=L(t"Confirm"),
-    cancel=L(t"Cancel"),
-    apply=L(t"Apply"),
-    save=L(t"Save"),
-    unsaved=L(t"Unsaved changes"),
-    search=L(t"Search"),
-    no_results=L(t"No results"),
-    decided=lambda label: L(t"You chose {label}."),
-    add=L(t"Add"),
-    edit=L(t"Edit"),
-    remove=L(t"Remove"),
-    move_up=L(t"Move up"),
-    move_down=L(t"Move down"),
-    review=L(t"Review"),
-    finish=L(t"Finish"),
-    unanswered=L(t"Not answered yet"),
-    page_footer=lambda page, pages: L(t"Page {page} of {pages}"),
+    previous=tr(t"Previous"),
+    next=tr(t"Next"),
+    back=tr(t"Back"),
+    home=tr(t"Home"),
+    close=tr(t"Close"),
+    on=tr(t"On"),
+    off=tr(t"Off"),
+    download=tr(t"Download"),
+    confirm=tr(t"Confirm"),
+    cancel=tr(t"Cancel"),
+    apply=tr(t"Apply"),
+    save=tr(t"Save"),
+    unsaved=tr(t"Unsaved changes"),
+    search=tr(t"Search"),
+    no_results=tr(t"No results"),
+    decided=lambda label: tr(t"You chose {label}."),
+    add=tr(t"Add"),
+    edit=tr(t"Edit"),
+    remove=tr(t"Remove"),
+    move_up=tr(t"Move up"),
+    move_down=tr(t"Move down"),
+    review=tr(t"Review"),
+    finish=tr(t"Finish"),
+    unanswered=tr(t"Not answered yet"),
+    page_footer=lambda page, pages: tr(t"Page {page} of {pages}"),
 )
-_OPEN_LINK = L(t"Open link")
+_OPEN_LINK = tr(t"Open link")
 
 PALETTES = ui.PaletteRegistry(
     {
