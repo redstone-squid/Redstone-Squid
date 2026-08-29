@@ -16,6 +16,15 @@ def _po_paths() -> list[Path]:
     return paths
 
 
+def _normalized(value: str | list[str] | tuple[str, ...] | None) -> str | tuple[str, ...] | None:
+    """Use one representation for Babel's PO tuples and MO lists."""
+    return tuple(value) if isinstance(value, list | tuple) else value
+
+
+def _has_translation(value: str | list[str] | tuple[str, ...] | None) -> bool:
+    return any(value) if isinstance(value, list | tuple) else bool(value)
+
+
 def test_every_catalog_parses_without_errors() -> None:
     for po_path in _po_paths():
         with po_path.open("rb") as handle:
@@ -42,9 +51,11 @@ def test_compiled_mo_matches_committed_po_translations() -> None:
             mo_catalog = read_mo(handle)
 
         translated = {
-            message.id: message.string for message in po_catalog if message.id and message.string and not message.fuzzy
+            _normalized(message.id): _normalized(message.string)
+            for message in po_catalog
+            if message.id and _has_translation(message.string) and not message.fuzzy
         }
-        compiled = {message.id: message.string for message in mo_catalog if message.id}
+        compiled = {_normalized(message.id): _normalized(message.string) for message in mo_catalog if message.id}
 
         for msgid, msgstr in translated.items():
             assert compiled.get(msgid) == msgstr, f"{mo_path} is stale for {msgid!r} -- run `just i18n-compile`"
