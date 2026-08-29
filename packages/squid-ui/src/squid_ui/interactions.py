@@ -6,9 +6,9 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Protocol
 
+from squid_reactivity.actions import ActionContext
 from squid_ui.entity import EntityRef
 from squid_ui.text import TextLike
-from squid_reactivity.actions import ActionContext
 
 if TYPE_CHECKING:
     from squid_ui.forms import FormIssue, FormLike, SubmitHandler
@@ -246,7 +246,6 @@ __all__ = [
     "ActionBinding",
     "ActionEvent",
     "ActionHandler",
-    "InteractionKind",
     "ActionMiddleware",
     "ActionMode",
     "ActionProceed",
@@ -256,6 +255,7 @@ __all__ = [
     "BusySpec",
     "EntitySelectionEvent",
     "EntitySelectionHandler",
+    "InteractionKind",
     "PressEvent",
     "PressHandler",
     "SelectionEvent",

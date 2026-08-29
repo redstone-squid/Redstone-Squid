@@ -18,8 +18,8 @@ from squid_storage.stores import (
     ClaimToken,
     DurableSessionStore,
     MemorySessionStore,
-    SQLiteSessionStore,
     SessionRecord,
+    SQLiteSessionStore,
 )
 
 __all__ = [
@@ -36,10 +36,10 @@ __all__ = [
     "SQLiteScopedStore",
     "SQLiteSessionStore",
     "ScopedStore",
+    "SessionRecord",
     "Slot",
     "SlotCodec",
     "SlotVersionError",
-    "SessionRecord",
     "TopicBridgeSnapshot",
     "json_codec",
 ]
