@@ -44,7 +44,9 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
 
     @app_commands.command(name="account", description="Manage your account or view a creator page")
     @app_commands.describe(user=app_commands.locale_str(_("Whose creator page to show. Defaults to your own account.")))
-    async def account(self, interaction: discord.Interaction[BotT], user: discord.Member | discord.User | None = None) -> None:
+    async def account(
+        self, interaction: discord.Interaction[BotT], user: discord.Member | discord.User | None = None
+    ) -> None:
         """Show your account, or somebody else's creator page."""
         locale = await resolve_locale(interaction, self.bot.services.settings)
         if user is not None and user.id != interaction.user.id:
@@ -146,7 +148,6 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         key = user.avatar.key if user.avatar is not None else None
         if key != identity.avatar_key:
             await self.account_service.record_identity_avatar_key(account.id, identity.id, key)
-
 
 
 def _link_conflict(preview: LinkPreview, existing_java: AccountIdentity | None) -> UUID | None:

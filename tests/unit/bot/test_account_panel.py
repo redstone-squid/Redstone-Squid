@@ -113,9 +113,7 @@ async def test_linking_runs_inside_the_workspace_and_refreshes_it() -> None:
 async def test_merge_requires_the_workspace_decision() -> None:
     account = Account((DISCORD,), AccountConsent.grant_current(), ACCOUNT_ID, NOW)
     accounts = SimpleNamespace(
-        preview_merge=AsyncMock(
-            return_value=SimpleNamespace(alias_names=("Notch",), identity_count=2, build_count=3)
-        ),
+        preview_merge=AsyncMock(return_value=SimpleNamespace(alias_names=("Notch",), identity_count=2, build_count=3)),
         complete_merge=AsyncMock(return_value=SimpleNamespace(redirected_public_creator_id=UUID(int=9))),
     )
 

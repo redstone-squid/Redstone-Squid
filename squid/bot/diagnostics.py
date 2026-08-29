@@ -13,6 +13,7 @@ from squid.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR, DIAGNOST
 if TYPE_CHECKING:
     import squid.bot.app
 
+
 class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     """Read stored error reports."""
 

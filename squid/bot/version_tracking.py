@@ -87,9 +87,7 @@ class VersionScreen(sd.Screen):
 
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
-            sl.status(L(t"Loading versions."))
-            if self._browser is None
-            else self.boundary(self._browser, key="browser")
+            sl.status(L(t"Loading versions.")) if self._browser is None else self.boundary(self._browser, key="browser")
         ]
         if self._can_create:
             nodes.append(
