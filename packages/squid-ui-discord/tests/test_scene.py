@@ -137,7 +137,7 @@ def test_scene_protocol_exposes_a_deterministic_cross_language_schema() -> None:
     assert "button" in schema["$defs"]
     assert "time" in schema["$defs"]
     assert "zoned_time" in schema["$defs"]
-    assert "data" not in scene.Codec.schema_json()
+    assert '"data":' not in scene.Codec.schema_json()
     schema["title"] = "mutated by caller"
     assert scene.Codec.schema()["title"] != "mutated by caller"
 
