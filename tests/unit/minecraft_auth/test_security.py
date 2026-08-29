@@ -138,7 +138,9 @@ async def test_incomplete_or_oversized_paper_binding_fails_before_authentication
     installations = FakeInstallations()
 
     with pytest.raises(AuthenticationError):
-        await current_principal(request_with_services(players, installations, headers=headers), f"Bearer {PLAYER_TOKEN}")
+        await current_principal(
+            request_with_services(players, installations, headers=headers), f"Bearer {PLAYER_TOKEN}"
+        )
 
     assert players.fabric_token is None
     assert players.paper_call is None

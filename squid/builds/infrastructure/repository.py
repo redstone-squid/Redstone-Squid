@@ -97,9 +97,7 @@ class BuildRepository:
     async def get_by_source_submission_draft_id(self, draft_id: uuid.UUID) -> Build | None:
         """Load the build already created from a synchronized submission draft."""
         async with self._session_factory() as session:
-            sql_build = await session.scalar(
-                select(SQLBuild).where(SQLBuild.source_submission_draft_id == draft_id)
-            )
+            sql_build = await session.scalar(select(SQLBuild).where(SQLBuild.source_submission_draft_id == draft_id))
             if sql_build is None:
                 return None
             return await self._mapper.to_domain(session, sql_build)
