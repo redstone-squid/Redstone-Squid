@@ -168,12 +168,13 @@ class Invocation:
         *,
         access: AccessPolicy,
         visibility: Visibility = "public",
+        wait: bool = False,
         **options: Unpack[MessageRootBehaviorOptions],
     ) -> MessageRoot:
         """Construct and deliver a plain message root through this invocation."""
         configured = cast(MessageRootBehaviorOptions, {**options, "localization": self.localization})
         message_root = self.runtime.mount(component, access=access, **configured)
-        await message_root.send(self.destination(visibility))
+        await message_root.send(self.destination(visibility, wait=wait))
         return message_root
 
     async def open(
