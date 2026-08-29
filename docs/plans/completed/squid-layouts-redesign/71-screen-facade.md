@@ -91,4 +91,5 @@ composition layer immediately below `Screen`.
 
 ## Status
 
-Accepted for implementation 2026-08-29.
+Shipped 2026-08-29. `Screen` now owns one root policy across direct and session openings, and the
+layout-showcase lobby exercises public access without overriding the derived session recipe.
