@@ -1,4 +1,4 @@
-"""Mounted squid-layouts component for interactive search results."""
+"""Mounted squid-ui component for interactive search results."""
 
 from collections.abc import Awaitable, Callable
 from dataclasses import replace
@@ -6,13 +6,15 @@ from typing import TYPE_CHECKING
 
 from discord.utils import escape_markdown
 
-import squid_layouts as sl
+import squid_ui as sl
+import squid_ui_discord as sd
+import squid_ui_widgets as sp
 from squid.bot.i18n import t
-from squid.bot.ui import DISCORD_GREEN, create_mount
+from squid.bot.ui import DISCORD_GREEN, create_message_root
 from squid.builds.domain import Build
 from squid.core.i18n import _
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchHit, SearchPage, SearchRequest
-from squid_layouts.sources import window_fingerprint
+from squid_ui.sources import window_fingerprint
 
 if TYPE_CHECKING:
     from squid.search.application import SearchService
@@ -101,8 +103,8 @@ class _SearchDetail(sl.Component):
             detail,
             *(
                 (
-                    sl.actions(
-                        sl.action(t(self.locale, _("View build")), self._open_build, key="open-build"),
+                    sl.action_controls(
+                        sl.action_control(t(self.locale, _("View build")), self._open_build, key="open-build"),
                         key="build-actions",
                     ),
                 )
@@ -144,7 +146,7 @@ class SearchResultsView(sl.Component):
         self.locale = locale
         self._load_build = load_build
         self._render_build = render_build
-        self._browser = sl.patterns.Browser(
+        self._browser = sp.Browser(
             self._source,
             key="search",
             identity=_hit_identity,
@@ -237,17 +239,19 @@ class SearchResultsView(sl.Component):
             )
         return (
             self.boundary(self._browser, key="results"),
-            sl.primitives.Row((sl.primitives.Button(t(self.locale, _("Close")), self._close, "close"),)),
+            sl.action_controls(
+                sl.action_control(t(self.locale, _("Close")), self._close, key="close"), key="search-actions"
+            ),
         )
 
     async def _close(self, event: sl.PressEvent) -> None:
         self.closed = True
         await event.finish()
 
-    def mount(self, *, source: sl.discord.host.HostSource) -> sl.discord.Mount:
+    def mount(self, *, source: sd.runtime.RuntimeSource) -> sd.MessageRoot:
         """Create the mount used by the command transport."""
-        return create_mount(
-            self, source=source, access=sl.discord.Owner(self._author_id), locale=self.locale, timeout=180
+        return create_message_root(
+            self, source=source, access=sd.Owner(self._author_id), locale=self.locale, timeout=180
         )
 
 

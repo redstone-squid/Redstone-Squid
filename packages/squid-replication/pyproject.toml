@@ -1,0 +1,18 @@
+[project]
+name = "squid-replication"
+version = "0.1.0"
+description = "Optional replicated-state adapters for Squid"
+requires-python = ">=3.14"
+license = "MIT"
+dependencies = ["squid-reactivity"]
+
+[project.optional-dependencies]
+loro = ["loro==1.13.2"]
+pycrdt = ["pycrdt==0.14.2"]
+
+[build-system]
+requires = ["uv_build>=0.11,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { file = "src/**/*" }]

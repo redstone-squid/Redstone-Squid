@@ -1,27 +1,27 @@
-"""The host supplies development policy and its session registry to library devtools."""
+"""The host supplies development policy and its session manager to library devtools."""
 
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock
 
 from squid.bot.devtools import _authorized, setup
-from squid_layouts.discord import Reactor, SessionRegistry
-from squid_layouts.discord.devtools import DevTools
-from squid_layouts.profiling import MemoryProfiler
+from squid_ui.profiling import MemoryProfiler
+from squid_ui_discord import MessageRootScheduler, SessionManager
+from squid_ui_discord.devtools import DevTools
 
 
-async def test_setup_adds_the_generic_cog_with_the_host_registry() -> None:
-    registry = SessionRegistry()
+async def test_setup_adds_the_generic_cog_with_the_host_manager() -> None:
+    manager = SessionManager()
     profiler = MemoryProfiler()
-    reactor = Reactor(profiler=profiler)
-    bot = SimpleNamespace(mounts=registry, layout_reactor=reactor, add_cog=AsyncMock())
+    scheduler = MessageRootScheduler(profiler=profiler)
+    bot = SimpleNamespace(sessions=manager, layout_scheduler=scheduler, add_cog=AsyncMock())
 
     await setup(cast(Any, bot))
 
     cog = bot.add_cog.await_args.args[0]
     assert isinstance(cog, DevTools)
-    assert cog._registry is registry
-    assert cog._reactor is reactor
+    assert cog._manager is manager
+    assert cog._scheduler is scheduler
     assert cog._profiler is profiler
 
 

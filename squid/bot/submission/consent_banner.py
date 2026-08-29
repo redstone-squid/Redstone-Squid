@@ -5,21 +5,22 @@ from typing import TYPE_CHECKING, override
 
 from discord import Interaction, TextChannel
 
-import squid_layouts as sl
+import squid_ui as sl
+import squid_ui_discord as sd
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
-from squid.bot.consent import CONSENT_SCREEN, ConsentPrompt
+from squid.bot.consent import CONSENT_SESSION_SPEC, ConsentPrompt
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.routes.build_log_consents import build_log_consent, build_log_consents
 from squid.bot.ui import (
     CardField,
     localization_for,
-    render_presentation,
-    respond_presentation,
+    render_payload,
+    respond_payload,
     text_layout,
 )
 from squid.bot.utils.sticky_message import StickyMessage
 from squid.core.i18n import _
-from squid_layouts.discord.sessions import Opened, Rejected
+from squid_ui_discord.sessions import Opened, Rejected
 
 if TYPE_CHECKING:
     # importing this causes a circular import at runtime
@@ -38,7 +39,7 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
 
     account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(interaction.user.id))
     if account is not None and account.id is not None and not account.needs_consent_refresh:
-        await respond_presentation(
+        await respond_payload(
             interaction,
             text_layout(
                 t(
@@ -82,14 +83,14 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
         locale=locale,
         timeout=120,
     )
-    opened = await CONSENT_SCREEN.respond(
+    opened = await CONSENT_SESSION_SPEC.respond(
         component,
         interaction,
         wait=True,
         localization=localization_for(locale),
     )
     if isinstance(opened, Rejected):
-        await respond_presentation(
+        await respond_payload(
             interaction,
             text_layout(t(locale, _("You already have a consent prompt open. Please answer that one."))),
         )
@@ -102,7 +103,7 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
         await accounts.get_or_create_identity(
             IdentityProvider.DISCORD, str(interaction.user.id), consent=component.consent
         )
-        await respond_presentation(
+        await respond_payload(
             interaction,
             text_layout(
                 t(
@@ -124,8 +125,8 @@ class BuildLogConsentStickyMessage(StickyMessage):
     """Sticky banner posted in build-log channels when unconsented users post."""
 
     @override
-    async def render(self, channel: TextChannel) -> sl.discord.presentation.DiscordPresentation:
-        return render_presentation(
+    async def render(self, channel: TextChannel) -> sd.message_payload.MessagePayload:
+        return render_payload(
             [
                 sl.primitives.Text(
                     "## \U0001f4cb Build Log Ingestion Consent\n"

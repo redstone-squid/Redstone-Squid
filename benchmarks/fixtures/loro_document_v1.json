@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "backend": "loro-document-v1",
+  "description": "Redstone build review documents with prose, ordered steps, stable parts, reviewer registers, and an outline forest.",
+  "profiles": {
+    "p50": {
+      "text_bytes": 4096,
+      "list_items": 24,
+      "movable_items": 16,
+      "map_entries": 16,
+      "tree_nodes": 12,
+      "ceilings_ms": {"commit": 2000, "snapshot": 500, "export": 1000, "import": 2000, "plan_inverse": 2000},
+      "ceiling_update_bytes": 1048576
+    },
+    "p95": {
+      "text_bytes": 32768,
+      "list_items": 160,
+      "movable_items": 96,
+      "map_entries": 96,
+      "tree_nodes": 64,
+      "ceilings_ms": {"commit": 5000, "snapshot": 1000, "export": 2000, "import": 5000, "plan_inverse": 5000},
+      "ceiling_update_bytes": 1048576
+    },
+    "p99": {
+      "text_bytes": 131072,
+      "list_items": 512,
+      "movable_items": 256,
+      "map_entries": 256,
+      "tree_nodes": 192,
+      "ceilings_ms": {"commit": 15000, "snapshot": 3000, "export": 5000, "import": 15000, "plan_inverse": 15000},
+      "ceiling_update_bytes": 1048576
+    }
+  }
+}

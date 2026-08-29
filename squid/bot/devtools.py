@@ -3,7 +3,7 @@
 from discord.ext.commands import Context
 
 import squid.bot.app
-import squid_layouts as sl
+import squid_ui_discord as sd
 
 
 async def _authorized(ctx: Context[squid.bot.app.RedstoneSquid]) -> bool:
@@ -12,11 +12,11 @@ async def _authorized(ctx: Context[squid.bot.app.RedstoneSquid]) -> bool:
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
-    """Add the package-owned devtools with this process's policy and session registry."""
+    """Add the package-owned devtools with this process's policy and session manager."""
     await bot.add_cog(
-        sl.discord.devtools.DevTools(
+        sd.devtools.DevTools(
             check=_authorized,
-            registry=bot.mounts,
-            reactor=getattr(bot, "layout_reactor", None),
+            manager=bot.sessions,
+            scheduler=getattr(bot, "layout_scheduler", None),
         )
     )

@@ -22,7 +22,7 @@ from squid.schematics.infrastructure.worker import SchematicWorkerPool
 from squid.topics import open_topic_bridge
 from squid.worker.events import ApplyBuildVoteOutcomeHandler, CoreDomainEventRunner, MaterializeNotificationHandler
 from squid.worker.rendering import SchematicRenderProjector
-from squid_reactive import LocalTopicBus
+from squid_reactivity import LocalTopicBus
 
 logger = logging.getLogger(__name__)
 

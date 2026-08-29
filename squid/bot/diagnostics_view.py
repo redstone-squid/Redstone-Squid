@@ -1,6 +1,6 @@
 """Interactive Components V2 rendering for stored error reports.
 
-The browser is a mounted squid-layouts component: the list ↔ detail switch is a state change,
+The browser is a mounted squid-ui component: the list ↔ detail switch is a state change,
 the traceback pages through the engine's budget solver (which replaced the hand-tuned
 PAGE_CHARS constant), and author lock, expiry, and error routing belong to the mount.
 """
@@ -11,7 +11,7 @@ from collections.abc import Sequence
 
 import discord
 
-import squid_layouts as sl
+import squid_ui as sl
 from squid.bot.ui import CHROME, L
 from squid.diagnostics.domain import ErrorReport
 
@@ -86,7 +86,7 @@ class ErrorReportBrowser(sl.Component):
                     placeholder=L(t"Choose an error to open"),
                 )
             )
-        nodes.append(sl.primitives.Row((self._close_button(),)))
+        nodes.append(sl.action_controls(self._close_action(), key="list-actions"))
         return nodes
 
     def _render_detail(self) -> Sequence[sl.LayoutNode]:
@@ -114,18 +114,17 @@ class ErrorReportBrowser(sl.Component):
                 L(t"Full report"), report_asset(report), key="full-report", emphasis=sl.semantic.Emphasis.STRONG
             )
         )
-        controls: list[sl.primitives.Button] = []
+        controls: list[sl.semantic.ActionControl] = []
         if self._reports:
-            controls.append(sl.primitives.Button(label=L(t"Back"), on_click=self._back, key="back"))
-        controls.append(self._close_button())
-        return [sl.stack(*children), sl.primitives.Row(tuple(controls))]
+            controls.append(sl.action_control(L(t"Back"), self._back, key="back"))
+        controls.append(self._close_action())
+        return [sl.stack(*children), sl.action_controls(*controls, key="detail-actions")]
 
-    def _close_button(self) -> sl.primitives.Button:
-        return sl.primitives.Button(
-            label=L(t"Close"),
-            on_click=self._close,
+    def _close_action(self) -> sl.semantic.ActionControl:
+        return sl.action_control(
+            L(t"Close"),
+            self._close,
             key="close",
-            style=sl.primitives.ActionStyle.SECONDARY,
         )
 
     async def _open(self, event: sl.SelectionEvent) -> None:

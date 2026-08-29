@@ -9,8 +9,8 @@ from typing import Any, override
 import discord
 from discord import TextChannel
 
-import squid_layouts as sl
-from squid_layouts.discord import send_to
+import squid_ui_discord as sd
+from squid_ui_discord import send_to
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ class StickyMessage(abc.ABC):
         return self._locks[channel_id]
 
     @abc.abstractmethod
-    async def render(self, channel: TextChannel) -> sl.discord.presentation.DiscordPresentation:
+    async def render(self, channel: TextChannel) -> sd.message_payload.MessagePayload:
         """Render the presentation to display in the sticky message."""
         ...
 
@@ -116,8 +116,8 @@ class StickyMessage(abc.ABC):
 
             presentation = await self.render(channel)
             try:
-                receipt = await send_to(channel)(presentation)
-                new_msg = receipt.message
+                result = await send_to(channel)(presentation)
+                new_msg = result.message
                 if new_msg is None:
                     logger.warning("Sticky delivery returned no message for channel %s", channel.id)
                     return
@@ -148,7 +148,7 @@ class FunctionalStickyMessage(StickyMessage):
 
     def __init__(
         self,
-        renderer: Callable[[TextChannel], Coroutine[Any, Any, sl.discord.presentation.DiscordPresentation]],
+        renderer: Callable[[TextChannel], Coroutine[Any, Any, sd.message_payload.MessagePayload]],
         *,
         stale_threshold: int = DEFAULT_STALE_THRESHOLD,
         debounce_delay: float = DEFAULT_DEBOUNCE_DELAY,
@@ -157,5 +157,5 @@ class FunctionalStickyMessage(StickyMessage):
         self._renderer = renderer
 
     @override
-    async def render(self, channel: TextChannel) -> sl.discord.presentation.DiscordPresentation:
+    async def render(self, channel: TextChannel) -> sd.message_payload.MessagePayload:
         return await self._renderer(channel)

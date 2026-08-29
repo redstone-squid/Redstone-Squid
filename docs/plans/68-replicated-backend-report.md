@@ -1,6 +1,6 @@
 # Plan 68 replicated backend research report
 
-Status: conclusive recommendation
+Status: implemented; production adapter promoted 2026-08-27
 Date: 2026-08-24
 Repository evidence: `03a7e095` and `cf650fa1`
 Evaluated releases: Loro Python 1.13.2, pycrdt 0.14.2, and an isolated pycrdt 0.14.4 verification
@@ -26,11 +26,31 @@ This resolves the dependency direction without lowering the production gate:
   adapter therefore uses `skip_gc=True`, making compaction an all-history coordination event rather than a
   selective retained-token boundary.
 
-The generalized production adapter remains blocked on type-aware inverse planning, not on text CRDT
-mathematics. A raw Loro `diff(after, before)` correctly preserves later text insertions and counter
+At research time, the generalized production adapter was blocked on type-aware inverse planning, not on text
+CRDT mathematics. A raw Loro `diff(after, before)` correctly preserves later text insertions and counter
 increments, but it restored an old LWW-map value over a causally later remote value. Map/register paths must
 therefore use an action-token precondition and return a typed conflict when their winning operation changed.
 No production code may use raw document-wide frontier reversal as a universally safe inverse.
+
+## Implementation outcome
+
+The production adapter now satisfies the hardening list below. `LoroBackend` is explicitly injected into a
+`Replica`; the public document exposes immutable named handles for all six Loro classes plus Squid's tagged
+set. Exact counters use per-peer decimal totals rather than Loro's floating-point counter. Text alone uses a
+frontier reverse diff, filtered to the action's affected text roots. Lists, movable lists, maps, trees,
+counters, and sets stage semantic inverses; every replacement or move-like path first verifies its recorded
+action authority, and one mismatch conflicts the entire action before staging.
+
+History entries automatically acquire and release token leases. Shallow compaction intersects the retained
+before-frontiers, checkpoints preserve that boundary across reload, and unleased tokens behind it return a
+typed expired conflict without entering Loro's missing-history failure path. Binding failures whose exact
+type is the built-in `BaseException` are translated without catching cancellation or process-control
+exceptions. Update/token size, operation count, root count, path size, and container cardinality are bounded.
+
+The versioned representative workload is `benchmarks/fixtures/loro_document_v1.json`; run
+`benchmarks/plan68_loro_production.py` to enforce its deliberately generous p50/p95/p99 time and update-size
+ceilings. Transport, sender authentication, authorization, durable storage, and task lifetime remain host
+responsibilities rather than hidden adapter services.
 
 ## What was executed
 
@@ -65,11 +85,11 @@ The focused tests also reproduced the limiting behavior rather than inferring it
   from unavailable retained authority.
 
 The executable evidence is in
-[`test_real_backends.py`](../../packages/squid-replicated/tests/test_real_backends.py). The focused command is:
+[`test_real_backends.py`](../../packages/squid-replication/tests/test_real_backends.py). The focused command is:
 
 ```console
-uv run --locked --package squid-replicated --extra loro --extra pycrdt \
-  pytest packages/squid-replicated/tests/test_real_backends.py --no-cov -q
+uv run --locked --package squid-replication --extra loro --extra pycrdt \
+  pytest packages/squid-replication/tests/test_real_backends.py --no-cov -q
 ```
 
 Result at the report commit: 19 passed.

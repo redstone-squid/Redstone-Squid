@@ -9,15 +9,16 @@ from typing import Any, overload
 from discord.abc import Messageable
 from discord.ext.commands import Context
 
-import squid_layouts as sl
-from squid.bot.errors import build_error_presentation, record_operation_error
+import squid_ui as sl
+import squid_ui_discord as sd
+from squid.bot.errors import build_error_notice, record_operation_error
 from squid.bot.i18n import resolve_locale
-from squid.bot.ui import create_mount, destination, error_node, info_node
+from squid.bot.ui import create_message_root, error_node, info_node, message_destination
 from squid.core.i18n import _, translate
-from squid_layouts.runtime.component import RenderResult
+from squid_ui.runtime.component import RenderResult
 
 type OperationWork = Callable[
-    [sl.operations.Progress[RenderResult | None], sl.discord.delivery.DeliveryReceipt],
+    [sl.operations.ProgressReporter[RenderResult | None], sd.delivery.DeliveryResult],
     Awaitable[RenderResult],
 ]
 _INITIAL_PROGRESS: RenderResult | None = None
@@ -41,20 +42,20 @@ class CommandOperation(sl.Component):
         self._work = work
         self._initial = initial
         self._locale = locale
-        self._receipt: sl.discord.delivery.DeliveryReceipt | None = None
+        self._result: sd.delivery.DeliveryResult | None = None
         self.execution = self._execute.start()
 
     @sl.operation(initial=_INITIAL_PROGRESS)
     async def _execute(
         self,
-        progress: sl.operations.Progress[RenderResult | None],
+        progress: sl.operations.ProgressReporter[RenderResult | None],
     ) -> RenderResult:
-        receipt = self._receipt
-        if receipt is None:
+        result = self._result
+        if result is None:
             message = "a command operation cannot start before its initial delivery"
             raise RuntimeError(message)
 
-        return await self._work(progress, receipt)
+        return await self._work(progress, result)
 
     def render(self) -> RenderResult:
         match self.execution.status:
@@ -63,8 +64,8 @@ class CommandOperation(sl.Component):
             case sl.operations.Succeeded(value=value):
                 return value
             case sl.operations.Failed(error=error):
-                presentation = build_error_presentation(error, self._locale)
-                return error_node(presentation.title, presentation.detail)
+                payload = build_error_notice(error, self._locale)
+                return error_node(payload.title, payload.detail)
             case sl.operations.Cancelled(progress=progress):
                 return self._initial if progress is None else progress
 
@@ -91,7 +92,7 @@ class _ManagedResultComponent(sl.Component):
         self.execution = self._execute.start()
 
     @sl.operation(initial=None)
-    async def _execute(self, _progress: sl.operations.Progress[None]) -> RenderResult:
+    async def _execute(self, _progress: sl.operations.ProgressReporter[None]) -> RenderResult:
         """Evaluate the command callback once the mount has committed its initial delivery."""
         return await self._callback(*self._args, **self._kwargs)
 
@@ -103,8 +104,8 @@ class _ManagedResultComponent(sl.Component):
             case sl.operations.Succeeded(value=value):
                 return value
             case sl.operations.Failed(error=error):
-                presentation = build_error_presentation(error, self._locale)
-                return error_node(presentation.title, presentation.detail)
+                payload = build_error_notice(error, self._locale)
+                return error_node(payload.title, payload.detail)
             case sl.operations.Cancelled():
                 return self._initial
 
@@ -155,19 +156,19 @@ def managed_result[**P](
                 initial=info_node(translate(locale, title), translate(locale, description)),
                 locale=locale,
             )
-            mount = create_mount(component, source=ctx, access=sl.discord.Everyone(), locale=locale, timeout=900)
-            delivered = await mount.send(destination(ctx, locale=locale))
+            message_root = create_message_root(component, source=ctx, access=sd.Everyone(), locale=locale, timeout=900)
+            delivered = await message_root.send(message_destination(ctx, locale=locale))
             match component.execution.status:
                 case sl.operations.Succeeded():
                     if dismiss_on_success:
-                        await mount.dismiss()
+                        await message_root.dismiss()
                 case sl.operations.Failed(error=error):
-                    receipt = delivered.receipt if isinstance(delivered, sl.discord.delivery.Delivered) else None
+                    result = delivered.result if isinstance(delivered, sd.delivery.Delivered) else None
                     await record_operation_error(
                         error,
                         locale=locale,
-                        receipt=receipt,
-                        presented=isinstance(delivered, sl.discord.delivery.Delivered) and delivered.settled,
+                        result=result,
+                        presented=isinstance(delivered, sd.delivery.Delivered) and delivered.settled,
                         reports=_error_reports(bound.arguments),
                     )
                     raise error
@@ -222,7 +223,7 @@ async def run_command_operation(
     target: Messageable,
     work: OperationWork,
     *,
-    source: sl.discord.host.HostSource,
+    source: sd.runtime.RuntimeSource,
     title: str = _("Working"),
     description: str = _("Getting information..."),
     locale: str | None = None,
@@ -235,28 +236,28 @@ async def run_command_operation(
         initial=info_node(translate(locale, title), translate(locale, description)),
         locale=locale,
     )
-    mount = create_mount(component, source=source, access=sl.discord.Everyone(), locale=locale, timeout=900)
-    destination = sl.discord.send_to(target)
+    message_root = create_message_root(component, source=source, access=sd.Everyone(), locale=locale, timeout=900)
+    message_destination = sd.send_to(target)
 
     async def capture(
-        presentation: sl.discord.presentation.DiscordPresentation,
-    ) -> sl.discord.delivery.DeliveryReceipt:
-        receipt = await destination(presentation)
-        component._receipt = receipt
-        return receipt
+        payload: sd.message_payload.MessagePayload,
+    ) -> sd.delivery.DeliveryResult:
+        result = await message_destination(payload)
+        component._result = result
+        return result
 
-    delivered = await mount.send(capture)
+    delivered = await message_root.send(capture)
     match component.execution.status:
         case sl.operations.Succeeded():
             if dismiss_on_success:
-                await mount.dismiss()
+                await message_root.dismiss()
         case sl.operations.Failed(error=error):
-            receipt = delivered.receipt if isinstance(delivered, sl.discord.delivery.Delivered) else None
+            result = delivered.result if isinstance(delivered, sd.delivery.Delivered) else None
             await record_operation_error(
                 error,
                 locale=locale,
-                receipt=receipt,
-                presented=isinstance(delivered, sl.discord.delivery.Delivered) and delivered.settled,
+                result=result,
+                presented=isinstance(delivered, sd.delivery.Delivered) and delivered.settled,
                 reports=reports,
             )
             raise error

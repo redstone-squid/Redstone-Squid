@@ -1,0 +1,781 @@
+# squid-ui
+
+A declarative, limits-aware UI engine: semantic authoring, a planner that fits a document to a
+target's limits, a scene IR, a component runtime, and an HTML renderer.
+
+Discord rejects any message that exceeds one of its many hard limits (4000 display characters,
+40 components, 25 select options, 45-char modal titles, …) with an opaque HTTP 50035. This
+package prevents known target-limit violations before delivery: views describe *intent*, and the engine measures
+every markdown prefix and code fence exactly, allocates the shared budgets by priority, and
+degrades content the way its author said it should degrade.
+
+> **The discord.py runtime lives in [`squid-ui-discord`](../squid-ui-discord/README.md), and the
+> reusable application patterns in [`squid-ui-widgets`](../squid-ui-widgets/README.md).** MessageRoots,
+> sessions, routing, delivery, adoption, roles, devtools and durable panels moved there; the
+> examples below that call `sd.MessageRoot(...)` need it installed. What stays here is Discord
+> *protocol* knowledge — Components V2 and classic limits, the two dialects, the scene shapes,
+> the capability tags — because that is what the planner plans against, and none of it imports
+> discord.py. Examples below that use `sp.Wizard`, `sp.Editor` or `sp.guards.confirm` need
+> `squid-ui-widgets`. Installing `squid-ui` alone pulls in neither discord.py nor a store
+> backend, and neither leaf package.
+
+```python
+import squid_ui as sl
+
+class Counter(sl.Component):
+    count: int = sl.state(0)
+
+    def render(self):
+        return sl.section(
+            sl.heading("Counter"),
+            t"Count: {self.count}",
+            sl.action_controls(sl.action_control("+1", self.increment, key="increment"), key="counter-actions"),
+        )
+
+    async def increment(self, event: sl.PressEvent) -> None:
+        self.count += 1  # the message root re-renders and edits the message
+```
+
+See [the architecture and API interaction guide](../../docs/squid-ui-architecture.md)
+for component composition, planning, renderers, action policies, and durable message roots, and
+[Classic Discord messages](../squid-ui-discord/docs/classic-messages.md) for the second target: content, embeds,
+and action rows, from the same semantic document.
+
+## The layers
+
+1. **Semantic documents** describe author intent with `Section`, `Paragraph`, `List`,
+   `Fields`, `Table`, `Roster`, `Media`, `Details`, `ActionControls`, `Choices`, `Items`, `Navigation`, and `Grid`.
+   Authors may express a display preference and flexibility, but never an exact Discord shape.
+   The lowercase factories (`sl.section`, `sl.action_controls`, `sl.field`, …) are the recommended
+   authoring surface; the uppercase dataclasses are the IR they build and stay fully public.
+2. **Target adapters** select lossless representations, per target: one document becomes a
+   `LayoutView` under `V2_TARGET` and content, embeds, and action rows under `CLASSIC_TARGET`.
+   For example, 36 semantic actions become
+   two pickers containing 25 and 11 options; explicit action groups never merge. Strategy state
+   supplies hysteresis, so small data changes do not reshuffle a familiar UI.
+3. **Exact primitives** live under `squid_ui.primitives`. `Row`, `SelectMenu`, `Panel`,
+   and their overflow policies are the deliberate target-shaped escape hatch, not the primary API.
+4. **Planner and solver** rank strategies by coarse lexicographic tiers, measure every target
+   resource, apply only author-granted loss, and produce a `PlanReport`. Search has a bounded
+   512-state default; exhaustion emits `planner.search_fallback` and keeps a lossless plan.
+5. **Scene protocol 1** is immutable canonical JSON with action references but no callbacks or
+   native frontend objects.
+6. **Renderers** mechanically draw a scene. Discord produces Components V2 and audits it with
+   `sd.conform(strict=True)`; HTML produces escaped Discord-like preview markup from the same scene.
+
+`sd.render_message()` is the Discord convenience pipeline, with `reservation` for callers whose
+message carries content the engine cannot see — `sd.measure(view)` and `sd.cost(item)`
+produce one without hand-counting. It always creates a renderer-owned view;
+adopting a *live* `discord.py` view — one already sent, which will edit its own message — is
+intentionally unsupported, because two writers on one message make measurement unsound.
+
+There are four ways to adopt the package, and they can be mixed in one bot:
+
+1. **A new screen.** Use `sd.MessageRoot` for one command while everything else stays as it is.
+2. **A region of an existing V2 screen.** `sd.contribute(document, to=view, followed_by=...)`
+   measures the host, plans into what is left, and places the result — the host keeps sending,
+   editing, timeouts, callbacks and error policy. The contributed region is stateless: link and
+   routed controls only, since no message root exists to wire a component-local callback.
+3. **An unsent classic view.** `sd.adopt(view)` turns a never-sent `discord.ui.View`
+   into a `Component`: Squid builds its own controls from `view.children`, owns the message,
+   and dispatches to the legacy callbacks unchanged. The message root owns the timeout, and anything
+   that would make the legacy object a second writer raises `AdoptionError`.
+4. **The whole message.** Hand it to `MessageRoot` when component state or callbacks move into Squid.
+
+See [Migrating an existing discord.py bot](../squid-ui-discord/docs/migrating.md) for an incremental path covering
+V2 and classic contributions, persistent routes, message roots, sessions, forms, and durability.
+
+A fragment is not a miniature message root. If two independently stateful regions need to edit one
+message, give them a single parent component, or keep the legacy view as the sole owner and make
+the Squid region stateless. Components nest through explicit
+`self.embed(child, key=...)` boundaries, so actions and pagers never cross-wire. `sd.MessageRoot`
+binds a component tree to a message: every
+interaction funnels through it (author lock, error hook, re-render/edit), timeouts disable
+controls, `sd.MessageRootScheduler` coalesces out-of-band refreshes, and `sd.Navigator` stacks screens with
+Back/Home/Close by composition. A message root's `nav=` replaces the stock Previous/Next row with
+controls built from `sd.NavigationContext`; the same factory receives materialized pages and
+asynchronously loaded windows. Semantic pickers page through keyed
+25-option windows. A keyed root `Document` may promote structural overflow to whole-message
+pages; local pagination wins, and local plus root navigation are never shown simultaneously.
+Authors can size a region with `sl.budget(node, min=..., prefer=..., stretch=...)` or page a
+heterogeneous container with `sl.paged(section, key=..., chars=...)`. Use
+`sl.keep_with_next(heading)` to prevent a stranded heading and `sl.unbreakable(group)` when a
+region's children must stay together. These declarations use the same keyed cursor lifecycle as
+text and option pagination.
+`sd.render_static` is the sessionless
+path for reconciler-managed posts. `sd.build_modal`/`sd.conform_modal` do the same for modals,
+whose string lengths discord.py does not validate at all. `sl.scene.Codec` transports plans to
+other processes; `sd.durability.DurableSessionRuntime` provides opt-in, whole-session recovery.
+
+Presentation colours are an immutable `sl.Palette`, supplied to `sl.planning.plan`, `sd.render_message`,
+`sd.render_static`, or `sd.MessageRoot`. An omitted section or article accent inherits
+`Palette.brand`; `accent=None` explicitly opts out and an integer remains an exact data override.
+Semantic tones resolve through the palette. `sl.themed(palette, *children)` scopes an override to a
+subtree, so a component may select a palette from reactive state while the final scene still contains
+only exact colours. Discord buttons retain Discord's platform-owned style colours.
+
+### Host-owned ledgers and selectable grids
+
+Roster and tally declarations render domain data without taking ownership of it:
+
+```python
+placement = sp.place_roster(
+    tuple(sp.RosterEntry(str(member.id), member.name, member.team) for member in members),
+    (
+        sp.RosterSlot("builders", "Builders", capacity=4),
+        sp.RosterSlot("reviewers", "Reviewers", capacity=2),
+    ),
+    overflow=sp.RosterOverflow.WAITLIST,
+)
+roster = sl.roster(placement, key="teams", on_join=move_member)
+
+tally = sl.tally(
+    tuple(sp.TallyOption(option.key, option.label, counts[option.key]) for option in options),
+    key="poll",
+    on_vote=cast_vote,
+)
+```
+
+Grid cells are variadic, matching the other collection factories. The semantic factory
+preserves one callback contract while adapting its Discord shape:
+
+```python
+board = sl.grid(
+    sp.GridCell("a1", "A1"),
+    sp.GridCell("b1", "B1", available=False),
+    sp.GridCell("a2", "A2", tone=sl.Tone.SUCCESS),
+    sp.GridCell("b2", "B2"),
+    key="board",
+    columns=2,
+    on_pick=pick_cell,  # SelectionEvent.values contains the stable cell key
+)
+```
+
+Use `sd.button_grid(*cells, ...)` only when exact button rows are part of the
+contract and exceeding Discord's row or message budget should be an error. Use
+`sl.semantic.TableDisplay.MATRIX` for a non-interactive dense matrix.
+
+`sp.Agreement` is a mounted, actor-keyed component. Its approval state ends with the
+mount and is never a substitute for a durable host ledger:
+
+```python
+participants = tuple(
+    sp.AgreementParticipant(str(member.id), member.name) for member in reviewers
+)
+agreement = sp.Agreement(
+    "Approve this release?",
+    participants,
+    require="all",
+    on_resolve=release,
+)
+message_root = sd.MessageRoot(
+    agreement,
+    access=sd.Users({member.id for member in reviewers}),
+    timeout=900,
+)
+```
+
+### Discord component parity
+
+Discord modals may interleave static text and fields in declaration order. Native checkbox groups
+remain Discord-specific and declare their portable fallback explicitly:
+
+```python
+choices = (
+    sl.forms.ChoiceOption("alerts", "Alerts", "alerts", emoji="🔔"),
+    sl.forms.ChoiceOption("reports", "Reports", "reports"),
+)
+field = sd.CheckboxGroupField(
+    key="subscriptions",
+    label="Subscriptions",
+    options=choices,
+    required=False,
+    fallback=sl.forms.MultiChoiceField(options=choices, required=False),
+)
+form = sl.forms.FormSpec(
+    "Preferences",
+    (sl.forms.FormText("Choose every update you want to receive."), field),
+)
+```
+
+The exact primitive API exposes Discord-only controls and complete media metadata. A premium
+button must have a positive SKU and no interactive or link fields; link and interactive buttons
+may omit their label when they have an emoji. Custom emoji use `sl.emoji.Emoji(name, id, animated=...)`.
+
+```python
+from squid_ui.emoji import Emoji
+from squid_ui.primitives import Gallery, GalleryItem, LinkButton, PremiumButton, Row
+
+document = (
+    Row(
+        (
+            PremiumButton(sku_id=123456789),
+            LinkButton(None, "https://example.com", emoji=Emoji("docs", 987654321), disabled=True),
+        )
+    ),
+    Gallery((GalleryItem("https://example.com/preview.png", "Build preview", spoiler=True),)),
+)
+```
+
+Premium controls are supported by both Discord message targets. Other targets require a
+`Variants` rung with an explicit fallback. Components V2 preserves media descriptions and spoiler
+state; classic Discord and other targets reject V2-only media structures rather than silently
+discarding that content.
+
+### Live updates across message roots
+
+`TopicBus` is the two-method protocol for a payload-free latency projection. Publishing says only
+that an address changed; every subscriber re-reads the application's source of truth.
+`LocalTopicBus` is the synchronous in-process implementation for tests and single-process hosts.
+
+An address is either a `sl.runtime.Topic(kind, key)` -- a value a host writes, equal by value so two
+publishers agree without sharing a constructor -- or a `sl.runtime.CellAddress`, which is a `SharedState` cell's
+identity and is only ever received, never built. `sl.runtime.Address` is the union the bus carries. Keys
+are text on purpose: `sl.runtime.Topic("build", 123)` is a type error rather than a topic nobody else ever
+addresses.
+
+Watch a topic where you read the thing it names, and the message root follows it for you:
+
+```python
+class BuildPanel(sl.Component):
+    def __init__(self, build_id: str) -> None:
+        self.build_id = build_id
+
+    @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
+    async def build(self) -> Build:
+        sl.runtime.watch(sl.runtime.Topic("build", self.build_id))
+        return await queries.get_build(self.build_id)
+
+    def render(self):
+        return sl.Text(self.build.value.name)
+```
+
+`sl.runtime.watch` is a tracked read like any other, so the render that used the resource's value
+follows the topic, a render that stops reading it stops following, and `bus.publish` re-pends
+the resource before the message root redraws. Nothing is subscribed by hand, so nothing has to be
+unsubscribed -- and the initial load is just the resource's first settle. Prefer
+`PendingMode.ATOMIC` for live data: the default `EXPLICIT` would flash a pending paint on
+every external change.
+
+Because the topic carries a version, a publish landing *during* the load is not lost: it moves
+what the load is being compared against, so the value it produced is already stale and settles
+again. There is no "subscribe before the first read" rule to get wrong. `sl.runtime.watch` belongs in a
+resource, never in `on_load`, which runs once and under no consumer.
+
+`scheduler.follow` remains for a dependency no render-time read can express, and `bus.subscribe`
+for a subscriber that is not a message root:
+
+```python
+bus = sl.runtime.LocalTopicBus()
+scheduler = sd.MessageRootScheduler(bus)
+message_root = sd.MessageRoot(panel, access=sd.Owner(interaction.user.id), scheduler=scheduler)
+scheduler.follow(message_root, sl.runtime.Topic("build", "123"))  # subscribe before the first read/send
+await message_root.send(sd.respond_to(interaction))
+
+# The host owns the only long-running coroutine.
+async with anyio.create_task_group() as tasks:
+    tasks.start_soon(scheduler.run)
+```
+
+`publish()` delivers local subscribers synchronously in registration order. A subscriber that
+raises is reported through the bus's error hook, delivery continues to the rest, and the bus has
+no task that can die. A distributed application bridges
+its own durable change feed, NOTIFY listener, or queue consumer into the local bus. Publish where
+the application already funnels committed changes; do not subscribe a durable projection that
+already has a reconciler, because that would give one message two competing writers. For tests,
+call `publish()` and assert immediately.
+Expiry and idle-time tests can inject UTC and monotonic clocks through `MessageRootScheduler(clock=...)` and
+`MessageRoot(clock=...)`; production callers normally keep their defaults.
+
+When the change happens in another process -- a worker that finished a render, a second shard --
+the host bridges it in. `PostgresTopicBridge` is that bridge for a deployment that already runs
+PostgreSQL: it publishes through the bus rather than relaying it, so nothing loops, and the
+payload is an encoded *address*, never state.
+
+```python
+bridge = sd.durability.PostgresTopicBridge(pool, bus)
+tasks.start_soon(bridge.run)   # LISTEN, plus the outbound sender
+bridge.publish(sl.runtime.Topic("build", "123"))  # local subscribers now, other processes shortly after
+```
+
+The default wire form is `sl.runtime.KindKeyCodec`, which writes `kind:key` and is total on `Topic`, so
+most hosts pass no codec at all. A `CellAddress` cannot reach a codec -- it names a live object
+rather than a value -- so shared cells stay process-local by type rather than by convention. Pass
+`codec=` only to speak a format someone else already defined:
+
+```python
+bridge = sd.durability.PostgresTopicBridge(pool, bus, LegacyCodec())
+```
+
+Every process that takes part runs the bridge, including one that only publishes. Delivery is
+exactly as durable as the bus: NOTIFY reaches whoever is listening at commit time, so a restart
+or a dropped connection costs latency, not correctness -- keep the reconciler or poll that already
+makes the projection converge. A reconnect calls the optional `on_resync()` for hosts that want to
+republish their coarse topics; payloads must stay under 8000 bytes.
+
+`publish()` is immediate on this process and queues a remote notification. When the change belongs
+inside an application-owned PostgreSQL transaction, use `publish_in()` instead:
+
+```python
+async with connection.transaction():
+    await save_change(connection)
+    await bridge.publish_in(connection, sl.runtime.Topic("build", "123"))
+```
+
+`publish_in()` does not commit the transaction. PostgreSQL holds its notification until commit,
+then the bridge listener publishes it locally and in other processes. The bridge must be running
+before calling it; unlike `publish()`, it rejects topics that cannot be encoded or fit under the
+NOTIFY payload limit.
+
+Every delivered message root using a scheduler is observed for edit-authority expiry, even when it follows
+no topics. `PauseUpdates(warning=60)` is the default pre-expiry status policy. A long-lived
+ephemeral panel can opt into an explicit, non-mutating handoff instead:
+
+```python
+message_root = sd.MessageRoot(
+    panel,
+    access=sd.Owner(user_id),
+    scheduler=scheduler,
+    expiry=sd.RenewEphemeral(warning=90),
+)
+```
+
+The renewal screen preserves the message root and hidden application state, then restores the latest
+render on the same message when its owner clicks **Continue Session**. Pass `expiry=None` to
+disable pre-expiry UI. `RenewEphemeral` requires a scheduler-backed scheduler so timed arming cannot
+silently be missed.
+
+### Runtime profiling
+
+Runtime profiling is opt-in, bounded, and synchronous. One `MemoryProfiler` can cover the host's
+live-update chain: pass it to `MessageRootScheduler`, and a `MessageRoot` inherits its scheduler's profiler unless
+explicitly overridden. Routers are independent ownership roots and accept the same collector
+directly.
+
+```python
+profiler = sl.profiling.MemoryProfiler(sample_rate=0.1)
+bus = sl.runtime.LocalTopicBus()
+scheduler = sd.MessageRootScheduler(bus, profiler=profiler)
+
+message_root = sd.MessageRoot(panel, access=sd.Everyone(), scheduler=scheduler)
+router = sd.Router(profiler=profiler)
+devtools = sd.devtools.DevTools(scheduler=scheduler)
+```
+
+Completed operations contribute to lifetime and rolling histograms and event counters even when
+their detailed trace is sampled out. Slow, failed, cancelled, and acknowledgement-deadline traces
+have dedicated bounded retention. `profiler.snapshot()` returns frozen data, and
+`sl.profiling.snapshot_json(snapshot)` exports schema-versioned JSON without consulting live
+objects. The profiler starts no tasks and performs no I/O; keep exporters under the host's own
+supervisor.
+
+The owner-only devtools cog reads all of this back: `dev ui actions [limit]` for the bounded causal
+action ledger (including rollbacks even when profiling is disabled), `dev ui profile` for latency aggregates,
+`dev ui profile <message-root-id>` for one message root's retained traces, `dev ui timeline [limit] [target]`
+for every retained dispatch in the order it happened, `dev ui queues` for the bus, and
+`dev ui export` for the whole snapshot as JSON. A timeline entry names the action key, the actor,
+the message root and the disposition, and `target` narrows it to `message-root:<id>` or `actor:<user_id>`.
+
+Trace attributes may retain a message root ID and the acting user ID in these bounded buffers, and
+`dev ui export` will dump both. Neither ever becomes an aggregate key: message-root IDs, topics, users,
+message IDs, route values, and form payloads are excluded from those by construction, so the
+unbounded half of the profiler stays free of identifiers.
+
+## Interaction patterns and two shells
+
+`Tabs`, `Menu`, materialized `RankedList`, `Wizard`, and `MultiChoice` are pure state machines.
+They do not choose between in-memory callbacks and restart-surviving routes. Instead, a shell injects
+that control construction:
+
+```python
+tabs = sp.Tabs(
+    (sp.Tab("summary", "Summary", summary), sp.Tab("history", "History", history)),
+    key="build-tabs",
+)
+
+# A stateful message: state lives in sl.state and controls use sl.action_control closures.
+message_root = sd.MessageRoot(tabs.build_component(), access=sd.Everyone())
+
+# A restart-surviving message: state is decoded from and encoded into route parameters.
+shell = sp.RouteDriver(
+    lambda request: BUILD_TAB.id(build_id=build.id, tab=request.state.selected),
+)
+document = shell.render(tabs, sp.TabsState(selected=tab))
+```
+
+MessageRooted actions accept application-wide middleware directly on the message root:
+
+```python
+class TraceActions(sl.interactions.ActionMiddleware):
+    async def dispatch(self, request, proceed) -> None:
+        with tracer.span("ui.action", action=request.key, rebased=request.rebased):
+            await proceed()
+
+
+message_root = sd.MessageRoot(
+    panel,
+    access=sd.Everyone(),
+    middleware=(TraceActions(),),
+)
+```
+
+The first middleware is outermost. Returning without `proceed()` short-circuits the handler but
+still lets the message root acknowledge and flush; `proceed()` is one-shot and expires when that
+middleware call returns. Middleware runs after message-root admission and stale-generation handling.
+Its `ActionRequest.rebased` flag is generation metadata, not a completion result. Handler state
+rolls back before an exception reaches outer middleware, and Discord rendering/delivery remains
+outside the onion. The onion itself is outside the handler transaction so it can catch commit-time
+shared-state conflicts. Component state written by middleware is consequently independent and does
+not roll back with handler state; middleware is a policy surface unless that independence is
+intentional.
+
+`MessageRoot.on_committed()` and `MessageRoot.on_presented()` observers are synchronous. Committed observers run
+whenever application runtime state advances, including when an identical presentation suppresses the
+Discord edit. Presented observers run only at delivered-generation commit points. Both run under the
+message root's render lock and must not await or call lock-taking message-root operations. External hosts migrating
+an async observer should enqueue its work or start it through an owned task supervisor.
+
+Every message root states who may interact. `Owner`, `Users`, and `Everyone` cover static policy;
+`Check` accepts an asynchronous application policy. Visibility stays a destination concern,
+so owner access does not by itself make a channel message private.
+
+`SessionManager` groups a root message root and its attached children under one operational lifetime.
+Typed `SessionKey.user`, `guild`, `user_guild`, `global_`, and `custom` constructors name scoped
+cardinality, while `AdmissionSpec` composes a limit, collision selection, and replacement
+protection. Opens return `Opened`, `Rejected`, or `Abandoned`; no preflight `get()` is needed to
+explain a collision.
+
+`SessionSpec` holds reusable key scope, admission, access, and message-root options for a logical application
+screen. Use `screen.respond(sessions, component, interaction)` when one interaction supplies both
+delivery and open-context identity; use `screen.open(...)` with an explicit `MessageDestination` and `OpenContext`
+for other transports.
+
+Stateful drafts that must survive restarts open through `DurableSessionRuntime`, which coordinates
+fenced admission, recoverable Discord bindings, whole-session checkpoints, and lease supervision.
+See [Durable sessions](../squid-ui-discord/docs/durable-message-roots.md) for the imperative and `DurableBot` startup paths.
+
+`TransitionRoute.phase` is `next` for deterministic buttons: its state is already the state the next
+document should render. Selects and forms use `input`, because their values arrive in the
+interaction; a route handler calls `RouteDriver.transition(...)` with those values and rebuilds the
+whole document. `Wizard.form_for(...)` and `MultiChoice.form_for(...)` return the form a routed
+input action should present. The route builder owns compact state encoding and receives the normal
+100-character custom-id budget check from `sl.routed_action`/`sl.routed_choices`.
+
+Routed patterns accept frontend-neutral content only. A mounted shell may embed child `Component`
+instances, but a process-independent route cannot carry an in-memory component identity.
+
+### Durable routed controls
+
+Controls on long-lived posts use a stable route tree rather than an in-memory message root. The namespace
+is an ordinary root group; every `define` returns its final, context-free identity immediately:
+
+```python
+routes = sd.RouteGroup[Bot]("r")
+polls = routes.group("polls")
+close_poll = polls.define("close", aliases=("poll:close",))
+
+router = sd.Router(namespace=routes, on_gone=control_gone)
+
+@polls.route(close_poll)
+async def close(interaction: discord.Interaction[Bot]) -> None:
+    ...
+```
+
+Reusable policy is a `Middleware[BotT]` instance attached before `Router.register(client)`:
+
+```python
+class TraceRoutes(sd.Middleware[Bot]):
+    async def dispatch(self, request, proceed) -> None:
+        with route_span(request):
+            await proceed()
+
+router.add_middleware(TraceRoutes())
+polls.add_middleware(PollAuthorization())
+```
+
+Middleware forms one onion in first-attached, outermost order: router middleware, inherited
+root-to-leaf group middleware, then the handler, unwinding in reverse. Omitting `proceed()`
+short-circuits; calling it twice or after `dispatch` returns is an error. The router keeps the
+initial interaction acknowledgement deadline outside this chain, so a slow handler or deliberate
+short-circuit cannot produce Discord's generic interaction failure.
+
+### State values
+
+`sl.state` holds a value that is replaced, never mutated in place. The type checker enforces
+it: a `dict`, `list` or `set` default declares the field as `Mapping`, `Sequence` or
+`AbstractSet`, so `self.rows.append(x)` and `rows: list[str] = sl.state([])` are both type
+errors, while the stored value is exactly the one assigned. `{**m, k: v}` replaces a key; for more
+than that, copy into a local and assign it back.
+`sl.state(..., opaque=True)` declares a collaborator the component holds and never mutates — a
+service, a guild, a session — which settles on identity and is never persisted.
+
+Inside an action a write stages into the transaction's overlay and becomes visible at commit.
+The action reads its own writes; another task reading the same field across an `await` sees the
+committed value until then, and a rollback is dropping the overlay.
+
+### Action history
+
+History is opt-in and component-owned. Declare a bounded stack like state, then pass it to
+state-changing actions; the framework retains the whole immutable commit only when the action commits:
+
+```python
+class Editor(sl.Component):
+    history: sl.runtime.History = sl.runtime.history(limit=20)
+    title: str = sl.state("")
+
+    def render(self):
+        return sl.action_controls(
+            sl.action_control("Rename", self.rename, key="rename", record=self.history),
+            sl.runtime.history_actions(self.history),
+            key="editor-actions",
+        )
+
+    async def rename(self, event: sl.PressEvent) -> None:
+        self.title = "New title"
+```
+
+Undo and redo are new actions. Each ordinary state inverse requires the exact version written by the
+action; a later write to the same slot returns a typed conflict without changing anything, while later
+work elsewhere is preserved. Redo is derived from the committed undo and therefore uses its fresh
+versions. For an external effect, record a `CompensationSpec` whose operation receives an idempotency
+key. Compensation failure and external-success/local-conflict are visible as `FAILED` and
+`NEEDS_RECONCILIATION`; neither is described as rollback.
+
+Every admitted transaction has an `ActionContext` before middleware runs and produces exactly one immutable
+`ActionCommit` or `ActionRollback`. Commit, rollback, and outcome hooks run only after the transaction is dead.
+They cannot mutate it or change its result; use `aftermath.start_action(...)` for a separately identified recovery.
+Portable ledger snapshots retain IDs, causality, timing, classifications, and change counts—not state values,
+owners, tracebacks, or closures. See [the action ledger guide](../../docs/action-ledger.md) for the commit point,
+hook rules, compensation, and replicated-state examples.
+The coordinated breaking signatures and direct before/after examples are in
+[the Plan 68 migration guide](../../docs/plan68-migration.md).
+
+### SharedState state
+
+`sl.runtime.SharedStateState` is a namespace of view state several live message roots agree on. Subclass it, declare
+state with `sl.state()`, and hand the same instance to whoever should see the same values:
+
+```python
+class Workspace(sl.runtime.SharedStateState[GuildId]):
+    selected: int | None = sl.state(None)
+    filters: tuple[str, ...] = sl.state(())
+
+workspace = Workspace(bus, guild.id)
+```
+
+It is the same `sl.state()` a component declares, and literally the same storage, so
+replacement, `opaque=`, staging and rollback are identical. What differs is who is told when it
+changes, and that is decided by what holds it rather than by how it is declared: a component's
+state invalidates its one owner, while a namespace's publishes an address on the `TopicBus`.
+Every message root whose render read that field refreshes; a message root subscribes to exactly what it
+rendered, reconciled each time it stages one. The message root that *made* the write repaints in the
+click itself rather than waiting for the bus, so a panel writing shared state feels no
+different from one writing local state — and needs no scheduler to do it. Every shared value an action
+strongly reads is guarded by its version when that action publishes anything, so write skew and
+A→B→A lineage changes raise `sl.runtime.ReactiveConflictError` rather than overwriting. A read is
+strong when the action also writes that cell, or when it was taken inside `strong_read()`; a
+read-only read is not validated by default. Use `relaxed_read()` to opt back out of a strong read;
+`untracked()` controls reactive subscription and is independent. History covers shared and local writes in one atomic,
+version-conditional inverse.
+
+Collaborative/offline data is a separate optional `squid-replication` package. `state()` and `SharedState`
+remain transactional registers. Replicated handles expose immutable snapshots and semantic mutation
+methods, route local and remote changes through the same runtime commit gate, and never expose mutable
+backend containers.
+
+There is no global store and no lookup by type: two panels converge because something gave them
+the same object, so the handle is the state and its lifetime is whoever holds it. When what a host
+holds is one handle per scope, `sl.runtime.SharedStateStatePool` is that lifetime written down instead of a
+`setdefault` cache around every namespace:
+
+```python
+workspaces = sl.runtime.SharedStateStatePool(Workspace, bus)
+workspace = workspaces.get(guild.id)
+```
+
+`get` is get-or-create and synchronous; `get_existing`, `drop`, `clear` and `active` are the rest of
+it. Put the pool where the lifetime is — on the bot for the process, on a cog for the extension, on
+a session for that session. `squid_storage.PersistentStatePool` is the hydrating variant, `await load(scope)`
+for a namespace that should survive a restart. Keep domain truth in your data layer; a namespace is
+for what only the screen wants.
+
+### Computed values
+
+`sl.computed` caches a synchronous derived value against whatever state its body read. Nothing
+is declared, so a conditional dependency is exactly the branch that ran:
+
+```python
+class SearchResults(sl.Component):
+    query: str = sl.state("")
+    filters: frozenset[str] = sl.state(frozenset())
+
+    @sl.computed
+    def visible_results(self) -> tuple[Result, ...]:
+        return apply_filters(search(self.query), self.filters)
+```
+
+A computed may read another component's state, or another computed. It is lazy — one nobody
+renders is never evaluated — and one that raises fails where its value is used rather than at
+commit. Values form selector boundaries: downstream computed values recompute only when the
+refreshed value compares unequal. `sl.runtime.untracked()` reads state without subscribing to it.
+
+### StateOwner async resources
+
+`sl.resource` keeps async data in a synchronous, renderable state machine. Its dependencies are
+whatever its loader read, tracked the same way a computed's are:
+
+```python
+class VotingPanel(sl.Component):
+    kind: VoteKind = sl.state(VoteKind.BUILD)
+
+    @sl.resource
+    async def configuration(self) -> VoteConfiguration:
+        return await votes.configuration(self.kind)
+
+    def render(self):
+        match self.configuration.status:
+            case sl.resources.Pending(previous=None):
+                return sl.note("Loading…")
+            case sl.resources.Pending(previous=sl.resources.Ready(value=config)):
+                return refreshing_panel(config)
+            case sl.resources.Failed(error=error, previous=previous):
+                return failed_panel(error, previous)
+            case sl.resources.Ready(value=config):
+                return voting_panel(config)
+```
+
+A committed write to state the loader read re-pends the resource at the next read. A loader
+that reads something only in one branch must hoist that read, or a run that skipped the branch
+will not subscribe to it. Hidden branches remain lazy:
+only resources observed during rendering are loaded. `Pending` and `Failed` retain the last `Ready`
+value when available, while request tokens prevent stale completions from publishing.
+
+Explicit pending is the default: Discord commits the pending render, settles observed sibling
+resources concurrently, then edits to the settled render. Use
+`@sl.resource(pending=sl.resources.PendingMode.ATOMIC)` when pending should remain internal and
+the first delivery must already be settled. Its `.status` is typed as `Ready[T] | Failed[T]`:
+refreshes expose the previous `Ready` value while loading, and an initial pending read is retried
+by the message root. Both policies use the same internal state machine and neither starts detached
+background work.
+
+`await panel.configuration.reload()` is the caller-owned, awaited form. `invalidate()` requests a
+new value without immediately loading it, and `replace(value)` publishes an authoritative local
+result. Resource state is runtime-only and is not included in durable component snapshots.
+
+### Operation definitions and executions
+
+`sl.operation` declares a repeatable component-bound definition. Each `start()` creates a fresh,
+causally identified one-shot execution under the message root's caller-owned task. Store the execution that
+the component renders; progress is explicit reactive current state, not an event stream:
+
+```python
+class PublishVote(sl.Component):
+    publication: sl.operations.OperationExecution[VoteId, PublishProgress]
+
+    def __init__(self) -> None:
+        self.publication = self._publish.start()
+
+    @sl.operation(initial=PublishProgress.CREATING)
+    async def _publish(
+        self,
+        progress: sl.operations.ProgressReporter[PublishProgress],
+    ) -> VoteId:
+        progress.report(PublishProgress.PUBLISHING)
+        return await votes.publish()
+
+    def render(self):
+        match self.publication.status:
+            case sl.operations.Pending(progress=progress):
+                return pending_vote(progress)
+            case sl.operations.Succeeded(value=vote_id):
+                return published_vote(vote_id)
+            case sl.operations.Failed(error=error, progress=progress):
+                return failed_vote(error, progress)
+            case sl.operations.Cancelled(progress=progress):
+                return cancelled_vote(progress)
+```
+
+Unlike a resource, an execution has no `reload`, `invalidate`, or `replace`: success, failure,
+and cancellation are terminal for that execution. A retry is `self._publish.start()` and receives a
+new execution ID while keeping the initiating action as its cause. MessageRoots coalesce progress invalidations through their ordinary
+stage/deliver/commit path while the operation runs. Resources remain repeatable and intentionally
+have no cancelled status; cancelling one load attempt leaves it pending and retryable.
+
+### Async cursor sources
+
+A ranking too large to materialize uses the distinct `SourceRankedList` component. A source declares
+only what it can prove and fetches one window at a time:
+
+```python
+class BuildSource:
+    capabilities = sl.sources.SourceCapabilities(backward=True)
+
+    async def fetch(self, position: sl.sources.Position, extent: int) -> sl.sources.Window[Build]:
+        resolved, rows, has_previous, has_more = await builds.window(position, extent)
+        return sl.sources.Window(resolved, tuple(rows), has_previous, has_more)
+
+ranking = sp.SourceRankedList(
+    BuildSource(),
+    key="builds",
+    label=lambda build: build.title,
+    value=lambda build: build.score,
+    identity=lambda build: str(build.id),
+    page_size=10,
+)
+```
+
+`position.direction` is `Direction.AROUND` for an anchor-preserving refresh, `FORWARD` for rows after
+the anchor, and `BACKWARD` for rows before it. Every `Window` returns the source's resolved
+`Direction.AROUND` position, including its fallback when an anchor disappeared. The component exposes
+loading and failure as visible resource states, retaining the previous window during navigation.
+`WindowLoader` fingerprints visible identities, while the resource rejects superseded completions.
+
+`SourceCapabilities` separately declares backward traversal, known offsets, arbitrary jumps, and
+`CountPrecision`. Exact jumpable sources get page counts and an `on_seek` on their
+`NavigationContext`, which takes a zero-based page; exact or approximate sequential sources get
+range totals; offset-only sources get a range; keyset-only sources get no numeric footer. A source that
+declares no count must return `total=None`. Source-backed rankings are components because fetching stays
+outside planning and cannot run in `RouteDriver.render()`.
+
+## Testing a panel with no Discord attached
+
+`sd.testing` is public surface, not a private test helper. Send a message root to nowhere,
+then drive it through `MessageRoot.dispatch` — the same funnel a real press takes, so access
+policies, guards, the action transaction and the repaint all run:
+
+```python
+from squid_ui_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
+
+message_root = sd.MessageRoot(Settings(), access=sd.Everyone())
+await message_root.send(delivered_to(fake_message()))
+
+await message_root.dispatch("save", fake_interaction(user_id=AUTHOR_ID))
+
+assert message_root.component.saved
+```
+
+`commit_render(message_root)` is the shortcut when the load path is not what is under test: it stages
+and commits a render with no delivery and does not run `on_load`. Modal submissions go through
+`MessageRoot.dispatch_submit`. There is no `press("save")` sugar on purpose — `dispatch` is the real
+entry point, and a second spelling of it would be one more thing to keep true.
+
+The other half of the module checks the wire payload rather than the Python objects:
+`assert_within_limits(built)`, or `payload_problems` / `modal_problems` when a test wants the
+list rather than an assertion.
+
+## Host integration rules
+
+- The base package depends only on the zero-dependency `squid-reactivity` kernel. Install
+  `squid-ui-discord` for the discord.py adapter. The adapter never starts background work on its own;
+  start `sd.MessageRootScheduler.run()` and any external bridge under your own supervisor.
+- Factories take content positionally and everything else by keyword. `None` and `False`
+  children are skipped, so `cond and node` is the way to include something conditionally;
+  `True` is rejected because `and` can never produce it. Collections are unpacked by the
+  caller: `sl.fields(*(sl.field(name, value) for name, value in rows))`.
+- Bare strings are trusted Discord Markdown. Use `md(t"Build {title}")` for escaped Python
+  3.14 template-string interpolation, `plain()` for literal text, and `raw_md()` only for a
+  deliberately trusted interpolation.
+- It contains no translation markers. All user-facing chrome (nav labels, spill lines, page
+  footers) enters pre-translated through `Chrome`; build one per locale.
+- If it ever grows `_()` markers, the host's Babel config must add
+  `[python: packages/squid-ui/src/**.py]`.

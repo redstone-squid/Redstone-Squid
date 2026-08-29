@@ -8,7 +8,8 @@ import discord
 from discord import app_commands
 from discord.ext.commands import Cog, Context, hybrid_group
 
-import squid_layouts as sl
+import squid_ui as sl
+import squid_ui_discord as sd
 from squid.accounts.domain import (
     CURRENT_CONSENT_VERSION,
     Account,
@@ -25,7 +26,7 @@ from squid.bot.i18n import resolve_locale, t
 from squid.bot.profile_render import (
     public_profile_fields,
 )
-from squid.bot.ui import DISCORD_BLUE, card_layout, create_mount, destination, reply_presentation, text_layout
+from squid.bot.ui import card_layout, create_message_root, message_destination, reply_payload, text_layout
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.permissions import PermissionNodeRequired, requires, subject_for
 from squid.bot.utils.visibility import deliver_privately, personal
@@ -55,19 +56,16 @@ class MergeConfirmation(sl.Component):
 
     def render(self) -> tuple[sl.LayoutNode, ...]:
         return (
-            sl.section(
-                sl.heading(t(self.locale, _("Confirm account merge"))), sl.paragraph(self.prompt), accent=DISCORD_BLUE
-            ),
-            sl.primitives.Row(
-                (
-                    sl.primitives.Button(
-                        t(self.locale, _("Confirm")),
-                        self._confirm,
-                        "confirm",
-                        style=sl.primitives.ActionStyle.SUCCESS,
-                    ),
-                    sl.primitives.Button(t(self.locale, _("Cancel")), self._cancel, "cancel"),
-                )
+            sl.section(sl.heading(t(self.locale, _("Confirm account merge"))), sl.paragraph(self.prompt)),
+            sl.action_controls(
+                sl.action_control(
+                    t(self.locale, _("Confirm")),
+                    self._confirm,
+                    key="confirm",
+                    tone=sl.Tone.SUCCESS,
+                ),
+                sl.action_control(t(self.locale, _("Cancel")), self._cancel, key="cancel"),
+                key="merge-actions",
             ),
         )
 
@@ -86,11 +84,11 @@ class MergeConfirmation(sl.Component):
             await self._done.wait()
         return None if scope.cancel_called else self.value
 
-    def mount(self, *, source: sl.discord.host.HostSource) -> sl.discord.Mount:
-        return create_mount(
+    def mount(self, *, source: sd.runtime.RuntimeSource) -> sd.MessageRoot:
+        return create_message_root(
             self,
             source=source,
-            access=sl.discord.Owner(self.author_id),
+            access=sd.Owner(self.author_id),
             locale=self.locale,
             timeout=self._timeout,
         )
@@ -114,7 +112,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         # to be remembered, and there is nothing to show for someone with no account anyway.
         account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(ctx.author.id))
         if account is None or account.id is None:
-            await reply_presentation(
+            await reply_payload(
                 ctx,
                 text_layout(t(locale, _("You don't have any linked accounts yet. Link one with `/account link`."))),
                 visibility="personal" if personal(ctx) else "public",
@@ -128,21 +126,21 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             author_id=ctx.author.id,
             locale=locale,
         )
-        mount = component.mount(source=ctx)
-        await mount.send(destination(ctx, visibility="personal", locale=locale))
+        message_root = component.mount(source=ctx)
+        await message_root.send(message_destination(ctx, visibility="personal", locale=locale))
 
     async def _show_creator_page(self, ctx: Context[BotT], user: discord.Member | discord.User, locale: str) -> None:
         """Show somebody else's page, which is shared content and answers where the channel sees it."""
         account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(user.id))
         if account is None or account.public_creator_id is None:
-            await reply_presentation(
+            await reply_payload(
                 ctx,
                 text_layout(t(locale, _("{user} doesn't have a creator page."), user=user.display_name)),
                 visibility="personal" if personal(ctx) else "public",
             )
             return
         presentation = await self._public_profile_card(account.public_creator_id, user.display_name, locale)
-        await reply_presentation(ctx, presentation)
+        await reply_payload(ctx, presentation)
 
     @account_group.command(name="link")
     @app_commands.describe(code=app_commands.locale_str(_("The code you received by running /link in the game.")))
@@ -177,7 +175,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
                 # would be reporting something that did not happen.
                 return
             if consent is None:
-                await reply_presentation(
+                await reply_payload(
                     ctx,
                     text_layout(t(locale, _("Account linking cancelled. No user account information was stored."))),
                     visibility="personal" if ephemeral else "public",
@@ -207,7 +205,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             if not committed:
                 await self.account_service.release_minecraft_link(code, reservation)
 
-        await reply_presentation(
+        await reply_payload(
             ctx,
             text_layout(_link_message(refresh, locale)),
             visibility="personal" if ephemeral else "public",
@@ -220,7 +218,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         ephemeral = personal(ctx)
         account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(ctx.author.id))
         if account is not None and account.id is not None and not account.needs_consent_refresh:
-            await reply_presentation(
+            await reply_payload(
                 ctx,
                 text_layout(
                     t(
@@ -236,7 +234,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         account_id = await ensure_consented_account(ctx, self.account_service, locale=locale)
         if account_id is None:
             return
-        await reply_presentation(
+        await reply_payload(
             ctx,
             text_layout(t(locale, _("Thanks. You can use the bot's other commands now."))),
             visibility="personal" if ephemeral else "public",
@@ -251,13 +249,11 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             return card_layout(
                 t(locale, _("Hidden creator page")),
                 t(locale, _("This creator has hidden their page. Their build credit is still listed.")),
-                accent_colour=DISCORD_BLUE,
                 fields=public_profile_fields(public, locale),
             )
         return card_layout(
             public.display_name or fallback_name,
             public.bio,
-            accent_colour=DISCORD_BLUE,
             fields=public_profile_fields(public, locale),
             media=() if public.avatar_url is None else (public.avatar_url,),
         )
@@ -302,7 +298,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             raise AccountNotFoundError(provider=IdentityProvider.DISCORD, subject=str(target.id))
 
         refresh = await self.account_service.refresh_java_identity(account.id)
-        await reply_presentation(
+        await reply_payload(
             ctx,
             text_layout(_refresh_message(refresh, locale)),
             visibility="personal" if personal(ctx) else "public",
@@ -331,7 +327,6 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
                     ),
                     code=code,
                 ),
-                accent_colour=DISCORD_BLUE,
                 footer=t(
                     locale,
                     _("Expires {expiry}. Give it to nobody but yourself: it hands this account over."),
@@ -368,7 +363,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             author_id=ctx.author.id,
             locale=locale,
         )
-        await confirmation.mount(source=ctx).send(destination(ctx, visibility="personal", locale=locale))
+        await confirmation.mount(source=ctx).send(message_destination(ctx, visibility="personal", locale=locale))
         await confirmation.wait()
 
         if confirmation.value is None:
@@ -382,7 +377,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
                 _("Merged. `{redirected}` now redirects to your creator page."),
                 redirected=merge.redirected_public_creator_id,
             )
-        await reply_presentation(
+        await reply_payload(
             ctx,
             text_layout(message),
             visibility="personal" if personal(ctx) else "public",
@@ -398,7 +393,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         if account_id is None:
             return
         claim = await self.account_service.request_alias_claim(account_id, name)
-        await reply_presentation(
+        await reply_payload(
             ctx,
             text_layout(
                 t(
@@ -429,8 +424,8 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             can_approve=approve.allowed,
             can_reject=reject.allowed,
         )
-        mount = component.mount(source=ctx)
-        await mount.send(destination(ctx, visibility="personal", locale=locale))
+        message_root = component.mount(source=ctx)
+        await message_root.send(message_destination(ctx, visibility="personal", locale=locale))
 
 
 def _link_conflict(preview: LinkPreview, existing_java: AccountIdentity | None) -> UUID | None:

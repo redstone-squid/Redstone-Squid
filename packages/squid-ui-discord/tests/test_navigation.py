@@ -1,0 +1,86 @@
+"""StackNavigator: stack navigation by composition."""
+
+import discord
+
+from squid_ui import Component
+from squid_ui.primitives import Heading, Text
+from squid_ui_discord import Everyone, MessageRoot
+from squid_ui_discord.navigation import StackNavigator
+from squid_ui_discord.testing import commit_render, fake_interaction
+
+
+class Screen(Component):
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def render(self):
+        return [Heading(self.name), Text(f"content of {self.name}")]
+
+
+def _texts(view: discord.ui.LayoutView) -> list[str]:
+    return [c.content for c in view.walk_children() if isinstance(c, discord.ui.TextDisplay)]
+
+
+def _labels(view: discord.ui.LayoutView) -> list[str | None]:
+    return [b.label for b in view.walk_children() if isinstance(b, discord.ui.Button)]
+
+
+async def test_push_pop_and_controls_render_last():
+    navigator = StackNavigator(Screen("root"))
+    message_root = MessageRoot(navigator, access=Everyone(), timeout=None)
+    view = commit_render(message_root)
+    assert "## root" in _texts(view)
+    assert _labels(view) == ["Back", "Close"]
+
+    navigator.push(Screen("child"))
+    interaction = fake_interaction()
+    await message_root.refresh(interaction)
+    pushed = interaction.response.edit_message.await_args.kwargs["view"]
+    assert "## child" in _texts(pushed)
+
+    await message_root.dispatch("__nav_back", fake_interaction())
+    assert navigator.current.name == "root"  # pyrefly: ignore
+
+
+async def test_home_appears_only_when_deep():
+    navigator = StackNavigator(Screen("root"))
+    message_root = MessageRoot(navigator, access=Everyone(), timeout=None)
+    navigator.push(Screen("a"))
+    navigator.push(Screen("b"))
+    view = commit_render(message_root)
+    assert "Home" in _labels(view)
+
+    await message_root.dispatch("__nav_home", fake_interaction())
+    assert navigator.depth == 1
+
+
+async def test_child_state_changes_rerender_through_the_shared_root():
+    from squid_ui import state
+
+    class Counting(Component):
+        count: int = state(0)
+
+        def render(self):
+            return [Text(f"count {self.count}")]
+
+    child = Counting()
+    navigator = StackNavigator(Screen("root"))
+    message_root = MessageRoot(navigator, access=Everyone(), timeout=None)
+    commit_render(message_root)
+    navigator.push(child)
+    commit_render(message_root)
+
+    child.count = 5
+
+    assert message_root._dirty
+    assert "count 5" in _texts(commit_render(message_root))
+
+
+async def test_close_finishes_the_root():
+    navigator = StackNavigator(Screen("root"))
+    message_root = MessageRoot(navigator, access=Everyone(), timeout=None)
+    commit_render(message_root)
+
+    await message_root.dispatch("__nav_close", fake_interaction())
+
+    assert message_root._finished

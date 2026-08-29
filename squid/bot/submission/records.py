@@ -7,7 +7,7 @@ from discord.ext import commands
 from discord.ext.commands import Cog, Context, hybrid_group
 
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.ui import DISCORD_BLUE, PagedList, info_layout, reply_presentation
+from squid.bot.ui import DISCORD_BLUE, PagedList, info_layout, reply_payload
 from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.bot.utils.permissions import hide_unless, requires
 from squid.bot.utils.visibility import personal
@@ -98,7 +98,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         locale = await resolve_locale(ctx, self.bot.services.settings)
         kinds = (kind,) if kind is not None else (BuildKind.DOOR, BuildKind.EXTENDER)
         summary = await self.computation.rebuild(current_version_id=current_version_id, kinds=kinds)
-        await reply_presentation(
+        await reply_payload(
             ctx,
             info_layout(
                 t(locale, _("Records rebuilt")),
@@ -162,7 +162,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                     version_id=version_id,
                 )
             )
-        await reply_presentation(
+        await reply_payload(
             ctx,
             info_layout(
                 t(locale, _("Record category materialized")),

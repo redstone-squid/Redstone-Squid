@@ -10,7 +10,9 @@ import discord
 import pytest
 from whenever import Instant
 
-import squid_layouts as sl
+import squid_ui as sl
+import squid_ui_discord as sd
+import squid_ui_widgets as sp
 from squid.accounts.domain import (
     Account,
     AccountConsent,
@@ -21,7 +23,7 @@ from squid.accounts.domain import (
 )
 from squid.bot.account_view import AccountPanel
 from squid.bot.verify import VerifyCog
-from squid_layouts.discord.testing import commit_render, fake_interaction
+from squid_ui_discord.testing import commit_render, fake_interaction
 
 ACCOUNT_ID = 42
 AUTHOR_ID = 555
@@ -115,8 +117,8 @@ def test_profile_editor_splits_profile_fields_from_ordered_links() -> None:
     )
 
     component = panel._build_profile_editor()
-    editor = cast(sl.patterns.Editor, component.pattern)
-    values = editor.values(component.pattern_state)
+    editor = cast(sp.Editor, component.machine)
+    values = editor.values(component.machine_state)
 
     assert values["profile"] == {"display_name": "Builder", "pronouns": None, "bio": "Hello"}
     assert tuple(dict(link) for link in cast(tuple, values["links"])) == (
@@ -138,9 +140,9 @@ async def test_profile_editor_commit_persists_and_returns_to_account_panel() -> 
     panel._refresh = AsyncMock()  # type: ignore[method-assign]
     component = panel._build_profile_editor()
     panel._profile_editor = component
-    editor = cast(sl.patterns.Editor, component.pattern)
+    editor = cast(sp.Editor, component.machine)
     staged = editor.transition(
-        component.pattern_state,
+        component.machine_state,
         "submit:profile",
         submitted={"display_name": "Builder", "pronouns": None, "bio": "Hello"},
     )
@@ -148,7 +150,7 @@ async def test_profile_editor_commit_persists_and_returns_to_account_panel() -> 
     source = SimpleNamespace(notice=AsyncMock())
 
     assert component.on_change is not None
-    await component.on_change(sl.patterns.PatternEvent(cast(Any, source), "save", staged, committed))
+    await component.on_change(sp.TransitionEvent(cast(Any, source), "save", staged, committed))
 
     cast(AsyncMock, panel._accounts.update_profile).assert_awaited_once()
     assert panel._profile_editor is None
@@ -187,9 +189,11 @@ def _gated_panel(monkeypatch: pytest.MonkeyPatch) -> tuple[AccountPanel, dict[st
     return panel, opened
 
 
-def _press(mount: Any) -> Any:
+def _press(message_root: Any) -> Any:
     """A press double carrying the Discord facts `_with_consent` reads off an event."""
-    responder = SimpleNamespace(interaction=SimpleNamespace(user=SimpleNamespace(id=AUTHOR_ID)), mount=mount)
+    responder = SimpleNamespace(
+        interaction=SimpleNamespace(user=SimpleNamespace(id=AUTHOR_ID)), message_root=message_root
+    )
     return SimpleNamespace(responder=responder, value=True)
 
 
@@ -203,37 +207,37 @@ async def test_a_press_needing_consent_ends_instead_of_holding_the_panel(
     -- up to two minutes. Nothing here waits, so the editor is simply not open yet.
     """
     panel, opened = _gated_panel(monkeypatch)
-    monkeypatch.setattr("squid_layouts.discord.native", lambda event: event.responder.interaction)
-    monkeypatch.setattr("squid_layouts.discord.responder", lambda event: event.responder)
-    mount = SimpleNamespace(refresh=AsyncMock())
+    monkeypatch.setattr("squid_ui_discord.native", lambda event: event.responder.interaction)
+    monkeypatch.setattr("squid_ui_discord.responder", lambda event: event.responder)
+    message_root = SimpleNamespace(schedule=AsyncMock())
 
-    await panel._edit_page(cast(Any, _press(mount)))
+    await panel._edit_page(cast(Any, _press(message_root)))
 
     assert panel._profile_editor is None
-    mount.refresh.assert_not_awaited()
+    message_root.schedule.assert_not_awaited()
 
     await opened["on_answer"](cast(Any, None), AccountConsent.grant_current())
 
     # The press resumes where the reader left it, on the panel's own message.
     assert panel._profile_editor is not None
     cast(AsyncMock, panel._accounts.grant_current_consent).assert_awaited_once()
-    mount.refresh.assert_awaited_once()
+    message_root.schedule.assert_awaited_once()
 
 
 async def test_declining_leaves_the_panel_exactly_as_it_was(monkeypatch: pytest.MonkeyPatch) -> None:
     """Cancelling stores nothing, changes nothing, and does not redraw anything."""
     panel, opened = _gated_panel(monkeypatch)
-    monkeypatch.setattr("squid_layouts.discord.native", lambda event: event.responder.interaction)
-    monkeypatch.setattr("squid_layouts.discord.responder", lambda event: event.responder)
-    mount = SimpleNamespace(refresh=AsyncMock())
+    monkeypatch.setattr("squid_ui_discord.native", lambda event: event.responder.interaction)
+    monkeypatch.setattr("squid_ui_discord.responder", lambda event: event.responder)
+    message_root = SimpleNamespace(schedule=AsyncMock())
 
-    await panel._edit_page(cast(Any, _press(mount)))
+    await panel._edit_page(cast(Any, _press(message_root)))
     await opened["on_answer"](cast(Any, None), None)
 
     assert panel._profile_editor is None
     assert panel._needs_consent
     cast(AsyncMock, panel._accounts.grant_current_consent).assert_not_awaited()
-    mount.refresh.assert_not_awaited()
+    message_root.schedule.assert_not_awaited()
 
 
 async def test_a_toggle_needing_consent_still_applies_once_the_reader_agrees(
@@ -245,13 +249,13 @@ async def test_a_toggle_needing_consent_still_applies_once_the_reader_agrees(
     to sit in the handler rather than in the control declaration.
     """
     panel, opened = _gated_panel(monkeypatch)
-    monkeypatch.setattr("squid_layouts.discord.native", lambda event: event.responder.interaction)
-    monkeypatch.setattr("squid_layouts.discord.responder", lambda event: event.responder)
+    monkeypatch.setattr("squid_ui_discord.native", lambda event: event.responder.interaction)
+    monkeypatch.setattr("squid_ui_discord.responder", lambda event: event.responder)
     panel._identities = (DISCORD,)
     panel.selected_id = DISCORD.id
-    mount = SimpleNamespace(refresh=AsyncMock())
+    message_root = SimpleNamespace(schedule=AsyncMock())
 
-    await panel._toggle_identity(cast(Any, _press(mount)))
+    await panel._toggle_identity(cast(Any, _press(message_root)))
 
     cast(AsyncMock, panel._accounts.set_identity_visibility).assert_not_awaited()
 
@@ -260,7 +264,7 @@ async def test_a_toggle_needing_consent_still_applies_once_the_reader_agrees(
     cast(AsyncMock, panel._accounts.set_identity_visibility).assert_awaited_once_with(
         ACCOUNT_ID, DISCORD.id, is_public=True
     )
-    mount.refresh.assert_awaited_once()
+    message_root.schedule.assert_awaited_once()
 
 
 class _Recorder:
@@ -273,7 +277,7 @@ class _Recorder:
         self.requests.append(request)
 
 
-def _linked_panel() -> tuple[AccountPanel, _Recorder, AsyncMock, sl.discord.Mount]:
+def _linked_panel() -> tuple[AccountPanel, _Recorder, AsyncMock, sd.MessageRoot]:
     unlink = AsyncMock(return_value=JAVA)
     panel = AccountPanel(
         accounts=cast(Any, SimpleNamespace(unlink_identity=unlink)),
@@ -286,20 +290,20 @@ def _linked_panel() -> tuple[AccountPanel, _Recorder, AsyncMock, sl.discord.Moun
     panel.selected_id = JAVA.id
     panel._refresh = AsyncMock()  # type: ignore[method-assign]
     presenter = _Recorder()
-    mount = sl.discord.Mount(panel, access=sl.discord.Everyone(), timeout=None, challenge=presenter)
-    commit_render(mount)
-    return panel, presenter, unlink, mount
+    message_root = sd.MessageRoot(panel, access=sd.Everyone(), timeout=None, challenge=presenter)
+    commit_render(message_root)
+    return panel, presenter, unlink, message_root
 
 
 async def test_unlinking_asks_before_it_removes_anything() -> None:
     """The armed flag is gone: the button declares that it needs reaffirming.
 
     What used to be three pieces of view state, an early return and a relabelled button is now
-    `guard=sl.guards.confirm(...)`, and the warning is in the question instead of the footer.
+    `guard=sp.guards.confirm(...)`, and the warning is in the question instead of the footer.
     """
-    panel, presenter, unlink, mount = _linked_panel()
+    panel, presenter, unlink, message_root = _linked_panel()
 
-    await mount.dispatch("unlink", fake_interaction(user_id=AUTHOR_ID))
+    await message_root.dispatch("unlink", fake_interaction(user_id=AUTHOR_ID))
 
     unlink.assert_not_awaited()
     assert len(presenter.requests) == 1
@@ -307,8 +311,8 @@ async def test_unlinking_asks_before_it_removes_anything() -> None:
 
 
 async def test_agreeing_to_the_question_removes_the_identity() -> None:
-    panel, presenter, unlink, mount = _linked_panel()
-    await mount.dispatch("unlink", fake_interaction(user_id=AUTHOR_ID))
+    panel, presenter, unlink, message_root = _linked_panel()
+    await message_root.dispatch("unlink", fake_interaction(user_id=AUTHOR_ID))
 
     await presenter.requests[0].approve()
 
@@ -316,8 +320,8 @@ async def test_agreeing_to_the_question_removes_the_identity() -> None:
 
 
 async def test_declining_the_question_removes_nothing() -> None:
-    panel, presenter, unlink, mount = _linked_panel()
-    await mount.dispatch("unlink", fake_interaction(user_id=AUTHOR_ID))
+    panel, presenter, unlink, message_root = _linked_panel()
+    await message_root.dispatch("unlink", fake_interaction(user_id=AUTHOR_ID))
 
     await presenter.requests[0].decline()
 

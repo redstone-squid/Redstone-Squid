@@ -1,4 +1,4 @@
-"""Public interactive showcase for the squid-layouts engine."""
+"""Public interactive showcase for the squid-ui engine."""
 
 import asyncio
 from collections.abc import Awaitable, Callable, Iterable, Sequence
@@ -9,24 +9,26 @@ from typing import TYPE_CHECKING, Literal, Never
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Context, guild_only
-from squid_replicated import ReplicatedDocument, ReplicatedScope
 
-import squid_layouts as sl
+import squid_ui as sl
+import squid_ui_discord as sd
+import squid_ui_widgets as sp
 from squid.bot.i18n import resolve_locale
 from squid.bot.ui import (
     DISCORD_BLUE,
     DISCORD_GREEN,
     DISCORD_YELLOW,
     L,
-    create_mount,
-    destination,
+    create_message_root,
     localization_for,
+    message_destination,
     send_component,
 )
 from squid.core.i18n import _
-from squid_layouts.discord import SessionKey
-from squid_layouts.discord.screens import Opener
-from squid_layouts.discord.sessions import UserScope
+from squid_replication import ReferenceBackend, Replica, ReplicatedDocument
+from squid_ui_discord import SessionKey
+from squid_ui_discord.session_specs import OpenContext
+from squid_ui_discord.sessions import UserScope
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -62,7 +64,7 @@ _SOURCE_EXAMPLES = {
 # No page size: the solver fills Discord's actual text budget.
 return sl.section(sl.heading("Measured pagination"), lines)""",
     "adaptation": """actions = tuple(
-    sl.action(
+    sl.action_control(
         L("Action {number}", number=number),
         on_action,
         key=f"action.{number}",
@@ -71,7 +73,7 @@ return sl.section(sl.heading("Measured pagination"), lines)""",
 )
 
 # Declare intent once. Discord lowers this to pickers of 25 and 11.
-return sl.actions(*actions, key="showcase-actions")""",
+return sl.action_controls(*actions, key="showcase-actions")""",
     "degradation": """return sl.primitives.Panel((
     sl.primitives.Heading("Deliberate degradation"),
 
@@ -88,7 +90,7 @@ return sl.actions(*actions, key="showcase-actions")""",
     sl.heading("Typed data"),
 
     # A quantity, a proportion, and an instant -- not three pre-formatted strings.
-    sl.measure(len(rows), "Loaded samples", unit="rows"),
+    sl.metric(len(rows), "Loaded samples", unit="rows"),
     sl.progress(clicks, label="Clicks toward ten", maximum=10),
 
     # One node; Discord draws it in each reader's own timezone.
@@ -98,7 +100,7 @@ return sl.actions(*actions, key="showcase-actions")""",
     sl.table(columns, *rows, key="capability-table"),
 )""",
     "grid": """cells = tuple(
-    sl.patterns.GridCell(
+    sp.GridCell(
         f"cell-{index}",
         str(index + 1),
         available=index not in blocked,
@@ -155,14 +157,14 @@ return sl.form("Open the feedback form", FeedbackForm(**prefill), key="feedback"
     )
 
 async def switch_language(self, event: sl.PressEvent) -> None:
-    mount = sl.discord.responder(event).mount
+    mount = sd.responder(event).mount
     mount.localize(localization_for("zh-CN"))
 
 # Interpolated values are Markdown-escaped unless wrapped in sl.raw_md().""",
     "history": """history: sl.runtime.History = sl.runtime.history(limit=5)
 
 # The whole committed action becomes one conditional inverse plan.
-sl.action("Rename project", self.rename, key="history.rename", record=self.history)
+sl.action_control("Rename project", self.rename, key="history.rename", record=self.history)
 
 result = await self.history.undo()
 match result.status:
@@ -172,12 +174,12 @@ match result.status:
         ...  # a later write is intact; nothing was partially restored
 
 # Outcome hooks run after the old transaction is dead. Recovery is a new action.
-def rolled_back(rollback, aftermath):
-    with aftermath.start_action("Present failure"):
+def rolled_back(rollback, continuation):
+    with continuation.start_action("Present failure"):
         self.notice = rollback.reason.value
 
 sl.runtime.on_action_rollback(rolled_back)""",
-    "replication": """scope = ReplicatedScope("browser-a")
+    "replication": """scope = Replica("browser-a", backend=ReferenceBackend())
 document = scope.open("showcase")
 
 # Reads are immutable snapshots; writes are semantic transaction participants.
@@ -192,8 +194,8 @@ peer.import_update(document.export_since())
 # a peer's later +3 and tagged-set insertion.
 result = await history.undo()""",
     "effects": """@sl.operation(initial="queued")
-async def publish(self, progress: sl.operations.Progress[str]) -> int:
-    progress.set("sending")
+async def publish(self, progress: sl.operations.ProgressReporter[str]) -> int:
+    progress.report("sending")
     return 42
 
 execution = self.publish.start()  # every start has a fresh execution id
@@ -346,15 +348,15 @@ class LayoutShowcase(sl.Component):
         self.left = DemoCounter(L(t"Left child"))
         self.right = DemoCounter(L(t"Right child"))
         self.channel_service = DemoChannelService()
-        self.local_replication_scope = ReplicatedScope("showcase-local")
-        self.peer_replication_scope = ReplicatedScope("showcase-peer")
+        self.local_replication_scope = Replica("showcase-local", backend=ReferenceBackend())
+        self.peer_replication_scope = Replica("showcase-peer", backend=ReferenceBackend())
         self.local_document: ReplicatedDocument = self.local_replication_scope.open("layout-showcase")
         self.peer_document: ReplicatedDocument = self.peer_replication_scope.open("layout-showcase")
 
     @sl.operation(initial="queued")
-    async def publish_revision(self, progress: sl.operations.Progress[str]) -> int:
+    async def publish_revision(self, progress: sl.operations.ProgressReporter[str]) -> int:
         """Simulate one repeatable external publication execution."""
-        progress.set("sending")
+        progress.report("sending")
         await asyncio.sleep(0)
         return (self.published_revision or 40) + 1
 
@@ -373,7 +375,7 @@ class LayoutShowcase(sl.Component):
                 "section",
                 placeholder=L(t"Choose an engine exhibit"),
             ),
-            sl.primitives.ActionGroup(
+            sl.primitives.ControlGroup(
                 (
                     sl.primitives.Button(
                         L(t"Cycle accent"),
@@ -387,7 +389,7 @@ class LayoutShowcase(sl.Component):
         )
         header = sl.primitives.Panel(
             (
-                sl.primitives.Heading(L(t"squid-layouts engine showcase")),
+                sl.primitives.Heading(L(t"squid-ui engine showcase")),
                 sl.primitives.Text(self.status),
                 *controls,
             ),
@@ -447,7 +449,7 @@ class LayoutShowcase(sl.Component):
 
     def _adaptation(self) -> Sequence[sl.LayoutNode]:
         actions = tuple(
-            sl.semantic.Action(f"action.{index}", L("Action {number}", number=index), self._action_notice)
+            sl.semantic.ActionControl(f"action.{index}", L("Action {number}", number=index), self._action_notice)
             for index in range(1, 37)
         )
         return (
@@ -462,7 +464,7 @@ class LayoutShowcase(sl.Component):
                 ),
                 accent=DISCORD_YELLOW,
             ),
-            sl.semantic.Actions(actions, key="showcase-actions"),
+            sl.semantic.ActionControls(actions, key="showcase-actions"),
         )
 
     def _degradation(self) -> Sequence[sl.LayoutNode]:
@@ -508,7 +510,7 @@ class LayoutShowcase(sl.Component):
                         "every reader in their own timezone without this component knowing any of them."
                     )
                 ),
-                sl.measure(len(self.entries), L(t"Loaded samples"), unit="rows"),
+                sl.metric(len(self.entries), L(t"Loaded samples"), unit="rows"),
                 sl.progress(self.clicks, label=L(t"Reactive clicks toward ten"), maximum=10),
                 sl.timestamp(self.opened_at, style=sl.semantic.TimeStyle.RELATIVE, label=L(t"Showcase opened")),
                 accent=DISCORD_BLUE,
@@ -569,7 +571,7 @@ class LayoutShowcase(sl.Component):
     def _grid(self) -> Sequence[sl.LayoutNode]:
         blocked = {5, 10}
         cells = tuple(
-            sl.patterns.GridCell(
+            sp.GridCell(
                 f"cell-{index}",
                 str(index + 1),
                 available=index not in blocked,
@@ -657,8 +659,8 @@ class LayoutShowcase(sl.Component):
                 sl.note(L(t"Switching language invalidates this same mount; no component is rebuilt or replaced.")),
                 accent=DISCORD_BLUE,
             ),
-            sl.actions(
-                sl.action(L(t"Switch language"), self._switch_language, key="switch-language"),
+            sl.action_controls(
+                sl.action_control(L(t"Switch language"), self._switch_language, key="switch-language"),
                 key="localization-actions",
             ),
         )
@@ -687,22 +689,24 @@ class LayoutShowcase(sl.Component):
                 ),
                 accent=DISCORD_GREEN,
             ),
-            sl.actions(
-                sl.action(
+            sl.action_controls(
+                sl.action_control(
                     L(t"Rename project"),
                     self._rename_project,
                     key="history.rename",
                     tone=sl.Tone.SUCCESS,
                     record=self.action_history,
                 ),
-                sl.action(L(t"Sibling edit"), self._sibling_edit, key="history.sibling"),
+                sl.action_control(L(t"Sibling edit"), self._sibling_edit, key="history.sibling"),
                 key="history-write-actions",
             ),
-            sl.actions(
-                sl.action(L(t"Undo rename"), self._undo_rename, key="history.undo"),
-                sl.action(L(t"Redo rename"), self._redo_rename, key="history.redo"),
-                sl.action(L(t"Drop conflict"), self._drop_history_conflict, key="history.drop"),
-                sl.action(L(t"Cause rollback"), self._cause_rollback, key="history.rollback", tone=sl.Tone.DANGER),
+            sl.action_controls(
+                sl.action_control(L(t"Undo rename"), self._undo_rename, key="history.undo"),
+                sl.action_control(L(t"Redo rename"), self._redo_rename, key="history.redo"),
+                sl.action_control(L(t"Drop conflict"), self._drop_history_conflict, key="history.drop"),
+                sl.action_control(
+                    L(t"Cause rollback"), self._cause_rollback, key="history.rollback", tone=sl.Tone.DANGER
+                ),
                 key="history-outcome-actions",
             ),
         )
@@ -735,16 +739,16 @@ class LayoutShowcase(sl.Component):
                 ),
                 accent=DISCORD_BLUE,
             ),
-            sl.actions(
-                sl.action(
+            sl.action_controls(
+                sl.action_control(
                     L(t"Add my +2 review"),
                     self._add_local_review,
                     key="replication.local",
                     record=self.replication_history,
                     tone=sl.Tone.SUCCESS,
                 ),
-                sl.action(L(t"Merge peer +3"), self._merge_peer_review, key="replication.peer"),
-                sl.action(L(t"Undo my review"), self._undo_local_review, key="replication.undo"),
+                sl.action_control(L(t"Merge peer +3"), self._merge_peer_review, key="replication.peer"),
+                sl.action_control(L(t"Undo my review"), self._undo_local_review, key="replication.undo"),
                 key="replication-actions",
             ),
         )
@@ -778,12 +782,16 @@ class LayoutShowcase(sl.Component):
                 ),
                 accent=DISCORD_YELLOW,
             ),
-            sl.actions(
-                sl.action(L(t"Start publication"), self._start_publication, key="effects.publish"),
-                sl.action(L(t"Accept result"), self._accept_publication, key="effects.accept"),
-                sl.action(L(t"Create channel"), self._create_channel, key="effects.create", tone=sl.Tone.SUCCESS),
-                sl.action(L(t"Fail next compensation"), self._fail_next_compensation, key="effects.fail"),
-                sl.action(L(t"Undo / retry channel"), self._undo_channel, key="effects.undo", tone=sl.Tone.DANGER),
+            sl.action_controls(
+                sl.action_control(L(t"Start publication"), self._start_publication, key="effects.publish"),
+                sl.action_control(L(t"Accept result"), self._accept_publication, key="effects.accept"),
+                sl.action_control(
+                    L(t"Create channel"), self._create_channel, key="effects.create", tone=sl.Tone.SUCCESS
+                ),
+                sl.action_control(L(t"Fail next compensation"), self._fail_next_compensation, key="effects.fail"),
+                sl.action_control(
+                    L(t"Undo / retry channel"), self._undo_channel, key="effects.undo", tone=sl.Tone.DANGER
+                ),
                 key="effects-actions",
             ),
         )
@@ -900,7 +908,7 @@ class LayoutShowcase(sl.Component):
 
     async def _switch_language(self, event: sl.ActionEvent) -> None:
         self.display_locale = "en" if event.locale == "zh-CN" else "zh-CN"
-        sl.discord.responder(event).mount.localize(localization_for(self.display_locale))
+        sd.responder(event).message_root.localize(localization_for(self.display_locale))
 
     async def _action_notice(self, event: sl.ActionEvent) -> None:
         await event.notice(L(t"The semantic action kept its own callback after adaptation."))
@@ -909,8 +917,8 @@ class LayoutShowcase(sl.Component):
         del event
         self.project_name = "Action Ledger" if self.project_name == "Redstone Squid" else "Redstone Squid"
 
-        def committed(commit: sl.runtime.ActionCommit, aftermath: sl.runtime.Aftermath) -> None:
-            with aftermath.start_action("Present commit outcome"):
+        def committed(commit: sl.runtime.ActionCommit, continuation: sl.runtime.ActionContinuation) -> None:
+            with continuation.start_action("Present commit outcome"):
                 self.outcome_result = (
                     f"COMMITTED · local sequence {commit.sequence.value} · action {str(commit.context.action_id)[-8:]}"
                 )
@@ -934,7 +942,7 @@ class LayoutShowcase(sl.Component):
 
     async def _drop_history_conflict(self, event: sl.ActionEvent) -> None:
         del event
-        dropped = self.action_history.drop_conflicted()
+        dropped = self.action_history.delete_conflicted()
         self.history_result = (
             "Dropped the conflicted entry without changing state." if dropped else "No conflict to drop."
         )
@@ -946,8 +954,10 @@ class LayoutShowcase(sl.Component):
             with sl.runtime.fresh_action_transaction(action_context=context):
                 self.project_name = "THIS STAGED VALUE MUST NOT APPEAR"
 
-                def rolled_back(rollback: sl.runtime.ActionRollback, aftermath: sl.runtime.Aftermath) -> None:
-                    with aftermath.start_action("Present rollback outcome"):
+                def rolled_back(
+                    rollback: sl.runtime.ActionRollback, continuation: sl.runtime.ActionContinuation
+                ) -> None:
+                    with continuation.start_action("Present rollback outcome"):
                         self.outcome_result = (
                             f"ROLLED BACK · {rollback.reason.value} · action "
                             f"{str(rollback.context.action_id)[-8:]} · recovery is a fresh action"
@@ -966,16 +976,16 @@ class LayoutShowcase(sl.Component):
     async def _merge_peer_review(self, event: sl.ActionEvent) -> None:
         del event
         with sl.runtime.fresh_action_transaction(
-            action_context=sl.runtime.ActionContext.create("Receive local update", kind=sl.runtime.ActionKind.REMOTE)
+            action_context=sl.runtime.ActionContext.create("Receive local update", kind=sl.runtime.ActionPurpose.REMOTE)
         ):
             self.peer_document.import_update(self.local_document.export_since())
         with sl.runtime.fresh_action_transaction(
-            action_context=sl.runtime.ActionContext.create("Peer review", kind=sl.runtime.ActionKind.REMOTE)
+            action_context=sl.runtime.ActionContext.create("Peer review", kind=sl.runtime.ActionPurpose.REMOTE)
         ):
             self.peer_document.counter("votes").increment(3)
             self.peer_document.set("reviewers").add("peer")
         with sl.runtime.fresh_action_transaction(
-            action_context=sl.runtime.ActionContext.create("Receive peer update", kind=sl.runtime.ActionKind.REMOTE)
+            action_context=sl.runtime.ActionContext.create("Receive peer update", kind=sl.runtime.ActionPurpose.REMOTE)
         ):
             self.local_document.import_update(self.peer_document.export_since())
         self.replication_result = "Replicas converged. Undo can now preserve the peer's later contribution."
@@ -1059,10 +1069,10 @@ class LayoutShowcase(sl.Component):
         self.peer_replication_scope.close()
 
 
-# --- Shared state ---------------------------------------------------------------------------
+# --- shared state ---------------------------------------------------------------------------
 
 
-class Appearance(sl.runtime.Shared[UserScope]):
+class Appearance(sl.runtime.SharedState[UserScope]):
     """View state two live panels agree on, scoped to one reader.
 
     Nothing outside the screen wants a theme name, so it is not a service and not a row: it
@@ -1074,7 +1084,7 @@ class Appearance(sl.runtime.Shared[UserScope]):
     density: str = sl.state("comfortable")
 
 
-class Session(sl.runtime.Shared[UserScope]):
+class Session(sl.runtime.SharedState[UserScope]):
     """What one invocation's two panels are looking at, and only for as long as they are."""
 
     focus: str = sl.state("overview")
@@ -1097,7 +1107,7 @@ class AppearanceControls(sl.Component):
 
     def render(self) -> sl.LayoutNode:
         appearance = self.inject(APPEARANCE)
-        return sl.primitives.ActionGroup(
+        return sl.primitives.ControlGroup(
             (
                 sl.primitives.Button(
                     L(t"Cycle accent"),
@@ -1197,26 +1207,24 @@ class Lobby(sl.Component):
     started_with: int | None = sl.state(None)
     """How many players the game began with. The only fact here that *is* view state."""
 
-    def __init__(self, sessions: sl.discord.SessionRegistry, host_id: int) -> None:
+    def __init__(self, sessions: sd.SessionManager, host_id: int) -> None:
         self.sessions = sessions
         self.host_id = host_id
-        self._mount: sl.discord.Mount | None = None
+        self._root: sd.MessageRoot | None = None
 
-    def mount(self, *, source: sl.discord.host.HostSource, locale: str | None = None) -> sl.discord.Mount:
+    def mount(self, *, source: sd.runtime.RuntimeSource, locale: str | None = None) -> sd.MessageRoot:
         # Kept so the panel can find its own session; the mount cannot be handed to the
         # component that renders it any other way.
-        self._mount = create_mount(self, source=source, access=sl.discord.Everyone(), locale=locale, timeout=None)
-        return self._mount
+        self._root = create_message_root(self, source=source, access=sd.Everyone(), locale=locale, timeout=None)
+        return self._root
 
     def render(self) -> sl.LayoutNode:
         session = self._session()
         if session is None:
             return sl.section(sl.heading(L(t"Lobby")), sl.paragraph(L(t"This lobby has closed.")))
-        placement = sl.patterns.place_roster(
-            tuple(
-                sl.patterns.RosterEntry(str(user_id), f"<@{user_id}>", "players") for user_id in sorted(session.members)
-            ),
-            (sl.patterns.RosterSlot("players", L(t"Players"), session.capacity),),
+        placement = sp.place_roster(
+            tuple(sp.RosterEntry(str(user_id), f"<@{user_id}>", "players") for user_id in sorted(session.members)),
+            (sp.RosterSlot("players", L(t"Players"), session.capacity),),
         )
         status = (
             L("Started with {count} players.", count=self.started_with)
@@ -1227,9 +1235,9 @@ class Lobby(sl.Component):
             sl.heading(L(t"Lobby")),
             sl.roster(placement, key="lobby-roster", on_join=self._join),
             sl.paragraph(status),
-            sl.actions(
-                sl.action(L(t"Leave"), self._leave, key="leave"),
-                sl.action(L(t"Start"), self._start, key="start"),
+            sl.action_controls(
+                sl.action_control(L(t"Leave"), self._leave, key="leave"),
+                sl.action_control(L(t"Start"), self._start, key="start"),
                 key="lobby",
             ),
         )
@@ -1262,25 +1270,25 @@ class Lobby(sl.Component):
             return
         self.started_with = len(session.members)
 
-    def _session(self) -> sl.discord.sessions.Session | None:
-        return None if self._mount is None else self.sessions.session_for(self._mount)
+    def _session(self) -> sd.sessions.Session | None:
+        return None if self._root is None else self.sessions.session_for(self._root)
 
 
 _JOIN_NOTICES = {
-    sl.discord.sessions.MembershipStatus.JOINED: L(t"You are in."),
-    sl.discord.sessions.MembershipStatus.ALREADY_MEMBER: L(t"You had already joined."),
-    sl.discord.sessions.MembershipStatus.AT_CAPACITY: L(t"This lobby is full."),
-    sl.discord.sessions.MembershipStatus.QUOTA_REACHED: L(t"You are already in a lobby on another server."),
-    sl.discord.sessions.MembershipStatus.REFUSED: L(t"The host has left, so the lobby is closed to newcomers."),
-    sl.discord.sessions.MembershipStatus.CONFLICT: L(t"Somebody else moved first -- try again."),
-    sl.discord.sessions.MembershipStatus.SESSION_FINISHED: L(t"This lobby has closed."),
+    sd.sessions.MembershipStatus.JOINED: L(t"You are in."),
+    sd.sessions.MembershipStatus.ALREADY_MEMBER: L(t"You had already joined."),
+    sd.sessions.MembershipStatus.AT_CAPACITY: L(t"This lobby is full."),
+    sd.sessions.MembershipStatus.QUOTA_REACHED: L(t"You are already in a lobby on another server."),
+    sd.sessions.MembershipStatus.REFUSED: L(t"The host has left, so the lobby is closed to newcomers."),
+    sd.sessions.MembershipStatus.CONFLICT: L(t"Somebody else moved first -- try again."),
+    sd.sessions.MembershipStatus.SESSION_FINISHED: L(t"This lobby has closed."),
 }
 
 _LEAVE_NOTICES = {
-    sl.discord.sessions.MembershipStatus.LEFT: L(t"You have left."),
-    sl.discord.sessions.MembershipStatus.NOT_MEMBER: L(t"You were not in this lobby."),
-    sl.discord.sessions.MembershipStatus.CONFLICT: L(t"Somebody else moved first -- try again."),
-    sl.discord.sessions.MembershipStatus.SESSION_FINISHED: L(t"This lobby has closed."),
+    sd.sessions.MembershipStatus.LEFT: L(t"You have left."),
+    sd.sessions.MembershipStatus.NOT_MEMBER: L(t"You were not in this lobby."),
+    sd.sessions.MembershipStatus.CONFLICT: L(t"Somebody else moved first -- try again."),
+    sd.sessions.MembershipStatus.SESSION_FINISHED: L(t"This lobby has closed."),
 }
 
 
@@ -1292,7 +1300,7 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         # Retention state, per §3 of the shared-state plan: the cog outlives every panel, so
         # a reader's accent survives closing and reopening the demo. The pool is the retention
         # policy, written down where the lifetime is known.
-        self._appearance = sl.runtime.SharedPool(Appearance, bot.topic_bus)
+        self._appearance = sl.runtime.SharedStatePool(Appearance, bot.topic_bus)
 
     @commands.hybrid_group(name="layout")
     async def layout_group(self, ctx: Context[BotT]) -> None:
@@ -1310,12 +1318,12 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         section: DemoSection = "pagination",
         entries: app_commands.Range[int, 20, 200] = 100,
     ) -> None:
-        """Open an interactive showcase of squid-layouts."""
+        """Open an interactive showcase of squid-ui."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
         await send_component(
             ctx,
             LayoutShowcase(section=section, entries=entries, locale=locale),
-            access=sl.discord.Everyone(),
+            access=sd.Everyone(),
             locale=locale,
         )
 
@@ -1323,7 +1331,7 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def shared(self, ctx: Context[BotT]) -> None:
         """Open two live panels that share one namespace of view state."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        scope = Opener(ctx.author.id, ctx.guild.id if ctx.guild else None).user()
+        scope = OpenContext(ctx.author.id, ctx.guild.id if ctx.guild else None).user()
         appearance = self._appearance.get(scope)
         # Co-existence state: only the two panels hold it, so it is collected when the second
         # of them finishes. Nothing was looking at it, so it wants no pool -- the lifetime the
@@ -1336,9 +1344,9 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             await send_component(
                 ctx,
                 component,
-                access=sl.discord.Owner(ctx.author.id),
+                access=sd.Owner(ctx.author.id),
                 locale=locale,
-                reactor=self.bot.layout_reactor,
+                scheduler=self.bot.layout_scheduler,
             )
 
     @layout_group.command(name="lobby")
@@ -1347,10 +1355,10 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         """Open a four-seat lobby whose roster lives in the session, not the panel."""
         assert ctx.guild is not None
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        panel = Lobby(self.bot.mounts, ctx.author.id)
-        await self.bot.mounts.open(
+        panel = Lobby(self.bot.sessions, ctx.author.id)
+        await self.bot.sessions.open(
             panel.mount(source=ctx, locale=locale),
-            destination(ctx, locale=locale),
+            message_destination(ctx, locale=locale),
             key=SessionKey.guild("showcase-lobby", ctx.guild.id),
             actor_id=ctx.author.id,
             capacity=4,

@@ -3,7 +3,7 @@
 import discord
 import pytest
 
-import squid_layouts as sl
+import squid_ui_discord as sd
 from squid.bot.ui import (
     CardField,
     L,
@@ -72,9 +72,9 @@ async def test_delivery_clears_legacy_fields_when_converting() -> None:
     harness = make_message()
     layout = text_layout("Converted")
 
-    await sl.discord.delivery.handle_for(
+    await sd.delivery.handle_for(
         harness.message,
-        mode=sl.discord.presentation.DiscordMode.CLASSIC,
+        mode=sd.message_payload.MessageMode.CLASSIC,
     ).write(layout)
 
     call = harness.edit.await_args
@@ -89,7 +89,7 @@ async def test_delivery_does_not_resend_legacy_fields_for_v2_message() -> None:
     harness = make_message(components_v2=True)
     layout = text_layout("Updated")
 
-    await sl.discord.delivery.handle_for(harness.message, mode=layout.mode).write(layout)
+    await sd.delivery.handle_for(harness.message, mode=layout.mode).write(layout)
 
     call = harness.edit.await_args
     assert call is not None

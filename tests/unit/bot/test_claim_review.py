@@ -8,7 +8,7 @@ from whenever import Instant
 
 from squid.accounts.domain import Account, AccountIdentity, AliasClaim, ClaimStatus
 from squid.bot.claims_view import ClaimReviewComponent
-from squid_layouts.discord.testing import commit_render
+from squid_ui_discord.testing import commit_render
 from tests.helpers.discord import make_layout_bot
 
 AUTHOR_ID = 11
@@ -57,7 +57,7 @@ async def test_selecting_a_claim_enables_decisions() -> None:
     assert component.reassign_armed is None
 
 
-async def test_closing_finishes_the_semantic_mount() -> None:
+async def test_closing_finishes_the_semantic_root() -> None:
     component = make_component((make_claim(7),))
     event = SimpleNamespace(finish=AsyncMock())
 

@@ -75,7 +75,7 @@ match result.status:
 
 Later writes elsewhere survive. Redo is the inverse of the committed undo, so an intervening same-slot
 write makes redo conflict rather than overwrite it. A conflicted entry remains inspectable and may be
-explicitly removed with `drop_conflicted()`.
+explicitly removed with `delete_conflicted()`.
 
 A sibling write to a `Shared` register demonstrates the conditional rule directly:
 
@@ -94,7 +94,7 @@ assert workspace.selected == "b"
 
 ## Semantic replicated inverse
 
-`state()` and `Shared` remain transactional registers. The optional `squid-replicated` package exposes
+`state()` and `Shared` remain transactional registers. The optional `squid-replication` package exposes
 immutable snapshots plus semantic methods:
 
 ```python
@@ -152,11 +152,11 @@ consulted, not written, so nothing was promised about it.
 The deterministic test harness drives that checkpoint in tests; production receivers decode and route
 the envelope before entering the same synchronous commit gate.
 
-The Loro 1.13.2 and pycrdt 0.14.2 extras are conformance spikes. Both selectively reverse a non-latest
-text insertion while preserving later local and remote insertions, converge under reordered delivery,
-and reload their action token. Neither adapter is production-ready. The
-[conclusive backend report](plans/68-replicated-backend-report.md) selects Loro for generalized backend
-hardening and records the remaining register-conflict, compaction, staging-cost, and ownership gates.
+Loro 1.13.2 now backs the production generalized adapter. Its immutable document API covers text, list,
+movable list, map, tree, exact counters, and tagged sets. The adapter selectively reverses non-latest
+sequence changes, uses semantic counter/set operations, and checks action authorities before reversing
+register replacements or moves. A superseded guarded path conflicts the entire undo before anything is
+staged. The older text-only Loro and pycrdt engines remain conformance spikes.
 
 The collaborative-text spike targets an action token, not “the latest local edit”:
 
@@ -174,8 +174,10 @@ engine.apply(engine.plan_inverse(LoroChangeToken.decode(token.encode())))
 assert engine.snapshot() == "B"
 ```
 
-This is evidence for the experimental adapter only. It is deliberately not exposed as a production
-`ReplicatedDocument.text()` until the remaining backend gate passes.
+This low-level example remains useful as conformance evidence. Production code uses an explicitly injected
+`LoroBackend` and the named handles on `ReplicatedDocument`; it never applies a raw document-wide reverse
+diff. Retained `History` entries lease their Loro frontiers so shallow compaction cannot silently invalidate
+undo authority.
 
 ## Compensation is not rollback
 
@@ -227,7 +229,7 @@ coroutine from a hook is an error.
 ## Retention and privacy
 
 `ActionCommit` is an ephemeral in-process event and may carry opaque inverse handles. The bounded
-`ActionOutcomeSnapshot` and JSON schema 1 retain only stable IDs, causality, times, terminal status,
+`ActionResultSnapshot` and JSON schema 1 retain only stable IDs, causality, times, terminal status,
 safe tags, and change counts. They retain no values, owners, mutable backend objects, closures,
 tracebacks, or arbitrary `repr()`. Unknown schemas are rejected. A durable application must separately
 define codecs, redaction, actor privacy, access, encryption, retention, and deletion policy. Use

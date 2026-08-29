@@ -25,7 +25,7 @@ on_action_rollback(lambda rollback, aftermath: report(rollback.reason))
 ```
 
 `StateDelta`, `restore_before()`, and `restore_after()` no longer exist. Use `CellPatchSet` for lineage,
-`ActionOutcomeSnapshot` for safe retention, and `UndoPlan` through `History` for inversion.
+`ActionResultSnapshot` for safe retention, and `UndoPlan` through `History` for inversion.
 
 ## History and conflicts
 
@@ -55,7 +55,7 @@ elif result.status is HistoryResultStatus.NEEDS_RECONCILIATION:
 ```
 
 The default changed from “undo always restores” to “undo preserves later work or reports conflict.”
-`UndoStrategy.LOCAL_OVERWRITE` is the named escape hatch for ephemeral component-local registers; it
+`UndoMode.LOCAL_OVERWRITE` is the named escape hatch for ephemeral component-local registers; it
 rejects `Shared` and participant changes. Redo is freshly based on the committed undo and may conflict
 after another same-target write.
 
@@ -97,11 +97,13 @@ live transaction context.
 
 ## Replicated state
 
-Do not add CRDT behavior to `state()` or `Shared`. Use the optional `squid-replicated` package for
+Do not add CRDT behavior to `state()` or `Shared`. Use the optional `squid-replication` package for
 immutable snapshots and semantic mutations. Transport messages are `ReplicatedUpdate` envelopes with
-document/backend/schema/source/action identity and a verified payload hash. Loro and pycrdt text engines
-remain experimental. Loro is the selected generalized-backend hardening direction, while its production
-promotion and the failing rows are recorded in
+document/backend/schema/source/action identity and a verified payload hash. The explicitly injected
+`LoroBackend` is the production generalized adapter; its named containers expose only deeply immutable
+Python values and its retained tokens coordinate shallow compaction. The text-only Loro and pycrdt engines
+remain conformance tools. The host owns authentication, authorization, durable storage, and transport tasks;
+the envelope hash detects corruption but does not authenticate a sender. See
 [the conclusive backend report](plans/68-replicated-backend-report.md).
 
 ## Durable records

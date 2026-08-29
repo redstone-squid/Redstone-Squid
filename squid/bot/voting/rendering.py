@@ -9,8 +9,10 @@ import dataclasses
 from collections.abc import Mapping
 from textwrap import dedent
 
-import squid_layouts as sl
-from squid.bot.ui import DISCORD_GREEN, DISCORD_RED, DISCORD_YELLOW, CardField, card_layout, render_presentation
+import squid_ui as sl
+import squid_ui_discord as sd
+import squid_ui_widgets as sp
+from squid.bot.ui import DISCORD_GREEN, DISCORD_RED, DISCORD_YELLOW, CardField, card_layout, render_payload
 from squid.bot.voting.controls import poll_controls
 from squid.voting.domain import VoteChoice, VoteSessionResult, VoteSessionSnapshot, VoteStatus
 
@@ -25,7 +27,7 @@ def render_build_review(
     card: sl.LayoutNode,
     snapshot: VoteSessionSnapshot,
     guild_id: int | None,
-) -> sl.discord.presentation.DiscordPresentation:
+) -> sd.message_payload.MessagePayload:
     """Compose a build card with the review vote state beneath it.
 
     The card arrives as IR rather than as a built container so the whole post is solved in
@@ -67,12 +69,10 @@ def render_build_review(
         # Not currently reachable — render_node() always returns a Section — kept as a safe
         # fallback for any future card producer that returns something else entirely.
         post = sl.group(card, *state)
-    return render_presentation([post])
+    return render_payload([post])
 
 
-def render_delete_log(
-    snapshot: VoteSessionSnapshot, target_content: str
-) -> sl.discord.presentation.DiscordPresentation:
+def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> sd.message_payload.MessagePayload:
     """Render the card asking whether a logged message should be deleted."""
     # Compare enum members rather than their string values: `status == "closed"` is true at
     # runtime for a StrEnum but reads as a non-overlapping comparison to a type checker, which
@@ -119,7 +119,7 @@ def render_delete_log(
 def render_generic_poll(
     snapshot: VoteSessionSnapshot,
     voter_discord_ids: Mapping[int, int] = {},
-) -> sl.discord.presentation.DiscordPresentation:
+) -> sd.message_payload.MessagePayload:
     """Render a user-created poll, honouring its visibility setting.
 
     An open poll carries its own close and refresh controls; a closed one has nothing left
@@ -128,7 +128,7 @@ def render_generic_poll(
     nodes = _generic_poll_nodes(snapshot, voter_discord_ids)
     if snapshot.status is not VoteStatus.CLOSED:
         nodes.append(poll_controls())
-    return render_presentation(nodes)
+    return render_payload(nodes)
 
 
 def _generic_poll_nodes(
@@ -146,7 +146,7 @@ def _generic_poll_nodes(
     if show_totals:
         raw = snapshot.raw_tallies()
         weighted = snapshot.weighted_tallies()
-        tally_options: list[sl.patterns.TallyOption] = []
+        tally_options: list[sp.TallyOption] = []
         for option in options:
             option_id = option.identifier or ""
             voters = [
@@ -159,7 +159,7 @@ def _generic_poll_nodes(
             label = option.label or option.identifier or option.emoji
             weighted_count = weighted.get(option_id, 0)
             tally_options.append(
-                sl.patterns.TallyOption(
+                sp.TallyOption(
                     option_id,
                     sl.md(t"{label} ??{weighted_count:g} weighted{voter_suffix}"),
                     raw.get(option_id, 0),

@@ -8,9 +8,10 @@ looking at it and removing it belong to the same message (audit C5's retyping ha
 
 from typing import TYPE_CHECKING
 
-import squid_layouts as sl
+import squid_ui as sl
+import squid_ui_discord as sd
 from squid.bot.i18n import t
-from squid.bot.ui import DISCORD_BLUE, create_mount
+from squid.bot.ui import create_message_root
 from squid.core.i18n import _
 from squid.notifications import (
     NotificationPreferences,
@@ -81,9 +82,7 @@ class NotificationPanel(sl.Component):
 
     def render(self) -> tuple[sl.LayoutNode, ...]:
         if self.closed:
-            # DISCORD_BLUE is house chrome, not a Tone, so the exact colour needs sl.section's
-            # accent rather than sl.status's fixed tone palette.
-            return (sl.section(sl.heading(t(self.locale, _("Notifications closed"))), accent=DISCORD_BLUE),)
+            return (sl.section(sl.heading(t(self.locale, _("Notifications closed")))),)
         on, off = t(self.locale, _("On")), t(self.locale, _("Off"))
         fields = (
             sl.field(t(self.locale, _("Web inbox")), on if self.web_enabled else off),
@@ -102,16 +101,16 @@ class NotificationPanel(sl.Component):
         ]
         if self.subscriptions:
             nodes.append(
-                sl.semantic.Choices(
-                    key="unfollow",
-                    choices=tuple(
-                        sl.semantic.Choice(
-                            str(subscription.id),
+                sl.choices(
+                    *(
+                        sl.choice(
                             self.describe(subscription),
-                            self.detail(subscription),
+                            key=str(subscription.id),
+                            description=self.detail(subscription),
                         )
                         for subscription in self.subscriptions
                     ),
+                    key="unfollow",
                     selection=sl.controlled(self.selected_ids, self._selection_changed),
                     minimum=0,
                     maximum=len(self.subscriptions),
@@ -134,21 +133,20 @@ class NotificationPanel(sl.Component):
             )
         )
         nodes.append(
-            sl.primitives.Row(
-                (
-                    sl.primitives.Button(
-                        t(self.locale, _("Unfollow selected")),
-                        self._unfollow,
-                        "unfollow_selected",
-                        style=sl.primitives.ActionStyle.DANGER,
-                        disabled=not self.selected_ids,
-                    ),
-                    sl.primitives.Button(
-                        t(self.locale, _("Close")),
-                        self._close,
-                        "close",
-                    ),
-                )
+            sl.action_controls(
+                sl.action_control(
+                    t(self.locale, _("Unfollow selected")),
+                    self._unfollow,
+                    key="unfollow_selected",
+                    tone=sl.Tone.DANGER,
+                    available=bool(self.selected_ids),
+                ),
+                sl.action_control(
+                    t(self.locale, _("Close")),
+                    self._close,
+                    key="close",
+                ),
+                key="notification-actions",
             )
         )
         return tuple(nodes)
@@ -207,11 +205,11 @@ class NotificationPanel(sl.Component):
             return None
         return t(self.locale, _("Discord rejected a DM, so DMs are suspended until you re-enable them."))
 
-    def mount(self, *, source: sl.discord.host.HostSource) -> sl.discord.Mount:
-        return create_mount(
+    def mount(self, *, source: sd.runtime.RuntimeSource) -> sd.MessageRoot:
+        return create_message_root(
             self,
             source=source,
-            access=sl.discord.Owner(self._author_id),
+            access=sd.Owner(self._author_id),
             locale=self.locale,
             timeout=SESSION_SECONDS,
         )

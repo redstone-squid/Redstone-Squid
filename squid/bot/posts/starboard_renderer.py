@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, final
 
 import discord
 
-import squid_layouts as sl
+import squid_ui_discord as sd
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale
 from squid.bot.posts.renderer import DesiredPost
@@ -51,15 +51,15 @@ class StarboardEntryRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
         ):
             return ()
 
-        destination = await self._channel(state.config.channel_id)
+        message_destination = await self._channel(state.config.channel_id)
         origin = await self.bot.get_or_fetch_message(state.origin.channel_id, state.origin.id)
-        if destination is None or origin is None or _unsafe_nsfw(origin.channel, destination):
+        if message_destination is None or origin is None or _unsafe_nsfw(origin.channel, message_destination):
             return ()
 
         mentions = (
             discord.AllowedMentions(everyone=False, roles=False, users=(origin.author,), replied_user=False)
             if state.config.ping_author
-            else sl.discord.delivery.no_mentions()
+            else sd.delivery.no_mentions()
         )
         locale = await resolve_locale(origin, self.bot.services.settings)
         return [
@@ -67,7 +67,7 @@ class StarboardEntryRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
                 channel_id=state.config.channel_id,
                 guild_id=state.config.guild_id,
                 surface="starboard_entry",
-                presentation=starboard_layout(state, origin, locale=locale),
+                payload=starboard_layout(state, origin, locale=locale),
                 allowed_mentions=mentions,
             )
         ]
@@ -93,8 +93,8 @@ class StarboardEntryRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
         return channel if isinstance(channel, GuildMessageable) else None
 
 
-def _unsafe_nsfw(source: discord.abc.Messageable, destination: GuildMessageable) -> bool:
+def _unsafe_nsfw(source: discord.abc.Messageable, message_destination: GuildMessageable) -> bool:
     """Whether mirroring would move NSFW content into a channel that is not marked so."""
     source_nsfw = bool(getattr(source, "is_nsfw", lambda: False)())
-    destination_nsfw = bool(getattr(destination, "is_nsfw", lambda: False)())
+    destination_nsfw = bool(getattr(message_destination, "is_nsfw", lambda: False)())
     return source_nsfw and not destination_nsfw

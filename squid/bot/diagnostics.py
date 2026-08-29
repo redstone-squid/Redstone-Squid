@@ -5,10 +5,10 @@ from typing import TYPE_CHECKING
 from discord.ext import commands
 from discord.ext.commands import Context
 
-import squid_layouts as sl
+import squid_ui_discord as sd
 from squid.bot.diagnostics_view import SESSION_SECONDS, ErrorReportBrowser
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.ui import Private, create_mount, destination, info_layout
+from squid.bot.ui import Private, create_message_root, info_layout, message_destination
 from squid.bot.utils.permissions import hide_unless, requires
 from squid.bot.utils.visibility import deliver_privately
 from squid.core.i18n import _
@@ -70,24 +70,24 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         browser: ErrorReportBrowser,
         locale: str | None,
     ) -> None:
-        """Mount the browser and answer where only the caller can read it.
+        """MessageRoot the browser and answer where only the caller can read it.
 
         A report carries a traceback naming internal paths and the unredacted message every
         other surface withholds, which is the payload class `deliver_privately` exists for:
         ephemeral on the slash side, direct messages on the prefix side, never the channel.
         """
-        mount = create_mount(
+        message_root = create_message_root(
             browser,
             source=ctx,
-            access=sl.discord.Owner(ctx.author.id),
+            access=sd.Owner(ctx.author.id),
             locale=locale,
             chrome=browser.chrome(),
             timeout=SESSION_SECONDS,
         )
         # A closed DM raises DeliveryAbandoned, which discards the render: there is nothing to
         # bind and, deliberately, no channel fallback.
-        await mount.send(
-            destination(
+        await message_root.send(
+            message_destination(
                 ctx,
                 visibility=Private(
                     t(locale, _("An error report names internal paths, so it is never posted in a channel."))
@@ -99,13 +99,13 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     async def _deliver(
         self,
         ctx: Context[BotT],
-        presentation: sl.discord.presentation.DiscordPresentation,
+        payload: sd.message_payload.MessagePayload,
         locale: str | None,
     ) -> None:
         """Answer a plain layout where only the caller can read it (see `_deliver_browser`)."""
         await deliver_privately(
             ctx,
-            presentation,
+            payload,
             reason=t(locale, _("An error report names internal paths, so it is never posted in a channel.")),
             locale=locale,
         )

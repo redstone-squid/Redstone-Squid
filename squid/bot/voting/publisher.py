@@ -16,7 +16,7 @@ from squid.bot.ui import text_layout
 from squid.bot.utils.permissions import build_subject
 from squid.permissions.domain.catalogue import VOTE_POLL_NETWORK_CREATE
 from squid.voting.domain import PollScope, VoteKind, VoteOption, VoteVisibility
-from squid_layouts.discord import send_to
+from squid_ui_discord import send_to
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -104,8 +104,8 @@ class DiscordPollPublisher:
 
     async def attach(self, vote_session_id: int, channel: GuildMessageable) -> discord.Message:
         """Post one card for an existing poll and let the reconcile loop own it."""
-        receipt = await send_to(channel)(text_layout("Publishing poll…"))
-        message = receipt.message
+        result = await send_to(channel)(text_layout("Publishing poll…"))
+        message = result.message
         if message is None:
             detail = "poll placeholder delivery returned no message"
             raise RuntimeError(detail)

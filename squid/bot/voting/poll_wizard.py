@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING, Any, cast
 
 import discord
 
-import squid_layouts as sl
+import squid_ui as sl
+import squid_ui_discord as sd
 from squid.bot._types import GuildMessageable
-from squid.bot.ui import create_mount
 from squid.voting.domain import (
     MAX_POLL_DURATION_SECONDS,
     MIN_POLL_DURATION_SECONDS,
@@ -19,7 +19,6 @@ from squid.voting.domain import (
     VoteVisibility,
 )
 from squid.voting.errors import InvalidVoteConfigurationError
-from squid_layouts.discord import SessionKey
 
 if TYPE_CHECKING:
     from squid.bot.voting.publisher import PollPublisher
@@ -36,6 +35,7 @@ DURATION_PRESETS: tuple[tuple[str, int], ...] = (
     ("7 days", 7 * 86400),
 )
 CUSTOM_DURATION = "custom"
+POLL_SESSION_SPEC = sd.SessionSpec("poll-wizard", scope=sd.ScopeKind.USER_GUILD, options={"timeout": 900})
 
 VISIBILITY_CHOICES: tuple[tuple[VoteVisibility, str, str], ...] = (
     (
@@ -180,7 +180,7 @@ async def present_poll_form(
 
     async def submitted(form_interaction: discord.Interaction[Any], values: dict[str, object]) -> None:
         if form_interaction.guild is None:
-            await sl.discord.delivery.respond_text(form_interaction, "Polls can only be created in a server.")
+            await sd.delivery.respond_text(form_interaction, "Polls can only be created in a server.")
             return
         current = draft or PollDraft(question="", options_text="")
         edited = replace(
@@ -191,24 +191,26 @@ async def present_poll_form(
         try:
             options = await publisher.resolve_options(form_interaction.guild.id, edited.option_lines)
         except InvalidVoteConfigurationError as error:
-            await sl.discord.delivery.respond_text(form_interaction, str(error))
+            await sd.delivery.respond_text(form_interaction, str(error))
             return
         component = PollConfirmationComponent(
             publisher,
-            form_interaction.user.id,
             author_account_id,
             edited,
             options,
             allow_network=allow_network,
         )
-        await form_interaction.client.mounts.open(
-            component.mount(source=form_interaction, reactor=getattr(form_interaction.client, "layout_reactor", None)),
-            sl.discord.respond_to(form_interaction, ephemeral=True, wait=True),
-            key=SessionKey.user_guild("poll-wizard", form_interaction.user.id, form_interaction.guild.id),
-            actor_id=form_interaction.user.id,
+        scheduler = getattr(form_interaction.client, "layout_scheduler", None)
+        await POLL_SESSION_SPEC.respond(
+            component,
+            form_interaction,
+            sessions=form_interaction.client.sessions,
+            wait=True,
+            scheduler=scheduler,
+            expiry=sd.RenewEphemeral() if scheduler is not None else sd.PauseUpdates(),
         )
 
-    modal = sl.discord.modal.build_form_modal(poll_form(draft), on_submit=submitted)
+    modal = sd.modal.build_form_modal(poll_form(draft), on_submit=submitted)
     await interaction.response.send_modal(modal)
 
 
@@ -221,22 +223,17 @@ class PollConfirmationComponent(sl.Component):
     def __init__(
         self,
         publisher: PollPublisher,
-        owner_id: int,
         author_account_id: int,
         draft: PollDraft,
         options: tuple[VoteOption, ...],
         *,
         allow_network: bool = False,
-        timeout: float = 900,
     ) -> None:
         self.publisher = publisher
-        self.owner_id = owner_id
         self.author_account_id = author_account_id
         self.draft = draft
         self.options = options
         self.allow_network = allow_network
-        self._timeout = timeout
-        self._mount: sl.discord.Mount | None = None
 
     def render(self) -> tuple[sl.LayoutNode, ...]:
         if self.published:
@@ -255,51 +252,50 @@ class PollConfirmationComponent(sl.Component):
             fields.append(sl.field("Reaches", self._scope_label()))
         nodes: list[sl.LayoutNode] = [
             sl.section(sl.heading(preview), sl.fields(*fields)),
-            sl.semantic.Choices(
-                key="visibility",
-                choices=tuple(
-                    sl.semantic.Choice(value.value, label, description)
+            sl.choices(
+                *(
+                    sl.choice(label, key=value.value, description=description)
                     for value, label, description in VISIBILITY_CHOICES
                 ),
+                key="visibility",
                 selection=sl.controlled((self.draft.visibility.value,), self._visibility_changed),
             ),
-            sl.semantic.Choices(
-                key="duration",
-                choices=tuple(
-                    sl.semantic.Choice(str(seconds), label)
+            sl.choices(
+                *(
+                    sl.choice(label, key=str(seconds))
                     for label, seconds in (*DURATION_PRESETS, ("Custom", CUSTOM_DURATION))
                 ),
+                key="duration",
                 selection=sl.controlled((str(self.draft.duration_seconds),), self._duration_changed),
             ),
         ]
         if self.allow_network:
             nodes.append(
-                sl.semantic.Choices(
-                    key="scope",
-                    choices=tuple(
-                        sl.semantic.Choice(value.value, label, description)
+                sl.choices(
+                    *(
+                        sl.choice(label, key=value.value, description=description)
                         for value, label, description in SCOPE_CHOICES
                     ),
+                    key="scope",
                     selection=sl.controlled((self.draft.scope.value,), self._scope_changed),
                 )
             )
         nodes.append(
-            sl.primitives.Row(
-                (
-                    sl.primitives.Button(
-                        "Publish",
-                        self._publish,
-                        "publish",
-                        style=sl.primitives.ActionStyle.SUCCESS,
-                    ),
-                    sl.primitives.Button("Edit", self._edit, "edit"),
-                    sl.primitives.Button(
-                        "Cancel",
-                        self._cancel,
-                        "cancel",
-                        style=sl.primitives.ActionStyle.DANGER,
-                    ),
-                )
+            sl.action_controls(
+                sl.action_control(
+                    "Publish",
+                    self._publish,
+                    key="publish",
+                    tone=sl.Tone.SUCCESS,
+                ),
+                sl.action_control("Edit", self._edit, key="edit"),
+                sl.action_control(
+                    "Cancel",
+                    self._cancel,
+                    key="cancel",
+                    tone=sl.Tone.DANGER,
+                ),
+                key="poll-actions",
             )
         )
         return tuple(nodes)
@@ -338,7 +334,7 @@ class PollConfirmationComponent(sl.Component):
         self.draft = replace(self.draft, scope=PollScope(event.selected[0]))
 
     async def _publish(self, event: sl.PressEvent) -> None:
-        interaction = sl.discord.native(event)
+        interaction = sd.native(event)
         if interaction.guild is None or interaction.channel is None:
             await event.notice("Polls can only be published in a server.")
             return
@@ -376,7 +372,7 @@ class PollConfirmationComponent(sl.Component):
             question=cast(str, event.values["question"]),
             options_text=cast(str, event.values["options"]),
         )
-        interaction = sl.discord.native(event)
+        interaction = sd.native(event)
         if interaction.guild is None:
             await event.notice("Polls can only be edited in a server.")
             return
@@ -397,16 +393,3 @@ class PollConfirmationComponent(sl.Component):
 
     def _scope_label(self) -> str:
         return next(label for value, label, _ in SCOPE_CHOICES if value is self.draft.scope)
-
-    def mount(
-        self, *, source: sl.discord.host.HostSource, reactor: sl.discord.Reactor | None = None
-    ) -> sl.discord.Mount:
-        self._mount = create_mount(
-            self,
-            source=source,
-            access=sl.discord.Owner(self.owner_id),
-            timeout=self._timeout,
-            reactor=reactor,
-            expiry=sl.discord.RenewEphemeral() if reactor is not None else sl.discord.PauseUpdates(),
-        )
-        return self._mount

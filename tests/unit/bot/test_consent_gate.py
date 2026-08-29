@@ -10,13 +10,14 @@ import pytest
 from discord.ext import commands
 from whenever import Instant
 
-import squid_layouts as sl
+import squid_ui as sl
+import squid_ui_discord as sd
 from squid.accounts.application import AccountService
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, Account, AccountConsent, AccountIdentity, IdentityProvider
 from squid.bot.consent import NOT_ASKED, ensure_consented_account, prompt_for_consent, request_consent
-from squid_layouts.discord import Everyone, SessionKey, SessionRegistry
-from squid_layouts.discord.sessions import Opened
-from squid_layouts.discord.testing import commit_render, delivered_to, fake_interaction, fake_message
+from squid_ui_discord import Everyone, SessionKey, SessionManager
+from squid_ui_discord.sessions import Opened
+from squid_ui_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 from tests.helpers.discord import make_layout_bot
 
 AFTER_CUTOFF = Instant.from_utc(2026, 8, 5)
@@ -171,15 +172,15 @@ async def test_a_second_prompt_is_refused_while_the_first_is_open() -> None:
 
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(lambda: _collect(outcomes, prompt_for_consent(ctx, user_id=USER_ID)))
-        while not ctx.bot.mounts.get(key):
+        while not ctx.bot.sessions.get(key):
             await anyio.sleep(0)
-        first = ctx.bot.mounts.get(key)
+        first = ctx.bot.sessions.get(key)
 
         second = await prompt_for_consent(ctx, user_id=USER_ID)
 
         assert second is NOT_ASKED
-        assert ctx.bot.mounts.get(key) == first  # the one being awaited is the one that stands
-        await ctx.bot.mounts.close(key, disable=False)
+        assert ctx.bot.sessions.get(key) == first  # the one being awaited is the one that stands
+        await ctx.bot.sessions.close(key, disable=False)
 
     assert outcomes == [None]
 
@@ -192,8 +193,8 @@ async def test_a_closing_parent_ends_the_wait_instead_of_stranding_it() -> None:
     the 120 s, which is the leak this was supposed to close.
     """
     ctx = make_context()
-    parent = sl.discord.Mount(_Blank(), access=Everyone(), timeout=None)
-    parent_opened = await ctx.bot.mounts.open(parent, delivered_to(fake_message()))
+    parent = sd.MessageRoot(_Blank(), access=Everyone(), timeout=None)
+    parent_opened = await ctx.bot.sessions.open(parent, delivered_to(fake_message()))
     assert isinstance(parent_opened, Opened)
     outcomes: list[Any] = []
 
@@ -202,7 +203,7 @@ async def test_a_closing_parent_ends_the_wait_instead_of_stranding_it() -> None:
     with anyio.fail_after(5):
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(lambda: _collect(outcomes, prompt_for_consent(ctx, user_id=USER_ID, parent=parent)))
-            while len(parent_opened.session.mounts) == 1:
+            while len(parent_opened.session.message_roots) == 1:
                 await anyio.sleep(0)
 
             await parent.finish(disable=False)
@@ -238,10 +239,10 @@ class _Gate(sl.Component):
 
     async def _ask(self, event: sl.PressEvent) -> None:
         await request_consent(
-            sl.discord.native(event),
+            sd.native(event),
             user_id=USER_ID,
             on_answer=self._answered,
-            parent=sl.discord.responder(event).mount,
+            parent=sd.responder(event).message_root,
         )
 
     async def _count(self, event: sl.PressEvent) -> None:
@@ -259,11 +260,11 @@ def _clicked(client: Any, *, message_id: int) -> Any:
     return interaction
 
 
-def _prompt_of(registry: SessionRegistry, panel: sl.discord.Mount) -> sl.discord.Mount | None:
+def _prompt_of(registry: SessionManager, panel: sd.MessageRoot) -> sd.MessageRoot | None:
     """The notice attached to `panel`'s session, which is where `parent=` puts it."""
     session = registry.session_for(panel)
     assert session is not None
-    return next((mount for mount in session.mounts if mount is not panel), None)
+    return next((message_root for message_root in session.message_roots if message_root is not panel), None)
 
 
 async def test_asking_for_consent_from_a_handler_leaves_the_panel_free() -> None:
@@ -275,20 +276,20 @@ async def test_asking_for_consent_from_a_handler_leaves_the_panel_free() -> None
     press ends and the panel goes on working.
     """
     bot = make_layout_bot()
-    registry = bot.mounts
+    registry = bot.sessions
     panel = _Gate()
-    mount = sl.discord.Mount(panel, access=Everyone(), timeout=None)
-    assert isinstance(await registry.open(mount, delivered_to(fake_message())), Opened)
-    commit_render(mount)
+    message_root = sd.MessageRoot(panel, access=Everyone(), timeout=None)
+    assert isinstance(await registry.open(message_root, delivered_to(fake_message())), Opened)
+    commit_render(message_root)
 
     # Bounded well under the prompt's 120 s: a press that still waited would hang here rather
     # than fail, and a test that only passes once the prompt times out proves nothing.
     with anyio.fail_after(5):
-        await mount.dispatch("ask", _clicked(bot, message_id=1))
-        assert _prompt_of(registry, mount) is not None
+        await message_root.dispatch("ask", _clicked(bot, message_id=1))
+        assert _prompt_of(registry, message_root) is not None
 
-        commit_render(mount)
-        await mount.dispatch("count", _clicked(bot, message_id=2))
+        commit_render(message_root)
+        await message_root.dispatch("count", _clicked(bot, message_id=2))
 
     assert panel.presses == 1
 
@@ -296,14 +297,14 @@ async def test_asking_for_consent_from_a_handler_leaves_the_panel_free() -> None
 async def test_the_prompt_carries_the_answer_back_to_the_panel() -> None:
     """The work the press was about runs from the prompt's own press, not from the panel's."""
     bot = make_layout_bot()
-    registry = bot.mounts
+    registry = bot.sessions
     panel = _Gate()
-    mount = sl.discord.Mount(panel, access=Everyone(), timeout=None)
-    assert isinstance(await registry.open(mount, delivered_to(fake_message())), Opened)
-    commit_render(mount)
-    await mount.dispatch("ask", _clicked(bot, message_id=1))
+    message_root = sd.MessageRoot(panel, access=Everyone(), timeout=None)
+    assert isinstance(await registry.open(message_root, delivered_to(fake_message())), Opened)
+    commit_render(message_root)
+    await message_root.dispatch("ask", _clicked(bot, message_id=1))
 
-    prompt = _prompt_of(registry, mount)
+    prompt = _prompt_of(registry, message_root)
     assert prompt is not None
     commit_render(prompt)
     await prompt.dispatch("accept", _clicked(bot, message_id=3))

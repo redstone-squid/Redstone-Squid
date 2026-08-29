@@ -8,7 +8,7 @@ import discord
 from discord.ext import commands
 
 from squid.bot.submission.search import SearchCog
-from squid_layouts.discord.testing import fake_message
+from squid_ui_discord.testing import fake_message
 from tests.helpers.discord import make_layout_bot
 
 

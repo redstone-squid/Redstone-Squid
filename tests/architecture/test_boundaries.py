@@ -7,39 +7,92 @@ from pytest_archon import archrule
 
 from squid.core.extract import deferred_msgid
 
-# Roots for the AST scans that state repo-wide invariants. The squid-layouts workspace member
+# Roots for the AST scans that state repo-wide invariants. The squid-ui workspace member
 # is held to the same rules as squid itself.
 SCAN_ROOTS = (
     Path("squid"),
-    Path("packages/squid-reactive/src"),
-    Path("packages/squid-layouts/src"),
-    Path("packages/squid-replicated/src"),
+    Path("packages/squid-reactivity/src"),
+    Path("packages/squid-ui/src"),
+    Path("packages/squid-ui-discord/src"),
+    Path("packages/squid-ui-widgets/src"),
+    Path("packages/squid-replication/src"),
 )
+
+COMPILER_PASS_ROOT = Path("packages/squid-ui/src/squid_ui/planning")
 
 
 def _scanned_files() -> list[Path]:
     return [path for root in SCAN_ROOTS for path in root.rglob("*.py")]
 
 
+def test_compiler_pass_packages_are_not_facades() -> None:
+    """Pass packages identify owners; their initializers must not aggregate those owners."""
+    for package in ("layout_measurement", "semantic_adaptation"):
+        path = COMPILER_PASS_ROOT / package / "__init__.py"
+        body = ast.parse(path.read_text(encoding="utf-8")).body
+        assert len(body) == 1
+        assert isinstance(body[0], ast.Expr)
+        assert isinstance(body[0].value, ast.Constant)
+        assert isinstance(body[0].value.value, str)
+
+
+def test_removed_compiler_pass_modules_have_no_compatibility_surface() -> None:
+    """The former monolith paths stay deleted rather than becoming forwarding shims."""
+    removed = {
+        "squid_ui.planning.adaptation",
+        "squid_ui.planning.measurement",
+    }
+    assert [name for name in removed if (COMPILER_PASS_ROOT / f"{name.rpartition('.')[2]}.py").exists()] == []
+
+    violations: list[tuple[Path, int, str]] = []
+    for path in _scanned_files():
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Import):
+                imported = (alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module is not None:
+                imported = (node.module,)
+            else:
+                continue
+            violations.extend((path, node.lineno, module) for module in imported if module in removed)
+
+    assert violations == []
+
+
 def test_layouts_package_stays_standalone() -> None:
     """The UI framework package must remain publishable: no host-project or adapter imports."""
     (
-        archrule("squid-layouts stays independent from the host application")
-        .match("squid_layouts*")
+        archrule("squid-ui stays independent from the host application")
+        .match("squid_ui*")
         .should_not_import("squid")
         .should_not_import("squid.*")
         .should_not_import("sqlalchemy*")
         .should_not_import("fastapi*")
         .should_not_import("nucleation*")
-        .check("squid_layouts", only_direct_imports=True)
+        .should_not_import("squid_ui_discord*")
+        .should_not_import("squid_ui_widgets*")
+        .check("squid_ui", only_direct_imports=True)
+    )
+
+
+def test_discord_package_stays_a_leaf() -> None:
+    """The transport adapter is downstream of everything; nothing may point back at it."""
+    (
+        archrule("squid-ui-discord depends on the engine, not on the host")
+        .match("squid_ui_discord*")
+        .should_not_import("squid")
+        .should_not_import("squid.*")
+        .should_not_import("sqlalchemy*")
+        .should_not_import("fastapi*")
+        .should_not_import("nucleation*")
+        .check("squid_ui_discord", only_direct_imports=True)
     )
 
 
 def test_reactive_package_has_no_hard_dependencies() -> None:
     """The extracted runtime may import only itself and Python's standard library."""
-    allowed = sys.stdlib_module_names | {"squid_reactive"}
+    allowed = sys.stdlib_module_names | {"squid_reactivity"}
     violations: list[tuple[Path, int, str]] = []
-    for path in Path("packages/squid-reactive/src").rglob("*.py"):
+    for path in Path("packages/squid-reactivity/src").rglob("*.py"):
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if isinstance(node, ast.Import):
                 imported = ((node.lineno, alias.name) for alias in node.names)
@@ -54,14 +107,35 @@ def test_reactive_package_has_no_hard_dependencies() -> None:
     assert violations == []
 
 
-def test_only_the_discord_transport_uses_the_layouts_package() -> None:
+def test_patterns_package_is_transport_free() -> None:
+    """State machines render through the engine; they never name a runtime.
+
+    The payoff of the extraction: `squid_ui_widgets` sits beside `squid_ui_discord`, not below it,
+    so a pattern cannot quietly acquire a Discord dependency and become unusable anywhere else.
+    """
     (
-        archrule("squid-layouts is a Discord presentation concern")
-        .match("squid*")
-        .exclude("squid.bot*")
-        .should_not_import("squid_layouts*")
-        .check("squid", only_direct_imports=True)
+        archrule("squid-ui-widgets is frontend-neutral")
+        .match("squid_ui_widgets*")
+        .should_not_import("discord*")
+        .should_not_import("anyio*")
+        .should_not_import("squid_ui_discord*")
+        .should_not_import("squid_storage*")
+        .should_not_import("squid")
+        .should_not_import("squid.*")
+        .check("squid_ui_widgets", only_direct_imports=True)
     )
+
+
+def test_only_the_bot_transport_uses_the_ui_packages() -> None:
+    """Presentation is `squid.bot`'s business; no other layer may reach for a UI package."""
+    for package in ("squid_ui*", "squid_ui_discord*", "squid_ui_widgets*"):
+        (
+            archrule(f"{package} is a Discord presentation concern")
+            .match("squid*")
+            .exclude("squid.bot*")
+            .should_not_import(package)
+            .check("squid", only_direct_imports=True)
+        )
 
 
 def test_layouts_package_carries_no_translation_markers() -> None:
@@ -69,7 +143,7 @@ def test_layouts_package_carries_no_translation_markers() -> None:
     drop out of the catalogue. All user-facing text must enter through Chrome, pre-translated."""
     violations = [
         f"{path}:{node.lineno}"
-        for path in Path("packages/squid-layouts/src").rglob("*.py")
+        for path in Path("packages/squid-ui/src").rglob("*.py")
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_"
     ]
@@ -117,9 +191,9 @@ def test_static_layout_rendering_stays_behind_the_host_wrapper() -> None:
                 continue
             resolved = ".".join((aliases.get(target.id, target.id), *reversed(parts)))
             # These are dotted *call* targets (package attribute -> function), not module
-            # paths: squid_layouts.discord.composition defines compose(), so a call resolves
-            # to "squid_layouts.discord.compose" regardless of which file compose() lives in.
-            if resolved in {"squid_layouts.discord.compose", "squid_layouts.discord.render_static"}:
+            # paths: squid_ui_discord.rendering defines render_message(), so a call resolves
+            # to "squid_ui_discord.render_message" regardless of which file render_message() lives in.
+            if resolved in {"squid_ui_discord.render_message", "squid_ui_discord.render_static"}:
                 violations.append(f"{path}:{node.lineno}")
 
     assert violations == []
@@ -481,13 +555,18 @@ def test_application_and_domain_layers_raise_only_structured_errors() -> None:
     assert stale == {}, f"lower or drop these BARE_RAISE_ALLOWLIST entries (allowed, found): {stale}"
 
 
-def test_only_the_discord_adapter_imports_adapter_dependencies() -> None:
-    """Portable authoring, planning, runtime, scenes, and HTML need no Discord install."""
-    root = Path("packages/squid-layouts/src/squid_layouts")
+def test_the_engine_needs_no_transport_install() -> None:
+    """Portable authoring, planning, runtime, scenes, and HTML need no Discord install.
+
+    This used to skip a `discord/` directory inside the same distribution. Now that the
+    adapter is its own package the rule is flat, and the blocked set widens to the packages
+    that sit above the engine: nothing here may import them, in a function body or under
+    TYPE_CHECKING, which is where a back-edge would hide from a plain dependency check.
+    """
+    root = Path("packages/squid-ui/src/squid_ui")
+    blocked = {"anyio", "discord", "squid_storage", "squid_ui_discord", "squid_ui_widgets"}
     violations: list[str] = []
     for path in root.rglob("*.py"):
-        if path.relative_to(root).parts[0] == "discord":
-            continue
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if isinstance(node, ast.Import):
                 imported = {alias.name.split(".", 1)[0] for alias in node.names}
@@ -495,7 +574,7 @@ def test_only_the_discord_adapter_imports_adapter_dependencies() -> None:
                 imported = {node.module.split(".", 1)[0]}
             else:
                 continue
-            if blocked := imported & {"anyio", "discord"}:
-                violations.append(f"{path}:{node.lineno}: {sorted(blocked)}")
+            if found := imported & blocked:
+                violations.append(f"{path}:{node.lineno}: {sorted(found)}")
 
     assert violations == []

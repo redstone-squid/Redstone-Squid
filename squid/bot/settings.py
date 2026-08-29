@@ -6,12 +6,20 @@ import discord
 from discord import app_commands
 from discord.ext.commands import Cog, Context, guild_only, hybrid_group
 
-import squid_layouts as sl
+import squid_ui_discord as sd
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.operations import managed_result
-from squid.bot.settings_view import FOLLOW_DISCORD, SettingsCapabilities, SettingsPanel
-from squid.bot.ui import destination, error_layout, error_node, info_layout, info_node, reply_presentation
+from squid.bot.settings_view import FOLLOW_DISCORD, SETTINGS_SESSION_SPEC, SettingsCapabilities, SettingsPanel
+from squid.bot.ui import (
+    error_layout,
+    error_node,
+    info_layout,
+    info_node,
+    localization_for,
+    message_destination,
+    reply_payload,
+)
 from squid.bot.utils.permissions import hide_unless, requires, subject_for
 from squid.bot.utils.visibility import personal
 from squid.core.i18n import SUPPORTED_LOCALES, _
@@ -23,8 +31,7 @@ from squid.permissions.domain.catalogue import (
 from squid.settings.domain import ScalarChannelSetting
 from squid.voting.domain import RoleWeight, VoteKind
 from squid.voting.errors import InvalidVoteConfigurationError
-from squid_layouts.discord import SessionKey
-from squid_layouts.runtime.component import RenderResult
+from squid_ui.runtime.component import RenderResult
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -47,18 +54,18 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
             settings=self.settings_service,
             votes=self.bot.services.votes,
             guild=ctx.guild,
-            author_id=ctx.author.id,
             capabilities=await self._capabilities(ctx),
             locale=locale,
             owner_guild_id=self.bot.owner_server_id,
         )
         # One panel per admin per guild: a second `/settings` replaces the first rather than
         # leaving two live panels writing the same settings service.
-        await self.bot.mounts.open(
-            view.mount(source=ctx),
-            destination(ctx, visibility="personal", locale=locale),
-            key=SessionKey.user_guild("settings", ctx.author.id, ctx.guild.id),
-            actor_id=ctx.author.id,
+        await SETTINGS_SESSION_SPEC.open(
+            view,
+            message_destination(ctx, visibility="personal", locale=locale),
+            sessions=ctx,
+            open_context=sd.OpenContext.of(ctx),
+            localization=localization_for(locale),
         )
 
     async def _capabilities(self, ctx: Context[BotT]) -> SettingsCapabilities:
@@ -225,11 +232,11 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
             ),
         )
 
-    async def _reply(self, ctx: Context[BotT], presentation: sl.discord.presentation.DiscordPresentation) -> None:
-        """Answer the caller privately through the presentation delivery boundary."""
-        await reply_presentation(
+    async def _reply(self, ctx: Context[BotT], payload: sd.message_payload.MessagePayload) -> None:
+        """Answer the caller privately through the payload delivery boundary."""
+        await reply_payload(
             ctx,
-            presentation,
+            payload,
             visibility="personal" if personal(ctx) else "public",
         )
 

@@ -6,7 +6,7 @@ import discord.ext.commands as commands
 from discord.ext.commands import Cog, Context
 
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.ui import link_layout, reply_presentation
+from squid.bot.ui import link_layout, reply_payload
 from squid.core.i18n import _
 
 if TYPE_CHECKING:
@@ -27,7 +27,7 @@ class Miscellaneous[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def invite_link(self, ctx: Context[BotT]):
         """Get a link to invite the bot to another server."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        await reply_presentation(
+        await reply_payload(
             ctx,
             link_layout(
                 t(locale, _("Invite Redstone Squid")),
@@ -42,7 +42,7 @@ class Miscellaneous[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def source_code(self, ctx: Context[BotT]):
         """Open the bot's source code."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        await reply_presentation(
+        await reply_payload(
             ctx,
             link_layout(
                 t(locale, _("Source code")),
@@ -56,7 +56,7 @@ class Miscellaneous[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         """Open the legacy submission form. Prefer `/build submit` for new builds."""
         BUILD_SUBMISSION_FORM_LINK = "https://forms.gle/i9Nf6apGgPGTUohr9"
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        await reply_presentation(
+        await reply_payload(
             ctx,
             link_layout(
                 t(locale, _("Submission form")),
@@ -70,7 +70,7 @@ class Miscellaneous[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def docs(self, ctx: Context[BotT]):
         """Open the build rules and regulations."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        await reply_presentation(
+        await reply_payload(
             ctx,
             link_layout(
                 t(locale, _("Regulations")),
