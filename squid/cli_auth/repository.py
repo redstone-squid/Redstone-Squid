@@ -2,11 +2,10 @@
 
 import hashlib
 import hmac
-from collections.abc import Callable
 from uuid import UUID
 
 from sqlalchemy import func, select, update
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.cli_auth.domain import CliDevice, CliDeviceEnrollment, CliSession, CliSessionChallenge
@@ -28,7 +27,7 @@ from squid.cli_auth.models import (
     CliSessionRecord,
 )
 
-SessionFactory = Callable[[], AsyncSession]
+SessionFactory = async_sessionmaker[AsyncSession]
 
 
 def _enrollment(record: CliDeviceEnrollmentRecord) -> CliDeviceEnrollment:

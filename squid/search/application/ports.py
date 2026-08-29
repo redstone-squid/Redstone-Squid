@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Protocol
 
-from squid.search.domain import CursorPosition, SearchHit, SearchQuery, SearchRequest
+from squid.search.domain import SearchHit, SearchQuery, SearchRequest
 
 
 class SearchQueryCompiler[CompiledQueryT](Protocol):
@@ -16,11 +16,10 @@ class SearchQueryCompiler[CompiledQueryT](Protocol):
 
 @dataclass(frozen=True, slots=True)
 class SearchSlice:
-    """Backend results plus the last returned ordering position."""
+    """One offset-addressed window of backend results and the size of the full result set."""
 
     hits: tuple[SearchHit, ...]
-    has_more: bool
-    last_position: CursorPosition | None
+    total: int
     warnings: tuple[str, ...] = ()
 
 
@@ -31,7 +30,8 @@ class SearchBackend(Protocol):
         self,
         request: SearchRequest,
         query: SearchQuery,
-        cursor: CursorPosition | None,
+        *,
+        offset: int,
     ) -> SearchSlice: ...
 
     async def suggest(self, query: SearchQuery, *, limit: int) -> tuple[str, ...]: ...

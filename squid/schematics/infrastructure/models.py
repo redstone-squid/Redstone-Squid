@@ -7,7 +7,6 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
-    LargeBinary,
     SmallInteger,
     Text,
     UniqueConstraint,
@@ -31,28 +30,15 @@ class SchematicFile(Base):
     __tablename__ = "schematic_files"
     __table_args__ = (
         CheckConstraint(f"byte_size > 0 AND byte_size <= {MAX_SCHEMATIC_BYTES}", name="schematic_files_size_bounded"),
-        CheckConstraint(
-            "storage_state IN ('pending', 'verified', 'ready')",
-            name="schematic_files_storage_state_check",
-        ),
-        CheckConstraint(
-            "data IS NOT NULL OR object_key IS NOT NULL",
-            name="schematic_files_has_storage_location",
-        ),
-        Index("schematic_files_storage_state_idx", "storage_state", "created_at"),
     )
 
     sha256: Mapped[str] = mapped_column(Text, primary_key=True)
-    """Lowercase hex SHA-256 of `data`, and the identity of this row."""
+    """Lowercase hex SHA-256 of the object payload, and the identity of this row."""
     byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
-    """Size of `data`. Stored so size predicates never have to detoast the bytes."""
+    """Object payload size used to bound downloads."""
     source_format: Mapped[str] = mapped_column(Text, nullable=False)
     """The format the content sniffer identified, e.g. `litematic`."""
-    data: Mapped[bytes | None] = mapped_column(LargeBinary, default=None)
-    """Legacy inline payload retained only until the worker copies it to object storage."""
-    object_key: Mapped[str | None] = mapped_column(Text, default=None)
-    storage_state: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'ready'"), default="ready")
-    verified_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    object_key: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )

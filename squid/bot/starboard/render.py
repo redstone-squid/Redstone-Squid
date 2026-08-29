@@ -7,13 +7,13 @@ import discord
 from squid.bot.i18n import t
 from squid.bot.utils.components import MAX_DISPLAY_CHARACTERS, StaticLayout, truncate_display_text
 from squid.core.i18n import _
-from squid.starboard.application import EntryPlan
+from squid.starboard.application import EntryState
 
 
-def starboard_layout(plan: EntryPlan, message: discord.Message, *, locale: str | None = None) -> StaticLayout:
+def starboard_layout(state: EntryState, message: discord.Message, *, locale: str | None = None) -> StaticLayout:
     """Render one source message as a Components V2 card."""
-    config = plan.config
-    entry = plan.entry
+    config = state.config
+    entry = state.entry
     author_name = getattr(message.author, "display_name", message.author.name)
     avatar_url = str(message.author.display_avatar.url)
     heading = f"**{author_name}**"

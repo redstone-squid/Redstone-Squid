@@ -14,7 +14,7 @@ DEFAULT_LOG_LEVEL = "INFO"
 """Default log level for application loggers when SQUID_LOG_LEVEL is not set."""
 
 DEFAULT_ROOT_LOG_LEVEL = "WARNING"
-"""Default root log level when SQUID_ROOT_LOG_LEVEL is not set."""
+"""Default root log level when SQUID_LOG_ROOT_LEVEL is not set."""
 
 DEFAULT_LOG_DIR_NAME = "logs"
 """Default directory used when SQUID_LOG_DIRECTORY is not set."""
@@ -271,6 +271,11 @@ def configure_api_logging(config: LoggingConfig) -> None:
             service_name="redstone-squid-api",
         )
     )
+    # Stamp trace/request-id correlation onto records even when the observability extra is absent,
+    # so the API's RequestContextMiddleware id reaches log lines without OpenTelemetry configured.
+    from squid.observability import install_trace_context_log_filter
+
+    install_trace_context_log_filter()
 
 
 def configure_service_worker_logging(config: LoggingConfig) -> None:

@@ -48,7 +48,7 @@ class SubmissionDraftClientTest {
         assertEquals("paper", body.getValue("origin").jsonPrimitive.content)
         assertFalse("account_id" in body)
         assertTrue(checkNotNull(request.headers["Authorization"]).startsWith("Bearer sqpt_"))
-        assertEquals(installationId.toString(), request.headers["X-Squid-Installation-ID"])
+        assertEquals(installationId.toString(), request.headers["Squid-Installation-ID"])
         assertTrue(checkNotNull(request.headers["Idempotency-Key"]).startsWith("paper:test:create:"))
         assertEquals("no-store", request.headers["Cache-Control"])
     }
@@ -109,7 +109,7 @@ class SubmissionDraftClientTest {
         assertEquals(SubmissionApiPaths.DRAFTS, request.pathAndQuery)
         assertEquals(MAX_DRAFT_LIST_BYTES, request.maxResponseBytes)
         assertTrue(checkNotNull(request.headers["Authorization"]).startsWith("Bearer sqpt_"))
-        assertEquals(installationId.toString(), request.headers["X-Squid-Installation-ID"])
+        assertEquals(installationId.toString(), request.headers["Squid-Installation-ID"])
     }
 
     @Test

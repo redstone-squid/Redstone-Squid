@@ -32,7 +32,7 @@ def encrypted_repository(
 
 
 @pytest.fixture
-async def idempotency_table(async_engine: AsyncEngine) -> AsyncGenerator[None, None]:
+async def idempotency_table(async_engine: AsyncEngine) -> AsyncGenerator[None]:
     async with async_engine.begin() as connection:
         await connection.run_sync(_TABLE.create)
     try:

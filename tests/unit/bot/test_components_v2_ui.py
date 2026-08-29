@@ -20,7 +20,7 @@ from squid.bot.submission.ui.views import (
     SubmissionModal,
 )
 from squid.builds.application import BuildService
-from squid.builds.domain import Build, BuildDraft, BuildLink, DoorBuild, OriginalMessage, Status
+from squid.builds.domain import Build, BuildDraft, BuildLink, DoorBuild, SourceMessage, Status
 from squid.search.application import SearchService
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
 from squid.sponsors import PublicSponsor
@@ -48,7 +48,7 @@ def display_build() -> Build:
         versions=["Java 1.20"],
         links=[BuildLink(url="https://example.com/build.png", media_type="image")],
         extra_info={},
-        original_message=OriginalMessage(message_id=3, server_id=1, channel_id=2),
+        source_messages=(SourceMessage(message_id=3, guild_id=1, channel_id=2),),
     )
 
 
@@ -153,8 +153,12 @@ def test_submission_form_uses_explicit_v2_rows() -> None:
     payload = form.to_components()
 
     assert form.has_components_v2()
-    assert [component["type"] for component in payload] == [17, 1, 1, 1]
-    assert len(payload[-1]["components"]) == 4
+    assert [component["type"] for component in payload] == [
+        discord.ComponentType.container.value,
+        discord.ComponentType.action_row.value,
+        discord.ComponentType.action_row.value,
+        discord.ComponentType.action_row.value,
+    ]
     assert "Only the door type and opening size are required" in str(payload)
     assert [button["label"] for button in payload[-1]["components"]] == [
         "Edit basics",
@@ -166,9 +170,10 @@ def test_submission_form_uses_explicit_v2_rows() -> None:
 
 def test_confirmation_view_contains_prompt_and_actions() -> None:
     view = ConfirmationView("Proceed?")
+    payload = view.to_components()
 
-    assert view.to_components()[0]["content"] == "Proceed?"
-    assert len(view.to_components()[1]["components"]) == 2
+    assert payload[0]["content"] == "Proceed?"
+    assert [button["label"] for button in payload[1]["components"]] == ["Confirm", "Cancel"]
 
 
 def test_user_data_consent_view_discloses_storage_and_actions() -> None:
@@ -183,7 +188,7 @@ def test_user_data_consent_view_discloses_storage_and_actions() -> None:
 
 
 def test_modals_wrap_text_inputs_in_labels(display_build: Build) -> None:
-    submission = SubmissionModal(display_build, cast(BuildService, object()))
+    submission = SubmissionModal(BuildDraft(), cast(BuildService, object()))
     field = get_text_input(display_build, "width")
     edit = BuildEditView(display_build, cast(BuildService, object()), [field]).get_modal()
 
@@ -220,8 +225,9 @@ def test_search_results_use_named_selection_and_direct_build_action() -> None:
     )
     page = SearchPage(
         (record, BuildSearchHit("8", "Fast door", "confirmed")),
-        next_cursor=None,
-        has_more=False,
+        total=1,
+        next=None,
+        prev=None,
     )
     view = SearchResultsView(
         cast(SearchService, object()),
@@ -241,7 +247,7 @@ def test_search_results_use_named_selection_and_direct_build_action() -> None:
 
 @pytest.mark.asyncio
 async def test_search_timeout_visibly_disables_bound_controls() -> None:
-    page = SearchPage((BuildSearchHit("8", "Fast door", "confirmed"),), next_cursor=None, has_more=False)
+    page = SearchPage((BuildSearchHit("8", "Fast door", "confirmed"),), total=1, next=None, prev=None)
     view = SearchResultsView(cast(SearchService, object()), SearchRequest("door"), page, author_id=123)
     message = AsyncMock(spec=discord.Message)
     view.bind_message(cast(discord.Message, message))

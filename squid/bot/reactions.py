@@ -25,7 +25,7 @@ class ReactionEvent:
     payload: discord.RawReactionActionEvent
     emoji: str
     member: discord.Member | None
-    _bot: "squid.bot.app.RedstoneSquid" = field(repr=False, compare=False)
+    _bot: squid.bot.app.RedstoneSquid = field(repr=False, compare=False)
     _message_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False, compare=False)
     _message: discord.Message | None = field(default=None, init=False, repr=False, compare=False)
     _message_loaded: bool = field(default=False, init=False, repr=False, compare=False)
@@ -37,9 +37,7 @@ class ReactionEvent:
         async with self._message_lock:
             if self._message_loaded:
                 return self._message
-            message = await self._bot.get_or_fetch_message(
-                self.payload.channel_id, self.payload.message_id, untrack_if_missing=False
-            )
+            message = await self._bot.get_or_fetch_message(self.payload.channel_id, self.payload.message_id)
             object.__setattr__(self, "_message", message)
             object.__setattr__(self, "_message_loaded", True)
             return message
@@ -102,7 +100,7 @@ class ReactionRouter:
 
     def __init__(
         self,
-        bot: "squid.bot.app.RedstoneSquid",
+        bot: squid.bot.app.RedstoneSquid,
         *,
         concurrency: int = 16,
         max_pending: int = 1024,
@@ -225,7 +223,7 @@ class ReactionRouter:
 class ReactionRouterCog(commands.Cog):
     """Own the bot's only Discord raw-reaction listeners."""
 
-    def __init__(self, bot: "squid.bot.app.RedstoneSquid") -> None:
+    def __init__(self, bot: squid.bot.app.RedstoneSquid) -> None:
         self.bot = bot
 
     @commands.Cog.listener()
@@ -249,5 +247,5 @@ class ReactionRouterCog(commands.Cog):
         await self.bot.reactions.close()
 
 
-async def setup(bot: "squid.bot.app.RedstoneSquid") -> None:
+async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
     await bot.add_cog(ReactionRouterCog(bot))

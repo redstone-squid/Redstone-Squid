@@ -121,7 +121,7 @@ async def current_principal(
             raise AuthenticationError
         if request.method not in {"GET", "HEAD", "OPTIONS"}:
             csrf_cookie = request.cookies.get("squid_csrf")
-            csrf_header = request.headers.get("X-CSRF-Token")
+            csrf_header = request.headers.get("CSRF-Token")
             if csrf_cookie is None or csrf_header is None or not hmac.compare_digest(csrf_cookie, csrf_header):
                 raise AuthorizationError
         return Principal(
@@ -168,8 +168,8 @@ async def current_principal(
         if players is None:
             raise AuthenticationError
         try:
-            installation_id = request.headers.get("X-Squid-Installation-ID")
-            installation_secret = request.headers.get("X-Squid-Installation-Secret")
+            installation_id = request.headers.get("Squid-Installation-ID")
+            installation_secret = request.headers.get("Squid-Installation-Secret")
             if installation_id is None and installation_secret is None:
                 context = await players.authenticate_fabric_player(token)
             else:
@@ -182,7 +182,7 @@ async def current_principal(
                     f"{INSTALLATION_TOKEN_PREFIX}_{parsed_id.hex}_{installation_secret}"
                 )
                 context = await players.authenticate_paper_player(token, installation)
-        except (MinecraftAuthorizationError, ValueError):
+        except MinecraftAuthorizationError, ValueError:
             raise AuthenticationError from None
         return Principal(
             kind="minecraft_player",

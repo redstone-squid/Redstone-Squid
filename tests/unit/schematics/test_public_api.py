@@ -8,7 +8,6 @@ from whenever import Instant
 from squid.api.v1.schematics import get_schematic_content, list_build_schematics, router
 from squid.builds.application import BuildQueryService
 from squid.builds.domain import Status
-from squid.core.pagination import SignedCursor
 from squid.schematics.application import SchematicPublication, SchematicService, StoredSchematic
 from squid.schematics.domain import SchematicLicense, SchematicVisibility
 from tests.unit.schematics.fakes import make_analysis
@@ -58,9 +57,8 @@ async def test_public_metadata_omits_digest_and_original_filename() -> None:
         7,
         cast(BuildQueryService, ConfirmedBuilds()),
         cast(SchematicService, PublicSchematics()),
-        SignedCursor(b"schematic-test-cursor-secret"),
         page_size=50,
-        cursor=None,
+        offset=None,
     )
 
     item = page.items[0].model_dump(mode="json")
@@ -81,8 +79,10 @@ async def test_download_uses_scoped_locator_and_short_revalidation_cache() -> No
     assert response.body == b"sanitized-sponge-v3"
     assert response.headers["content-type"] == "application/octet-stream"
     assert response.headers["content-disposition"] == 'attachment; filename="build-7-schematic-3.schem"'
-    assert response.headers["x-schematic-license"] == "cc_by_4_0"
+    assert "x-schematic-license" not in response.headers
     assert response.headers["cache-control"] == "public, max-age=300, must-revalidate"
+    # The standard Link header carries the license instead of a bespoke X- header.
+    assert 'rel="license"' in response.headers["link"]
     assert "creativecommons.org/licenses/by/4.0/" in response.headers["link"]
     paths = {getattr(route, "path", None) for route in router.routes}
     assert "/schematics/{sha256}/content" not in paths

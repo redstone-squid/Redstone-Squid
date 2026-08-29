@@ -9,6 +9,7 @@ from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError as PydanticValidationError
 from whenever import Instant
 
+from squid.accounts.domain import IdentityProvider
 from squid.accounts.errors import ConsentRequiredError
 from squid.api.security import ANONYMOUS, Principal, current_principal
 from squid.api.v1.schemas.submissions import (
@@ -390,7 +391,11 @@ async def test_draft_authentication_requires_current_privacy_consent() -> None:
     with pytest.raises(ConsentRequiredError) as error:
         await authenticated_account(principal)
 
-    assert error.value.context == {"discord_id": 123, "account_id": 42}
+    assert error.value.context == {
+        "account_id": 42,
+        "provider": IdentityProvider.DISCORD,
+        "subject": "123",
+    }
 
 
 async def test_player_grant_derives_minecraft_origin() -> None:

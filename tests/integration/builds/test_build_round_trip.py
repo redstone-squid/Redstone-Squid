@@ -13,15 +13,19 @@ save→load is the identity (up to database-generated timestamps), and ``save()`
 itself persists ``build.tags`` verbatim without interpreting the string fields.
 """
 
+# ruff: noqa: RUF001, RUF002  The case-folding regression below is about confusable
+# characters; they are its inputs, not typos.
+
 from dataclasses import fields as dataclass_fields
 from typing import Any
 
 import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.accounts.infrastructure.models import Account
+from squid.accounts.infrastructure.models import Account, CreatorAlias
 from squid.builds.application.taxonomy import apply_build_taxonomy
 from squid.builds.domain import (
     BUILD_CLASS_BY_CATEGORY,
@@ -30,8 +34,8 @@ from squid.builds.domain import (
     BuildLink,
     DoorBuild,
     ExtenderBuild,
-    OriginalMessage,
     OtherBuild,
+    SourceMessage,
     Status,
 )
 from squid.builds.infrastructure.repository import BuildRepository
@@ -319,7 +323,7 @@ async def test_alias_resolves_to_canonical_display_name(
     assert loaded.component_restrictions == ["Observerless"]
 
 
-async def test_original_message_round_trips(
+async def test_source_messages_round_trip(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     account_id = await _seed_catalogue(migrated_session_factory)
@@ -330,12 +334,15 @@ async def test_original_message_round_trips(
         submission_status=build.submission_status,
         submitter_account_id=account_id,
         versions=["Java 1.21.0"],
-        original_message=OriginalMessage(
-            message_id=6000,
-            server_id=4000,
-            channel_id=5000,
-            author_id=7000,
-            content="the original submission text",
+        source_messages=(
+            SourceMessage(
+                message_id=6000,
+                guild_id=4000,
+                channel_id=5000,
+                author_id=7000,
+                content="the original submission text",
+            ),
+            SourceMessage(message_id=6001, guild_id=4000, channel_id=5000, author_id=7000, content="a follow-up"),
         ),
     )
     await repository.save(frozen)
@@ -343,12 +350,45 @@ async def test_original_message_round_trips(
 
     loaded = await repository.get_by_id(frozen.id)
     assert loaded is not None
-    assert loaded.original_message is not None
-    assert loaded.original_message.server_id == 4000
-    assert loaded.original_message.channel_id == 5000
-    assert loaded.original_message.message_id == 6000
-    assert loaded.original_message.author_id == 7000
-    assert loaded.original_message.content == "the original submission text"
+    assert [message.message_id for message in loaded.source_messages] == [6000, 6001]
+    first = loaded.source_messages[0]
+    assert first.guild_id == 4000
+    assert first.channel_id == 5000
+    assert first.author_id == 7000
+    assert first.content == "the original submission text"
+    # The submission link points at the request, not at a trailing image.
+    assert loaded.original_link == "https://discord.com/channels/4000/5000/6000"
+
+
+async def test_one_message_can_source_several_builds(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A build-log message that yields a bundle links to every build it produced.
+
+    The replaced `builds.original_message_id` could only name one build per message,
+    so half a bundle's provenance was silently dropped.
+    """
+    account_id = await _seed_catalogue(migrated_session_factory)
+    repository = BuildRepository(migrated_session_factory)
+    shared = SourceMessage(message_id=8000, guild_id=4000, channel_id=5000, author_id=7000, content="two doors")
+
+    build_ids: list[int] = []
+    for _ in range(2):
+        build = OtherBuild(
+            submission_status=Status.PENDING,
+            submitter_account_id=account_id,
+            versions=["Java 1.21.0"],
+            source_messages=(shared,),
+        )
+        await repository.save(build)
+        assert build.id is not None
+        build_ids.append(build.id)
+
+    assert sorted(await repository.list_ids_for_source_message(8000)) == sorted(build_ids)
+    for build_id in build_ids:
+        loaded = await repository.get_by_id(build_id)
+        assert loaded is not None
+        assert [message.message_id for message in loaded.source_messages] == [8000]
 
 
 # --- Edit-time taxonomy handling ---------------------------------------------
@@ -579,3 +619,30 @@ async def test_round_trip_property(
     loaded = await repository.get_by_id(build.id)
     assert loaded is not None
     _assert_round_trip(build, loaded)
+
+
+async def test_repeat_credit_of_a_case_folding_name_resolves_to_one_alias(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Regression: a second build crediting `ΣΣ` used to raise NoResultFound.
+
+    `_get_or_create_aliases` looked the name up by a Python fold, inserted on a miss, and
+    re-selected by that same fold when the insert hit a conflict. While Postgres computed
+    the stored fold itself the two disagreed — Python `lower` gave `σς`, SQL `lower` gave
+    `σσ` — so the insert conflicted on a row the re-select could not see and `.scalar_one()`
+    raised. Both sides now use `fold_creator_name`.
+
+    `Σς` is credited last to pin the other half: the two spellings are one creator, which
+    the retired SQL fold got wrong in the opposite direction by storing them separately.
+    """
+    account_id = await _seed_catalogue(migrated_session_factory)
+    repository = BuildRepository(migrated_session_factory)
+
+    for spelling in ("ΣΣ", "ΣΣ", "Σς"):
+        build = _make_build(BuildCategory.UTILITY, account_id)
+        build.creators_ign = [spelling]
+        await _resolve_and_save(migrated_session_factory, repository, build)
+
+    async with migrated_session_factory() as session:
+        aliases = list((await session.scalars(select(CreatorAlias.normalized_name))).all())
+    assert aliases == ["σσ"], "the three credits must resolve to exactly one creator"

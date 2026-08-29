@@ -592,7 +592,7 @@ def _frame_rate(stream: Mapping[str, Any]) -> Fraction:
             continue
         try:
             rate = Fraction(raw)
-        except (ValueError, ZeroDivisionError):
+        except ValueError, ZeroDivisionError:
             continue
         if rate >= 0:
             return rate
@@ -673,5 +673,5 @@ def _set_resource_limit(which: int, soft: int) -> None:
         _, hard = resource.getrlimit(which)
         ceiling = soft if hard == resource.RLIM_INFINITY else min(soft, hard)
         resource.setrlimit(which, (ceiling, hard))
-    except (OSError, ValueError):
+    except OSError, ValueError:
         pass

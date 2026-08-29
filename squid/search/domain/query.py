@@ -58,7 +58,7 @@ class FieldExpression:
 class NotExpression:
     """Negation of an expression."""
 
-    operand: "QueryExpression"
+    operand: QueryExpression
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,7 +66,7 @@ class BooleanExpression:
     """A flattened Boolean combination."""
 
     operator: BooleanOperator
-    operands: tuple["QueryExpression", ...]
+    operands: tuple[QueryExpression, ...]
 
     def __post_init__(self) -> None:
         if len(self.operands) < 2:

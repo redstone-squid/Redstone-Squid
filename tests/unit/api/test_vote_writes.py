@@ -10,30 +10,12 @@ from squid.api.security import Principal
 from squid.api.v1.votes import VoteInput, cast_vote
 from squid.core.errors import AuthenticationError, ValidationError
 from squid.runtime import ApiServices
-from squid.voting.domain import (
-    DEFAULT_VOTE_OPTIONS,
-    CastVoteResult,
-    VoteActor,
-    VoteMessage,
-    VoteSessionSnapshot,
-    VoteTarget,
-)
+from squid.voting.domain import CastVoteResult, VoteActor, VoteRejection, VoteSessionSnapshot
+from tests.helpers.voting import build_snapshot
 
 
 def snapshot() -> VoteSessionSnapshot:
-    return VoteSessionSnapshot(
-        id=12,
-        author_account_id=7,
-        kind="build",
-        status="open",
-        result="pending",
-        pass_threshold=3,
-        fail_threshold=-3,
-        votes={},
-        messages=(VoteMessage(100, 200, 10),),
-        options=DEFAULT_VOTE_OPTIONS,
-        target=VoteTarget(build_id=42),
-    )
+    return build_snapshot()
 
 
 def account(subject: str = "account:1") -> Principal:
@@ -89,7 +71,7 @@ async def test_invalid_option_is_a_typed_client_error() -> None:
     session = snapshot()
     votes = SimpleNamespace(
         get_session_by_id=AsyncMock(return_value=session),
-        cast_vote_by_session=AsyncMock(return_value=CastVoteResult(session, rejection="invalid_option")),
+        cast_vote_by_session=AsyncMock(return_value=CastVoteResult(session, rejection=VoteRejection.INVALID_OPTION)),
     )
     members = SimpleNamespace(member=AsyncMock(return_value=VoteActor(1, 7, guild_id=10)))
 

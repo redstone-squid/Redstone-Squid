@@ -87,7 +87,7 @@ def mark_error_presented(error: BaseException) -> None:
     setattr(unwrap_error(error), _PRESENTED_ATTRIBUTE, True)
 
 
-def _presentation_locale(interaction: "discord.Interaction[Any] | None") -> str | None:
+def _presentation_locale(interaction: discord.Interaction[Any] | None) -> str | None:
     """Best-effort Discord-native locale for error presentation.
 
     Deliberately skips the admin-configured guild override (which requires a

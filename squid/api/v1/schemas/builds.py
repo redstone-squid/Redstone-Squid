@@ -221,7 +221,7 @@ class BuildSummary(BaseModel):
     updated_at: datetime | None
 
     @classmethod
-    def from_domain(cls, build: Build) -> "BuildSummary":
+    def from_domain(cls, build: Build) -> BuildSummary:
         """Render allowlisted public build fields."""
         if build.id is None:
             msg = "persisted build is missing its identifier"
@@ -357,7 +357,7 @@ class BuildDetail(BuildSummary):
 
     @classmethod
     @override
-    def from_domain(cls, build: Build) -> "BuildDetail":
+    def from_domain(cls, build: Build) -> BuildDetail:
         """Render public detail without raw extra_info or account identifiers."""
         summary = BuildSummary.from_domain(build)
         return cls(

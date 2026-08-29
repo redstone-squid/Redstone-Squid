@@ -2,7 +2,6 @@
 
 from squid.search.domain.models import (
     BuildSearchHit,
-    CursorPosition,
     MetadataSearchHit,
     RecordSearchHit,
     SearchHit,
@@ -30,7 +29,6 @@ __all__ = [
     "BooleanOperator",
     "BuildSearchHit",
     "ComparisonOperator",
-    "CursorPosition",
     "FieldExpression",
     "MetadataSearchHit",
     "NotExpression",

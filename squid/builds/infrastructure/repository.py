@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from decimal import Decimal
 from typing import Any, cast
 
-from sqlalchemy import Select, func, select, update
+from sqlalchemy import Select, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -16,7 +16,7 @@ from sqlalchemy.orm import raiseload, selectinload
 from sqlalchemy.orm.exc import StaleDataError
 from whenever import Instant
 
-from squid.accounts.domain import IdentityProvider, normalize_ign
+from squid.accounts.domain import IdentityProvider, fold_creator_name
 from squid.accounts.infrastructure.models import Account, AccountIdentity, CreatorAlias
 from squid.builds.application.queries import DEFAULT_BUILD_LIST_SORT, BuildListSort
 from squid.builds.domain import (
@@ -31,6 +31,7 @@ from squid.builds.infrastructure.models import (
 from squid.builds.infrastructure.models import (
     BuildCreator,
     BuildLink,
+    BuildSourceMessage,
     BuildVersion,
 )
 from squid.core.errors import InvalidStateError, PersistenceError
@@ -218,24 +219,20 @@ class BuildRepository:
             )
             return await session.scalar(statement) or 0
 
-    async def get_by_message_id(self, message_id: int) -> Build | None:
-        """
-        Get the build by a message id.
+    async def list_ids_for_source_message(self, message_id: int) -> Sequence[int]:
+        """Return every build inferred from one Discord message.
 
-        Args:
-            message_id: The message id to get the build from.
-
-        Returns:
-            The Build object with the specified message id, or None if the build was not found.
+        Plural because a build-log message routinely yields a bundle, which the old
+        single `messages.build_id` column could not express.
         """
         async with self._session_factory() as session:
-            stmt = select(Message).where(Message.id == message_id)
-            result = await session.execute(stmt)
-            message = result.scalar_one_or_none()
-
-            if message and message.build_id is not None:
-                return await self.get_by_id(message.build_id)
-            return None
+            return (
+                await session.scalars(
+                    select(BuildSourceMessage.build_id)
+                    .where(BuildSourceMessage.message_id == message_id)
+                    .order_by(BuildSourceMessage.build_id)
+                )
+            ).all()
 
     async def save(self, build: Build) -> None:
         """
@@ -257,11 +254,7 @@ class BuildRepository:
                     await self._setup_relationships(build, session, sql_build)
                 await session.flush()
                 build.id = sql_build.id
-                if build.original_message is not None:
-                    await self._create_or_update_message(build, session)
-                sql_build.original_message_id = (
-                    build.original_message.message_id if build.original_message is not None else None
-                )
+                await self._sync_source_messages(build, session)
                 await session.commit()
                 build.revision = sql_build.revision
         else:
@@ -325,11 +318,7 @@ class BuildRepository:
                     sql_build.links.clear()
                     await self._setup_relationships(build, session, sql_build)
                     sql_build.extra_info = build.extra_info
-                if build.original_message is not None:
-                    await self._create_or_update_message(build, session)
-                sql_build.original_message_id = (
-                    build.original_message.message_id if build.original_message is not None else None
-                )
+                await self._sync_source_messages(build, session)
                 await session.commit()
             except StaleDataError as error:
                 await session.rollback()
@@ -513,20 +502,21 @@ class BuildRepository:
         """Return the creator alias IDs for *igns*, creating missing names.
 
         Names are matched case-insensitively via the ``normalized_name``
-        generated column, so ``Foo`` and ``foo`` share one credit. The insert
-        relies on that column's unique constraint rather than a read-then-write,
-        so two submissions naming the same creator cannot race.
+        column, so ``Foo`` and ``foo`` share one credit. The insert relies on
+        that column's unique constraint rather than a read-then-write, so two
+        submissions naming the same creator cannot race. The column is written
+        from ``name`` by a column default, so it is never set here.
         """
         alias_ids: list[int] = []
         seen: set[str] = set()
         for ign in igns:
             name = ign.strip()
-            normalized = normalize_ign(name)
-            if not normalized or normalized in seen:
+            folded = fold_creator_name(name)
+            if not folded or folded in seen:
                 continue
-            seen.add(normalized)
+            seen.add(folded)
 
-            alias_id = await session.scalar(select(CreatorAlias.id).where(CreatorAlias.normalized_name == normalized))
+            alias_id = await session.scalar(select(CreatorAlias.id).where(CreatorAlias.normalized_name == folded))
             if alias_id is None:
                 result = await session.execute(
                     pg_insert(CreatorAlias)
@@ -536,8 +526,9 @@ class BuildRepository:
                 )
                 alias_id = result.scalar_one_or_none()
             if alias_id is None:
+                # Lost the insert race against a concurrent submission naming the same creator.
                 alias_id = (
-                    await session.execute(select(CreatorAlias.id).where(CreatorAlias.normalized_name == normalized))
+                    await session.execute(select(CreatorAlias.id).where(CreatorAlias.normalized_name == folded))
                 ).scalar_one()
             alias_ids.append(alias_id)
 
@@ -564,39 +555,54 @@ class BuildRepository:
         return list(result.scalars().all())
 
     @staticmethod
-    async def _create_or_update_message(build: Build, session: AsyncSession) -> None:
-        """Create or update the original message record."""
-        original = build.original_message
-        if original is None:
+    async def _sync_source_messages(build: Build, session: AsyncSession) -> None:
+        """Record the message facts a build came from, then relink the build to them.
+
+        The message rows are upserted rather than inserted because the same Discord
+        message legitimately backs several builds: a build-log post that yields a
+        bundle is one message fact with one link row per build.
+
+        This writes `messages` directly instead of going through `MessageService`
+        because `build_source_messages.message_id` is RESTRICT: the fact and the link
+        have to land in one transaction, or the link has a window where its target
+        does not exist yet.
+        """
+        assert build.id is not None
+        await session.execute(delete(BuildSourceMessage).where(BuildSourceMessage.build_id == build.id))
+        if not build.source_messages:
             return
-        assert original.server_id is not None, "Original server ID must be set for original message."
-        # Channel ID may be None if the message is from DMs
-        assert original.author_id is not None, "Original message author ID must be set for original message."
 
-        stmt = select(Message).where(Message.id == original.message_id)
-        result = await session.execute(stmt)
-        message = result.scalar_one_or_none()
-
-        if message is None:
-            message = Message(
-                id=original.message_id,
-                server_id=original.server_id,
-                channel_id=original.channel_id,
-                author_id=original.author_id,
-                purpose="build_original_message",
-                content=original.content,
-                build_id=build.id,
+        for source in build.source_messages:
+            assert source.author_id is not None, "A source message must record its author."
+            await session.execute(
+                pg_insert(Message)
+                .values(
+                    id=source.message_id,
+                    guild_id=source.guild_id,
+                    channel_id=source.channel_id,
+                    author_id=source.author_id,
+                    content=source.content,
+                    observed_at=Instant.now(),
+                )
+                .on_conflict_do_update(
+                    index_elements=[Message.id],
+                    set_={
+                        "guild_id": source.guild_id,
+                        "channel_id": source.channel_id,
+                        "author_id": source.author_id,
+                        "content": source.content,
+                    },
+                )
             )
-            session.add(message)
-        else:
-            message.server_id = original.server_id
-            message.channel_id = original.channel_id
-            message.author_id = original.author_id
-            message.purpose = "build_original_message"
-            message.content = original.content
-            message.build_id = build.id
-            message.updated_at = Instant.now()
-        await session.flush()
+
+        await session.execute(
+            pg_insert(BuildSourceMessage).values(
+                [
+                    {"build_id": build.id, "message_id": source.message_id, "position": position}
+                    for position, source in enumerate(build.source_messages)
+                ]
+            )
+        )
 
     async def confirm(self, build: Build) -> None:
         """Marks the build as confirmed.
@@ -672,10 +678,6 @@ class BuildRepository:
             sql_builds = list(result.unique().scalars().all())
             by_id = {build.id: build for build in await self._mapper.to_domain_many(session, sql_builds)}
             return [by_id.get(build_id) for build_id in build_ids]
-
-    async def get_unsent_builds(self, server_id: int) -> list[Build] | None:
-        """Get all the builds that have not been posted on the server"""
-        raise NotImplementedError
 
 
 def _split_tag_value(

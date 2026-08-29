@@ -38,7 +38,7 @@ def _catalog(locale: str) -> gettext.NullTranslations:
 def _parse(tag: str) -> Locale | None:
     try:
         return Locale.parse(tag, sep="-")
-    except (UnknownLocaleError, ValueError):
+    except UnknownLocaleError, ValueError:
         return None
 
 

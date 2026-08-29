@@ -80,6 +80,6 @@ class Miscellaneous[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         )
 
 
-async def setup(bot: "squid.bot.app.RedstoneSquid"):
+async def setup(bot: squid.bot.app.RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(Miscellaneous(bot))

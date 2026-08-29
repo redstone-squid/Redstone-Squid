@@ -4,7 +4,16 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
-from squid.voting.domain import VoteOption, VoteSelection, VoteSessionSnapshot
+from squid.voting.domain import (
+    BuildVoteTarget,
+    VoteKind,
+    VoteOption,
+    VoteSelection,
+    VoteSessionResult,
+    VoteSessionSnapshot,
+    VoteStatus,
+    VoteVisibility,
+)
 
 
 class VoteOptionSummary(BaseModel):
@@ -18,7 +27,7 @@ class VoteOptionSummary(BaseModel):
     position: int
 
     @classmethod
-    def from_domain(cls, option: VoteOption) -> "VoteOptionSummary":
+    def from_domain(cls, option: VoteOption) -> VoteOptionSummary:
         assert option.identifier is not None
         return cls(id=option.identifier, label=option.label, choice=option.choice.value, position=option.position)
 
@@ -41,7 +50,7 @@ class VotePollSummary(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     question: str
-    visibility: str
+    visibility: VoteVisibility
     deadline: datetime
 
 
@@ -53,7 +62,7 @@ class OwnVoteSelection(BaseModel):
     option_id: str
 
     @classmethod
-    def from_domain(cls, selection: VoteSelection) -> "OwnVoteSelection":
+    def from_domain(cls, selection: VoteSelection) -> OwnVoteSelection:
         return cls(option_id=selection.option_id)
 
 
@@ -63,11 +72,11 @@ class VoteSessionDetail(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: int
-    kind: str
-    status: str
-    result: str
-    pass_threshold: int
-    fail_threshold: int
+    kind: VoteKind
+    status: VoteStatus
+    result: VoteSessionResult
+    pass_threshold: int | None
+    fail_threshold: int | None
     build_id: int | None
     options: list[VoteOptionSummary]
     tallies: VoteTallies | None
@@ -75,16 +84,13 @@ class VoteSessionDetail(BaseModel):
     own_selection: OwnVoteSelection | None
 
     @classmethod
-    def from_domain(cls, session: VoteSessionSnapshot, *, caller_account_id: int | None = None) -> "VoteSessionDetail":
+    def from_domain(cls, session: VoteSessionSnapshot, *, caller_account_id: int | None = None) -> VoteSessionDetail:
         options_by_id: dict[str, VoteOption] = {}
         for option in session.options:
             assert option.identifier is not None
             options_by_id.setdefault(option.identifier, option)
-        hide_tallies = (
-            session.poll is not None and session.poll.visibility == "anonymous_hidden" and session.status == "open"
-        )
         tallies = None
-        if not hide_tallies:
+        if session.shows_tallies:
             tallies = VoteTallies(
                 raw=dict(session.raw_tallies()),
                 weighted=dict(session.weighted_tallies()),
@@ -103,7 +109,7 @@ class VoteSessionDetail(BaseModel):
             result=session.result,
             pass_threshold=session.pass_threshold,
             fail_threshold=session.fail_threshold,
-            build_id=session.target.build_id,
+            build_id=session.target.build_id if isinstance(session.target, BuildVoteTarget) else None,
             options=[VoteOptionSummary.from_domain(option) for option in options_by_id.values()],
             tallies=tallies,
             poll=(

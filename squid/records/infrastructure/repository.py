@@ -974,7 +974,7 @@ def parse_category_key(key: str) -> CategoryIdentity | None:
             for tag_id, operator, value in (item.split(":", maxsplit=2),)
         )
         return CategoryIdentity(BuildKind(kind_value), base_key, restriction_ids, values)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return None
 
 

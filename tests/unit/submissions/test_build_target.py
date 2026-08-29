@@ -207,8 +207,8 @@ async def test_adapter_preserves_taxonomy_timings_rights_and_opaque_artifact_pro
     ).create_or_get(submission)
 
     build = builds.calls[0][0]
-    assert build.door_dimensions == (3, 4, 2)
     assert isinstance(build, DoorBuild)
+    assert build.door_dimensions == (3, 4, 2)
     assert build.orientation == "Trapdoor"
     assert build.patterns == ["Regular"]
     assert build.wiring_placement_restrictions == ["Seamless"]

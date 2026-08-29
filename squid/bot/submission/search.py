@@ -4,12 +4,10 @@ import logging
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-import discord
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Context, when_mentioned
 from discord.utils import escape_markdown
-from rapidfuzz import process
 
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.edit import BuildEditCommands
@@ -19,6 +17,7 @@ from squid.bot.submission.search_view import SearchResultsView
 from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildInfoView
+from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.components import (
     edit_layout,
     error_layout,
@@ -69,6 +68,7 @@ class SearchCog[
         self.restrictions = bot.services.restrictions
         self.register_edit_context_menu()
 
+    @autocompletes(sort="search_sorts", query="search_query")
     @commands.hybrid_command("search")
     @app_commands.describe(
         query=app_commands.locale_str(_("Search text and filters, e.g. `width:5`.")),
@@ -109,6 +109,7 @@ class SearchCog[
         """Find restrictions and manage their aliases."""
         await ctx.send_help("restrictions")
 
+    @autocompletes(query="approved_restrictions")
     @restrictions_group.command(name="search")
     @app_commands.describe(
         query=app_commands.locale_str(_("Part of a restriction name. Leave blank to list all restrictions."))
@@ -127,6 +128,7 @@ class SearchCog[
                 allowed_mentions=no_mentions(),
             )
 
+    @autocompletes(restriction="approved_restrictions")
     @restrictions_group.command(name="add-alias")
     @requires(RESTRICTION_ALIAS_CREATE)
     @app_commands.describe(
@@ -152,23 +154,6 @@ class SearchCog[
                     allowed_mentions=no_mentions(),
                 )
 
-    @add_restriction_alias.autocomplete("restriction")
-    async def restriction_autocomplete(
-        self, _interaction: discord.Interaction[BotT], current: str
-    ) -> list[app_commands.Choice[str]]:
-        """Provide autocomplete for restriction names."""
-        if not current:
-            return []
-
-        restriction_names = await self.restrictions.names()
-        matches = process.extract(
-            current,
-            restriction_names,
-            limit=25,
-            score_cutoff=30,
-        )
-        return [app_commands.Choice(name=match[0], value=match[0]) for match in matches]
-
     @commands.hybrid_group(name="patterns")
     async def patterns_group(self, ctx: Context[BotT]) -> None:
         """List and search build patterns."""
@@ -186,6 +171,7 @@ class SearchCog[
                 allowed_mentions=no_mentions(),
             )
 
+    @autocompletes(query="approved_patterns")
     @patterns_group.command(name="search")
     @app_commands.describe(query=app_commands.locale_str(_("A full or partial pattern name.")))
     async def search_patterns(self, ctx: Context[BotT], query: str):
@@ -225,6 +211,7 @@ class SearchCog[
                 allowed_mentions=no_mentions(),
             )
 
+    @autocompletes(build_id="builds")
     @BuildCommandGroup.build_hybrid_group.command(name="view")  # type: ignore
     @app_commands.rename(build_id="id")
     @app_commands.describe(build_id=app_commands.locale_str(_("The ID of the build you want to see.")))
@@ -263,6 +250,7 @@ class SearchCog[
             )
         return None
 
+    @autocompletes(build_id="builds_pending")
     @BuildCommandGroup.build_hybrid_group.command(name="approve")  # type: ignore
     @requires(BUILD_SUBMISSION_APPROVE)
     @app_commands.rename(build_id="id")
@@ -279,6 +267,7 @@ class SearchCog[
                 allowed_mentions=no_mentions(),
             )
 
+    @autocompletes(build_id="builds_pending")
     @BuildCommandGroup.build_hybrid_group.command(name="reject")  # type: ignore
     @requires(BUILD_SUBMISSION_REJECT)
     @app_commands.rename(build_id="id")
@@ -287,9 +276,11 @@ class SearchCog[
         """Mark a submission as denied."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
         async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
-            build = await self.builds.deny(build_id)
+            await self.builds.deny(build_id)
 
-            await self.bot.for_build(build).update_messages()
+            # Denying removes the card rather than editing it, which the renderer
+            # expresses by wanting no posts for a build in this state.
+            await self.bot.refresh_posts("build", str(build_id))
 
             await edit_layout(
                 sent_message,
@@ -297,6 +288,7 @@ class SearchCog[
                 allowed_mentions=no_mentions(),
             )
 
+    @autocompletes(build_id="builds")
     @BuildCommandGroup.build_hybrid_group.command(name="debug")  # type: ignore
     @requires(BUILD_SUBMISSION_DEBUG)
     @app_commands.rename(build_id="id")
@@ -359,7 +351,7 @@ class SearchCog[
         await ctx.invoke(self.view_build, build_id=build_id)
 
 
-async def setup(bot: "squid.bot.app.RedstoneSquid"):
+async def setup(bot: squid.bot.app.RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     bot.add_dynamic_items(DynamicBuildEditButton)
     await bot.add_cog(SearchCog(bot))

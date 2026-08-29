@@ -2,7 +2,7 @@
 name = "redstone-squid"
 description = "A bot designed to manage redstone records"
 version = "1.5.7"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -49,7 +49,7 @@ dependencies = [
 #
 # Pinned exactly, not ranged: fingerprints and data-version loss reports are version-scoped
 # outputs we persist, so upgrading is a deliberate act that requires a backfill plan.
-schematics = ["nucleation==0.10.1"]
+schematics = ["nucleation==0.10.14"]
 observability = [
     "opentelemetry-exporter-otlp-proto-http>=1.44,<2",
     "opentelemetry-instrumentation-aiohttp-client>=0.65b0,<1",
@@ -73,7 +73,7 @@ dev = [
     "pytest-archon>=0.0.6",
     "ruff>=0.5.1",
     "bump-my-version>=0.29.0",
-    "pyrefly>=0.44.0",
+    "pyrefly>=1.2.0",
     "pytest-cov>=6.1.1",
     "pytest-mock>=3.14.0",
     "pytest>=8.3.5",
@@ -89,7 +89,7 @@ dev = [
     # `x86_64` but has no wheel, and a machine-only marker sends it to the sdist, which needs
     # a Rust toolchain and fails `uv sync` outright. PEP 508 has no libc marker, so musl
     # cannot be excluded the same way; Alpine contributors must skip this group by hand.
-    "nucleation==0.10.1 ; (platform_machine == 'x86_64' and sys_platform != 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin')",
+    "nucleation==0.10.14 ; (platform_machine == 'x86_64' and sys_platform != 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin')",
 ]
 fuzz = [
     "atheris>=3.0.0; sys_platform == 'linux'",
@@ -109,16 +109,104 @@ packages = []
 
 [tool.uv]
 package = false
+# Only used for termux, don't enable universally.
+# cache-dir = ".cache/uv"
+# link-mode = "copy"
 exclude-newer = "7 days"
+# maturin cannot infer Termux's minimum SDK from its Python platform metadata. These packages
+# build from source on Android, where Termux's current toolchain targets API 24.
 # nucleation releases faster than the 7-day soak window (0.3.0 -> 0.9.2 inside two weeks), so
 # the global cutoff would pin us to a version several API generations behind the one this
 # integration targets. Carved out deliberately: the dependency is pinned exactly and its
 # wheel hashes are locked, and it is an optional extra that no default deployment installs.
-exclude-newer-package = { nucleation = "2026-08-05T00:00:00Z" }
+exclude-newer-package = { nucleation = "2026-08-16T00:00:00Z" }
+
+[tool.uv.extra-build-variables]
+# cryptography and jsonschema-rs are PyO3 extension modules. pyo3-ffi's build script already
+# detects Android correctly and emits `cargo:rustc-link-lib=python3` -- pyo3-build-config
+# special-cases target.environment == Android specifically because it knows the glibc trick
+# (resolving CPython C-API symbols from the already-running process without an explicit NEEDED
+# entry) doesn't work on bionic. Same failure mode as nucleation's Python3_SABI_LIBRARY bug
+# (see docs/plans/completed/nucleation-android-build.md), different cause: the modules fail to import
+# with "dlopen failed: cannot locate symbol PyLong_Type" (jsonschema-rs: _Py_TrueStruct).
+#
+# `-lpython3` genuinely reaches the final linker invocation -- confirmed by capturing the
+# actual argv cargo invokes the linker with, via `maturin build -vv` run directly against the
+# same source tree uv builds from. But Termux's default clang/lld toolchain links with
+# --as-needed active, and nothing earlier on that argv (dozens of .rlib archives, then
+# `-lssl -lcrypto -ldl -llog -lunwind -ldl -lm -lc`, then `-nodefaultlibs`) leaves an
+# unresolved symbol at the point `-lpython3` is processed, so the linker silently drops it
+# from DT_NEEDED even though PyLong_Type et al. are genuinely referenced elsewhere in the
+# same object code. RUSTFLAGS and CARGO_ENCODED_RUSTFLAGS were both tried first (simpler, no
+# wrapper script needed) and both still produced an unlinked .so -- consistent with the same
+# elision landing on whichever position the flag ends up in, not a maturin/cargo propagation
+# bug as such.
+#
+# scripts/android-link-with-libpython3.sh sidesteps the guesswork about argv position: it
+# wraps `cc` and re-asserts `-lpython3` (Termux's unversioned, version-independent stable-ABI
+# shim) wrapped in --no-as-needed/--as-needed on every real link invocation, which --as-needed
+# cannot drop. Intermediate rlib compiles never invoke a linker at all, so it's a no-op there.
+# Assumes this repo is checked out at /data/data/com.termux/files/home/Redstone-Squid, matching
+# the same assumption already baked into nucleation's CMAKE_ARGS entry below.
+cryptography = { ANDROID_API_LEVEL = "24", CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER = "/data/data/com.termux/files/home/Redstone-Squid/scripts/android-link-with-libpython3.sh" }
+hypothesis = { ANDROID_API_LEVEL = "24" }
+jiter = { ANDROID_API_LEVEL = "24" }
+jsonschema-rs = { ANDROID_API_LEVEL = "24", CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER = "/data/data/com.termux/files/home/Redstone-Squid/scripts/android-link-with-libpython3.sh" }
+orjson = { ANDROID_API_LEVEL = "24" }
+pydantic-core = { ANDROID_API_LEVEL = "24" }
+prek = { ANDROID_API_LEVEL = "24" }
+# Three upstream build bugs block the sdist on Termux/Android; see
+# docs/plans/completed/nucleation-android-build.md for full repro details. Each can be dropped once a
+# fixed release lands:
+#
+# 1. https://github.com/Schem-at/Nucleation/issues/38 -- The wheel's default feature set is
+#    "bridge-full", which pulls in rquickjs (scripting-js) for embedded JS scripting.
+#    rquickjs-sys 0.9.0 ships pregenerated
+#    bindgen output for a fixed target list that does not include aarch64-linux-android,
+#    so the build fails outright even though nucleation_adapter.py never touches the
+#    scripting bridge. The generated C++ bindings under src/sub_modules are NOT
+#    conditionally generated per feature -- CMakeLists.txt globs all of them in
+#    unconditionally -- so every *other* bridge-full feature must stay enabled or the
+#    link fails looking for FFI symbols (e.g. IoLayout_destroy) the Rust side never
+#    exported. scripting-js is the only feature that is both build-broken on Android and
+#    safe to drop: bridge/scripting.rs's exported symbol is unconditional and only
+#    branches internally on scripting-js/scripting-lua, so dropping just scripting-js
+#    keeps the C++/Rust symbol contract intact.
+# 2. https://github.com/Schem-at/Nucleation/issues/36 -- CMakeLists.txt links the compiled
+#    extension against `${Python3_SABI_LIBRARY}`, but it calls `find_package(Python ...)`
+#    (singular), which populates `Python_SABI_LIBRARY` -- the `Python3_`-prefixed variable
+#    is never set, so the module links with no libpython dependency at all. glibc Linux
+#    hides this: the main Python executable
+#    already exports CPython's C-API symbols globally, so the extension resolves them at
+#    load time regardless. Android's bionic linker does not do that implicit resolution,
+#    so the resulting .so fails to import with "dlopen failed: cannot locate symbol
+#    PyExc_ImportError". CMAKE_ARGS is scikit-build-core's documented passthrough for
+#    extra `-D` args; supplying the variable under its real (buggy) name at the command
+#    line forces cmake to pick it up even on an incremental reconfigure of the cached
+#    build dir, where an env-seeded value would be ignored once already cached. The
+#    unversioned libpython3.so is Termux's stable-ABI shim (not tied to a Python minor
+#    version), matching what `Python_SABI_LIBRARY` would have resolved to.
+# 3. https://github.com/Schem-at/Nucleation/issues/37 -- The `rendering` feature links wgpu,
+#    whose Android GPU backend calls ANativeWindow_* (surface creation) from libandroid.so.
+#    CMakeLists.txt links platform system libraries for WIN32 and APPLE but has no ANDROID
+#    branch, so the link leaves those calls
+#    unresolved; same glibc-hides-it/bionic-doesn't split as the SABI library above.
+#    nanobind_add_module builds a CMake MODULE library (it's dlopen'd, never linked
+#    against directly), so the flag belongs on CMAKE_MODULE_LINKER_FLAGS --
+#    CMAKE_SHARED_LINKER_FLAGS silently does not apply to MODULE targets.
+nucleation = { NUCLEATION_FEATURES = "bridge,meshing,simulation,rendering,scripting-lua,voxelize,world-segment,store-ssh,mc-tick,routing,hdl", CMAKE_ARGS = "-DPython3_SABI_LIBRARY=/data/data/com.termux/files/usr/lib/libpython3.so -DCMAKE_MODULE_LINKER_FLAGS=-landroid" }
+# Pyrefly also enables LTO for releases; rustc's LLVM backend exceeds the memory available on
+# Android while linking the binary built in place of the unavailable platform wheel.
+pyrefly = { ANDROID_API_LEVEL = "24", CARGO_PROFILE_RELEASE_LTO = "off" }
+rpds-py = { ANDROID_API_LEVEL = "24" }
+# Ruff's release profile enables fat LTO, which can exhaust Android's linker during the final
+# binary link. The PyPI wheels do not target Android, so keep the source build's optimizations
+# but disable LTO to bound its peak memory use on Termux.
+ruff = { ANDROID_API_LEVEL = "24", CARGO_PROFILE_RELEASE_LTO = "off" }
 
 [tool.ruff]
 line-length = 120
-target-version = "py312"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = [
@@ -206,7 +294,7 @@ commit_args = ""
 files.glob = "**/config.py,pyproject.toml"
 
 [tool.basedpyright]
-pythonVersion = "3.12"
+pythonVersion = "3.14"
 pythonPlatform = "All"
 typeCheckingMode = "standard"
 exclude = ["**/node_modules", "**/__pycache__", "**/.*", "scripts/migrations"]
@@ -236,15 +324,12 @@ reportAny = false
 enableExperimentalFeatures = true  # For `TypeForm` support
 
 [tool.pyrefly]
-# The baseline holds exactly one class of error: `interaction.response` / `interaction.followup`
-# reported as `no-matching-overload`. Pyrefly <=1.1.1 resolves `CachedSlotProperty.__get__`'s
-# `owner` argument to the bare `type[Interaction]` instead of the parameterized one, because
-# `ClientT` carries a PEP 696 default. 1.2.0 fixes it; drop the baseline entirely once the
-# `exclude-newer` soak window lets us lock that release.
-baseline = "pyrefly-baseline.json"
 project-includes = ["squid/**/*.py", "tests/**/*.py", "app.py"]
 project-excludes = ["alembic/**/*.py", "scripts/migrations/**/*.py"]
-python-version = "3.12"
+python-version = "3.14"
+# `observability` is an optional extra (see the dependency group below) that isn't installed in
+# every environment; these imports are already guarded by `try`/`ModuleNotFoundError` at runtime.
+ignore-missing-imports = ["opentelemetry", "opentelemetry.*"]
 
 [tool.alembic]
 script_location = "%(here)s/alembic"

@@ -1,14 +1,15 @@
 """SQLAlchemy types for application persistence."""
 
 from datetime import UTC, datetime
+from enum import StrEnum
 from typing import override
 
-from sqlalchemy import DateTime
+from sqlalchemy import DateTime, Text
 from sqlalchemy.engine import Dialect
 from sqlalchemy.types import TypeDecorator
 from whenever import Instant
 
-__all__ = ["InstantUTC"]
+__all__ = ["InstantUTC", "StrEnumText"]
 
 
 class InstantUTC(TypeDecorator[Instant]):
@@ -39,3 +40,37 @@ class InstantUTC(TypeDecorator[Instant]):
         if value.tzinfo is None:
             value = value.replace(tzinfo=UTC)
         return Instant(value)
+
+
+class StrEnumText[EnumT: StrEnum](TypeDecorator[EnumT]):
+    """Store a `StrEnum` as plain text while exposing the member to the ORM.
+
+    Deliberately not `sqlalchemy.Enum`: the shipped columns are `TEXT` guarded by
+    check constraints, and a native PostgreSQL enum type would make every added
+    member a migration. What this buys over a bare `Text` column is that a row read
+    back is a member rather than a string the caller has to remember to re-wrap.
+    """
+
+    impl = Text
+    cache_ok = True
+
+    def __init__(self, enum_type: type[EnumT]) -> None:
+        super().__init__()
+        self._enum_type = enum_type
+
+    @property
+    @override
+    def python_type(self) -> type[EnumT]:
+        return self._enum_type
+
+    @override
+    def process_bind_param(self, value: EnumT | str | None, dialect: Dialect) -> str | None:
+        if value is None:
+            return None
+        return self._enum_type(value).value
+
+    @override
+    def process_result_value(self, value: str | None, dialect: Dialect) -> EnumT | None:
+        if value is None:
+            return None
+        return self._enum_type(value)

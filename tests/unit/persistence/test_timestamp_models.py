@@ -1,54 +1,64 @@
-"""Timestamp model configuration tests."""
+"""Every persisted timestamp column is stored and returned as a whenever `Instant`."""
 
-import pytest
+from datetime import datetime
+
 from sqlalchemy import inspect
-from whenever import Instant
+from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.types import TypeEngine
 
-from squid.accounts.infrastructure.models import (
-    Account,
-    AccountIdentity,
-    CreatorAlias,
-    CreatorAliasClaim,
-    VerificationCode,
-)
-from squid.auth.infrastructure.models import ApiKey
-from squid.builds.infrastructure.models import Build, BuildEditHistory
-from squid.messages.infrastructure.models import Message
+import squid.persistence.model_registry  # noqa: F401  # imported for its model registration side effect
+from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC
-from squid.tags.infrastructure.models import TagAlias
-from squid.voting.infrastructure.models import VoteSession
 
 
-@pytest.mark.parametrize(
-    ("model", "column_name"),
-    [
-        (ApiKey, "created_at"),
-        (ApiKey, "expires_at"),
-        (ApiKey, "revoked_at"),
-        (ApiKey, "last_used_at"),
-        (Build, "edited_time"),
-        (Build, "locked_at"),
-        (Build, "submission_time"),
-        (BuildEditHistory, "created_at"),
-        (Message, "updated_at"),
-        (CreatorAlias, "claimed_at"),
-        (CreatorAlias, "created_at"),
-        (CreatorAliasClaim, "created_at"),
-        (CreatorAliasClaim, "resolved_at"),
-        (TagAlias, "created_at"),
-        (Account, "consented_at"),
-        (Account, "created_at"),
-        (AccountIdentity, "verified_at"),
-        (AccountIdentity, "created_at"),
-        (VerificationCode, "created"),
-        (VerificationCode, "expires"),
-        (VoteSession, "created_at"),
-    ],
-)
-def test_timestamp_columns_use_instant_utc(model: type[object], column_name: str) -> None:
-    mapper = inspect(model)
-    assert mapper is not None
-    column_type = mapper.columns[column_name].type
+def _mapped_models() -> list[type[DeclarativeBase]]:
+    """Every model the migration metadata knows about."""
+    return [
+        mapper.class_
+        for mapper in Base.registry.mappers
+        # Single-table inheritance maps several classes onto one table; the base carries
+        # the columns, so mapping over every class would double-count them.
+        if mapper.local_table is not None
+    ]
 
-    assert isinstance(column_type, InstantUTC)
-    assert column_type.python_type is Instant
+
+def _stores_naive_datetime(column_type: TypeEngine[object]) -> bool:
+    """Whether the column hands the application a stdlib `datetime` instead of an `Instant`."""
+    try:
+        return column_type.python_type is datetime
+    except NotImplementedError:
+        # Types like JSONB and enums do not declare a Python type; they are not timestamps.
+        return False
+
+
+def test_no_model_stores_a_bare_datetime() -> None:
+    """Read off the registry rather than a hand-maintained list of columns.
+
+    The list this replaces could only fail for columns someone had already remembered to
+    add to it, which is precisely the case that was never going to regress. Sweeping the
+    registry covers every column added from here on, on the day it lands.
+    """
+    naive = sorted(
+        f"{model.__tablename__}.{column.name}"  # pyright: ignore[reportAttributeAccessIssue]
+        for model in _mapped_models()
+        for column in inspect(model).columns
+        if _stores_naive_datetime(column.type)
+    )
+
+    assert naive == [], f"these columns bypass InstantUTC: {naive}"
+
+
+def test_the_registry_sweep_actually_sees_timestamp_columns() -> None:
+    """Guard the sweep above against passing vacuously.
+
+    If model registration or the mapper walk silently produced nothing, the naive-column
+    check would still pass. This fails instead.
+    """
+    instant_columns = {
+        f"{model.__tablename__}.{column.name}"  # pyright: ignore[reportAttributeAccessIssue]
+        for model in _mapped_models()
+        for column in inspect(model).columns
+        if isinstance(column.type, InstantUTC)
+    }
+
+    assert {"builds.submission_time", "vote_sessions.created_at"} <= instant_columns

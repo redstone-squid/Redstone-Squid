@@ -34,7 +34,7 @@ class _GroupingMessage:
     reference_id: int | None
 
     @classmethod
-    def from_discord(cls, message: Message) -> "_GroupingMessage":
+    def from_discord(cls, message: Message) -> _GroupingMessage:
         """Expose Discord message facts to the framework-neutral grouper."""
         reference_id = message.reference.message_id if message.reference is not None else None
         return cls(message, message.id, message.author.id, message.created_at, reference_id)
@@ -51,7 +51,7 @@ class ImportSummary:
     ignored: int = 0
     failed: int = 0
 
-    def __add__(self, other: "ImportSummary") -> "ImportSummary":
+    def __add__(self, other: ImportSummary) -> ImportSummary:
         return ImportSummary(
             groups=self.groups + other.groups,
             builds=self.builds + other.builds,
@@ -76,8 +76,7 @@ async def process_group(
     """Import one group without aborting the backfill on failure."""
     try:
         for message in primary:
-            tracked = await services.messages.get(message.id)
-            if tracked is not None and tracked.build_id is not None:
+            if await services.builds.list_ids_for_source_message(message.id):
                 return ImportSummary(groups=1, skipped_existing=1)
         builds = await ingest_message_bundle(
             primary,

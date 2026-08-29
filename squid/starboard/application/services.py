@@ -5,7 +5,7 @@ from math import isfinite
 
 from squid.reactions.application import RoleWeightPolicy
 from squid.reactions.domain import ReactionActor, RoleMultiplier, WeightScope
-from squid.starboard.application.ports import EntryPlan, PendingVote, StarboardRepository
+from squid.starboard.application.ports import EntryKey, EntryState, PendingVote, StarboardRepository
 from squid.starboard.domain import OriginMessage, StarboardConfig, StarboardEmoji, evaluate_vote
 
 
@@ -13,7 +13,7 @@ from squid.starboard.domain import OriginMessage, StarboardConfig, StarboardEmoj
 class StarboardVoteResult:
     """Plans and source-reaction cleanup requested by one reaction."""
 
-    plans: tuple[EntryPlan, ...]
+    keys: tuple[EntryKey, ...]
     remove_reaction: bool = False
 
 
@@ -52,15 +52,15 @@ class StarboardService:
             option = next(item for item in config.emojis if item.emoji == emoji)
             assert role_weight is not None
             pending.append(PendingVote(config, emoji, verdict.direction, role_weight * option.multiplier))
-        plans = await self._repository.record_votes(origin, actor.user_id, pending) if pending else ()
-        return StarboardVoteResult(tuple(plans), remove_reaction)
+        keys = await self._repository.record_votes(origin, actor.user_id, pending) if pending else ()
+        return StarboardVoteResult(tuple(keys), remove_reaction)
 
-    async def withdraw_vote(self, origin_message_id: int, user_id: int, emoji: str) -> tuple[EntryPlan, ...]:
+    async def withdraw_vote(self, origin_message_id: int, user_id: int, emoji: str) -> tuple[EntryKey, ...]:
         return tuple(await self._repository.withdraw_vote(origin_message_id, user_id, emoji))
 
     async def recount(
         self, origin: OriginMessage, reactions: tuple[tuple[ReactionActor, str], ...]
-    ) -> tuple[EntryPlan, ...]:
+    ) -> tuple[EntryKey, ...]:
         configs = await self._repository.configs_for_source(origin.guild_id, origin.channel_id)
         accepted: dict[tuple[int, int], tuple[int, PendingVote]] = {}
         for actor, emoji in reactions:
@@ -78,13 +78,13 @@ class StarboardService:
                 )
         return tuple(await self._repository.recount_votes(origin, tuple(accepted.values())))
 
-    async def clear_votes(self, origin_message_id: int, emoji: str | None = None) -> tuple[EntryPlan, ...]:
+    async def clear_votes(self, origin_message_id: int, emoji: str | None = None) -> tuple[EntryKey, ...]:
         return tuple(await self._repository.clear_votes(origin_message_id, emoji))
 
-    async def refresh(self, origin_message_id: int, *, force: bool = False) -> tuple[EntryPlan, ...]:
+    async def refresh(self, origin_message_id: int, *, force: bool = False) -> tuple[EntryKey, ...]:
         return tuple(await self._repository.refresh(origin_message_id, force=force))
 
-    async def mark_origin_deleted(self, origin_message_id: int) -> tuple[EntryPlan, ...]:
+    async def mark_origin_deleted(self, origin_message_id: int) -> tuple[EntryKey, ...]:
         return tuple(await self._repository.mark_origin_deleted(origin_message_id))
 
     async def create_starboard(
@@ -144,17 +144,13 @@ class StarboardService:
     async def get_role_multipliers(self, config: StarboardConfig) -> dict[int, float]:
         return dict(await self._repository.role_multipliers(config.id))
 
-    async def mark_posted(self, plan: EntryPlan, message_id: int, channel_id: int) -> None:
-        await self._repository.mark_posted(plan.config.id, plan.origin.id, message_id, channel_id)
+    async def entry_state(self, starboard_id: int, origin_message_id: int) -> EntryState | None:
+        """Return one entry's config, origin and score, for rendering."""
+        return await self._repository.entry_state(starboard_id, origin_message_id)
 
-    async def mark_rendered(self, plan: EntryPlan) -> None:
-        await self._repository.mark_rendered(plan.config.id, plan.origin.id, plan.entry.score)
-
-    async def mark_removed(self, plan: EntryPlan) -> None:
-        await self._repository.mark_removed(plan.config.id, plan.origin.id)
-
-    async def reset_deleted_post(self, posted_message_id: int) -> tuple[int, int] | None:
-        return await self._repository.reset_deleted_post(posted_message_id)
+    async def mark_rendered(self, starboard_id: int, origin_message_id: int, score: float) -> None:
+        """Record the score a post now shows, so an unchanged entry is not re-edited."""
+        await self._repository.mark_rendered(starboard_id, origin_message_id, score)
 
     async def disable_channel(self, channel_id: int) -> None:
         await self._repository.disable_channel(channel_id)

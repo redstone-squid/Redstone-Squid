@@ -1,6 +1,7 @@
 """Account application service tests."""
 
 from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import replace
 from uuid import UUID
 
 import pytest
@@ -20,8 +21,9 @@ from squid.accounts.domain import (
     CreatorAlias,
     CreatorProfile,
     IdentityProvider,
+    IdentityRefresh,
     RecentAccountProof,
-    normalize_ign,
+    fold_creator_name,
 )
 from squid.accounts.errors import (
     AccountAlreadyLinkedError,
@@ -31,6 +33,7 @@ from squid.accounts.errors import (
     InvalidMergeProofError,
     InvalidVerificationCodeError,
     MinecraftAccountNotFoundError,
+    NoLinkedMinecraftAccountError,
 )
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
@@ -49,6 +52,7 @@ class FakeAccountRepository:
         self.link_result = VerificationLinkResult()
         self.created_code: tuple[UUID, str, str] | None = None
         self.merge_result: AccountMerge | None = None
+        self.refreshed: tuple[int, UUID, str] | None = None
         self._next_id = 1
 
     def seed_account(
@@ -65,6 +69,56 @@ class FakeAccountRepository:
         self.accounts[self._next_id] = account
         self._next_id += 1
         return account
+
+    async def create(
+        self,
+        *,
+        consent: AccountConsent | None = None,
+        identities: Sequence[AccountIdentity] = (),
+    ) -> Account:
+        account = Account(tuple(identities), consent, self._next_id, NOW, UUID(int=self._next_id))
+        self.accounts[self._next_id] = account
+        self._next_id += 1
+        return account
+
+    async def get_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
+        return next(
+            (
+                account
+                for account in self.accounts.values()
+                if (identity := account.identity(provider)) is not None and identity.subject == subject
+            ),
+            None,
+        )
+
+    async def unlink_java_identity(self, discord_id: int) -> bool:
+        entry = next(
+            (
+                (account_id, account)
+                for account_id, account in self.accounts.items()
+                if (identity := account.identity(IdentityProvider.DISCORD)) is not None
+                and identity.subject == str(discord_id)
+            ),
+            None,
+        )
+        if entry is None:
+            return False
+        account_id, account = entry
+        if account.identity(IdentityProvider.JAVA) is None:
+            return False
+        remaining = tuple(identity for identity in account.identities if identity.provider is not IdentityProvider.JAVA)
+        self.accounts[account_id] = Account(
+            remaining, account.consent, account.id, account.created_at, account.public_creator_id
+        )
+        return True
+
+    async def claim_unclaimed_alias(self, *, account_id: int, name: str, method: ClaimMethod) -> CreatorAlias | None:
+        alias = await self.get_alias_by_name(name)
+        if alias is None or alias.account_id is not None:
+            return None
+        claimed = replace(alias, account_id=account_id, claimed_at=NOW, claim_method=method)
+        self.aliases[alias.id] = claimed
+        return claimed
 
     async def get_by_discord_id(self, discord_id: int) -> Account | None:
         return next(
@@ -100,7 +154,8 @@ class FakeAccountRepository:
 
     async def get_alias_by_name(self, name: str) -> CreatorAlias | None:
         return next(
-            (alias for alias in self.aliases.values() if normalize_ign(alias.name) == normalize_ign(name)), None
+            (alias for alias in self.aliases.values() if fold_creator_name(alias.name) == fold_creator_name(name)),
+            None,
         )
 
     async def get_creator_profile(self, public_id: UUID) -> CreatorProfile | None:
@@ -116,10 +171,28 @@ class FakeAccountRepository:
     async def get_claim(self, claim_id: int) -> AliasClaim | None:
         return self.claims.get(claim_id)
 
-    async def pending_claims(self) -> Sequence[AliasClaim]:
+    async def pending_claims(self, *, with_claimants: bool = False) -> Sequence[AliasClaim]:
+        self.claimants_requested = with_claimants
         return tuple(claim for claim in self.claims.values() if claim.status is ClaimStatus.PENDING)
 
-    async def resolve_claim(self, *, claim_id: int, status: ClaimStatus, resolved_by_account_id: int) -> AliasClaim:
+    async def refresh_java_identity(self, *, account_id: int, java_uuid: UUID, username: str) -> IdentityRefresh:
+        self.refreshed = (account_id, java_uuid, username)
+        return IdentityRefresh(
+            account_id=account_id,
+            java_uuid=java_uuid,
+            current_name=username,
+            previous_name="Player",
+        )
+
+    async def resolve_claim(
+        self,
+        *,
+        claim_id: int,
+        status: ClaimStatus,
+        resolved_by_account_id: int,
+        reassign: bool = False,
+    ) -> AliasClaim:
+        self.reassign_requested = reassign
         claim = self.claims[claim_id]
         resolved = AliasClaim(
             claim.id,
@@ -250,3 +323,48 @@ async def test_code_generation_validates_java_identity() -> None:
 
     with pytest.raises(MinecraftAccountNotFoundError):
         await service(FakeAccountRepository(), None).generate_verification_code(JAVA_UUID)
+
+
+async def test_refresh_looks_up_the_current_name_and_delegates() -> None:
+    repository = FakeAccountRepository()
+    account = repository.seed_account(1, consent=CONSENT, java_uuid=JAVA_UUID)
+    assert account.id is not None
+
+    refresh = await service(repository, "RenamedPlayer").refresh_java_identity(account.id)
+
+    assert repository.refreshed == (account.id, JAVA_UUID, "RenamedPlayer")
+    assert refresh.renamed is True
+    assert refresh.previous_name == "Player"
+    assert refresh.current_name == "RenamedPlayer"
+
+
+async def test_refresh_without_a_linked_java_identity_is_rejected() -> None:
+    repository = FakeAccountRepository()
+    account = repository.seed_account(1, consent=CONSENT)
+    assert account.id is not None
+
+    with pytest.raises(NoLinkedMinecraftAccountError):
+        await service(repository).refresh_java_identity(account.id)
+
+
+async def test_refresh_of_a_uuid_mojang_no_longer_knows_is_rejected() -> None:
+    repository = FakeAccountRepository()
+    account = repository.seed_account(1, consent=CONSENT, java_uuid=JAVA_UUID)
+    assert account.id is not None
+
+    with pytest.raises(MinecraftAccountNotFoundError):
+        await service(repository, None).refresh_java_identity(account.id)
+
+
+async def test_refresh_of_an_unknown_account_is_rejected() -> None:
+    with pytest.raises(AccountNotFoundError):
+        await service(FakeAccountRepository()).refresh_java_identity(999)
+
+
+async def test_refresh_can_name_which_java_identity_to_refresh() -> None:
+    repository = FakeAccountRepository()
+    account = repository.seed_account(1, consent=CONSENT, java_uuid=JAVA_UUID)
+    assert account.id is not None
+
+    with pytest.raises(NoLinkedMinecraftAccountError):
+        await service(repository).refresh_java_identity(account.id, java_uuid=OTHER_JAVA_UUID)

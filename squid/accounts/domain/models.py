@@ -1,5 +1,9 @@
 """Provider-neutral account domain values."""
 
+# ruff: noqa: RUF002  Confusable and compatibility characters are the subject
+# matter here: they are the inputs whose folding this file exists to pin.
+
+import unicodedata
 from dataclasses import dataclass
 from enum import StrEnum
 from uuid import UUID
@@ -15,9 +19,22 @@ MERGE_PROOF_MAX_AGE_SECONDS = 10 * 60
 """Maximum age of an identity proof accepted for a self-service account merge."""
 
 
-def normalize_ign(name: str) -> str:
-    """Return the comparison form of a Minecraft name."""
-    return name.strip().lower()
+def fold_creator_name(name: str) -> str:
+    """Return the comparison form of a creator name.
+
+    NFKC first, so compatibility forms unify and NBSP or ideographic space become U+0020
+    before trimming; then strip; then casefold, which is the Unicode operation for caseless
+    matching that ``str.lower()`` is not — ``lower`` leaves ``ΣΣ`` as ``σς`` while casefold
+    gives ``σσ``.
+
+    This is the only definition of the value, and it is deliberately not reproduced in SQL.
+    Postgres ``lower()`` depends on the database's glibc collation (see
+    ``pg_database.datcollversion``), and the two foldings disagree about *what collides* in
+    both directions: ``Straße``/``Strasse`` collide here but not in SQL, ``I``/``İ`` collide
+    in SQL but not here. A second SQL-side column would therefore be a second, conflicting
+    notion of creator identity rather than a hedge against this one.
+    """
+    return unicodedata.normalize("NFKC", name).strip().casefold()
 
 
 class IdentityProvider(StrEnum):
@@ -39,7 +56,7 @@ class AccountIdentity:
     id: int | None = None
 
     @classmethod
-    def discord(cls, discord_id: int, *, verified_at: Instant | None = None) -> "AccountIdentity":
+    def discord(cls, discord_id: int, *, verified_at: Instant | None = None) -> AccountIdentity:
         """Create a canonical Discord identity."""
         if discord_id <= 0:
             msg = "Discord identity subjects must be positive integers."
@@ -53,7 +70,7 @@ class AccountIdentity:
         *,
         username: str | None = None,
         verified_at: Instant | None = None,
-    ) -> "AccountIdentity":
+    ) -> AccountIdentity:
         """Create a canonical Java Edition identity."""
         return cls(IdentityProvider.JAVA, str(minecraft_uuid), username, verified_at)
 
@@ -64,7 +81,7 @@ class AccountIdentity:
         *,
         gamertag: str | None = None,
         verified_at: Instant | None = None,
-    ) -> "AccountIdentity":
+    ) -> AccountIdentity:
         """Create a canonical Bedrock identity from an unsigned XUID."""
         if not 0 < xuid < 2**64:
             msg = "Bedrock XUIDs must be unsigned 64-bit integers."
@@ -90,7 +107,7 @@ class AccountConsent:
     granted_at: Instant
 
     @classmethod
-    def grant_current(cls) -> "AccountConsent":
+    def grant_current(cls) -> AccountConsent:
         """Create a receipt for the currently published privacy notice."""
         return cls(version=CURRENT_CONSENT_VERSION, granted_at=Instant.now())
 
@@ -197,6 +214,40 @@ class AliasClaim:
     created_at: Instant
     resolved_at: Instant | None = None
     resolved_by_account_id: int | None = None
+    claimant: Account | None = None
+    """The claiming account, when the caller asked for it.
+
+    Present so a staff queue can name a claimant as something better than an internal ID,
+    without every claim read paying for the join.
+    """
+
+
+@dataclass(frozen=True, slots=True)
+class IdentityRefresh:
+    """Outcome of reconciling a Java identity's display name with its creator credit.
+
+    Every field is filled on every refresh, including one that changed nothing, so callers
+    render one shape rather than inferring what happened from a bare `None`.
+    """
+
+    account_id: int
+    java_uuid: UUID
+    current_name: str
+    previous_name: str | None = None
+    claimed_alias: CreatorAlias | None = None
+    retained_alias_names: tuple[str, ...] = ()
+    contested_alias: CreatorAlias | None = None
+    opened_claim: AliasClaim | None = None
+
+    @property
+    def renamed(self) -> bool:
+        """Whether the verified name differs from the one previously stored."""
+        return self.previous_name is not None and self.previous_name != self.current_name
+
+    @property
+    def is_contested(self) -> bool:
+        """Whether the new name is credited to a different account, pending staff review."""
+        return self.contested_alias is not None
 
 
 @dataclass(frozen=True, slots=True)

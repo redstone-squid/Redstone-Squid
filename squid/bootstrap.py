@@ -67,6 +67,8 @@ from squid.permissions.infrastructure.repository import (
 )
 from squid.persistence.engine import DatabaseEngine
 from squid.persistence.wake_listener import PostgresWakeListener
+from squid.posts.application import PostService
+from squid.posts.infrastructure.repository import PostRepository
 from squid.records.application import RecordComputationService, RecordService
 from squid.records.infrastructure.repository import PostgresRecordRepository
 from squid.runtime import ApiServices, ApplicationRuntime, BotServices, WorkerServices
@@ -84,7 +86,7 @@ from squid.schematics.infrastructure.render_jobs import PostgresSchematicRenderJ
 from squid.schematics.infrastructure.repository import SchematicRepository
 from squid.schematics.infrastructure.resource_pack import ResourcePackLoader
 from squid.schematics.infrastructure.version_resolver import PostgresSchematicVersionResolver
-from squid.search.application import CursorCodec, SearchEmbeddingService, SearchQueryParser, SearchService
+from squid.search.application import SearchEmbeddingService, SearchQueryParser, SearchService
 from squid.search.infrastructure import (
     PostgresSearchBackend,
     PostgresSearchEmbeddingQueue,
@@ -113,9 +115,11 @@ from squid.submissions.infrastructure.finalization_events import (
     PollableFinalizationStatusPublisher,
 )
 from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
-from squid.submissions.infrastructure.options import ApprovedSubmissionOptionCatalog
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
 from squid.submissions.infrastructure.sponsors import PaperSponsorResolver
+from squid.submissions.infrastructure.suggestion_options import SuggestionFormOptionCatalog
+from squid.suggestions.application import SuggestionService
+from squid.suggestions.infrastructure.catalogue import build_registry as build_suggestion_registry
 from squid.sync import DiscordSyncService
 from squid.sync.infrastructure import PostgresDiscordSyncQueue
 from squid.tags.application import TagService
@@ -403,7 +407,7 @@ class _ServiceGraph:
 
     @cached_property
     def submission_forms(self) -> SubmissionFormService:
-        return SubmissionFormService(ApprovedSubmissionOptionCatalog(self.tags, self.version_service))
+        return SubmissionFormService(SuggestionFormOptionCatalog(self.suggestions))
 
     @cached_property
     def submission_drafts(self) -> SubmissionDraftService:
@@ -457,9 +461,42 @@ class _ServiceGraph:
                 semantic_provider=PostgresSemanticCandidateProvider(self.db.async_session, self.embedding_model),
             ),
             SearchQueryParser(),
-            CursorCodec(self.config.cursor_secret.get_secret_value().encode()),
             self.search_fields,
         )
+
+    @cached_property
+    def suggestions(self) -> SuggestionService:
+        """Suggestion sources available to every process."""
+        return SuggestionService(
+            build_suggestion_registry(
+                session_factory=self.db.async_session,
+                search=self.search,
+                versions=self.version_service,
+                tags=self.tags,
+                notifications=self.notifications,
+                accounts=self.accounts,
+            )
+        )
+
+    @cached_property
+    def bot_suggestions(self) -> SuggestionService:
+        """Suggestions plus the guild-scoped sources only the gateway process can answer."""
+        return SuggestionService(
+            build_suggestion_registry(
+                session_factory=self.db.async_session,
+                search=self.search,
+                versions=self.version_service,
+                tags=self.tags,
+                notifications=self.notifications,
+                accounts=self.accounts,
+                starboards=self.starboards,
+                permission_roles=self.permission_admin,
+            )
+        )
+
+    @cached_property
+    def starboards(self) -> StarboardService:
+        return StarboardService(PostgresStarboardRepository(self.db.async_session))
 
     @cached_property
     def search_embeddings(self) -> SearchEmbeddingService:
@@ -587,6 +624,7 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         submission_forms=graph.submission_forms,
         submission_drafts=graph.submission_drafts,
         submission_finalization=graph.submission_finalization,
+        suggestions=graph.suggestions,
         media_jobs=graph.media_jobs,
         minecraft_installations=graph.minecraft_installations,
         minecraft_player_authorization=graph.minecraft_player_authorization,
@@ -606,6 +644,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         restrictions=RestrictionService(graph.restriction_repository),
         build_queries=graph.build_queries,
         messages=MessageService(MessageRepository(db.async_session)),
+        posts=PostService(PostRepository(db.async_session)),
         permissions=graph.permissions,
         permission_admin=graph.permission_admin,
         permission_epoch=graph.permission_epoch,
@@ -615,7 +654,8 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         search=graph.search,
         tags=graph.tags,
         settings=SettingsService(SettingsRepository(db.async_session)),
-        starboards=StarboardService(PostgresStarboardRepository(db.async_session)),
+        starboards=graph.starboards,
+        suggestions=graph.bot_suggestions,
         accounts=graph.accounts,
         versions=graph.version_service,
         votes=graph.votes,

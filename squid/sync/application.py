@@ -6,7 +6,7 @@ from typing import Literal, Protocol
 
 from whenever import Instant
 
-type ResourceKind = Literal["build", "vote_session"]
+type ResourceKind = Literal["build", "vote_session", "starboard_entry"]
 type SyncAction = Literal["refresh", "delete"]
 
 

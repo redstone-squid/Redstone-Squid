@@ -35,10 +35,10 @@ const MAXIMUM_QUERY_PARAMETERS: usize = 32;
 const MAXIMUM_QUERY_VALUE_BYTES: usize = 1024;
 const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
-const PROTOCOL_HEADER: &str = "x-squid-protocol";
-const CAPABILITIES_HEADER: &str = "x-squid-renderer-capabilities";
-const INSTANCE_HEADER: &str = "x-squid-client-instance";
-const REQUEST_ID_HEADER: &str = "x-request-id";
+const PROTOCOL_HEADER: &str = "squid-protocol";
+const CAPABILITIES_HEADER: &str = "squid-renderer-capabilities";
+const INSTANCE_HEADER: &str = "squid-client-instance";
+const REQUEST_ID_HEADER: &str = "request-id";
 const IDEMPOTENCY_HEADER: &str = "idempotency-key";
 
 /// Supported request methods; retry behavior can classify these without parsing strings.
@@ -902,7 +902,7 @@ mod tests {
             let length = stream.read(&mut request)?;
             let request = String::from_utf8_lossy(&request[..length]).into_owned();
             stream.write_all(
-                b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nX-Request-Id: req-7\r\nContent-Length: 11\r\nConnection: close\r\n\r\n{\"ok\":true}",
+                b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nRequest-Id: req-7\r\nContent-Length: 11\r\nConnection: close\r\n\r\n{\"ok\":true}",
             )?;
             Ok(request)
         });
@@ -926,11 +926,11 @@ mod tests {
             .map_err(|_error| io::Error::other("test server panicked"))??;
         let lowercase = request.to_ascii_lowercase();
         assert!(lowercase.starts_with("get /api/v1/capabilities?category=door+%26+gate http/1.1"));
-        assert!(lowercase.contains("x-squid-protocol:"));
-        assert!(lowercase.contains("x-squid-renderer-capabilities:"));
+        assert!(lowercase.contains("squid-protocol:"));
+        assert!(lowercase.contains("squid-renderer-capabilities:"));
         assert!(lowercase.contains("cli.control.text.v1"));
         assert!(!lowercase.contains("cli.handoff.v1"));
-        assert!(lowercase.contains("x-squid-client-instance:"));
+        assert!(lowercase.contains("squid-client-instance:"));
         assert!(lowercase.contains("accept-language: en"));
         Ok(())
     }
@@ -946,7 +946,7 @@ mod tests {
             let _length = stream.read(&mut request)?;
             let body = br#"{"title":"Conflict","status":409,"detail":"Awaiting approval.","code":"CONFLICT","context":{"cli_auth_code":"cli_authorization_pending","retryable":true}}"#;
             let headers = format!(
-                "HTTP/1.1 409 Conflict\r\nContent-Type: application/problem+json\r\nX-Request-Id: req-problem\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                "HTTP/1.1 409 Conflict\r\nContent-Type: application/problem+json\r\nRequest-Id: req-problem\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
                 body.len(),
             );
             stream.write_all(headers.as_bytes())?;

@@ -8,6 +8,7 @@ does not.
 import asyncio
 import logging
 from collections.abc import AsyncIterator, Callable
+from importlib.metadata import version
 
 import pytest
 
@@ -36,11 +37,16 @@ async def pool() -> AsyncIterator[SchematicWorkerPool]:
 
 
 async def test_the_pool_reports_the_engine_it_actually_loaded(pool: SchematicWorkerPool) -> None:
+    """The worker must report the engine *this* environment installed.
+
+    Fingerprints are version-scoped, so a worker quietly running a different build than
+    its parent would poison duplicate lookups. Which version that is, is pyproject's exact
+    pin to state; repeating the literal here only guaranteed a failure on every bump.
+    """
     capabilities = await pool.capabilities()
 
     assert capabilities.available is True
-    assert capabilities.analyzer_version is not None
-    assert capabilities.analyzer_version == "nucleation-0.10.1"
+    assert capabilities.analyzer_version == f"nucleation-{version('nucleation')}"
     assert capabilities.can_simulate is True
 
 

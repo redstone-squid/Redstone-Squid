@@ -4,16 +4,26 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from squid.api.dependencies import BuildQueries, CursorSigner, Records
+from squid.api.dependencies import BuildQueries, Records
 from squid.api.errors import responses
-from squid.api.pagination import Page
+from squid.api.pagination import (
+    AfterIdParam,
+    BeforeIdParam,
+    OffsetParam,
+    Page,
+    PageSizeParam,
+    parse_page_sort,
+    render_page,
+    resolve_selector,
+)
 from squid.api.v1.schemas.builds import BuildSummary
 from squid.api.v1.schemas.records import RecordDetail, RecordSummary
 from squid.builds.domain import Status
-from squid.core.errors import DataIntegrityError, ErrorCode, NotFoundError, ValidationError
+from squid.core.errors import DataIntegrityError, NotFoundError
 
 router = APIRouter(prefix="/records", tags=["records"])
-_BINDING = "records:active:id-desc"
+# Result identifiers ascend with computation, so recency needs no separate indexed column.
+_SORT_FIELDS = frozenset({"id"})
 
 
 @router.get("/{record_id}", response_model=RecordDetail, responses=responses(404, 422, 500, 503))
@@ -45,30 +55,14 @@ async def get_record(record_id: int, records: Records, build_queries: BuildQueri
 @router.get("", response_model=Page[RecordSummary], responses=responses(400, 422, 503))
 async def list_records(
     records: Records,
-    signer: CursorSigner,
-    page_size: Annotated[int, Query(ge=1, le=50)] = 20,
-    cursor: Annotated[str | None, Query(max_length=4_096)] = None,
+    sort: Annotated[str | None, Query(max_length=80)] = None,
+    page_size: PageSizeParam = 20,
+    offset: OffsetParam = None,
+    after_id: AfterIdParam = None,
+    before_id: BeforeIdParam = None,
 ) -> Page[RecordSummary]:
     """List authoritative active record results."""
-    after_id = _after_id(signer, cursor)
-    found = list(await records.list_page(after_id=after_id, limit=page_size + 1))
-    has_more = len(found) > page_size
-    page_records = found[:page_size]
-    next_cursor = (
-        signer.encode({"after_id": page_records[-1].id}, binding=_BINDING) if has_more and page_records else None
-    )
-    return Page(
-        items=[RecordSummary.from_domain(record) for record in page_records],
-        next_cursor=next_cursor,
-        has_more=has_more,
-    )
-
-
-def _after_id(signer: CursorSigner, cursor: str | None) -> int | None:
-    if cursor is None:
-        return None
-    value = signer.decode(cursor, binding=_BINDING).get("after_id")
-    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        msg = "cursor payload contains an invalid record identifier"
-        raise ValidationError(msg, code=ErrorCode.INVALID_CURSOR)
-    return value
+    _, descending = parse_page_sort(sort, allowed=_SORT_FIELDS, default="-id")
+    selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)
+    page = await records.list_page(selector=selector, descending=descending, page_size=page_size)
+    return render_page(page, RecordSummary.from_domain)

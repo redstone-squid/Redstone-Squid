@@ -172,16 +172,29 @@ def compare(left: bytes, right: bytes, *, preset: FingerprintPreset) -> Schemati
 def render(data: bytes, *, request: RenderRequest, resource_pack: bytes) -> bytes:
     """Render a schematic to PNG bytes. Phase 3 wires this up; the plumbing exists now."""
     schematic = _load(data)
-    config = nucleation.RenderConfig.create()
-    config.set_isometric(request.width, request.height)
-    config.set_sphere_fit(request.sphere_fit)
-    config.set_background(*request.background)
+    config = _render_config(request)
     pack_digest = hashlib.sha256(resource_pack).hexdigest()
     pack = _RESOURCE_PACK_CACHE.get(pack_digest)
     if pack is None:
         pack = nucleation.ResourcePack.from_bytes(resource_pack)
         _RESOURCE_PACK_CACHE[pack_digest] = pack
     return base64.b64decode(nucleation.Renderer.render_png_b64_with_pack(schematic, pack, config))
+
+
+def _render_config(request: RenderRequest) -> Any:
+    """Translate an application render request to Nucleation's camera API."""
+    config = nucleation.RenderConfig.create(request.width, request.height)
+    config.set_isometric()
+    config.set_orthographic(request.projection == "orthographic")
+    config.set_sphere_fit(request.sphere_fit)
+    if request.yaw is not None:
+        config.set_yaw(request.yaw)
+    if request.pitch is not None:
+        config.set_pitch(request.pitch)
+    if request.zoom is not None:
+        config.set_zoom(request.zoom)
+    config.set_background(*request.background)
+    return config
 
 
 def simulate(data: bytes, *, request: SimulationRequest) -> SimulationResult:
@@ -263,7 +276,7 @@ _INPUT_BLOCK_NAMES = ("lever", "_button")
 
 
 def _resolve_simulation_input(
-    schematic: "nucleation.Schematic",
+    schematic: nucleation.Schematic,
     snapshot: Sequence[object],
     manual: Vector3 | None,
 ) -> tuple[Vector3, Literal["insign", "heuristic", "manual"]]:
@@ -326,7 +339,7 @@ def _insign_input_positions(compiled: Mapping[str, Any]) -> set[Vector3]:
     return positions
 
 
-def _load(data: bytes) -> "nucleation.Schematic":
+def _load(data: bytes) -> nucleation.Schematic:
     """Parse bytes into an engine handle.
 
     `from_data` is a *constructor*, not an in-place loader: discarding its return value leaves
@@ -339,7 +352,7 @@ def _load(data: bytes) -> "nucleation.Schematic":
         raise InvalidSchematicError(context={"engine_error": str(exc)}) from exc
 
 
-def _guard_allocated_volume(schematic: "nucleation.Schematic", limits: SchematicLimits) -> None:
+def _guard_allocated_volume(schematic: nucleation.Schematic, limits: SchematicLimits) -> None:
     """Refuse a schematic whose allocated bounds are too large to work with.
 
     Checked against the *allocated* volume rather than the tight one: a file can declare a
@@ -360,7 +373,7 @@ def _guard_allocated_volume(schematic: "nucleation.Schematic", limits: Schematic
 
 
 def _metrics(
-    schematic: "nucleation.Schematic", data: bytes, *, source_format: SchematicFormat | None
+    schematic: nucleation.Schematic, data: bytes, *, source_format: SchematicFormat | None
 ) -> SchematicMetrics:
     tight = _dimensions(schematic.tight_dimensions())
     resolved_format = source_format or sniff_schematic_format(data) or SchematicFormat.LITEMATIC
@@ -387,7 +400,7 @@ def _metrics(
     )
 
 
-def _optional[T](read: "Callable[[], T]", missing: T) -> T:
+def _optional[T](read: Callable[[], T], missing: T) -> T:
     """Read one piece of optional metadata, treating "this format has no such field" as absent.
 
     `author()` and `description()` *raise* `NotFound` when the metadata is absent, while
@@ -407,7 +420,7 @@ def _optional[T](read: "Callable[[], T]", missing: T) -> T:
         return missing
 
 
-def _fingerprints(schematic: "nucleation.Schematic") -> SchematicFingerprints:
+def _fingerprints(schematic: nucleation.Schematic) -> SchematicFingerprints:
     """Compute all three presets plus the coarse signature used for pre-filtering.
 
     `structural` is a coarse bucket, not an identity - a build differing by one glass block
@@ -424,7 +437,7 @@ def _fingerprints(schematic: "nucleation.Schematic") -> SchematicFingerprints:
     )
 
 
-def _detect_lattice(schematic: "nucleation.Schematic") -> AutostackLattice | None:
+def _detect_lattice(schematic: nucleation.Schematic) -> AutostackLattice | None:
     """Return the repeating unit cell explaining the most of the build, if any.
 
     Failure here is never fatal: a lattice is opportunistic evidence, and a build with no
@@ -466,7 +479,7 @@ def _lattice(candidate: object) -> AutostackLattice | None:
     )
 
 
-def _signs(schematic: "nucleation.Schematic") -> tuple[SchematicSign, ...]:
+def _signs(schematic: nucleation.Schematic) -> tuple[SchematicSign, ...]:
     """Recover sign text, tolerating an engine payload shape we do not fully pin down.
 
     Sign text is display-only evidence, so an unexpected entry is dropped rather than failing
@@ -489,7 +502,7 @@ def _signs(schematic: "nucleation.Schematic") -> tuple[SchematicSign, ...]:
     return tuple(signs)
 
 
-def _export(schematic: "nucleation.Schematic", target: SchematicFormat) -> bytes:
+def _export(schematic: nucleation.Schematic, target: SchematicFormat) -> bytes:
     writer = _EXPORTERS.get(target)
     if writer is None:
         msg = f"The engine cannot write {target.value} files."
@@ -538,7 +551,7 @@ def _dimensions(reported: object) -> SchematicDimensions:
     )
 
 
-def _optional_data_version(schematic: "nucleation.Schematic") -> int | None:
+def _optional_data_version(schematic: nucleation.Schematic) -> int | None:
     declared = int(schematic.source_data_version())
     return None if declared == _UNKNOWN_DATA_VERSION else declared
 
@@ -548,7 +561,7 @@ def _vector(value: object) -> Vector3 | None:
         parts = cast(Sequence[object], value)
         try:
             return int(parts[0]), int(parts[1]), int(parts[2])  # type: ignore[arg-type]
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return None
     return None
 
@@ -556,7 +569,7 @@ def _vector(value: object) -> Vector3 | None:
 def _coordinate(value: object) -> int:
     try:
         return int(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return 0
 
 

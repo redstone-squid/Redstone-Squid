@@ -16,11 +16,12 @@ from squid.api.openapi import install_openapi_contract
 from squid.api.private_responses import PRIVATE_API_PATH_PREFIXES, PrivateResponseHeadersMiddleware
 from squid.api.rate_limit import RateLimitMiddleware, create_rate_limiter, enforce_route_rate_limits
 from squid.api.request_body import BoundedRequestBodyMiddleware
+from squid.api.request_context import RequestContextMiddleware
 from squid.api.security import Principal, requires
 from squid.api.v1 import TAGS_METADATA
 from squid.api.v1 import router as v1_router
 from squid.bootstrap import create_api_runtime
-from squid.config import ApiProcessConfig, RuntimeConfig, load_api_process_config
+from squid.config import ApiProcessConfig, RuntimeConfig, load_api_process_config, load_or_exit
 from squid.logging_config import configure_api_logging
 from squid.observability import configure_observability, instrument_api_app
 from squid.permissions.domain.catalogue import ACCOUNT_VERIFY_RELAY
@@ -110,7 +111,11 @@ def create_api_app(
     api = FastAPI(
         title="Redstone Squid API",
         version="1.0.0",
-        description="Versioned public API for the Redstone Squid build catalog.",
+        description=(
+            "Versioned public API for the Redstone Squid build catalog. Every response carries a "
+            "Request-Id header for correlation; send Request-Id or a W3C traceparent to have it "
+            "propagated."
+        ),
         openapi_tags=TAGS_METADATA,
         lifespan=lifespan,
     )
@@ -122,6 +127,9 @@ def create_api_app(
     api.add_middleware(IdempotencyResponseMiddleware)
     api.add_middleware(BoundedRequestBodyMiddleware)
     api.add_middleware(PrivateResponseHeadersMiddleware, path_prefixes=PRIVATE_API_PATH_PREFIXES)
+    # Added last of the unconditional stack so it is outermost: it stamps Request-Id onto rate-limit
+    # rejections and idempotency replays alike, and its binding is visible to every inner layer.
+    api.add_middleware(RequestContextMiddleware)
     resolved_for_middleware = config
     cors_origins = (
         resolved_for_middleware.api.cors_origins if isinstance(resolved_for_middleware, ApiProcessConfig) else ()
@@ -139,11 +147,11 @@ def create_api_app(
                 "Content-Type",
                 "Idempotency-Key",
                 "If-Match",
-                "X-CSRF-Token",
-                "X-Squid-Installation-ID",
-                "X-Squid-Installation-Secret",
+                "CSRF-Token",
+                "Squid-Installation-ID",
+                "Squid-Installation-Secret",
             ],
-            expose_headers=["ETag", "RateLimit", "RateLimit-Policy", "Retry-After"],
+            expose_headers=["ETag", "RateLimit", "RateLimit-Policy", "Request-Id", "Retry-After"],
         )
     if config is not None:
         instrument_api_app(api, config.observability)
@@ -157,7 +165,7 @@ def main(process_config: ApiProcessConfig | None = None) -> None:
     """Run the FastAPI server."""
     import uvicorn
 
-    resolved_config = process_config or load_api_process_config()
+    resolved_config = process_config or load_or_exit(load_api_process_config)
     configure_api_logging(resolved_config.logging)
     observability = configure_observability(resolved_config.observability, service_name="api")
     try:

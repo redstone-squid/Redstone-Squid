@@ -1,9 +1,9 @@
 """Real-PostgreSQL coverage for durable schematic execution."""
 
 import asyncio
-from collections.abc import AsyncGenerator, Awaitable
+from collections.abc import AsyncGenerator, Coroutine
 from pathlib import Path
-from typing import TypeVar
+from typing import Any, TypeVar
 
 import pytest
 from sqlalchemy import func, select, update
@@ -28,7 +28,7 @@ _TABLE = Base.metadata.tables["schematic_jobs"]
 
 
 @pytest.fixture
-async def schematic_job_table(async_engine: AsyncEngine) -> AsyncGenerator[None, None]:
+async def schematic_job_table(async_engine: AsyncEngine) -> AsyncGenerator[None]:
     async with async_engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all, tables=[_TABLE])
     try:
@@ -57,7 +57,7 @@ def durable_components(
     )
 
 
-async def _with_runner(runner: SchematicJobRunner, request: Awaitable[ResultT]) -> ResultT:
+async def _with_runner(runner: SchematicJobRunner, request: Coroutine[Any, Any, ResultT]) -> ResultT:
     task = asyncio.create_task(request)
     while not task.done():
         await runner.process_batch()

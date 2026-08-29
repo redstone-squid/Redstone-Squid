@@ -51,13 +51,12 @@ class SchematicRepository:
         """
         digest = hashlib.sha256(data).hexdigest()
         object_key = _schematic_object_key(digest)
+        await self._write_verified_object(digest, object_key, data)
         statement = (
             insert(SchematicFile)
             .values(
                 sha256=digest,
-                data=None,
                 object_key=object_key,
-                storage_state="pending",
                 byte_size=len(data),
                 source_format=source_format.value,
             )
@@ -66,9 +65,6 @@ class SchematicRepository:
         async with self._session_factory() as session:
             await session.execute(statement)
             await session.commit()
-            state = await session.scalar(select(SchematicFile.storage_state).where(SchematicFile.sha256 == digest))
-        if state != "ready":
-            await self._store_and_verify(digest, object_key, data)
         return digest
 
     async def get_file(self, sha256: str) -> bytes | None:
@@ -76,108 +72,18 @@ class SchematicRepository:
             row = (
                 await session.execute(
                     select(
-                        SchematicFile.data,
                         SchematicFile.object_key,
                         SchematicFile.byte_size,
-                        SchematicFile.storage_state,
                     ).where(SchematicFile.sha256 == sha256)
                 )
             ).one_or_none()
-        if row is None or row.storage_state != "ready":
-            return None
-        if row.data is not None:
-            return bytes(row.data)
-        if row.object_key is None:
+        if row is None:
             return None
         data = await self._artifacts.get(row.object_key, max_bytes=row.byte_size)
         if data is None or len(data) != row.byte_size or hashlib.sha256(data).hexdigest() != sha256:
             msg = f"Object storage returned corrupt or missing schematic payload {sha256}."
             raise RuntimeError(msg)
         return data
-
-    async def maintain_storage(self, *, limit: int = 20) -> tuple[int, int]:
-        """Backfill legacy inline files and recover interrupted staged writes."""
-        migrated = await self._migrate_legacy_files(limit=limit)
-        recovered = await self._recover_staged_files(limit=limit)
-        return migrated, recovered
-
-    async def _migrate_legacy_files(self, *, limit: int) -> int:
-        async with self._session_factory() as session:
-            rows = tuple(
-                (
-                    await session.scalars(
-                        select(SchematicFile)
-                        .where(SchematicFile.data.is_not(None), SchematicFile.object_key.is_(None))
-                        .order_by(SchematicFile.created_at)
-                        .limit(limit)
-                    )
-                ).all()
-            )
-        migrated = 0
-        for row in rows:
-            assert row.data is not None
-            data = bytes(row.data)
-            object_key = _schematic_object_key(row.sha256)
-            await self._write_verified_object(row.sha256, object_key, data)
-            async with self._session_factory.begin() as session:
-                await session.execute(
-                    update(SchematicFile)
-                    .where(SchematicFile.sha256 == row.sha256, SchematicFile.data.is_not(None))
-                    .values(
-                        object_key=object_key,
-                        storage_state="ready",
-                        verified_at=func.now(),
-                        data=None,
-                    )
-                )
-            migrated += 1
-        return migrated
-
-    async def _recover_staged_files(self, *, limit: int) -> int:
-        async with self._session_factory() as session:
-            rows = tuple(
-                (
-                    await session.scalars(
-                        select(SchematicFile)
-                        .where(
-                            SchematicFile.storage_state.in_(("pending", "verified")),
-                            SchematicFile.object_key.is_not(None),
-                        )
-                        .order_by(SchematicFile.created_at)
-                        .limit(limit)
-                    )
-                ).all()
-            )
-        recovered = 0
-        for row in rows:
-            assert row.object_key is not None
-            data = await self._artifacts.get(row.object_key, max_bytes=row.byte_size)
-            if data is None:
-                continue
-            await self._write_verified_object(row.sha256, row.object_key, data)
-            async with self._session_factory.begin() as session:
-                await session.execute(
-                    update(SchematicFile)
-                    .where(SchematicFile.sha256 == row.sha256)
-                    .values(storage_state="ready", verified_at=func.now())
-                )
-            recovered += 1
-        return recovered
-
-    async def _store_and_verify(self, digest: str, object_key: str, data: bytes) -> None:
-        await self._write_verified_object(digest, object_key, data)
-        async with self._session_factory.begin() as session:
-            await session.execute(
-                update(SchematicFile)
-                .where(SchematicFile.sha256 == digest)
-                .values(storage_state="verified", verified_at=func.now())
-            )
-        async with self._session_factory.begin() as session:
-            await session.execute(
-                update(SchematicFile)
-                .where(SchematicFile.sha256 == digest, SchematicFile.storage_state == "verified")
-                .values(storage_state="ready")
-            )
 
     async def _write_verified_object(self, digest: str, object_key: str, data: bytes) -> None:
         metadata = await self._artifacts.put(object_key, data, content_type="application/octet-stream")

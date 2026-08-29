@@ -28,7 +28,7 @@ class NotificationPreferencesDetail(BaseModel):
     dm_suspended: bool
 
     @classmethod
-    def from_domain(cls, preferences: NotificationPreferences) -> "NotificationPreferencesDetail":
+    def from_domain(cls, preferences: NotificationPreferences) -> NotificationPreferencesDetail:
         return cls(
             notice_version=preferences.notice_version,
             consented=preferences.has_current_consent,
@@ -119,7 +119,7 @@ class NotificationSubscriptionDetail(BaseModel):
     filter: dict[str, object] | None
 
     @classmethod
-    def from_domain(cls, subscription: NotificationSubscription) -> "NotificationSubscriptionDetail":
+    def from_domain(cls, subscription: NotificationSubscription) -> NotificationSubscriptionDetail:
         return cls(
             id=subscription.id,
             kind=subscription.kind,
@@ -140,7 +140,7 @@ class InboxNotificationDetail(BaseModel):
     read_at: datetime | None
 
     @classmethod
-    def from_domain(cls, notification: InboxNotification) -> "InboxNotificationDetail":
+    def from_domain(cls, notification: InboxNotification) -> InboxNotificationDetail:
         return cls(
             id=notification.id,
             kind=notification.kind.value,
