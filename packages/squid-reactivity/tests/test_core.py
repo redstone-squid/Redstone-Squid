@@ -6,11 +6,11 @@ import pytest
 
 from squid_reactivity import (
     LocalTopicBus,
-    StateOwner,
     ReactiveConflictError,
     ReactiveWriteError,
     SharedState,
     StaleReactiveContextError,
+    StateOwner,
     computed,
     observe_reads,
     state,
