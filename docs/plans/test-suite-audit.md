@@ -71,11 +71,11 @@ tests/helpers/discord.py
 
 ### Bot screens and Discord adapters
 
-Rewrite screens around rendered public controls and recorded domain operations. Introduce narrow
-account, settings, catalogue, moderation, submission, and worker ports only where production
-constructors currently force an oversized concrete service. Retain privacy, permission, payload,
-and composition boundaries; remove repeated framework transaction, history, invalidation,
-pagination, and confirmation claims.
+Rewrite screens around rendered public controls and recorded domain operations. Subclass the
+concrete account, settings, catalogue, moderation, submission, and worker services in tests;
+do not widen production with testing-only protocols. Retain privacy, permission, payload, and
+composition boundaries; remove repeated framework transaction, history, invalidation, pagination,
+and confirmation claims.
 
 ```text
 tests/unit/bot/events/test_dispatcher.py
@@ -191,7 +191,7 @@ API fuzz campaign. The removed in-process Schemathesis test must not be presente
 
 | Run | Collected | Outcome | Duration | Notes |
 |---|---:|---|---:|---|
-| Before cleanup | 4,823 | Running | - | `uv run --locked pytest --no-cov --durations=40` |
+| Before cleanup | 4,823 | 4,687 passed, 10 failed, 10 skipped, 118 setup errors | 276.22 s | Setup errors were the sandbox-denied system temp directory; functional failures were the now-fixed localized permission-node hashing regression. |
 | After cleanup | - | Pending | - | Same command and environment |
 
 The audit is complete only when every flagged module above has a final rewrite, delete, or
