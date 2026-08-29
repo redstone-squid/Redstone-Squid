@@ -6,8 +6,7 @@ to read off `list` and type back. A subscription is a thing you look at and then
 looking at it and removing it belong to the same message (audit C5's retyping half).
 """
 
-from collections.abc import Sequence
-from typing import Protocol, cast
+from typing import TYPE_CHECKING, cast
 from uuid import UUID
 
 import squid_ui as sl
@@ -21,33 +20,13 @@ from squid.notifications import (
     TagPredicate,
 )
 
+if TYPE_CHECKING:
+    from squid.notifications.application import NotificationService
+
 SESSION_SECONDS = 300
 
 MAX_LISTED = 25
 """A select holds 25 options, which is also as many as a card should list."""
-
-
-class NotificationOperations(Protocol):
-    """Notification preferences and subscriptions used by the workspace."""
-
-    async def preferences(self, account_id: int) -> NotificationPreferences: ...
-
-    async def set_preferences(
-        self, account_id: int, *, web_enabled: bool, dm_enabled: bool
-    ) -> NotificationPreferences: ...
-
-    async def subscriptions(self, account_id: int) -> Sequence[NotificationSubscription]: ...
-
-    async def unsubscribe(self, account_id: int, subscription_id: int) -> None: ...
-
-    async def subscribe(
-        self,
-        account_id: int,
-        *,
-        kind: SubscriptionKind,
-        subject_id: UUID | None = None,
-        record_filter: RecordSubscriptionFilter | None = None,
-    ) -> NotificationSubscription: ...
 
 
 def _kind_label(kind: SubscriptionKind) -> sl.TextLike:
@@ -76,7 +55,7 @@ class NotificationScreen(sd.Screen):
     def __init__(
         self,
         *,
-        notifications: NotificationOperations,
+        notifications: NotificationService,
         account_id: int,
         author_id: int,
     ) -> None:
