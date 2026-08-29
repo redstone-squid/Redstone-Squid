@@ -1,235 +1,72 @@
-"""This module contains the SettingsCog class, which is a cog for the bot that allows server admins to configure the bot"""
+"""The guild settings workspace and guild-lifecycle registration."""
 
 from typing import TYPE_CHECKING
 
 import discord
 from discord import app_commands
-from discord.ext.commands import Cog, Context, guild_only, hybrid_group
+from discord.ext.commands import Cog
 
-import squid_ui as sl
-import squid_ui_discord as sd
-from squid.bot._types import GuildMessageable
-from squid.bot.i18n import resolve_locale, t
-from squid.bot.operations import managed_result
-from squid.bot.settings_view import FOLLOW_DISCORD, SettingsCapabilities, SettingsPanel
-from squid.bot.ui import error_node, info_node
-from squid.bot.utils.permissions import hide_unless, requires, subject_for
-from squid.core.i18n import SUPPORTED_LOCALES, _
-from squid.permissions.domain.catalogue import (
-    SETTINGS_SERVER_EDIT,
-    SETTINGS_SERVER_VIEW,
-    SETTINGS_VOTING_EDIT,
-)
-from squid.settings.domain import ScalarChannelSetting
-from squid.voting.domain import RoleWeight, VoteKind
-from squid.voting.errors import InvalidVoteConfigurationError
-from squid_ui.document import DocumentLike
+from squid.bot.settings_view import SettingsCapabilities, SettingsPanel
+from squid.bot.utils.permissions import allows, enforce, hide_unless, subject_for_interaction
+from squid.permissions.domain import PermissionNode
+from squid.permissions.domain.catalogue import SETTINGS_SERVER_EDIT, SETTINGS_SERVER_VIEW, SETTINGS_VOTING_EDIT
 
 if TYPE_CHECKING:
     import squid.bot.app
 
 
 class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
+    """Open one capability-aware settings workspace per administrator and guild."""
+
     def __init__(self, bot: BotT):
         self.bot = bot
         self.settings_service = bot.services.settings
 
-    @hybrid_group(name="settings", fallback="show")
-    @requires(SETTINGS_SERVER_VIEW, SETTINGS_SERVER_EDIT, SETTINGS_VOTING_EDIT, mode="any")
+    @app_commands.command(name="settings", description="Configure this server")
+    @app_commands.guild_only()
     @hide_unless(manage_guild=True)
-    @guild_only()
-    async def settings_hybrid_group(self, ctx: Context[BotT]) -> None:
-        """Open this server's settings panel."""
-        assert ctx.guild is not None
-        # One panel per admin per guild: a second `/settings` replaces the first rather than
-        # leaving two live panels writing the same settings service.
-        await SettingsPanel(
-            settings=self.settings_service,
-            votes=self.bot.services.votes,
-            guild=ctx.guild,
-            capabilities=await self._capabilities(ctx),
-            owner_guild_id=self.bot.owner_server_id,
-        ).show(ctx)
-
-    async def _capabilities(self, ctx: Context[BotT]) -> SettingsCapabilities:
-        """What this caller may do, asked once so the panel can render only that.
-
-        The group admits anyone holding any one of the three nodes, so a caller granted only
-        vote configuration reaches the panel with no business seeing the channel pickers.
-        """
-        subject = await subject_for(ctx)
+    async def settings(self, interaction: discord.Interaction[BotT]) -> None:
+        """Open this server's channel, locale, emoji, and vote-weight editor."""
+        await enforce(
+            interaction,
+            SETTINGS_SERVER_VIEW,
+            SETTINGS_SERVER_EDIT,
+            SETTINGS_VOTING_EDIT,
+            mode="any",
+        )
+        guild = interaction.guild
+        assert guild is not None
+        subject = await subject_for_interaction(interaction)
         permissions = self.bot.services.permissions
-        return SettingsCapabilities(
+        capabilities = SettingsCapabilities(
             view_server=await permissions.allows(subject, SETTINGS_SERVER_VIEW),
             edit_server=await permissions.allows(subject, SETTINGS_SERVER_EDIT),
             edit_voting=await permissions.allows(subject, SETTINGS_VOTING_EDIT),
         )
 
+        async def authorize(node: PermissionNode) -> bool:
+            return await allows(interaction, node)
+
+        await SettingsPanel(
+            settings=self.settings_service,
+            votes=self.bot.services.votes,
+            guild=guild,
+            capabilities=capabilities,
+            authorize=authorize,
+            owner_guild_id=self.bot.owner_server_id,
+        ).show(interaction)
+
     @Cog.listener("on_guild_join")
-    async def on_guild_join(self, guild: discord.Guild):
-        """Let the db know that the bot has joined a new guild."""
+    async def on_guild_join(self, guild: discord.Guild) -> None:
+        """Register a guild when the bot joins it."""
         await self.settings_service.guild_joined(guild.id)
 
     @Cog.listener("on_guild_remove")
-    async def on_guild_remove(self, guild: discord.Guild):
-        """Let the db know that the bot has left a guild."""
+    async def on_guild_remove(self, guild: discord.Guild) -> None:
+        """Remove a guild registration when the bot leaves it."""
         await self.settings_service.guild_removed(guild.id)
 
-    @settings_hybrid_group.command(name="set")
-    @app_commands.describe(
-        channel=app_commands.locale_str(_("The channel to use. Leave it out to clear this setting."))
-    )
-    @app_commands.rename(setting="type")
-    @requires(SETTINGS_SERVER_EDIT)
-    @managed_result
-    async def change_setting(
-        self,
-        ctx: Context[BotT],
-        setting: ScalarChannelSetting,
-        channel: GuildMessageable | None = None,
-    ) -> DocumentLike[sl.ComponentsV2Target]:
-        """Point one setting at a channel, or clear it. The panel edits several at once."""
-        assert ctx.guild is not None
-        locale = await resolve_locale(ctx, self.settings_service)
 
-        if channel is None:
-            await self.settings_service.clear(ctx.guild.id, setting)
-            return info_node(
-                t(locale, _("Setting updated")),
-                t(locale, _("{setting} has been cleared."), setting=setting),
-            )
-
-        if ctx.guild.get_channel_or_thread(channel.id) is None:
-            return error_node(t(locale, _("Error")), t(locale, _("Could not find that channel.")))
-
-        await self.settings_service.set_channel(ctx.guild.id, setting, channel.id)
-        return info_node(
-            t(locale, _("Settings updated")),
-            t(locale, _("{setting} channel has successfully been set."), setting=setting),
-        )
-
-    @settings_hybrid_group.command(name="locale")
-    @app_commands.describe(language=app_commands.locale_str(_("The language the bot should respond in")))
-    @app_commands.choices(
-        language=[
-            app_commands.Choice(name=app_commands.locale_str(_("Follow Discord")), value=FOLLOW_DISCORD),
-            *(app_commands.Choice(name=tag, value=tag) for tag in sorted(SUPPORTED_LOCALES)),
-        ],
-    )
-    @requires(SETTINGS_SERVER_EDIT)
-    @managed_result
-    async def set_locale(self, ctx: Context[BotT], language: str) -> DocumentLike[sl.ComponentsV2Target]:
-        """Set the language the bot responds with in this server."""
-        assert ctx.guild is not None
-        locale = await resolve_locale(ctx, self.settings_service)
-
-        if language != FOLLOW_DISCORD and language not in SUPPORTED_LOCALES:
-            return error_node(t(locale, _("Error")), t(locale, _("That language is not supported.")))
-
-        if language == FOLLOW_DISCORD:
-            await self.settings_service.set_locale(ctx.guild.id, None)
-            return info_node(
-                t(locale, _("Settings updated")),
-                t(locale, _("This server now follows its Discord language.")),
-            )
-
-        await self.settings_service.set_locale(ctx.guild.id, language)
-        return info_node(
-            t(language, _("Settings updated")),
-            t(language, _("This server's language has been set to {language}."), language=language),
-        )
-
-    @settings_hybrid_group.group(name="voting")
-    @requires(SETTINGS_VOTING_EDIT)
-    async def voting_settings(self, ctx: Context[BotT]) -> None:
-        """Configure vote emojis and role multipliers."""
-        await ctx.send_help("settings voting")
-
-    @voting_settings.command(name="weight-set")
-    @requires(SETTINGS_VOTING_EDIT)
-    async def set_vote_weight(self, ctx: Context[BotT], kind: VoteKind, role: discord.Role, multiplier: float) -> None:
-        """Set one role multiplier for a session kind."""
-        assert ctx.guild is not None
-        locale = await resolve_locale(ctx, self.settings_service)
-        if role.guild != ctx.guild:
-            await self._reply(
-                ctx, error_node(t(locale, _("Error")), t(locale, _("That role is not from this server.")))
-            )
-            return
-        try:
-            weight = RoleWeight(ctx.guild.id, kind, role.id, multiplier)
-        except InvalidVoteConfigurationError:
-            await self._reply(
-                ctx,
-                error_node(
-                    t(locale, _("Error")),
-                    t(locale, _("A vote multiplier must be a positive number, such as 1.5.")),
-                ),
-            )
-            return
-        await self.bot.services.votes.set_role_weight(weight)
-        await self._reply(
-            ctx,
-            info_node(
-                t(locale, _("Voting updated")),
-                t(locale, _("{role} now counts {multiplier}x."), role=role.name, multiplier=f"{multiplier:g}")
-                + self._weight_scope_note(ctx.guild.id, kind, locale),
-            ),
-        )
-
-    @voting_settings.command(name="weight-remove")
-    @requires(SETTINGS_VOTING_EDIT)
-    async def remove_vote_weight(self, ctx: Context[BotT], kind: VoteKind, role: discord.Role) -> None:
-        """Remove one role multiplier for a session kind."""
-        assert ctx.guild is not None
-        locale = await resolve_locale(ctx, self.settings_service)
-        if role.guild != ctx.guild:
-            await self._reply(
-                ctx, error_node(t(locale, _("Error")), t(locale, _("That role is not from this server.")))
-            )
-            return
-        await self.bot.services.votes.remove_role_weight(ctx.guild.id, kind, role.id)
-        await self._reply(
-            ctx,
-            info_node(
-                t(locale, _("Voting updated")),
-                t(locale, _("{role} no longer carries extra weight."), role=role.name)
-                + self._weight_scope_note(ctx.guild.id, kind, locale),
-            ),
-        )
-
-    @voting_settings.command(name="reset")
-    @requires(SETTINGS_VOTING_EDIT)
-    async def reset_voting(self, ctx: Context[BotT], kind: VoteKind | None = None) -> None:
-        """Reset voting configuration for one kind or the whole server."""
-        assert ctx.guild is not None
-        locale = await resolve_locale(ctx, self.settings_service)
-        await self.bot.services.votes.reset_configuration(ctx.guild.id, kind)
-        await self._reply(
-            ctx,
-            info_node(
-                t(locale, _("Voting reset")),
-                t(locale, _("{kind} voting is back to its defaults."), kind=kind.value)
-                if kind is not None
-                else t(locale, _("Every kind of voting is back to its defaults.")),
-            ),
-        )
-
-    async def _reply(self, ctx: Context[BotT], node: sl.LayoutNode[sl.ComponentsV2Target]) -> None:
-        """Answer the caller privately through the invocation delivery boundary."""
-        invocation = await sd.Invocation.of(ctx)
-        await invocation.reply(node, visibility="personal")
-
-    def _weight_scope_note(self, guild_id: int, kind: VoteKind, locale: str | None) -> str:
-        """Warn when this server's multipliers bind nothing it can see."""
-        if kind is not VoteKind.BUILD or self.bot.owner_server_id in (None, guild_id):
-            return ""
-        return t(
-            locale,
-            _("\n\nBuild reviews are weighted by the network's own server, so this server's multipliers do not apply."),
-        )
-
-
-async def setup(bot: squid.bot.app.RedstoneSquid):
-    """Called by discord.py when the cog is added to the bot via bot.load_extension."""
+async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
+    """Load the settings cog."""
     await bot.add_cog(SettingsCog(bot))
