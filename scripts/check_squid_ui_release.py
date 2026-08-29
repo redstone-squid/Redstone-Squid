@@ -11,6 +11,7 @@ DISTRIBUTIONS = (
     "squid-storage",
     "squid-ui",
     "squid-ui-discord",
+    "squid-ui-slack",
     "squid-ui-widgets",
 )
 TAG_PREFIX = "squid-ui-v"

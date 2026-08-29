@@ -901,11 +901,11 @@ with `prepare`.
 ### Naming
 
 **The full dictionary is [squid-vocabulary.md](squid-vocabulary.md)**, which supersedes this
-section's "verbs closed, nouns open" position and was applied across the six packages on
+section's "verbs closed, nouns open" position and was applied across the suite packages on
 2026-08-26. What follows is the part that did not move.
 
 Lifetime is carried by verbs, not nouns. A closed noun vocabulary was designed and rejected
-twice, on the same measurement each time: the six packages export 555 classes with 273
+twice, on the same measurement each time: the original six packages exported 555 classes with 273
 distinct last words, 179 used exactly once, so the table would have had to reject
 `Component`, `MessageRoot`, `SessionSpec` and `Chrome` or grow until it was not a table. What nouns
 owe instead is consistency, which needs no dictionary:
@@ -940,9 +940,9 @@ to describe, and saying so is noise.
 - HTML action transport is not prescribed. Markup exposes action IDs; HTTP or WebSocket
   routing and authentication belong to the host. Action and form callbacks remain only in
   `PlanResult.bindings` and never enter a scene.
-- The engine depends directly on `squid-reactivity` and `markdown-it-py`. Two leaf packages sit on
-  it as independent siblings: `squid-ui-discord` for the discord.py adapter -- message roots,
-  sessions, routing, durability, with `squid-ui-discord[durable]` adding `squid-storage` -- and
-  `squid-ui-widgets` for the reusable application state machines. Neither imports the other.
-  Discord protocol knowledge stays behind `DiscordPlanner`; HTML planning and drawing do not
-  import Discord limits, primitives, or measured-layout types.
+- The engine depends directly on `squid-reactivity` and `markdown-it-py`. Three independent leaves
+  sit on it: `squid-ui-discord` for the discord.py runtime, `squid-ui-slack` for mechanical Slack
+  SDK drawing, and `squid-ui-widgets` for reusable application state machines. The Slack leaf owns
+  no Bolt app, listener, HTTP client, dispatch, or delivery lifecycle. Discord protocol knowledge
+  stays behind `DiscordPlanner`; Slack lowers through its own Block Kit dialect; HTML planning and
+  drawing import neither frontend SDK.

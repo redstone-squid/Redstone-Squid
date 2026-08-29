@@ -38,7 +38,7 @@ panel = sp.confirm("Delete this build?", on_confirm=chosen)
 
 ## Frontend-neutral, deliberately
 
-Nothing here imports `discord.py`, `squid-ui-discord`, or a store backend — the machines are state
+Nothing here imports a frontend SDK, `squid-ui-discord`, `squid-ui-slack`, or a store backend — the machines are state
 machines that render portable documents, and any target `squid-ui` can plan for can display
 them. `tests/architecture/test_boundaries.py::test_patterns_package_is_transport_free` is what
 keeps that true.

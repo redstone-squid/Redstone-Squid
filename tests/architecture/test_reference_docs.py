@@ -16,6 +16,7 @@ PAGES = {
     "squid_ui": Path("docs/reference/squid-ui.md"),
     "squid_ui_widgets": Path("docs/reference/squid-ui-widgets.md"),
     "squid_ui_discord": Path("docs/reference/squid-ui-discord.md"),
+    "squid_ui_slack": Path("docs/reference/squid-ui-slack.md"),
     "squid_storage": Path("docs/reference/squid-storage.md"),
     "squid_replication": Path("docs/reference/squid-replication.md"),
 }
