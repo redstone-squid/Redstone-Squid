@@ -352,7 +352,7 @@ def test_layouts_package_carries_no_translation_markers() -> None:
 def test_deferred_messages_are_present_in_the_catalog_template() -> None:
     with Path("locales/squid.pot").open(encoding="utf-8") as fileobj:
         catalog = read_po(fileobj)
-    msgids = {message.id for message in catalog if isinstance(message.id, str)}
+    msgids = {message.id for message in catalog}
     deferred = {
         msgid
         for path in Path("squid").rglob("*.py")

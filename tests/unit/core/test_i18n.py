@@ -1,18 +1,83 @@
 """Core translation lookup tests."""
 
+import ast
 from pathlib import Path
 
+import pytest
 from babel.messages.catalog import Catalog
 from babel.messages.mofile import write_mo
 
+from squid.core.extract import deferred_msgid
 from squid.core.i18n import (
     _catalog,
     locales_dir,
+    localization_for,
     negotiate_locale,
     negotiate_locale_candidates,
     ntranslate,
+    tr,
     translate,
 )
+from squid_ui.text import Message, current_localization, localization_scope
+
+
+def test_deferred_msgid_extracts_plural_templates_as_a_pair() -> None:
+    tree = ast.parse('tr(t"{count} build", plural=t"{count} builds")')
+    call = next(node for node in ast.walk(tree) if isinstance(node, ast.Call))
+
+    assert deferred_msgid(call) == ("{count} build", "{count} builds")
+
+
+def test_deferred_msgid_preserves_static_format_specifications() -> None:
+    tree = ast.parse('tr(t"Took {seconds:.1f}s")')
+    call = next(node for node in ast.walk(tree) if isinstance(node, ast.Call))
+
+    assert deferred_msgid(call) == "Took {seconds:.1f}s"
+
+
+def test_tr_template_defers_interpolation_until_resolution() -> None:
+    title = "[unsafe](link) @everyone"
+
+    message = tr(t"Build {title}")
+
+    assert isinstance(message, Message)
+    assert message.template == "Build {title}"
+    assert tr(message) == "Build \\[unsafe\\]\\(link\\) @\u200beveryone"
+
+
+def test_tr_preserves_conversion_and_format_specification() -> None:
+    seconds = 2.54
+    value = "hello"
+
+    assert tr(tr(t"Try again in {seconds:.1f} seconds: {value!r}")) == "Try again in 2\\.5 seconds: 'hello'"
+
+
+def test_tr_plural_template_defers_a_paired_message() -> None:
+    count = 2
+
+    message = tr(t"{count} build", plural=t"{count} builds")
+
+    assert isinstance(message, Message)
+    assert message.plural == "{count} builds"
+    assert tr(message) == "2 builds"
+
+
+def test_tr_plural_template_requires_matching_placeholders() -> None:
+    count = 2
+    total = 2
+
+    with pytest.raises(ValueError, match="same placeholders"):
+        tr(t"{count} build", plural=t"{total} builds")
+
+
+def test_tr_uses_and_restores_ambient_localization() -> None:
+    translated = localization_for("zh-CN")
+    original = current_localization()
+
+    with localization_scope(translated):
+        assert current_localization() is translated
+
+    assert current_localization() is original
 
 
 def test_translate_falls_back_to_source_string_for_unknown_locale() -> None:
