@@ -6,6 +6,7 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Any, Protocol
 
+from squid_ui.extensions import ExtensionKind as ExtensionKind
 from squid_ui.planning.resources import EMPTY_COST as EMPTY_COST
 from squid_ui.planning.resources import ResourceCost as ResourceCost
 from squid_ui.scene.model import JsonValue
@@ -24,10 +25,10 @@ class PreparedExtension[ResourceT]:
     resource: ResourceT
 
 
-class ExtensionAdapter[ResourceT](Protocol):
+class ExtensionAdapter[PayloadT, ResourceT](Protocol):
     """Prepare a logical extension payload for target planning and drawing."""
 
-    def prepare(self, payload: object) -> PreparedExtension[ResourceT]: ...
+    def prepare(self, payload: PayloadT) -> PreparedExtension[ResourceT]: ...
 
 
 def extension_capability(kind: str) -> str:
@@ -67,12 +68,14 @@ class AdapterProfile[AdapterT]:
     name: str
     version_expression: str
     capabilities: frozenset[AdapterCapability] = frozenset()
-    extensions: Mapping[str, ExtensionAdapter[Any]] = field(default_factory=dict)
-    """Extension adapters by kind.
+    extensions: Mapping[str, ExtensionAdapter[Any, Any]] = field(default_factory=dict)
+    """Extension adapters, by the wire name of the `ExtensionKind` each answers for.
 
-    `Any` at the container is the honest answer, not a fiction: the mapping is genuinely
-    heterogeneous — each kind produces its own frontend object — and there is no single
-    resource type for it to be parameterized by. The individual adapter is typed.
+    `Any` at the container is unavoidable and now costs nothing: the mapping is genuinely
+    heterogeneous, each kind pairing its own payload with its own frontend object, and no
+    single pair can stand for all of them. What changed is that the pairing is recovered
+    either side of this crossing -- an `ExtensionKind` carries it to the author, and the
+    adapter's own signature states it -- rather than being erased everywhere at once.
     """
 
     def __post_init__(self) -> None:
