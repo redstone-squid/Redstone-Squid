@@ -81,11 +81,13 @@ class PlanMemo[BodyT: scene.Body = Any]:
     def __init__(self) -> None:
         self._source: object | None = None
         self._key: object | None = None
-        self._session: object | None = None
+        self._session: PresentationState | None = None
         self._session_revisions: set[int] = set()
         self._result: PlanResult[BodyT] | None = None
 
-    def get(self, source: object, key: object, session: object, session_revision: int) -> PlanResult[BodyT] | None:
+    def get(
+        self, source: object, key: object, session: PresentationState, session_revision: int
+    ) -> PlanResult[BodyT] | None:
         if (
             self._source is source
             and self._key == key
@@ -96,7 +98,12 @@ class PlanMemo[BodyT: scene.Body = Any]:
         return None
 
     def put(
-        self, source: object, key: object, session: object, session_revision: int, result: PlanResult[BodyT]
+        self,
+        source: object,
+        key: object,
+        session: PresentationState,
+        session_revision: int,
+        result: PlanResult[BodyT],
     ) -> None:
         self._source = source
         self._key = key
@@ -120,7 +127,7 @@ class PlanMemo[BodyT: scene.Body = Any]:
         """Retain one exact result against the session's current revision."""
         self.put(source, key, session, session.revision, result)
 
-    def promote(self, session: object, session_revision: int) -> None:
+    def promote(self, session: PresentationState, session_revision: int) -> None:
         """Accept the post-commit revision of the session this result already describes."""
         if self._session is session and self._result is not None:
             self._session_revisions.add(session_revision)
