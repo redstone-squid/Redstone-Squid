@@ -364,11 +364,15 @@ class InteractionHarness:
 class ContextHarness:
     """A minimal context source with typed send and reply records."""
 
-    def __init__(self, *, message: MessageHarness | None = None) -> None:
+    def __init__(self, *, message: MessageHarness | None = None, bot: Any = None, user_id: int = 1) -> None:
         self.message_harness = message if message is not None else MessageHarness()
         self.message = self.message_harness.source
         self.send = AsyncCallRecorder(result=self.message)
         self.reply = AsyncCallRecorder(result=self.message)
+        self.bot = bot
+        self.interaction: Any = None
+        self.author = _Identity(user_id)
+        self.guild: Any = None
 
     @property
     def source(self) -> Any:
