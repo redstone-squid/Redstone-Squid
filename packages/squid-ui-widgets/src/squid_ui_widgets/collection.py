@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
 
+from squid_ui.document import DocumentLike
 from squid_ui.factories import action_controls, choice, heading, stack, status
 from squid_ui.forms import Form, FormLike, FormSpec
-from squid_ui.runtime.component import RenderResult
 from squid_ui.semantic import ControlDisplay, FormTrigger, Tone
 from squid_ui.text import TextLike
 from squid_ui_widgets._paging import PagePosition, window
@@ -198,7 +198,7 @@ class CollectionEditor:
         form = self.edit(values)
         return form.spec() if isinstance(form, Form) else form
 
-    def render(self, state: CollectionState, controls: MachineControls[CollectionState]) -> RenderResult:
+    def render(self, state: CollectionState, controls: MachineControls[CollectionState]) -> DocumentLike:
         visible, position, pages = window(
             state.entries,
             key=self.key,

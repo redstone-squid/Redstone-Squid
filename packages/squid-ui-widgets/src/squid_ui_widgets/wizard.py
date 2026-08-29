@@ -4,9 +4,9 @@ from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
 from types import MappingProxyType
 
+from squid_ui.document import DocumentLike
 from squid_ui.factories import action_controls, field, fields, heading, progress, stack
 from squid_ui.forms import Form, FormField, FormLike, FormSpec
-from squid_ui.runtime.component import RenderResult
 from squid_ui.semantic import ActionControl, ControlDisplay, FormTrigger, LayoutNode, RoutedActionControl, Tone
 from squid_ui.target_types import RenderTarget
 from squid_ui.text import TextLike
@@ -267,7 +267,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
         state: WizardState,
         controls: MachineControls[WizardState, RenderTargetT],
         review: WizardReview[RenderTargetT],
-    ) -> RenderResult[RenderTargetT]:
+    ) -> DocumentLike[RenderTargetT]:
         live = self.live_steps(state)
         answered = self._answer_map(state.answers)
         steps = tuple(step for step in live if step.form is not None)
@@ -321,7 +321,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
 
     def render(
         self, state: WizardState, controls: MachineControls[WizardState, RenderTargetT]
-    ) -> RenderResult[RenderTargetT]:
+    ) -> DocumentLike[RenderTargetT]:
         if self.review is not None and state.current == REVIEW_STEP:
             return self._render_review(state, controls, self.review)
         live = self.live_steps(state)

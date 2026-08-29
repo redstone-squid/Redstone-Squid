@@ -21,7 +21,7 @@ from squid_reactivity.core import (
     observe_render,
 )
 from squid_reactivity.internals import RENDER_OBSERVATION as _RENDER_OBSERVATION
-from squid_ui.document import Asset, Document
+from squid_ui.document import Asset, Document, DocumentLike
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.primitives.constraints import Paginate
 from squid_ui.primitives.nodes import (
@@ -98,12 +98,6 @@ from squid_ui.semantic import (
 from squid_ui.semantic import Toggle as SemanticToggle
 from squid_ui.target_types import RenderTarget
 
-type RenderNode[RenderTargetT = RenderTarget] = LayoutNode[RenderTargetT]
-type RenderResult[RenderTargetT = RenderTarget] = (
-    Document[RenderTargetT] | LayoutNode[RenderTargetT] | Sequence[LayoutNode[RenderTargetT]]
-)
-
-
 type AnyComponent = Component[Any]
 """A mounted component for any render target.
 
@@ -134,7 +128,7 @@ RenderTargetT = TypeVar("RenderTargetT", contravariant=True, default=RenderTarge
 """The dialects a component's rendered nodes can be drawn in.
 
 Declared the old way, and contravariant on purpose, in a file that otherwise uses PEP 695.
-`RenderTargetT` reaches `Component` through `RenderResult[RenderTargetT]`, which is contravariant
+`RenderTargetT` reaches `Component` through `DocumentLike[RenderTargetT]`, which is contravariant
 because `Renderable` puts the render target in a parameter position -- and neither pyrefly nor
 basedpyright infers variance through that nesting. PEP 695 has no syntax for declaring variance,
 so this is the only way to preserve portable-component substitution.
@@ -179,7 +173,7 @@ class _ComponentRender[RenderTargetT: RenderTarget]:
     root: bool
     inherited_context: dict[ContextKey[Any], object]
     child_context: dict[ContextKey[Any], object]
-    nodes: tuple[RenderNode[RenderTargetT], ...]
+    nodes: tuple[LayoutNode[RenderTargetT], ...]
     assets: tuple[Asset, ...]
     document_key: str | None
     observation: Observation
@@ -250,7 +244,7 @@ class Component(StateOwner, Generic[RenderTargetT]):
     def on_state_rollback(self) -> None:
         self.__dict__["_state_revision"] = self.__dict__.get("_state_revision", 0) + 1
 
-    def render(self) -> RenderResult[RenderTargetT]:
+    def render(self) -> DocumentLike[RenderTargetT]:
         """Describe the message for the current state. Pure and synchronous."""
         raise NotImplementedError
 
@@ -258,7 +252,7 @@ class Component(StateOwner, Generic[RenderTargetT]):
         """Place child in this render tree under a stable key and namespace.
 
         The child is bound to this component's own dialect. `Component` is contravariant in
-        it -- `render` returns a `RenderResult[RenderTargetT]`, which is contravariant -- so a
+        it -- `render` returns a `DocumentLike[RenderTargetT]`, which is contravariant -- so a
         portable child goes anywhere, while a V2-only child may only be embedded by a parent
         that is itself V2-only. A bare `Component` here would have accepted portable children
         alone, which is every child except the ones a V2 screen is actually built from.
@@ -332,8 +326,8 @@ def _inside(route: _LayoutRoute) -> _LayoutRoute:
 
 
 def _items[RenderTargetT: RenderTarget](
-    rendered: RenderResult[RenderTargetT], path: str
-) -> tuple[tuple[RenderNode[RenderTargetT], ...], tuple[Asset, ...], str | None]:
+    rendered: DocumentLike[RenderTargetT], path: str
+) -> tuple[tuple[LayoutNode[RenderTargetT], ...], tuple[Asset, ...], str | None]:
     """Normalize whatever `render()` returned into nodes, assets, and a document key."""
     if isinstance(rendered, Document):
         if rendered.key is not None and path != "$":
@@ -582,7 +576,7 @@ class _TreeRender[RenderTargetT: RenderTarget]:
         context = snapshot.child_context
 
         def expand_item(
-            item: RenderNode[RenderTargetT], item_path: str, route: _LayoutRoute
+            item: LayoutNode[RenderTargetT], item_path: str, route: _LayoutRoute
         ) -> list[LayoutNode[RenderTargetT]]:
             if isinstance(item, Boundary):
                 if item.key in embed_keys:

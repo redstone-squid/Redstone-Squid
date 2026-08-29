@@ -3,6 +3,7 @@
 from collections.abc import Callable
 
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
+from squid_ui.document import DocumentLike
 from squid_ui.factories import action_control, action_controls, heading, note, stack
 from squid_ui.interactions import ActionEvent
 from squid_ui.planning.navigation import (
@@ -12,7 +13,7 @@ from squid_ui.planning.navigation import (
     default_nav,
 )
 from squid_ui.primitives import Lines
-from squid_ui.runtime.component import Component, RenderResult
+from squid_ui.runtime.component import Component
 from squid_ui.runtime.reactivity import state
 from squid_ui.runtime.resources import Failed, Pending, Ready, resource
 from squid_ui.semantic import LayoutNode
@@ -111,7 +112,7 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget](Com
         value = hook(total) if callable(hook) else hook
         return render_content(self, normalize_content(value, name=name), prefix=name)
 
-    def render(self) -> RenderResult[RenderTargetT]:
+    def render(self) -> DocumentLike[RenderTargetT]:
         # One arm per member of `Ready | Pending | Failed`, with the `previous` case inside it.
         # Splitting on `previous` in the pattern left the match unprovably exhaustive, so the
         # checker saw a path with no return on a shape that cannot occur.
@@ -127,7 +128,7 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget](Com
                     return self._status(self.copy.failed, retry=True)
                 return self._render_loaded(previous.value, status=self.copy.failed, retry=True)
 
-    def _status(self, message: TextLike, *, retry: bool = False) -> RenderResult[RenderTargetT]:
+    def _status(self, message: TextLike, *, retry: bool = False) -> DocumentLike[RenderTargetT]:
         return stack(
             heading(self.title) if self.title is not None else None,
             note(message),
@@ -145,7 +146,7 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget](Com
         *,
         status: TextLike | None = None,
         retry: bool = False,
-    ) -> RenderResult[RenderTargetT]:
+    ) -> DocumentLike[RenderTargetT]:
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         nav = self.inject(NAV_FACTORY_CONTEXT, default_nav)
         window = loaded.window

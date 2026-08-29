@@ -5,10 +5,11 @@ from dataclasses import dataclass
 from typing import Literal, Protocol, overload, runtime_checkable
 
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME, Chrome
+from squid_ui.document import DocumentLike
 from squid_ui.factories import action_control, choice, choices, controlled, form, routed_action_control, routed_choices
 from squid_ui.forms import Form, FormLike, FormSpec
 from squid_ui.interactions import ActionEvent, SubmitEvent
-from squid_ui.runtime.component import Component, RenderResult
+from squid_ui.runtime.component import Component
 from squid_ui.runtime.reactivity import state
 from squid_ui.semantic import (
     ActionControl,
@@ -72,7 +73,7 @@ class StateMachine[StateT, RenderTargetT: RenderTarget = RenderTarget](Protocol)
 
     def render(
         self, state: StateT, controls: MachineControls[StateT, RenderTargetT]
-    ) -> RenderResult[RenderTargetT]: ...
+    ) -> DocumentLike[RenderTargetT]: ...
 
     def transition(
         self,
@@ -186,7 +187,7 @@ class ComponentDriver[StateT, RenderTargetT: RenderTarget = RenderTarget](Compon
         self.handlers = dict(handlers or {})
         self.finish_actions = frozenset(finish_actions)
 
-    def render(self) -> RenderResult[RenderTargetT]:
+    def render(self) -> DocumentLike[RenderTargetT]:
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         return self.machine.render(self.machine_state, _ComponentControls(self, chrome))
 
@@ -295,7 +296,7 @@ class RouteDriver[StateT, RenderTargetT: RenderTarget = RenderTarget]:
     route: RouteEncoder[StateT]
     chrome: Chrome = DEFAULT_CHROME
 
-    def render(self, machine: StateMachine[StateT, RenderTargetT], state: StateT) -> RenderResult[RenderTargetT]:
+    def render(self, machine: StateMachine[StateT, RenderTargetT], state: StateT) -> DocumentLike[RenderTargetT]:
         return machine.render(state, _RoutedControls(machine, state, self.route, self.chrome))
 
     def transition(

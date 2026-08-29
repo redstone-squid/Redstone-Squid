@@ -5,9 +5,10 @@ from dataclasses import dataclass
 from typing import Literal
 
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
+from squid_ui.document import DocumentLike
 from squid_ui.factories import action_control, action_controls, bullet, bullets, stack, status
 from squid_ui.interactions import ActionEvent, ActionMode, PressEvent
-from squid_ui.runtime.component import Component, RenderResult
+from squid_ui.runtime.component import Component
 from squid_ui.runtime.reactivity import state
 from squid_ui.semantic import ControlDisplay, Emphasis, Tone
 from squid_ui.target_types import RenderTarget
@@ -67,7 +68,7 @@ class Agreement[RenderTargetT: RenderTarget = RenderTarget](Component[RenderTarg
         self.allow_withdraw = allow_withdraw
         self.on_resolve = on_resolve
 
-    def render(self) -> RenderResult[RenderTargetT]:
+    def render(self) -> DocumentLike[RenderTargetT]:
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         approved = frozenset(self.approved)
         participant_rows = tuple(

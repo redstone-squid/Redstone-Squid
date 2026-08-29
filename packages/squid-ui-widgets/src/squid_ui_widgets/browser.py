@@ -3,6 +3,7 @@
 from collections.abc import Awaitable, Callable, Sequence
 
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
+from squid_ui.document import DocumentLike
 from squid_ui.factories import (
     action_control,
     action_controls,
@@ -23,7 +24,7 @@ from squid_ui.planning.navigation import (
     NavigationState,
     default_nav,
 )
-from squid_ui.runtime.component import Component, RenderResult
+from squid_ui.runtime.component import Component
 from squid_ui.runtime.reactivity import state
 from squid_ui.runtime.resources import Failed, Pending, Ready, resource
 from squid_ui.semantic import ActionControl, ChoiceEvent, ControlDisplay, Link
@@ -169,7 +170,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
     async def _next_item(self, event: ActionEvent) -> None:
         await self._adjacent(event, 1)
 
-    def render(self) -> RenderResult[RenderTargetT]:
+    def render(self) -> DocumentLike[RenderTargetT]:
         # One arm per member of `Ready | Pending | Failed`, with the `previous` case inside it.
         # Splitting on `previous` in the pattern left the match unprovably exhaustive, so the
         # checker saw a path with no return on a shape that cannot occur.
@@ -185,7 +186,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
                     return self._status(self.copy.failed, retry=True)
                 return self._render_loaded(previous.value, status_text=self.copy.failed, retry=True)
 
-    def _status(self, message: TextLike, *, retry: bool = False) -> RenderResult[RenderTargetT]:
+    def _status(self, message: TextLike, *, retry: bool = False) -> DocumentLike[RenderTargetT]:
         return stack(
             heading(self.title) if self.title is not None else None,
             note(message),
@@ -202,7 +203,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
         *,
         status_text: TextLike | None = None,
         retry: bool = False,
-    ) -> RenderResult[RenderTargetT]:
+    ) -> DocumentLike[RenderTargetT]:
         opened = None
         if self.opened is not None:
             opened = next(
@@ -219,7 +220,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
         *,
         status_text: TextLike | None,
         retry: bool,
-    ) -> RenderResult[RenderTargetT]:
+    ) -> DocumentLike[RenderTargetT]:
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         items = loaded.window.items
         extra = (
@@ -314,7 +315,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
         *,
         status_text: TextLike | None,
         retry: bool,
-    ) -> RenderResult[RenderTargetT]:
+    ) -> DocumentLike[RenderTargetT]:
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         items = loaded.window.items
         index = next(index for index, candidate in enumerate(items) if self.identity(candidate) == self.identity(item))
