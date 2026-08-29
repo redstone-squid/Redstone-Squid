@@ -5,6 +5,8 @@ from collections import defaultdict
 from pathlib import Path
 from typing import override
 
+from tests.support.source_tree import source_tree
+
 BOT_ROOT = Path(__file__).parents[2] / "squid" / "bot"
 LAYOUTS_ROOT = Path(__file__).parents[2] / "packages" / "squid-ui" / "src"
 MESSAGE_METHODS = {"edit", "edit_message", "send", "send_message"}
@@ -90,7 +92,7 @@ def test_bot_uses_components_v2_outside_archive_relay() -> None:
     for root in (BOT_ROOT, LAYOUTS_ROOT):
         for path in root.rglob("*.py"):
             visitor = DiscordUiVisitor(path)
-            visitor.visit(ast.parse(path.read_text(encoding="utf-8")))
+            visitor.visit(source_tree(path))
             violations.extend(visitor.violations)
 
     assert not violations, "\n".join(violations)
@@ -104,7 +106,7 @@ def test_reaction_router_owns_all_raw_reaction_listeners() -> None:
     """
     listeners: dict[str, set[str]] = defaultdict(set)
     for path in BOT_ROOT.rglob("*.py"):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = source_tree(path)
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("on_raw_reaction_"):
                 listeners[str(path.relative_to(BOT_ROOT))].add(node.name)
