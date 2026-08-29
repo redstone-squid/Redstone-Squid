@@ -51,7 +51,7 @@ from squid_ui.semantic import (
     Code,
     Column,
     Columns,
-    ConcreteLayoutNode,
+    BuiltinLayoutNode,
     ControlDisplay,
     ControlGroup,
     Controlled,
@@ -169,12 +169,12 @@ def _node_types(annotation: object) -> Iterator[type]:
 
 
 # Derived from the union rather than hand-listed, so a new node type is accepted the moment
-# it joins `LayoutNode`.
-_NODE_TYPES: tuple[type, ...] = tuple(_node_types(ConcreteLayoutNode))
+# it joins `BuiltinLayoutNode`.
+_NODE_TYPES: tuple[type, ...] = tuple(_node_types(BuiltinLayoutNode))
 _PORTABLE_TYPES: tuple[type, ...] = tuple(_node_types(PortableNode))
 
 
-def is_layout_node(value: object) -> TypeIs[ConcreteLayoutNode]:
+def is_layout_node(value: object) -> TypeIs[BuiltinLayoutNode]:
     """True when `value` is already a layout node, rather than text or a component.
 
     The public form of the derived `_NODE_TYPES` tuple: callers outside this module — the

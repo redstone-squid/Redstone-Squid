@@ -15,12 +15,13 @@ from squid_ui.planning.discord import (
 )
 from squid_ui.planning.limits import CLASSIC_LIMITS, LIMITS, ClassicLimits, V2Limits
 from squid_ui.planning.target import Target
-from squid_ui.primitives.nodes import Extension, Node, PrimitiveNode
+from squid_ui.primitives.nodes import Extension, Node
 from squid_ui.target_types import (
     ClassicTarget,
     ComponentsV2Target,
     DiscordPy27Adapter,
     DiscordPyAdapter,
+    Renderable,
 )
 from squid_ui_discord.adapter import DISCORD_PY_27_ADAPTER
 
@@ -63,7 +64,7 @@ def classic(
 
 
 def NativeItem[FallbackT](
-    factory: Callable[[], discord.ui.Item], *, fallback: PrimitiveNode[FallbackT]
+    factory: Callable[[], discord.ui.Item], *, fallback: Renderable[FallbackT]
 ) -> Extension[ComponentsV2Target | FallbackT]:
     """Create a measured Discord item with a required portable fallback."""
     return cast(

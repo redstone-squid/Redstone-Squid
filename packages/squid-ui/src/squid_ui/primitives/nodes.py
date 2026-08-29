@@ -563,8 +563,8 @@ class Variants[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
     @overload
     def of[FirstT, SecondT](
         cls,
-        first: PrimitiveNode[FirstT] | Variant[FirstT],
-        second: PrimitiveNode[SecondT] | Variant[SecondT],
+        first: Renderable[FirstT] | Variant[FirstT],
+        second: Renderable[SecondT] | Variant[SecondT],
         /,
         *,
         priority: int = 0,
@@ -574,9 +574,9 @@ class Variants[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
     @overload
     def of[FirstT, SecondT, ThirdT](
         cls,
-        first: PrimitiveNode[FirstT] | Variant[FirstT],
-        second: PrimitiveNode[SecondT] | Variant[SecondT],
-        third: PrimitiveNode[ThirdT] | Variant[ThirdT],
+        first: Renderable[FirstT] | Variant[FirstT],
+        second: Renderable[SecondT] | Variant[SecondT],
+        third: Renderable[ThirdT] | Variant[ThirdT],
         /,
         *,
         priority: int = 0,
@@ -586,10 +586,10 @@ class Variants[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
     @overload
     def of[FirstT, SecondT, ThirdT, FourthT](
         cls,
-        first: PrimitiveNode[FirstT] | Variant[FirstT],
-        second: PrimitiveNode[SecondT] | Variant[SecondT],
-        third: PrimitiveNode[ThirdT] | Variant[ThirdT],
-        fourth: PrimitiveNode[FourthT] | Variant[FourthT],
+        first: Renderable[FirstT] | Variant[FirstT],
+        second: Renderable[SecondT] | Variant[SecondT],
+        third: Renderable[ThirdT] | Variant[ThirdT],
+        fourth: Renderable[FourthT] | Variant[FourthT],
         /,
         *,
         priority: int = 0,
@@ -599,11 +599,11 @@ class Variants[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
     @overload
     def of[FirstT, SecondT, ThirdT, FourthT, FifthT](
         cls,
-        first: PrimitiveNode[FirstT] | Variant[FirstT],
-        second: PrimitiveNode[SecondT] | Variant[SecondT],
-        third: PrimitiveNode[ThirdT] | Variant[ThirdT],
-        fourth: PrimitiveNode[FourthT] | Variant[FourthT],
-        fifth: PrimitiveNode[FifthT] | Variant[FifthT],
+        first: Renderable[FirstT] | Variant[FirstT],
+        second: Renderable[SecondT] | Variant[SecondT],
+        third: Renderable[ThirdT] | Variant[ThirdT],
+        fourth: Renderable[FourthT] | Variant[FourthT],
+        fifth: Renderable[FifthT] | Variant[FifthT],
         /,
         *,
         priority: int = 0,
@@ -611,10 +611,10 @@ class Variants[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
 
     @classmethod
     @overload
-    def of(cls, *rungs: PrimitiveNode[Any] | Variant[Any], priority: int = 0) -> Variants[Any]: ...
+    def of(cls, *rungs: Renderable[Any] | Variant[Any], priority: int = 0) -> Variants[Any]: ...
 
     @classmethod
-    def of(cls, *rungs: PrimitiveNode[Any] | Variant[Any], priority: int = 0) -> Variants[Any]:
+    def of(cls, *rungs: Renderable[Any] | Variant[Any], priority: int = 0) -> Variants[Any]:
         """Build a ladder from bare nodes, wrapping each in an exact, capability-free Variant."""
         return cls(
             tuple(rung if isinstance(rung, Variant) else Variant((cast(Node, rung),)) for rung in rungs),
@@ -655,8 +655,6 @@ type Node = (
     | Extension
     | Variants
 )
-
-type PrimitiveNode[RenderTargetT = DiscordTarget] = Renderable[RenderTargetT]
 
 
 def as_nodes(rendered: Node | Sequence[Node]) -> list[Node]:
