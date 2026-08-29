@@ -1,14 +1,12 @@
 """Profile, visibility, and identity-management route contracts."""
 
 from dataclasses import replace
-from types import SimpleNamespace
-from typing import Any, cast
-from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
 from whenever import Instant
 
+from squid.accounts.application import AccountService
 from squid.accounts.domain import (
     UNSET,
     AccountIdentity,
@@ -18,6 +16,7 @@ from squid.accounts.domain import (
     MergePreview,
     MergeTicket,
     ProfileLink,
+    ProfileUpdate,
 )
 from squid.accounts.errors import InvalidMergeCodeError, LastIdentityError
 from squid.api.security import UNBOUNDED, Caller
@@ -45,15 +44,79 @@ def _caller() -> Caller:
     return Caller(kind="account", subject="account:1", nodes=UNBOUNDED, account_id=1)
 
 
-def _accounts(**overrides: object) -> Any:
-    defaults: dict[str, object] = {
-        "list_identities": AsyncMock(return_value=(DISCORD, JAVA)),
-        "update_profile": AsyncMock(return_value=AccountProfile.empty(1)),
-        "set_identity_visibility": AsyncMock(return_value=replace(JAVA, is_public=False)),
-        "unlink_identity": AsyncMock(return_value=JAVA),
-        "clear_profile": AsyncMock(return_value=AccountProfile.empty(1)),
-    }
-    return cast(Any, SimpleNamespace(**(defaults | overrides)))
+class AccountRecorder(AccountService):
+    def __init__(
+        self,
+        *,
+        identities: tuple[AccountIdentity, ...] = (DISCORD, JAVA),
+        profile: AccountProfile | None = None,
+        unlink_error: Exception | None = None,
+        merge_error: Exception | None = None,
+    ) -> None:
+        self.identities = identities
+        self.profile = profile or AccountProfile.empty(1)
+        self.unlink_error = unlink_error
+        self.merge_error = merge_error
+        self.profile_updates: list[tuple[int, ProfileUpdate]] = []
+        self.visibility_updates: list[tuple[int, int, bool]] = []
+        self.unlinks: list[tuple[int, int]] = []
+        self.clears: list[int] = []
+        self.merge_codes: list[int] = []
+        self.merge_previews: list[tuple[int, str]] = []
+        self.merges: list[tuple[int, str]] = []
+
+    async def list_identities(self, account_id: int) -> tuple[AccountIdentity, ...]:
+        return self.identities
+
+    async def update_profile(self, account_id: int, update: ProfileUpdate) -> AccountProfile:
+        self.profile_updates.append((account_id, update))
+        return self.profile
+
+    async def set_identity_visibility(
+        self, account_id: int, identity_id: int, *, is_public: bool
+    ) -> AccountIdentity:
+        self.visibility_updates.append((account_id, identity_id, is_public))
+        return replace(JAVA, is_public=is_public)
+
+    async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity:
+        self.unlinks.append((account_id, identity_id))
+        if self.unlink_error is not None:
+            raise self.unlink_error
+        return JAVA
+
+    async def clear_profile(self, account_id: int) -> AccountProfile:
+        self.clears.append(account_id)
+        return AccountProfile.empty(account_id)
+
+    async def create_merge_code(self, account_id: int) -> tuple[str, MergeTicket]:
+        self.merge_codes.append(account_id)
+        return "ABCD2345", MergeTicket(1, Instant.from_utc(2026, 8, 18), Instant.from_utc(2026, 8, 18, 0, 10))
+
+    async def preview_merge(self, surviving_account_id: int, code: str) -> MergePreview:
+        self.merge_previews.append((surviving_account_id, code))
+        return MergePreview(
+            absorbed_public_creator_id=ABSORBED_ID,
+            alias_names=("Notch",),
+            identity_count=2,
+            build_count=3,
+        )
+
+    async def complete_merge(
+        self, surviving_account_id: int, code: str, *, now: Instant | None = None
+    ) -> AccountMerge:
+        self.merges.append((surviving_account_id, code))
+        if self.merge_error is not None:
+            raise self.merge_error
+        return AccountMerge(1, 2, SURVIVING_ID, ABSORBED_ID)
+
+
+def _accounts(
+    *,
+    identities: tuple[AccountIdentity, ...] = (DISCORD, JAVA),
+    profile: AccountProfile | None = None,
+    unlink_error: Exception | None = None,
+) -> AccountRecorder:
+    return AccountRecorder(identities=identities, profile=profile, unlink_error=unlink_error)
 
 
 class TestProfileUpdate:
@@ -63,7 +126,7 @@ class TestProfileUpdate:
 
         await update_profile(body, accounts, _caller())
 
-        update = accounts.update_profile.await_args.args[1]
+        update = accounts.profile_updates[0][1]
         assert update.display_name == "Steve"
         assert update.bio is None
         # Never sent, so it must not reach the service as a clear.
@@ -75,18 +138,18 @@ class TestProfileUpdate:
 
         await update_profile(body, accounts, _caller())
 
-        assert accounts.update_profile.await_args.args[1].links == (ProfileLink("Site", "https://example.com"),)
+        assert accounts.profile_updates[0][1].links == (ProfileLink("Site", "https://example.com"),)
 
     async def test_hidden_null_is_treated_as_false_rather_than_a_clear(self) -> None:
         accounts = _accounts()
 
         await update_profile(ProfileUpdateRequest.model_validate({"hidden": None}), accounts, _caller())
 
-        assert accounts.update_profile.await_args.args[1].hidden is False
+        assert accounts.profile_updates[0][1].hidden is False
 
     async def test_the_response_renders_the_saved_profile(self) -> None:
         profile = AccountProfile(account_id=1, display_name="Steve", avatar_identity_id=2)
-        accounts = _accounts(update_profile=AsyncMock(return_value=profile))
+        accounts = _accounts(profile=profile)
 
         response = await update_profile(ProfileUpdateRequest(), accounts, _caller())
 
@@ -107,7 +170,7 @@ class TestProfileUpdate:
 
 class TestIdentities:
     async def test_listing_includes_hidden_identities(self) -> None:
-        accounts = _accounts(list_identities=AsyncMock(return_value=(DISCORD, replace(JAVA, is_public=False))))
+        accounts = _accounts(identities=(DISCORD, replace(JAVA, is_public=False)))
 
         response = await list_identities(accounts, _caller())
 
@@ -119,7 +182,7 @@ class TestIdentities:
 
         response = await set_identity_visibility(2, IdentityVisibilityRequest(public=False), accounts, _caller())
 
-        accounts.set_identity_visibility.assert_awaited_once_with(1, 2, is_public=False)
+        assert accounts.visibility_updates == [(1, 2, False)]
         assert response.is_public is False
 
     async def test_unlink_returns_the_removed_identity(self) -> None:
@@ -127,11 +190,11 @@ class TestIdentities:
 
         response = await unlink_identity(2, accounts, _caller())
 
-        accounts.unlink_identity.assert_awaited_once_with(1, 2)
+        assert accounts.unlinks == [(1, 2)]
         assert response.provider is IdentityProvider.JAVA
 
     async def test_unlinking_the_last_identity_surfaces_a_conflict(self) -> None:
-        accounts = _accounts(unlink_identity=AsyncMock(side_effect=LastIdentityError(account_id=1)))
+        accounts = _accounts(unlink_error=LastIdentityError(account_id=1))
 
         with pytest.raises(LastIdentityError):
             await unlink_identity(1, accounts, _caller())
@@ -143,27 +206,14 @@ class TestStaffClear:
 
         response = await clear_profile(42, accounts)
 
-        accounts.clear_profile.assert_awaited_once_with(42)
+        assert accounts.clears == [42]
         assert response.display_name is None
         assert response.hidden is False
 
 
 class TestMerge:
-    def _merge_accounts(self, **overrides: object) -> Any:
-        preview = MergePreview(
-            absorbed_public_creator_id=ABSORBED_ID,
-            alias_names=("Notch",),
-            identity_count=2,
-            build_count=3,
-        )
-        merge = AccountMerge(1, 2, SURVIVING_ID, ABSORBED_ID)
-        ticket = MergeTicket(1, Instant.from_utc(2026, 8, 18), Instant.from_utc(2026, 8, 18, 0, 10))
-        defaults: dict[str, object] = {
-            "create_merge_code": AsyncMock(return_value=("ABCD2345", ticket)),
-            "preview_merge": AsyncMock(return_value=preview),
-            "complete_merge": AsyncMock(return_value=merge),
-        }
-        return cast(Any, SimpleNamespace(**(defaults | overrides)))
+    def _merge_accounts(self, *, merge_error: Exception | None = None) -> AccountRecorder:
+        return AccountRecorder(merge_error=merge_error)
 
     async def test_a_code_is_minted_for_the_calling_account(self) -> None:
         """Minted by the side being absorbed: it is that side's consent to disappear."""
@@ -171,7 +221,7 @@ class TestMerge:
 
         response = await create_merge_code(accounts, _caller())
 
-        accounts.create_merge_code.assert_awaited_once_with(1)
+        assert accounts.merge_codes == [1]
         assert response.code == "ABCD2345"
 
     async def test_the_preview_names_what_would_move(self) -> None:
@@ -188,12 +238,12 @@ class TestMerge:
 
         response = await complete_merge(MergeRequest(code="ABCD2345"), accounts, _caller())
 
-        accounts.complete_merge.assert_awaited_once_with(1, "ABCD2345")
+        assert accounts.merges == [(1, "ABCD2345")]
         assert response.surviving_creator_id == SURVIVING_ID
         assert response.redirected_creator_id == ABSORBED_ID
 
     async def test_a_bad_code_surfaces_as_a_validation_error(self) -> None:
-        accounts = self._merge_accounts(complete_merge=AsyncMock(side_effect=InvalidMergeCodeError))
+        accounts = self._merge_accounts(merge_error=InvalidMergeCodeError())
 
         with pytest.raises(InvalidMergeCodeError):
             await complete_merge(MergeRequest(code="NOPE"), accounts, _caller())
