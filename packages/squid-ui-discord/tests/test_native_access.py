@@ -8,6 +8,7 @@ from squid_ui.forms import FormLike, SubmitHandler
 from squid_ui.interactions import ActionMode, Actor, Visibility
 from squid_ui.interactions import ActionResponder as ActionResponderProtocol
 from squid_ui.primitives import Button, Row
+from squid_ui.testing import text_component
 from squid_ui_discord import Everyone, MessageRoot, native, responder
 from squid_ui_discord.actions import ActionResponder
 from squid_ui_discord.testing import commit_render, fake_interaction
@@ -41,14 +42,14 @@ class Portable:
 def test_native_returns_the_interaction_behind_a_discord_event() -> None:
     interaction = fake_interaction(user_id=7)
     event = PressEvent(
-        Actor("7"), ActionResponder(interaction, MessageRoot(Component(), access=Everyone(), timeout=None))
+        Actor("7"), ActionResponder(interaction, MessageRoot(text_component(), access=Everyone(), timeout=None))
     )
 
     assert native(event) is interaction
 
 
 def test_responder_returns_the_adapter_holding_the_native_surfaces() -> None:
-    adapter = ActionResponder(fake_interaction(), MessageRoot(Component(), access=Everyone(), timeout=None))
+    adapter = ActionResponder(fake_interaction(), MessageRoot(text_component(), access=Everyone(), timeout=None))
     event = PressEvent(Actor("7"), adapter)
 
     assert responder(event) is adapter

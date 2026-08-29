@@ -372,6 +372,22 @@ class TestMutatedInPlace:
 
 
 class TestAbstractBases:
+    def test_a_component_without_a_render_cannot_be_mounted(self):
+        """`render` is abstract, so "did not describe a message" is caught at construction.
+
+        This used to be a proxy check on `cls.render is not Component.render`, which decided
+        whether the required-state check applied. It failed open: a class that merely had no
+        render -- not abstract, just unfinished -- skipped the check entirely.
+        """
+        with pytest.raises(TypeError, match="abstract"):
+            Component()  # type: ignore[abstract]
+
+        class Unfinished(Component[DiscordTarget]):
+            profile: str = state()
+
+        with pytest.raises(TypeError, match="abstract"):
+            Unfinished()  # type: ignore[abstract]
+
     def test_an_unimplemented_component_may_leave_state_to_its_subclasses(self):
         class BasePanel(Component[DiscordTarget]):
             profile: str = state()

@@ -404,6 +404,9 @@ def test_local_state_rolls_back_with_a_conflict(bus: LocalTopicBus, here: Member
     class Panel(Component[DiscordTarget]):
         open: bool = state(default=False)
 
+        def render(self):
+            return Text(str(self.open))
+
     panel = Panel()
     with pytest.raises(ReactiveConflictError), transaction():
         panel.open = True
@@ -435,6 +438,9 @@ def test_a_computed_recomputes_when_another_owner_writes(bus: LocalTopicBus, her
         def title(self) -> str:
             runs.append(1)
             return f"build {self.workspace.selected}"
+
+        def render(self):
+            return Text(self.title)
 
     detail = Detail(workspace)
     assert detail.title == "build None"
