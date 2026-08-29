@@ -100,7 +100,7 @@ today: `_field_entry:255`, `_picker:735`, `_unbound_button:752`, `_button:770`.
 
 `planning/planner.py`, `planning/solve.py:745`, `discord/compose.py:40,75`: a
 `localization: Localization = NEUTRAL` keyword, with `chrome` localized immediately on
-entry — before `PageBroker` and before the cache key, so everything downstream still sees
+entry — before `CursorCoordinator` and before the cache key, so everything downstream still sees
 a `str`-valued `Chrome`.
 
 **`localization.locale` joins `_plan_cache_key` (`:580`).** Author `Message`s are resolved

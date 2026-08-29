@@ -1,5 +1,8 @@
 """Stateless routed controls: ids, dispatch, and drawing without a session."""
 
+from typing import Any, cast
+
+import anyio
 import discord
 import pytest
 
@@ -102,7 +105,7 @@ class TestRouter:
         async def edit(_interaction, build_id: int) -> None:
             seen.append(build_id)
 
-        await router.dispatch(None, "edit:build:42")  # type: ignore[arg-type]
+        await router.dispatch(fake_interaction(), "edit:build:42")
         assert seen == [42]
 
     async def test_a_handler_may_ignore_parameters_it_does_not_need(self) -> None:
@@ -113,7 +116,7 @@ class TestRouter:
         async def edit(_interaction) -> None:
             seen.append("called")
 
-        await router.dispatch(None, "edit:build:42")  # type: ignore[arg-type]
+        await router.dispatch(fake_interaction(), "edit:build:42")
         assert seen == ["called"]
 
     async def test_a_handler_taking_kwargs_receives_every_parameter(self) -> None:
@@ -124,7 +127,7 @@ class TestRouter:
         async def edit(_interaction, **params) -> None:
             seen.append(params)
 
-        await router.dispatch(None, "edit:build:42")  # type: ignore[arg-type]
+        await router.dispatch(fake_interaction(), "edit:build:42")
         assert seen == [{"build_id": 42}]
 
     async def test_a_select_handler_receives_values_then_route_parameters(self) -> None:
@@ -163,7 +166,7 @@ class TestRouter:
         async def close_select(_interaction, _values: tuple[str, ...]) -> None:
             seen.append("select")
 
-        await router.dispatch(None, "poll:close")  # type: ignore[arg-type]
+        await router.dispatch(fake_interaction(), "poll:close")
         await router.dispatch(
             fake_interaction(),
             "poll:close",
@@ -208,7 +211,7 @@ class TestRouter:
         async def edit(_interaction, build_id: int) -> None:
             seen.append(build_id)
 
-        await router.dispatch(None, "edit:build:7")  # type: ignore[arg-type]
+        await router.dispatch(fake_interaction(), "edit:build:7")
         assert seen == [7]
 
     def test_a_handler_taking_no_arguments_at_all_is_refused(self) -> None:
@@ -217,7 +220,7 @@ class TestRouter:
 
     async def test_a_retired_route_is_logged_rather_than_raised(self) -> None:
         # Buttons outlive the code that answered them; an unknown id must not crash dispatch.
-        await Router().dispatch(None, "gone:forever")  # type: ignore[arg-type]
+        await Router().dispatch(fake_interaction(), "gone:forever")
 
     async def test_a_retired_namespaced_route_gets_a_friendly_response(self) -> None:
         seen: list[object] = []
@@ -226,10 +229,11 @@ class TestRouter:
             seen.append(interaction)
 
         router = Router(namespace="r", on_gone=gone)
-        await router.dispatch("interaction", "r:retired:control")  # type: ignore[arg-type]
-        await router.dispatch("interaction", "other:control")  # type: ignore[arg-type]
+        interaction = fake_interaction()
+        await router.dispatch(interaction, "r:retired:control")
+        await router.dispatch(fake_interaction(), "other:control")
 
-        assert seen == ["interaction"]
+        assert seen == [interaction]
 
     def test_a_namespace_requires_a_gone_handler(self) -> None:
         with pytest.raises(ValueError, match="on_gone"):
@@ -267,7 +271,7 @@ class TestRouter:
         async def close(_interaction) -> None:
             raise RuntimeError("boom")
 
-        await router.dispatch(None, "poll:close")  # type: ignore[arg-type]
+        await router.dispatch(fake_interaction(), "poll:close")
         assert seen == ["route:poll:close"]
 
     def test_one_template_covers_every_route_so_a_click_dispatches_once(self) -> None:
@@ -296,6 +300,11 @@ class TestRouter:
 
     def test_an_empty_router_matches_nothing(self) -> None:
         assert not Router().template().fullmatch("anything")
+
+    @pytest.mark.parametrize("timeout", [0, 3, -1])
+    def test_the_acknowledgement_timeout_stays_inside_discords_deadline(self, timeout: float) -> None:
+        with pytest.raises(ValueError, match="below Discord's 3-second limit"):
+            Router(acknowledgement_timeout=timeout)
 
     @pytest.mark.parametrize(
         ("first", "second"),
@@ -364,7 +373,7 @@ class TestRouter:
             seen.append("replacement")
 
         router.add(sl.Route("poll:close"), replacement)
-        await router.dispatch(None, "poll:close")  # type: ignore[arg-type]
+        await router.dispatch(fake_interaction(), "poll:close")
 
         assert seen == ["replacement"]
         assert router.template().pattern == "(?:poll:close)"
@@ -411,9 +420,412 @@ class TestRouter:
         )
         select._values = ["now"]
         item = _dispatch_item(router)(select)
-        await item.callback(None)  # type: ignore[arg-type]
+        await item.callback(fake_interaction())
 
         assert seen == [("now",)]
+
+
+class TestRouteGroups:
+    async def test_child_groups_build_stable_routes_and_dispatch_them(self) -> None:
+        root = sl.discord.RouteGroup("r")
+        polls = root.group("polls")
+        close = polls.define("close", aliases=("poll:close",))
+        seen: list[str] = []
+
+        @polls.route(close)
+        async def handle(_interaction) -> None:
+            seen.append("close")
+
+        router = Router(namespace=root, on_gone=_noop)
+        await router.dispatch(fake_interaction(), close.id())
+        await router.dispatch(fake_interaction(), "poll:close")
+
+        assert close.id() == "r:polls:close"
+        assert seen == ["close", "close"]
+        assert router.template().fullmatch("r:polls:close")
+
+    def test_a_namespace_group_is_an_ordinary_one_segment_group(self) -> None:
+        nested = sl.discord.RouteGroup("r", "polls")
+
+        with pytest.raises(ValueError, match="exactly one prefix segment"):
+            Router(namespace=nested, on_gone=_noop)
+
+    @pytest.mark.parametrize("prefix", [(), ("{kind}",), ("bad:prefix",)])
+    def test_group_prefixes_are_nonempty_literal_segments(self, prefix: tuple[str, ...]) -> None:
+        with pytest.raises(ValueError, match=r"route group|literal segment"):
+            sl.discord.RouteGroup(*prefix)
+
+    def test_sibling_groups_are_checked_for_identity_overlap(self) -> None:
+        root = sl.discord.RouteGroup("r")
+        first = root.group("polls")
+        second = root.group("polls")
+        first.define("{action}")
+        second.define("close")
+
+        with pytest.raises(ValueError, match="overlaps the included route"):
+            Router(namespace=root, on_gone=_noop)
+
+    def test_a_group_from_another_namespace_is_rejected(self) -> None:
+        router = Router(namespace="r", on_gone=_noop)
+        foreign = sl.discord.RouteGroup("other")
+
+        with pytest.raises(ValueError, match="does not belong"):
+            router.include(foreign)
+
+    def test_including_an_existing_descendant_is_a_no_op(self) -> None:
+        root = sl.discord.RouteGroup("r")
+        polls = root.group("polls")
+        route = polls.define("close")
+        polls.add(route, _noop)
+        router = Router(namespace=root, on_gone=_noop)
+
+        router.include(polls)
+
+        assert len(router._groups) == 1
+        assert router.describe()[0].group_prefix == "r:polls"
+
+    def test_every_defined_identity_needs_a_handler_before_registration(self) -> None:
+        root = sl.discord.RouteGroup("r")
+        root.group("polls").define("close")
+        router = Router(namespace=root, on_gone=_noop)
+
+        with pytest.raises(RuntimeError, match="identities without handlers"):
+            router.register(_FakeClient())  # type: ignore[arg-type]
+
+    def test_identity_and_group_structure_freeze_at_registration(self) -> None:
+        root = sl.discord.RouteGroup("r")
+        polls = root.group("polls")
+        route = polls.define("close")
+        polls.add(route, _noop)
+        router = Router(namespace=root, on_gone=_noop)
+        router.register(_FakeClient())  # type: ignore[arg-type]
+
+        with pytest.raises(RuntimeError, match="before the route group is registered"):
+            polls.define("refresh")
+        with pytest.raises(RuntimeError, match="before registration"):
+            root.group("builds")
+
+    async def test_a_frozen_group_accepts_same_identity_handler_replacement(self) -> None:
+        root = sl.discord.RouteGroup("r")
+        polls = root.group("polls")
+        route = polls.define("close")
+        polls.add(route, _noop)
+        router = Router(namespace=root, on_gone=_noop)
+        router.register(_FakeClient())  # type: ignore[arg-type]
+        seen: list[str] = []
+
+        async def replacement(_interaction) -> None:
+            seen.append("replacement")
+
+        polls.add(route, replacement)
+        await router.dispatch(fake_interaction(), route.id())
+
+        assert seen == ["replacement"]
+
+
+class TestMiddleware:
+    def test_the_base_class_requires_dispatch(self) -> None:
+        with pytest.raises(TypeError, match="abstract"):
+            cast(Any, sl.discord.Middleware)()
+
+    async def test_router_and_group_middleware_compose_outermost_first(self) -> None:
+        seen: list[str] = []
+
+        class Record(sl.discord.Middleware[discord.Client]):
+            def __init__(self, name: str) -> None:
+                self.name = name
+
+            async def dispatch(self, request, proceed) -> None:
+                seen.append(f"{self.name}:before")
+                await proceed()
+                seen.append(f"{self.name}:after")
+
+        root = sl.discord.RouteGroup[discord.Client]("r")
+        polls = root.group("polls")
+        close = polls.define("close")
+        router = Router(namespace=root, on_gone=_noop)
+        router.add_middleware(Record("router"))
+        root.add_middleware(Record("root"))
+        polls.add_middleware(Record("polls"))
+
+        @polls.route(close)
+        async def handle(_interaction) -> None:
+            seen.append("handler")
+
+        await router.dispatch(fake_interaction(), close.id())
+
+        assert seen == [
+            "router:before",
+            "root:before",
+            "polls:before",
+            "handler",
+            "polls:after",
+            "root:after",
+            "router:after",
+        ]
+
+    async def test_returning_without_calling_next_short_circuits_and_still_acknowledges(self) -> None:
+        seen: list[str] = []
+
+        class Stop(sl.discord.Middleware[discord.Client]):
+            async def dispatch(self, request, proceed) -> None:
+                seen.append("stopped")
+
+        interaction = fake_interaction()
+        router = Router()
+        router.add_middleware(Stop())
+
+        @router.route(POLL_CLOSE)
+        async def handle(_interaction) -> None:
+            seen.append("handler")
+
+        await router.dispatch(interaction, POLL_CLOSE.id())
+
+        assert seen == ["stopped"]
+        interaction.response.defer.assert_awaited_once_with()
+
+    async def test_middleware_may_handle_an_inner_exception(self) -> None:
+        seen: list[str] = []
+
+        async def on_error(interaction, error: Exception, source: str) -> None:
+            seen.append("router-error")
+
+        class Catch(sl.discord.Middleware[discord.Client]):
+            async def dispatch(self, request, proceed) -> None:
+                try:
+                    await proceed()
+                except RuntimeError:
+                    seen.append("caught")
+
+        router = Router(on_error=on_error)
+        router.add_middleware(Catch())
+
+        @router.route(POLL_CLOSE)
+        async def fail(_interaction) -> None:
+            raise RuntimeError("boom")
+
+        await router.dispatch(fake_interaction(), POLL_CLOSE.id())
+
+        assert seen == ["caught"]
+
+    async def test_unhandled_errors_cross_the_whole_onion_before_the_error_hook(self) -> None:
+        seen: list[str] = []
+
+        async def on_error(interaction, error: Exception, source: str) -> None:
+            seen.append("router-error")
+
+        class Observe(sl.discord.Middleware[discord.Client]):
+            async def dispatch(self, request, proceed) -> None:
+                seen.append("before")
+                try:
+                    await proceed()
+                finally:
+                    seen.append("after")
+
+        router = Router(on_error=on_error)
+        router.add_middleware(Observe())
+
+        @router.route(POLL_CLOSE)
+        async def fail(_interaction) -> None:
+            raise RuntimeError("boom")
+
+        await router.dispatch(fake_interaction(), POLL_CLOSE.id())
+
+        assert seen == ["before", "after", "router-error"]
+
+    async def test_proceed_is_one_shot(self) -> None:
+        errors: list[Exception] = []
+
+        async def on_error(interaction, error: Exception, source: str) -> None:
+            errors.append(error)
+
+        class Twice(sl.discord.Middleware[discord.Client]):
+            async def dispatch(self, request, proceed) -> None:
+                await proceed()
+                await proceed()
+
+        router = Router(on_error=on_error)
+        router.add_middleware(Twice())
+        router.add(POLL_CLOSE, _noop)
+
+        await router.dispatch(fake_interaction(), POLL_CLOSE.id())
+
+        assert len(errors) == 1
+        assert "only be called once" in str(errors[0])
+
+    async def test_proceed_expires_when_middleware_returns(self) -> None:
+        saved: list[sl.discord.RouteProceed] = []
+
+        class Save(sl.discord.Middleware[discord.Client]):
+            async def dispatch(self, request, proceed) -> None:
+                saved.append(proceed)
+
+        router = Router()
+        router.add_middleware(Save())
+        router.add(POLL_CLOSE, _noop)
+        await router.dispatch(fake_interaction(), POLL_CLOSE.id())
+
+        with pytest.raises(RuntimeError, match="only valid during"):
+            await saved[0]()
+
+    async def test_instances_are_idempotent_only_by_identity(self) -> None:
+        seen: list[str] = []
+
+        class Record(sl.discord.Middleware[discord.Client]):
+            async def dispatch(self, request, proceed) -> None:
+                seen.append("middleware")
+                await proceed()
+
+        first = Record()
+        router = Router()
+        router.add_middleware(first)
+        router.add_middleware(first)
+        router.add_middleware(Record())
+        router.add(POLL_CLOSE, _noop)
+
+        await router.dispatch(fake_interaction(), POLL_CLOSE.id())
+
+        assert seen == ["middleware", "middleware"]
+
+    async def test_request_facts_are_immutable_and_distinguish_aliases(self) -> None:
+        requests: list[sl.discord.RouteRequest[discord.Client]] = []
+
+        class Capture(sl.discord.Middleware[discord.Client]):
+            async def dispatch(self, request, proceed) -> None:
+                requests.append(request)
+                await proceed()
+
+        root = sl.discord.RouteGroup[discord.Client]("r")
+        builds = root.group("builds")
+        edit = builds.define("{build_id:int}:edit", aliases=("edit:build:{build_id:int}",))
+        builds.add(edit, _noop)
+        router = Router(namespace=root, on_gone=_noop)
+        router.add_middleware(Capture())
+
+        await router.dispatch(fake_interaction(), "edit:build:7")
+        await router.dispatch(fake_interaction(), "r:retired")
+
+        matched, gone = requests
+        assert matched.route is edit
+        assert matched.params == {"build_id": 7}
+        assert matched.group_prefix == "r:builds"
+        assert matched.matched_alias
+        with pytest.raises(TypeError):
+            cast(dict[str, Any], matched.params)["build_id"] = 8
+        assert gone.route is None
+        assert gone.params == {}
+        assert gone.group_prefix is None
+        assert not gone.matched_alias
+
+    def test_descriptions_include_effective_middleware_provenance(self) -> None:
+        class RouterPolicy(sl.discord.Middleware[discord.Client]):
+            async def dispatch(self, request, proceed) -> None:
+                await proceed()
+
+        class GroupPolicy(sl.discord.Middleware[discord.Client]):
+            async def dispatch(self, request, proceed) -> None:
+                await proceed()
+
+        root = sl.discord.RouteGroup[discord.Client]("r")
+        polls = root.group("polls")
+        close = polls.define("close")
+        polls.add(close, _noop)
+        router = Router(namespace=root, on_gone=_noop)
+        router.add_middleware(RouterPolicy())
+        polls.add_middleware(GroupPolicy())
+
+        assert router.describe()[0].middleware == (
+            f"{__name__}.TestMiddleware.test_descriptions_include_effective_middleware_provenance.<locals>.RouterPolicy",
+            f"{__name__}.TestMiddleware.test_descriptions_include_effective_middleware_provenance.<locals>.GroupPolicy",
+        )
+
+    def test_middleware_freezes_at_registration(self) -> None:
+        class Policy(sl.discord.Middleware[discord.Client]):
+            async def dispatch(self, request, proceed) -> None:
+                await proceed()
+
+        root = sl.discord.RouteGroup[discord.Client]("r")
+        polls = root.group("polls")
+        close = polls.define("close")
+        polls.add(close, _noop)
+        router = Router(namespace=root, on_gone=_noop)
+        router.register(_FakeClient())  # type: ignore[arg-type]
+
+        with pytest.raises(RuntimeError, match=r"before Router\.register"):
+            router.add_middleware(Policy())
+        with pytest.raises(RuntimeError, match="before registration"):
+            polls.add_middleware(Policy())
+
+
+class TestAcknowledgement:
+    async def test_a_handler_that_returns_without_responding_is_acknowledged(self) -> None:
+        interaction = fake_interaction()
+        router = Router()
+        router.add(POLL_CLOSE, _noop)
+
+        await router.dispatch(interaction, POLL_CLOSE.id())
+
+        interaction.response.defer.assert_awaited_once_with()
+        assert interaction.response.is_done()
+
+    async def test_a_slow_handler_is_acknowledged_while_it_keeps_running(self) -> None:
+        interaction = fake_interaction()
+        finished = False
+        router = Router(acknowledgement_timeout=0.01)
+
+        @router.route(POLL_CLOSE)
+        async def slow(_interaction) -> None:
+            nonlocal finished
+            await anyio.sleep(0.03)
+            finished = True
+
+        await router.dispatch(interaction, POLL_CLOSE.id())
+
+        assert finished
+        interaction.response.defer.assert_awaited_once_with()
+
+    async def test_an_initial_handler_response_is_not_overwritten(self) -> None:
+        interaction = fake_interaction()
+        router = Router()
+
+        @router.route(POLL_CLOSE)
+        async def respond(current) -> None:
+            await current.response.send_message()
+
+        await router.dispatch(interaction, POLL_CLOSE.id())
+
+        interaction.response.send_message.assert_awaited_once_with()
+        interaction.response.defer.assert_not_awaited()
+
+    async def test_a_modal_response_is_not_overwritten(self) -> None:
+        interaction = fake_interaction()
+        router = Router()
+
+        @router.route(POLL_CLOSE)
+        async def respond(current) -> None:
+            await current.response.send_modal(object())
+
+        await router.dispatch(interaction, POLL_CLOSE.id())
+
+        interaction.response.send_modal.assert_awaited_once()
+        interaction.response.defer.assert_not_awaited()
+
+    async def test_an_error_hook_may_spend_the_response_slot(self) -> None:
+        interaction = fake_interaction()
+
+        async def hook(interaction, error, source: str) -> None:
+            await interaction.response.send_message()
+
+        router = Router(on_error=hook)
+
+        @router.route(POLL_CLOSE)
+        async def fail(_interaction) -> None:
+            raise RuntimeError("boom")
+
+        await router.dispatch(interaction, POLL_CLOSE.id())
+
+        interaction.response.send_message.assert_awaited_once_with()
+        interaction.response.defer.assert_not_awaited()
 
 
 class TestDrawing:
@@ -545,6 +957,126 @@ class TestDrawing:
 
         with pytest.raises(LayoutInvariantError, match="at least one available"):
             sl.plan(document, target=sl.discord.DEFAULT_TARGET)
+
+
+class _FakeClient:
+    """Weak-referenceable stand-in recording what `register` installs."""
+
+    def __init__(self) -> None:
+        self.items: list[type] = []
+
+    def add_dynamic_items(self, *items: type) -> None:
+        self.items.extend(items)
+
+
+class TestHandlerKinds:
+    def test_a_keyword_only_interaction_fails_at_import(self) -> None:
+        async def broken(*, interaction) -> None: ...
+
+        with pytest.raises(ValueError, match="positionally"):
+            Router().add(POLL_CLOSE, broken)
+
+    def test_a_kwargs_only_handler_fails_at_import(self) -> None:
+        # `**kwargs` alone passes the arity check but cannot bind the interaction.
+        async def broken(**kwargs) -> None: ...
+
+        with pytest.raises(ValueError, match="positionally"):
+            Router().add(POLL_CLOSE, broken)
+
+    def test_a_positional_only_route_parameter_fails_at_import(self) -> None:
+        async def broken(_interaction, build_id, /) -> None: ...
+
+        with pytest.raises(ValueError, match="passed by name"):
+            Router().add(EDIT_BUILD, broken)
+
+    async def test_a_star_args_handler_still_binds_the_interaction(self) -> None:
+        seen: list[object] = []
+
+        async def catch_all(*args) -> None:
+            seen.append(args)
+
+        router = Router()
+        router.add(POLL_CLOSE, catch_all)
+        interaction = fake_interaction()
+        await router.dispatch(interaction, "poll:close")
+        assert seen == [(interaction,)]
+
+
+class TestClientRegistration:
+    def test_installed_routers_have_a_public_read_only_snapshot(self) -> None:
+        client = _FakeClient()
+        first, second = Router(), Router()
+        first.add(POLL_CLOSE, _noop)
+        second.add(EDIT_BUILD, _noop)
+
+        first.register(client)  # type: ignore[arg-type]
+        second.register(client)  # type: ignore[arg-type]
+
+        assert sl.discord.routers(client) == (first, second)  # type: ignore[arg-type]
+
+    def test_registering_the_same_pair_again_is_a_no_op(self) -> None:
+        client = _FakeClient()
+        router = Router()
+        router.add(POLL_CLOSE, _noop)
+
+        router.register(client)  # type: ignore[arg-type]
+        router.register(client)  # type: ignore[arg-type]
+
+        assert len(client.items) == 1
+
+    def test_one_router_may_serve_two_clients(self) -> None:
+        router = Router()
+        router.add(POLL_CLOSE, _noop)
+        first, second = _FakeClient(), _FakeClient()
+
+        router.register(first)  # type: ignore[arg-type]
+        router.register(second)  # type: ignore[arg-type]
+
+        assert len(first.items) == len(second.items) == 1
+
+    def test_disjoint_routers_share_a_client(self) -> None:
+        client = _FakeClient()
+        polls, builds = Router(), Router()
+        polls.add(POLL_CLOSE, _noop)
+        builds.add(EDIT_BUILD, _noop)
+
+        polls.register(client)  # type: ignore[arg-type]
+        builds.register(client)  # type: ignore[arg-type]
+
+        assert len(client.items) == 2
+
+    def test_a_second_router_with_an_overlapping_route_is_rejected(self) -> None:
+        client = _FakeClient()
+        first, second = Router(), Router()
+        first.add(sl.Route("poll:{action}"), _noop)
+        second.add(POLL_CLOSE, _noop)
+        first.register(client)  # type: ignore[arg-type]
+
+        with pytest.raises(ValueError, match="overlaps"):
+            second.register(client)  # type: ignore[arg-type]
+        assert len(client.items) == 1
+
+    def test_a_route_entering_another_routers_namespace_is_rejected(self) -> None:
+        # The namespaced router's template catches every id under its prefix, so the
+        # plain router's clicks would also wake the namespaced router's gone hook.
+        client = _FakeClient()
+        namespaced = Router(namespace="vote", on_gone=_noop)
+        namespaced.add(sl.Route("vote:close:{poll_id:int}"), _noop)
+        plain = Router()
+        plain.add(sl.Route("vote:up:{build_id:int}"), _noop)
+        namespaced.register(client)  # type: ignore[arg-type]
+
+        with pytest.raises(ValueError, match="reserved namespace 'vote'"):
+            plain.register(client)  # type: ignore[arg-type]
+
+    def test_two_routers_reserving_one_namespace_are_rejected(self) -> None:
+        client = _FakeClient()
+        first = Router(namespace="v", on_gone=_noop)
+        second = Router(namespace="v", on_gone=_noop)
+        first.register(client)  # type: ignore[arg-type]
+
+        with pytest.raises(ValueError, match="both reserve"):
+            second.register(client)  # type: ignore[arg-type]
 
 
 async def _noop(_interaction) -> None: ...

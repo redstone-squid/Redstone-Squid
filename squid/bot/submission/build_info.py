@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 import squid_layouts as sl
 from squid.bot.i18n import t
-from squid.bot.routes import build_edit
+from squid.bot.routes.builds import build_edit
 from squid.bot.ui import create_mount
 from squid.core.i18n import _
 
@@ -23,14 +23,14 @@ class BuildInfoComponent(sl.Component):
         locale: str | None = None,
         ephemeral: bool = False,
         timeout: float = 300,
-        lock_to: int | None = None,
+        access: sl.discord.AccessPolicy | None = None,
     ) -> None:
         self.build = build
         self._node = node
         self.locale = locale
         self._ephemeral = ephemeral
         self._timeout = timeout
-        self._lock_to = lock_to
+        self._access = access if access is not None else sl.discord.Everyone()
 
     def render(self) -> tuple[sl.LayoutNode, ...]:
         if self.build.id is None:
@@ -43,6 +43,11 @@ class BuildInfoComponent(sl.Component):
             )
         return (self._node, edit)
 
+    def replace(self, build: Build, node: sl.LayoutNode) -> None:
+        """Replace the cached projection before an out-of-band redraw."""
+        self.build = build
+        self._node = node
+
     async def _edit(self, event: sl.PressEvent) -> None:
         interaction = sl.discord.native(event)
         from squid.bot.submission.ui.views import BuildEditComponent
@@ -53,10 +58,11 @@ class BuildInfoComponent(sl.Component):
             locale=self.locale,
         ).send(interaction, ephemeral=self._ephemeral, parent=sl.discord.responder(event).mount)
 
-    def mount(self) -> sl.discord.Mount:
+    def mount(self, *, reactor: sl.discord.Reactor | None = None) -> sl.discord.Mount:
         return create_mount(
             self,
+            access=self._access,
             locale=self.locale,
             timeout=self._timeout,
-            lock_to=self._lock_to,
+            reactor=reactor,
         )

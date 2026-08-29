@@ -16,7 +16,7 @@ _log = logging.getLogger(__name__)
 class ReactiveOwner(Protocol):
     __dict__: dict[str, Any]
 
-    def _state_changed(self) -> None: ...
+    def _state_changed(self, names: frozenset[str]) -> None: ...
 
     def _state_rolled_back(self) -> None: ...
 
@@ -48,13 +48,72 @@ class _Snapshot:
     copy: CopyMode = "deep"
 
 
+def _restore(owner: ReactiveOwner, name: str, existed: bool, value: Any, copy: CopyMode) -> None:
+    """Put one captured attribute back, bypassing the descriptor that would re-snapshot it."""
+    if not existed:
+        owner.__dict__.pop(name, None)
+        return
+    if copy != "ref":
+        value = _observe(value, owner, name)
+    owner.__dict__[name] = value
+
+
+@dataclass(frozen=True, slots=True)
+class StateChange:
+    """One declared attribute as an action found it and as it left it."""
+
+    owner: ReactiveOwner
+    name: str
+    existed_before: bool
+    before: Any
+    existed_after: bool
+    after: Any
+    copy: CopyMode = "deep"
+
+
+@dataclass(frozen=True, slots=True)
+class StateDelta:
+    """Every state write one action made, in both directions.
+
+    Restoring goes through the ambient transaction rather than around it, so an undo that
+    fails after this point rolls the restore back with everything else it did.
+    """
+
+    changes: tuple[StateChange, ...] = ()
+
+    def restore_before(self) -> None:
+        """Return every attribute to the value the action found."""
+        self._apply(before=True)
+
+    def restore_after(self) -> None:
+        """Return every attribute to the value the action left."""
+        self._apply(before=False)
+
+    def _apply(self, *, before: bool) -> None:
+        ordered = tuple(reversed(self.changes)) if before else self.changes
+        for change in ordered:
+            existed = change.existed_before if before else change.existed_after
+            value = change.before if before else change.after
+            # Copied on the way out as well as in: a delta outlives its action and may be
+            # replayed, so live state must never alias what the entry still holds.
+            if existed and change.copy != "ref":
+                value = _plain(value)
+            _before(change.owner, change.name, change.copy)
+            _restore(change.owner, change.name, existed, value, change.copy)
+            _after(change.owner, change.name)
+
+
 @dataclass(slots=True)
 class _Transaction:
     readonly: bool = False
     snapshots: dict[tuple[int, str], _Snapshot] = field(default_factory=dict)
     changed: dict[int, ReactiveOwner] = field(default_factory=dict)
+    changed_names: dict[int, set[str]] = field(default_factory=dict)
     # Held by strong reference, so an id cannot be recycled while this transaction runs.
     born: dict[int, object] = field(default_factory=dict)
+    hooks: list[tuple[object | None, Callable[[StateDelta], None]]] = field(default_factory=list)
+    write_block: str | None = None
+    """Why state may not be written right now, while the transaction itself stays open."""
 
     def note_born(self, owner: object) -> None:
         """Record an object created after this transaction began."""
@@ -83,27 +142,50 @@ class _Transaction:
             value = _plain(owner.__dict__[name])
         self.snapshots[key] = _Snapshot(owner, name, existed, value, copy)
 
-    def mark_changed(self, owner: ReactiveOwner) -> None:
+    def mark_changed(self, owner: ReactiveOwner, name: str) -> None:
         if not self.protects(owner):
             return
+        if self.write_block is not None:
+            raise ReactiveWriteError(self.write_block)
         if self.readonly:
             message = "parallel-read actions cannot mutate component state"
             raise ReactiveWriteError(message)
         self.changed[id(owner)] = owner
+        self.changed_names.setdefault(id(owner), set()).add(name)
+
+    def delta(self) -> StateDelta:
+        """What this action changed, both directions, from the snapshots it already took."""
+        changes: list[StateChange] = []
+        for snapshot in self.snapshots.values():
+            existed_after = snapshot.name in snapshot.owner.__dict__
+            after: Any = None
+            if existed_after:
+                current = snapshot.owner.__dict__[snapshot.name]
+                after = current if snapshot.copy == "ref" else _plain(current)
+            changes.append(
+                StateChange(
+                    snapshot.owner,
+                    snapshot.name,
+                    snapshot.existed,
+                    snapshot.value,
+                    existed_after,
+                    after,
+                    snapshot.copy,
+                )
+            )
+        return StateDelta(tuple(changes))
 
     def commit(self) -> None:
+        if self.hooks:
+            delta = self.delta()
+            for _, callback in self.hooks:
+                callback(delta)
         for owner in self.changed.values():
-            owner._state_changed()
+            owner._state_changed(frozenset(self.changed_names[id(owner)]))
 
     def rollback(self) -> None:
         for snapshot in reversed(tuple(self.snapshots.values())):
-            if snapshot.existed:
-                value = snapshot.value
-                if snapshot.copy != "ref":
-                    value = _observe(value, snapshot.owner, snapshot.name)
-                snapshot.owner.__dict__[snapshot.name] = value
-            else:
-                snapshot.owner.__dict__.pop(snapshot.name, None)
+            _restore(snapshot.owner, snapshot.name, snapshot.existed, snapshot.value, snapshot.copy)
             snapshot.owner._state_rolled_back()
 
 
@@ -131,6 +213,9 @@ def report_undeclared_write(owner: object, name: str) -> None:
     if current is None or not current.protects(owner):
         return
     label = f"{type(owner).__name__}.{name}"
+    if current.write_block is not None:
+        message = f"{current.write_block} ({label})"
+        raise ReactiveWriteError(message)
     if current.readonly:
         message = f"parallel-read actions cannot mutate component state ({label})"
         raise ReactiveWriteError(message)
@@ -149,11 +234,11 @@ def _before(owner: ReactiveOwner, name: str, copy: CopyMode = "deep") -> None:
         current.record(owner, name, copy)
 
 
-def _after(owner: ReactiveOwner) -> None:
+def _after(owner: ReactiveOwner, name: str) -> None:
     if current := _CURRENT.get():
-        current.mark_changed(owner)
+        current.mark_changed(owner, name)
     else:
-        owner._state_changed()
+        owner._state_changed(frozenset((name,)))
 
 
 @contextmanager
@@ -201,6 +286,53 @@ def readonly_transaction() -> Iterator[None]:
         current.commit()
 
 
+def on_action_commit(callback: Callable[[StateDelta], None], *, key: object | None = None) -> None:
+    """Hand `callback` the action's whole state delta if this transaction commits.
+
+    The capture an undo entry needs is the one the transaction already took, completed with
+    the post-action values at commit. A rolled-back action never reaches here, so a recorder
+    needs no cleanup path. `key` identifies the recorder, and one recorder may register only
+    once per action -- two hooks from the same owner would describe the same delta twice.
+    """
+    current = _CURRENT.get()
+    if current is None:
+        message = "commit hooks are only available inside an action's transaction"
+        raise RuntimeError(message)
+    if current.readonly:
+        message = "a read-only action changed nothing, so it has nothing to record"
+        raise ReactiveWriteError(message)
+    if key is not None and has_action_hook(key):
+        message = f"{key!r} already registered a commit hook for this action"
+        raise RuntimeError(message)
+    current.hooks.append((key, callback))
+
+
+def has_action_hook(key: object) -> bool:
+    """Whether `key` already registered a commit hook for the action in flight."""
+    current = _CURRENT.get()
+    return current is not None and any(registered is key for registered, _ in current.hooks)
+
+
+@contextmanager
+def block_writes(reason: str) -> Iterator[None]:
+    """Reject component-state writes for the duration of the block.
+
+    Narrower than `readonly_transaction`: the transaction stays open and keeps everything it
+    has recorded. For code that runs *inside* an action but must not touch the tree, such as
+    an undo entry's external inverse, whose writes a following restore would silently clobber.
+    """
+    current = _CURRENT.get()
+    if current is None:
+        yield
+        return
+    previous = current.write_block
+    current.write_block = reason
+    try:
+        yield
+    finally:
+        current.write_block = previous
+
+
 class _ReactiveMixin:
     _reactive_owner: ReactiveOwner
     _reactive_name: str
@@ -213,7 +345,7 @@ class _ReactiveMixin:
         _before(self._reactive_owner, self._reactive_name)
 
     def _after(self) -> None:
-        _after(self._reactive_owner)
+        _after(self._reactive_owner, self._reactive_name)
 
     def _wrap(self, value: Any) -> Any:
         return _observe(value, self._reactive_owner, self._reactive_name)
@@ -442,7 +574,7 @@ class _State:
             return
         _before(instance, self._name, self.copy)
         instance.__dict__[self._name] = self._wrap(instance, value)
-        _after(instance)
+        _after(instance, self._name)
 
 
 @overload

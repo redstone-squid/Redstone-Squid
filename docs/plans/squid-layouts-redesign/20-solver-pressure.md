@@ -49,13 +49,48 @@ dual priorities and priority *levels* — the last converging independently on
 
 6. **Region pagination**: page boundaries fall between the children of a keyed
    container; children are atomic (a `Field` never splits) except text children, which
-   nest their own splitting; the fingerprint hashes child identity. `PageBroker` is
+   nest their own splitting; the fingerprint hashes child identity. `CursorCoordinator` is
    unchanged — plan 06's single cursor lifecycle was built for exactly this; the
    region slicer asks `grant`, cuts, `record`s. Interactive children may differ per
    page (precedent: `Items` and `Details` already change component counts on toggle).
 
 7. **`sl.paged(section, key=…, chars=…)`** is sugar: the budget wrapper plus
    region-granular `Paginate`.
+
+### Public contract
+
+- `sl.budget(node, *, min, prefer, stretch=0)` accepts non-negative character
+  counts and requires `min <= prefer`. `stretch` is the lossless band above the
+  preferred size, not an instruction to pad short content.
+- `sl.unbreakable(node)` makes every primitive produced by `node` one atomic
+  region item. `sl.keep_with_next(node)` forbids the break immediately after that
+  item. The two wrappers compose, and remain transparent outside a paged region.
+- `Paginate(min_fill=0, widows=1)` names region-break preferences in characters
+  and child/segment count respectively. Both values are non-negative (`widows`
+  must be at least one). A breaker first minimizes violations of these preferences,
+  then page count, then squared distance from the mean page fill. This makes them
+  effective whenever a conforming break set exists without making a short final
+  document unsolvable.
+- `sl.paged(node, *, key, chars, min=0, stretch=0, min_fill=0, widows=1,
+  initial="start", footer=None)` requires a non-empty key and a positive `chars`.
+  It applies a `prefer=chars` budget and paginates the direct children of a
+  container. A container heading is implicitly kept with its first body child.
+  Applied to a leaf, the leaf is the region's sole child and may only split when it
+  is text-bearing.
+- Region fingerprints are derived from the stable logical identity of every child,
+  not from the chosen page or a callback's process address. Changing a page leaves
+  sibling paginator cursors untouched; changing the children resets only this key.
+
+### Implementation boundary
+
+The first implementation deliberately keeps glue allocation in the exact solver
+and region breaking in semantic adaptation. A small transparent primitive carries a
+budget through lowering; the region slicer lowers all candidate children, chooses a
+break set, asks `CursorCoordinator` for the cursor, and only then exposes the selected
+children to the exact solver. This is the expedient boundary allowed by policy 8:
+the declarations, page keys, fingerprints, and observed pages do not depend on it,
+so plan 22's later candidate-ladder redesign can replace it without an author-facing
+migration.
 
 8. **Solver policy, agreed explicitly: the implementation may be ugly; the contracts
    may not.** Land these as expedient special cases, keep the author declarations and
@@ -83,4 +118,17 @@ needed). B: region breaking plus break annotations, together. C: the sugar.
 
 ## Status
 
-Agreed 2026-08-21 (design session); not started.
+Implemented 2026-08-21 in `467e083f`, `4f8754f1`, and `18641223`, plus a final
+contract/docs follow-up. Glue allocation remains the deliberately expedient special
+case described above; all author-facing declarations, page identity, and cursor behavior are
+covered for plan 22's later internal rewrite.
+
+Verification at completion: all 527 `packages/squid-layouts` tests pass; `just typecheck`
+reports zero errors. Dedicated coverage pins stretch-band hysteresis and snapping, hard and
+best-effort floors, balanced text and region breaks, heading keeps, unbreakable rejection,
+widows, lossless nested text splitting, and stable region fingerprints.
+
+Algorithmic follow-up implemented 2026-08-22: text and region pagination now share one exact,
+prefix-summed breaker. The 256-chunk text heuristic and the region breaker's repeated
+page-count dynamic programs are gone. Validation is intentionally pending while concurrent
+changes elsewhere in the repository settle.

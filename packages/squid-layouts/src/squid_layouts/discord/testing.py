@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock
 
 import discord
 
-from squid_layouts.discord.delivery import Destination
+from squid_layouts.discord.delivery import DeliveryReceipt, Destination, EditHandle, handle_for
 from squid_layouts.discord.mount import Mount, MountedView
 from squid_layouts.planning.limits import LIMITS, V2Limits
 
@@ -137,12 +137,14 @@ def fake_interaction(user_id: int = 1, *, message_id: int = 99, expired: bool = 
     response.defer = _responds(discord.InteractionResponseType.deferred_message_update)
     response.send_message = _responds(discord.InteractionResponseType.channel_message)
     response.send_modal = _responds(discord.InteractionResponseType.modal)
+    message = _fake_message_shape(message_id, ephemeral=False, channel_id=5, guild_id=7)
     return SimpleNamespace(
         user=SimpleNamespace(id=user_id),
-        message=_fake_message_shape(message_id, ephemeral=False, channel_id=5, guild_id=7),
+        message=message,
         response=response,
         followup=SimpleNamespace(send=AsyncMock(), edit_message=AsyncMock()),
-        edit_original_response=AsyncMock(),
+        original_response=AsyncMock(return_value=message),
+        edit_original_response=AsyncMock(return_value=message),
         expires_at=datetime.now(UTC) + timedelta(minutes=15),
         is_expired=lambda: expired,
     )
@@ -158,15 +160,17 @@ def fake_message(
     return message
 
 
-def delivered_to(message: Any) -> Destination:
+def delivered_to(message: Any, *, handle: EditHandle | None = None) -> Destination:
     """A destination that hands `message` straight back — a send with no Discord in it.
 
     The mount ends up holding exactly the handle a real send would have given it, so tests
     about editing, refreshing and finishing can start from a delivered mount.
     """
 
-    async def send(view: discord.ui.LayoutView, files: list[discord.File]) -> Any:
-        return message
+    authority = handle if handle is not None else handle_for(message)
+
+    async def send(view: discord.ui.LayoutView, files: list[discord.File]) -> DeliveryReceipt:
+        return DeliveryReceipt(message, authority)
 
     return send
 
@@ -174,7 +178,7 @@ def delivered_to(message: Any) -> Destination:
 def commit_render(mount: Mount, *, disabled: bool = False) -> MountedView:
     """Stage a render and commit it with no Discord delivery — `Mount.send` to nowhere.
 
-    `Mount.build_view` only stages; handlers and the live generation move when a delivery
+    `Mount._stage_view` only stages; handlers and the live generation move when a delivery
     lands. Tests that never touch Discord say where that point is with this, rather than
     driving a destination that would only ever hand back `None`.
 
@@ -183,7 +187,7 @@ def commit_render(mount: Mount, *, disabled: bool = False) -> MountedView:
     `on_load` -- a test that wants a loaded render wants the real seam,
     `await mount.send(delivered_to(fake_message()))`.
     """
-    view = mount.build_view(disabled=disabled)
+    view = mount._stage_view(disabled=disabled)
     candidate = mount._pending
     assert candidate is not None and candidate.view is view
     mount._commit(candidate)

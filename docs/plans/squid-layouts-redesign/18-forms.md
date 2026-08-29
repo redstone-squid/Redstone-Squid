@@ -16,7 +16,11 @@ Modal handling is the last UI surface the framework does not own:
   gone.
 - `modal.py` wraps text inputs only, while modals now accept string/user/role/channel
   selects, file uploads, radio and checkbox groups (docs.discord.com components
-  reference, checked 2026-08-21). The field vocabulary below maps nearly 1:1.
+  reference, checked 2026-08-21). discord.py 2.7.1 ships all of them (`Label`, modal
+  selects, `FileUpload`, `RadioGroup`, `CheckboxGroup`), so the ceiling
+  `min(protocol, library)` is currently the protocol — but the release trains are
+  independent; re-verify both at implementation. The field vocabulary below maps
+  nearly 1:1.
 
 ## Design
 
@@ -91,8 +95,64 @@ path end to end. Then `PollModal` (create/edit prefill), `SubmissionModal`,
   respects EXCLUSIVE; extension field without fallback errors on the HTML renderer.
 - Host: `CustomDurationModal` migration lands with the framework change; the poll
   wizard's unit module covers the funnel path.
+- A real discord.py serialization pin covers `Label`, string/user/role/mentionable/channel
+  selects, `FileUpload`, `RadioGroup`, and `CheckboxGroup` so a library upgrade cannot
+  silently lower the verified field ceiling.
 - `just typecheck`.
+
+## Implemented API
+
+The value layer lives in `squid_layouts.forms` and is re-exported from the package root:
+
+```python
+spec = sl.FormSpec(
+    "Edit build",
+    (
+        sl.TextField(key="name", label="Name"),
+        sl.IntField(key="ticks", label="Ticks", minimum=1),
+    ),
+    prefill={"name": "3x3 door"},
+)
+
+await event.present_form(spec, key="edit-build", on_submit=save)
+```
+
+`sl.form(spec, key=..., on_submit=...)` is the content entry point. It lowers to a normal
+target action, while `ActionEvent.present_form` is the imperative entry point; both reach the
+same adapter and mount submission path. A `FormSpec` deliberately does not own its submit
+callback, so the frozen value can be reused with different destinations.
+
+Descriptor sugar uses field-suffixed root names to avoid collisions with semantic `Choice`
+and the existing lowercase factories. Short inventory names remain available under
+`sl.forms`:
+
+```python
+class EditBuild(sl.Form):
+    title = "Edit build"
+    name = sl.TextField()
+    category = sl.ChoiceField(options=(...))
+
+    async def on_submit(self, event: sl.SubmitEvent) -> None:
+        ...
+```
+
+Discord-only `EntityField` and `FileField` live under `sl.discord`. Their capabilities are
+resolved while planning a form node and while presenting an imperative form. An unsupported
+extension field must provide a portable `fallback`; modal targets enforce their 1–5-field
+budget without automatic chunking.
+
+Modal validation runs after the mount's ownership, generation, and action-policy gates.
+Successful values are typed in `SubmitEvent.values`; `attempted` retains adapter values and
+`errors` carries `FieldError | FormError`. Retry policy answers an invalid modal submit with
+an ephemeral error panel and a reader-locked Try again button whose modal is prefilled from
+`attempted`. `accept_and_mark` dispatches the same event with its errors intact.
 
 ## Status
 
-Agreed 2026-08-21 (design session); not started.
+Implemented 2026-08-21 in `426f8a01` (framework), `92d21876` (first host migration), and
+`d29da18a` (discord.py 2.7.1 modal-inventory pin).
+
+`PollConfirmationComponent` now uses a portable `DurationField`; its raw-interaction
+`set_duration`/manual `mount.flush` path is deleted. The legacy `PollConfirmation` still owns
+`CustomDurationModal`, and the remaining migration targets listed above are follow-up host
+cleanup rather than blockers for the framework contract.

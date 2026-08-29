@@ -1,11 +1,13 @@
 """Build edit command tests."""
 
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import discord
 
+import squid_layouts as sl
 from squid.bot.submission.edit import BuildEditCommands
 from squid.bot.submission.ui.views import BuildEditComponent
 from squid.bot.utils.mount_registry import MountRegistry
@@ -46,6 +48,8 @@ def _interaction(client: Any, *, user_id: int = 7) -> discord.Interaction[Any]:
                 locale="en-US",
                 response=_Response(),
                 followup=_Followup(),
+                expires_at=datetime.now(UTC) + timedelta(minutes=15),
+                is_expired=lambda: False,
             ),
         ),
     )
@@ -56,9 +60,11 @@ class StubBuilds:
 
     def __init__(self, build: Any) -> None:
         self._build = build
+        self.gets = 0
         self.sorted: list[list[str]] = []
 
     async def get(self, build_id: int) -> Any:
+        self.gets += 1
         return self._build
 
     async def sort_restrictions(self, restrictions: list[str]) -> dict[str, list[str]]:
@@ -74,6 +80,8 @@ class StubBuilds:
 def _cog(build: Any, *, allowed: bool = True, account_id: int | None = 1) -> BuildEditCommands[Any]:
     cog = BuildEditCommands.__new__(BuildEditCommands)
     cog.builds = cast(Any, StubBuilds(build))
+    topic_bus = sl.TopicBus()
+    layout_reactor = sl.discord.Reactor(topic_bus)
     cog.bot = cast(
         Any,
         SimpleNamespace(
@@ -85,9 +93,12 @@ def _cog(build: Any, *, allowed: bool = True, account_id: int | None = 1) -> Bui
             account_ids=SimpleNamespace(resolve=AsyncMock(return_value=account_id)),
             is_owner=AsyncMock(return_value=False),
             for_build=lambda _build: SimpleNamespace(
-                render_container=AsyncMock(return_value=discord.ui.Container(discord.ui.TextDisplay("card")))
+                render_container=AsyncMock(return_value=discord.ui.Container(discord.ui.TextDisplay("card"))),
+                render_node=AsyncMock(return_value=sl.paragraph("card")),
             ),
             mounts=MountRegistry(),
+            topic_bus=topic_bus,
+            layout_reactor=layout_reactor,
         ),
     )
     return cog
@@ -146,6 +157,14 @@ async def test_nothing_typed_still_opens_the_workspace() -> None:
     cog = _cog(_door())
 
     assert _component(_sent_view(await _run(cog))) is not None
+
+
+async def test_stored_editor_rereads_after_its_topic_subscription_is_live() -> None:
+    cog = _cog(_door())
+
+    await _run(cog)
+
+    assert cast(StubBuilds, cog.builds).gets == 2
 
 
 async def test_a_field_the_build_does_not_have_is_refused_not_dropped() -> None:

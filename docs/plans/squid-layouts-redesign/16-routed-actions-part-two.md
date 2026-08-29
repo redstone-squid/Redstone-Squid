@@ -28,12 +28,12 @@ does not so the rejected half is not re-derived.
 | Typed request/app context | **Taken** — stage 3 |
 | Redirects / aliases (301) | **Taken** — stage 4 |
 | 404 handler | **Taken** — stage 4, scoped; see below |
-| Middleware / `before_request` | **Deferred** — stage 5 did not survive Discord semantics |
-| "A view must return a response" | **Deferred** — the raw interaction exposes no reliable completion signal |
+| Middleware / `before_request` | **Taken** — stage 5, as a class-based router/group onion |
+| "A view must return a response" | **Reframed and shipped** — stage 5 guarantees the observable initial acknowledgement |
 | Method verbs (GET/POST) | **Taken** — stage 6; the analogue is *component type* |
 | Form body vs path params | **Taken** — stage 6; selected values are a second parameter source |
 | `flask routes` / `show_urls` | **Taken** — stage 7 |
-| Blueprints / `include_router(prefix=)` | **Deferred.** Real at 30 routes; at 5 it adds indirection over one module-level `router` |
+| Blueprints / `include_router(prefix=)` | **Taken** — stable feature groups, without late-bound route identity |
 | `Depends` dependency injection | **Rejected.** The duplication (`resolve_locale`, `_authorize`) is bot-domain, not framework. Stage 5's middleware is the seam to build it host-side |
 | `url_for("endpoint")` string keys | **Rejected.** A `Route` object is the typed, refactor-safe version of the same thing |
 | Werkzeug specificity-ordered matching | **Rejected.** Registration order is loud; specificity sorting makes an overlap silent. First-match plus the probe check stays |
@@ -295,9 +295,14 @@ into separate routes; the planner never invents state or silently changes transp
 canonical format, parameter converters, aliases, and handler provenance. Owner-only
 `!dev routes` renders the live table privately alongside `!dev ui`.
 
-## Remaining: registration hardening (2026-08-21 external audit)
+## Registration hardening (2026-08-21 external audit; shipped 2026-08-22)
 
-Two dispatch-boundary gaps, both verified in-repo:
+Two dispatch-boundary gaps, both verified in-repo and since closed — `register` now keeps a
+weak per-client router list (same pair is a no-op, an id-language intersection with an
+already-installed router is rejected, namespaces included), and `_accepted` checks kinds:
+leading parameters must bind positionally and positional-only parameters beyond them are
+rejected at registration. Covered by `TestClientRegistration` and `TestHandlerKinds` in
+`test_routing.py`. The original findings:
 
 - **`Router.register` is not idempotent per client.** Every call builds a fresh
   `RoutedDispatch` class over the same template (`discord/routing.py:287`); the same
@@ -316,26 +321,63 @@ Two dispatch-boundary gaps, both verified in-repo:
   parameters to be positionally bindable, and reject `POSITIONAL_ONLY` parameters
   beyond them rather than ignoring them.
 
-## Deferred
+## Final stages shipped (2026-08-22)
 
-### Stage 5 — Middleware, declarative defer, and the response guarantee
+### Stage 5 — Middleware and the acknowledgement guarantee (`54156c3a`, `c2e478b5`)
 
-The proposed `defer="ephemeral"` abstraction is not an honest button default. For a
-component interaction, `defer(ephemeral=True)` defaults to a deferred message update;
-`ephemeral` only affects a new deferred response when `thinking=True`. A generic router
-policy would therefore need to choose between editing the clicked message and showing a
-private loading state without knowing the handler's intent.
+Agreed 2026-08-22: take the part Discord can state honestly. `Router` owns a 2.5-second
+watchdog and sends a silent deferred message update when a handler, middleware, gone hook,
+or error hook has not yet acknowledged the component. A handler that returns without using
+the response slot is acknowledged immediately. This guarantees the one completion fact the
+raw interaction exposes without claiming that arbitrary followups are observable.
 
-The proposed response guarantee is also not observable from a raw interaction. The router
-can see whether the initial response was acknowledged, but followups and edits are not a
-single completion bit it can reliably inspect. Middleware would either misdiagnose valid
-handlers or require wrapping every response path, turning a small dispatch layer into a
-second interaction API. Keep defer, authorization, and response ownership explicit in the
-handler until a concrete repeated policy justifies a narrower abstraction.
+Private thinking and modals stay explicit. `defer(ephemeral=True)` is not a private button
+defer unless `thinking=True`; a thinking response also creates visible pending UI that the
+handler must finish. There will be no declarative `defer="ephemeral"` option and no second
+interaction-response API.
+
+Middleware is class-based and instance-attached. A generic `Middleware[BotT]` abstract base
+receives an immutable `RouteRequest[BotT]` and one-shot `RouteProceed`. `Router.add_middleware`
+installs global policies; `RouteGroup.add_middleware` installs feature policies. The effective
+chain is one conventional onion: router attachments, then root-to-leaf group attachments, then
+the handler. First attached is outermost, completion unwinds in reverse, and returning without
+calling next short-circuits every inner layer while the acknowledgement guarantee remains
+outside the onion. `proceed` is valid exactly once and only while that middleware invocation
+is active. One error boundary outside the complete user chain lets middleware observe or handle
+inner failures before an unhandled exception reaches `on_error`.
+
+The host's first consumers are routed-action tracing/correlation and the redstoner owner-guild
+gate. Dependency injection remains rejected: middleware controls flow but does not grow a
+mutable request-state bag. `Router.describe()` reports the effective middleware class chain so
+the private route diagnostic shows policy as well as handler ownership.
+
+### Stage 8 — Stable feature route groups (`b84f9fb6`, `bc58e07f`)
+
+The namespace is an ordinary root `RouteGroup("r")`; `root.group("polls")` creates a child
+whose prefix composes immediately. `polls.define("close")` therefore returns the final
+`r:polls:close` `Route`, and `Route.id()` remains context-free and unambiguous. `Router`
+validates that a namespace group has exactly one segment and derives its gone fallback from
+that prefix. Aliases stay absolute because they name already-emitted ids.
+
+The bot's stable route catalogue becomes a package outside reloadable extension subtrees,
+with poll, build, consent and redstoner groups included by one root router. Groups own route
+definitions, handlers and feature middleware; the root owns installation, gone/error hooks
+and global middleware. Inclusion is idempotent, cross-group overlap is exact, and the whole
+graph freezes at client registration while same-identity handler replacement remains legal
+for extension reloads.
+
+The bot catalogue is now `squid.bot.routes`, with sibling modules for polls, builds,
+build-log consent, and Redstoner roles. Renderers import identities from those stable modules;
+reloadable handler modules decorate their owning group. All five canonical ids and every legacy
+alias are pinned together, and extension-loading tests prove the graph accepts replacement
+handlers without admitting a sixth registration.
 
 ## Verification
 
-Stages 0-4, 6-7 and C1-C4 have automated coverage in the package and bot unit suites. The
-remaining operational check is to click a vote-card button and a build-card Edit button
-posted before the namespace migration, confirming legacy aliases on real Discord messages
-in addition to the pinned synthetic identities.
+Stages 0-8, C1-C4 and registration hardening have automated coverage in the package and bot
+unit suites, including acknowledgement timing, onion ordering and short-circuiting, one-shot
+continuations, immutable request facts, route-group composition, middleware provenance, and
+extension loading. The remaining operational check is to click a
+vote-card button and a build-card Edit button posted before the namespace migration,
+confirming legacy aliases on real Discord messages in addition to the pinned synthetic
+identities.

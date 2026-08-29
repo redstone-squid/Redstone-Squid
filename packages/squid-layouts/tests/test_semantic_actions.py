@@ -6,10 +6,13 @@ import pytest
 
 from squid_layouts import (
     ActionDisplay,
+    Paragraph,
+    Position,
     plan,
 )
 from squid_layouts.actions import ActionEvent, ActionPolicy
 from squid_layouts.discord import DEFAULT_TARGET
+from squid_layouts.primitives import Lines, Paginate, Panel, Sep, Text, Variants, alts
 from squid_layouts.runtime import PresentationSession, apply_updates
 from squid_layouts.runtime.presentation import StrategyState
 from squid_layouts.scene.model import SceneButton, SceneRow, SceneSelect
@@ -83,6 +86,57 @@ def test_grouped_route_keeps_the_selected_actions_policy_and_handler() -> None:
     assert routed.policy is ActionPolicy.PARALLEL_READ
 
 
+def test_actions_choose_a_global_fit_instead_of_root_pagination() -> None:
+    dense_document = (
+        *(Paragraph(f"component {index}") for index in range(35)),
+        Actions(_actions(5), key="demo"),
+    )
+
+    dense = plan(dense_document, target=DEFAULT_TARGET)
+    roomy = plan(Actions(_actions(5), key="demo"), target=DEFAULT_TARGET)
+
+    assert dense.report.events[0].code == "actions.grouped"
+    assert dense.metrics.states_explored == 2
+    assert not dense.scene.pagers
+    assert sum(isinstance(node, SceneSelect) for node in dense.scene.children) == 1
+    assert roomy.report.events[0].code == "actions.individual"
+    assert roomy.metrics.states_explored == 1
+    assert sum(len(node.items) for node in roomy.scene.children if isinstance(node, SceneRow)) == 5
+
+
+def test_actions_find_a_global_fit_alongside_a_local_pager() -> None:
+    document = (
+        *(Paragraph(f"component {index}") for index in range(33)),
+        Lines(("first", "second"), overflow=Paginate(key="local", per=1)),
+        Actions(_actions(5), key="demo"),
+    )
+
+    result = plan(document, target=DEFAULT_TARGET)
+
+    assert result.report.events[0].code == "actions.grouped"
+    assert result.metrics.states_explored == 2
+    assert [(pager.key, pager.pages) for pager in result.scene.pagers] == [("local", 2)]
+    assert not result.metrics.search_fallback
+
+
+def test_degraded_global_fit_prefers_less_loss_before_display_preference() -> None:
+    structural_fallback = Variants.of(
+        Panel(tuple(Sep() for _ in range(35))),
+        Text("compact details"),
+    )
+    document = (
+        Text("x" * 5000, overflow=alts("summary")),
+        structural_fallback,
+        Actions(_actions(5), key="demo"),
+    )
+
+    result = plan(document, target=DEFAULT_TARGET)
+
+    assert result.report.events[0].code == "actions.grouped"
+    assert "compact details" not in {node.content for node in result.scene.children if hasattr(node, "content")}
+    assert result.metrics.states_explored == 4
+
+
 def test_action_strategy_is_sticky_while_it_remains_valid() -> None:
     session = PresentationSession()
     first = plan(Actions(_actions(36), key="demo"), target=DEFAULT_TARGET, session=session)
@@ -149,7 +203,7 @@ def test_more_than_seventy_five_actions_use_a_keyed_paged_picker() -> None:
     document = Actions(_actions(76), key="demo")
     first = plan(document, target=DEFAULT_TARGET, session=session)
     apply_updates(session, first.session_updates)
-    session.move_cursor("demo.default", 1)
+    session.move_cursor("demo.default", Position(offset=1))
     second = plan(document, target=DEFAULT_TARGET, session=session)
 
     first_select = next(node for node in first.scene.children if isinstance(node, SceneSelect))

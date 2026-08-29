@@ -5,7 +5,7 @@ import gc
 import pytest
 
 from squid_layouts import Component, PressEvent, state
-from squid_layouts.discord import Mount, live
+from squid_layouts.discord import DeliveryReceipt, Everyone, Mount, Owner, live
 from squid_layouts.discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 from squid_layouts.primitives import Button, Heading, Row, Text
 
@@ -34,19 +34,19 @@ def _isolated_registry():
 
 class TestLiveRegistry:
     def test_an_unsent_mount_is_not_live(self) -> None:
-        Mount(Panel())
+        Mount(Panel(), access=Everyone())
 
         assert live.mounts() == ()
 
     async def test_a_delivered_mount_is_live(self) -> None:
-        mount = Mount(Panel())
+        mount = Mount(Panel(), access=Everyone())
         await mount.send(delivered_to(fake_message()))
 
         assert live.mounts() == (mount,)
         assert live.find(mount.id) is mount
 
     def test_registration_is_idempotent_across_renders(self) -> None:
-        mount = Mount(Panel())
+        mount = Mount(Panel(), access=Everyone())
         commit_render(mount)
         commit_render(mount)
 
@@ -55,7 +55,7 @@ class TestLiveRegistry:
         assert len(mount._finish_hooks) == 1
 
     async def test_finishing_deregisters_before_collection(self) -> None:
-        mount = Mount(Panel())
+        mount = Mount(Panel(), access=Everyone())
         await mount.send(delivered_to(fake_message()))
         await mount.finish()
 
@@ -65,13 +65,13 @@ class TestLiveRegistry:
         assert mount.finished
 
     def test_a_collected_mount_leaves_no_entry(self) -> None:
-        commit_render(Mount(Panel()))
+        commit_render(Mount(Panel(), access=Everyone()))
         gc.collect()
 
         assert live.mounts() == ()
 
     def test_ordering_follows_first_render(self) -> None:
-        first, second = Mount(Panel()), Mount(Panel())
+        first, second = Mount(Panel(), access=Everyone()), Mount(Panel(), access=Everyone())
         commit_render(second)
         commit_render(first)
 
@@ -83,7 +83,7 @@ class TestLiveRegistry:
 
 class TestSnapshot:
     async def test_a_delivered_mount_knows_where_it_is(self) -> None:
-        mount = Mount(Panel())
+        mount = Mount(Panel(), access=Everyone())
         await mount.send(delivered_to(fake_message(message_id=42, channel_id=5, guild_id=7)))
         snapshot = mount.snapshot()
 
@@ -93,7 +93,7 @@ class TestSnapshot:
         assert snapshot.address.jump_url.endswith("/7/5/42")
 
     async def test_a_handleless_mount_learns_its_message_from_the_first_click(self) -> None:
-        mount = Mount(Panel())
+        mount = Mount(Panel(), access=Everyone())
         # A destination that delivers without handing a message back — the unwaited
         # interaction response, where the mount runs located only once someone clicks.
         await mount.send(lambda view, files: _none())
@@ -106,7 +106,7 @@ class TestSnapshot:
         assert address.message_id == 42
 
     def test_a_snapshot_describes_the_committed_generation(self) -> None:
-        mount = Mount(Panel(), lock_to=7, timeout=900)
+        mount = Mount(Panel(), access=Owner(7), timeout=900)
         commit_render(mount)
         snapshot = mount.snapshot()
 
@@ -114,13 +114,13 @@ class TestSnapshot:
         assert snapshot.component.endswith("Panel")
         assert snapshot.generation == 1
         assert snapshot.handler_keys == ("inc",)
-        assert snapshot.lock_to == frozenset({7})
+        assert snapshot.access == Owner(7)
         assert not snapshot.pending and not snapshot.finished
         assert snapshot.scene is not None and snapshot.report is not None and snapshot.metrics is not None
         assert snapshot.expires_in is not None and 0 < snapshot.expires_in <= 900
 
     def test_an_unrendered_mount_has_no_plan(self) -> None:
-        snapshot = Mount(Panel(), timeout=None).snapshot()
+        snapshot = Mount(Panel(), access=Everyone(), timeout=None).snapshot()
 
         assert (snapshot.scene, snapshot.report, snapshot.metrics) == (None, None, None)
         assert snapshot.generation == 0
@@ -128,12 +128,12 @@ class TestSnapshot:
 
     def test_pending_state_changes_show_as_dirty(self) -> None:
         panel = Panel()
-        mount = Mount(panel)
+        mount = Mount(panel, access=Everyone())
         commit_render(mount)
         panel.count += 1
 
         assert mount.snapshot().pending
 
 
-async def _none() -> None:
-    return None
+async def _none() -> DeliveryReceipt:
+    return DeliveryReceipt(None, None)

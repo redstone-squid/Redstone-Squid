@@ -13,6 +13,10 @@ class CachedPlan:
     report: PlanReport
     session_updates: tuple[SessionUpdate, ...] = ()
     """Replayed on a hit: the session is part of the key, so these stay correct."""
+    strategies: tuple[tuple[str, str], ...] = ()
+    states_explored: int = 0
+    search_fallback: bool = False
+    variant_positions: tuple[tuple[tuple[int | str, ...], int], ...] = ()
 
 
 class PlanCache:

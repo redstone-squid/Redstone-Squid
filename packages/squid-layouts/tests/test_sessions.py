@@ -4,12 +4,14 @@ Stub mounts throughout -- the registry never touches Discord, which is the point
 rejection wording at the call sites.
 """
 
+from typing import Any
+
 import anyio
 import discord
 import pytest
 
 import squid_layouts as sl
-from squid.bot.utils.mount_registry import MountRegistry, SessionKey, WhenOpen
+from squid_layouts.discord import MountRegistry, SessionKey, WhenOpen
 from squid_layouts.discord.testing import fake_message
 from squid_layouts.primitives import Button, Heading, Row
 
@@ -25,15 +27,19 @@ class Panel(sl.Component):
 
 
 def a_mount() -> sl.discord.Mount:
-    return sl.discord.Mount(Panel(), timeout=None)
+    return sl.discord.Mount(Panel(), access=sl.discord.Everyone(), timeout=None)
 
 
-def to_message(message=None) -> sl.discord.Destination:
+_DEFAULT_MESSAGE = object()
+
+
+def to_message(message: Any = _DEFAULT_MESSAGE) -> sl.discord.Destination:
     """A destination that delivers and hands back credentials, with no Discord in it."""
-    delivered = message if message is not None else fake_message()
+    delivered = fake_message() if message is _DEFAULT_MESSAGE else message
 
     async def send(view: discord.ui.LayoutView, files: list[discord.File]):
-        return delivered
+        handle = None if delivered is None else sl.discord.delivery.handle_for(delivered)
+        return sl.discord.DeliveryReceipt(delivered, handle)
 
     return send
 
@@ -43,7 +49,8 @@ def slowly() -> sl.discord.Destination:
 
     async def send(view: discord.ui.LayoutView, files: list[discord.File]):
         await anyio.sleep(0)
-        return fake_message()
+        message = fake_message()
+        return sl.discord.DeliveryReceipt(message, sl.discord.delivery.handle_for(message))
 
     return send
 
@@ -65,6 +72,16 @@ def failing(error: Exception) -> sl.discord.Destination:
 
 
 KEY = SessionKey("panel", user_id=7, scope=42)
+
+
+async def test_any_hashable_key_can_name_a_session() -> None:
+    registry = MountRegistry()
+    key = ("panel", "team-red", 42)
+    mount = a_mount()
+
+    await registry.open(mount, to_message(), key=key)
+
+    assert registry.get(key) is mount
 
 
 class TestReplace:

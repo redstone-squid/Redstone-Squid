@@ -177,5 +177,6 @@ def generic_poll_text(snapshot: VoteSessionSnapshot, voter_discord_ids: Mapping[
         )
         lines.append(f"\n**Poll closed — {outcome}**")
     else:
-        lines.append(f"\nCloses <t:{poll.deadline.timestamp()}:R>.")
+        deadline = sl.md(t"{sl.timestamp(poll.deadline.to_stdlib(), style=sl.TimeStyle.RELATIVE)}").content
+        lines.append(f"\nCloses {deadline}.")
     return "\n".join(lines)

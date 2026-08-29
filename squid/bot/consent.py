@@ -20,9 +20,9 @@ from squid.bot.errors import ExpiringLayoutView
 from squid.bot.i18n import t
 from squid.bot.ui import create_mount
 from squid.bot.utils.components import CardField, card_container, edit_interaction_layout, no_mentions, text_layout
-from squid.bot.utils.mount_registry import MountRegistry, SessionKey, WhenOpen
 from squid.bot.utils.sentinel import Sentinel
 from squid.core.i18n import _, ntranslate
+from squid_layouts.discord import MountRegistry, SessionKey, WhenOpen
 
 
 class NotAskedType(Enum):
@@ -148,9 +148,9 @@ class ConsentPrompt(sl.Component):
     def mount(self) -> sl.discord.Mount:
         self._mount = create_mount(
             self,
+            access=sl.discord.Owner(self.user_id),
             locale=self.locale,
             timeout=self._timeout,
-            lock_to=self.user_id,
         )
         return self._mount
 

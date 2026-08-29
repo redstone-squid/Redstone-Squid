@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 from squid_layouts.actions import ActionBinding, ActionPolicy
+from squid_layouts.forms import FormBinding
 from squid_layouts.primitives.styles import ActionStyle, Color
 from squid_layouts.runtime.presentation import SessionUpdate
 from squid_layouts.text import TextDialect
@@ -14,6 +15,20 @@ from squid_layouts.text import TextDialect
 class SceneText:
     content: str
     dialect: TextDialect = TextDialect.DISCORD_MARKDOWN
+
+
+@dataclass(frozen=True, slots=True)
+class SceneTime:
+    instant: str
+    style: str
+    prefix: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SceneFile:
+    asset_key: str
+    name: str
+    media_type: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +143,8 @@ class SceneExtension:
 
 type SceneNode = (
     SceneText
+    | SceneTime
+    | SceneFile
     | SceneSeparator
     | SceneRow
     | SceneSelect
@@ -196,6 +213,7 @@ class PlanMetrics:
     """Planner instrumentation kept outside deterministic reports and scene payloads."""
 
     states_explored: int = 0
+    """Measured whole-layout candidates, across semantic strategies and structural variants."""
     cache_hit: bool = False
     search_fallback: bool = False
 
@@ -205,6 +223,8 @@ class PlanResult:
     scene: SceneDocument
     bindings: Mapping[str, ActionBinding]
     report: PlanReport
+    form_bindings: Mapping[str, FormBinding] = field(default_factory=dict)
+    """What each declared form key presents right now, for resolving a late submission."""
     resources: Mapping[str, object] = field(default_factory=dict)
     metrics: PlanMetrics = field(default_factory=PlanMetrics)
     session_updates: tuple[SessionUpdate, ...] = ()

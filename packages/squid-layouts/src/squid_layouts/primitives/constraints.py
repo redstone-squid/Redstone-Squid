@@ -44,10 +44,18 @@ class Paginate:
     initial: Literal["start", "end"] = "start"
     per: int | None = None
     footer: Callable[[int, int], TextLike] | None = None
+    min_fill: int = 0
+    widows: int = 1
 
     def __post_init__(self) -> None:
         if self.per is not None and self.per < 1:
             message = "Paginate(per=...) must be at least 1"
+            raise ValueError(message)
+        if self.min_fill < 0:
+            message = "Paginate(min_fill=...) must not be negative"
+            raise ValueError(message)
+        if self.widows < 1:
+            message = "Paginate(widows=...) must be at least 1"
             raise ValueError(message)
 
 

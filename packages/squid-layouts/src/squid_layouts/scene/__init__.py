@@ -12,6 +12,7 @@ from squid_layouts.scene.model import (
     SceneButton,
     SceneDocument,
     SceneExtension,
+    SceneFile,
     SceneGallery,
     SceneGalleryItem,
     SceneLink,
@@ -27,6 +28,7 @@ from squid_layouts.scene.model import (
     SceneSeparator,
     SceneText,
     SceneThumbnail,
+    SceneTime,
 )
 
 __all__ = [
@@ -41,6 +43,7 @@ __all__ = [
     "SceneButton",
     "SceneDocument",
     "SceneExtension",
+    "SceneFile",
     "SceneGallery",
     "SceneGalleryItem",
     "SceneLink",
@@ -56,4 +59,5 @@ __all__ = [
     "SceneSeparator",
     "SceneText",
     "SceneThumbnail",
+    "SceneTime",
 ]

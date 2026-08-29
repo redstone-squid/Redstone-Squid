@@ -7,8 +7,9 @@ webhook tokens, `@original` semantics and HTTP error codes lives here, so caller
 ask whether a handle is expired and catch :class:`StaleHandleError` when it turns out to be.
 
 The initial send is the mirror image: a mount holds no message yet, so it asks for one
-through a :class:`Destination` — `async (view, files) -> Message | None`. The destination
-owns every discord.py kwarg; the mount owns the stage/deliver/commit sequence around it.
+through a :class:`Destination`. The destination returns a :class:`DeliveryReceipt` naming
+both the observable message and the exact edit authority the operation created. It owns every
+discord.py kwarg; the mount owns the stage/deliver/commit sequence around it.
 
 Absorbs the three helpers that previously lived in the host bot (`edit_layout`,
 `edit_interaction_layout`, `reply_layout`): every path defaults to `AllowedMentions.none()`
@@ -17,6 +18,7 @@ and clears legacy content/embed fields when converting a pre-Components-V2 messa
 """
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Protocol
 
@@ -51,6 +53,21 @@ class DeliveryAbandoned(Exception):
     to put it in. `Mount.send` discards the staged render rather than committing one nobody
     will ever see.
     """
+
+
+@dataclass(frozen=True, slots=True)
+class Delivered:
+    """A mount render committed through a destination."""
+
+    receipt: DeliveryReceipt
+
+
+@dataclass(frozen=True, slots=True)
+class Abandoned:
+    """A destination deliberately declined to deliver a mount."""
+
+
+type SendResult = Delivered | Abandoned
 
 
 class EditHandle(Protocol):
@@ -90,10 +107,6 @@ def _uses_components_v2(message: discord.Message | None) -> bool:
     return bool(getattr(getattr(message, "flags", None), "components_v2", False))
 
 
-def _is_ephemeral(message: discord.Message | None) -> bool:
-    return bool(getattr(getattr(message, "flags", None), "ephemeral", False))
-
-
 def _is_stale(error: discord.HTTPException) -> bool:
     return error.code in _STALE_CODES
 
@@ -113,15 +126,12 @@ def _legacy_fields(message: discord.Message | None) -> dict[str, Any]:
     return {} if _uses_components_v2(message) else {"content": None, "embed": None}
 
 
-class _MessageHandle:
-    """Writes through the message itself, with whatever credentials sent it."""
+class _ChannelMessageHandle:
+    """Writes to a channel message with the bot token."""
 
     def __init__(self, message: discord.Message) -> None:
         self._message = message
-        # An ephemeral message lives only inside the interaction that produced it, so the
-        # credentials its handle carries expire with that interaction. Discord states no
-        # deadline for them, so `expired` cannot see it coming and `write` reports it instead.
-        self.permanent = not _is_ephemeral(message)
+        self.permanent = True
         self.expires_at: datetime | None = None
 
     def expired(self) -> bool:
@@ -139,17 +149,23 @@ class _MessageHandle:
             self._message = await self._message.edit(view=view, allowed_mentions=None, **extra)
         except discord.HTTPException as error:
             if _is_stale(error):
-                message = "the credentials this message was sent with have expired"
+                message = "the bot no longer has authority to edit this channel message"
                 raise StaleHandleError(message) from error
             raise
 
 
-class _InteractionHandle:
-    """Writes through the credentials one interaction carries."""
+class _WebhookMessageHandle:
+    """Writes to one interaction webhook message by id."""
 
-    def __init__(self, interaction: discord.Interaction[Any], message_id: int) -> None:
+    def __init__(
+        self,
+        interaction: discord.Interaction[Any],
+        message_id: int,
+        message: discord.Message | None = None,
+    ) -> None:
         self._interaction = interaction
         self._message_id = message_id
+        self._message = message
         self.permanent = False
         self.expires_at: datetime | None = interaction.expires_at
 
@@ -164,14 +180,47 @@ class _InteractionHandle:
     ) -> None:
         interaction = self._interaction
         extra: dict[str, Any] = {} if attachments is None else {"attachments": list(attachments)}
-        extra |= _legacy_fields(interaction.message)
+        extra |= _legacy_fields(self._message)
         try:
             # An unspent response is the cheap path: it edits the source message with no
             # extra round trip. Afterwards the message has to be named explicitly.
             if not interaction.response.is_done():
                 await interaction.response.edit_message(view=view, **extra)
                 return
-            await interaction.followup.edit_message(self._message_id, view=view, **extra)
+            self._message = await interaction.followup.edit_message(self._message_id, view=view, **extra)
+        except discord.HTTPException as error:
+            if _is_stale(error):
+                message = "the credentials behind this interaction have expired"
+                raise StaleHandleError(message) from error
+            raise
+
+
+class _OriginalResponseHandle:
+    """Writes to an interaction's original response through the `@original` endpoint."""
+
+    def __init__(
+        self,
+        interaction: discord.Interaction[Any],
+        message: discord.Message | None = None,
+    ) -> None:
+        self._interaction = interaction
+        self._message = message
+        self.permanent = False
+        self.expires_at: datetime | None = interaction.expires_at
+
+    def expired(self) -> bool:
+        return self._interaction.is_expired()
+
+    async def write(
+        self,
+        view: discord.ui.LayoutView,
+        *,
+        attachments: Sequence[discord.File | discord.Attachment] | None = None,
+    ) -> None:
+        extra: dict[str, Any] = {} if attachments is None else {"attachments": list(attachments)}
+        extra |= _legacy_fields(self._message)
+        try:
+            self._message = await self._interaction.edit_original_response(view=view, **extra)
         except discord.HTTPException as error:
             if _is_stale(error):
                 message = "the credentials behind this interaction have expired"
@@ -180,8 +229,8 @@ class _InteractionHandle:
 
 
 def handle_for(message: discord.Message) -> EditHandle:
-    """A handle that writes to `message` with the credentials that sent it."""
-    return _MessageHandle(message)
+    """A permanent bot-token handle for a message sent through a channel endpoint."""
+    return _ChannelMessageHandle(message)
 
 
 def handle_from(interaction: discord.Interaction[Any]) -> EditHandle | None:
@@ -193,7 +242,15 @@ def handle_from(interaction: discord.Interaction[Any]) -> EditHandle | None:
     message = interaction.message
     if message is None or not _addresses_source(interaction):
         return None
-    return _InteractionHandle(interaction, message.id)
+    return _WebhookMessageHandle(interaction, message.id, message)
+
+
+@dataclass(frozen=True, slots=True)
+class DeliveryReceipt:
+    """What a delivery exposed and the authority it created to edit it."""
+
+    message: discord.Message | None
+    handle: EditHandle | None
 
 
 async def respond_text(interaction: discord.Interaction[Any], content: str, *, ephemeral: bool = True) -> None:
@@ -212,7 +269,9 @@ class Replyable(Protocol):
     """Whatever a command arrived on — `discord.ext.commands.Context`, structurally.
 
     Typed by shape so this package keeps out of the commands extension, and so a test double
-    does not have to subclass one.
+    does not have to subclass one. `reply_to` additionally peeks at an `interaction`
+    attribute to name the edit authority the send created; when a double carries one, it
+    must answer `is_expired()`, `expires_at`, and `response.is_done()` like the real thing.
     """
 
     async def send(
@@ -230,23 +289,40 @@ class Destination(Protocol):
 
     The return value says what the mount gets to keep, not whether it worked:
 
-    - a `Message` — delivered, and here are the credentials to edit it later;
-    - `None` — delivered, but no handle came back (an unwaited interaction response). The
-      mount commits and mints its handle from the first click instead;
+    - a receipt with a handle — delivered, and here is the exact authority to edit it;
+    - a receipt without a handle — delivered, but the operation exposed no edit authority;
     - raise :class:`DeliveryAbandoned` — nothing was delivered, deliberately, and the user
       already knows;
     - raise anything else — the delivery failed. The mount stays on its previous generation
       and the exception reaches the caller.
     """
 
-    async def __call__(self, view: discord.ui.LayoutView, files: list[discord.File], /) -> discord.Message | None: ...
+    async def __call__(self, view: discord.ui.LayoutView, files: list[discord.File], /) -> DeliveryReceipt: ...
 
 
-def reply_to(ctx: Replyable, *, ephemeral: bool = False) -> Destination:
+def reply_to(
+    ctx: Replyable,
+    *,
+    ephemeral: bool = False,
+    files: Sequence[discord.File] = (),
+) -> Destination:
     """Answer the command that asked, in whatever channel it asked from."""
 
-    async def send(view: discord.ui.LayoutView, files: list[discord.File]) -> discord.Message | None:
-        return await ctx.send(view=view, files=files, ephemeral=ephemeral, allowed_mentions=no_mentions())
+    async def send(view: discord.ui.LayoutView, rendered: list[discord.File]) -> DeliveryReceipt:
+        interaction = getattr(ctx, "interaction", None)
+        active = interaction is not None and not interaction.is_expired()
+        response_done = active and interaction.response.is_done()
+        message = await ctx.send(
+            view=view,
+            files=[*files, *rendered],
+            ephemeral=ephemeral,
+            allowed_mentions=no_mentions(),
+        )
+        if not active:
+            return DeliveryReceipt(message, handle_for(message))
+        if response_done:
+            return DeliveryReceipt(message, _WebhookMessageHandle(interaction, message.id, message))
+        return DeliveryReceipt(message, _OriginalResponseHandle(interaction, message))
 
     return send
 
@@ -254,20 +330,22 @@ def reply_to(ctx: Replyable, *, ephemeral: bool = False) -> Destination:
 def respond_to(interaction: discord.Interaction[Any], *, ephemeral: bool = True, wait: bool = False) -> Destination:
     """Answer an interaction, whether or not it was already responded to.
 
-    `wait` costs a round trip to fetch the message back, so it is opt-in: pass it when the
-    caller needs the message itself, or when the mount must still be writable with nobody
-    having clicked it. Otherwise the mount runs handle-less until the first click renews it.
+    `wait` costs a round trip only when the caller needs the message itself. A fresh response
+    remains writable through `@original` without fetching it.
     """
 
-    async def send(view: discord.ui.LayoutView, files: list[discord.File]) -> discord.Message | None:
+    async def send(view: discord.ui.LayoutView, files: list[discord.File]) -> DeliveryReceipt:
         if interaction.response.is_done():
             message = await interaction.followup.send(
                 view=view, files=files, ephemeral=ephemeral, wait=wait, allowed_mentions=no_mentions()
             )
-            return message if wait else None
+            if message is None:
+                return DeliveryReceipt(None, None)
+            return DeliveryReceipt(message, _WebhookMessageHandle(interaction, message.id, message))
         await interaction.response.send_message(  # pyrefly: ignore[no-matching-overload]
             view=view, files=files, ephemeral=ephemeral, allowed_mentions=no_mentions()
         )
-        return await interaction.original_response() if wait else None
+        message = await interaction.original_response() if wait else None
+        return DeliveryReceipt(message, _OriginalResponseHandle(interaction, message))
 
     return send

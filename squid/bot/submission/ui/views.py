@@ -15,7 +15,7 @@ from whenever import Instant
 import squid_layouts as sl
 from squid.bot.errors import ErrorHandledLayoutView, ErrorHandledModal, ExpiringLayoutView
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.routes import build_edit
+from squid.bot.routes.builds import build_edit
 from squid.bot.submission.navigation_view import (
     BaseNavigableView,
     MaybeAwaitableBaseNavigableViewFunc,
@@ -29,6 +29,7 @@ from squid.bot.submission.ui.components import (
     EphemeralBuildEditButton,
     get_text_input,
 )
+from squid.bot.topics import follow_resource, resource_topic
 from squid.bot.ui import create_mount, display_text_length, render_static
 from squid.bot.utils.components import (
     DISCORD_BLUE,
@@ -41,13 +42,13 @@ from squid.bot.utils.components import (
     no_mentions,
     text_layout,
 )
-from squid.bot.utils.mount_registry import SessionKey
 from squid.bot.utils.permissions import allows
 from squid.bot.utils.sentinel import DEFAULT, DefaultType
 from squid.builds.application import BuildEditPatch, BuildService
 from squid.builds.domain import DOOR_ORIENTATION_NAMES, Build, BuildCategory, BuildDraft, Status
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
+from squid_layouts.discord import SessionKey
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -680,9 +681,9 @@ class SubmissionFormComponent(sl.Component):
     def mount(self) -> sl.discord.Mount:
         self._mount = create_mount(
             self,
+            access=(sl.discord.Owner(self.author_id) if self.author_id is not None else sl.discord.Everyone()),
             locale=self.locale,
             timeout=self._timeout,
-            lock_to=self.author_id,
         )
         return self._mount
 
@@ -1161,17 +1162,20 @@ class BuildEditComponent(sl.Component):
         changed = [item for item in self.items if item.modified]
         await event.acknowledge()
         patch = BuildEditPatch.from_attributes({item.attribute: item.actual_value for item in changed})
+        edited_build_id: int | None = None
         if self.build.id is None:
             patch.apply(self.build)
             await self.builds.save(self.build)
         else:
             async with self.builds.edit(self.build.id, patch) as edit:
                 self.build = await edit.commit()
-            await interaction.client.refresh_posts("build", str(self.build.id))
+            edited_build_id = self.build.id
         self.saved = True
         self.confirming = False
         self._node = await interaction.client.for_build(self.build).render_node()
         await event.finish()
+        if edited_build_id is not None:
+            await interaction.client.refresh_posts("build", str(edited_build_id))
 
     async def _close(self, event: sl.PressEvent) -> None:
         await event.finish()
@@ -1251,15 +1255,44 @@ class BuildEditComponent(sl.Component):
             )
         # Keyed per user per build: a second editor for the same build replaces the first
         # rather than leaving two of them staging edits to one row.
+        mount = self.mount(interaction.user.id, reactor=interaction.client.layout_reactor)
+
+        async def reload(current: BuildEditComponent) -> None:
+            if current.build.id is None:
+                return
+            latest = await current.builds.get(current.build.id)
+            if latest is None:
+                return
+            node = await interaction.client.for_build(latest).render_node()
+            with sl.batch():
+                current.build = latest
+                current._node = node
+
+        if self.build.id is not None:
+            follow_resource(
+                interaction.client.topic_bus,
+                interaction.client.layout_reactor,
+                mount,
+                resource_topic("build", str(self.build.id)),
+                self,
+                reload,
+            )
+            await reload(self)
         await interaction.client.mounts.open(
-            self.mount(),
+            mount,
             sl.discord.respond_to(interaction, ephemeral=ephemeral, wait=True),
             key=SessionKey("build-edit", interaction.user.id, self.build.id),
             parent=parent,
         )
 
-    def mount(self) -> sl.discord.Mount:
-        self._mount = create_mount(self, locale=self.locale, timeout=self._timeout)
+    def mount(self, user_id: int, *, reactor: sl.discord.Reactor | None = None) -> sl.discord.Mount:
+        self._mount = create_mount(
+            self,
+            access=sl.discord.Owner(user_id),
+            locale=self.locale,
+            timeout=self._timeout,
+            reactor=reactor,
+        )
         return self._mount
 
 

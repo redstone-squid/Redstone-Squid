@@ -117,25 +117,25 @@ class NotificationPanel(sl.Component):
                     maximum=len(self.subscriptions),
                 )
             )
+        nodes.extend(
+            (
+                sl.toggle(
+                    t(self.locale, _("Web inbox")),
+                    key="web",
+                    on=sl.controlled(self.web_enabled, self._toggle_web),
+                    tone=sl.Tone.SUCCESS if self.web_enabled else sl.Tone.NEUTRAL,
+                ),
+                sl.toggle(
+                    t(self.locale, _("Discord DMs")),
+                    key="dm",
+                    on=sl.controlled(self.dm_enabled, self._toggle_dm),
+                    tone=sl.Tone.SUCCESS if self.dm_enabled else sl.Tone.NEUTRAL,
+                ),
+            )
+        )
         nodes.append(
             sl.primitives.Row(
                 (
-                    sl.primitives.Button(
-                        t(self.locale, _("Web inbox")),
-                        self._toggle_web,
-                        "web",
-                        style=sl.primitives.ActionStyle.SUCCESS
-                        if self.web_enabled
-                        else sl.primitives.ActionStyle.SECONDARY,
-                    ),
-                    sl.primitives.Button(
-                        t(self.locale, _("Discord DMs")),
-                        self._toggle_dm,
-                        "dm",
-                        style=sl.primitives.ActionStyle.SUCCESS
-                        if self.dm_enabled
-                        else sl.primitives.ActionStyle.SECONDARY,
-                    ),
                     sl.primitives.Button(
                         t(self.locale, _("Unfollow selected")),
                         self._unfollow,
@@ -156,20 +156,20 @@ class NotificationPanel(sl.Component):
     async def _selection_changed(self, event: sl.ChoiceEvent) -> None:
         self.selected_ids = event.selected
 
-    async def _toggle_web(self, event: sl.PressEvent) -> None:
+    async def _toggle_web(self, event: sl.ToggleEvent) -> None:
         await event.acknowledge()
         self._preferences = await self._notifications.set_preferences(
             self._account_id,
-            web_enabled=not self.web_enabled,
+            web_enabled=event.value,
             dm_enabled=self.dm_enabled,
         )
 
-    async def _toggle_dm(self, event: sl.PressEvent) -> None:
+    async def _toggle_dm(self, event: sl.ToggleEvent) -> None:
         await event.acknowledge()
         self._preferences = await self._notifications.set_preferences(
             self._account_id,
             web_enabled=self.web_enabled,
-            dm_enabled=not self.dm_enabled,
+            dm_enabled=event.value,
         )
 
     async def _unfollow(self, event: sl.PressEvent) -> None:
@@ -208,7 +208,7 @@ class NotificationPanel(sl.Component):
         return t(self.locale, _("Discord rejected a DM, so DMs are suspended until you re-enable them."))
 
     def mount(self) -> sl.discord.Mount:
-        return create_mount(self, locale=self.locale, timeout=SESSION_SECONDS, lock_to=self._author_id)
+        return create_mount(self, access=sl.discord.Owner(self._author_id), locale=self.locale, timeout=SESSION_SECONDS)
 
 
 def _filter_text(record_filter: RecordSubscriptionFilter) -> str:

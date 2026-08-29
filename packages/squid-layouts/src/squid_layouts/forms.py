@@ -6,7 +6,9 @@ import re
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
 from dataclasses import field as dataclass_field
-from datetime import date
+from datetime import UTC, date, tzinfo
+from datetime import datetime as DateTimeValue
+from datetime import time as TimeValue
 from enum import StrEnum
 from types import MappingProxyType
 from typing import Any, ClassVar, NoReturn, Self, overload
@@ -41,12 +43,17 @@ class FormValidationPolicy(StrEnum):
     ACCEPT_AND_MARK = "accept_and_mark"
 
 
-class _FieldValueError(ValueError):
-    """A user-correctable parse failure, converted to :class:`FieldError`."""
+class FormValueError(ValueError):
+    """A user-correctable parse failure, converted to :class:`FieldError`.
+
+    The one failure boundary :meth:`FormSpec.evaluate` treats as validation. Anything else a
+    field raises is a bug, and propagates to the mount's error hook rather than being shown to
+    the reader as if they had typed something wrong.
+    """
 
 
 def _invalid(message: str) -> NoReturn:
-    raise _FieldValueError(message)
+    raise FormValueError(message)
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,7 +97,11 @@ class FormField[ValueT]:
         return replace(self, key=self.key or name, label=label)
 
     def parse(self, raw: object) -> ValueT | None:
-        """Parse one submitted adapter value."""
+        """Parse one submitted adapter value.
+
+        Raise :class:`FormValueError` for anything the reader can correct. Every other
+        exception is a programmer error and is left to propagate.
+        """
         raise NotImplementedError
 
     def format_prefill(self, value: object) -> object:
@@ -195,13 +206,19 @@ class DurationField(FormField[int]):
     maximum: int | None = None
     placeholder: TextLike | None = None
     parser: Callable[[str], int] | None = dataclass_field(default=None, repr=False, compare=False)
+    """Replaces the compact-duration grammar; signals bad input with `ValueError`."""
 
     def parse(self, raw: object) -> int | None:
         if self._optional(raw):
             return None
         source = str(raw).strip()
         if self.parser is not None:
-            value = self.parser(source)
+            # A custom parser states its complaint in the exception; `ValueError` is what a
+            # domain parser naturally raises for input the reader can fix.
+            try:
+                value = self.parser(source)
+            except ValueError as error:
+                _invalid(str(error) or "Enter a valid duration.")
         else:
             match = _DURATION.fullmatch(source)
             if match is None:
@@ -248,6 +265,65 @@ class DateField(FormField[date]):
 
 
 @dataclass(frozen=True, slots=True)
+class TimeField(FormField[TimeValue]):
+    """An ISO-8601 wall-clock time with optional inclusive bounds."""
+
+    minimum: TimeValue | None = None
+    maximum: TimeValue | None = None
+    placeholder: TextLike | None = "HH:MM"
+
+    def parse(self, raw: object) -> TimeValue | None:
+        if self._optional(raw):
+            return None
+        try:
+            value = TimeValue.fromisoformat(str(raw).strip())
+        except ValueError:
+            _invalid("Enter a time as HH:MM.")
+        if self.minimum is not None and value < self.minimum:
+            _invalid(f"Enter a time at or after {self.minimum.isoformat()}.")
+        if self.maximum is not None and value > self.maximum:
+            _invalid(f"Enter a time at or before {self.maximum.isoformat()}.")
+        return value
+
+    def format_prefill(self, value: object) -> object:
+        return value.isoformat() if isinstance(value, TimeValue) else value
+
+
+@dataclass(frozen=True, slots=True)
+class DateTimeField(FormField[DateTimeValue]):
+    """An ISO-8601 instant; naive input is interpreted in ``timezone``."""
+
+    timezone: tzinfo = UTC
+    minimum: DateTimeValue | None = None
+    maximum: DateTimeValue | None = None
+    placeholder: TextLike | None = "YYYY-MM-DD HH:MM"
+
+    def __post_init__(self) -> None:
+        for name, bound in (("minimum", self.minimum), ("maximum", self.maximum)):
+            if bound is not None and (bound.tzinfo is None or bound.utcoffset() is None):
+                message = f"DateTimeField {name} must be aware"
+                raise ValueError(message)
+
+    def parse(self, raw: object) -> DateTimeValue | None:
+        if self._optional(raw):
+            return None
+        try:
+            value = DateTimeValue.fromisoformat(str(raw).strip())
+        except ValueError:
+            _invalid("Enter a date and time as YYYY-MM-DD HH:MM.")
+        if value.tzinfo is None or value.utcoffset() is None:
+            value = value.replace(tzinfo=self.timezone)
+        if self.minimum is not None and value < self.minimum:
+            _invalid(f"Enter a date and time on or after {self.minimum.isoformat()}.")
+        if self.maximum is not None and value > self.maximum:
+            _invalid(f"Enter a date and time on or before {self.maximum.isoformat()}.")
+        return value
+
+    def format_prefill(self, value: object) -> object:
+        return value.isoformat() if isinstance(value, DateTimeValue) else value
+
+
+@dataclass(frozen=True, slots=True)
 class ChoiceOption[ValueT]:
     """One submitted key, reader-facing label, and typed value."""
 
@@ -281,6 +357,60 @@ class ChoiceField[ValueT](FormField[ValueT]):
     def format_prefill(self, value: object) -> object:
         option = next((option for option in self.options if option.value == value or option.key == value), None)
         return option.key if option is not None else value
+
+
+@dataclass(frozen=True, slots=True)
+class MultiChoiceField[ValueT](FormField[tuple[ValueT, ...]]):
+    """Several declared choices returned in declaration order."""
+
+    options: tuple[ChoiceOption[ValueT], ...] = ()
+    minimum: int = 0
+    maximum: int | None = None
+
+    def __post_init__(self) -> None:
+        keys = [option.key for option in self.options]
+        if len(set(keys)) != len(keys):
+            message = f"MultiChoiceField option keys must be unique: {keys!r}"
+            raise ValueError(message)
+        maximum = len(self.options) if self.maximum is None else self.maximum
+        if self.minimum < 0 or maximum < self.minimum or maximum > len(self.options):
+            message = "MultiChoiceField bounds must satisfy 0 <= minimum <= maximum <= len(options)"
+            raise ValueError(message)
+
+    def parse(self, raw: object) -> tuple[ValueT, ...] | None:
+        if self._optional(raw):
+            return None
+        submitted = tuple(str(value) for value in raw) if isinstance(raw, list | tuple) else (str(raw),)
+        by_key = {option.key: option for option in self.options}
+        if any(key not in by_key for key in submitted):
+            _invalid("Choose only from the available options.")
+        selected = set(submitted)
+        values = tuple(option.value for option in self.options if option.key in selected)
+        if len(values) < self.minimum:
+            _invalid(f"Choose at least {self.minimum} options.")
+        maximum = len(self.options) if self.maximum is None else self.maximum
+        if len(values) > maximum:
+            _invalid(f"Choose no more than {maximum} options.")
+        return values
+
+    def format_prefill(self, value: object) -> object:
+        submitted = tuple(value) if isinstance(value, list | tuple | set | frozenset) else (value,)
+        return tuple(
+            option.key
+            for option in self.options
+            if any(option.key == selected or option.value == selected for selected in submitted)
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class UploadedFile:
+    """Portable metadata and byte access for a frontend upload."""
+
+    name: str
+    media_type: str
+    size: int
+    url: str
+    read: Callable[[], Awaitable[bytes]] = dataclass_field(repr=False, compare=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -353,6 +483,11 @@ class FormSpec:
         object.__setattr__(self, "fields", normalized)
         object.__setattr__(self, "prefill", MappingProxyType(dict(self.prefill)))
 
+    @property
+    def field_keys(self) -> tuple[str, ...]:
+        """The submitted keys this schema parses, in declaration order."""
+        return tuple(field.key for field in self.fields)
+
     async def evaluate(self, attempted: Mapping[str, object]) -> FormEvaluation:
         """Parse every field, then run cross-field validation only after parsing succeeds."""
         raw = MappingProxyType(dict(attempted))
@@ -361,10 +496,8 @@ class FormSpec:
         for field in self.fields:
             try:
                 values[field.key] = field.parse(raw.get(field.key))
-            except _FieldValueError as error:
+            except FormValueError as error:
                 errors.append(FieldError(field.key, str(error)))
-            except Exception as error:
-                errors.append(FieldError(field.key, str(error) or type(error).__name__))
         if not errors and self.validator is not None:
             validated = self.validator(MappingProxyType(values))
             issues = await validated if inspect.isawaitable(validated) else validated
@@ -477,6 +610,21 @@ class Form:
         """Handle a successfully parsed submission, or an accepted invalid one."""
 
 
+@dataclass(frozen=True, slots=True)
+class FormBinding:
+    """One render's answer for a form key: what to present, and what to do with it.
+
+    Declared by a `FormTrigger` and carried through planning so a frontend can resolve the
+    newest one. A form presented ad hoc from a handler has no render-time binding, and so
+    nothing newer to be rebased onto.
+    """
+
+    key: str
+    spec: FormSpec
+    on_submit: SubmitHandler
+    policy: ActionPolicy = ActionPolicy.EXCLUSIVE
+
+
 type FormLike = FormSpec | Form
 
 
@@ -500,5 +648,8 @@ Int = IntField
 Float = FloatField
 Duration = DurationField
 Date = DateField
+Time = TimeField
+DateTime = DateTimeField
 Choice = ChoiceField
+MultiChoice = MultiChoiceField
 Bool = BoolField
