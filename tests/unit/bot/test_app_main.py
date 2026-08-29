@@ -1,8 +1,7 @@
 """Discord process entry-point lifecycle tests."""
 
-from types import SimpleNamespace
+from dataclasses import dataclass, field
 from typing import Any, cast
-from unittest.mock import AsyncMock
 
 import discord
 from discord.ext.commands import Bot, Context
@@ -10,6 +9,26 @@ from pytest_mock import MockerFixture
 
 import squid_ui_discord as sd
 from squid.bot import app as bot_app
+from squid_ui_discord.testing import AsyncCallRecorder, ContextHarness, MessageHarness
+
+
+@dataclass(frozen=True)
+class SetupServices:
+    error_reports: object
+    permission_epoch: object
+
+
+@dataclass
+class TreeRecorder:
+    set_translator: AsyncCallRecorder = field(default_factory=AsyncCallRecorder)
+
+
+@dataclass(frozen=True)
+class ClientRuntimeRecorder:
+    job: Any
+
+    def run(self) -> Any:
+        return self.job
 
 
 async def test_main_owns_observability_and_logging_shutdown(mocker: MockerFixture) -> None:
@@ -70,16 +89,7 @@ async def test_main_starts_log_capture(mocker: MockerFixture) -> None:
 async def test_prefix_invoke_establishes_invocation_scope(mocker: MockerFixture) -> None:
     bot = bot_app.RedstoneSquid.__new__(bot_app.RedstoneSquid)
     runtime = sd.install(cast(discord.Client, bot))
-    context = cast(
-        Context[Any],
-        SimpleNamespace(
-            bot=bot,
-            author=SimpleNamespace(id=7),
-            guild=None,
-            interaction=None,
-            send=AsyncMock(),
-        ),
-    )
+    context = cast(Context[Any], ContextHarness(message=MessageHarness(), bot=bot, user_id=7).source)
     seen: list[sd.Invocation] = []
 
     async def invoke(_bot: object, source: Context[Any]) -> None:
@@ -99,16 +109,16 @@ async def test_prefix_invoke_establishes_invocation_scope(mocker: MockerFixture)
 async def test_setup_hook_supervises_the_layout_runtime_as_one_job(mocker: MockerFixture) -> None:
     bot = bot_app.RedstoneSquid.__new__(bot_app.RedstoneSquid)
     bot.background_tasks = mocker.Mock()
-    bot.__dict__["services"] = SimpleNamespace(error_reports=object(), permission_epoch=object())
-    bot.__dict__["_BotBase__tree"] = SimpleNamespace(set_translator=AsyncMock())
+    bot.__dict__["services"] = SetupServices(error_reports=object(), permission_epoch=object())
+    bot.__dict__["_BotBase__tree"] = TreeRecorder()
     bot.database_config = None
     bot.topic_bridge = None
     bot.development_mode = False
     bot.__dict__["layout_profiler"] = object()
-    bot.load_extension = AsyncMock()
-    run = AsyncMock()
+    bot.load_extension = AsyncCallRecorder()
+    run = AsyncCallRecorder()
     layout_job = run()
-    bot.__dict__["client_runtime"] = SimpleNamespace(run=mocker.Mock(return_value=layout_job))
+    bot.__dict__["client_runtime"] = ClientRuntimeRecorder(layout_job)
     router = mocker.Mock()
     mocker.patch.object(bot_app, "EXTENSIONS", ())
     mocker.patch.object(bot_app, "control_router", router)
