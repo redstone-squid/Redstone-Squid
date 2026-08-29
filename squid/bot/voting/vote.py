@@ -13,7 +13,6 @@ from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
 from squid.bot.utils.components import error_layout, no_mentions, reply_layout, text_layout
-from squid.bot.voting import controls
 from squid.bot.voting.actors import describe_rejection, resolve_actor
 from squid.bot.voting.poll_wizard import PollModal
 from squid.bot.voting.publisher import DiscordPollPublisher
@@ -313,5 +312,4 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
 
 async def setup(bot: squid.bot.app.RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
-    controls.register(bot)
     await bot.add_cog(VoteCog(bot))

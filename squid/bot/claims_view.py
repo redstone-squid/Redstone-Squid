@@ -22,7 +22,7 @@ from squid.accounts.errors import AliasAlreadyClaimedError
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import t
 from squid.bot.profile_render import present_claimant
-from squid.bot.ui import create_mount
+from squid.bot.ui import L, create_mount
 from squid.bot.utils.components import DISCORD_BLUE, edit_interaction_layout, reply_layout, text_layout
 from squid.bot.utils.pagination import ListPaginator
 from squid.bot.utils.permissions import enforce
@@ -244,12 +244,14 @@ class ClaimReviewComponent(sl.Component):
     def selected(self) -> AliasClaim | None:
         return next((claim for claim in self._claims if claim.id == self.selected_id), None)
 
-    def render(self) -> tuple[sl.primitives.Node, ...]:
+    def render(self) -> tuple[sl.LayoutNode, ...]:
         if self.closed:
+            # DISCORD_BLUE is house chrome, not a Tone, so this needs sl.section's accent
+            # rather than sl.status's fixed tone palette.
             return (
-                sl.primitives.card(
-                    t(self.locale, _("Claims closed")),
-                    t(self.locale, _("This review queue is closed.")),
+                sl.section(
+                    sl.paragraph(L(t"This review queue is closed.")),
+                    heading=L(t"Claims closed"),
                     accent=DISCORD_BLUE,
                 ),
             )
@@ -261,7 +263,7 @@ class ClaimReviewComponent(sl.Component):
                 overflow=sl.primitives.Paginate(key="claims", footer=self._page_footer),
             )
             if entries
-            else sl.primitives.Text(t(self.locale, _("No creator credit claims are awaiting review.")))
+            else sl.primitives.Text(L(t"No creator credit claims are awaiting review."))
         )
         choices: sl.primitives.Node | None = None
         if self._claims:
@@ -272,13 +274,17 @@ class ClaimReviewComponent(sl.Component):
                     choices=tuple(
                         sl.Choice(
                             str(claim.id),
-                            t(self.locale, _("Claim #{id} — {name}"), id=claim.id, name=claim.alias_name),
-                            present_claimant(claim, self.locale, mention=False),
+                            L("Claim #{id} — {name}", id=claim.id, name=claim.alias_name),
+                            sl.md(
+                                "{claimant}",
+                                claimant=sl.raw_md(present_claimant(claim, self.locale, mention=False)),
+                            ),
                         )
                         for claim in self._claims
                     ),
-                    selected=(str(self.selected_id),) if self.selected_id is not None else (),
-                    on_change=self._select_claim,
+                    selection=sl.controlled(
+                        (str(self.selected_id),) if self.selected_id is not None else (), self._select_claim
+                    ),
                     minimum=1,
                     maximum=1,
                 ),
@@ -287,9 +293,7 @@ class ClaimReviewComponent(sl.Component):
         if self._can_approve:
             buttons.append(
                 sl.primitives.Button(
-                    t(self.locale, _("Take the name"))
-                    if self.reassign_armed == self.selected_id
-                    else t(self.locale, _("Approve")),
+                    L(t"Take the name") if self.reassign_armed == self.selected_id else L(t"Approve"),
                     self._approve,
                     "approve",
                     style=sl.primitives.ActionStyle.DANGER
@@ -301,7 +305,7 @@ class ClaimReviewComponent(sl.Component):
         if self._can_reject:
             buttons.append(
                 sl.primitives.Button(
-                    t(self.locale, _("Reject")),
+                    L(t"Reject"),
                     self._reject,
                     "reject",
                     style=sl.primitives.ActionStyle.SECONDARY,
@@ -310,7 +314,7 @@ class ClaimReviewComponent(sl.Component):
             )
         buttons.append(
             sl.primitives.Button(
-                t(self.locale, _("Close")),
+                L(t"Close"),
                 self._close,
                 "close",
                 style=sl.primitives.ActionStyle.SECONDARY,
@@ -319,7 +323,7 @@ class ClaimReviewComponent(sl.Component):
         return (
             sl.primitives.Panel(
                 (
-                    sl.primitives.Heading(t(self.locale, _("Creator credit claims awaiting review"))),
+                    sl.primitives.Heading(L(t"Creator credit claims awaiting review")),
                     body,
                     *((choices,) if choices is not None else ()),
                 ),
@@ -328,14 +332,9 @@ class ClaimReviewComponent(sl.Component):
             sl.primitives.Row(tuple(buttons)),
         )
 
-    def _page_footer(self, page: int, pages: int) -> str:
-        return t(
-            self.locale,
-            _("Page {page} of {pages} · {total} in total"),
-            page=page,
-            pages=pages,
-            total=len(self._claims),
-        )
+    def _page_footer(self, page: int, pages: int) -> sl.Message:
+        total = len(self._claims)
+        return L(t"Page {page} of {pages} · {total} in total")
 
     async def _select_claim(self, event: sl.ChoiceEvent) -> None:
         self.selected_id = int(event.selected[0])

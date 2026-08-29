@@ -1,7 +1,7 @@
 """Mechanical drawing of resolved Discord Components V2 scenes."""
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, override
 
 import discord
 
@@ -19,6 +19,8 @@ from squid_layouts.scene.model import (
     SceneLink,
     SceneNode,
     ScenePanel,
+    SceneRoutedButton,
+    SceneRoutedSelect,
     SceneRow,
     SceneSection,
     SceneSelect,
@@ -31,6 +33,36 @@ from squid_layouts.text import discord_text
 type Control = SceneButton | SceneSelect
 type Wire = Callable[[Control, ActionBinding], discord.ui.Item[Any]]
 type ViewFactory = Callable[[], discord.ui.LayoutView]
+
+
+class RoutedItem(discord.ui.Button[Any]):
+    """A button whose only dispatch path is a `Router`.
+
+    Discord's payload is an ordinary button; the override is purely about discord.py's
+    in-process bookkeeping. `ViewStore.add_view` files an item into the stored dispatch
+    table only when `is_dispatchable()` is true, and `dispatch_view` runs *both* the dynamic
+    lookup and that table. A stored routed button would therefore take a second dispatch
+    whose callback is `Item`'s no-op — harmless for responses, but `_scheduled_task` resets
+    the view's timeout expiry before awaiting it, so clicking a routed control inside a
+    mounted message silently extended that mount's life.
+
+    Staying out of the table gives the control exactly one dispatch path. Dynamic dispatch
+    is unaffected: `schedule_dynamic_item_call` rebuilds the view with
+    `LayoutView.from_message` and finds the base item by component type and custom id there,
+    on stock `Button` objects this class never touches.
+    """
+
+    @override
+    def is_dispatchable(self) -> bool:
+        return False
+
+
+class RoutedSelectItem(discord.ui.Select[Any]):
+    """A stateless select kept out of a surrounding mount's stored dispatch table."""
+
+    @override
+    def is_dispatchable(self) -> bool:
+        return False
 
 
 class StaticView(discord.ui.LayoutView):
@@ -94,12 +126,25 @@ class Renderer:
                 raise DrawInvariantError(message)
             return item
 
-        def accessory(node: SceneThumbnail | SceneLink | SceneButton | SceneExtension) -> discord.ui.Item[Any]:
+        def accessory(
+            node: SceneThumbnail | SceneLink | SceneButton | SceneRoutedButton | SceneExtension,
+        ) -> discord.ui.Item[Any]:
             match node:
                 case SceneThumbnail(url=url, description=description):
                     return discord.ui.Thumbnail(url, description=description)
                 case SceneLink(label=label, url=url):
                     return discord.ui.Button(style=discord.ButtonStyle.link, label=label, url=url)
+                case SceneRoutedButton(label=label, route_id=route_id):
+                    # No binding to wire, so this draws in a sessionless document too. Not a
+                    # DynamicItem: discord.py's dynamic dispatch finds the base item by custom
+                    # id, so nothing outgoing has to be one.
+                    return RoutedItem(
+                        style=getattr(discord.ButtonStyle, node.style.value),
+                        label=label,
+                        custom_id=route_id,
+                        emoji=node.emoji,
+                        disabled=node.disabled,
+                    )
                 case SceneButton():
                     return control(node)
                 case SceneExtension():
@@ -123,11 +168,36 @@ class Renderer:
                     return discord.ui.ActionRow(*(accessory(entry) for entry in items))
                 case SceneSelect():
                     return discord.ui.ActionRow(control(node))
+                case SceneRoutedSelect(
+                    options=options,
+                    route_id=route_id,
+                    placeholder=placeholder,
+                    min_values=minimum,
+                    max_values=maximum,
+                    disabled=disabled,
+                ):
+                    select = RoutedSelectItem(
+                        options=[
+                            discord.SelectOption(
+                                label=option.label,
+                                value=option.value,
+                                description=option.description,
+                                default=option.default,
+                            )
+                            for option in options
+                        ],
+                        custom_id=route_id,
+                        placeholder=placeholder,
+                        min_values=minimum,
+                        max_values=maximum,
+                        disabled=disabled,
+                    )
+                    return discord.ui.ActionRow(select)
                 case SceneGallery(items=items):
                     return discord.ui.MediaGallery(
                         *(discord.MediaGalleryItem(entry.url, description=entry.description) for entry in items)
                     )
-                case SceneThumbnail() | SceneLink() | SceneButton():
+                case SceneThumbnail() | SceneLink() | SceneButton() | SceneRoutedButton():
                     return accessory(node)
                 case SceneExtension():
                     return extension(node)

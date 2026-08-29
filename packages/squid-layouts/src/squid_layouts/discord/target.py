@@ -45,6 +45,8 @@ class Target(TargetProfile):
                     "actions.buttons",
                     "actions.select",
                     "extension.discord.item",
+                    "forms.discord.entity",
+                    "forms.discord.file",
                     "forms.modal",
                     "layout.container",
                     "layout.gallery",

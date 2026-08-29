@@ -15,6 +15,8 @@ from squid_layouts.scene.model import (
     SceneLink,
     SceneNode,
     ScenePanel,
+    SceneRoutedButton,
+    SceneRoutedSelect,
     SceneRow,
     SceneSection,
     SceneSelect,
@@ -77,7 +79,7 @@ class Renderer:
             f"<style>{self.css}</style></head><body>{root}</body></html>"
         )
 
-    def _node(self, node: SceneNode | SceneLink | SceneButton) -> str:
+    def _node(self, node: SceneNode | SceneLink | SceneButton | SceneRoutedButton) -> str:
         match node:
             case SceneText(content=content, dialect=dialect):
                 return f'<div class="squid-text" data-squid-dialect="{dialect.value}">{escape(content)}</div>'
@@ -109,6 +111,14 @@ class Renderer:
                 return (
                     f'<button type="button" class="squid-button squid-button--{style.value}" '
                     f'data-squid-action="{_attribute(action)}" data-squid-policy="{policy.value}"'
+                    f"{disabled_attribute}>{icon}{escape(label)}</button>"
+                )
+            case SceneRoutedButton(label=label, route_id=route_id, style=style, emoji=emoji, disabled=disabled):
+                disabled_attribute = " disabled" if disabled else ""
+                icon = f'<span class="squid-button__emoji">{escape(emoji)}</span> ' if emoji else ""
+                return (
+                    f'<button type="button" class="squid-button squid-button--{style.value}" '
+                    f'data-route-id="{_attribute(route_id)}"'
                     f"{disabled_attribute}>{icon}{escape(label)}</button>"
                 )
             case SceneLink(label=label, url=url):
@@ -143,6 +153,31 @@ class Renderer:
                 return (
                     f'<select class="squid-select" data-squid-action="{_attribute(action)}" '
                     f'data-squid-policy="{policy.value}" data-squid-min="{minimum}" data-squid-max="{maximum}"'
+                    f"{multiple}{disabled_attribute}>{prompt}{rendered}</select>"
+                )
+            case SceneRoutedSelect(
+                options=options,
+                route_id=route_id,
+                placeholder=placeholder,
+                min_values=minimum,
+                max_values=maximum,
+                disabled=disabled,
+            ):
+                disabled_attribute = " disabled" if disabled else ""
+                multiple = " multiple" if maximum > 1 else ""
+                prompt = (
+                    f'<option value="" disabled selected>{escape(placeholder)}</option>'
+                    if placeholder is not None
+                    else ""
+                )
+                rendered = "".join(
+                    f'<option value="{_attribute(option.value)}"{" selected" if option.default else ""}>'
+                    f"{escape(option.label)}</option>"
+                    for option in options
+                )
+                return (
+                    f'<select class="squid-select" data-route-id="{_attribute(route_id)}" '
+                    f'data-squid-min="{minimum}" data-squid-max="{maximum}"'
                     f"{multiple}{disabled_attribute}>{prompt}{rendered}</select>"
                 )
             case SceneThumbnail(url=url, description=description):

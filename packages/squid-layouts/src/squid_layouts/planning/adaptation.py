@@ -1,12 +1,12 @@
 """Lower semantic author intent into finite target-shaped strategy candidates."""
 
-import hashlib
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 
 from squid_layouts.actions import ActionBinding, ActionEvent, PressEvent, SelectionEvent
 from squid_layouts.chrome import Chrome
 from squid_layouts.errors import LayoutInvariantError
+from squid_layouts.planning.cursors import PageBroker, PageRequest, content_fingerprint
 from squid_layouts.planning.limits import V2Limits
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET, StrategyCandidate, choose_strategy
 from squid_layouts.primitives.constraints import Alt, Condense, Drop, Never, Overflow, Paginate, Spill, Truncate
@@ -15,7 +15,6 @@ from squid_layouts.primitives.nodes import (
 )
 from squid_layouts.primitives.nodes import (
     Button,
-    Fold,
     Footer,
     Gallery,
     Lines,
@@ -23,10 +22,14 @@ from squid_layouts.primitives.nodes import (
     Node,
     Option,
     Panel,
+    RoutedButton,
+    RoutedSelect,
     Row,
     SelectMenu,
     Text,
     Thumbnail,
+    Variant,
+    Variants,
 )
 from squid_layouts.primitives.nodes import (
     Code as PrimitiveCode,
@@ -38,7 +41,12 @@ from squid_layouts.primitives.nodes import (
     Section as PrimitiveSection,
 )
 from squid_layouts.primitives.styles import ActionStyle
-from squid_layouts.runtime.presentation import PresentationSession
+from squid_layouts.runtime.presentation import (
+    PresentationSession,
+    SessionUpdate,
+    StrategyState,
+    StrategyUpdate,
+)
 from squid_layouts.scene.model import PlanEvent, PlanSeverity, ScenePager
 from squid_layouts.semantic import (
     Action,
@@ -52,27 +60,35 @@ from squid_layouts.semantic import (
     Choices,
     Cluster,
     Code,
+    Controlled,
     Details,
+    Emphasis,
     FallbackContent,
     Field,
     Fields,
     Figure,
+    FormTrigger,
     Group,
     Heading,
     ItemDisplay,
     Items,
     LayoutNode,
+    Link,
     List,
+    Managed,
     Measure,
     Media,
     NavigateEvent,
     Navigation,
     NavigationDisplay,
     Note,
+    OpenEvent,
     OptionalContent,
     Paragraph,
     Progress,
     Quote,
+    RoutedAction,
+    RoutedChoices,
     Section,
     Spilled,
     Stack,
@@ -82,10 +98,7 @@ from squid_layouts.semantic import (
     Tone,
     Truncated,
 )
-from squid_layouts.text import resolve_text
-
-type PageState = Mapping[str, int] | int | None
-type PageNav = Callable[[str, int, int], Sequence[Node]]
+from squid_layouts.text import Localization, TextLike, resolve_text
 
 ACTIONS_ADAPTER_ID = "discord.actions"
 ACTIONS_ADAPTER_VERSION = 1
@@ -96,6 +109,7 @@ class SemanticLowering:
     nodes: tuple[Node, ...]
     events: tuple[PlanEvent, ...] = ()
     pagers: tuple[ScenePager, ...] = ()
+    updates: tuple[SessionUpdate, ...] = ()
     states_explored: int = 0
     search_fallback: bool = False
 
@@ -104,11 +118,12 @@ class SemanticLowering:
 class _Context:
     limits: V2Limits
     chrome: Chrome
+    localization: Localization
     session: PresentationSession
-    page: PageState
-    nav: PageNav | None
+    pages: PageBroker
+    capabilities: frozenset[str]
     events: list[PlanEvent]
-    pagers: list[ScenePager]
+    updates: list[SessionUpdate]
     search_budget: int = DEFAULT_SEARCH_BUDGET
     states_explored: int = 0
     search_fallback: bool = False
@@ -119,20 +134,23 @@ def lower_semantics(
     *,
     limits: V2Limits,
     chrome: Chrome,
+    localization: Localization,
     session: PresentationSession,
-    page: PageState = None,
-    nav: PageNav | None = None,
+    pages: PageBroker | None = None,
+    capabilities: frozenset[str] = frozenset(),
     search_budget: int = DEFAULT_SEARCH_BUDGET,
 ) -> SemanticLowering:
     """Lower semantic nodes before the existing exact solver measures the result."""
-    context = _Context(limits, chrome, session, page, nav, [], [], search_budget)
+    broker = pages if pages is not None else PageBroker(session, chrome)
+    context = _Context(limits, chrome, localization, session, broker, capabilities, [], [], search_budget)
     lowered: list[Node] = []
     for index, node in enumerate(nodes):
         lowered.extend(_node(node, f"$.{index}", context))
     return SemanticLowering(
         tuple(lowered),
         tuple(context.events),
-        tuple(context.pagers),
+        context.pages.pagers,
+        tuple(context.updates),
         context.states_explored,
         context.search_fallback,
     )
@@ -149,13 +167,13 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
         case BestEffort(node=child):
             policy: Overflow = Spill() if isinstance(child, List | Fields) else Truncate()
             return [_with_overflow(item, policy) for item in _node(child, path, context)]
-        case FallbackContent(primary=primary, alternate=alternate):
-            return [
-                Fold(
-                    _single(_node(primary, f"{path}.primary", context)),
-                    _single(_node(alternate, f"{path}.alternate", context)),
-                )
-            ]
+        case FallbackContent(primary=primary, alternates=alternates):
+            rungs = [Variant(tuple(_node(primary, f"{path}.primary", context)))]
+            rungs.extend(
+                Variant(tuple(_node(alternate, f"{path}.alternate.{index}", context)))
+                for index, alternate in enumerate(alternates)
+            )
+            return [Variants(tuple(rungs))]
         case Actions():
             return _actions(node, path, context)
         case Group(children=children) | Stack(children=children) | Cluster(children=children):
@@ -166,7 +184,7 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
         ):
             contents: list[Node] = []
             if heading is not None:
-                title = PrimitiveHeading(resolve_text(heading).content, overflow=Never())
+                title = PrimitiveHeading(_resolve(heading, context), overflow=Never())
                 # The lead image sits beside the title and nothing else: picking "the body"
                 # out of an arbitrary children tuple would be a guess.
                 contents.append(
@@ -179,28 +197,28 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
         case Aside(children=children, tone=tone):
             return [Panel(tuple(_children(children, path, context)), accent=_tone_color(tone))]
         case Heading(content=content, level=level):
-            return [PrimitiveHeading(resolve_text(content).content, level=level, overflow=Never())]
+            return [PrimitiveHeading(_resolve(content, context), level=level, overflow=Never())]
         case Paragraph(content=content):
-            return [Text(resolve_text(content).content, overflow=Never())]
+            return [Text(_resolve(content, context), overflow=Never())]
         case Note(content=content):
-            return [Footer(resolve_text(content).content, overflow=Never())]
+            return [Footer(_resolve(content, context), overflow=Never())]
         case List(items=items, key=key, ordered=ordered, page_size=page_size):
             marker = (lambda index: f"{index + 1}.") if ordered else (lambda _index: "•")
-            lines = tuple(f"{marker(index)} {resolve_text(item.content).content}" for index, item in enumerate(items))
+            lines = tuple(f"{marker(index)} {_resolve(item.content, context)}" for index, item in enumerate(items))
             return [Lines(lines, overflow=Paginate(key=key, per=page_size))]
         case Fields(fields=fields):
-            return [Lines(tuple(_field_entry(field) for field in fields), overflow=Condense())]
+            return [Lines(tuple(_field_entry(field, context) for field in fields), overflow=Condense())]
         case Quote(content=content, attribution=attribution):
-            value = "> " + resolve_text(content).content.replace("\n", "\n> ")
+            value = "> " + _resolve(content, context).replace("\n", "\n> ")
             if attribution is not None:
-                value += f"\n— {resolve_text(attribution).content}"
+                value += f"\n— {_resolve(attribution, context)}"
             return [Text(value, overflow=Never())]
         case Code(content=content, language=language):
             return [PrimitiveCode(content, language, overflow=Never())]
         case Figure(media=media, caption=caption):
             children: list[Node] = [Gallery((media.url,))]
             if caption is not None:
-                children.append(Footer(resolve_text(caption).content))
+                children.append(Footer(_resolve(caption, context)))
             return children
         case Media():
             return _media(node, context)
@@ -213,17 +231,21 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
                 Tone.WARNING: "⚠️ ",
                 Tone.DANGER: "❌ ",
             }.get(tone, "")
-            return [Text(prefix + resolve_text(content).content, overflow=Never())]
+            return [Text(prefix + _resolve(content, context), overflow=Never())]
         case Progress(value=value, maximum=maximum, label=label):
             ratio = 0.0 if maximum <= 0 else max(0.0, min(1.0, value / maximum))
             filled = round(ratio * 10)
-            prefix = f"{resolve_text(label).content}: " if label is not None else ""
+            prefix = f"{_resolve(label, context)}: " if label is not None else ""
             return [Text(f"{prefix}{'█' * filled}{'░' * (10 - filled)} {ratio:.0%}", overflow=Never())]
         case Measure(value=value, label=label, unit=unit):
             suffix = f" {unit}" if unit else ""
-            return [Text(f"**{resolve_text(label).content}:** {value}{suffix}", overflow=Never())]
+            return [Text(f"**{_resolve(label, context)}:** {value}{suffix}", overflow=Never())]
+        case FormTrigger():
+            return _form(node, context)
         case Choices():
             return _choices(node, path, context)
+        case RoutedChoices():
+            return _routed_choices(node, path, context)
         case Items():
             return _items(node, path, context)
         case Navigation():
@@ -233,22 +255,80 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
         case Panel(children=children, accent=accent):
             return [Panel(tuple(_children(children, path, context)), accent)]
         case _:
-            return [node]
+            return [_primitive(node, context)]
 
 
-def _field_entry(field: Field) -> str | Alt:
+def _remember(key: str, adapter_id: str, version: int, strategy: str, context: _Context) -> None:
+    """Stage an adapter's sticky choice. Lowering reads the session and writes nothing."""
+    context.updates.append(StrategyUpdate(key, StrategyState(key, adapter_id, version, strategy)))
+
+
+def _resolve(value: TextLike, context: _Context) -> str:
+    return resolve_text(value, context.localization).content
+
+
+def _primitive(node: Node, context: _Context) -> Node:
+    """Resolve deferred author text on exact primitive nodes."""
+    match node:
+        case (
+            Text(content=content)
+            | PrimitiveHeading(content=content)
+            | Footer(content=content)
+            | PrimitiveCode(content=content)
+        ):
+            return replace(node, content=_resolve(content, context))
+        case Lines(lines=lines, overflow=overflow):
+            resolved_lines = tuple(line if isinstance(line, Alt) else _resolve(line, context) for line in lines)
+            if isinstance(overflow, Paginate) and overflow.footer is not None:
+                footer = overflow.footer
+                localized = lambda page, pages: _resolve(footer(page, pages), context)
+                overflow = replace(overflow, footer=localized)
+            return replace(node, lines=resolved_lines, overflow=overflow)
+        case Button(label=label) | LinkButton(label=label) | RoutedButton(label=label):
+            return replace(node, label=_resolve(label, context))
+        case Row(items=items) | PrimitiveActionGroup(items=items):
+            return replace(node, items=tuple(_primitive(item, context) for item in items))
+        case (
+            SelectMenu(options=options, placeholder=placeholder)
+            | RoutedSelect(options=options, placeholder=placeholder)
+        ):
+            return replace(
+                node,
+                options=tuple(
+                    replace(
+                        option,
+                        label=_resolve(option.label, context),
+                        description=_resolve(option.description, context) if option.description is not None else None,
+                    )
+                    for option in options
+                ),
+                placeholder=_resolve(placeholder, context) if placeholder is not None else None,
+            )
+        case Thumbnail(description=description):
+            return replace(node, description=_resolve(description, context) if description is not None else None)
+        case PrimitiveSection(texts=texts, accessory=accessory):
+            return replace(
+                node,
+                texts=tuple(_primitive(text, context) for text in texts),
+                accessory=_primitive(accessory, context),
+            )
+        case _:
+            return node
+
+
+def _field_entry(field: Field, context: _Context) -> str | Alt:
     """One `Fields` line, carrying the field's own degradation ladder when it has one.
 
     Rungs come from caller data assembled by formatting and escaping, so one that came out
     empty or longer than what precedes it is skipped rather than rejected — direct `Alt`
     construction stays strict.
     """
-    label = resolve_text(field.label).content
-    primary = f"**{label}:** {resolve_text(field.value).content}"
+    label = _resolve(field.label, context)
+    primary = f"**{label}:** {_resolve(field.value, context)}"
     kept: list[str] = []
     ceiling = len(primary)
     for fallback in field.fallbacks:
-        rung = f"**{label}:** {resolve_text(fallback).content}"
+        rung = f"**{label}:** {_resolve(fallback, context)}"
         if len(rung) <= ceiling:
             kept.append(rung)
             ceiling = len(rung)
@@ -262,8 +342,29 @@ def _children(children: Sequence[LayoutNode], path: str, context: _Context) -> l
     return lowered
 
 
-def _single(nodes: Sequence[Node]) -> Node:
-    return nodes[0] if len(nodes) == 1 else Panel(tuple(nodes))
+def _form(node: FormTrigger, context: _Context) -> list[Node]:
+    if not {"forms.modal", "forms.inline"} & context.capabilities:
+        message = "target does not support forms"
+        raise LayoutInvariantError(message)
+    maximum = context.limits.modal_components if "forms.modal" in context.capabilities else None
+    spec = node.spec.adapt(context.capabilities, maximum_fields=maximum)
+
+    async def present(event: PressEvent) -> None:
+        await event.present_form(spec, key=node.key, on_submit=node.on_submit, policy=node.policy)
+
+    return [
+        PrimitiveActionGroup(
+            (
+                Button(
+                    _resolve(node.label, context),
+                    present,
+                    node.key,
+                    style=_button_style(node.tone, node.emphasis),
+                    policy=node.policy,
+                ),
+            )
+        )
+    ]
 
 
 def _with_overflow(node: Node, overflow: Overflow) -> Node:
@@ -276,27 +377,41 @@ def _with_overflow(node: Node, overflow: Overflow) -> Node:
 
 def _choices(node: Choices, path: str, context: _Context) -> list[Node]:
     available = tuple(choice for choice in node.choices if choice.available)
-    previous = tuple(node.selected)
-    if node.maximum == 1 and 2 <= len(available) <= 5:
-        buttons: list[Button] = []
-        for choice in available:
+    match node.selection:
+        case Controlled(value=value):
+            previous = tuple(value)
+        case Managed(initial=initial):
+            previous = context.session.selection(node.key, initial=tuple(initial)).selected
 
-            async def choose(event: PressEvent, key: str = choice.key) -> None:
-                await node.on_change(
+    async def commit(event: ActionEvent, selected: tuple[str, ...]) -> None:
+        match node.selection:
+            case Controlled(on_change=on_change):
+                await on_change(
                     ChoiceEvent(
                         event.actor,
                         event.responder,
                         event.locale,
                         event.context,
-                        (key,),
-                        () if key in previous else (key,),
-                        tuple(value for value in previous if value != key),
+                        selected,
+                        tuple(key for key in selected if key not in previous),
+                        tuple(key for key in previous if key not in selected),
                     )
                 )
+            case Managed():
+                await event.acknowledge()
+                context.session.select(node.key, selected)
+                event.invalidate()
+
+    if node.maximum == 1 and 2 <= len(available) <= 5:
+        buttons: list[Button] = []
+        for choice in available:
+
+            async def choose(event: PressEvent, key: str = choice.key) -> None:
+                await commit(event, (key,))
 
             buttons.append(
                 Button(
-                    resolve_text(choice.label).content,
+                    _resolve(choice.label, context),
                     choose,
                     f"{node.key}.{choice.key}",
                     style=ActionStyle.PRIMARY if choice.key in previous else ActionStyle.SECONDARY,
@@ -313,24 +428,13 @@ def _choices(node: Choices, path: str, context: _Context) -> list[Node]:
     visible, page, pages = _page_items(available, page_key, context, identity=lambda choice: choice.key)
 
     async def choose_values(event: SelectionEvent) -> None:
-        selected = tuple(event.values)
-        await node.on_change(
-            ChoiceEvent(
-                event.actor,
-                event.responder,
-                event.locale,
-                event.context,
-                selected,
-                tuple(key for key in selected if key not in previous),
-                tuple(key for key in previous if key not in selected),
-            )
-        )
+        await commit(event, tuple(event.values))
 
     options = tuple(
         Option(
-            resolve_text(choice.label).content,
+            _resolve(choice.label, context),
             choice.key,
-            resolve_text(choice.description).content if choice.description is not None else None,
+            _resolve(choice.description, context) if choice.description is not None else None,
             choice.key in previous,
         )
         for choice in visible
@@ -344,54 +448,89 @@ def _choices(node: Choices, path: str, context: _Context) -> list[Node]:
             max_values=min(node.maximum, len(options)),
         )
     ]
-    result.extend(_page_chrome(page_key, page, pages, context))
+    result.extend(context.pages.controls(page_key, page, pages))
     return result
 
 
+def _routed_choices(node: RoutedChoices, path: str, context: _Context) -> list[Node]:
+    """Lower an explicitly stateless picker without inventing mount-owned pagination."""
+    available = tuple(choice for choice in node.choices if choice.available)
+    if not available:
+        message = f"{path}: RoutedChoices needs at least one available choice"
+        raise LayoutInvariantError(message)
+    return [
+        RoutedSelect(
+            options=tuple(
+                Option(
+                    _resolve(choice.label, context),
+                    choice.key,
+                    _resolve(choice.description, context) if choice.description is not None else None,
+                )
+                for choice in available
+            ),
+            route_id=node.route_id,
+            placeholder=_resolve(node.placeholder, context) if node.placeholder is not None else None,
+            min_values=node.minimum,
+            max_values=min(node.maximum, len(available)),
+            disabled=not node.available,
+        )
+    ]
+
+
 def _items(node: Items, path: str, context: _Context) -> list[Node]:
+    # An entry the author named but no longer supplies means the list, not a crash.
     keys = {item.key for item in node.items}
-    remembered = context.session.selection(node.key).selected
-    focused = (
-        node.focused if node.focused in keys else (remembered[0] if remembered and remembered[0] in keys else None)
-    )
-    if node.display is ItemDisplay.FOCUSED and focused is None and node.items:
-        focused = node.items[0].key
-    if focused is not None:
-        item = next(item for item in node.items if item.key == focused)
+    match node.opened:
+        case Controlled(value=value):
+            opened = value if value in keys else None
+        case Managed(initial=initial):
+            seed = () if initial is None else (initial,)
+            remembered = context.session.selection(node.key, initial=seed).selected
+            opened = remembered[0] if remembered and remembered[0] in keys else None
+    if node.display is ItemDisplay.OPENED and opened is None and node.items:
+        opened = node.items[0].key
+
+    async def open_(event: ActionEvent, entry: str | None) -> None:
+        match node.opened:
+            case Controlled(on_change=on_change):
+                await on_change(OpenEvent(event.actor, event.responder, event.locale, event.context, opened=entry))
+            case Managed():
+                await event.acknowledge()
+                context.session.select(node.key, () if entry is None else (entry,))
+                event.invalidate()
+
+    if opened is not None:
+        item = next(item for item in node.items if item.key == opened)
 
         async def back(event: PressEvent) -> None:
-            await event.acknowledge()
-            context.session.select(node.key, ())
-            event.invalidate()
+            await open_(event, None)
 
         return [
-            PrimitiveHeading(resolve_text(item.label).content, level=3, overflow=Never()),
+            PrimitiveHeading(_resolve(item.label, context), level=3, overflow=Never()),
             *_children(item.children, f"{path}.{item.key}", context),
             Row((Button(context.chrome.back, back, f"{node.key}.back"),)),
         ]
 
     async def focus(event: SelectionEvent) -> None:
-        await event.acknowledge()
-        context.session.select(node.key, tuple(event.values[:1]))
-        event.invalidate()
+        await open_(event, event.values[0] if event.values else None)
 
     page_key = f"{node.key}.items"
     visible, page, pages = _page_items(node.items, page_key, context, identity=lambda item: item.key)
     summaries = tuple(
-        f"**{resolve_text(item.label).content}**"
-        + (f" — {resolve_text(item.summary).content}" if item.summary is not None else "")
+        f"**{_resolve(item.label, context)}**"
+        + (f" — {_resolve(item.summary, context)}" if item.summary is not None else "")
         for item in visible
     )
     result: list[Node] = [
         Lines(summaries, overflow=Never()),
         SelectMenu(
-            tuple(Option(resolve_text(item.label).content, item.key) for item in visible),
+            tuple(Option(_resolve(item.label, context), item.key) for item in visible),
             focus,
             f"{node.key}.focus",
             placeholder="Choose an item",
         ),
     ]
-    result.extend(_page_chrome(page_key, page, pages, context))
+    result.extend(context.pages.controls(page_key, page, pages))
     return result
 
 
@@ -401,8 +540,27 @@ def _navigation(node: Navigation, context: _Context) -> list[Node]:
         node.display is NavigationDisplay.AUTO and len(available) > 5
     )
 
+    match node.current:
+        case Controlled(value=value):
+            current = value
+        case Managed(initial=initial):
+            # A remembered destination that has since gone unavailable is the engine's own
+            # stale data, so drop it. An author's value is theirs to be wrong about.
+            keys = {destination.key for destination in available}
+            seed = () if initial is None else (initial,)
+            remembered = context.session.selection(node.key, initial=seed).selected
+            current = remembered[0] if remembered and remembered[0] in keys else None
+    if current is None and available:
+        current = available[0].key
+
     async def navigate(event: ActionEvent, destination: str) -> None:
-        await node.on_navigate(NavigateEvent(event.actor, event.responder, event.locale, event.context, destination))
+        match node.current:
+            case Controlled(on_change=on_change):
+                await on_change(NavigateEvent(event.actor, event.responder, event.locale, event.context, destination))
+            case Managed():
+                await event.acknowledge()
+                context.session.select(node.key, (destination,))
+                event.invalidate()
 
     if grouped:
         page_key = f"{node.key}.destinations"
@@ -416,9 +574,9 @@ def _navigation(node: Navigation, context: _Context) -> list[Node]:
             SelectMenu(
                 tuple(
                     Option(
-                        resolve_text(destination.label).content,
+                        _resolve(destination.label, context),
                         destination.key,
-                        default=destination.key == node.current,
+                        default=destination.key == current,
                     )
                     for destination in visible
                 ),
@@ -426,7 +584,7 @@ def _navigation(node: Navigation, context: _Context) -> list[Node]:
                 node.key,
             )
         ]
-        result.extend(_page_chrome(page_key, page, pages, context))
+        result.extend(context.pages.controls(page_key, page, pages))
         return result
     buttons: list[Button] = []
     for destination in available:
@@ -436,25 +594,32 @@ def _navigation(node: Navigation, context: _Context) -> list[Node]:
 
         buttons.append(
             Button(
-                resolve_text(destination.label).content,
+                _resolve(destination.label, context),
                 go,
                 f"{node.key}.{destination.key}",
-                style=ActionStyle.PRIMARY if destination.key == node.current else ActionStyle.SECONDARY,
+                style=ActionStyle.PRIMARY if destination.key == current else ActionStyle.SECONDARY,
             )
         )
     return [PrimitiveActionGroup(tuple(buttons))]
 
 
 def _details(node: Details, path: str, context: _Context) -> list[Node]:
-    open_ = context.session.disclosure(node.key, initial=node.open).open
+    match node.open:
+        case Controlled(value=value):
+            open_ = value
+        case Managed(initial=initial):
+            open_ = context.session.disclosure(node.key, initial=initial).open
 
     async def toggle(event: PressEvent) -> None:
-        await event.acknowledge()
-        current = context.session.disclosure(node.key, initial=node.open).open
-        context.session.disclose(node.key, not current)
-        event.invalidate()
+        match node.open:
+            case Controlled(on_change=on_change):
+                await on_change(OpenEvent(event.actor, event.responder, event.locale, event.context, opened=not open_))
+            case Managed(initial=seed):
+                await event.acknowledge()
+                context.session.disclose(node.key, not context.session.disclosure(node.key, initial=seed).open)
+                event.invalidate()
 
-    result: list[Node] = [Row((Button(resolve_text(node.summary).content, toggle, f"{node.key}.toggle"),))]
+    result: list[Node] = [Row((Button(_resolve(node.summary, context), toggle, f"{node.key}.toggle"),))]
     if open_:
         result.extend(_children(node.children, path, context))
     return result
@@ -464,23 +629,23 @@ def _table(node: Table, context: _Context) -> list[Node]:
     strategy = context.session.strategy(node.key, "discord.table", 1)
     if strategy is None:
         strategy = "tabular" if node.display is not TableDisplay.RECORDS and len(node.columns) <= 4 else "records"
-        context.session.remember_strategy(node.key, "discord.table", 1, strategy)
+        _remember(node.key, "discord.table", 1, strategy, context)
     if strategy == "tabular":
-        headings = [resolve_text(column.heading).content for column in node.columns]
+        headings = [_resolve(column.heading, context) for column in node.columns]
         widths = [
-            max([len(heading), *(len(resolve_text(row.cells[index]).content) for row in node.rows)])
+            max([len(heading), *(len(_resolve(row.cells[index], context)) for row in node.rows)])
             for index, heading in enumerate(headings)
         ]
         lines = [" | ".join(heading.ljust(widths[index]) for index, heading in enumerate(headings))]
         lines.append("-+-".join("-" * width for width in widths))
         lines.extend(
-            " | ".join(resolve_text(cell).content.ljust(widths[index]) for index, cell in enumerate(row.cells))
+            " | ".join(_resolve(cell, context).ljust(widths[index]) for index, cell in enumerate(row.cells))
             for row in node.rows
         )
         return [PrimitiveCode("\n".join(lines), overflow=Never())]
     records = tuple(
         "\n".join(
-            f"**{resolve_text(column.heading).content}:** {resolve_text(cell).content}"
+            f"**{_resolve(column.heading, context)}:** {_resolve(cell, context)}"
             for column, cell in zip(node.columns, row.cells, strict=True)
         )
         for row in node.rows
@@ -494,12 +659,12 @@ def _media(node: Media, context: _Context) -> list[Node]:
     strategy = context.session.strategy(node.key, "discord.media", 1)
     if strategy is None:
         strategy = "featured" if node.display.value == "featured" else "collection"
-        context.session.remember_strategy(node.key, "discord.media", 1, strategy)
+        _remember(node.key, "discord.media", 1, strategy, context)
     if strategy == "featured":
         first = node.items[0]
         result: list[Node] = [Gallery((first.url,))]
         if first.description is not None:
-            result.append(Footer(resolve_text(first.description).content, overflow=Never()))
+            result.append(Footer(_resolve(first.description, context), overflow=Never()))
         return result
     return [
         Gallery(tuple(item.url for item in node.items[start : start + context.limits.gallery_items]))
@@ -509,9 +674,11 @@ def _media(node: Media, context: _Context) -> list[Node]:
 
 def _actions(node: Actions, path: str, context: _Context) -> list[Node]:
     strategy = _action_strategy(node, context)
-    context.session.remember_strategy(node.key, ACTIONS_ADAPTER_ID, ACTIONS_ADAPTER_VERSION, strategy)
+    _remember(node.key, ACTIONS_ADAPTER_ID, ACTIONS_ADAPTER_VERSION, strategy, context)
     groups: list[tuple[str, tuple[Action, ...], str | None]] = []
-    direct: list[Action | LinkButton] = []
+    # Links and routed controls carry no binding, so they can never be folded into a select
+    # menu the way a group of session actions can: they stay individual buttons.
+    direct: list[Action | LinkButton | RoutedButton] = []
     implicit: list[Action] = []
 
     def flush_implicit() -> None:
@@ -527,13 +694,13 @@ def _actions(node: Actions, path: str, context: _Context) -> list[Node]:
                 if isinstance(action, Action):
                     group_actions.append(action)
                 else:
-                    direct.append(LinkButton(resolve_text(action.label).content, action.url))
-            groups.append((item.key, tuple(group_actions), resolve_text(item.label).content if item.label else None))
+                    direct.append(_unbound_button(action, context))
+            groups.append((item.key, tuple(group_actions), _resolve(item.label, context) if item.label else None))
         elif isinstance(item, Action):
             implicit.append(item)
         else:
             flush_implicit()
-            direct.append(LinkButton(resolve_text(item.label).content, item.url))
+            direct.append(_unbound_button(item, context))
     flush_implicit()
 
     result: list[Node] = []
@@ -544,7 +711,7 @@ def _actions(node: Actions, path: str, context: _Context) -> list[Node]:
         for group_key, actions, label in groups:
             result.extend(_grouped(actions, f"{node.key}.{group_key}", label, path, context))
     if direct:
-        controls = tuple(_button(action) if isinstance(action, Action) else action for action in direct)
+        controls = tuple(_button(action, context) if isinstance(action, Action) else action for action in direct)
         result.append(PrimitiveActionGroup(controls))
     context.events.append(
         PlanEvent(
@@ -622,7 +789,7 @@ def _contained_actions(item: Action | object) -> Sequence[Action]:
 
 
 def _individual(actions: Sequence[Action], key: str, context: _Context) -> list[Node]:
-    controls = tuple(_button(action) for action in actions)
+    controls = tuple(_button(action, context) for action in actions)
     return [PrimitiveActionGroup(controls)] if controls else []
 
 
@@ -641,7 +808,12 @@ def _grouped(actions: Sequence[Action], key: str, label: str | None, path: str, 
         result.extend(_paged_picker(eligible, key, label, context))
     else:
         result.extend(
-            _picker(tuple(eligible[start : start + context.limits.select_options]), f"{key}.{start // 25}", label)
+            _picker(
+                tuple(eligible[start : start + context.limits.select_options]),
+                f"{key}.{start // 25}",
+                label,
+                context,
+            )
             for start in range(0, len(eligible), context.limits.select_options)
         )
     if direct:
@@ -650,26 +822,8 @@ def _grouped(actions: Sequence[Action], key: str, label: str | None, path: str, 
 
 
 def _paged_picker(actions: Sequence[Action], key: str, label: str | None, context: _Context) -> list[Node]:
-    per = context.limits.select_options
-    pages = (len(actions) + per - 1) // per
-    cursor = context.session.cursor(key)
-    index = cursor.index
-    keys = [action.key for action in actions]
-    if cursor.anchor in keys:
-        index = keys.index(cursor.anchor) // per
-    if isinstance(context.page, Mapping):
-        index = context.page.get(key, index)
-    index = max(0, min(index, pages - 1))
-    chunk = tuple(actions[index * per : (index + 1) * per])
-    anchor = chunk[0].key if chunk else None
-    context.session.anchor_cursor(key, index, anchor, extent=pages)
-    fingerprint = hashlib.blake2s("\0".join(keys).encode(), digest_size=16).hexdigest()
-    context.pagers.append(ScenePager(key, index, pages, fingerprint))
-    result: list[Node] = [_picker(chunk, f"{key}.page", label)]
-    result.append(Footer(context.chrome.page_footer(index + 1, pages)))
-    if context.nav is not None:
-        result.extend(context.nav(key, index, pages))
-    return result
+    chunk, index, pages = _page_items(actions, key, context, identity=lambda action: action.key)
+    return [_picker(chunk, f"{key}.page", label, context), *context.pages.controls(key, index, pages)]
 
 
 def _page_items[T](
@@ -679,40 +833,25 @@ def _page_items[T](
     *,
     identity: Callable[[T], str],
 ) -> tuple[tuple[T, ...], int, int]:
+    """Window a list of options 25 at a time, following the item the reader was on."""
     per = context.limits.select_options
-    pages = max(1, (len(items) + per - 1) // per)
-    cursor = context.session.cursor(pager_key)
-    index = cursor.index
     keys = [identity(item) for item in items]
-    if cursor.anchor in keys:
-        index = keys.index(cursor.anchor) // per
-    if isinstance(context.page, Mapping):
-        index = context.page.get(pager_key, index)
-    index = max(0, min(index, pages - 1))
-    visible = tuple(items[index * per : (index + 1) * per])
-    fingerprint = hashlib.blake2s("\0".join(keys).encode(), digest_size=16).hexdigest()
-    context.session.anchor_cursor(
-        pager_key,
-        index,
-        identity(visible[0]) if visible else None,
-        extent=pages,
-        content_fingerprint=fingerprint,
+    anchors: dict[str, int] = {}
+    for position, key in enumerate(keys):
+        anchors.setdefault(key, position // per)
+    request = PageRequest(
+        key=pager_key,
+        pages=max(1, (len(items) + per - 1) // per),
+        fingerprint=content_fingerprint(keys),
+        anchors=anchors,
     )
-    if pages > 1:
-        context.pagers.append(ScenePager(pager_key, index, pages, fingerprint))
-    return visible, index, pages
+    grant = context.pages.grant(request)
+    visible = tuple(items[grant.index * per : (grant.index + 1) * per])
+    context.pages.record(request, grant.index, anchor=identity(visible[0]) if visible else None)
+    return visible, grant.index, grant.pages
 
 
-def _page_chrome(key: str, page: int, pages: int, context: _Context) -> list[Node]:
-    if pages <= 1:
-        return []
-    result: list[Node] = [Footer(context.chrome.page_footer(page + 1, pages))]
-    if context.nav is not None:
-        result.extend(context.nav(key, page, pages))
-    return result
-
-
-def _picker(actions: Sequence[Action], key: str, label: str | None) -> SelectMenu:
+def _picker(actions: Sequence[Action], key: str, label: str | None, context: _Context) -> SelectMenu:
     routes = {action.key: ActionBinding(action.key, action.on_trigger, action.policy) for action in actions}
 
     async def route(event: SelectionEvent) -> None:
@@ -721,7 +860,7 @@ def _picker(actions: Sequence[Action], key: str, label: str | None) -> SelectMen
             await binding.handler(event)
 
     return SelectMenu(
-        tuple(Option(resolve_text(action.label).content, action.key) for action in actions),
+        tuple(Option(_resolve(action.label, context), action.key) for action in actions),
         route,
         key,
         placeholder=label or "Choose an action",
@@ -729,17 +868,30 @@ def _picker(actions: Sequence[Action], key: str, label: str | None) -> SelectMen
     )
 
 
-def _button(action: Action) -> Button:
-    style = {
+def _unbound_button(item: Link | RoutedAction, context: _Context) -> LinkButton | RoutedButton:
+    """Lower a control the mount never dispatches: a URL, or a router's own custom id."""
+    label = _resolve(item.label, context)
+    if isinstance(item, Link):
+        return LinkButton(label, item.url)
+    return RoutedButton(
+        label, item.route_id, style=_button_style(item.tone, item.emphasis), disabled=not item.available
+    )
+
+
+def _button_style(tone: Tone, emphasis: Emphasis) -> ActionStyle:
+    return {
         Tone.SUCCESS: ActionStyle.SUCCESS,
         Tone.DANGER: ActionStyle.DANGER,
         Tone.INFO: ActionStyle.PRIMARY,
-    }.get(action.tone, ActionStyle.PRIMARY if action.emphasis.value == "strong" else ActionStyle.SECONDARY)
+    }.get(tone, ActionStyle.PRIMARY if emphasis is Emphasis.STRONG else ActionStyle.SECONDARY)
+
+
+def _button(action: Action, context: _Context) -> Button:
     return Button(
-        resolve_text(action.label).content,
+        _resolve(action.label, context),
         action.on_trigger,
         action.key,
-        style=style,
+        style=_button_style(action.tone, action.emphasis),
         disabled=not action.available,
         policy=action.policy,
     )

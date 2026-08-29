@@ -11,18 +11,19 @@ from dataclasses import dataclass, field
 from squid_layouts.actions import ActionBinding, ActionPolicy, PressHandler, SelectionHandler
 from squid_layouts.primitives.constraints import Alt, Overflow, Spill, Truncate
 from squid_layouts.primitives.styles import ActionStyle, Color
+from squid_layouts.text import TextLike
 
 
 @dataclass(frozen=True, slots=True)
 class Text:
-    content: str
+    content: TextLike
     overflow: Overflow = field(default_factory=Truncate)
     priority: int = 0
 
 
 @dataclass(frozen=True, slots=True)
 class Heading:
-    content: str
+    content: TextLike
     level: int = 2
     overflow: Overflow = field(default_factory=Truncate)
     priority: int = 10
@@ -32,7 +33,7 @@ class Heading:
 class Footer:
     """Small (`-#`) text at the card's foot; first to shrink by default."""
 
-    content: str
+    content: TextLike
     overflow: Overflow = field(default_factory=Truncate)
     priority: int = -10
 
@@ -41,7 +42,7 @@ class Footer:
 class Code:
     """Fenced code block; embedded fences are escaped so content cannot break out."""
 
-    content: str
+    content: TextLike
     lang: str = ""
     overflow: Overflow = field(default_factory=Truncate)
     priority: int = 0
@@ -58,7 +59,7 @@ class Lines:
     priorities disappear first, while surviving entries keep document order.
     """
 
-    lines: tuple[str | Alt, ...]
+    lines: tuple[TextLike | Alt, ...]
     join: str = "\n"
     overflow: Overflow = field(default_factory=Spill)
     priority: int = 0
@@ -72,7 +73,7 @@ class Sep:
 
 @dataclass(frozen=True, slots=True)
 class LinkButton:
-    label: str
+    label: TextLike
     url: str
 
 
@@ -80,7 +81,7 @@ class LinkButton:
 class Button:
     """An interactive button whose handler runs through the mount's dispatch funnel."""
 
-    label: str
+    label: TextLike
     on_click: PressHandler
     key: str
     style: ActionStyle = ActionStyle.SECONDARY
@@ -90,10 +91,27 @@ class Button:
 
 
 @dataclass(frozen=True, slots=True)
+class RoutedButton:
+    """A button whose route id *is* its state, dispatched by a router rather than a mount.
+
+    Carries no handler, so it needs no binding and survives the process that drew it: a
+    sessionless document may hold one, and a mount's policies (author lock, generation
+    checks) do not reach it even when it sits inside a mounted message. Build the id with
+    a `squid_layouts.routing.Route` rather than by hand.
+    """
+
+    label: TextLike
+    route_id: str
+    style: ActionStyle = ActionStyle.SECONDARY
+    emoji: str | None = None
+    disabled: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class Option:
-    label: str
+    label: TextLike
     value: str
-    description: str | None = None
+    description: TextLike | None = None
     default: bool = False
 
 
@@ -104,12 +122,24 @@ class SelectMenu:
     options: tuple[Option, ...]
     on_select: SelectionHandler
     key: str
-    placeholder: str | None = None
+    placeholder: TextLike | None = None
     min_values: int = 1
     max_values: int = 1
     disabled: bool = False
     policy: ActionPolicy = ActionPolicy.EXCLUSIVE
     routes: Mapping[str, ActionBinding] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class RoutedSelect:
+    """A string select dispatched by its stable route id rather than a mount binding."""
+
+    options: tuple[Option, ...]
+    route_id: str
+    placeholder: TextLike | None = None
+    min_values: int = 1
+    max_values: int = 1
+    disabled: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,20 +184,20 @@ class Extension:
 class Row:
     """An exact target row; invalid local structure is a planning error."""
 
-    items: tuple[LinkButton | Button | RawItem, ...]
+    items: tuple[LinkButton | Button | RoutedButton | RawItem, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class ActionGroup:
     """Buttons automatically arranged into as many valid target rows as needed."""
 
-    items: tuple[LinkButton | Button | RawItem, ...]
+    items: tuple[LinkButton | Button | RoutedButton | RawItem, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class Thumbnail:
     url: str
-    description: str | None = None
+    description: TextLike | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,7 +219,7 @@ class Section:
     """Up to three text nodes beside an accessory; extra texts are dropped with a note."""
 
     texts: tuple[Text | Heading | Footer, ...]
-    accessory: Thumbnail | LinkButton | RawItem
+    accessory: Thumbnail | LinkButton | RoutedButton | RawItem
 
 
 @dataclass(frozen=True, slots=True)
@@ -202,39 +232,55 @@ class Panel:
 
 @dataclass(frozen=True, slots=True)
 class Variant:
-    """One structural representation and the capabilities it requires."""
+    """One structural representation of a region and the capabilities it requires.
 
-    node: Node
+    ``nodes`` is a tuple because a variant may lower to several nodes — an ActionGroup becomes
+    one Row per five buttons — and splicing them into the parent is exact where wrapping them
+    in a Panel would invent the very container component the ladder exists to save.
+    """
+
+    nodes: tuple[Node, ...]
     requires: frozenset[str] = frozenset()
+
+    def __post_init__(self) -> None:
+        if not self.nodes:
+            message = "Variant needs at least one node"
+            raise ValueError(message)
 
 
 @dataclass(frozen=True, slots=True)
-class Choice:
-    """Ordered structural and capability fallback ladder."""
+class Variants:
+    """An ordered ladder of structural representations for one region.
+
+    Overflow policies shrink *text*; nothing they do returns a component, so a document with
+    too many components would otherwise only be reportable. A ladder gives the solver
+    something to give up: a button panel stepping to one select, a gallery to a link row.
+
+    Rungs unsupported by the target are dropped at planning time; the survivors form a budget
+    ladder. The solver opens every ladder at rung 0 and, under component pressure, steps the
+    lowest-priority one down a single rung, re-solving after each step — the decision is made
+    before anything is measured, so it stays out of the text-policy matrix.
+
+    Two rules follow from stepping being a whole-tree decision. ``priority`` compares
+    **globally**, not among siblings: the lowest-priority ladder anywhere in the document
+    steps first, and equal priorities step breadth-first, each reaching rung 1 before any
+    reaches rung 2. And a nested ladder only becomes steppable once its ancestor's *selected*
+    rung exposes it; stepping the ancestor abandons it and opens whatever the new rung holds
+    at rung 0.
+    """
 
     variants: tuple[Variant, ...]
     priority: int = 0
 
     def __post_init__(self) -> None:
         if not self.variants:
-            message = "Choice needs at least one variant"
+            message = "Variants needs at least one variant"
             raise ValueError(message)
 
-
-@dataclass(frozen=True, slots=True)
-class Fold:
-    """A structural alternate: ``primary``, or ``fallback`` when components run short.
-
-    Overflow policies shrink *text*; nothing they do returns a component, so a document with
-    too many components was previously only reportable. A Fold gives the solver something to
-    give up: a button panel folding to one select, a gallery folding to a link row. The
-    lowest-priority folds collapse first, and the choice is made before anything is measured,
-    so it stays out of the text-policy matrix.
-    """
-
-    primary: Node
-    fallback: Node
-    priority: int = 0
+    @classmethod
+    def of(cls, *rungs: Node | Variant, priority: int = 0) -> Variants:
+        """Build a ladder from bare nodes, wrapping each in a capability-free Variant."""
+        return cls(tuple(rung if isinstance(rung, Variant) else Variant((rung,)) for rung in rungs), priority)
 
 
 type Node = (
@@ -247,6 +293,8 @@ type Node = (
     | Row
     | ActionGroup
     | SelectMenu
+    | RoutedSelect
+    | RoutedButton
     | Thumbnail
     | Gallery
     | MediaCollection
@@ -255,8 +303,7 @@ type Node = (
     | RawItem
     | Embed
     | Extension
-    | Fold
-    | Choice
+    | Variants
 )
 
 

@@ -9,10 +9,11 @@ child class can appear in one message without their controls or pagers cross-wir
 root component is attached to a Mount; children reach it through their parent.
 """
 
-from collections.abc import Sequence
+import functools
+from collections.abc import Callable, Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass, replace
-from typing import Any, Protocol
+from typing import Any, ClassVar, Protocol, Self
 
 from squid_layouts.document import Asset, Document
 from squid_layouts.errors import LayoutInvariantError
@@ -20,11 +21,9 @@ from squid_layouts.primitives.constraints import Paginate
 from squid_layouts.primitives.nodes import (
     ActionGroup,
     Button,
-    Choice,
     Code,
     Embed,
     Extension,
-    Fold,
     Footer,
     Heading,
     Lines,
@@ -35,8 +34,10 @@ from squid_layouts.primitives.nodes import (
     SelectMenu,
     Text,
     Variant,
+    Variants,
 )
 from squid_layouts.runtime.context import ContextKey
+from squid_layouts.runtime.reactivity import _CURRENT, _State, report_undeclared_write
 from squid_layouts.semantic import (
     Action as SemanticAction,
 )
@@ -66,6 +67,9 @@ from squid_layouts.semantic import (
 )
 from squid_layouts.semantic import (
     FallbackContent as SemanticFallbackContent,
+)
+from squid_layouts.semantic import (
+    FormTrigger as SemanticFormTrigger,
 )
 from squid_layouts.semantic import (
     Group as SemanticGroup,
@@ -120,6 +124,42 @@ _CURRENT_CONTEXT: ContextVar[dict[ContextKey[Any], object] | None] = ContextVar(
 )
 _MISSING = object()
 
+# Written by the tree walker, not by authors, so they are never an author's state change.
+_FRAMEWORK_ATTRIBUTES = frozenset({"_runtime", "_parent", "_loaded"})
+
+
+def _is_abstract(cls: type) -> bool:
+    """Whether this class is a base to build on rather than one to instantiate.
+
+    Such a class may declare state only its concrete subclasses can assign, so its constructor
+    is not the place to demand one. Not having implemented render is the test: `ABCMeta` needs
+    no special case, both because it populates `__abstractmethods__` only after
+    `__init_subclass__` has run, and because it already refuses to instantiate the class, so
+    that wrapper can never be the outermost one.
+    """
+    return cls.render is Component.render
+
+
+def _checked_init(
+    original: Callable[..., None],
+    required: tuple[tuple[str, str], ...],
+) -> Callable[..., None]:
+    """Wrap ``__init__`` so state declared without an initial value must be assigned."""
+
+    @functools.wraps(original)
+    def __init__(self: Component, *args: Any, **kwargs: Any) -> None:
+        original(self, *args, **kwargs)
+        # Only the outermost __init__ checks. A subclass calling super().__init__() would
+        # otherwise trip the base's wrapper before it had finished assigning.
+        if type(self).__init__ is not __init__:
+            return
+        missing = sorted(name for name, slot in required if slot not in self.__dict__)
+        if missing:
+            message = f"{type(self).__name__}.__init__ left declared state unassigned: {', '.join(missing)}"
+            raise TypeError(message)
+
+    return __init__
+
 
 @dataclass(frozen=True, slots=True)
 class ComponentTree:
@@ -129,6 +169,13 @@ class ComponentTree:
     components: dict[str, Component]
     assets: tuple[Asset, ...] = ()
     document_key: str | None = None
+    deferred: tuple[Component, ...] = ()
+    """Embedded components expansion stopped at, in the order it met them.
+
+    Only ever non-empty for a discovery render (see ``render_component_tree``'s ``defer``).
+    Such a tree is missing whole subtrees, so it describes what to load next and nothing else:
+    never plan it, draw it, or commit it.
+    """
 
 
 class Component:
@@ -136,6 +183,40 @@ class Component:
 
     _runtime: RuntimeOwner | None = None
     _parent: Component | None = None
+    _loaded: bool = False
+    """Whether this instance's :meth:`on_load` has completed. Owned by the frontend."""
+    _state_names: ClassVar[frozenset[str]] = frozenset()
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        declared = {
+            name: descriptor
+            for klass in reversed(cls.__mro__)
+            for name, descriptor in vars(klass).items()
+            if isinstance(descriptor, _State)
+        }
+        cls._state_names = frozenset(declared)
+        required = tuple(
+            (name, descriptor._name) for name, descriptor in declared.items() if not descriptor.has_initial
+        )
+        if required and not _is_abstract(cls):
+            # Wrap even an inherited __init__, so adding a required field to a subclass that
+            # defines no constructor of its own is still checked.
+            cls.__init__ = _checked_init(cls.__init__, required)
+
+    def __new__(cls, *args: Any, **kwargs: Any) -> Self:
+        # A handler may build components. Noting the ones born mid-action is what lets their
+        # __init__ write freely while a live component's writes stay covered.
+        instance = super().__new__(cls)
+        if current := _CURRENT.get():
+            current.note_born(instance)
+        return instance
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        # Fast path: one contextvar read when no action is in flight, which is almost always.
+        if _CURRENT.get() is not None and name not in _FRAMEWORK_ATTRIBUTES and name not in type(self)._state_names:
+            report_undeclared_write(self, name)
+        object.__setattr__(self, name, value)
 
     def _state_changed(self) -> None:
         self.invalidate()
@@ -151,11 +232,37 @@ class Component:
         """Place child in this render tree under a stable key and namespace."""
         return Embed(child, key)
 
+    async def on_load(self) -> None:
+        """Fetch what this component cannot render without, before its first render.
+
+        Runs once per instance, before the first delivery that would show it, and before
+        :meth:`render` is ever called on it: a frontend stops expanding at an unloaded
+        component rather than rendering it empty. Writes are ordinary pre-delivery state, so
+        the delivered view is the loaded one -- there is no loading paint to design for.
+
+        A raise leaves the instance eligible to retry on the next delivery attempt, and
+        nothing is delivered in the meantime. Data the component can degrade without belongs
+        in declared state with a render branch, refreshed by a handler, not here.
+        """
+
     def on_mount(self) -> None:
         """Run after this component first enters a successfully drawn tree."""
 
     def on_unmount(self) -> None:
         """Run after this component leaves a successfully drawn tree."""
+
+    def mutated(self, name: str) -> None:
+        """Re-render because declared state changed in place where nothing observed it.
+
+        Assignment and list, dict, and set mutation are observed already. Reach for this only
+        when a field's *contents* changed some other way, such as setting an attribute on the
+        object a ``copy="ref"`` field holds. It schedules the draw; it cannot roll the change
+        back, and naming the field keeps the call tied to the declaration it depends on.
+        """
+        if name not in type(self)._state_names:
+            message = f"{type(self).__name__}.{name} is not declared state, so it cannot have changed in place"
+            raise TypeError(message)
+        self.invalidate()
 
     def invalidate(self) -> None:
         """Mark this component's message as needing a re-render."""
@@ -189,13 +296,22 @@ def render_component_tree(
     *,
     runtime: RuntimeOwner | None = None,
     context: dict[ContextKey[Any], object] | None = None,
+    defer: Callable[[Component], bool] | None = None,
 ) -> ComponentTree:
-    """Render and expand a component tree, preserving keyed component identity."""
+    """Render and expand a component tree, preserving keyed component identity.
+
+    ``defer`` makes this a *discovery* render: an embedded component it selects is recorded in
+    :attr:`ComponentTree.deferred` and not expanded, so its :meth:`Component.render` is not
+    called. That is what lets a frontend run :meth:`Component.on_load` before a component
+    renders for the first time. The resulting tree is incomplete by construction; see
+    :attr:`ComponentTree.deferred`.
+    """
     components: dict[str, Component] = {}
     assets: list[Asset] = []
     document_key: str | None = None
     identities: dict[int, str] = {}
     active: set[int] = set()
+    deferred: list[Component] = []
 
     def items(rendered: RenderResult, path: str) -> tuple[RenderNode, ...]:
         nonlocal document_key
@@ -244,44 +360,85 @@ def render_component_tree(
                 if not isinstance(item.component, Component):
                     message = f"{item_path}: Embed does not contain a Component"
                     raise LayoutInvariantError(message)
+                # Before the defer check: a deferred child still reaches the mount through
+                # its parent when its on_load writes state.
                 item.component._parent = component
+                if defer is not None and defer(item.component):
+                    deferred.append(item.component)
+                    return []
                 child_path = item.key if path == "$" else f"{path}.{item.key}"
                 return _namespace(expand(item.component, child_path, context), item.key)
             match item:
+                case (
+                    SemanticGroup(children=children)
+                    | SemanticStack(children=children)
+                    | SemanticCluster(children=children)
+                    | SemanticSection(children=children)
+                    | SemanticArticle(children=children)
+                    | SemanticAside(children=children)
+                    | SemanticDetails(children=children)
+                ):
+                    return [replace(item, children=expand_children(children, item_path))]
+                case SemanticItems(items=items):
+                    return [
+                        replace(
+                            item,
+                            items=tuple(
+                                replace(
+                                    entry,
+                                    children=expand_children(entry.children, f"{item_path}.item.{index}"),
+                                )
+                                for index, entry in enumerate(items)
+                            ),
+                        )
+                    ]
+                case (
+                    SemanticTruncated(node=child)
+                    | SemanticSpilled(node=child)
+                    | SemanticOptionalContent(node=child)
+                    | SemanticBestEffort(node=child)
+                ):
+                    node_path = f"{item_path}.node"
+                    return [replace(item, node=one(expand_item(child, node_path), node_path))]
+                case SemanticFallbackContent(primary=primary, alternates=alternates):
+                    primary_path = f"{item_path}.primary"
+                    return [
+                        replace(
+                            item,
+                            primary=one(expand_item(primary, primary_path), primary_path),
+                            alternates=tuple(
+                                one(
+                                    expand_item(alternate, f"{item_path}.alternate.{index}"),
+                                    f"{item_path}.alternate.{index}",
+                                )
+                                for index, alternate in enumerate(alternates)
+                            ),
+                        )
+                    ]
                 case Panel(children=children, accent=accent):
                     expanded: list[Node] = []
                     for index, child in enumerate(children):
                         expanded.extend(expand_item(child, f"{item_path}.{index}"))  # pyrefly: ignore
                     return [Panel(tuple(expanded), accent)]
-                case Fold(primary=primary, fallback=fallback, priority=priority):
-                    return [
-                        Fold(
-                            one(expand_item(primary, f"{item_path}.primary"), f"{item_path}.primary"),
-                            one(expand_item(fallback, f"{item_path}.fallback"), f"{item_path}.fallback"),
-                            priority,
-                        )
-                    ]
-                case Choice(variants=variants, priority=priority):
-                    return [
-                        Choice(
-                            tuple(
-                                Variant(
-                                    one(
-                                        expand_item(variant.node, f"{item_path}.variant.{index}"),
-                                        f"{item_path}.variant.{index}",
-                                    ),
-                                    variant.requires,
-                                )
-                                for index, variant in enumerate(variants)
-                            ),
-                            priority,
-                        )
-                    ]
+                case Variants(variants=variants, priority=priority):
+                    rungs: list[Variant] = []
+                    for index, variant in enumerate(variants):
+                        expanded_rung: list[Node] = []
+                        for child_index, child in enumerate(variant.nodes):
+                            expanded_rung.extend(expand_item(child, f"{item_path}.variant.{index}.{child_index}"))  # pyrefly: ignore
+                        rungs.append(Variant(tuple(expanded_rung), variant.requires))
+                    return [Variants(tuple(rungs), priority)]
                 case Extension(kind=kind, version=version, payload=payload, fallback=fallback):
                     expanded = expand_item(fallback, f"{item_path}.fallback")
                     return [Extension(kind, version, payload, one(expanded, f"{item_path}.fallback"))]
                 case _:
                     return [item]
+
+        def expand_children(children: Sequence[RenderNode], parent_path: str) -> tuple[LayoutNode, ...]:
+            expanded: list[LayoutNode] = []
+            for index, child in enumerate(children):
+                expanded.extend(expand_item(child, f"{parent_path}.{index}"))
+            return tuple(expanded)
 
         try:
             nodes: list[LayoutNode] = []
@@ -292,7 +449,8 @@ def render_component_tree(
             _CURRENT_CONTEXT.reset(token)
             active.remove(identity)
 
-    return ComponentTree(tuple(expand(root, "$", context or {})), components, tuple(assets), document_key)
+    nodes = tuple(expand(root, "$", context or {}))
+    return ComponentTree(nodes, components, tuple(assets), document_key, tuple(deferred))
 
 
 def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
@@ -363,6 +521,7 @@ def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
                 | SemanticNavigation(key=key)
                 | SemanticTable(key=key)
                 | SemanticMedia(key=key)
+                | SemanticFormTrigger(key=key)
             ):
                 return replace(node, key=f"{prefix}.{key}")
             case (
@@ -372,8 +531,12 @@ def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
                 | SemanticBestEffort(node=child)
             ):
                 return replace(node, node=rewrite(child))
-            case SemanticFallbackContent(primary=primary, alternate=alternate):
-                return replace(node, primary=rewrite(primary), alternate=rewrite(alternate))
+            case SemanticFallbackContent(primary=primary, alternates=alternates):
+                return replace(
+                    node,
+                    primary=rewrite(primary),
+                    alternates=tuple(rewrite(alternate) for alternate in alternates),
+                )
             case Text() | Heading() | Footer() | Code() | Lines():
                 return rewrite_text(node)
             case Panel(children=children, accent=accent):
@@ -388,11 +551,12 @@ def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
                 return replace(node, key=key_for(node))
             case Extension(kind=kind, version=version, payload=payload, fallback=fallback):
                 return Extension(kind, version, payload, rewrite(fallback))
-            case Fold(primary=primary, fallback=fallback, priority=priority):
-                return Fold(primary=rewrite(primary), fallback=rewrite(fallback), priority=priority)
-            case Choice(variants=variants, priority=priority):
-                return Choice(
-                    variants=tuple(Variant(rewrite(variant.node), variant.requires) for variant in variants),
+            case Variants(variants=variants, priority=priority):
+                return Variants(
+                    variants=tuple(
+                        Variant(tuple(rewrite(child) for child in variant.nodes), variant.requires)
+                        for variant in variants
+                    ),
                     priority=priority,
                 )
             case _:

@@ -9,7 +9,7 @@ from discord.utils import escape_markdown
 
 import squid_layouts as sl
 from squid.bot._types import GuildMessageable
-from squid.bot.ui import render_item, truncate_display_text
+from squid.bot.ui import render_item, render_static, truncate_display_text
 from squid.bot.utils.components import (
     DISCORD_GREEN,
     DISCORD_RED,
@@ -96,7 +96,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
 
     async def render_layout(self) -> discord.ui.LayoutView:
         """Render a standalone Components V2 layout for the build."""
-        return sl.discord.render_static([await self.render_node()])
+        return render_static([await self.render_node()])
 
     async def render_container(self, *, reserved_text: int = 0) -> discord.ui.Container[discord.ui.LayoutView]:
         """Render the build card as a detached item, for composition into a larger V2 layout.
@@ -108,7 +108,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         assert isinstance(container, discord.ui.Container)
         return container
 
-    async def render_node(self) -> sl.primitives.Node:
+    async def render_node(self) -> sl.LayoutNode:
         """The build card as layout IR, for callers composing a whole message at once."""
         build = self.build
         current_java_version = await self.bot.services.versions.newest("Java")
@@ -135,19 +135,20 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
 
         ladders = self._field_ladders()
 
-        def section(title: str, names: set[str]) -> sl.primitives.FieldGroup:
-            return sl.primitives.FieldGroup(
-                title,
-                tuple(
-                    sl.primitives.presets.Field(
-                        name,
-                        escape_markdown(value),
-                        alts=tuple(escape_markdown(alt) for alt in ladders.get(name, ())),
-                    )
-                    for name, value in metadata.items()
-                    if name in names
-                ),
+        # A nested section per group: each field steps its own Condense ladder independently
+        # rather than a whole group stepping in lockstep — finer granularity, not a
+        # regression. Groups with no matching fields render as nothing.
+        def group(title: str, names: set[str]) -> sl.LayoutNode | None:
+            entries = tuple(
+                sl.field(
+                    name,
+                    escape_markdown(value),
+                    fallbacks=tuple(escape_markdown(alt) for alt in ladders.get(name, ())),
+                )
+                for name, value in metadata.items()
+                if name in names
             )
+            return sl.section(sl.fields(*entries), heading=title) if entries else None
 
         status_colours: dict[Status | None, int] = {
             Status.PENDING: DISCORD_YELLOW,
@@ -160,20 +161,24 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         rows = ()
         if build.original_link is not None:
             rows = (sl.primitives.Row((sl.primitives.LinkButton("Original submission", build.original_link),)),)
-        return sl.primitives.card(
-            format_build_display_title(build, markdown=True, current_version=current_java_version),
-            await self.get_description(),
+        description = await self.get_description()
+        media = await self._get_media_urls()
+        extra_media = media[1:]
+        return sl.section(
+            # The body is the card's shock absorber: truncate lets it give up characters
+            # under pressure before a field group, media, or the footer loses any.
+            description and sl.truncate(sl.paragraph(description)),
+            group("Review warnings", review_names),
+            group("Size & performance", performance_names),
+            group("Compatibility", {"Versions"}),
+            group("Credits", credit_names),
+            group("Resources", resource_names),
+            bool(extra_media) and sl.media(*extra_media, key="media"),
+            sl.note(footer),
+            *rows,
+            heading=format_build_display_title(build, markdown=True, current_version=current_java_version),
             accent=status_colours.get(build.submission_status, DISCORD_GREEN),
-            groups=(
-                section("Review warnings", review_names),
-                section("Size & performance", performance_names),
-                section("Compatibility", {"Versions"}),
-                section("Credits", credit_names),
-                section("Resources", resource_names),
-            ),
-            footer=footer,
-            media=await self._get_media_urls(),
-            rows=rows,
+            thumbnail=media[0] if media else None,
         )
 
     def _field_ladders(self) -> dict[str, tuple[str, ...]]:

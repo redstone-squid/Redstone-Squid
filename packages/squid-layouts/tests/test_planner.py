@@ -8,6 +8,8 @@ from squid_layouts import (
     Document,
     InlineAsset,
     LayoutInvariantError,
+    Localization,
+    Message,
     UnsolvableLayoutError,
     plan,
 )
@@ -17,9 +19,9 @@ from squid_layouts.planning import TargetProfile
 from squid_layouts.primitives import (
     ActionGroup,
     Button,
-    Choice,
     Code,
     Lines,
+    Never,
     Paginate,
     Panel,
     Row,
@@ -27,6 +29,7 @@ from squid_layouts.primitives import (
     Text,
     Thumbnail,
     Variant,
+    Variants,
 )
 from squid_layouts.scene import Codec as SceneCodec
 from squid_layouts.scene.model import SceneRow, SceneText
@@ -56,6 +59,14 @@ def test_planner_extracts_callbacks_from_the_serializable_scene() -> None:
     encoded = SceneCodec.dumps(result.scene)
     assert "_click" not in encoded
     assert '"action":"act"' in encoded
+
+
+def test_planner_resolves_deferred_text_on_exact_primitives() -> None:
+    localization = Localization("xx", gettext=lambda message: {"Hello": "Bonjour"}[message])
+
+    result = plan(Text(Message("Hello")), target=DEFAULT_TARGET, localization=localization)
+
+    assert result.scene.children == (SceneText("Bonjour"),)
 
 
 def test_duplicate_action_keys_fail_before_drawing() -> None:
@@ -111,6 +122,22 @@ def test_explicit_document_key_allows_lossless_root_component_paging() -> None:
         page_result = plan(document, target=DEFAULT_TARGET, nav=_nav, page={"toolbar": page_index})
         visible.update(key for key in page_result.bindings if key.startswith("b"))
     assert visible == {f"b{index}" for index in range(41)}
+
+
+def test_a_cosmetic_note_does_not_fragment_root_pages() -> None:
+    """Cutting on any note put every later node on a page of its own.
+
+    `Paginate(per=...)` on a node that is not `Lines` is noted and ignored — the content
+    is unchanged and nothing had to give — but the note was sticky across every probe
+    that included the node, so each following node looked like it no longer fitted.
+    """
+    buttons = tuple(Button(str(index), _click, f"b{index}") for index in range(41))
+
+    def pages_for(overflow) -> int:
+        document = Document((Text("hi", overflow=overflow), ActionGroup(buttons)), key="toolbar")
+        return plan(document, target=DEFAULT_TARGET, nav=_nav).scene.pagers[0].pages
+
+    assert pages_for(Paginate(key="noted", per=5)) == pages_for(Never())
 
 
 def test_root_paging_requires_an_explicit_document_key() -> None:
@@ -177,21 +204,47 @@ def test_scene_reports_every_independent_pager() -> None:
     ]
 
 
-def test_choice_selects_by_capability_before_budget_degradation() -> None:
-    choice = Choice(
+def test_a_ladder_selects_by_capability_before_budget_degradation() -> None:
+    ladder = Variants(
         (
-            Variant(Text("rich"), requires=frozenset({"rich-text"})),
-            Variant(Text("plain")),
+            Variant((Text("rich"),), requires=frozenset({"rich-text"})),
+            Variant((Text("plain"),)),
         )
     )
     basic = TargetProfile("test", 1, limits=LIMITS)
     rich = TargetProfile("test", 1, capabilities=frozenset({"rich-text"}), limits=LIMITS)
 
-    basic_scene = plan(choice, target=basic).scene
-    rich_scene = plan(choice, target=rich).scene
+    basic_scene = plan(ladder, target=basic).scene
+    rich_scene = plan(ladder, target=rich).scene
 
     assert basic_scene.children == (SceneText("plain"),)
     assert rich_scene.children == (SceneText("rich"),)
+
+
+def test_capability_filtering_shortens_the_ladder_the_solver_steps() -> None:
+    """An unsupported rung is gone before stepping, not skipped over during it."""
+
+    def rung(index: int, texts: int) -> Panel:
+        return Panel(children=tuple(Text(f"n{index}.{step}") for step in range(texts)))
+
+    # Rung 0 needs a capability the target lacks, so each ladder opens on rung 1 already.
+    # Nine surviving rung 1s cost 45 against a ceiling of 40, so stepping still has work.
+    ladders = [
+        Variants(
+            (
+                Variant((rung(index, 6),), requires=frozenset({"rich-text"})),
+                Variant((rung(index, 4),)),
+                Variant((Text(f"line {index}"),)),
+            )
+        )
+        for index in range(9)
+    ]
+    scene = plan(ladders, target=TargetProfile("test", 1, limits=LIMITS)).scene
+    rendered = repr(scene.children)
+
+    assert "n0.5" not in rendered  # the gated rung never reaches the solver
+    assert "line 0" in rendered  # the ladder still had its last rung to step to
+    assert "n8.0" in rendered  # and stepping stopped once the document fit
 
 
 def test_native_item_is_built_once_measured_recursively_and_reused() -> None:

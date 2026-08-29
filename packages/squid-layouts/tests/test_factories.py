@@ -102,7 +102,9 @@ class TestParity:
         assert sl.section("a", heading="H") == sl.Section((sl.Paragraph("a"),), "H")
         assert sl.article("a", heading="H") == sl.Article((sl.Paragraph("a"),), "H")
         assert sl.aside("a", tone=sl.Tone.WARNING) == sl.Aside((sl.Paragraph("a"),), sl.Tone.WARNING)
-        assert sl.details("a", key="k", summary="S", open=True) == sl.Details("k", "S", (sl.Paragraph("a"),), True)  # noqa: FBT003
+        assert sl.details("a", key="k", summary="S", open=sl.managed(initial=True)) == sl.Details(
+            "k", "S", (sl.Paragraph("a"),), sl.Managed(initial=True)
+        )
         assert sl.item("a", key="k", label="L") == sl.Item("k", "L", (sl.Paragraph("a"),))
 
     def test_leaves(self) -> None:
@@ -140,17 +142,20 @@ class TestParity:
             (sl.Action("vote", "Vote", _noop),), "a"
         )
         assert sl.choice("Yes", key="y", description="d") == sl.Choice("y", "Yes", "d")
-        assert sl.choices(sl.choice("Yes", key="y"), key="c", selected=["y"], on_change=_noop) == sl.Choices(
-            "c", (sl.Choice("y", "Yes"),), ("y",), _noop
+        assert sl.choices(sl.choice("Yes", key="y"), key="c", selection=sl.controlled(("y",), _noop)) == sl.Choices(
+            "c", (sl.Choice("y", "Yes"),), sl.Controlled(("y",), _noop)
+        )
+        assert sl.routed_choices(sl.choice("Yes", key="y"), key="c", route_id="r:choices") == sl.RoutedChoices(
+            "c", (sl.Choice("y", "Yes"),), "r:choices"
         )
         assert sl.destination("Home", key="home") == sl.Destination("home", "Home")
         assert sl.navigation(
-            sl.destination("Home", key="home"), key="n", current="home", on_navigate=_noop
-        ) == sl.Navigation("n", (sl.Destination("home", "Home"),), "home", _noop)
+            sl.destination("Home", key="home"), key="n", current=sl.controlled("home", _noop)
+        ) == sl.Navigation("n", (sl.Destination("home", "Home"),), sl.Controlled("home", _noop))
 
 
 class TestDrift:
-    _ALIASES = {"List": "bullets"}
+    _ALIASES = {"List": "bullets", "RoutedChoices": "routed_choices"}
 
     def test_every_semantic_node_has_a_root_level_factory(self) -> None:
         for member in SemanticNode.__value__.__args__:

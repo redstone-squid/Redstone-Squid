@@ -1,4 +1,4 @@
-"""Unit tests for the build log consent banner and dynamic button."""
+"""Unit tests for the build log consent banner and its routed button."""
 
 from types import SimpleNamespace
 from typing import Any, cast
@@ -12,9 +12,11 @@ from squid.accounts.domain import CURRENT_CONSENT_VERSION, Account, AccountConse
 from squid.bot.consent import ConsentPrompt
 from squid.bot.submission.consent_banner import (
     BuildLogConsentStickyMessage,
-    DynamicBuildLogConsentButton,
+    open_consent_prompt,
 )
 from squid.bot.submission.submit import BuildSubmitCommands
+from squid.bot.utils.mount_registry import MountRegistry
+from squid_layouts.discord.testing import fake_message
 
 BUILD_LOG_CHANNEL = 500
 USER_ID = 42
@@ -118,20 +120,20 @@ def _make_interaction(accounts: Any) -> Any:
             services=SimpleNamespace(
                 settings=SimpleNamespace(),
                 accounts=accounts,
-            )
+            ),
+            mounts=MountRegistry(),
         ),
         response=SimpleNamespace(defer=AsyncMock(), is_done=lambda: True),
-        followup=SimpleNamespace(send=AsyncMock(return_value=SimpleNamespace(id=999))),
+        followup=SimpleNamespace(send=AsyncMock(return_value=fake_message(message_id=999))),
     )
 
 
-async def test_dynamic_consent_button_shows_already_consented() -> None:
-    button = DynamicBuildLogConsentButton()
+async def test_routed_consent_button_shows_already_consented() -> None:
     accounts = AsyncMock()
     accounts.get_account_by_identity.return_value = _discord_account(consented=True)
     interaction = _make_interaction(accounts)
 
-    await button.callback(cast(Any, interaction))
+    await open_consent_prompt(cast(Any, interaction))
 
     interaction.response.defer.assert_awaited_once_with(ephemeral=True)
     accounts.get_account_by_identity.assert_awaited_once_with(IdentityProvider.DISCORD, str(USER_ID))
@@ -140,10 +142,9 @@ async def test_dynamic_consent_button_shows_already_consented() -> None:
     assert kwargs.get("ephemeral") is True
 
 
-async def test_dynamic_consent_button_grants_consent_when_user_agrees(
+async def test_routed_consent_button_grants_consent_when_user_agrees(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    button = DynamicBuildLogConsentButton()
     accounts = AsyncMock()
     accounts.get_account_by_identity.return_value = None
     accounts.get_or_create_identity.return_value = _discord_account(consented=True)
@@ -154,7 +155,7 @@ async def test_dynamic_consent_button_grants_consent_when_user_agrees(
 
     monkeypatch.setattr(ConsentPrompt, "wait", mock_wait)
 
-    await button.callback(cast(Any, interaction))
+    await open_consent_prompt(cast(Any, interaction))
 
     accounts.get_or_create_identity.assert_awaited_once()
     call = accounts.get_or_create_identity.await_args
@@ -163,10 +164,9 @@ async def test_dynamic_consent_button_grants_consent_when_user_agrees(
     assert interaction.followup.send.await_count == 2
 
 
-async def test_dynamic_consent_button_cancelling_stores_no_account(
+async def test_routed_consent_button_cancelling_stores_no_account(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    button = DynamicBuildLogConsentButton()
     accounts = AsyncMock()
     accounts.get_account_by_identity.return_value = None
     interaction = _make_interaction(accounts)
@@ -176,7 +176,7 @@ async def test_dynamic_consent_button_cancelling_stores_no_account(
 
     monkeypatch.setattr(ConsentPrompt, "wait", mock_wait)
 
-    await button.callback(cast(Any, interaction))
+    await open_consent_prompt(cast(Any, interaction))
 
     accounts.get_or_create_identity.assert_not_awaited()
     assert interaction.followup.send.await_count == 1
