@@ -71,7 +71,7 @@ def _identity_label(identity: AccountIdentity) -> sl.TextLike:
 
 
 def _error_detail(error: ValidationError) -> sl.TextLike:
-    message = tr(error.message, **error.message_params)
+    message = tr(error.message)
     if error.end_user_action is None:
         return message
     action = tr(error.end_user_action)

@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 from whenever import Instant
 
 from squid.core.errors import InvalidStateError, JSONValue, ValidationError
-from squid.core.i18n import _
+from squid.core.i18n import _, tr
 from squid.submissions.domain import (
     DraftChange,
     DraftSnapshot,
@@ -206,8 +206,8 @@ class SubmissionDraftService:
     async def list_active(self, account_id: int, *, limit: int = 10) -> tuple[StoredDraft, ...]:
         """List a bounded newest-first view of one account's unexpired active drafts."""
         if not 1 <= limit <= DEFAULT_ACCOUNT_DRAFT_CAPACITY:
-            msg = _("draft discovery limit must be between 1 and {maximum}")
-            raise InvalidStateError(msg, message_params={"maximum": DEFAULT_ACCOUNT_DRAFT_CAPACITY})
+            maximum = DEFAULT_ACCOUNT_DRAFT_CAPACITY
+            raise InvalidStateError(tr(t"draft discovery limit must be between 1 and {maximum}"))
         return await self._repository.list_active_for_account(account_id, now=self._now(), limit=limit)
 
     async def get_owned(self, draft_id: UUID, account_id: int) -> StoredDraft:
