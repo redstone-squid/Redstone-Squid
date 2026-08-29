@@ -124,7 +124,7 @@ class Target(Generic[LimitsT, BodyT, RenderTargetT_co, AdapterT_co]):
         return f"{self.dialect.id}+{self.adapter.name}"
 
     @property
-    def extensions(self) -> Mapping[str, ExtensionAdapter[Any]]:
+    def extensions(self) -> Mapping[str, ExtensionAdapter[Any, Any]]:
         """The extension adapters in play, which a dialect that draws none never has."""
         if not self.dialect.realizes_extensions:
             return {}

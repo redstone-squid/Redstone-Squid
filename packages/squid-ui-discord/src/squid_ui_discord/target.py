@@ -1,9 +1,6 @@
 """Discord target conveniences bound to the shipped discord.py adapter."""
 
-from collections.abc import Callable
 from typing import cast, overload
-
-import discord
 
 from squid_ui import scene
 from squid_ui.planning.adapter import AdapterProfile
@@ -23,7 +20,7 @@ from squid_ui.target_types import (
     DiscordPyAdapter,
     Renderable,
 )
-from squid_ui_discord.adapter import DISCORD_PY_27_ADAPTER
+from squid_ui_discord.adapter import DISCORD_ITEM, DISCORD_PY_27_ADAPTER, ItemFactory
 
 V2_CAPABILITIES = DISCORD_PY_27_ADAPTER.combine_capabilities(V2_PROTOCOL_CAPABILITIES)
 CLASSIC_CAPABILITIES = CLASSIC_PROTOCOL_CAPABILITIES
@@ -64,12 +61,12 @@ def classic(
 
 
 def NativeItem[FallbackT](
-    factory: Callable[[], discord.ui.Item], *, fallback: Renderable[FallbackT]
-) -> Extension[ComponentsV2Target | FallbackT]:
+    factory: ItemFactory, *, fallback: Renderable[FallbackT]
+) -> Extension[ItemFactory, ComponentsV2Target | FallbackT]:
     """Create a measured Discord item with a required portable fallback."""
     return cast(
-        Extension[ComponentsV2Target | FallbackT],
-        Extension(kind="discord.item", version=1, payload=factory, fallback=cast(Node, fallback)),
+        Extension[ItemFactory, ComponentsV2Target | FallbackT],
+        Extension(kind=DISCORD_ITEM, version=1, payload=factory, fallback=cast(Node, fallback)),
     )
 
 
