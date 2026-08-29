@@ -191,7 +191,7 @@ API fuzz campaign. The removed in-process Schemathesis test must not be presente
 
 | Run | Collected | Outcome | Duration | Notes |
 |---|---:|---|---:|---|
-| Before cleanup | 4,823 | 4,687 passed, 10 failed, 10 skipped, 118 setup errors | 276.22 s | Setup errors were the sandbox-denied system temp directory; functional failures were the now-fixed localized permission-node hashing regression. |
+| Before cleanup | 4,823 | 4,687 passed, 10 failed, 10 skipped, 118 setup errors | 276.22 s | Setup errors were the sandbox-denied system temp directory. Nine functional failures were the now-fixed localized permission-node hashing regression; the UI literal localization guard remains red against the in-progress refactor. |
 | After cleanup | - | Pending | - | Same command and environment |
 
 The audit is complete only when every flagged module above has a final rewrite, delete, or
