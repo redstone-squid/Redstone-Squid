@@ -79,8 +79,8 @@ class HelpScreen(sd.Screen):
             summary=lambda item: getattr(item, "short_doc", None) or getattr(item, "description", ""),
             detail=self._detail,
             page_size=10,
-            title=L("Redstone Squid help"),
-            empty=L("No commands are available."),
+            title=L(t"Redstone Squid help"),
+            empty=L(t"No commands are available."),
         )
 
     def _find(self, needle: str | None) -> AnyCommand | None:
@@ -93,8 +93,8 @@ class HelpScreen(sd.Screen):
         signature = getattr(command, "signature", "")
         qualified_name = command.qualified_name
         heading = f"/{qualified_name}{f' {signature}' if signature else ''}"
-        description = getattr(command, "help", None) or getattr(command, "description", None) or L(
-            "No details provided"
+        description = (
+            getattr(command, "help", None) or getattr(command, "description", None) or L(t"No details provided")
         )
         children = tuple(getattr(command, "commands", ()))
         return sl.section(
@@ -112,7 +112,7 @@ class HelpScreen(sd.Screen):
         if self._needle is not None and self._focused is None:
             needle = self._needle
             body: sl.LayoutNode[sl.ComponentsV2Target] = sl.section(
-                sl.heading(L("Command not found")),
+                sl.heading(L(t"Command not found")),
                 sl.paragraph(L(t"No command named `{needle}` is available.")),
             )
         elif self._focused is not None:
@@ -121,16 +121,16 @@ class HelpScreen(sd.Screen):
             body = self.boundary(self._browser, key="browser")
         project_url = self._bot.source_code_url or PROJECT_URL
         links: list[sl.semantic.Link] = [
-            sl.link(L("Source"), project_url, key="source"),
-            sl.link(L("Submission form"), SUBMISSION_FORM_URL, key="form"),
-            sl.link(L("Documentation"), f"{project_url}/tree/master/docs", key="docs"),
-            sl.link(L("Regulations"), REGULATIONS_URL, key="regulations"),
+            sl.link(L(t"Source"), project_url, key="source"),
+            sl.link(L(t"Submission form"), SUBMISSION_FORM_URL, key="form"),
+            sl.link(L(t"Documentation"), f"{project_url}/tree/master/docs", key="docs"),
+            sl.link(L(t"Regulations"), REGULATIONS_URL, key="regulations"),
         ]
         if self._bot.user is not None:
             links.insert(
                 0,
                 sl.link(
-                    L("Invite"),
+                    L(t"Invite"),
                     f"https://discordapp.com/oauth2/authorize?client_id={self._bot.user.id}&scope=bot&permissions=8",
                     key="invite",
                 ),
@@ -138,7 +138,7 @@ class HelpScreen(sd.Screen):
         return (
             body,
             sl.action_controls(*links, key="help-links"),
-            sl.action_controls(sl.action_control(L("Close"), self._close, key="close"), key="help-actions"),
+            sl.action_controls(sl.action_control(L(t"Close"), self._close, key="close"), key="help-actions"),
         )
 
     async def _close(self, event: sl.PressEvent) -> None:
