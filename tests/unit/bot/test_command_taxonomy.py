@@ -148,17 +148,6 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "unassign",
     ),
     "search": (),
-    # `settings` is a hybrid group with a `show` fallback, so bare `settings` opens the panel
-    # that `list`, `get`, `clear`, `voting show` and `voting emojis` used to answer one key at
-    # a time (docs/plans/command-redesign/04-settings.md).
-    "settings": (
-        "locale",
-        "set",
-        "voting",
-        "voting reset",
-        "voting weight-remove",
-        "voting weight-set",
-    ),
     "starboard": (
         "create",
         "delete",
@@ -307,11 +296,6 @@ def test_sensitive_commands_declare_the_intended_permission_nodes() -> None:
     assert _nodes(search.__cog_commands__, "restrictions") == {"restriction.alias.create"}
     assert _nodes(search.__cog_commands__, "restrictions add-alias") == {"restriction.alias.create"}
 
-    settings = SettingsCog.__new__(SettingsCog)
-    assert _nodes(settings.__cog_commands__, "settings set") == {"settings.server.edit"}
-    assert _nodes(settings.__cog_commands__, "settings locale") == {"settings.server.edit"}
-    assert _nodes(settings.__cog_commands__, "settings voting") == {"settings.voting.edit"}
-
     starboard = StarboardCog.__new__(StarboardCog)
     assert _nodes(starboard.__cog_commands__, "starboard create") == {"starboard.board.create"}
     assert _nodes(starboard.__cog_commands__, "starboard recount") == {"starboard.board.recount"}
@@ -339,9 +323,6 @@ def test_group_gates_admit_anyone_holding_one_of_their_commands_nodes() -> None:
     the others unreachable for anyone granted only those.
     """
     for cog, group, member in (
-        (SettingsCog, "settings", "settings set"),
-        (SettingsCog, "settings", "settings voting"),
-        (SettingsCog, "settings voting", "settings voting reset"),
         (StarboardCog, "starboard", "starboard recount"),
         (RecordCog, "records", "records rebuild"),
         (SearchCog, "restrictions", "restrictions add-alias"),
@@ -414,15 +395,7 @@ def test_polls_are_one_app_only_command() -> None:
     assert not [command.qualified_name for command in cog.__cog_commands__]
 
 
-def test_the_settings_group_opens_the_panel_from_its_fallback() -> None:
-    """`/settings` and `!settings` both have to reach the panel, not a help page.
-
-    The panel is the phase 4 answer to setting a guild up one key per invocation, so it is the
-    group's own callback rather than another subcommand somebody has to know about.
-    """
-    cog = SettingsCog.__new__(SettingsCog)
-    group = cast(HybridGroup, _command(cog.__cog_commands__, "settings"))
-
-    assert group.fallback == "show"
-    assert group.invoke_without_command is True
-    assert not group.clean_params
+def test_settings_are_one_app_only_workspace() -> None:
+    settings = cast(Any, SettingsCog)
+    assert settings.__cog_commands__ == []
+    assert [command.qualified_name for command in settings.__cog_app_commands__] == ["settings"]
