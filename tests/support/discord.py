@@ -1,17 +1,75 @@
 """Small typed harnesses shared by Discord boundary tests."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterable
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Literal, cast
 from unittest.mock import AsyncMock
 
 import discord
 
+from squid.accounts.application import AccountService
+from squid.permissions.application import PermissionService
+from squid.permissions.domain import Decision, PermissionNode, Reason, Subject
+
 if TYPE_CHECKING:
     import squid.bot.app
+
+
+@dataclass(frozen=True, slots=True)
+class _Identity:
+    id: int
+
+
+@dataclass(frozen=True, slots=True)
+class _InitialResponseResult:
+    resource: None = None
+    message_id: None = None
+
+    def is_ephemeral(self) -> bool:
+        return True
+
+
+@dataclass(frozen=True, slots=True)
+class _FollowupResult:
+    id: int = 99
+
+
+@dataclass(frozen=True, slots=True)
+class _ResponseSource:
+    done: bool
+    send_message: AsyncMock
+
+    def is_done(self) -> bool:
+        return self.done
+
+
+@dataclass(frozen=True, slots=True)
+class _FollowupSource:
+    send: AsyncMock
+    delete_message: AsyncMock
+
+
+@dataclass(frozen=True, slots=True)
+class _ErrorServices:
+    error_reports: object
+
+
+@dataclass(slots=True)
+class _InteractionSource:
+    response: _ResponseSource
+    followup: _FollowupSource
+    client: object
+    user: _Identity
+    guild_id: int | None
+    channel_id: int
+    expires_at: datetime
+    command: None = None
+    delete_original_response: AsyncMock = field(default_factory=AsyncMock)
+
+    def is_expired(self) -> bool:
+        return False
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,26 +94,89 @@ def make_interaction(
     The client carries the installed layout host a real interaction always names. It has no
     services by default; pass `error_reports` to assert that a failure was captured.
     """
-    send_initial = AsyncMock(return_value=SimpleNamespace(resource=None, message_id=None, is_ephemeral=lambda: True))
-    send_followup = AsyncMock(return_value=SimpleNamespace(id=99))
-    services = SimpleNamespace(error_reports=error_reports) if error_reports is not None else None
+    send_initial = AsyncMock(return_value=_InitialResponseResult())
+    send_followup = AsyncMock(return_value=_FollowupResult())
+    services = _ErrorServices(error_reports) if error_reports is not None else None
     client = make_layout_bot(services=services)
     interaction = cast(
         discord.Interaction[discord.Client],
-        SimpleNamespace(
-            response=SimpleNamespace(is_done=lambda: response_done, send_message=send_initial),
-            followup=SimpleNamespace(send=send_followup, delete_message=AsyncMock()),
+        _InteractionSource(
+            response=_ResponseSource(response_done, send_initial),
+            followup=_FollowupSource(send_followup, AsyncMock()),
             client=client,
-            command=None,
-            user=SimpleNamespace(id=user_id),
+            user=_Identity(user_id),
             guild_id=guild_id,
             channel_id=channel_id,
             expires_at=datetime.now(UTC) + timedelta(minutes=15),
-            is_expired=lambda: False,
-            delete_original_response=AsyncMock(),
         ),
     )
     return InteractionHarness(interaction, send_initial, send_followup)
+
+
+class _AutocompletePermissions(PermissionService):
+    def __init__(self, allowed_nodes: frozenset[str]) -> None:
+        self.allowed_nodes = allowed_nodes
+
+    async def allows(self, subject: Subject, node: PermissionNode | str) -> bool:
+        del subject
+        return str(getattr(node, "name", node)) in self.allowed_nodes
+
+    async def decisions(
+        self,
+        subject: Subject,
+        nodes: Iterable[PermissionNode | str],
+    ) -> tuple[Decision, ...]:
+        del subject
+        return tuple(
+            Decision(
+                node=str(getattr(node, "name", node)),
+                allowed=str(getattr(node, "name", node)) in self.allowed_nodes,
+                reason=Reason.DEFAULT,
+            )
+            for node in nodes
+        )
+
+
+class _AutocompleteAccounts(AccountService):
+    def __init__(self) -> None:
+        pass
+
+
+@dataclass(frozen=True, slots=True)
+class _AutocompleteServices:
+    suggestions: object
+    permissions: _AutocompletePermissions
+    accounts: _AutocompleteAccounts
+
+
+@dataclass(frozen=True, slots=True)
+class _AccountIds:
+    account_id: int
+
+    async def resolve(self, accounts: AccountService, discord_id: int) -> int:
+        del accounts, discord_id
+        return self.account_id
+
+
+@dataclass(frozen=True, slots=True)
+class _AutocompleteClient:
+    services: _AutocompleteServices
+    account_ids: _AccountIds
+
+    async def is_owner(self, user: object) -> bool:
+        del user
+        return False
+
+
+@dataclass(frozen=True, slots=True)
+class _AutocompleteSource:
+    client: _AutocompleteClient
+    user: _Identity
+    guild_id: int | None
+    locale: str
+    channel_id: int = 2
+    command: None = None
+    guild: None = None
 
 
 def make_autocomplete_interaction(
@@ -74,44 +195,21 @@ def make_autocomplete_interaction(
     `allowed_nodes` is what the permission engine would grant this user.
     """
 
-    async def decisions(subject: object, nodes: object) -> tuple[object, ...]:
-        del subject
-        return tuple(
-            SimpleNamespace(node=node, allowed=node in allowed_nodes, reason=None)
-            for node in cast(tuple[object, ...], nodes)
-        )
-
-    async def permission_allows(subject: object, node: object) -> bool:
-        del subject
-        return str(getattr(node, "name", node)) in allowed_nodes
-
-    async def resolve_account(accounts: object, discord_id: int) -> int:
-        del accounts, discord_id
-        return account_id
-
-    async def is_owner(user: object) -> bool:
-        del user
-        return False
-
-    client = SimpleNamespace(
-        services=SimpleNamespace(
+    client = _AutocompleteClient(
+        services=_AutocompleteServices(
             suggestions=suggestions,
-            permissions=SimpleNamespace(allows=permission_allows, decisions=decisions),
-            accounts=SimpleNamespace(),
+            permissions=_AutocompletePermissions(allowed_nodes),
+            accounts=_AutocompleteAccounts(),
         ),
-        account_ids=SimpleNamespace(resolve=resolve_account),
-        is_owner=is_owner,
+        account_ids=_AccountIds(account_id),
     )
     return cast(
         discord.Interaction[discord.Client],
-        SimpleNamespace(
+        _AutocompleteSource(
             client=client,
-            user=SimpleNamespace(id=user_id),
-            guild=None,
+            user=_Identity(user_id),
             guild_id=guild_id,
             locale=locale,
-            channel_id=2,
-            command=None,
         ),
     )
 
@@ -124,16 +222,29 @@ class MessageHarness:
     edit: AsyncMock
 
 
+@dataclass(frozen=True, slots=True)
+class _MessageFlags:
+    components_v2: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _MessageSource:
+    edit: AsyncMock
+    channel: _Identity
+    id: int
+    flags: _MessageFlags
+
+
 def make_message(*, channel_id: int = 2, message_id: int = 3, components_v2: bool = False) -> MessageHarness:
     """Create the minimal message contract used by shared error handling."""
     edit = AsyncMock()
     message = cast(
         discord.Message,
-        SimpleNamespace(
+        _MessageSource(
             edit=edit,
-            channel=SimpleNamespace(id=channel_id),
+            channel=_Identity(channel_id),
             id=message_id,
-            flags=SimpleNamespace(components_v2=components_v2),
+            flags=_MessageFlags(components_v2),
         ),
     )
     return MessageHarness(message, edit)
@@ -174,6 +285,16 @@ class ReactionBotHarness:
     get_or_fetch_message: AsyncMock
 
 
+@dataclass(frozen=True, slots=True)
+class _ReactionBotSource:
+    guild: discord.Guild | None
+    get_or_fetch_message: AsyncMock
+
+    def get_guild(self, guild_id: int) -> discord.Guild | None:
+        del guild_id
+        return self.guild
+
+
 def make_reaction_bot(
     *, guild: discord.Guild | None = None, message: discord.Message | None = None
 ) -> ReactionBotHarness:
@@ -185,7 +306,7 @@ def make_reaction_bot(
     get_or_fetch_message = AsyncMock(return_value=message)
     bot = cast(
         "squid.bot.app.RedstoneSquid",
-        SimpleNamespace(get_guild=lambda guild_id: guild, get_or_fetch_message=get_or_fetch_message),
+        _ReactionBotSource(guild, get_or_fetch_message),
     )
     return ReactionBotHarness(bot, get_or_fetch_message)
 
@@ -193,7 +314,7 @@ def make_reaction_bot(
 class FakeClient:
     """A bot stand-in a layout host can be installed on.
 
-    `sd.install` keys a weak table on the client, which rules `SimpleNamespace` out.
+    `sd.install` keys a weak table on the client, which rules plain namespace bags out.
     Everything else about these doubles is unchanged: attributes are whatever the code under
     test reads off a bot.
     """
