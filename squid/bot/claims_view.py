@@ -1,13 +1,13 @@
 """The semantic review workspace for creator credit claims."""
 
 from collections.abc import Awaitable, Callable, Sequence
-from typing import cast
+from typing import Protocol, cast
 
 import squid_ui as sl
-from squid.accounts.application import AccountService
+import squid_ui_discord as sd
 from squid.accounts.domain import AliasClaim, IdentityProvider
 from squid.accounts.errors import AliasAlreadyClaimedError
-from squid.bot.consent import with_consented_account
+from squid.bot.consent import ConsentAccountOperations, with_consented_account
 from squid.bot.ui import DISCORD_BLUE, tr
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import ACCOUNT_CLAIM_APPROVE, ACCOUNT_CLAIM_REJECT
@@ -15,6 +15,18 @@ from squid.permissions.domain.catalogue import ACCOUNT_CLAIM_APPROVE, ACCOUNT_CL
 REVIEW_SECONDS = 300
 CLAIMS_PER_PAGE = 5
 type ClaimAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
+
+
+class ClaimOperations(ConsentAccountOperations, Protocol):
+    """Claim queue reads and decisions used by the review workspace."""
+
+    async def pending_alias_claims(self, *, with_claimants: bool = False) -> Sequence[AliasClaim]: ...
+
+    async def approve_alias_claim(
+        self, claim_id: int, *, staff_account_id: int, reassign: bool = False
+    ) -> AliasClaim: ...
+
+    async def reject_alias_claim(self, claim_id: int, *, staff_account_id: int) -> AliasClaim: ...
 
 
 class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
@@ -26,7 +38,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
 
     def __init__(
         self,
-        accounts: AccountService,
+        accounts: ClaimOperations,
         claims: Sequence[AliasClaim],
         *,
         author_id: int,
