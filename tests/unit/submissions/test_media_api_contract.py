@@ -3,9 +3,8 @@
 import asyncio
 import os
 import stat
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
-from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
@@ -169,6 +168,17 @@ class FakeMedia:
             artifacts=(),
         )
         return True
+
+
+@dataclass(frozen=True, slots=True)
+class DisabledMediaServices:
+    media_jobs: None
+    submission_drafts: FakeDrafts
+
+
+@dataclass(frozen=True, slots=True)
+class DisabledMediaRuntime:
+    services: DisabledMediaServices
 
 
 def app_with_fakes(media: FakeMedia, drafts: FakeDrafts) -> FastAPI:
@@ -463,7 +473,7 @@ async def test_disabled_media_service_fails_closed_with_service_unavailable() ->
     events: list[str] = []
     drafts = FakeDrafts(events)
     app = FastAPI()
-    app.state.runtime = SimpleNamespace(services=SimpleNamespace(media_jobs=None, submission_drafts=drafts))
+    app.state.runtime = DisabledMediaRuntime(DisabledMediaServices(media_jobs=None, submission_drafts=drafts))
     register_exception_handlers(app)
     app.include_router(router)
 
