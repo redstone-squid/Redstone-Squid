@@ -8,7 +8,7 @@ from discord import app_commands
 import squid_ui_discord as sd
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.groups import BuildCommandGroup
-from squid.bot.submission.ui.views import BuildEditComponent
+from squid.bot.submission.ui.opening import open_build_editor, prepare_build_editor, show_build_editor
 from squid.bot.ui import error_node, text_node
 from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.builds.application import BuildService
@@ -87,7 +87,7 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
             )
             return
 
-        component = BuildEditComponent(build, self.builds)
+        screen = await prepare_build_editor(interaction, build, self.builds)
         staged: dict[str, str] = {
             attribute: value
             for attribute, value in (
@@ -111,7 +111,7 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
             staged["component_restrictions"] = ", ".join(buckets["component"])
             staged["miscellaneous_restrictions"] = ", ".join(buckets["miscellaneous"])
 
-        inapplicable = [attribute for attribute, value in staged.items() if not component.stage(attribute, value)]
+        inapplicable = [attribute for attribute, value in staged.items() if not screen.stage(attribute, value)]
         if inapplicable:
             # Dropping a typed option silently is the failure mode this command was merged to
             # end, so a door option on a build with no door is a refusal rather than a no-op.
@@ -128,7 +128,7 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
             )
             return
 
-        await component.send(interaction, ephemeral=True)
+        await show_build_editor(interaction, screen)
 
     async def edit_context_menu(self, interaction: discord.Interaction[BotT], message: discord.Message) -> None:
         """A context menu command to edit a build."""
@@ -150,4 +150,4 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
         if build is None:
             await invocation.reply(text_node(t(locale, _("This does not look like a build."))), visibility="personal")
             return
-        await BuildEditComponent(build, self.builds).send(interaction, ephemeral=True)
+        await open_build_editor(interaction, build)
