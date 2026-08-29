@@ -6,14 +6,13 @@ these tests pin that along with the Minecraft refresh responses.
 """
 
 from dataclasses import replace
-from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
 from whenever import Instant
 
+from squid.accounts.application import AccountService
 from squid.accounts.domain import (
     CURRENT_CONSENT_VERSION,
     Account,
@@ -48,14 +47,50 @@ def _account(*, discord: bool = True) -> Account:
     )
 
 
-def _accounts(**overrides: object) -> Any:
-    """A stub account service carrying the two reads the self view always makes."""
-    defaults: dict[str, object] = {
-        "get_account_by_id": AsyncMock(return_value=_account()),
-        "get_profile": AsyncMock(return_value=AccountProfile.empty(1)),
-        "list_identities": AsyncMock(return_value=_account().identities),
-    }
-    return cast(Any, SimpleNamespace(**(defaults | overrides)))
+class AccountRecorder(AccountService):
+    def __init__(
+        self,
+        *,
+        account: Account | None = None,
+        profile: AccountProfile | None = None,
+        refresh: IdentityRefresh | None = None,
+    ) -> None:
+        self.account = account or _account()
+        self.profile = profile or AccountProfile.empty(1)
+        self.refresh = refresh
+        self.account_reads: list[int] = []
+        self.consent_grants: list[int] = []
+        self.refreshes: list[tuple[int, UUID | None]] = []
+
+    async def get_account_by_id(self, account_id: int) -> Account | None:
+        self.account_reads.append(account_id)
+        return self.account
+
+    async def get_profile(self, account_id: int) -> AccountProfile:
+        assert account_id == 1
+        return self.profile
+
+    async def list_identities(self, account_id: int) -> tuple[AccountIdentity, ...]:
+        assert account_id == 1
+        return self.account.identities
+
+    async def grant_current_consent(self, account_id: int) -> Account:
+        self.consent_grants.append(account_id)
+        return self.account
+
+    async def refresh_java_identity(self, account_id: int, *, java_uuid: UUID | None = None) -> IdentityRefresh:
+        self.refreshes.append((account_id, java_uuid))
+        assert self.refresh is not None
+        return self.refresh
+
+
+def _accounts(
+    *,
+    account: Account | None = None,
+    profile: AccountProfile | None = None,
+    refresh: IdentityRefresh | None = None,
+) -> AccountRecorder:
+    return AccountRecorder(account=account, profile=profile, refresh=refresh)
 
 
 def _identity_of(response: Any, provider: IdentityProvider) -> Any:
@@ -69,11 +104,11 @@ def _caller(kind: str = "account") -> Caller:
 
 async def test_a_cli_caller_can_read_its_own_account() -> None:
     """The regression: no Discord identity, but a real account."""
-    accounts = _accounts(get_account_by_id=AsyncMock(return_value=_account(discord=False)))
+    accounts = _accounts(account=_account(discord=False))
 
     response = await get_me(accounts, _caller("cli"))
 
-    accounts.get_account_by_id.assert_awaited_once_with(1)
+    assert accounts.account_reads == [1]
     assert response.id == 1
     assert response.creator_id == CREATOR_ID
     assert _identity_of(response, IdentityProvider.DISCORD) is None
@@ -99,7 +134,7 @@ async def test_the_response_lists_identities_rather_than_flattening_them() -> No
 
 async def test_the_response_carries_the_profile() -> None:
     profile = AccountProfile(account_id=1, display_name="Steve", bio="I build", hidden=True)
-    response = await get_me(_accounts(get_profile=AsyncMock(return_value=profile)), _caller())
+    response = await get_me(_accounts(profile=profile), _caller())
 
     assert response.profile.display_name == "Steve"
     assert response.profile.bio == "I build"
@@ -109,7 +144,7 @@ async def test_the_response_carries_the_profile() -> None:
 
 async def test_the_response_renders_a_java_avatar_from_its_source_identity() -> None:
     profile = AccountProfile(account_id=1, avatar_identity_id=2)
-    response = await get_me(_accounts(get_profile=AsyncMock(return_value=profile)), _caller())
+    response = await get_me(_accounts(profile=profile), _caller())
 
     assert response.profile.avatar is not None
     assert response.profile.avatar.identity_id == 2
@@ -124,14 +159,11 @@ async def test_a_caller_without_an_account_is_rejected() -> None:
 
 
 async def test_consent_is_granted_by_account_not_discord_id() -> None:
-    accounts = _accounts(
-        grant_current_consent=AsyncMock(return_value=_account(discord=False)),
-        get_account_by_id=AsyncMock(return_value=_account(discord=False)),
-    )
+    accounts = _accounts(account=_account(discord=False))
 
     response = await grant_consent(accounts, _caller("cli"))
 
-    accounts.grant_current_consent.assert_awaited_once_with(1)
+    assert accounts.consent_grants == [1]
     assert response.consent_pending is False
 
 
@@ -144,11 +176,11 @@ async def test_refresh_reports_a_rename_and_its_new_credit() -> None:
         claimed_alias=CreatorAlias(5, "NewName", account_id=1),
         retained_alias_names=("OldName",),
     )
-    accounts = SimpleNamespace(refresh_java_identity=AsyncMock(return_value=refresh))
+    accounts = _accounts(refresh=refresh)
 
-    response = await refresh_minecraft_identity(cast(Any, accounts), _caller())
+    response = await refresh_minecraft_identity(accounts, _caller())
 
-    accounts.refresh_java_identity.assert_awaited_once_with(1)
+    assert accounts.refreshes == [(1, None)]
     assert response.renamed is True
     assert response.previous_ign == "OldName"
     assert response.ign == "NewName"
@@ -167,9 +199,9 @@ async def test_refresh_reports_a_contested_name_without_claiming_it() -> None:
         contested_alias=CreatorAlias(9, "Contested", account_id=2),
         opened_claim=AliasClaim(3, 9, "Contested", 1, ClaimStatus.PENDING, NOW),
     )
-    accounts = SimpleNamespace(refresh_java_identity=AsyncMock(return_value=refresh))
+    accounts = _accounts(refresh=refresh)
 
-    response = await refresh_minecraft_identity(cast(Any, accounts), _caller())
+    response = await refresh_minecraft_identity(accounts, _caller())
 
     assert response.claimed_creator_name is None
     assert response.contested_creator_name == "Contested"
@@ -184,9 +216,9 @@ async def test_refresh_reports_an_unchanged_name() -> None:
         previous_name="Steve",
         claimed_alias=CreatorAlias(5, "Steve", account_id=1),
     )
-    accounts = SimpleNamespace(refresh_java_identity=AsyncMock(return_value=refresh))
+    accounts = _accounts(refresh=refresh)
 
-    response = await refresh_minecraft_identity(cast(Any, accounts), _caller())
+    response = await refresh_minecraft_identity(accounts, _caller())
 
     assert response.renamed is False
     assert response.previous_ign == "Steve"
@@ -194,9 +226,9 @@ async def test_refresh_reports_an_unchanged_name() -> None:
 
 async def test_staff_refresh_targets_the_named_account() -> None:
     refresh = IdentityRefresh(account_id=42, java_uuid=JAVA_UUID, current_name="Steve", previous_name="Steve")
-    accounts = SimpleNamespace(refresh_java_identity=AsyncMock(return_value=refresh))
+    accounts = _accounts(refresh=refresh)
 
-    response = await refresh_minecraft_identity_for(42, cast(Any, accounts))
+    response = await refresh_minecraft_identity_for(42, accounts)
 
-    accounts.refresh_java_identity.assert_awaited_once_with(42)
+    assert accounts.refreshes == [(42, None)]
     assert response.ign == "Steve"
