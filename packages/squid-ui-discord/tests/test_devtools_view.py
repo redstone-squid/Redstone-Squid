@@ -282,7 +282,9 @@ class TestOperationalInspectorSections:
         read_only_view = commit_render(MessageRoot(read_only, access=Owner(1)))
         writable_view = commit_render(MessageRoot(writable, access=Owner(1)))
 
-        read_only_labels = {item.label for item in read_only_view.walk_children() if isinstance(item, discord.ui.Button)}
+        read_only_labels = {
+            item.label for item in read_only_view.walk_children() if isinstance(item, discord.ui.Button)
+        }
         writable_labels = {item.label for item in writable_view.walk_children() if isinstance(item, discord.ui.Button)}
         assert "Wait for idle" not in read_only_labels
         assert "Wait for idle" in writable_labels

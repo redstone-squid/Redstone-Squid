@@ -42,9 +42,7 @@ def starboard_layout(
         if media:
             children.append(sd.v2.gallery(*media))
     if config.jump_to_message:
-        children.append(
-            sd.v2.row(sd.v2.link_button(t(locale, _("Original message")), message.jump_url))
-        )
+        children.append(sd.v2.row(sd.v2.link_button(t(locale, _("Original message")), message.jump_url)))
     score = f"{config.display_emoji} {entry.score:g}"
     if entry.raw_count != entry.score:
         score += t(locale, _(" ({count} reactions)"), count=entry.raw_count)

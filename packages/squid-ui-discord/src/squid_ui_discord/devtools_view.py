@@ -467,7 +467,9 @@ class OperationalInspector(sl.Component):
         nodes: list[sl.LayoutNode] = [sl.section(sl.heading("Queues and subscribers"), sl.code("\n".join(lines)))]
         if self._devtools_runtime.policy.permits(DevToolsAction.WAIT_IDLE):
             nodes.append(
-                sl.action_controls(sl.action_control("Wait for idle", self._wait_idle, key="wait-idle"), key="queue-actions")
+                sl.action_controls(
+                    sl.action_control("Wait for idle", self._wait_idle, key="wait-idle"), key="queue-actions"
+                )
             )
         return (*nodes, self._controls(back=True))
 
@@ -519,7 +521,9 @@ class OperationalInspector(sl.Component):
                 )
             )
             record_state = self.persistence_records.status
-            previous = record_state.previous if isinstance(record_state, sl.resources.Pending | sl.resources.Failed) else None
+            previous = (
+                record_state.previous if isinstance(record_state, sl.resources.Pending | sl.resources.Failed) else None
+            )
             if isinstance(record_state, sl.resources.Ready):
                 records = record_state.value
             elif previous is not None:
@@ -543,7 +547,10 @@ class OperationalInspector(sl.Component):
                 if records and self._devtools_runtime.policy.permits(DevToolsAction.PURGE_PERSISTENCE):
                     record_nodes.append(
                         sl.choices(
-                            *(sl.choice(record.key, key=record.key, description=record.scope) for record in records[:25]),
+                            *(
+                                sl.choice(record.key, key=record.key, description=record.scope)
+                                for record in records[:25]
+                            ),
                             key="purge-records",
                             selection=sl.controlled(self.selected_records, self._select_records),
                             minimum=0,
@@ -604,11 +611,11 @@ class OperationalInspector(sl.Component):
             body = "No routers are installed on this client." if not lines else "\n".join(lines)
         return (sl.section(sl.heading("Routed controls"), sl.code(body)), self._controls(back=True))
 
-    def _activity(
-        self, snapshot: squid_ui_discord.devtools_runtime.OperationalSnapshot
-    ) -> Sequence[sl.LayoutNode]:
+    def _activity(self, snapshot: squid_ui_discord.devtools_runtime.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         events = () if self._action_ledger is None else self._action_ledger.events[-20:]
-        event_text = "No retained causal events." if not events else "\n".join(_event_summary(event) for event in events)
+        event_text = (
+            "No retained causal events." if not events else "\n".join(_event_summary(event) for event in events)
+        )
         retained = (
             *snapshot.profiler.recent,
             *snapshot.profiler.slow,
@@ -617,14 +624,12 @@ class OperationalInspector(sl.Component):
         )
         dispatches = sorted(
             {
-                trace.trace_id: trace
-                for trace in retained
-                if trace.operation.value in {"dispatch", "route_dispatch"}
+                trace.trace_id: trace for trace in retained if trace.operation.value in {"dispatch", "route_dispatch"}
             }.values(),
             key=lambda trace: trace.started,
         )[-20:]
-        timeline = "No retained dispatches." if not dispatches else "\n".join(
-            _trace_summary(trace) for trace in dispatches
+        timeline = (
+            "No retained dispatches." if not dispatches else "\n".join(_trace_summary(trace) for trace in dispatches)
         )
         return (
             sl.section(sl.heading("Action results"), sl.code(event_text)),

@@ -168,9 +168,7 @@ class ErrorReportScreen(sd.UserSessionScreen):
             # front; the attachment carries all of it.
             children.append(sd.v2.heading(L(t"Log tail"), level=3, priority=2))
             children.append(
-                sd.v2.code(
-                    "\n".join(report.log_tail), overflow=sl.primitives.Truncate(keep="tail"), priority=-8
-                )
+                sd.v2.code("\n".join(report.log_tail), overflow=sl.primitives.Truncate(keep="tail"), priority=-8)
             )
         children.append(sl.fields(*_summary_fields(report, matches)))
         children.append(

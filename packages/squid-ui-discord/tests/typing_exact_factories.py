@@ -2,7 +2,6 @@
 
 import squid_ui_discord as sd
 
-
 classic = sd.classic.card("classic")
 v2 = sd.v2.panel("v2")
 
