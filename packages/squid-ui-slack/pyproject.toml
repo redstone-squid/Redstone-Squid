@@ -1,0 +1,34 @@
+[project]
+name = "squid-ui-slack"
+version = "0.1.0a1"
+description = "Slack Block Kit renderer for squid-ui"
+requires-python = ">=3.14"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Redstone Squid contributors" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
+]
+dependencies = [
+    "squid-ui==0.1.0a1",
+    "slack-sdk>=3.43,<4",
+    "packaging>=24,<27",
+]
+
+[project.urls]
+Changelog = "https://github.com/redstone-squid/Redstone-Squid/blob/master/CHANGELOG.md"
+Documentation = "https://redstone-squid.github.io/Redstone-Squid/squid-ui/"
+Issues = "https://github.com/redstone-squid/Redstone-Squid/issues"
+Repository = "https://github.com/redstone-squid/Redstone-Squid"
+
+[build-system]
+requires = ["uv_build>=0.11,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { file = "src/**/*" }]

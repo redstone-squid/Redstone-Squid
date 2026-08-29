@@ -31,10 +31,13 @@ class SlackComponentLimits:
     option_description: int = 75
     option_value: int = 150
     select_options: int = 100
+    choice_options: int = 10
     placeholder: int = 150
     table_rows: int = 100
     table_columns: int = 20
     table_text: int = 10000
+    card_title: int = 150
+    card_body: int = 200
     carousel_cards: int = 10
     alert_text: int = 200
 
