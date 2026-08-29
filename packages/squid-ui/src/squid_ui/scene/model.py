@@ -12,6 +12,7 @@ from squid_ui.forms import FormBinding
 from squid_ui.interactions import ActionBinding, ActionMode
 from squid_ui.primitives.styles import ActionStyle, Color
 from squid_ui.runtime.presentation_state import SessionUpdate
+from squid_ui.scene.slack import SlackHomeView, SlackMessage, SlackModalView
 from squid_ui.text import Markup
 
 
@@ -566,7 +567,7 @@ class ClassicMessage:
     rows: tuple[ClassicRow, ...] = ()
 
 
-type Body = ComponentsV2 | ClassicMessage | HtmlBody
+type Body = ComponentsV2 | ClassicMessage | HtmlBody | SlackMessage | SlackModalView | SlackHomeView
 
 
 _KIND_OWNERS: dict[str, type] = {}
@@ -594,6 +595,9 @@ for _kind_cls in (
     ComponentsV2,
     ClassicMessage,
     HtmlBody,
+    SlackMessage,
+    SlackModalView,
+    SlackHomeView,
 ):
     if _kind_cls.KIND in _KIND_OWNERS:
         # A reused tag would let the codec's `match kind:` misroute an unrelated node type.
