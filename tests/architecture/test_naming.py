@@ -212,10 +212,12 @@ NOT_AGENT_NOUNS = frozenset(
         "Author",
         "Cluster",
         "Counter",
+        "Divider",
         # Python's own protocol term: a descriptor is what the object *is*, not a doer.
         "Descriptor",
         "Error",
         "Footer",
+        "Header",
         "Ledger",
         "Never",
         "OpenContext",

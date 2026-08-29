@@ -42,6 +42,13 @@ from squid_ui.planning.types import (
     HtmlTarget,
     Renderable,
     RenderTarget,
+    SlackAdapter,
+    SlackHomeTarget,
+    SlackMessageTarget,
+    SlackModalTarget,
+    SlackSdk343Adapter,
+    SlackSdkAdapter,
+    SlackTarget,
 )
 from squid_ui.sources import POSITION_RESOLVER, Position, PositionResolver
 
@@ -69,6 +76,13 @@ __all__ = [
     "RenderTarget",
     "Renderable",
     "ResourceCost",
+    "SlackAdapter",
+    "SlackHomeTarget",
+    "SlackMessageTarget",
+    "SlackModalTarget",
+    "SlackSdk343Adapter",
+    "SlackSdkAdapter",
+    "SlackTarget",
     "SolveNote",
     "SolveNoteCode",
     "SolveNoteSeverity",

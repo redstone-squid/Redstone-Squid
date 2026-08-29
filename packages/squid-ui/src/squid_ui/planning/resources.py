@@ -20,6 +20,7 @@ class Axis(StrEnum):
     EMBEDS = "embeds"
     ROWS = "rows"
     CONTROLS = "controls"
+    BLOCKS = "blocks"
 
 
 TEXT_AXES = frozenset({Axis.DISPLAY_TEXT, Axis.CONTENT_TEXT, Axis.EMBED_TEXT})

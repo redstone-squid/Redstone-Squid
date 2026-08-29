@@ -11,6 +11,13 @@ from squid_ui.target_types import (
     HtmlTarget,
     Renderable,
     RenderTarget,
+    SlackAdapter,
+    SlackHomeTarget,
+    SlackMessageTarget,
+    SlackModalTarget,
+    SlackSdk343Adapter,
+    SlackSdkAdapter,
+    SlackTarget,
 )
 
 __all__ = [
@@ -24,4 +31,11 @@ __all__ = [
     "HtmlTarget",
     "RenderTarget",
     "Renderable",
+    "SlackAdapter",
+    "SlackHomeTarget",
+    "SlackMessageTarget",
+    "SlackModalTarget",
+    "SlackSdk343Adapter",
+    "SlackSdkAdapter",
+    "SlackTarget",
 ]

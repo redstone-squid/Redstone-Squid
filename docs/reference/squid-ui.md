@@ -214,7 +214,7 @@ conditioned or themed.
 
 ## Planning and targets
 
-`planning.plan` turns a document into a `PlanResult` for one explicit target. The four dialect
+`planning.plan` turns a document into a `PlanResult` for one explicit target. The target
 markers appear in component base classes when a component uses target-specific primitives.
 
 ::: squid_ui.planning.plan
@@ -230,6 +230,14 @@ markers appear in component base classes when a component uses target-specific p
 ::: squid_ui.ClassicTarget
 
 ::: squid_ui.HtmlTarget
+
+::: squid_ui.SlackTarget
+
+::: squid_ui.SlackMessageTarget
+
+::: squid_ui.SlackModalTarget
+
+::: squid_ui.SlackHomeTarget
 
 ## Native HTML
 
@@ -305,6 +313,7 @@ adapter contracts; import from them when the root vocabulary is not enough.
 | `squid_ui.runtime` | Frontend-neutral component runtime and presentation state. |
 | `squid_ui.scene` | Immutable resolved scenes and protocol serialization. |
 | `squid_ui.semantic` | Frontend-neutral semantic layout vocabulary. |
+| `squid_ui.slack` | Slack Block Kit target identities and hard limits. |
 | `squid_ui.sources` | Position tokens and asynchronous window loading. |
 | `squid_ui.temporal` | Portable exact-time values and local-time resolution. |
 | `squid_ui.testing` | Tree queries, frontend doubles, and determinism controls for tests. |

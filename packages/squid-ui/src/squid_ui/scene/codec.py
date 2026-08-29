@@ -63,6 +63,8 @@ from squid_ui.scene.model import (
     ZonedTime,
 )
 from squid_ui.scene.schema import SCHEMA
+from squid_ui.scene.slack import SlackHomeView, SlackMessage, SlackModalView
+from squid_ui.scene.slack_codec import SlackSceneCodecError, slack_body_from_dict, slack_body_to_dict
 from squid_ui.text import Markup
 
 
@@ -183,6 +185,8 @@ def _body_to_dict(body: Body) -> dict[str, Any]:
                 "children": [_html_node_to_dict(child) for child in children],
                 "locale": locale,
             }
+        case SlackMessage() | SlackModalView() | SlackHomeView():
+            return slack_body_to_dict(body)
 
 
 def _body_from_dict(raw: Mapping[str, Any]) -> Body:
@@ -214,6 +218,11 @@ def _body_from_dict(raw: Mapping[str, Any]) -> Body:
                 tuple(_html_node_from_dict(_object(child)) for child in children),
                 locale=_optional_string(raw, "locale"),
             )
+        case SlackMessage.KIND | SlackModalView.KIND | SlackHomeView.KIND:
+            try:
+                return slack_body_from_dict(raw)
+            except SlackSceneCodecError as error:
+                raise CodecError(str(error)) from error
         case _:
             msg = f"unknown scene body kind {kind!r}"
             raise CodecError(msg)
