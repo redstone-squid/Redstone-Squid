@@ -8,7 +8,6 @@ BOT_ROOT = Path(__file__).parents[2] / "squid" / "bot"
 NATIVE_EVENT_ALLOWLIST = {
     ("claims_view.py", "_decide"),
     ("consent.py", "with_consented_account"),
-    ("submission/build_info.py", "_edit"),
     ("verify.py", "open_consent"),
 }
 """Reviewed Discord operation bridges that still need callbacks injected by their workspace."""
