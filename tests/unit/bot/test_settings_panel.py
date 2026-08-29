@@ -17,7 +17,7 @@ from squid.voting.application import VoteService
 from squid.voting.domain import EmojiPreset, RoleWeight, VoteKind, VoteOption
 from squid_ui.runtime.reactivity import readonly_transaction
 from squid_ui_discord.testing import commit_render
-from tests.helpers.discord import make_layout_bot
+from tests.support.discord import make_layout_bot
 
 GUILD_ID = 7
 EVERYTHING = SettingsCapabilities(view_server=True, edit_server=True, edit_voting=True)

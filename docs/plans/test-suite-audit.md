@@ -66,7 +66,7 @@ packages/squid-ui-discord/tests/test_runtime.py
 packages/squid-ui-discord/tests/test_screen.py
 packages/squid-ui-discord/tests/test_session_specs.py
 packages/squid-ui-discord/tests/test_sessions.py
-tests/helpers/discord.py
+tests/support/discord.py
 ```
 
 ### Bot screens and Discord adapters

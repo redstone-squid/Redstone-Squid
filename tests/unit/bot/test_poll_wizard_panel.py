@@ -15,8 +15,8 @@ from squid.voting.errors import InvalidVoteConfigurationError
 from squid_ui.testing import labels
 from squid_ui_discord.testing import interaction_harness
 from squid_ui_widgets import testing as wt
-from tests.helpers.discord import make_layout_bot
-from tests.helpers.voting import GENERIC_OPTIONS
+from tests.support.discord import make_layout_bot
+from tests.support.voting import GENERIC_OPTIONS
 
 OWNER_ID = 11
 
