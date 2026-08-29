@@ -66,7 +66,7 @@ class PermissionNode:
 
     name: str
     scope: NodeScope
-    description: Message
+    description: Message = field(hash=False)
     default: Default = Default.DENY
     tags: frozenset[Tag] = field(default_factory=frozenset)
 
