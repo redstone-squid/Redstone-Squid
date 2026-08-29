@@ -51,8 +51,6 @@ UNGATED_COMMANDS = frozenset(
         "tag",
         "tag apply",
         "tag propose",
-        "version",
-        "version list",
     }
 )
 """Commands that legitimately declare no permission node: the public ones.
@@ -165,7 +163,6 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "weight set",
     ),
     "tag": ("apply", "approve", "archive", "pending", "propose", "reject"),
-    "version": ("add", "list"),
 }
 
 

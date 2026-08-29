@@ -8,7 +8,6 @@ import discord
 from discord.ext import commands
 
 from squid.bot.submission.records import RecordCog
-from squid.bot.version_tracking import VersionTracker
 from squid_ui_discord.testing import fake_interaction, fake_message
 from tests.helpers.discord import make_layout_bot
 
@@ -52,34 +51,6 @@ def _records_cog(gaps: list[Any]) -> RecordCog[Any]:
     cog.bot = cast(Any, SimpleNamespace(services=SimpleNamespace(settings=SimpleNamespace())))
     cog.records = cast(Any, SimpleNamespace(gaps=AsyncMock(return_value=gaps), title_gaps=AsyncMock(return_value=gaps)))
     return cog
-
-
-def _version_cog(versions: list[str]) -> VersionTracker[Any]:
-    cog = VersionTracker.__new__(VersionTracker)
-    cog.bot = cast(Any, SimpleNamespace(services=SimpleNamespace(settings=SimpleNamespace())))
-    cog.version_service = cast(Any, SimpleNamespace(list_display=AsyncMock(return_value=versions)))
-    return cog
-
-
-async def test_the_version_list_asks_for_every_version_it_knows() -> None:
-    """It stopped at 20 with a TODO where the pagination should have been."""
-    cog = _version_cog([f"1.{minor}" for minor in range(60)])
-    ctx = _context()
-
-    await VersionTracker.versions.callback(cog, ctx)  # type: ignore[arg-type]
-
-    assert cast(Any, cog).version_service.list_display.await_args.kwargs.get("limit") is None
-    assert "**Page 1 of 2**" not in _text(_sent(ctx))
-    assert "Page 1 of 2" in _text(_sent(ctx))
-
-
-async def test_versions_read_as_a_run_of_tokens_rather_than_paragraphs() -> None:
-    cog = _version_cog(["1.20", "1.21"])
-    ctx = _context()
-
-    await VersionTracker.versions.callback(cog, ctx)  # type: ignore[arg-type]
-
-    assert "1.20, 1.21" in _text(_sent(ctx))
 
 
 async def test_record_gaps_page_instead_of_stopping_at_thirty() -> None:
