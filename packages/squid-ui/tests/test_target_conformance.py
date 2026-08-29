@@ -129,9 +129,7 @@ _TARGETS: dict[str, Callable[[], Any]] = {
     "html": lambda: sl.html.target(),
     "discord-v2": lambda: components_v2_target(AdapterProfile(DiscordAdapter, "conformance", ">=1")),
     "discord-classic": lambda: classic_target(AdapterProfile(DiscordAdapter, "conformance", ">=1")),
-    "slack-message": lambda: sl.slack.message_target(
-        adapter=AdapterProfile(SlackAdapter, "conformance", ">=1")
-    ),
+    "slack-message": lambda: sl.slack.message_target(adapter=AdapterProfile(SlackAdapter, "conformance", ">=1")),
     "slack-home": lambda: sl.slack.home_target(adapter=AdapterProfile(SlackAdapter, "conformance", ">=1")),
 }
 
