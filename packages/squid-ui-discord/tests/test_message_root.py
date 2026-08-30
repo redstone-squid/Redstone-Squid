@@ -424,7 +424,9 @@ class TestEphemeralRenewal:
     async def test_stale_arming_leaves_the_application_generation_pending(self) -> None:
         message_root, interaction, _ = await _armed_root()
         # Restore active state so this test can exercise the stale arm branch independently.
-        await message_root.dispatch("__squid_continue_session", interaction_harness(), generation=message_root.generation)
+        await message_root.dispatch(
+            "__squid_continue_session", interaction_harness(), generation=message_root.generation
+        )
         active_generation = message_root.generation
 
         class StaleHandle:

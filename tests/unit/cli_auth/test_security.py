@@ -53,13 +53,18 @@ def request_with_service(cli: FakeCliAuthorization) -> Request:
     app = FastAPI()
     app.state.config = TEST_CONFIG
     app.state.runtime = Runtime(Services(cli))
-    return Request(cast(Scope, {
-            "type": "http",
-            "method": "GET",
-            "path": "/v1/submissions/drafts",
-            "headers": [],
-            "app": app,
-        }))
+    return Request(
+        cast(
+            Scope,
+            {
+                "type": "http",
+                "method": "GET",
+                "path": "/v1/submissions/drafts",
+                "headers": [],
+                "app": app,
+            },
+        )
+    )
 
 
 async def test_cli_token_derives_account_device_and_session_caller() -> None:

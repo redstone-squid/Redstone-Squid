@@ -33,11 +33,13 @@ class StubPermissions(PermissionService):
     def __init__(self, *, allowed: bool) -> None:
         self.allowed = allowed
 
-    async def decisions(
-        self, subject: Subject, nodes: Iterable[PermissionNode | str]
-    ) -> tuple[Decision, ...]:
+    async def decisions(self, subject: Subject, nodes: Iterable[PermissionNode | str]) -> tuple[Decision, ...]:
         return tuple(
-            Decision(node=node.name if isinstance(node, PermissionNode) else node, allowed=self.allowed, reason=Reason.DEFAULT)
+            Decision(
+                node=node.name if isinstance(node, PermissionNode) else node,
+                allowed=self.allowed,
+                reason=Reason.DEFAULT,
+            )
             for node in nodes
         )
 
@@ -141,6 +143,7 @@ def _message(*, channel_id: int = BUILD_LOG_CHANNEL, from_bot: bool = False) -> 
     # the channel's history, which a thread or a DM does not offer the same way.
     channel = MagicMock(spec=discord.TextChannel)
     channel.id = channel_id
+
     @dataclass(frozen=True)
     class Author:
         id: int

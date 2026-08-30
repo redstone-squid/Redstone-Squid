@@ -245,9 +245,7 @@ def app_with_fakes(
     app = FastAPI()
     app.state.runtime = Runtime(Services(idempotency))
     app.state.config = TEST_CONFIG.model_copy(
-        update={
-            "minecraft_auth": TEST_CONFIG.minecraft_auth.model_copy(update={"verification_uri": VERIFICATION_URI})
-        }
+        update={"minecraft_auth": TEST_CONFIG.minecraft_auth.model_copy(update={"verification_uri": VERIFICATION_URI})}
     )
     register_exception_handlers(app)
     app.include_router(router)

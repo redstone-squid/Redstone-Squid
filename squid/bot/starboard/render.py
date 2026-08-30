@@ -41,9 +41,7 @@ def starboard_layout(
         if media:
             children.append(sl.primitives.Gallery(media))
     if config.jump_to_message:
-        children.append(
-            sl.primitives.Row((sl.primitives.LinkButton(tr("Original message"), message.jump_url),))
-        )
+        children.append(sl.primitives.Row((sl.primitives.LinkButton(tr("Original message"), message.jump_url),)))
     score = f"{config.display_emoji} {entry.score:g}"
     if entry.raw_count != entry.score:
         score += tr(" ({count} reactions)", count=entry.raw_count)
