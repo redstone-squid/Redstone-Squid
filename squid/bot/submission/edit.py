@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 import discord
 from discord import app_commands
 
-import squid_ui_discord as sd
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.ui.opening import open_build_editor, prepare_build_editor, show_build_editor
 from squid.bot.ui import error_node, text_node
