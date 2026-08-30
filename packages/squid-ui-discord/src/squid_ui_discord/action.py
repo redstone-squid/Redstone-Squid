@@ -12,13 +12,13 @@ from squid_ui.target_types import ComponentsV2Target
 from squid_ui_discord.actions import responder
 from squid_ui_discord.contracts import FacadeContent
 from squid_ui_discord.facade import DiscordUI
-from squid_ui_discord.modal import ModalSpec
 from squid_ui_discord.message_root import MessageRoot
+from squid_ui_discord.modal import ModalSpec
 from squid_ui_discord.request import DiscordRequest
 from squid_ui_discord.response import Response, ResponseOverrides, ResponseResult, ResponseSpec
 
 
-class DiscordAction[EventT: ActionEvent, OwnerT]:
+class DiscordAction[EventT: ActionEvent, OwnerT = object]:
     """A component event whose response authority ends when its dispatch returns."""
 
     def __init__(self, event: EventT, ui: DiscordUI[OwnerT]) -> None:
