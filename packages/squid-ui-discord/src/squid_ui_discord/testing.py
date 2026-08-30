@@ -318,12 +318,23 @@ class InteractionHarness:
     """
 
     def __init__(
-        self, user_id: int = 1, *, message_id: int = 99, expired: bool = False, components_v2: bool = True
+        self,
+        user_id: int = 1,
+        *,
+        message_id: int = 99,
+        expired: bool = False,
+        components_v2: bool = True,
+        client: Any = None,
     ) -> None:
         self.user = _Identity(user_id)
         self.message_harness = MessageHarness(message_id=message_id, components_v2=components_v2)
         self.message = self.message_harness.source
+        self.client = client
+        self.channel = self.message.channel
+        self.guild = self.message.guild
         self.guild_id = self.message.guild.id if self.message.guild is not None else None
+        self.locale = "en-US"
+        self.guild_locale = "en-US"
         self.response = _InteractionResponseHarness(message_id)
         self.followup = _FollowupHarness()
         self.original_response = AsyncCallRecorder(result=self.message)
