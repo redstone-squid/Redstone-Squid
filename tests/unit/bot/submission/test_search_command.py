@@ -7,7 +7,6 @@ import pytest
 from discord.ext import commands
 
 import squid_ui_discord as sd
-
 from squid.bot.submission.search import SearchCog, SearchTarget
 from squid.builds.application import BuildQueryService
 from squid.builds.domain import Build

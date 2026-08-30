@@ -68,9 +68,7 @@ class _InteractionSource:
     command: None = None
     delete_original_response: AsyncCallRecorder = field(default_factory=AsyncCallRecorder)
     edit_original_response: AsyncCallRecorder = field(default_factory=AsyncCallRecorder)
-    original_response: AsyncCallRecorder = field(
-        default_factory=lambda: AsyncCallRecorder(result=_FollowupResult())
-    )
+    original_response: AsyncCallRecorder = field(default_factory=lambda: AsyncCallRecorder(result=_FollowupResult()))
 
     def is_expired(self) -> bool:
         return False
