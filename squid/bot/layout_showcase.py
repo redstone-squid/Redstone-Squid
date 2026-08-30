@@ -10,11 +10,11 @@ import asyncio
 from collections.abc import Awaitable, Callable, Iterable, Sequence
 from datetime import UTC, datetime
 from functools import partial
-from typing import TYPE_CHECKING, ClassVar, Literal, Never
+from typing import TYPE_CHECKING, Literal, Never
 
 from discord import app_commands
 from discord.ext import commands
-from discord.ext.commands import Cog, Context, guild_only
+from discord.ext.commands import Context, guild_only
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -23,6 +23,7 @@ from squid.bot.i18n import localization_for, resolve_locale
 from squid.bot.ui import DISCORD_BLUE, DISCORD_GREEN, DISCORD_YELLOW, tr
 from squid_replication import ReferenceBackend, Replica, ReplicatedDocument
 from squid_ui_discord import SessionKey
+from squid_ui_discord.ext import Cog
 from squid_ui_discord.session_specs import OpenContext
 from squid_ui_discord.sessions import UserScope
 
@@ -1251,12 +1252,11 @@ class Lobby(sd.Screen):
     roster of its own -- it reads `session.members` and asks for a redraw after each change.
     """
 
-    session_name: ClassVar[str] = "showcase-lobby"
-    scope = sd.ScopeKind.GUILD
     capacity = 4
     quota = 1
+    session = sd.SessionSpec("showcase-lobby", scope=sd.ScopeKind.GUILD, capacity=capacity, quota=quota)
     access = sd.Everyone()
-    visibility = "public"
+    audience = "public"
     timeout = None
 
     started_with: int | None = sl.state(None)
@@ -1323,7 +1323,9 @@ class Lobby(sd.Screen):
         guild = self.opening.guild
         if guild is None:
             return None
-        sessions = self.opening.runtime.sessions.get(SessionKey.guild(self.session_name, guild.id))
+        session_spec = self.session
+        assert session_spec is not None
+        sessions = self.opening.runtime.sessions.get(SessionKey.guild(session_spec.name, guild.id))
         return sessions[0] if sessions else None
 
 
@@ -1345,11 +1347,11 @@ _LEAVE_NOTICES = {
 }
 
 
-class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
+class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
     """Public commands demonstrating the layout engine."""
 
     def __init__(self, bot: BotT) -> None:
-        self.bot = bot
+        super().__init__(bot)
         # Retention state, per §3 of the shared-state plan: the cog outlives every panel, so
         # a reader's accent survives closing and reopening the demo. The pool is the retention
         # policy, written down where the lifetime is known.
@@ -1372,9 +1374,9 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         entries: app_commands.Range[int, 12, 120] = 30,
     ) -> None:
         """Open an interactive tour of how this bot lays out its messages."""
-        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        await invocation.mount(
+        await self.ui.respond(
+            ctx,
             LayoutShowcase(section=section, entries=entries, locale=locale),
             access=sd.Everyone(),
         )
@@ -1382,7 +1384,6 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     @layout_group.command(name="shared")
     async def shared(self, ctx: Context[BotT]) -> None:
         """Open two live panels that agree on settings neither of them owns."""
-        invocation = await sd.Invocation.of(ctx)
         scope = OpenContext(ctx.author.id, ctx.guild.id if ctx.guild else None).user()
         appearance = self._appearance.get(scope)
         # Co-existence state: only the two panels hold it, so it is collected when the second
@@ -1393,10 +1394,11 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             AppearancePanel(appearance, session),
             PreviewPanel(appearance, session),
         ):
-            await invocation.mount(
+            await self.ui.respond(
+                ctx,
                 component,
                 access=sd.Owner(ctx.author.id),
-                scheduler=self.bot.client_runtime.scheduler,
+                follow_topics=True,
             )
 
     @layout_group.command(name="lobby")
@@ -1404,7 +1406,7 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def lobby(self, ctx: Context[BotT]) -> None:
         """Open a four-seat lobby anyone can join, with the roster held by the session."""
         assert ctx.guild is not None
-        await Lobby(ctx.author.id).show(ctx)
+        await self.ui.respond(ctx, Lobby(ctx.author.id))
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:

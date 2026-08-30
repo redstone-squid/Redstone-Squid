@@ -124,9 +124,9 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target]):
 class SearchScreen(sd.Screen):
     """A resource-backed search workspace that ends when closed, replaced, or timed out."""
 
-    session_name = "search"
+    session = sd.SessionSpec("search")
     timeout = 180
-    visibility = "public"
+    audience = "public"
 
     closed: bool = sl.state(default=False)
 

@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Protocol, cast
 
 import discord
 from discord import app_commands
-from discord.ext.commands import Cog
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -18,6 +17,7 @@ from squid.permissions.domain.catalogue import VERSION_ENTRY_CREATE
 from squid.versions.domain import Edition, MinecraftVersion
 from squid_ui.text import localization_scope
 from squid_ui_discord import send_to
+from squid_ui_discord.ext import Cog
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -45,9 +45,9 @@ type VersionAuthorizer = Callable[[], Awaitable[bool]]
 class VersionScreen(sd.Screen):
     """A version catalogue that ends when closed, replaced, or timed out."""
 
-    session_name = "versions"
+    session = sd.SessionSpec("versions")
     timeout = 300
-    visibility = "personal"
+    audience = "personal"
 
     def __init__(
         self,
@@ -136,11 +136,11 @@ class VersionScreen(sd.Screen):
         await event.finish()
 
 
-class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="VersionTracker"):
+class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT], name="VersionTracker"):
     """Open the version catalogue and ingest configured channel announcements."""
 
     def __init__(self, bot: BotT):
-        self.bot = bot
+        super().__init__(bot)
         self.version_service = bot.services.versions
 
     @app_commands.command(name="versions", description="Browse recognized Minecraft versions")
@@ -150,11 +150,14 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="VersionTrac
         async def may_create() -> bool:
             return await allows(interaction, VERSION_ENTRY_CREATE)
 
-        await VersionScreen(
-            self.version_service,
-            can_create=await may_create(),
-            authorize_create=may_create,
-        ).show(interaction)
+        await self.ui.respond(
+            interaction,
+            VersionScreen(
+                self.version_service,
+                can_create=await may_create(),
+                authorize_create=may_create,
+            ),
+        )
 
     @Cog.listener(name="on_message")
     async def on_message_version_add(self, message: discord.Message) -> None:

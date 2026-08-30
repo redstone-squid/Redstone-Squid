@@ -27,7 +27,7 @@ async def edit_build(interaction: Interaction[RedstoneSquid], build_id: int) -> 
         invocation = await sd.Invocation.of(interaction)
         await invocation.reply(text_node(tr("That build no longer exists.")), visibility="personal")
         return
-    await open_build_editor(interaction, build)
+    await open_build_editor(interaction, build, interaction.client.app_ui)
 
 
 __all__ = ["build_edit", "builds", "edit_build"]

@@ -69,8 +69,9 @@ async def test_screen_offers_all_follow_workflows() -> None:
 
     rendered = screen.render()
 
-    assert NotificationScreen.session_name == "notifications"
-    assert NotificationScreen.visibility == "personal"
+    assert NotificationScreen.session is not None
+    assert NotificationScreen.session.name == "notifications"
+    assert NotificationScreen.audience == "personal"
     assert {"Follow creator", "Follow record", "Follow matching records"} <= set(labels(rendered))
 
 

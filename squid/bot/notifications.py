@@ -1,11 +1,10 @@
 """Slash-only notification management and durable Discord DM delivery."""
 
 import logging
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, Any, override
 
 import discord
 from discord import app_commands
-from discord.ext import commands
 
 from squid.bot.consent import ensure_consented_account
 from squid.bot.notifications_view import NotificationScreen
@@ -13,6 +12,7 @@ from squid.notifications import (
     PendingNotificationDelivery,
 )
 from squid.runtime import JobHandle
+from squid_ui_discord.ext import Cog
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
@@ -20,15 +20,17 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class NotificationCog(commands.Cog):
+class NotificationCog(Cog[Any]):
     """Manage notification state and deliver queued DMs without prefix commands."""
 
+    bot: RedstoneSquid
+
     def __init__(self, bot: RedstoneSquid) -> None:
-        self.bot = bot
+        super().__init__(bot)
         self._delivery_task: JobHandle | None = None
 
     @override
-    async def cog_load(self) -> None:
+    async def ui_load(self) -> None:
         self._delivery_task = self.bot.background_tasks.start_periodic(
             self.process_deliveries,
             name="notification-deliveries",
@@ -36,7 +38,7 @@ class NotificationCog(commands.Cog):
         )
 
     @override
-    async def cog_unload(self) -> None:
+    async def ui_unload(self) -> None:
         if self._delivery_task is not None:
             await self.bot.background_tasks.cancel(self._delivery_task)
 
@@ -46,11 +48,14 @@ class NotificationCog(commands.Cog):
         account_id = await self._account_id(interaction)
         if account_id is None:
             return
-        await NotificationScreen(
-            notifications=self.bot.services.notifications,
-            account_id=account_id,
-            author_id=interaction.user.id,
-        ).show(interaction)
+        await self.ui.respond(
+            interaction,
+            NotificationScreen(
+                notifications=self.bot.services.notifications,
+                account_id=account_id,
+                author_id=interaction.user.id,
+            ),
+        )
 
     async def process_deliveries(self) -> None:
         """Drain a bounded DM batch; retry ambiguous failures and suspend explicit forbiddens."""

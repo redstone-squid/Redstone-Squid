@@ -6,7 +6,6 @@ from uuid import UUID
 
 import discord
 from discord import app_commands
-from discord.ext.commands import Cog
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -31,14 +30,15 @@ from squid.permissions.domain.catalogue import (
     ACCOUNT_CLAIM_LIST,
     ACCOUNT_CLAIM_REJECT,
 )
+from squid_ui_discord.ext import Cog
 
 if TYPE_CHECKING:
     import squid.bot.app
 
 
-class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
+class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT], name="verify"):
     def __init__(self, bot: BotT):
-        self.bot = bot
+        super().__init__(bot)
         self.account_service = bot.services.accounts
 
     @app_commands.command(name="account", description="Manage your account or view a creator page")
@@ -79,16 +79,19 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         async def authorize_claim(node) -> bool:
             return await allows(interaction, node)
 
-        await AccountWorkspace(
-            accounts=self.account_service,
-            actor_id=interaction.user.id,
-            account=account,
-            request_consent=open_consent,
-            can_review_claims=await allows(interaction, ACCOUNT_CLAIM_LIST),
-            can_approve_claims=await allows(interaction, ACCOUNT_CLAIM_APPROVE),
-            can_reject_claims=await allows(interaction, ACCOUNT_CLAIM_REJECT),
-            authorize_claim=authorize_claim,
-        ).show(interaction)
+        await self.ui.respond(
+            interaction,
+            AccountWorkspace(
+                accounts=self.account_service,
+                actor_id=interaction.user.id,
+                account=account,
+                request_consent=open_consent,
+                can_review_claims=await allows(interaction, ACCOUNT_CLAIM_LIST),
+                can_approve_claims=await allows(interaction, ACCOUNT_CLAIM_APPROVE),
+                can_reject_claims=await allows(interaction, ACCOUNT_CLAIM_REJECT),
+                authorize_claim=authorize_claim,
+            ),
+        )
 
     async def _show_creator_page(
         self,

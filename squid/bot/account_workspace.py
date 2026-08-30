@@ -19,9 +19,9 @@ type ClaimAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 class AccountWorkspace(sd.Screen):
     """An account workspace that ends when closed, replaced, or timed out."""
 
-    session_name = "account"
+    session = sd.SessionSpec("account")
     timeout = 300
-    visibility = "personal"
+    audience = "personal"
 
     def __init__(
         self,
