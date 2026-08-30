@@ -8,16 +8,16 @@ process global to stand in for the lookup this module now offers.
 
 :func:`install` performs the assembly once — registry, challenge runner, dialog presenter,
 and optionally a scheduler — and records the result against the client. Anything carrying that
-client reaches it again through :meth:`ClientRuntime.of`. The client-keyed weak table is the
+client reaches it again through :meth:`DiscordUIRuntime.of`. The client-keyed weak table is the
 same shape :mod:`squid_ui_discord.routing` already uses for installed routers.
 
-Nothing here starts a task. `ClientRuntime.run()` is offered for a host that wants one job, and
+Nothing here starts a task. `DiscordUIRuntime.run()` is offered for a host that wants one job, and
 declined by a host that wants per-job health granularity; either way the host supervises it.
 """
 
 import weakref
 from collections.abc import Awaitable, Callable, Iterator
-from typing import Any, Unpack
+from typing import TYPE_CHECKING, Any, Never, Unpack, cast, overload
 
 import anyio
 import discord
@@ -30,12 +30,17 @@ from squid_ui.target_types import ComponentsV2Target
 from squid_ui.text import Localization
 from squid_ui_discord.access import AccessPolicy
 from squid_ui_discord.challenges import ChallengeRunner, DialogPresenter
+from squid_ui_discord.config import DiscordUIConfig
 from squid_ui_discord.delivery import Replyable
 from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_contracts import MessageRootBehaviorOptions
 from squid_ui_discord.message_root_options import MessageRootDefaults
 from squid_ui_discord.message_root_scheduler import MessageRootScheduler
 from squid_ui_discord.sessions import SessionManager
+
+if TYPE_CHECKING:
+    from squid_ui_discord.facade import DiscordUI
+    from squid_ui_discord.response import ResponseSpec
 
 type RuntimeSource = discord.Client | discord.Interaction[Any] | Replyable | discord.Message
 """Anything an installation can be found from: the client, or something carrying one."""
@@ -46,7 +51,7 @@ type InvocationSource = discord.Interaction[Any] | Replyable | discord.Message
 type LocalizationResolver = Callable[[InvocationSource], Awaitable[Localization]]
 """Resolve the render-time localization for one invocation source."""
 
-_INSTALLED: weakref.WeakKeyDictionary[Any, ClientRuntime[Any]] = weakref.WeakKeyDictionary()
+_INSTALLED: weakref.WeakKeyDictionary[Any, DiscordUIRuntime[Any]] = weakref.WeakKeyDictionary()
 """Hosts installed per client, so a second `install` on one client can be refused."""
 
 
@@ -77,7 +82,7 @@ def _candidates(source: RuntimeSource) -> Iterator[Any]:
         yield get_client()
 
 
-class ClientRuntime[ClientT: discord.Client]:
+class DiscordUIRuntime[ClientT: discord.Client]:
     """The Discord runtime installed on one client; `close()` ends it.
 
     Holds the objects whose construction is circular — the session registry, the challenge
@@ -94,12 +99,18 @@ class ClientRuntime[ClientT: discord.Client]:
         challenges: ChallengeRunner,
         scheduler: MessageRootScheduler | None,
         localization: LocalizationResolver | None,
+        response_defaults: ResponseSpec,
+        config: DiscordUIConfig,
     ) -> None:
         self.client = client
         self.sessions = sessions
         self.challenges = challenges
         self.scheduler = scheduler
         self.localization = localization
+        self.response_defaults = response_defaults
+        self.config = config
+        self._scopes: list[DiscordUI[object]] = []
+        self._scope_roots: dict[int, set[MessageRoot]] = {}
 
     @property
     def defaults(self) -> MessageRootDefaults:
@@ -149,13 +160,15 @@ class ClientRuntime[ClientT: discord.Client]:
         that owns the job is the thing entitled to end it.
         """
         try:
+            for scope in tuple(self._scopes):
+                await scope.close()
             await self.sessions.close_all()
         finally:
             if _INSTALLED.get(self.client) is self:
                 del _INSTALLED[self.client]
 
     @classmethod
-    def of(cls, source: RuntimeSource) -> ClientRuntime[Any]:
+    def of(cls, source: RuntimeSource) -> DiscordUIRuntime[Any]:
         """The host installed on the client `source` names.
 
         Raises:
@@ -174,15 +187,55 @@ class ClientRuntime[ClientT: discord.Client]:
         )
         raise ClientRuntimeMissing(message)
 
+    @overload
+    def scope(self, owner: None, *, defaults: ResponseSpec | None = None) -> Never: ...
+
+    @overload
+    def scope[OwnerT](self, owner: OwnerT, *, defaults: ResponseSpec | None = None) -> DiscordUI[OwnerT]: ...
+
+    def scope[OwnerT](self, owner: OwnerT | None, *, defaults: ResponseSpec | None = None) -> DiscordUI[OwnerT]:
+        """Return the one live scope registered for ``owner`` by exact identity."""
+        from squid_ui_discord.facade import DiscordUI
+        from squid_ui_discord.response import ResponseSpec
+
+        if owner is None:
+            message = "None cannot own a Discord UI scope"
+            raise TypeError(message)
+        selected = ResponseSpec() if defaults is None else defaults
+        for scope in self._scopes:
+            if scope.owner is owner and not scope.closed:
+                if defaults is not None and scope.defaults != selected:
+                    message = "owner is already registered with different response defaults"
+                    raise ValueError(message)
+                return cast(DiscordUI[OwnerT], scope)
+        scope = DiscordUI(cast(DiscordUIRuntime[discord.Client], self), owner, selected)
+        self._scopes.append(cast(DiscordUI[object], scope))
+        self._scope_roots[id(scope)] = set()
+        return scope
+
+    def _track[OwnerT](self, scope: DiscordUI[OwnerT], message_root: MessageRoot) -> None:
+        self._scope_roots[id(scope)].add(message_root)
+
+    async def _close_scope[OwnerT](self, scope: DiscordUI[OwnerT]) -> None:
+        roots = self._scope_roots.pop(id(scope), set())
+        for message_root in tuple(roots):
+            session = self.sessions.session_for(message_root)
+            if session is not None:
+                await session.finish()
+            else:
+                await message_root.finish()
+        self._scopes = [candidate for candidate in self._scopes if candidate is not scope]
+
 
 def install[ClientT: discord.Client](
     client: ClientT,
+    config: DiscordUIConfig | None = None,
     *,
-    defaults: MessageRootDefaults = MessageRootDefaults(),  # noqa: B008  # frozen value
+    defaults: MessageRootDefaults | None = None,
     bus: TopicBus | None = None,
     profiler: Profiler | None = None,
     localization: LocalizationResolver | None = None,
-) -> ClientRuntime[ClientT]:
+) -> DiscordUIRuntime[ClientT]:
     """Assemble the Discord runtime for `client` and record it against the client.
 
     `bus` is what makes a scheduler: with one, message roots refresh from topics and shared state, and
@@ -196,6 +249,21 @@ def install[ClientT: discord.Client](
             way one client has one router per id language -- a second would give the same
             click two answers.
     """
+    from squid_ui_discord.response import DEFAULT_RESPONSE_SPEC
+
+    if config is not None and any(value is not None for value in (defaults, bus, profiler, localization)):
+        message = "pass DiscordUIConfig or legacy installation keywords, not both"
+        raise TypeError(message)
+    selected = config or DiscordUIConfig(
+        defaults=MessageRootDefaults() if defaults is None else defaults,
+        bus=bus,
+        profiler=profiler,
+        localization=localization,
+    )
+    defaults = selected.defaults
+    bus = selected.bus
+    profiler = selected.profiler
+    localization = selected.localization
     if _INSTALLED.get(client) is not None:
         message = "client already has a layout host installed"
         raise ValueError(message)
@@ -207,15 +275,21 @@ def install[ClientT: discord.Client](
     # The knot install exists to tie: the presenter needs the registry and the runner, and
     # the registry needs the presenter to hand every mount it opens.
     sessions.defaults = sessions.defaults.replace(challenge=DialogPresenter(sessions, challenges))
-    runtime = ClientRuntime(
+    runtime = DiscordUIRuntime(
         client,
         sessions=sessions,
         challenges=challenges,
         scheduler=scheduler,
         localization=localization,
+        response_defaults=DEFAULT_RESPONSE_SPEC.overlay(selected.responses),
+        config=selected,
     )
     _INSTALLED[client] = runtime
     return runtime
+
+
+# Kept only until the repository-wide clean-break migration removes old imports.
+ClientRuntime = DiscordUIRuntime
 
 
 __all__ = [
