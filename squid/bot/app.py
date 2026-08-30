@@ -53,7 +53,7 @@ from squid_reactivity import LocalTopicBus
 from squid_storage import PostgresTopicBridge
 from squid_ui.profiling import MemoryProfiler
 from squid_ui.text import localization_scope
-from squid_ui_discord import DiscordUI, DiscordUIConfig, DiscordUIRuntime, Invocation, SessionManager, install, invocation_scope
+from squid_ui_discord import DiscordUI, DiscordUIConfig, DiscordUIRuntime, SessionManager, install
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -167,7 +167,7 @@ class RedstoneSquid(Bot):
         # that is the local bus, and the reconciler's poll is what the other processes get.
         self.topic_publisher: TopicPublisher = self.topic_bus
         # One assembly for the whole process, reachable from any interaction as
-        # `ClientRuntime.of(...)`: the session registry, the scheduler, and the challenge runner
+        # `DiscordUIRuntime.of(...)`: the session registry, the scheduler, and the challenge runner
         # a guard's dialog resumes an approved press through.
         self.ui: DiscordUIRuntime[Self] = install(
             self,
@@ -202,9 +202,9 @@ class RedstoneSquid(Bot):
         and mint a second ID unrelated to the log lines the command produced. A hybrid command
         reaching here from the application command tree keeps the ID that tree already bound.
         """
-        with correlation_scope(), invocation_scope(ctx):
-            invocation = await Invocation.of(ctx)
-            with localization_scope(invocation.localization):
+        with correlation_scope():
+            request = await self.app_ui.resolve(ctx)
+            with localization_scope(request.localization):
                 await super().invoke(ctx)
 
     @override

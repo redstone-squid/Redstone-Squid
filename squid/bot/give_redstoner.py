@@ -60,7 +60,7 @@ async def remove_own_redstoner_role(interaction: Interaction[squid.bot.app.Redst
     if redstoner_role is None or redstoner_role not in member.roles:
         return
 
-    invocation = await sd.Invocation.of(interaction)
+    request = await interaction.client.app_ui.resolve(interaction)
     await member.remove_roles(redstoner_role)
     owner = interaction.client.get_user(interaction.client.owner_id)
     assert owner is not None
@@ -90,9 +90,9 @@ async def remove_own_redstoner_role(interaction: Interaction[squid.bot.app.Redst
     await anyio.sleep(10)
 
     await member.add_roles(redstoner_role)
-    await invocation.reply(
+    await request.respond(
         text_node(tr("{member} — just kidding, here is your role back.", member=member.mention)),
-        visibility="personal",
+        audience="personal",
     )
 
 

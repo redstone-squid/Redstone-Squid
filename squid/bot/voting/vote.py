@@ -207,10 +207,10 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
         if account is None or account.id is None or account.needs_consent_refresh:
             if await ensure_consented_account(interaction, self.bot.services.accounts) is None:
                 return
-            invocation = await sd.Invocation.of(interaction)
-            await invocation.reply(
+            await self.ui.respond(
+                interaction,
                 text_node(tr("Thanks. Run `/poll` again to open the editor.")),
-                visibility="personal",
+                audience="personal",
             )
             return
         allow_network = isinstance(interaction.user, discord.Member) and await self.publisher.may_create_network(
@@ -249,16 +249,16 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
         This was `/vote delete <message>`, which in slash form meant pasting a link to a
         message you were already looking at (audit C4).
         """
-        await interaction.response.defer(ephemeral=True)
-        invocation = await sd.Invocation.of(interaction)
+        request = await self.ui.resolve(interaction)
+        await request.defer("private")
 
         if interaction.guild is None or message.guild != interaction.guild:
-            await invocation.reply(
+            await request.respond(
                 error_node(
                     tr("Cannot vote on this message"),
                     tr("The message is not from this guild."),
                 ),
-                visibility="personal",
+                audience="personal",
             )
             return
 
@@ -285,11 +285,11 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
             return info_node(tr("Working"), tr("Getting information..."))
 
         await run_command_operation(
-            invocation,
+            request,
             publish,
             destination=sd.send_to(message.channel),
         )
-        await invocation.reply(text_node(tr("Deletion vote opened.")), visibility="personal")
+        await request.respond(text_node(tr("Deletion vote opened.")), audience="personal")
 
     async def _consented_account_id(self, discord_id: int) -> int | None:
         """Resolve a voter's account without creating one.

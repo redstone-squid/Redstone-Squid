@@ -98,8 +98,8 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         fourth_attachment: discord.Attachment | None = None,
     ):
         """Submit a build. Every field is optional; a guided form picks up whatever you skip."""
-        await interaction.response.defer(ephemeral=True)
-        invocation = await sd.Invocation.of(interaction)
+        request = await self.ui.resolve(interaction)
+        await request.defer("private")
 
         # Before the uploads, not after: declining should not cost the user an attachment round
         # trip, and the notice describes exactly what submitting a build publishes.
@@ -114,9 +114,9 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             if build_size is not None:
                 draft.dimensions = parse_dimensions(build_size)
         except ValueError as error:
-            await invocation.reply(
+            await request.respond(
                 error_node(tr("Check the dimensions"), str(error)),
-                visibility="personal",
+                audience="personal",
             )
             return
         if door_type is not None:
@@ -349,18 +349,18 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         message and pasting it back at the bot (audit C4). Inference is a judgement about one
         specific message, which is what a message context menu is.
         """
-        await interaction.response.defer(ephemeral=True)
-        invocation = await sd.Invocation.of(interaction)
+        request = await self.ui.resolve(interaction)
+        await request.defer("private")
 
         # A context menu cannot carry `requires(...)`, so the same denial is raised by hand.
         await enforce(interaction, BUILD_SUBMISSION_RECALC)
         if not self._is_build_log_message(message):
-            await invocation.reply(
+            await request.respond(
                 error_node(
                     tr("Nothing to recalculate"),
                     tr("Builds are only read out of messages posted in a build log channel."),
                 ),
-                visibility="personal",
+                audience="personal",
             )
             return
 
@@ -368,7 +368,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             IdentityProvider.DISCORD, str(message.author.id)
         )
         if account is None or account.id is None or account.needs_consent_refresh:
-            await invocation.reply(
+            await request.respond(
                 error_node(
                     tr("Author has not consented"),
                     tr(
@@ -377,11 +377,11 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
                         user_id=message.author.id,
                     ),
                 ),
-                visibility="personal",
+                audience="personal",
             )
             if CONSENT_STICKY_ENABLED and isinstance(message.channel, discord.TextChannel):
                 await self.consent_sticky.trigger(message.channel)
             return
 
         await self.infer_build_from_message(message)
-        await invocation.reply(text_node(tr("Build recalculated.")), visibility="personal")
+        await request.respond(text_node(tr("Build recalculated.")), audience="personal")
