@@ -150,7 +150,7 @@ def make_component_panel(
         authorize=authorize,
     )
     bot = make_layout_bot()
-    message_root = sd.ClientRuntime.of(bot).defaults.mount(panel, access=sd.Owner(1), timeout=300)
+    message_root = sd.DiscordUIRuntime.of(bot).defaults.mount(panel, access=sd.Owner(1), timeout=300)
     return panel, settings, message_root
 
 

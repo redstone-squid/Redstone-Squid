@@ -95,7 +95,6 @@ from squid_ui.target_types import ComponentsV2Target, DiscordPy27Adapter, Discor
 from squid_ui.text import Localization, TextLike, localization_scope, resolve_text
 from squid_ui_discord import delivery as deliver
 from squid_ui_discord import live
-from squid_ui_discord._invocation_context import invocation_scope
 from squid_ui_discord.access import AccessPolicy, Allowed, Denied, Owner
 from squid_ui_discord.actions import ActionResponder
 from squid_ui_discord.adapter import require_discord_py_target
@@ -1722,7 +1721,6 @@ class MessageRoot[
         """
         kind = InteractionKind.PRESS if values is None else InteractionKind.SELECTION
         with (
-            invocation_scope(interaction),
             localization_scope(self.localization),
             self.profiler.operation(
                 OperationKind.DISPATCH,
@@ -1882,7 +1880,6 @@ class MessageRoot[
         discarding a filled-in form is the worse of the two surprises.
         """
         with (
-            invocation_scope(interaction),
             localization_scope(self.localization),
             self.profiler.operation(
                 OperationKind.DISPATCH,

@@ -19,6 +19,7 @@ import squid_ui_discord as sd
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 runtime = sd.install(bot)
+app_ui = runtime.scope(bot)
 ```
 
 Then define a `Screen`. Its class variables are opening policy; its fields and `render()` are the
@@ -26,7 +27,7 @@ portable component:
 
 ```python
 class Counter(sd.Screen):
-    visibility = "personal"
+    audience = "personal"
     count: int = sl.state(0)
 
     def render(self) -> sl.LayoutNode:
@@ -45,29 +46,28 @@ class Counter(sd.Screen):
 
 @bot.tree.command()
 async def counter(interaction: discord.Interaction) -> None:
-    await Counter().show(interaction)
+    await app_ui.respond(interaction, Counter())
 ```
 
-`screen.show()` resolves the installed runtime, localization, user, destination, and access policy.
-Omit `access` for an owner-only screen. For a logical session, declare `session_name` and its policy
-alongside the common root policy:
+The owner scope resolves localization, user, destination, acknowledgement state, and response policy.
+For a logical session, declare a `SessionSpec` alongside the common screen policy:
 
 ```python
 class Lobby(sd.Screen):
-    session_name = "lobby"
-    scope = sd.ScopeKind.GUILD
+    session = sd.SessionSpec("lobby", scope=sd.ScopeKind.GUILD)
     access = sd.Everyone()
-    visibility = "public"
-    capacity = 8
+    audience = "public"
 ```
 
-Override `resolve_access(invocation)` when access depends on constructor state. Use `on_load()` for
-invocation-dependent loading before the first render; `opening` is available inside that hook.
-For one-off output, resolve an invocation directly:
+Use `on_load()` for request-dependent loading before the first render; `opening` is available inside
+that hook. For one-off output, use the same scope directly or resolve a typed request:
 
 ```python
-invocation = await sd.Invocation.of(interaction)
-await invocation.reply(sl.heading("Saved"), sl.paragraph("Your changes are live."))
+await app_ui.respond(interaction, sl.section(sl.heading("Saved"), sl.paragraph("Your changes are live.")))
+
+request = await app_ui.resolve(interaction)
+await request.defer("private")
+await request.respond("Saved.")
 ```
 
 `sd.install()` starts no background work. If the application uses scheduled topic refreshes or

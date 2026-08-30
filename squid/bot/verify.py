@@ -99,16 +99,16 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT], name="verify"):
         user: discord.Member | discord.User,
     ) -> None:
         """Show somebody else's page, which is shared content and answers where the channel sees it."""
-        invocation = await sd.Invocation.of(interaction)
+        request = await self.ui.resolve(interaction)
         account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(user.id))
         if account is None or account.public_creator_id is None:
-            await invocation.reply(
+            await request.respond(
                 text_node(tr("{user} doesn't have a creator page.", user=user.display_name)),
-                visibility="personal",
+                audience="personal",
             )
             return
         node = await self._public_profile_card(account.public_creator_id, user.display_name)
-        await invocation.reply(node)
+        await request.respond(node)
 
     async def _public_profile_card(self, public_id: UUID, fallback_name: str):
         """Render somebody else's page from the same filtered view the API serves."""
