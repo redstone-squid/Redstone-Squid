@@ -45,7 +45,11 @@ class Screen[OwnerT = object](Component[ComponentsV2Target]):
         if cls.audience not in ("public", "personal") and not isinstance(cls.audience, Private):
             message = f"{cls.__name__}.audience must be 'public', 'personal', or Private"
             raise TypeError(message)
-        if cls.access is not None and cls.access is not invoker_only and not callable(getattr(cls.access, "check", None)):
+        if (
+            cls.access is not None
+            and cls.access is not invoker_only
+            and not callable(getattr(cls.access, "check", None))
+        ):
             message = f"{cls.__name__}.access must be an access policy, invoker_only, or None"
             raise TypeError(message)
         if not isinstance(cls.root_options, dict):

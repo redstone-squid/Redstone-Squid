@@ -98,9 +98,7 @@ async def test_submit_maps_authenticated_identity_and_rejects_other_categories()
     assert http_response.headers["etag"] == '"build-42-r1"'
 
     with pytest.raises(InvalidBuildError):
-        await submit_build(
-            DoorSubmission(category="extender", door_size=(2, 2, None)), Response(), builds, ACCOUNT
-        )
+        await submit_build(DoorSubmission(category="extender", door_size=(2, 2, None)), Response(), builds, ACCOUNT)
 
 
 @pytest.mark.asyncio

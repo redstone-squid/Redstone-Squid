@@ -97,8 +97,7 @@ def renderer_for(snapshot: VoteSessionSnapshot, vote_channels: dict[int, int]) -
     """A renderer whose bot sees `vote_channels` as channel id to guild id."""
     guilds = [Guild(id=guild_id) for guild_id in dict.fromkeys(vote_channels.values())]
     channels = {
-        channel_id: Channel(id=channel_id, guild=Guild(id=guild_id))
-        for channel_id, guild_id in vote_channels.items()
+        channel_id: Channel(id=channel_id, guild=Guild(id=guild_id)) for channel_id, guild_id in vote_channels.items()
     }
     bot = Bot(
         guilds=guilds,

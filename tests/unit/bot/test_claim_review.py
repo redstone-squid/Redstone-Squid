@@ -31,9 +31,7 @@ class AccountRecorder(AccountService):
         assert with_claimants is True
         return self.claims
 
-    async def approve_alias_claim(
-        self, claim_id: int, *, staff_account_id: int, reassign: bool = False
-    ) -> AliasClaim:
+    async def approve_alias_claim(self, claim_id: int, *, staff_account_id: int, reassign: bool = False) -> AliasClaim:
         return next(claim for claim in self.claims if claim.id == claim_id)
 
     async def reject_alias_claim(self, claim_id: int, *, staff_account_id: int) -> AliasClaim:

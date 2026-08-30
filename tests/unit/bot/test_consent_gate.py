@@ -153,9 +153,7 @@ async def test_the_gate_works_from_an_interaction_in_either_response_state(
     interaction = make_interaction(response_done=response_done)
     _stub_prompt(monkeypatch, agree=True)
 
-    assert (
-        await ensure_consented_account(cast(discord.Interaction[Any], interaction), accounts) == 7
-    )
+    assert await ensure_consented_account(cast(discord.Interaction[Any], interaction), accounts) == 7
 
 
 async def test_the_gate_stays_silent_when_the_user_was_never_asked(monkeypatch: pytest.MonkeyPatch) -> None:

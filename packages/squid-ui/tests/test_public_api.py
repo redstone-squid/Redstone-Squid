@@ -47,7 +47,6 @@ RENAMED_SUBMODULES = (
 )
 
 
-
 def test_namespaces_are_modules_not_shadowed_callables() -> None:
     """`import squid_ui.entity as e` must not hand back a factory."""
     for name in ROOT_NAMESPACES:
@@ -73,7 +72,6 @@ def test_renamed_submodules_are_modules_not_shadowed_callables(dotted: str) -> N
 
     mod = importlib.import_module(dotted)
     assert isinstance(mod, ModuleType)
-
 
 
 def test_engine_imports_without_transport_or_store_dependencies() -> None:

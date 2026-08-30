@@ -156,9 +156,7 @@ class MergeAccountService(AccountService):
         return MergePreview(UUID(int=8), ("Notch",), identity_count=2, build_count=3)
 
     @override
-    async def complete_merge(
-        self, surviving_account_id: int, code: str, *, now: Instant | None = None
-    ) -> AccountMerge:
+    async def complete_merge(self, surviving_account_id: int, code: str, *, now: Instant | None = None) -> AccountMerge:
         del now
         self.completed.append((surviving_account_id, code))
         return AccountMerge(surviving_account_id, 9, UUID(int=8), UUID(int=9))
@@ -183,9 +181,7 @@ class AccountMutationService(AccountService):
         return Account((), AccountConsent.grant_current(), account_id, NOW)
 
     @override
-    async def set_identity_visibility(
-        self, account_id: int, identity_id: int, *, is_public: bool
-    ) -> AccountIdentity:
+    async def set_identity_visibility(self, account_id: int, identity_id: int, *, is_public: bool) -> AccountIdentity:
         self.visibility_writes.append((account_id, identity_id, is_public))
         return DISCORD
 

@@ -3,6 +3,7 @@
 from typing import TYPE_CHECKING
 
 from discord import app_commands
+
 from squid_ui_discord.ext import Cog
 
 if TYPE_CHECKING:

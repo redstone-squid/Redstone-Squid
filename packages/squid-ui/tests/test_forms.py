@@ -533,4 +533,3 @@ def test_scale_field_prefill_is_the_option_key() -> None:
 def test_scale_field_needs_a_span_to_pick_from() -> None:
     with pytest.raises(ValueError, match="maximum greater than minimum"):
         sl.forms.ScaleField(key="score", minimum=3, maximum=3)
-

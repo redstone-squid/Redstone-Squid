@@ -72,9 +72,7 @@ class AccountRecorder(AccountService):
         self.profile_updates.append((account_id, update))
         return self.profile
 
-    async def set_identity_visibility(
-        self, account_id: int, identity_id: int, *, is_public: bool
-    ) -> AccountIdentity:
+    async def set_identity_visibility(self, account_id: int, identity_id: int, *, is_public: bool) -> AccountIdentity:
         self.visibility_updates.append((account_id, identity_id, is_public))
         return replace(JAVA, is_public=is_public)
 
@@ -101,9 +99,7 @@ class AccountRecorder(AccountService):
             build_count=3,
         )
 
-    async def complete_merge(
-        self, surviving_account_id: int, code: str, *, now: Instant | None = None
-    ) -> AccountMerge:
+    async def complete_merge(self, surviving_account_id: int, code: str, *, now: Instant | None = None) -> AccountMerge:
         self.merges.append((surviving_account_id, code))
         if self.merge_error is not None:
             raise self.merge_error

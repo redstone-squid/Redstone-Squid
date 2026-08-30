@@ -9,7 +9,6 @@ from discord.ext import commands
 from discord.ext.commands import Context, Greedy
 
 import squid_ui as sl
-import squid_ui_discord as sd
 from squid.accounts.domain import IdentityProvider
 from squid.bot.operations import managed_result
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent

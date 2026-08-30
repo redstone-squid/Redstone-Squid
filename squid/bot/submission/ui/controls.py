@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING
 
 from discord import Interaction
 
-import squid_ui_discord as sd
 from squid.bot.routes._root import _feature_group, _feature_route
 from squid.bot.ui import text_node
 from squid.core.i18n import tr

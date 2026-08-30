@@ -41,9 +41,7 @@ class StubBuilds(BuildService):
         self.gets += 1
         return self._build
 
-    async def sort_restrictions(
-        self, restrictions: Sequence[str]
-    ) -> dict[RestrictionTypeLiteral, list[str]]:
+    async def sort_restrictions(self, restrictions: Sequence[str]) -> dict[RestrictionTypeLiteral, list[str]]:
         self.sorted.append(list(restrictions))
         return {
             "wiring-placement": [name for name in restrictions if name == "Seamless"],

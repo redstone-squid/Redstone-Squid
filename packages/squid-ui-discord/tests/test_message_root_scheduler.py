@@ -269,7 +269,9 @@ async def test_renewal_sweep_requires_ephemeral_visibility_and_time_to_renew(
         timeout=timeout,
         expiry=RenewEphemeral(warning=60),
     )
-    await message_root.send(delivered_to(message_harness(ephemeral=ephemeral), handle=delivery.handle_from(interaction)))
+    await message_root.send(
+        delivered_to(message_harness(ephemeral=ephemeral), handle=delivery.handle_from(interaction))
+    )
 
     scheduler._sweep_once()
 
