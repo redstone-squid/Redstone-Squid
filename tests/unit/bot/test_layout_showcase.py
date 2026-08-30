@@ -450,8 +450,9 @@ class TestLobby:
             user_id=host_id,
         )
         context.guild = Guild(id=guild_id)
-        panel = await Lobby(host_id).show(cast(sd.InvocationSource, context))
-        assert panel is not None
+        panel = Lobby(host_id)
+        outcome = await bot.app_ui.respond(cast(Any, context), panel)
+        assert isinstance(outcome, sd.Presented)
         return bot, panel
 
     async def test_the_host_opens_as_the_only_member(self) -> None:

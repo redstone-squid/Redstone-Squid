@@ -112,6 +112,7 @@ def _cog(build: Any, *, allowed: bool = True, account_id: int | None = 1) -> Bui
             for_build=lambda _build: BuildRenderer(),
         ),
     )
+    cog.ui = cog.bot.ui.scope(cog)
     return cog
 
 

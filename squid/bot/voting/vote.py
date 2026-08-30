@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, cast, override
 
 import discord
 from discord import app_commands
-from discord.ext.commands import Cog
 
 import squid_ui_discord as sd
 from squid.accounts.domain import IdentityProvider
@@ -26,6 +25,7 @@ from squid.voting.domain import PollScope, VoteActor, VoteKind, VoteOption, Vote
 from squid.voting.errors import InvalidVoteConfigurationError
 from squid_ui.text import localization_scope
 from squid_ui_discord import send_to
+from squid_ui_discord.ext import Cog
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -41,9 +41,9 @@ would otherwise put a bot message in the channel for every stray reaction.
 """
 
 
-class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
+class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
     def __init__(self, bot: BotT):
-        self.bot = bot
+        super().__init__(bot)
         self.vote_service = bot.services.votes
         self.publisher = DiscordPollPublisher(bot)
         self._background_tasks: set[JobHandle] = set()
@@ -59,7 +59,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         self.bot.tree.add_command(self.delete_ctx_menu)
 
     @override
-    async def cog_unload(self) -> None:
+    async def ui_unload(self) -> None:
         self.bot.reactions.unsubscribe(self)
         self.bot.tree.remove_command(self.delete_ctx_menu.name, type=self.delete_ctx_menu.type)
         await self.bot.background_tasks.cancel(*self._background_tasks)
@@ -241,7 +241,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             )
             return message.jump_url
 
-        await PollScreen(resolve_options, publish, allow_network=allow_network).show(interaction)
+        await self.ui.respond(interaction, PollScreen(resolve_options, publish, allow_network=allow_network))
 
     async def delete_vote_context_menu(self, interaction: discord.Interaction[BotT], message: discord.Message) -> None:
         """Open a vote on deleting the message that was right-clicked.

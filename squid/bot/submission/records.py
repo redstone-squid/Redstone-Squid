@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Protocol, cast
 
 import discord
 from discord import app_commands
-from discord.ext.commands import Cog
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -16,6 +15,7 @@ from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
 from squid.records.application import RebuildSummary, RecordGap, RecordLookupRequest, TitleDiagnosticGap
 from squid.records.domain import BuildKind
+from squid_ui_discord.ext import Cog
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -56,10 +56,9 @@ type RecordAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 class RecordsScreen(sd.Screen):
     """A records workspace that ends when closed, replaced, or timed out."""
 
-    session_name = "records"
-    scope = sd.ScopeKind.USER_GUILD
+    session = sd.SessionSpec("records", scope=sd.ScopeKind.USER_GUILD)
     timeout = 300
-    visibility = "personal"
+    audience = "personal"
 
     def __init__(
         self,
@@ -238,11 +237,11 @@ class RecordsScreen(sd.Screen):
         await event.finish()
 
 
-class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
+class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
     """Open the record diagnostics and maintenance workspace."""
 
     def __init__(self, bot: BotT) -> None:
-        self.bot = bot
+        super().__init__(bot)
         self.records = bot.services.records
         self.computation = bot.services.record_computation
 
@@ -256,13 +255,16 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         async def authorize(node: PermissionNode) -> bool:
             return await allows(interaction, node)
 
-        await RecordsScreen(
-            self.records,
-            self.computation,
-            can_inspect=await authorize(RECORD_ENTRY_INSPECT),
-            can_rebuild=await authorize(RECORD_ENTRY_REBUILD),
-            authorize=authorize,
-        ).show(interaction)
+        await self.ui.respond(
+            interaction,
+            RecordsScreen(
+                self.records,
+                self.computation,
+                can_inspect=await authorize(RECORD_ENTRY_INSPECT),
+                can_rebuild=await authorize(RECORD_ENTRY_REBUILD),
+                authorize=authorize,
+            ),
+        )
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:

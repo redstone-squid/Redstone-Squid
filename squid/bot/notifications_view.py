@@ -42,9 +42,9 @@ def _kind_label(kind: SubscriptionKind) -> sl.TextLike:
 class NotificationScreen(sd.Screen):
     """A notification workspace that ends when closed, replaced, or timed out."""
 
-    session_name = "notifications"
+    session = sd.SessionSpec("notifications")
     timeout = SESSION_SECONDS
-    visibility = "personal"
+    audience = "personal"
 
     selected_ids: tuple[str, ...] = sl.state(())
     closed: bool = sl.state(default=False)

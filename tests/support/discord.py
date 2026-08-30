@@ -350,7 +350,8 @@ def make_layout_bot(**attributes: Any) -> Any:
     # Written through `__dict__` because these are the bot attributes the code under test
     # reads, and the double is a bag of them rather than a class declaring any.
     client.__dict__.update(
-        client_runtime=runtime,
+        ui=runtime,
+        app_ui=runtime.scope(client),
         sessions=runtime.sessions,
     )
     return client

@@ -189,11 +189,14 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             await self.bot.for_build(build).post_for_voting()
             return SubmissionOutcome(build, node)
 
-        await SubmissionScreen(
-            draft,
-            self.builds,
-            on_submit=persist_draft,
-        ).show(interaction, wait=True)
+        await self.ui.respond(
+            interaction,
+            SubmissionScreen(
+                draft,
+                self.builds,
+                on_submit=persist_draft,
+            ),
+        )
 
     async def _analyse_attachments(
         self, pending: Sequence[tuple[str, bytes]], *, uploader_account_id: int

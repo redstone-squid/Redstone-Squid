@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Protocol, cast, override
 import anyio
 import discord
 from discord import Interaction, app_commands
-from discord.ext.commands import Cog
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -20,6 +19,7 @@ from squid.community.domain import RedstonerDecisionKind
 from squid.permissions.domain.catalogue import REDSTONER_PANEL_MANAGE, REDSTONER_ROLE_RESYNC
 from squid_ui.text import localization_scope
 from squid_ui_discord import send_to
+from squid_ui_discord.ext import Cog
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -103,10 +103,9 @@ type PanelPublisher = Callable[[], Awaitable[None]]
 class RedstonerScreen(sd.Screen):
     """A Redstoner deployment screen that ends when closed, replaced, or timed out."""
 
-    session_name = "redstoner"
-    scope = sd.ScopeKind.USER_GUILD
+    session = sd.SessionSpec("redstoner", scope=sd.ScopeKind.USER_GUILD)
     timeout = 300
-    visibility = "personal"
+    audience = "personal"
 
     def __init__(
         self,
@@ -155,9 +154,9 @@ class RedstonerScreen(sd.Screen):
         await event.finish()
 
 
-class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
+class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
     def __init__(self, bot: BotT):
-        self.bot = bot
+        super().__init__(bot)
         self.service = bot.services.redstoner
         self.resync_ctx_menu = app_commands.ContextMenu(
             name="Resync Redstoner",
@@ -167,7 +166,7 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         self.bot.tree.add_command(self.resync_ctx_menu)
 
     @override
-    async def cog_unload(self) -> None:
+    async def ui_unload(self) -> None:
         self.bot.tree.remove_command(self.resync_ctx_menu.name, type=self.resync_ctx_menu.type)
 
     @Cog.listener("on_message")
@@ -210,14 +209,17 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             )
 
         community = self.bot.community_config
-        await RedstonerScreen(
-            guild_id=interaction.guild.id,
-            role_id=community.redstoner_role_id,
-            source_channel_id=community.redstoner_corner_channel_id,
-            can_deploy=await may_deploy(),
-            authorize_deploy=may_deploy,
-            publish_panel=publish_panel,
-        ).show(interaction)
+        await self.ui.respond(
+            interaction,
+            RedstonerScreen(
+                guild_id=interaction.guild.id,
+                role_id=community.redstoner_role_id,
+                source_channel_id=community.redstoner_corner_channel_id,
+                can_deploy=await may_deploy(),
+                authorize_deploy=may_deploy,
+                publish_panel=publish_panel,
+            ),
+        )
 
     async def resync_redstoner_context(
         self,

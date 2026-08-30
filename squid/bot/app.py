@@ -53,7 +53,7 @@ from squid_reactivity import LocalTopicBus
 from squid_storage import PostgresTopicBridge
 from squid_ui.profiling import MemoryProfiler
 from squid_ui.text import localization_scope
-from squid_ui_discord import Invocation, SessionManager, install, invocation_scope
+from squid_ui_discord import DiscordUI, DiscordUIConfig, DiscordUIRuntime, Invocation, SessionManager, install, invocation_scope
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -169,18 +169,25 @@ class RedstoneSquid(Bot):
         # One assembly for the whole process, reachable from any interaction as
         # `ClientRuntime.of(...)`: the session registry, the scheduler, and the challenge runner
         # a guard's dialog resumes an approved press through.
-        self.client_runtime = install(
+        self.ui: DiscordUIRuntime[Self] = install(
             self,
-            defaults=HOST_DEFAULTS,
-            bus=self.topic_bus,
-            profiler=self.layout_profiler,
-            localization=localization_resolver,
+            DiscordUIConfig(
+                defaults=HOST_DEFAULTS,
+                bus=self.topic_bus,
+                profiler=self.layout_profiler,
+                localization=localization_resolver,
+            ),
         )
+
+    @property
+    def app_ui(self) -> DiscordUI[Self]:
+        """The cached owner scope for bot-level and routed application work."""
+        return self.ui.scope(self)
 
     @property
     def sessions(self) -> SessionManager:
         """The installed registry for live Discord sessions."""
-        return self.client_runtime.sessions
+        return self.ui.sessions
 
     def is_operational(self) -> bool:
         """Return whether Discord and every critical bot-owned job are healthy."""
@@ -208,7 +215,7 @@ class RedstoneSquid(Bot):
         # because each one is a gateway round trip: a slow Discord must not stall shutdown,
         # and an undisabled panel times out on its own anyway.
         with anyio.move_on_after(3.0):
-            await self.client_runtime.close()
+            await self.ui.close()
         await self.background_tasks.close()
         # After the supervisor, so the bridge's listener is already cancelled and cannot
         # log a torn connection on the way out. Bounded, then hung up: shutdown must not
@@ -230,7 +237,7 @@ class RedstoneSquid(Bot):
         # watcher keeps honest, so it runs before any extension loads rather than
         # as a side effect of one of them being enabled.
         start_permission_epoch_watch(self.background_tasks, self.services.permission_epoch)
-        self.background_tasks.start(self.client_runtime.run(), name="layout-runtime")
+        self.background_tasks.start(self.ui.run(), name="layout-runtime")
         if self.database_config is not None:
             self.topic_bridge = await open_topic_bridge(self.database_config, self.topic_bus)
         if self.topic_bridge is not None:

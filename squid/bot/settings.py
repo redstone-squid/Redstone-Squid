@@ -4,22 +4,22 @@ from typing import TYPE_CHECKING
 
 import discord
 from discord import app_commands
-from discord.ext.commands import Cog
 
 from squid.bot.settings_view import SettingsCapabilities, SettingsPanel
 from squid.bot.utils.permissions import allows, enforce, hide_unless, subject_for_interaction
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import SETTINGS_SERVER_EDIT, SETTINGS_SERVER_VIEW, SETTINGS_VOTING_EDIT
+from squid_ui_discord.ext import Cog
 
 if TYPE_CHECKING:
     import squid.bot.app
 
 
-class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
+class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT], name="Settings"):
     """Open one capability-aware settings workspace per administrator and guild."""
 
     def __init__(self, bot: BotT):
-        self.bot = bot
+        super().__init__(bot)
         self.settings_service = bot.services.settings
 
     @app_commands.command(name="settings", description="Configure this server")
@@ -47,14 +47,17 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         async def authorize(node: PermissionNode) -> bool:
             return await allows(interaction, node)
 
-        await SettingsPanel(
-            settings=self.settings_service,
-            votes=self.bot.services.votes,
-            guild=guild,
-            capabilities=capabilities,
-            authorize=authorize,
-            owner_guild_id=self.bot.owner_server_id,
-        ).show(interaction)
+        await self.ui.respond(
+            interaction,
+            SettingsPanel(
+                settings=self.settings_service,
+                votes=self.bot.services.votes,
+                guild=guild,
+                capabilities=capabilities,
+                authorize=authorize,
+                owner_guild_id=self.bot.owner_server_id,
+            ),
+        )
 
     @Cog.listener("on_guild_join")
     async def on_guild_join(self, guild: discord.Guild) -> None:
