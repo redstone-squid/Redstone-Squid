@@ -9,6 +9,7 @@ from pytest_mock import MockerFixture
 
 import squid_ui_discord as sd
 from squid.bot import app as bot_app
+from squid_ui.text import Localization, current_localization
 from squid_ui_discord.testing import AsyncCallRecorder, ContextHarness, MessageHarness
 
 
@@ -86,24 +87,31 @@ async def test_main_starts_log_capture(mocker: MockerFixture) -> None:
     )
 
 
-async def test_prefix_invoke_establishes_invocation_scope(mocker: MockerFixture) -> None:
+async def test_prefix_invoke_establishes_localization_scope(mocker: MockerFixture) -> None:
     bot = bot_app.RedstoneSquid.__new__(bot_app.RedstoneSquid)
-    runtime = sd.install(cast(discord.Client, bot))
+    runtime = sd.install(
+        cast(discord.Client, bot),
+        localization=lambda _source: _localization("en-GB"),
+    )
+    bot.ui = cast(Any, runtime)
     context = cast(Context[Any], ContextHarness(message=MessageHarness(), bot=bot, user_id=7).source)
-    seen: list[sd.Invocation] = []
+    seen: list[str | None] = []
 
     async def invoke(_bot: object, source: Context[Any]) -> None:
-        invocation = await sd.Invocation.of(source)
-        assert sd.current_invocation() is invocation
-        seen.append(invocation)
+        del source
+        seen.append(current_localization().locale)
 
     mocker.patch.object(Bot, "invoke", new=invoke)
 
     await bot_app.RedstoneSquid.invoke(bot, context)
     await runtime.close()
 
-    assert len(seen) == 1
-    assert sd.current_invocation() is None
+    assert seen == ["en-GB"]
+    assert current_localization().locale is None
+
+
+async def _localization(locale: str) -> Localization:
+    return Localization(locale=locale)
 
 
 async def test_setup_hook_supervises_the_layout_runtime_as_one_job(mocker: MockerFixture) -> None:

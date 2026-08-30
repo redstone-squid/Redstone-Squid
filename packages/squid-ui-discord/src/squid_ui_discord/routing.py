@@ -49,7 +49,6 @@ from squid_ui.profiling import NoOpProfiler, OperationKind, OperationRecorder, P
 from squid_ui.routing import Route
 from squid_ui.target_types import DiscordPyAdapter
 from squid_ui.text import NEUTRAL, localization_scope
-from squid_ui_discord._invocation_context import invocation_scope
 from squid_ui_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
 from squid_ui_discord.message_root_contracts import ErrorHook
 
@@ -720,26 +719,25 @@ class Router[BotT: discord.Client]:
                 finish_acknowledgement("handler")
 
             async def dispatch_operation() -> None:
-                with invocation_scope(interaction):
-                    from squid_ui_discord.invocation import Invocation
-                    from squid_ui_discord.runtime import ClientRuntimeMissing
+                from squid_ui_discord.runtime import DiscordUIRuntime, DiscordUIRuntimeMissing
 
-                    try:
-                        localization = (await Invocation.of(interaction)).localization
-                    except ClientRuntimeMissing:
-                        localization = NEUTRAL
-                    try:
-                        with localization_scope(localization):
-                            handled = await self._run_middleware(middleware, request, endpoint, profile=profile)
-                    except Exception as error:
-                        profile.set_result(
-                            TraceResult(TraceStatus.FAILED, f"{type(error).__module__}.{type(error).__qualname__}")
-                        )
-                        with localization_scope(localization), profile.span("error_hook"):
-                            await self._handle_error(interaction, error, source)
-                        finish_acknowledgement("error_hook")
-                    else:
-                        profile.set_result(TraceResult(TraceStatus.COMPLETED, None if handled else "short_circuited"))
+                try:
+                    runtime = DiscordUIRuntime.of(interaction)
+                    localization = (await runtime.scope(runtime.client).resolve(interaction)).localization
+                except DiscordUIRuntimeMissing:
+                    localization = NEUTRAL
+                try:
+                    with localization_scope(localization):
+                        handled = await self._run_middleware(middleware, request, endpoint, profile=profile)
+                except Exception as error:
+                    profile.set_result(
+                        TraceResult(TraceStatus.FAILED, f"{type(error).__module__}.{type(error).__qualname__}")
+                    )
+                    with localization_scope(localization), profile.span("error_hook"):
+                        await self._handle_error(interaction, error, source)
+                    finish_acknowledgement("error_hook")
+                else:
+                    profile.set_result(TraceResult(TraceStatus.COMPLETED, None if handled else "short_circuited"))
 
             async def watchdog() -> None:
                 await anyio.sleep(self.acknowledgement_timeout)

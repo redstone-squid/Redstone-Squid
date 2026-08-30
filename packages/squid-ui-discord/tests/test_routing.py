@@ -101,28 +101,29 @@ class TestRouteFormats:
 
 
 class TestRouter:
-    async def test_dispatch_establishes_invocation_scope_inside_the_handler_task(self) -> None:
+    async def test_dispatch_resolves_and_binds_installed_localization(self) -> None:
         class FakeClient:
             pass
 
         client = FakeClient()
-        runtime = squid_ui_discord.install(cast(discord.Client, client))
+        async def localize(_source) -> sl.text.Localization:
+            return sl.text.Localization(locale="en-GB")
+
+        runtime = squid_ui_discord.install(cast(discord.Client, client), localization=localize)
         interaction = interaction_harness()
         interaction.client = client
-        seen: list[squid_ui_discord.Invocation] = []
+        seen: list[str | None] = []
         router = Router()
 
         @router.route(POLL_CLOSE)
         async def close(source) -> None:
-            invocation = await squid_ui_discord.Invocation.of(source)
-            assert squid_ui_discord.current_invocation() is invocation
-            seen.append(invocation)
+            del source
+            seen.append(sl.text.current_localization().locale)
 
         await router.dispatch(interaction, POLL_CLOSE.id())
         await runtime.close()
 
-        assert len(seen) == 1
-        assert squid_ui_discord.current_invocation() is None
+        assert seen == ["en-GB"]
 
     async def test_a_handler_takes_its_route_parameters_by_name(self) -> None:
         seen: list[int] = []

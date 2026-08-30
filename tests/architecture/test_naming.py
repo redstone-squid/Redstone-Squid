@@ -148,7 +148,6 @@ ANNOTATION_VOCABULARY = {
     "ActionMode": frozenset({"policy"}),
     "ActionStatus": frozenset({"status"}),
     "ChangeReport": frozenset({"summary"}),
-    "ClientRuntime": frozenset({"host", "layout_host"}),
     "ExceptionReport": frozenset({"summary"}),
     "Markup": frozenset({"dialect"}),
     "MessagePayload": frozenset({"presentation"}),

@@ -182,7 +182,7 @@ HOST_DEFAULTS = sd.MessageRootDefaults(chrome=CHROME, palette=PALETTES.resolve()
 
 Only the half that can be written down as a value. The other half -- a challenge presenter,
 which needs the session registry and the background runner -- is assembled by
-`sd.install` and reached back through `ClientRuntime.of`, so a panel built from a click
+`sd.install` and reached back through `DiscordUIRuntime.of`, so a panel built from a click
 gets the same wiring as one opened through `bot.mounts`.
 """
 

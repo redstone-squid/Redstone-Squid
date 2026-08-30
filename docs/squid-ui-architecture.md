@@ -87,7 +87,7 @@ flowchart TB
     scene -->|mechanical draw| html
 
     subgraph discord_runtime[Discord live runtime]
-        invocation[Invocation or Screen.show<br/>source · audience · localization · destination]
+        invocation[Owner-scoped DiscordUI and DiscordRequest<br/>source · audience · localization · acknowledgement]
         root[MessageRoot<br/>owns one message and one ComponentRuntime]
         session[SessionManager and Session<br/>own a graph of roots]
         router[Router and RouteGroup<br/>stateless durable route identity]
@@ -95,7 +95,7 @@ flowchart TB
         handle[MessageDestination and EditHandle<br/>delivery and expiring write authority]
         discord_api[discord.py and Discord]
 
-        invocation -->|reply · mount · open| root
+        invocation -->|respond · send · edit| root
         session -->|owns| root
         root -->|delivers through| handle --> discord_api
         discord_api -->|component interaction| dispatch
@@ -169,13 +169,14 @@ planning, that is a DrawInvariantError, not a second degradation mechanism.
 
 | Need | API | Result |
 |---|---|---|
-| Runtime for one discord.py client | `sd.install(client, defaults=..., bus=..., localization=...)` | `ClientRuntime`: sessions, scheduler, challenges, and the host localization hook |
-| Current command or routed action | `inv = await sd.Invocation.of(source)` | source, runtime, localization, user, guild, and source-aware delivery |
-| Terminal command reply | `await inv.reply(*nodes, visibility=...)` | a localized public, personal, or `sd.Private(reason)` response |
-| Plain live panel | `await inv.mount(component, access=..., visibility=...)` | a delivered `MessageRoot` without session policy |
-| Reusable application screen | `await MyScreen(...).show(source)` | the prepared screen, or `None` after a policy-authored rejection |
-| Dynamic session composition | `await inv.open(component, spec, visibility=...)` | `Opened` or `Rejected`; destination and open context come from the invocation |
-| Low-level root composition | `runtime.mount(...)`, then `root.send(inv.destination(...))` | explicit message-root and delivery ownership when a higher entry point cannot express it |
+| Runtime for one discord.py client | `runtime = sd.install(client, config)` | `DiscordUIRuntime`: scopes, sessions, scheduler, challenges, and localization |
+| Authority for one application owner | `ui = runtime.scope(owner, defaults=...)` | an identity-bound `DiscordUI[OwnerT]` closed with its owner |
+| Current command or routed action | `request = await ui.resolve(source)` | typed owner/source, localization, user, guild, and acknowledgement state |
+| Terminal response | `await ui.respond(source, content, audience=...)` | `Sent`, `Presented`, `Rejected`, or `Abandoned` |
+| Plain live panel | `await ui.respond(source, component, access=...)` | a `Presented` outcome with its `MessageRoot` and delivery |
+| Reusable application screen | `await ui.respond(source, MyScreen(...))` | screen class policy composed with scope and call policy |
+| Dynamic session composition | `await ui.respond(source, component, session=spec)` | a typed presentation or admission rejection |
+| Low-level root composition | `MessageRoot(...)`, then `root.send(destination)` | explicit message-root and delivery ownership when a higher entry point cannot express it |
 | Low-level Discord destination | `sd.reply_to`, `sd.respond_to`, `sd.send_to` | a `MessageDestination` for framework internals and transport adapters |
 | Static Components V2 message | sd.render_static(document) | MessagePayload |
 | One node as a detached item | sd.render_item(node, reservation=...) | discord.ui.Item for a host-built view |
@@ -198,30 +199,27 @@ document is preferable because the planner can see every cost. A reservation is 
 planning against a reduced target, so adaptation and measurement agree on the room available. It never adopts an arbitrary existing `discord.py` view: renderers own their
 output object, so unknown pre-existing controls cannot undermine measurement.
 
-`Invocation` is the product entry point for one Discord event. `Invocation.of` resolves the
-installed runtime and host localization hook once inside the ambient dispatch scope; callers then
-reuse its audience policy for static replies, plain mounts, and session opens. Router dispatch and
-message-root action/submit dispatch establish that scope themselves, so a handler does not install
-one. `tr(...)` resolves strings leaving the layout system, such as autocomplete or a native modal
-API; layout nodes retain deferred `TextLike` values and resolve them when their message root renders.
+`DiscordUIRuntime.scope` is the product ownership boundary. It keys scopes by exact object identity;
+re-registering the same owner and defaults returns the live scope, while conflicting defaults fail.
+`DiscordUI.resolve` creates a `DiscordRequest` once for a Discord source. The request reconciles its
+acknowledgement ledger with discord.py before each response, so Squid never assumes it was the only
+responder. `tr(...)` resolves strings leaving the layout system, such as autocomplete or a native
+modal API; layout nodes retain deferred `TextLike` values and resolve them when their root renders.
 
-`Screen` is the declarative application layer over `Invocation`. A subclass places stable policy in
-class variables. Root policy — `access`, `visibility`, `timeout`, `expiry`, `follow_topics`, and
-`root_options` — applies to both direct and session openings. Setting `session_name` enables session
-policy through `scope`, `admission`, `capacity`, `quota`, and `domain`; those fields are rejected on
-a direct screen instead of being ignored. A fixed `access` policy defaults to the opener, while an
-instance can override `resolve_access(invocation)` when constructor state or invocation context
-decides access. `show()` claims one instance for one opening attempt and records its `opening`
-invocation before delivery. Invocation-dependent loading uses the ordinary component `on_load()`
-hook and therefore runs only when the screen reaches its first render. A rejected session returns
-`None` only after its deferred policy notice has already been answered.
+`Screen` is declarative response policy over an ordinary component. A subclass places stable
+`audience`, `access`, `timeout`, `expiry`, `follow_topics`, `session`, `allowed_mentions`, and
+`root_options` values in class variables. Those values compile once into a `ResponseSpec`, then the
+owner facade overlays installation defaults, owner defaults, call policy, and explicit overrides.
+The facade claims one screen instance for one presentation and records its `opening` request before
+delivery. Request-dependent loading uses the ordinary component `on_load()` hook and therefore runs
+only when the screen reaches its first render.
 
 `SessionSpec` remains the composition recipe for dynamic policy: `scope` picks the collision key,
 `admission` decides what happens on collision, `capacity` and `quota` bound membership, and `access`
 builds the root policy from the open context. `SessionSpec.open`/`respond`, `SessionManager`, raw
 `MessageRoot`, and `reply_to`/`respond_to` remain public lower layers for framework extensions and
-transport adapters. Application handlers normally enter through `Invocation` or `Screen`, which
-derive destination, sessions, open context, and localization from one source.
+transport adapters. Application handlers normally enter through an owner-scoped `DiscordUI`, which
+derives destination, sessions, open context, and localization from one source.
 
 ## Semantic authoring, adaptation, and exact primitives
 

@@ -12,8 +12,8 @@ import squid_ui_discord as sd
 from squid_reactivity import LocalTopicBus
 from squid_ui.primitives import Heading
 from squid_ui.runtime.topics import Topic
-from squid_ui_discord import ClientRuntime, install
-from squid_ui_discord.runtime import _INSTALLED, ClientRuntimeMissing
+from squid_ui_discord import DiscordUIRuntime, install
+from squid_ui_discord.runtime import _INSTALLED, DiscordUIRuntimeMissing
 from squid_ui_discord.testing import ContextHarness, delivered_to, interaction_harness, message_harness
 
 
@@ -73,7 +73,7 @@ def test_install_keeps_host_defaults_and_adds_to_them() -> None:
 
 
 def test_install_keeps_the_optional_localization_resolver() -> None:
-    async def resolve(source: sd.InvocationSource) -> sl.text.Localization:
+    async def resolve(source: sd.contracts.LocalizationSource) -> sl.text.Localization:
         del source
         return sl.text.Localization(locale="en-GB")
 
@@ -89,21 +89,21 @@ def test_of_resolves_from_a_client_an_interaction_and_a_command_context() -> Non
     interaction.client = client
     context = ContextHarness(bot=client, user_id=7)
 
-    assert ClientRuntime.of(cast(Any, client)) is runtime
-    assert ClientRuntime.of(interaction) is runtime
-    assert ClientRuntime.of(context.source) is runtime
+    assert DiscordUIRuntime.of(cast(Any, client)) is runtime
+    assert DiscordUIRuntime.of(interaction) is runtime
+    assert DiscordUIRuntime.of(context.source) is runtime
 
 
 def test_of_raises_rather_than_returning_none_when_nothing_is_installed() -> None:
     """A missing installation is a wiring bug, so every caller would grow the same raise."""
-    with pytest.raises(ClientRuntimeMissing, match="no layout host is installed"):
-        ClientRuntime.of(cast(Any, fake_client()))
+    with pytest.raises(DiscordUIRuntimeMissing, match="no layout host is installed"):
+        DiscordUIRuntime.of(cast(Any, fake_client()))
 
 
 def test_of_survives_a_source_that_cannot_be_a_weak_key() -> None:
     """An unhashable source was never a key here; it is missing, not an error."""
-    with pytest.raises(ClientRuntimeMissing):
-        ClientRuntime.of(cast(Any, {"client": None}))
+    with pytest.raises(DiscordUIRuntimeMissing):
+        DiscordUIRuntime.of(cast(Any, {"client": None}))
 
 
 def test_a_panel_holding_the_host_needs_no_other_object() -> None:
@@ -126,8 +126,8 @@ async def test_close_finishes_every_session_and_stops_answering_of() -> None:
 
     assert message_root.finished
     assert tuple(runtime.sessions.active()) == ()
-    with pytest.raises(ClientRuntimeMissing):
-        ClientRuntime.of(cast(Any, client))
+    with pytest.raises(DiscordUIRuntimeMissing):
+        DiscordUIRuntime.of(cast(Any, client))
 
 
 async def test_close_drops_the_installation_even_when_a_teardown_fails() -> None:

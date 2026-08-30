@@ -4,7 +4,7 @@
 ``MessageRootConfig`` (a frozen dataclass, so the defaults have one home) list the same
 surface by hand, because a TypedDict cannot be derived from a dataclass at type-check time.
 A keyword added to one but not the other would be silently unreachable for every host that
-mounts through ``ClientRuntime.mount`` or a ``SessionSpec``.
+mounts through ``DiscordUIRuntime.mount`` or a ``SessionSpec``.
 
 ``MessageRoot.__init__`` is no longer a third copy: it takes a config, the target discriminator,
 and target-independent overrides, so it cannot fall out of step with either.

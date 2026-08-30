@@ -9,7 +9,8 @@ from discord.ext import commands
 from squid.core.i18n import DEFAULT_LOCALE, localization_for, negotiate_locale, tr
 from squid.settings.application import SettingsService
 from squid_ui.text import Localization, localization_scope
-from squid_ui_discord.runtime import ClientRuntime, InvocationSource
+from squid_ui_discord.contracts import LocalizationSource
+from squid_ui_discord.runtime import DiscordUIRuntime
 
 
 async def resolve_locale(
@@ -43,9 +44,9 @@ async def resolve_locale(
     return DEFAULT_LOCALE
 
 
-async def localization_resolver(source: InvocationSource) -> Localization:
+async def localization_resolver(source: LocalizationSource) -> Localization:
     """Resolve one installed bot invocation into its render-time localization."""
-    client = cast(Any, ClientRuntime.of(source).client)
+    client = cast(Any, DiscordUIRuntime.of(source).client)
     target = cast(discord.Interaction[Any] | commands.Context[Any] | discord.Message, source)
     locale = await resolve_locale(target, client.services.settings)
     return localization_for(locale)

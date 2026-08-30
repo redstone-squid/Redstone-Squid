@@ -16,7 +16,7 @@ declined by a host that wants per-job health granularity; either way the host su
 """
 
 import weakref
-from collections.abc import Awaitable, Callable, Iterator
+from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, Never, Unpack, cast, overload
 
 import anyio
@@ -27,10 +27,10 @@ from squid_ui.profiling import Profiler
 from squid_ui.runtime.component import Component
 from squid_ui.runtime.topics import TopicBus
 from squid_ui.target_types import ComponentsV2Target
-from squid_ui.text import Localization
 from squid_ui_discord.access import AccessPolicy
 from squid_ui_discord.challenges import ChallengeRunner, DialogPresenter
 from squid_ui_discord.config import DiscordUIConfig
+from squid_ui_discord.contracts import LocalizationResolver
 from squid_ui_discord.delivery import Replyable
 from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_contracts import MessageRootBehaviorOptions
@@ -45,17 +45,11 @@ if TYPE_CHECKING:
 type RuntimeSource = discord.Client | discord.Interaction[Any] | Replyable | discord.Message
 """Anything an installation can be found from: the client, or something carrying one."""
 
-type InvocationSource = discord.Interaction[Any] | Replyable | discord.Message
-"""A Discord event surface from which a user-facing invocation originates."""
-
-type LocalizationResolver = Callable[[InvocationSource], Awaitable[Localization]]
-"""Resolve the render-time localization for one invocation source."""
-
 _INSTALLED: weakref.WeakKeyDictionary[Any, DiscordUIRuntime[Any]] = weakref.WeakKeyDictionary()
 """Hosts installed per client, so a second `install` on one client can be refused."""
 
 
-class ClientRuntimeMissing(SquidUiError, LookupError):
+class DiscordUIRuntimeMissing(SquidUiError, LookupError):
     """Nothing was installed on the client this source names.
 
     A wiring bug rather than a runtime condition: every reachable path from a click runs
@@ -172,7 +166,7 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         """The host installed on the client `source` names.
 
         Raises:
-            ClientRuntimeMissing: Nothing was installed on it.
+            DiscordUIRuntimeMissing: Nothing was installed on it.
         """
         for candidate in _candidates(source):
             try:
@@ -185,7 +179,7 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         message = (
             f"no layout host is installed on this {type(source).__name__}; call sd.install(client) once at startup"
         )
-        raise ClientRuntimeMissing(message)
+        raise DiscordUIRuntimeMissing(message)
 
     @overload
     def scope(self, owner: None, *, defaults: ResponseSpec | None = None) -> Never: ...
@@ -241,8 +235,8 @@ def install[ClientT: discord.Client](
     `bus` is what makes a scheduler: with one, message roots refresh from topics and shared state, and
     the scheduler becomes the default scheduler; without one, a mount is refreshed only by its
     own clicks. `profiler` instruments that scheduler. `localization` is the host's one async
-    hook for resolving an invocation's render-time locale; it runs lazily when an invocation
-    first asks for it.
+    hook for resolving a request's render-time locale; it runs when an owner scope resolves
+    the request.
 
     Raises:
         ValueError: A host is already installed on this client. One client has one host, the
@@ -288,14 +282,9 @@ def install[ClientT: discord.Client](
     return runtime
 
 
-# Kept only until the repository-wide clean-break migration removes old imports.
-ClientRuntime = DiscordUIRuntime
-
-
 __all__ = [
-    "ClientRuntime",
-    "ClientRuntimeMissing",
-    "InvocationSource",
+    "DiscordUIRuntime",
+    "DiscordUIRuntimeMissing",
     "LocalizationResolver",
     "RuntimeSource",
     "install",
