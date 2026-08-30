@@ -21,13 +21,17 @@ from squid_ui_discord import (
     access,
     actions,
     adapter,
+    audience,
     challenges,
     classic,
     classic_renderer,
+    config,
     conformance,
+    contracts,
     delivery,
     devtools,
     devtools_runtime,
+    facade,
     fragments,
     grids,
     guards,
@@ -39,6 +43,8 @@ from squid_ui_discord import (
     navigation,
     renderer,
     rendering,
+    request,
+    response,
     roles,
     routing,
     runtime,
@@ -66,7 +72,9 @@ from squid_ui_discord.adoption import (
     AdoptionError,
     adopt,
 )
+from squid_ui_discord.audience import Audience, Private, Visibility
 from squid_ui_discord.challenges import ChallengeRunner, DialogPresenter
+from squid_ui_discord.config import DiscordUIConfig
 from squid_ui_discord.conformance import conform
 from squid_ui_discord.delivery import (
     MessageDestination,
@@ -76,9 +84,10 @@ from squid_ui_discord.delivery import (
     respond_to,
     send_to,
 )
+from squid_ui_discord.facade import DiscordUI
 from squid_ui_discord.fragments import contribute
 from squid_ui_discord.grids import button_grid
-from squid_ui_discord.invocation import Invocation, Private, Visibility, current_invocation, invocation_scope
+from squid_ui_discord.invocation import Invocation, current_invocation, invocation_scope
 from squid_ui_discord.live import message_roots
 from squid_ui_discord.managed import (
     ErrorObserver,
@@ -124,6 +133,17 @@ from squid_ui_discord.rendering import (
     render_message,
     render_static,
 )
+from squid_ui_discord.request import DiscordRequest
+from squid_ui_discord.response import (
+    Abandoned,
+    Presented,
+    Rejected,
+    Response,
+    ResponseResult,
+    ResponseSpec,
+    Sent,
+    invoker_only,
+)
 from squid_ui_discord.roles import (
     ANY,
     AT_LEAST_ONE,
@@ -145,6 +165,7 @@ from squid_ui_discord.roles import (
 from squid_ui_discord.runtime import (
     ClientRuntime,
     ClientRuntimeMissing,
+    DiscordUIRuntime,
     InvocationSource,
     LocalizationResolver,
     install,
@@ -195,8 +216,10 @@ __all__ = [
     "EMPTY_RESERVATION",
     "EXACTLY_ONE",
     "V2_LIMITS",
+    "Abandoned",
     "AccessPolicy",
     "AdoptionError",
+    "Audience",
     "Cardinality",
     "ChallengePresenter",
     "ChallengeRequest",
@@ -205,6 +228,10 @@ __all__ = [
     "ClientRuntime",
     "ClientRuntimeMissing",
     "DialogPresenter",
+    "DiscordRequest",
+    "DiscordUI",
+    "DiscordUIConfig",
+    "DiscordUIRuntime",
     "ErrorObserver",
     "ErrorRenderer",
     "Everyone",
@@ -229,10 +256,15 @@ __all__ = [
     "OpenContext",
     "Owner",
     "PauseUpdates",
+    "Presented",
     "Private",
+    "Rejected",
     "RenderedMessage",
     "RenewEphemeral",
     "ResourceCost",
+    "Response",
+    "ResponseResult",
+    "ResponseSpec",
     "RoleCategory",
     "RoleConfigurationUnavailable",
     "RoleMutationFailed",
@@ -246,6 +278,7 @@ __all__ = [
     "RolesUpdated",
     "ScopeKind",
     "Screen",
+    "Sent",
     "SessionKey",
     "SessionManager",
     "SessionOptions",
@@ -260,12 +293,15 @@ __all__ = [
     "actions",
     "adapter",
     "adopt",
+    "audience",
     "button_grid",
     "challenges",
     "classic",
     "classic_renderer",
+    "config",
     "conform",
     "conformance",
+    "contracts",
     "contribute",
     "current_invocation",
     "deliver_to",
@@ -274,6 +310,7 @@ __all__ = [
     "devtools_runtime",
     "durability",
     "edit_to",
+    "facade",
     "fragments",
     "grids",
     "guards",
@@ -281,6 +318,7 @@ __all__ = [
     "install",
     "invocation",
     "invocation_scope",
+    "invoker_only",
     "limits",
     "live",
     "message_mode",
@@ -298,8 +336,10 @@ __all__ = [
     "renderer",
     "rendering",
     "reply_to",
+    "request",
     "respond_to",
     "responder",
+    "response",
     "roles",
     "routing",
     "run_managed_result",
