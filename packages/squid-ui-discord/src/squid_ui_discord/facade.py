@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Unpack, cast, overload
 import discord
 
 from squid_ui import paragraph
+from squid_ui.interactions import ActionEvent
 from squid_ui.runtime.component import Component
 from squid_ui.target_types import ComponentsV2Target
 from squid_ui.text import Localization
@@ -90,6 +91,13 @@ class DiscordUI[OwnerT]:
         from squid_ui_discord.request import DiscordRequest
 
         return await DiscordRequest.create(self, source)
+
+    def action[EventT: ActionEvent](self, event: EventT):
+        """Bind a portable component event to this owner's safe Discord boundary."""
+        self._require_live()
+        from squid_ui_discord.action import DiscordAction
+
+        return DiscordAction(event, self)
 
     def render(self, content: FacadeContent, *, localization: Localization | None = None) -> MessagePayload:
         """Render supported static content through installed rendering defaults."""
