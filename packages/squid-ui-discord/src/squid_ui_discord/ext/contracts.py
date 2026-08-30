@@ -17,15 +17,15 @@ type AutocompleteItem = app_commands.Choice[ChoiceValue] | tuple[str, ChoiceValu
 type AsyncHandler = Callable[..., Awaitable[object]]
 
 
-class AsyncDecorator(Protocol):
+class AsyncHandlerTransform(Protocol):
     """A decorator that preserves an async handler's signature."""
 
     def __call__[**P, T](self, handler: Callable[P, Awaitable[T]], /) -> Callable[P, Awaitable[T]]: ...
 
 
 __all__ = [
-    "AsyncDecorator",
     "AsyncHandler",
+    "AsyncHandlerTransform",
     "AutocompleteItem",
     "ChoiceValue",
     "CommandResult",
