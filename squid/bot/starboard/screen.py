@@ -40,10 +40,9 @@ class StarboardOperations(Protocol):
 class StarboardScreen(sd.Screen):
     """A guild starboard workspace that ends when closed, replaced, or timed out."""
 
-    session_name = "starboard"
-    scope = sd.ScopeKind.USER_GUILD
+    session = sd.SessionSpec("starboard", scope=sd.ScopeKind.USER_GUILD)
     timeout = 300
-    visibility = "personal"
+    audience = "personal"
 
     def __init__(
         self,

@@ -11,14 +11,14 @@ from squid_ui_discord.testing import AsyncCallRecorder
 
 
 @dataclass(frozen=True)
-class ClientRuntime:
+class UIRuntime:
     scheduler: MessageRootScheduler
 
 
 @dataclass
 class Bot:
     sessions: SessionManager | None = None
-    client_runtime: ClientRuntime | None = None
+    ui: UIRuntime | None = None
     development_mode: bool = False
     add_cog: AsyncCallRecorder = field(default_factory=AsyncCallRecorder)
     is_owner: AsyncCallRecorder = field(default_factory=lambda: AsyncCallRecorder(result=True))
@@ -34,7 +34,7 @@ async def test_setup_adds_the_generic_cog_with_the_host_manager() -> None:
     manager = SessionManager()
     profiler = MemoryProfiler()
     scheduler = MessageRootScheduler(profiler=profiler)
-    bot = Bot(sessions=manager, client_runtime=ClientRuntime(scheduler))
+    bot = Bot(sessions=manager, ui=UIRuntime(scheduler))
 
     await setup(cast(Any, bot))
 

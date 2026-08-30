@@ -1,6 +1,6 @@
 """Owner-bound safe response adapter for component actions."""
 
-from collections.abc import Sequence
+from collections.abc import Hashable, Sequence
 from typing import Literal, Unpack, cast, overload
 
 import discord
@@ -13,6 +13,7 @@ from squid_ui_discord.actions import responder
 from squid_ui_discord.contracts import FacadeContent
 from squid_ui_discord.facade import DiscordUI
 from squid_ui_discord.modal import ModalSpec
+from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.request import DiscordRequest
 from squid_ui_discord.response import Response, ResponseOverrides, ResponseResult, ResponseSpec
 
@@ -52,6 +53,8 @@ class DiscordAction[EventT: ActionEvent, OwnerT]:
         *,
         spec: ResponseSpec | None = None,
         files: Sequence[discord.File] = (),
+        parent: MessageRoot | None = None,
+        session_key: Hashable | None = None,
         **overrides: Unpack[ResponseOverrides],
     ) -> ResponseResult[ComponentT]: ...
 
@@ -62,6 +65,8 @@ class DiscordAction[EventT: ActionEvent, OwnerT]:
         *,
         spec: ResponseSpec | None = None,
         files: Sequence[discord.File] = (),
+        parent: MessageRoot | None = None,
+        session_key: Hashable | None = None,
         **overrides: Unpack[ResponseOverrides],
     ) -> ResponseResult: ...
 
@@ -71,10 +76,19 @@ class DiscordAction[EventT: ActionEvent, OwnerT]:
         *,
         spec: ResponseSpec | None = None,
         files: Sequence[discord.File] = (),
+        parent: MessageRoot | None = None,
+        session_key: Hashable | None = None,
         **overrides: Unpack[ResponseOverrides],
     ) -> ResponseResult:
         """Respond through the same acknowledgement ledger as command requests."""
-        return await self._request.respond(content, spec=spec, files=files, **overrides)
+        return await self._request.respond(
+            content,
+            spec=spec,
+            files=files,
+            parent=parent,
+            session_key=session_key,
+            **overrides,
+        )
 
     async def defer(self, policy: Literal["private", "public"] | None = None) -> None:
         """Acknowledge this action before longer work."""

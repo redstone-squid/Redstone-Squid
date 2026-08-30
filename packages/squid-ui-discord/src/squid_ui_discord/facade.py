@@ -1,6 +1,6 @@
 """Explicit Discord UI authority bound to one application owner."""
 
-from collections.abc import Sequence
+from collections.abc import Hashable, Sequence
 from dataclasses import replace
 from typing import TYPE_CHECKING, Unpack, cast, overload
 
@@ -16,6 +16,7 @@ from squid_ui_discord.contracts import DocumentContent, FacadeContent, ResponseS
 from squid_ui_discord.delivery import Abandoned as DeliveryAbandoned
 from squid_ui_discord.delivery import DeliveryResult, edit_to, no_mentions, send_to
 from squid_ui_discord.message_payload import MessagePayload
+from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_contracts import PauseUpdates, RenewEphemeral
 from squid_ui_discord.rendering import render_static
 from squid_ui_discord.response import (
@@ -131,6 +132,8 @@ class DiscordUI[OwnerT]:
         *,
         spec: ResponseSpec | None = None,
         files: Sequence[discord.File] = (),
+        parent: MessageRoot | None = None,
+        session_key: Hashable | None = None,
         **overrides: Unpack[ResponseOverrides],
     ) -> ResponseResult[ComponentT]: ...
 
@@ -142,6 +145,8 @@ class DiscordUI[OwnerT]:
         *,
         spec: ResponseSpec | None = None,
         files: Sequence[discord.File] = (),
+        parent: MessageRoot | None = None,
+        session_key: Hashable | None = None,
         **overrides: Unpack[ResponseOverrides],
     ) -> ResponseResult: ...
 
@@ -152,11 +157,20 @@ class DiscordUI[OwnerT]:
         *,
         spec: ResponseSpec | None = None,
         files: Sequence[discord.File] = (),
+        parent: MessageRoot | None = None,
+        session_key: Hashable | None = None,
         **overrides: Unpack[ResponseOverrides],
     ) -> ResponseResult:
         """Respond to an interaction, command context, or message."""
         request = await self.resolve(source)
-        return await request.respond(content, spec=spec, files=files, **overrides)
+        return await request.respond(
+            content,
+            spec=spec,
+            files=files,
+            parent=parent,
+            session_key=session_key,
+            **overrides,
+        )
 
     async def send(
         self,
@@ -218,6 +232,8 @@ class DiscordUI[OwnerT]:
         overrides: ResponseOverrides,
         files: Sequence[discord.File],
         complete_deferred: bool = False,
+        parent: MessageRoot | None = None,
+        session_key: Hashable | None = None,
     ) -> ResponseResult:
         if isinstance(content, Response):
             nested: ResponseOverrides = {} if content.overrides is None else content.overrides
@@ -236,6 +252,8 @@ class DiscordUI[OwnerT]:
             localization=request.localization,
             source=request.source,
             actor_id=request.user.id,
+            parent=parent,
+            session_key=session_key,
         )
 
     async def _present(
@@ -247,8 +265,16 @@ class DiscordUI[OwnerT]:
         localization: Localization,
         source: ResponseSource | None,
         actor_id: int | None,
+        parent: MessageRoot | None = None,
+        session_key: Hashable | None = None,
     ) -> ResponseResult:
+        if parent is not None and session_key is not None:
+            message = "parent= attaches to an existing session and cannot be combined with session_key="
+            raise TypeError(message)
         if not isinstance(content, Component):
+            if parent is not None or session_key is not None:
+                message = "session attachment and keys require live component content"
+                raise TypeError(message)
             return Sent(await destination(self.render(content, localization=localization)))
         access = self._access(policy, actor_id)
         options = self._root_options(policy, localization)
@@ -261,6 +287,9 @@ class DiscordUI[OwnerT]:
             return captured
 
         if session_spec is None:
+            if parent is not None or session_key is not None:
+                message = "parent= and session_key= require a response session policy"
+                raise TypeError(message)
             root = self._runtime.mount(content, access=access, **options)
             result = await root.send(capture)
             if isinstance(result, DeliveryAbandoned):
@@ -273,13 +302,26 @@ class DiscordUI[OwnerT]:
             raise TypeError(message)
         open_context = OpenContext.of(source)
         configured = replace(session_spec, access=lambda _context: access)
-        result = await configured.open(
-            content,
-            capture,
-            sessions=self._runtime.sessions,
-            open_context=open_context,
-            **options,
-        )
+        parent_session = self._runtime.sessions.session_for(parent) if parent is not None else None
+        existing_roots = frozenset(parent_session.message_roots) if parent_session is not None else frozenset()
+        if parent is None:
+            result = await configured.open(
+                content,
+                capture,
+                sessions=self._runtime.sessions,
+                open_context=open_context,
+                key=session_key,
+                **options,
+            )
+        else:
+            result = await configured.attach(
+                content,
+                capture,
+                sessions=self._runtime.sessions,
+                open_context=open_context,
+                parent=parent,
+                **options,
+            )
         if isinstance(result, SessionRejected):
             notice_delivery = None
             if result.notice is not None:
@@ -288,8 +330,15 @@ class DiscordUI[OwnerT]:
         if isinstance(result, DeliveryAbandoned):
             return Abandoned()
         assert isinstance(result, Opened) and captured is not None
-        self._runtime._track(self, result.session.root)
-        return Presented(content, result.session.root, result.session, captured)
+        root = result.session.root
+        if parent is not None:
+            attached = tuple(candidate for candidate in result.session.message_roots if candidate not in existing_roots)
+            if len(attached) != 1:
+                message = "session attachment did not produce exactly one child root"
+                raise RuntimeError(message)
+            root = attached[0]
+        self._runtime._track(self, root)
+        return Presented(content, root, result.session, captured)
 
     def _root_options(self, policy: ResponseSpec, localization: Localization) -> SessionOptions:
         configured = self._setting(policy.root_options, default=None)

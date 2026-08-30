@@ -24,7 +24,7 @@ class TreeRecorder:
 
 
 @dataclass(frozen=True)
-class ClientRuntimeRecorder:
+class UIRuntimeRecorder:
     job: Any
 
     def run(self) -> Any:
@@ -118,7 +118,7 @@ async def test_setup_hook_supervises_the_layout_runtime_as_one_job(mocker: Mocke
     bot.load_extension = AsyncCallRecorder()
     run = AsyncCallRecorder()
     layout_job = run()
-    bot.__dict__["client_runtime"] = ClientRuntimeRecorder(layout_job)
+    bot.__dict__["ui"] = UIRuntimeRecorder(layout_job)
     router = mocker.Mock()
     mocker.patch.object(bot_app, "EXTENSIONS", ())
     mocker.patch.object(bot_app, "control_router", router)

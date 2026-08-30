@@ -37,15 +37,14 @@ def test_submission_form_uses_semantic_controls() -> None:
 
 
 def test_submission_screen_rejects_a_second_live_draft() -> None:
-    assert SubmissionScreen.session_name == "build-submission"
+    assert SubmissionScreen.session is not None
+    assert SubmissionScreen.session.name == "build-submission"
     assert SubmissionScreen.timeout == 300
-    assert isinstance(SubmissionScreen.admission.collision, Reject)
+    assert isinstance(SubmissionScreen.session.admission.collision, Reject)
 
 
 async def test_basics_form_describes_portable_fields() -> None:
-    interaction = make_interaction().interaction
-    async with invocation_scope(interaction) as invocation:
-        form = _submission_basics_form(BuildDraft(), invocation)
+    form = _submission_basics_form(BuildDraft())
 
     assert form.field_keys == ("door_size", "pattern", "dimensions", "versions", "creators")
     first = form.items[0]
@@ -56,7 +55,7 @@ async def test_basics_form_describes_portable_fields() -> None:
 async def test_changing_the_door_type_marks_the_message_root_dirty() -> None:
     component = _component()
     bot = make_layout_bot()
-    message_root = bot.client_runtime.mount(component, access=sd.Everyone(), timeout=300)
+    message_root = bot.ui.mount(component, access=sd.Everyone(), timeout=300)
     commit_render(message_root)
 
     await component._door_changed(choice_event("Door"))
