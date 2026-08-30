@@ -19,6 +19,7 @@ from squid_ui.planning.planner import EMPTY_RESERVATION
 from squid_ui.planning.target import ResourceCost
 from squid_ui_discord import (
     access,
+    action,
     actions,
     adapter,
     audience,
@@ -64,6 +65,7 @@ from squid_ui_discord.access import (
     Owner,
     Users,
 )
+from squid_ui_discord.action import DiscordAction
 from squid_ui_discord.actions import (
     native,
     responder,
@@ -228,6 +230,7 @@ __all__ = [
     "ClientRuntime",
     "ClientRuntimeMissing",
     "DialogPresenter",
+    "DiscordAction",
     "DiscordRequest",
     "DiscordUI",
     "DiscordUIConfig",
@@ -290,6 +293,7 @@ __all__ = [
     "Visibility",
     "Work",
     "access",
+    "action",
     "actions",
     "adapter",
     "adopt",
