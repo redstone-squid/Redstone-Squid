@@ -15,8 +15,9 @@ composition and adapter contracts.
 | Compile a Slack message | `squid_ui_slack.SLACK_MESSAGE_SDK343`, `MessageRenderer` |
 | Compile a Slack modal | `squid_ui_slack.SLACK_MODAL_SDK343`, `ModalRenderer` |
 | Compile an App Home view | `squid_ui_slack.SLACK_HOME_SDK343`, `HomeRenderer` |
-| Install a Discord host | `squid_ui_discord.install`, `ClientRuntime` |
-| Handle one Discord event | `squid_ui_discord.Invocation` |
+| Install a Discord host | `squid_ui_discord.install`, `DiscordUIRuntime` |
+| Bind UI authority to an owner | `DiscordUIRuntime.scope`, `DiscordUI` |
+| Handle one Discord event | `DiscordUI.resolve`, `DiscordRequest` |
 | Declare reusable opening policy | `squid_ui_discord.Screen` |
 | Compose dynamic session policy | `SessionSpec`, `SessionManager` |
 | Own one live message | `MessageRoot` |

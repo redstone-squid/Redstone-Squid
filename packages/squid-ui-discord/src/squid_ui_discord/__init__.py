@@ -37,7 +37,6 @@ from squid_ui_discord import (
     grids,
     guards,
     inspection,
-    invocation,
     live,
     message_payload,
     message_root,
@@ -78,6 +77,7 @@ from squid_ui_discord.audience import Audience, Private, Visibility
 from squid_ui_discord.challenges import ChallengeRunner, DialogPresenter
 from squid_ui_discord.config import DiscordUIConfig
 from squid_ui_discord.conformance import conform
+from squid_ui_discord.contracts import LocalizationResolver, RequestSource, ResponseSource
 from squid_ui_discord.delivery import (
     MessageDestination,
     deliver_to,
@@ -89,7 +89,6 @@ from squid_ui_discord.delivery import (
 from squid_ui_discord.facade import DiscordUI
 from squid_ui_discord.fragments import contribute
 from squid_ui_discord.grids import button_grid
-from squid_ui_discord.invocation import Invocation, current_invocation, invocation_scope
 from squid_ui_discord.live import message_roots
 from squid_ui_discord.managed import (
     ErrorObserver,
@@ -165,11 +164,8 @@ from squid_ui_discord.roles import (
     RoleTransitionResult,
 )
 from squid_ui_discord.runtime import (
-    ClientRuntime,
-    ClientRuntimeMissing,
     DiscordUIRuntime,
-    InvocationSource,
-    LocalizationResolver,
+    DiscordUIRuntimeMissing,
     install,
 )
 from squid_ui_discord.screen import Screen
@@ -227,20 +223,17 @@ __all__ = [
     "ChallengeRequest",
     "ChallengeRunner",
     "ChallengeSupervisor",
-    "ClientRuntime",
-    "ClientRuntimeMissing",
     "DialogPresenter",
     "DiscordAction",
     "DiscordRequest",
     "DiscordUI",
     "DiscordUIConfig",
     "DiscordUIRuntime",
+    "DiscordUIRuntimeMissing",
     "ErrorObserver",
     "ErrorRenderer",
     "Everyone",
     "ExistingLayoutError",
-    "Invocation",
-    "InvocationSource",
     "LimitViolationError",
     "LocalizationResolver",
     "ManagedDelivery",
@@ -261,6 +254,7 @@ __all__ = [
     "PauseUpdates",
     "Presented",
     "Private",
+    "RequestSource",
     "Rejected",
     "RenderedMessage",
     "RenewEphemeral",
@@ -268,6 +262,7 @@ __all__ = [
     "Response",
     "ResponseResult",
     "ResponseSpec",
+    "ResponseSource",
     "RoleCategory",
     "RoleConfigurationUnavailable",
     "RoleMutationFailed",
@@ -307,7 +302,6 @@ __all__ = [
     "conformance",
     "contracts",
     "contribute",
-    "current_invocation",
     "deliver_to",
     "delivery",
     "devtools",
@@ -320,8 +314,6 @@ __all__ = [
     "guards",
     "inspection",
     "install",
-    "invocation",
-    "invocation_scope",
     "invoker_only",
     "limits",
     "live",
