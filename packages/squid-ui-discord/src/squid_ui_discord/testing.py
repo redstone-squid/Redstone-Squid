@@ -339,7 +339,11 @@ class InteractionHarness:
 
     @property
     def edits(self) -> list[CallRecord]:
-        return [*self.response.edit_message.records, *self.followup.edit_message.records, *self.edit_original_response.records]
+        return [
+            *self.response.edit_message.records,
+            *self.followup.edit_message.records,
+            *self.edit_original_response.records,
+        ]
 
     @property
     def sends(self) -> list[CallRecord]:

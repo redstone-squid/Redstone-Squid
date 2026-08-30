@@ -437,7 +437,9 @@ async def test_an_entity_selects_resolved_objects_reach_the_legacy_callback() ->
     message_root, errors = _mounted(Picker())
     member = discord.Object(id=5)
 
-    await message_root.dispatch("who", interaction_harness(), _EntityValues((EntityRef(EntityKind.USER, 5),), (member,)))
+    await message_root.dispatch(
+        "who", interaction_harness(), _EntityValues((EntityRef(EntityKind.USER, 5),), (member,))
+    )
 
     assert seen == [[member]]
 

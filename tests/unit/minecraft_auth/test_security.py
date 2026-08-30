@@ -83,13 +83,18 @@ def request_with_services(
     app = FastAPI()
     app.state.config = TEST_CONFIG
     app.state.runtime = Runtime(Services(players, installations))
-    return Request(cast(Scope, {
-            "type": "http",
-            "method": "GET",
-            "path": "/v1/submissions/drafts/test",
-            "headers": list(headers),
-            "app": app,
-        }))
+    return Request(
+        cast(
+            Scope,
+            {
+                "type": "http",
+                "method": "GET",
+                "path": "/v1/submissions/drafts/test",
+                "headers": list(headers),
+                "app": app,
+            },
+        )
+    )
 
 
 async def test_fabric_player_token_derives_bound_caller_without_installation_headers() -> None:
