@@ -323,10 +323,11 @@ async def handle_context_error[BotT: commands.Bot](
 ) -> None:
     """Handle an exception raised by a prefix or hybrid command."""
 
-    invocation = await sd.Invocation.of(context)
+    runtime = sd.DiscordUIRuntime.of(context)
+    request = await runtime.scope(context.bot).resolve(context)
 
     async def respond(node: sl.LayoutNode[sl.ComponentsV2Target]) -> None:
-        await invocation.reply(node, visibility="personal")
+        await request.respond(node, audience="personal")
 
     command_name = context.command.qualified_name if context.command is not None else None
     await _handle_discord_error(
@@ -351,10 +352,11 @@ async def handle_interaction_error(
 ) -> None:
     """Handle an exception raised by an application command or UI interaction."""
 
-    invocation = await sd.Invocation.of(interaction)
+    runtime = sd.DiscordUIRuntime.of(interaction)
+    request = await runtime.scope(interaction.client).resolve(interaction)
 
     async def respond(node: sl.LayoutNode[sl.ComponentsV2Target]) -> None:
-        await invocation.reply(node, visibility="personal")
+        await request.respond(node, audience="personal")
 
     command = interaction.command
     await _handle_discord_error(
@@ -434,11 +436,11 @@ class SquidCommandTree[ClientT: discord.Client](app_commands.CommandTree[ClientT
         with (
             trace_span(f"discord.command {command_name}", attributes) as span,
             correlation_scope(),
-            sd.invocation_scope(interaction),
         ):
             try:
-                localization = (await sd.Invocation.of(interaction)).localization
-            except sd.ClientRuntimeMissing:
+                runtime = sd.DiscordUIRuntime.of(interaction)
+                localization = (await runtime.scope(interaction.client).resolve(interaction)).localization
+            except sd.DiscordUIRuntimeMissing:
                 localization = NEUTRAL
             with localization_scope(localization):
                 await super()._call(interaction)  # pyright: ignore[reportPrivateUsage]

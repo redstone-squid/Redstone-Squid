@@ -6,7 +6,7 @@ silently, and only on the path nobody tests by hand. That is how `!error <ref>` 
 tracebacks (phase 3) and how `!account merge-code` posted an account-takeover credential
 (phase 5.7).
 
-So a literal `True` is banned on a `Context` reply. `Invocation` owns the public/personal
+So a literal `True` is banned on a `Context` reply. `DiscordUI` owns the public/personal
 transport distinction, and a payload that must never reach a channel uses `Private`, which
 uses direct messages instead. Interactions are untouched: there `ephemeral=True` means what
 it says.
@@ -41,4 +41,4 @@ def _violations(path: Path) -> list[str]:
 def test_no_context_reply_claims_an_ephemerality_it_may_not_get() -> None:
     offenders = [violation for path in sorted(BOT_ROOT.rglob("*.py")) for violation in _violations(path)]
 
-    assert offenders == [], "Use Invocation visibility instead of a literal ephemeral=True"
+    assert offenders == [], "Use DiscordUI audience policy instead of a literal ephemeral=True"

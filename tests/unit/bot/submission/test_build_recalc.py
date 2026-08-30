@@ -123,6 +123,7 @@ def _cog(*, allowed: bool = True, account_consented: bool = True) -> RecordingSu
             community_config=CommunityConfig(build_log_channel_ids={BUILD_LOG_CHANNEL}),
         ),
     )
+    cog.ui = cog.bot.ui.scope(cog)
     cog.consent_sticky = ConsentStickyRecorder()
     return cog
 
@@ -134,7 +135,6 @@ def _interaction() -> discord.Interaction[Any]:
     interaction.guild_locale = None
     interaction.locale = "en-US"
     interaction.client = None
-    interaction.response._done = True
     return cast(discord.Interaction[Any], interaction)
 
 
@@ -184,7 +184,7 @@ async def test_a_message_no_build_can_come_from_says_so() -> None:
     interaction = await _run(cog, _message(channel_id=999))
 
     assert cog.inferred == []
-    assert cast(Any, interaction).followup.send.await_count == 1
+    assert cast(Any, interaction).edit_original_response.await_count == 1
 
 
 async def test_a_build_log_message_is_recalculated() -> None:
@@ -203,6 +203,6 @@ async def test_recalc_refuses_when_author_is_unconsented() -> None:
     interaction = await _run(cog, message)
 
     assert cog.inferred == []
-    assert cast(Any, interaction).followup.send.await_count == 1
+    assert cast(Any, interaction).edit_original_response.await_count == 1
     assert isinstance(cog.consent_sticky, ConsentStickyRecorder)
     assert cog.consent_sticky.calls == [message.channel]

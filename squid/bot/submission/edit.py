@@ -54,14 +54,14 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
         notes: str | None = None,
     ) -> None:
         """Edit a build. Whatever you fill in is staged; the workspace opens for the rest."""
-        await interaction.response.defer(ephemeral=True)
-        invocation = await sd.Invocation.of(interaction)
+        request = await self.ui.resolve(interaction)
+        await request.defer("private")
 
         build = await self.builds.get(build_id)
         if build is None:
-            await invocation.reply(
+            await request.respond(
                 error_node(tr("Error"), tr("No build with that ID.")),
-                visibility="personal",
+                audience="personal",
             )
             return
 
@@ -93,7 +93,7 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
         if inapplicable:
             # Dropping a typed option silently is the failure mode this command was merged to
             # end, so a door option on a build with no door is a refusal rather than a no-op.
-            await invocation.reply(
+            await request.respond(
                 error_node(
                     tr("Not a field of this build"),
                     tr(
@@ -101,7 +101,7 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
                         fields=", ".join(sorted(inapplicable)),
                     ),
                 ),
-                visibility="personal",
+                audience="personal",
             )
             return
 
@@ -109,22 +109,22 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
 
     async def edit_context_menu(self, interaction: discord.Interaction[BotT], message: discord.Message) -> None:
         """A context menu command to edit a build."""
-        await interaction.response.defer(ephemeral=True)
-        invocation = await sd.Invocation.of(interaction)
+        request = await self.ui.resolve(interaction)
+        await request.defer("private")
 
         if message.author.id != self.bot.user.id:  # type: ignore
-            await invocation.reply(text_node(tr("This does not look like a build.")), visibility="personal")
+            await request.respond(text_node(tr("This does not look like a build.")), audience="personal")
             return
 
         # Which build a card shows is a property of the post, not of the message: the
         # same message row is just a fact about a Discord message.
         post = await self.bot.services.posts.resolve(message.id)
         if post is None or post.resource_kind != "build":
-            await invocation.reply(text_node(tr("This does not look like a build.")), visibility="personal")
+            await request.respond(text_node(tr("This does not look like a build.")), audience="personal")
             return
 
         build = await self.builds.get(int(post.resource_key))
         if build is None:
-            await invocation.reply(text_node(tr("This does not look like a build.")), visibility="personal")
+            await request.respond(text_node(tr("This does not look like a build.")), audience="personal")
             return
         await open_build_editor(interaction, build, self.ui)

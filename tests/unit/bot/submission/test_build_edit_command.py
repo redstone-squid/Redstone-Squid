@@ -123,7 +123,9 @@ async def _run(cog: BuildEditCommands[Any], **kwargs: Any) -> discord.Interactio
 
 
 def _sent_view(interaction: discord.Interaction[Any]) -> Any:
-    return cast(Any, interaction).followup.send.await_args.kwargs["view"]
+    source = cast(Any, interaction)
+    call = source.followup.send.await_args or source.edit_original_response.await_args
+    return call.kwargs["view"]
 
 
 def _component(view: Any) -> BuildEditScreen | None:

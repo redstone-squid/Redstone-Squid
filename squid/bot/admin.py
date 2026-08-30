@@ -182,9 +182,9 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
             else:
                 synced = await ctx.bot.tree.sync()
 
-            invocation = await sd.Invocation.of(ctx)
             scope = tr("globally") if spec is None else tr("to the current guild")
-            await invocation.reply(
+            await self.ui.respond(
+                ctx,
                 text_node(tr("Synced {count} commands {scope}.", count=len(synced), scope=scope)),
             )
             return
@@ -198,8 +198,8 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
             else:
                 ret += 1
 
-        invocation = await sd.Invocation.of(ctx)
-        await invocation.reply(
+        await self.ui.respond(
+            ctx,
             text_node(tr("Synced the tree to {synced}/{total}.", synced=ret, total=len(guilds))),
         )
 
@@ -207,9 +207,8 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
     @commands.is_owner()
     async def get_sheets_link(self, ctx: Context[BotT]):
         """Sends the google sheets link"""
-        invocation = await sd.Invocation.of(ctx)
-
-        await invocation.reply(
+        await self.ui.respond(
+            ctx,
             link_node(
                 tr("Build spreadsheet"),
                 "https://docs.google.com/spreadsheets/d/1BiyHD6PE1Jyn1EtlT0o2DqciUzWPSdwHmeRcUJtanUs/edit#gid=2075219221",
@@ -221,9 +220,8 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
     @commands.is_owner()
     async def get_database_link(self, ctx: Context[BotT]):
         """Sends the database link"""
-        invocation = await sd.Invocation.of(ctx)
-
-        await invocation.reply(
+        await self.ui.respond(
+            ctx,
             link_node(
                 tr("Database"),
                 "https://supabase.com/dashboard/project/jnushtruzgnnmmxabsxi/editor/29424?sort=submission_id%3Aasc",

@@ -10,6 +10,7 @@ import squid_ui_discord as sd
 from squid.bot.errors import build_error_notice, record_operation_error
 from squid.bot.ui import error_node, info_node, tr
 from squid_ui.document import DocumentLike
+from squid_ui_discord.delivery import no_mentions
 
 type OperationWork = Callable[
     [sl.operations.ProgressReporter[DocumentLike[sl.ComponentsV2Target] | None], sd.delivery.DeliveryResult],
@@ -21,43 +22,47 @@ type ManagedResultHandler[**P] = Callable[P, Awaitable[DocumentLike[sl.Component
 type ManagedResultCallback[**P] = Callable[P, Coroutine[Any, Any, None]]
 
 
-async def _command_invocation(args: tuple[object, ...]) -> sd.Invocation:
+async def _command_request(args: tuple[object, ...]) -> sd.DiscordRequest[Any, Any]:
     if len(args) < 2:
         message = "managed_result requires a bound command callback"
         raise RuntimeError(message)
-    invocation = await sd.Invocation.of(cast(sd.InvocationSource, args[1]))
-    if sd.current_invocation() is not invocation:
-        message = "managed_result requires a resolved ambient invocation"
-        raise RuntimeError(message)
-    return invocation
+    owner, source = args[0], cast(Any, args[1])
+    owner_ui = getattr(owner, "ui", None)
+    if isinstance(owner_ui, sd.DiscordUI):
+        ui = owner_ui
+    elif isinstance(owner_ui, sd.DiscordUIRuntime):
+        ui = owner_ui.scope(owner)
+    else:
+        ui = sd.DiscordUIRuntime.of(source).scope(owner)
+    return await ui.resolve(source)
 
 
 def _make_root(
-    invocation: sd.Invocation,
+    request: sd.DiscordRequest[Any, Any],
 ) -> Callable[[sl.Component[sl.ComponentsV2Target]], sd.MessageRoot[sl.ComponentsV2Target]]:
     def make_root(component: sl.Component[sl.ComponentsV2Target]) -> sd.MessageRoot[sl.ComponentsV2Target]:
-        return invocation.runtime.mount(
+        return request.runtime.mount(
             component,
             access=sd.Everyone(),
-            localization=invocation.localization,
+            localization=request.localization,
             timeout=900,
         )
 
     return make_root
 
 
-def _render_error(invocation: sd.Invocation, error: Exception) -> DocumentLike[sl.ComponentsV2Target]:
-    notice = build_error_notice(error, invocation.localization.locale)
+def _render_error(request: sd.DiscordRequest[Any, Any], error: Exception) -> DocumentLike[sl.ComponentsV2Target]:
+    notice = build_error_notice(error, request.localization.locale)
     return error_node(notice.title, notice.detail)
 
 
-async def _record_error(invocation: sd.Invocation, managed: sd.ManagedError) -> None:
+async def _record_error(request: sd.DiscordRequest[Any, Any], managed: sd.ManagedError) -> None:
     delivered = managed.delivery
     result = delivered.result if isinstance(delivered, sd.delivery.Delivered) else None
-    services = getattr(invocation.client, "services", None)
+    services = getattr(request.client, "services", None)
     await record_operation_error(
         managed.error,
-        locale=invocation.localization.locale,
+        locale=request.localization.locale,
         result=result,
         presented=isinstance(delivered, sd.delivery.Delivered) and delivered.settled,
         reports=getattr(services, "error_reports", None),
@@ -71,8 +76,8 @@ class CommandOperation(sl.Component[sl.ComponentsV2Target]):
         DocumentLike[sl.ComponentsV2Target], DocumentLike[sl.ComponentsV2Target] | None
     ]
 
-    def __init__(self, invocation: sd.Invocation, work: OperationWork) -> None:
-        self._invocation = invocation
+    def __init__(self, request: sd.DiscordRequest[Any, Any], work: OperationWork) -> None:
+        self._request = request
         self._work = work
         self._initial = info_node(tr(t"Working"), tr(t"Getting information..."))
         self._result: sd.delivery.DeliveryResult | None = None
@@ -97,7 +102,7 @@ class CommandOperation(sl.Component[sl.ComponentsV2Target]):
             case sl.operations.Succeeded(value=value):
                 return value
             case sl.operations.Failed(error=error):
-                return _render_error(self._invocation, error)
+                return _render_error(self._request, error)
             case sl.operations.Cancelled(progress=progress):
                 return self._initial if progress is None else progress
 
@@ -132,20 +137,24 @@ def managed_result[**P](
     def decorate(handler: ManagedResultHandler[P]) -> ManagedResultCallback[P]:
         @wraps(handler)
         async def invoke(*args: P.args, **kwargs: P.kwargs) -> None:
-            invocation = await _command_invocation(args)
+            request = await _command_request(args)
 
             async def work() -> DocumentLike:
                 return cast(DocumentLike, await handler(*args, **kwargs))
 
             async def on_error(error: sd.ManagedError) -> None:
-                await _record_error(invocation, error)
+                await _record_error(request, error)
 
             await sd.run_managed_result(
                 work,
-                message_destination=invocation.destination(),
-                make_root=cast(sd.MessageRootFactory, _make_root(invocation)),
+                message_destination=request.destination(
+                    "public",
+                    files=(),
+                    allowed_mentions=no_mentions(),
+                ),
+                make_root=cast(sd.MessageRootFactory, _make_root(request)),
                 initial=cast(DocumentLike, info_node(tr(t"Working"), tr(t"Getting information..."))),
-                render_error=cast(sd.ErrorRenderer, lambda error: _render_error(invocation, error)),
+                render_error=cast(sd.ErrorRenderer, lambda error: _render_error(request, error)),
                 on_error=on_error,
                 dismiss_on_success=dismiss_on_success,
             )
@@ -158,16 +167,20 @@ def managed_result[**P](
 
 
 async def run_command_operation(
-    invocation: sd.Invocation,
+    request: sd.DiscordRequest[Any, Any],
     work: OperationWork,
     *,
     destination: sd.MessageDestination | None = None,
     dismiss_on_success: bool = False,
 ) -> None:
     """Deliver and settle one command operation, rethrowing a rendered failure."""
-    component = CommandOperation(invocation, work)
-    message_root = _make_root(invocation)(component)
-    target = invocation.destination() if destination is None else destination
+    component = CommandOperation(request, work)
+    message_root = _make_root(request)(component)
+    target = (
+        request.destination("public", files=(), allowed_mentions=no_mentions())
+        if destination is None
+        else destination
+    )
 
     async def capture(payload: sd.message_payload.MessagePayload) -> sd.delivery.DeliveryResult:
         result = await target(payload)
@@ -180,7 +193,7 @@ async def run_command_operation(
             if dismiss_on_success:
                 await message_root.dismiss()
         case sl.operations.Failed(error=error):
-            await _record_error(invocation, sd.ManagedError(error, delivered))
+            await _record_error(request, sd.ManagedError(error, delivered))
             raise error
         case sl.operations.Cancelled():
             raise asyncio.CancelledError

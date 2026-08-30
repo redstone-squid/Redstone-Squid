@@ -1,7 +1,6 @@
 """Small typed harnesses shared by Discord boundary tests."""
 
-from collections.abc import AsyncIterator, Iterable
-from contextlib import asynccontextmanager
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Literal, cast
@@ -40,6 +39,7 @@ class _FollowupResult:
 class _ResponseSource:
     done: bool
     send_message: AsyncCallRecorder
+    type: discord.InteractionResponseType | None = None
 
     def is_done(self) -> bool:
         return self.done
@@ -67,6 +67,10 @@ class _InteractionSource:
     expires_at: datetime
     command: None = None
     delete_original_response: AsyncCallRecorder = field(default_factory=AsyncCallRecorder)
+    edit_original_response: AsyncCallRecorder = field(default_factory=AsyncCallRecorder)
+    original_response: AsyncCallRecorder = field(
+        default_factory=lambda: AsyncCallRecorder(result=_FollowupResult())
+    )
 
     def is_expired(self) -> bool:
         return False
@@ -101,7 +105,11 @@ def make_interaction(
     interaction = cast(
         discord.Interaction[discord.Client],
         _InteractionSource(
-            response=_ResponseSource(response_done, send_initial),
+            response=_ResponseSource(
+                response_done,
+                send_initial,
+                discord.InteractionResponseType.channel_message if response_done else None,
+            ),
             followup=_FollowupSource(send_followup, AsyncCallRecorder()),
             client=client,
             user=_Identity(user_id),
@@ -330,7 +338,7 @@ def make_layout_bot(**attributes: Any) -> Any:
     """A bot double with the layout runtime installed, the way `RedstoneSquid` installs it.
 
     Panels reach their chrome, error hook and challenge presenter through
-    `ClientRuntime.of(source)`, so a test building one needs a real installation rather than a
+    `DiscordUIRuntime.of(source)`, so a test building one needs a real installation rather than a
     bare `SessionManager`. The installation is weakly keyed, so it leaves with the double.
     """
     import squid_ui_discord as sd
@@ -342,7 +350,7 @@ def make_layout_bot(**attributes: Any) -> Any:
     bus = attributes.get("topic_bus") or LocalTopicBus()
     client = FakeClient(topic_bus=bus, **{k: v for k, v in attributes.items() if k != "topic_bus"})
 
-    async def resolve(source: sd.InvocationSource) -> Localization:
+    async def resolve(source: sd.contracts.LocalizationSource) -> Localization:
         settings = getattr(getattr(client, "services", None), "settings", None)
         return NEUTRAL if settings is None else await localization_resolver(source)
 
@@ -355,12 +363,3 @@ def make_layout_bot(**attributes: Any) -> Any:
         sessions=runtime.sessions,
     )
     return client
-
-
-@asynccontextmanager
-async def invocation_scope(source: Any) -> AsyncIterator[Any]:
-    """Resolve one invocation inside the ambient scope production dispatch establishes."""
-    import squid_ui_discord as sd
-
-    with sd.invocation_scope(source):
-        yield await sd.Invocation.of(source)

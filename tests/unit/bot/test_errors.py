@@ -21,6 +21,7 @@ from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.builds.errors import BuildNotFoundError
 from squid.core.errors import InternalError
 from squid.observability import correlation_id
+from squid_ui.text import Localization, current_localization
 from tests.support.discord import make_interaction, make_message
 
 
@@ -182,9 +183,12 @@ async def test_application_command_binds_one_correlation_id_for_the_whole_invoca
     assert seen[0] != outside, "the binding must not leak past the invocation"
 
 
-async def test_application_command_establishes_invocation_scope(mocker: MockerFixture) -> None:
+async def test_application_command_establishes_localization_scope(mocker: MockerFixture) -> None:
     client = discord.Client(intents=discord.Intents.none())
-    runtime = sd.install(client)
+    async def localize(_source: object) -> Localization:
+        return Localization(locale="en-GB")
+
+    runtime = sd.install(client, localization=localize)
     tree = SquidCommandTree(client)
     interaction = mocker.Mock(
         type=discord.InteractionType.application_command,
@@ -196,20 +200,19 @@ async def test_application_command_establishes_invocation_scope(mocker: MockerFi
         user=mocker.Mock(id=7),
         guild=None,
     )
-    seen: list[sd.Invocation] = []
+    seen: list[str | None] = []
 
     async def record_bound(_tree: object, source: discord.Interaction) -> None:
-        invocation = await sd.Invocation.of(source)
-        assert sd.current_invocation() is invocation
-        seen.append(invocation)
+        del source
+        seen.append(current_localization().locale)
 
     mocker.patch.object(app_commands.CommandTree, "_call", new=record_bound)
 
     await tree._call(interaction)  # pyright: ignore[reportPrivateUsage]
     await runtime.close()
 
-    assert len(seen) == 1
-    assert sd.current_invocation() is None
+    assert seen == ["en-GB"]
+    assert current_localization().locale is None
 
 
 async def test_application_command_failure_marks_span(mocker: MockerFixture) -> None:
