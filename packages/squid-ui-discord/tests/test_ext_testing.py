@@ -51,7 +51,7 @@ async def test_stage_drives_facade_dispatch_and_forms_by_semantic_key() -> None:
     screen = Editor()
 
     async with sdx.testing.stage(screen, owner=owner, user_id=7) as ui:
-        assert ui.outcome.component is screen
+        assert ui.result.component is screen
         assert ui.session is not None
         assert ui.root.access == sd.Owner(7)
         assert ui.texts() == ["Old: 0"]

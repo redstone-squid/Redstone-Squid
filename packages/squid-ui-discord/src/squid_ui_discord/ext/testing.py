@@ -94,17 +94,17 @@ class StagedUI[ComponentT: Component[ComponentsV2Target]]:
 
     def __init__(
         self,
-        outcome: Presented[ComponentT],
+        result: Presented[ComponentT],
         *,
         client: discord.Client,
         user_id: int,
         interaction: InteractionHarness,
     ) -> None:
-        self.outcome = outcome
-        self.component = outcome.component
-        self.root = outcome.root
-        self.session = outcome.session
-        self.delivery = outcome.delivery
+        self.result = result
+        self.component = result.component
+        self.root = result.root
+        self.session = result.session
+        self.delivery = result.delivery
         self.interaction = interaction
         self._client = client
         self._user_id = user_id
