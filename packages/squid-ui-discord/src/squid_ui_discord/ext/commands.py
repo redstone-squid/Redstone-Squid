@@ -14,7 +14,13 @@ from discord.ext import commands
 
 from squid_ui.forms import FormSpec
 from squid_ui_discord.contracts import RequestSource
-from squid_ui_discord.ext.contracts import AsyncDecorator, AsyncHandler, AutocompleteItem, ChoiceValue, CommandResult
+from squid_ui_discord.ext.contracts import (
+    AsyncHandler,
+    AsyncHandlerTransform,
+    AutocompleteItem,
+    ChoiceValue,
+    CommandResult,
+)
 from squid_ui_discord.facade import DiscordUI
 from squid_ui_discord.modal import ModalSpec
 from squid_ui_discord.request import AcknowledgementPolicy, DiscordRequest
@@ -232,7 +238,7 @@ def context_menu(
     name: str,
     type: discord.AppCommandType = discord.AppCommandType.message,
     acknowledgement: AcknowledgementPolicy = "none",
-) -> AsyncDecorator:
+) -> AsyncHandlerTransform:
     """Declare a cog-bound context menu converted during cog loading."""
     if type not in (discord.AppCommandType.message, discord.AppCommandType.user):
         message = "context menus must target messages or users"
