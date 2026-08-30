@@ -130,8 +130,8 @@ def managed_result[**P](
     """Manage a command callback whose return value is a rendered terminal layout.
 
     The decorated callback keeps its Discord-facing parameters and requires the command
-    dispatcher to have resolved the ambient invocation. It runs after the deferred progress
-    card is delivered, and its returned layout becomes the terminal scene.
+    source in its native slot. It resolves the owner's UI request, then runs after the deferred
+    progress card is delivered; its returned layout becomes the terminal scene.
     """
 
     def decorate(handler: ManagedResultHandler[P]) -> ManagedResultCallback[P]:
@@ -177,9 +177,7 @@ async def run_command_operation(
     component = CommandOperation(request, work)
     message_root = _make_root(request)(component)
     target = (
-        request.destination("public", files=(), allowed_mentions=no_mentions())
-        if destination is None
-        else destination
+        request.destination("public", files=(), allowed_mentions=no_mentions()) if destination is None else destination
     )
 
     async def capture(payload: sd.message_payload.MessagePayload) -> sd.delivery.DeliveryResult:
