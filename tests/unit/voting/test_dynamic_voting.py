@@ -1,15 +1,16 @@
-from dataclasses import replace
+from collections.abc import Sequence
+from dataclasses import dataclass, replace
 from math import inf, nan
-from types import SimpleNamespace
 from typing import Any, cast
 
 import discord
 import pytest
+from whenever import Instant
 
 from squid.bot.voting.poll_wizard import format_duration, parse_option_lines, parse_poll_duration
 from squid.bot.voting.rendering import generic_poll_text, render_generic_poll
 from squid.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_POLL_CLOSE_ANY, VOTE_WEIGHT_STAFF
-from squid.voting.application import RoleVoteWeightPolicy
+from squid.voting.application import RoleVoteWeightPolicy, VoteService
 from squid.voting.domain import (
     PollScope,
     RoleWeight,
@@ -27,7 +28,7 @@ from squid.voting.domain import (
 )
 from squid.voting.errors import InvalidVoteConfigurationError
 from squid_ui.text import NEUTRAL, resolve_text
-from tests.helpers.voting import GENERIC_OPTIONS, build_snapshot, poll_snapshot
+from tests.support.voting import GENERIC_OPTIONS, build_snapshot, poll_snapshot
 
 STAFF = frozenset({VOTE_WEIGHT_STAFF.name})
 DELETE_LOG = frozenset({VOTE_LOG_DELETE_CAST.name})
@@ -290,16 +291,59 @@ async def test_publishing_a_network_poll_unscopes_its_options() -> None:
     """Guild-scoped aliases would leave every other server's card unvotable."""
     from squid.bot.voting.publisher import DiscordPollPublisher
 
-    created: dict[str, object] = {}
+    class VoteRecorder(VoteService):
+        def __init__(self) -> None:
+            self.created: dict[str, object] = {}
 
-    async def create_generic_poll(**kwargs: object) -> int:
-        created.update(kwargs)
-        return 7
+        async def create_generic_poll(
+            self,
+            *,
+            author_account_id: int,
+            question: str,
+            visibility: VoteVisibility,
+            duration_seconds: int,
+            options: Sequence[VoteOption],
+            guild_id: int | None = None,
+            scope: PollScope = PollScope.GUILD,
+            now: Instant | None = None,
+        ) -> int:
+            self.created = {
+                "author_account_id": author_account_id,
+                "question": question,
+                "visibility": visibility,
+                "duration_seconds": duration_seconds,
+                "options": options,
+                "guild_id": guild_id,
+                "scope": scope,
+                "now": now,
+            }
+            return 7
 
-    channel = SimpleNamespace(id=200, guild=SimpleNamespace(id=10), send=None)
-    bot = SimpleNamespace(services=SimpleNamespace(votes=SimpleNamespace(create_generic_poll=create_generic_poll)))
-    publisher = DiscordPollPublisher(cast(Any, bot))
-    publisher.attach = lambda *args, **kwargs: _resolved(None)  # type: ignore[method-assign]
+    @dataclass(frozen=True)
+    class Guild:
+        id: int
+
+    @dataclass(frozen=True)
+    class Channel:
+        id: int
+        guild: Guild
+
+    @dataclass(frozen=True)
+    class Services:
+        votes: VoteService
+
+    @dataclass(frozen=True)
+    class Bot:
+        services: Services
+
+    class PublisherRecorder(DiscordPollPublisher):
+        async def attach(self, vote_session_id: int, channel: Any) -> discord.Message:
+            assert vote_session_id == 7
+            return cast(discord.Message, object())
+
+    votes = VoteRecorder()
+    channel = Channel(id=200, guild=Guild(id=10))
+    publisher = PublisherRecorder(cast(Any, Bot(services=Services(votes=votes))))
 
     await publisher.create_and_publish(
         author_account_id=1,
@@ -311,13 +355,6 @@ async def test_publishing_a_network_poll_unscopes_its_options() -> None:
         scope=PollScope.NETWORK,
     )
 
-    assert created["scope"] is PollScope.NETWORK
-    assert created["guild_id"] == 10
-    assert all(option.guild_id is None for option in cast(Any, created["options"]))
-
-
-def _resolved(value: object):
-    async def call() -> object:
-        return value
-
-    return call()
+    assert votes.created["scope"] is PollScope.NETWORK
+    assert votes.created["guild_id"] == 10
+    assert all(option.guild_id is None for option in cast(Sequence[VoteOption], votes.created["options"]))

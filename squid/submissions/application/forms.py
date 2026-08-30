@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from squid.core.errors import InvalidStateError
-from squid.core.i18n import _, translate
+from squid.core.i18n import localization_for, tr
 from squid.submissions.domain import (
     CategoryForm,
     ChoiceOption,
@@ -19,6 +19,7 @@ from squid.submissions.domain import (
     VisibilityOperator,
     VisibilityRule,
 )
+from squid_ui.text import Message, localization_scope
 
 CURRENT_SUBMISSION_PROTOCOL = 1
 CURRENT_SUBMISSION_SCHEMA = "build_submission.v1"
@@ -48,7 +49,7 @@ class FormOptionSet:
 
     def __post_init__(self) -> None:
         if self.revision < 1:
-            msg = _("option revisions must be positive")
+            msg = tr(t"option revisions must be positive")
             raise InvalidStateError(msg)
 
 
@@ -105,30 +106,35 @@ class CheckedInFormManifestRegistry:
 
 def build_submission_manifest(locale: str | None = None) -> FormManifest:
     """Build the checked-in schema revision localized for one client."""
-    localize = lambda message: translate(locale, message)
+    with localization_scope(localization_for(locale)):
+        return _build_submission_manifest()
+
+
+def _build_submission_manifest() -> FormManifest:
+    localize = tr
     common = (
         FormSection(
             id="identity",
-            title=localize(_("Build identity")),
+            title=localize(tr(t"Build identity")),
             fields=(
                 FormField(
                     id="display_name",
-                    label=localize(_("Display name")),
-                    help_text=localize(_("Optional name shown in addition to the canonical structured title.")),
+                    label=localize(tr(t"Display name")),
+                    help_text=localize(tr(t"Optional name shown in addition to the canonical structured title.")),
                     control=ControlKind.TEXT,
                     value_kind=ValueKind.STRING,
                     constraints=FieldConstraints(max_length=120),
                 ),
                 FormField(
                     id="description",
-                    label=localize(_("Description")),
+                    label=localize(tr(t"Description")),
                     control=ControlKind.TEXT,
                     value_kind=ValueKind.STRING,
                     constraints=FieldConstraints(max_length=4_000),
                 ),
                 FormField(
                     id="creators",
-                    label=localize(_("Creators")),
+                    label=localize(tr(t"Creators")),
                     control=ControlKind.TEXT,
                     value_kind=ValueKind.STRING_LIST,
                     required=True,
@@ -140,14 +146,14 @@ def build_submission_manifest(locale: str | None = None) -> FormManifest:
         ),
         FormSection(
             id="dimensions_versions",
-            title=localize(_("Dimensions and versions")),
+            title=localize(tr(t"Dimensions and versions")),
             fields=(
-                _integer_field("capture_width", _("Build width"), localize, required=True, maximum=512),
-                _integer_field("capture_height", _("Build height"), localize, required=True, maximum=512),
-                _integer_field("capture_depth", _("Build depth"), localize, required=True, maximum=512),
+                _integer_field("capture_width", tr(t"Build width"), localize, required=True, maximum=512),
+                _integer_field("capture_height", tr(t"Build height"), localize, required=True, maximum=512),
+                _integer_field("capture_depth", tr(t"Build depth"), localize, required=True, maximum=512),
                 FormField(
                     id="source_version",
-                    label=localize(_("Exact source Minecraft version")),
+                    label=localize(tr(t"Exact source Minecraft version")),
                     control=ControlKind.CHOICE,
                     value_kind=ValueKind.STRING,
                     required=True,
@@ -156,7 +162,7 @@ def build_submission_manifest(locale: str | None = None) -> FormManifest:
                 ),
                 FormField(
                     id="version_compatibility",
-                    label=localize(_("Declared version compatibility")),
+                    label=localize(tr(t"Declared version compatibility")),
                     control=ControlKind.TEXT,
                     value_kind=ValueKind.STRING,
                     constraints=FieldConstraints(max_length=500),
@@ -165,11 +171,11 @@ def build_submission_manifest(locale: str | None = None) -> FormManifest:
         ),
         FormSection(
             id="taxonomy",
-            title=localize(_("Restrictions and tags")),
+            title=localize(tr(t"Restrictions and tags")),
             fields=(
                 FormField(
                     id="restrictions",
-                    label=localize(_("Known restrictions")),
+                    label=localize(tr(t"Known restrictions")),
                     control=ControlKind.MULTI_CHOICE,
                     value_kind=ValueKind.STRING_LIST,
                     option_source="approved_restrictions",
@@ -177,8 +183,8 @@ def build_submission_manifest(locale: str | None = None) -> FormManifest:
                 ),
                 FormField(
                     id="restriction_proposals",
-                    label=localize(_("Propose missing restrictions")),
-                    help_text=localize(_("Suggestions remain unofficial until staff promotes them.")),
+                    label=localize(tr(t"Propose missing restrictions")),
+                    help_text=localize(tr(t"Suggestions remain unofficial until staff promotes them.")),
                     control=ControlKind.TEXT,
                     value_kind=ValueKind.STRING_LIST,
                     repeatable=True,
@@ -187,7 +193,7 @@ def build_submission_manifest(locale: str | None = None) -> FormManifest:
                 ),
                 FormField(
                     id="showcase_tags",
-                    label=localize(_("Showcase tags")),
+                    label=localize(tr(t"Showcase tags")),
                     control=ControlKind.MULTI_CHOICE,
                     value_kind=ValueKind.STRING_LIST,
                     option_source="approved_showcase_tags",
@@ -197,23 +203,23 @@ def build_submission_manifest(locale: str | None = None) -> FormManifest:
         ),
         FormSection(
             id="rights_privacy",
-            title=localize(_("Schematic rights and privacy")),
+            title=localize(tr(t"Schematic rights and privacy")),
             fields=(
                 FormField(
                     id="schematic_visibility",
-                    label=localize(_("Schematic visibility")),
-                    help_text=localize(_("Choose explicitly; publication is never inferred.")),
+                    label=localize(tr(t"Schematic visibility")),
+                    help_text=localize(tr(t"Choose explicitly; publication is never inferred.")),
                     control=ControlKind.CHOICE,
                     value_kind=ValueKind.STRING,
                     required=True,
                     options=(
-                        ChoiceOption("reviewer_only", localize(_("Reviewer only"))),
-                        ChoiceOption("public_download", localize(_("Public download"))),
+                        ChoiceOption("reviewer_only", localize(tr(t"Reviewer only"))),
+                        ChoiceOption("public_download", localize(tr(t"Public download"))),
                     ),
                 ),
                 FormField(
                     id="schematic_license",
-                    label=localize(_("Public schematic license")),
+                    label=localize(tr(t"Public schematic license")),
                     control=ControlKind.CHOICE,
                     value_kind=ValueKind.STRING,
                     required=True,
@@ -222,7 +228,7 @@ def build_submission_manifest(locale: str | None = None) -> FormManifest:
                 ),
                 FormField(
                     id="rights_attestation",
-                    label=localize(_("I have permission to distribute this schematic under the selected license.")),
+                    label=localize(tr(t"I have permission to distribute this schematic under the selected license.")),
                     control=ControlKind.BOOLEAN,
                     value_kind=ValueKind.BOOLEAN,
                     required=True,
@@ -231,16 +237,16 @@ def build_submission_manifest(locale: str | None = None) -> FormManifest:
                 ),
                 FormField(
                     id="include_inventories",
-                    label=localize(_("Include inventories and functional item contents")),
-                    help_text=localize(_("Review the disclosure preview before submitting.")),
+                    label=localize(tr(t"Include inventories and functional item contents")),
+                    help_text=localize(tr(t"Review the disclosure preview before submitting.")),
                     control=ControlKind.BOOLEAN,
                     value_kind=ValueKind.BOOLEAN,
                     default=True,
                 ),
                 FormField(
                     id="include_free_text",
-                    label=localize(_("Include signs, books, names, and other free text")),
-                    help_text=localize(_("Review the disclosure preview before submitting.")),
+                    label=localize(tr(t"Include signs, books, names, and other free text")),
+                    help_text=localize(tr(t"Review the disclosure preview before submitting.")),
                     control=ControlKind.BOOLEAN,
                     value_kind=ValueKind.BOOLEAN,
                     default=True,
@@ -249,18 +255,18 @@ def build_submission_manifest(locale: str | None = None) -> FormManifest:
         ),
         FormSection(
             id="provenance",
-            title=localize(_("Provenance")),
+            title=localize(tr(t"Provenance")),
             fields=(
                 FormField(
                     id="completion",
-                    label=localize(_("Completion date or context")),
+                    label=localize(tr(t"Completion date or context")),
                     control=ControlKind.TEXT,
                     value_kind=ValueKind.STRING,
                     constraints=FieldConstraints(max_length=200),
                 ),
                 FormField(
                     id="ai_generated",
-                    label=localize(_("AI-generated or AI-assisted")),
+                    label=localize(tr(t"AI-generated or AI-assisted")),
                     control=ControlKind.BOOLEAN,
                     value_kind=ValueKind.BOOLEAN,
                     required=True,
@@ -268,7 +274,7 @@ def build_submission_manifest(locale: str | None = None) -> FormManifest:
                 ),
                 FormField(
                     id="sponsor_attribution",
-                    label=localize(_("Show the sponsoring server on this build")),
+                    label=localize(tr(t"Show the sponsoring server on this build")),
                     control=ControlKind.BOOLEAN,
                     value_kind=ValueKind.BOOLEAN,
                     default=False,
@@ -286,35 +292,35 @@ def build_submission_manifest(locale: str | None = None) -> FormManifest:
         categories=(
             _door_form(localize),
             _extender_form(localize),
-            CategoryForm("utility", localize(_("Utility")), ()),
-            CategoryForm("entrance", localize(_("Entrance")), ()),
-            CategoryForm("other", localize(_("Other")), ()),
+            CategoryForm("utility", localize(tr(t"Utility")), ()),
+            CategoryForm("entrance", localize(tr(t"Entrance")), ()),
+            CategoryForm("other", localize(tr(t"Other")), ()),
         ),
     )
 
 
-def _door_form(localize: Callable[[str], str]) -> CategoryForm:
+def _door_form(localize: Callable[[Message], str]) -> CategoryForm:
     return CategoryForm(
         code="door",
-        label=localize(_("Door")),
+        label=localize(tr(t"Door")),
         sections=(
             FormSection(
                 id="door_geometry",
-                title=localize(_("Door geometry")),
+                title=localize(tr(t"Door geometry")),
                 fields=(
-                    _integer_field("opening_width", _("Opening width"), localize, required=True, maximum=512),
-                    _integer_field("opening_height", _("Opening height"), localize, required=True, maximum=512),
-                    _integer_field("opening_depth", _("Opening depth"), localize, required=True, maximum=512),
+                    _integer_field("opening_width", tr(t"Opening width"), localize, required=True, maximum=512),
+                    _integer_field("opening_height", tr(t"Opening height"), localize, required=True, maximum=512),
+                    _integer_field("opening_depth", tr(t"Opening depth"), localize, required=True, maximum=512),
                     FormField(
                         id="door_orientation",
-                        label=localize(_("Door orientation")),
+                        label=localize(tr(t"Door orientation")),
                         control=ControlKind.CHOICE,
                         value_kind=ValueKind.STRING,
                         required=True,
                         options=(
-                            ChoiceOption("door", localize(_("Door"))),
-                            ChoiceOption("skydoor", localize(_("Skydoor"))),
-                            ChoiceOption("trapdoor", localize(_("Trapdoor"))),
+                            ChoiceOption("door", localize(tr(t"Door"))),
+                            ChoiceOption("skydoor", localize(tr(t"Skydoor"))),
+                            ChoiceOption("trapdoor", localize(tr(t"Trapdoor"))),
                         ),
                     ),
                 ),
@@ -322,63 +328,63 @@ def _door_form(localize: Callable[[str], str]) -> CategoryForm:
             _pattern_section(localize),
             FormSection(
                 id="door_timing",
-                title=localize(_("Optional default timing")),
+                title=localize(tr(t"Optional default timing")),
                 fields=(
-                    _duration_field("opening_time", _("Opening time"), localize),
-                    _duration_field("visible_opening_time", _("Visible opening time"), localize),
-                    _duration_field("closing_time", _("Closing time"), localize),
-                    _duration_field("visible_closing_time", _("Visible closing time"), localize),
+                    _duration_field("opening_time", tr(t"Opening time"), localize),
+                    _duration_field("visible_opening_time", tr(t"Visible opening time"), localize),
+                    _duration_field("closing_time", tr(t"Closing time"), localize),
+                    _duration_field("visible_closing_time", tr(t"Visible closing time"), localize),
                 ),
             ),
         ),
     )
 
 
-def _extender_form(localize: Callable[[str], str]) -> CategoryForm:
+def _extender_form(localize: Callable[[Message], str]) -> CategoryForm:
     return CategoryForm(
         code="extender",
-        label=localize(_("Extender")),
+        label=localize(tr(t"Extender")),
         sections=(
             FormSection(
                 id="extender_geometry",
-                title=localize(_("Extender movement")),
+                title=localize(tr(t"Extender movement")),
                 fields=(
                     FormField(
                         id="movement_orientation",
-                        label=localize(_("Movement orientation")),
+                        label=localize(tr(t"Movement orientation")),
                         control=ControlKind.CHOICE,
                         value_kind=ValueKind.STRING,
                         required=True,
                         options=(
-                            ChoiceOption("horizontal", localize(_("Horizontal"))),
-                            ChoiceOption("vertical_up", localize(_("Vertical upward"))),
-                            ChoiceOption("vertical_down", localize(_("Vertical downward"))),
+                            ChoiceOption("horizontal", localize(tr(t"Horizontal"))),
+                            ChoiceOption("vertical_up", localize(tr(t"Vertical upward"))),
+                            ChoiceOption("vertical_down", localize(tr(t"Vertical downward"))),
                         ),
                     ),
-                    _integer_field("extension_length", _("Extension length"), localize, required=True, maximum=512),
+                    _integer_field("extension_length", tr(t"Extension length"), localize, required=True, maximum=512),
                 ),
             ),
             _pattern_section(localize),
             FormSection(
                 id="extender_timing",
-                title=localize(_("Optional default timing")),
+                title=localize(tr(t"Optional default timing")),
                 fields=(
-                    _duration_field("extension_time", _("Extension time"), localize),
-                    _duration_field("retraction_time", _("Retraction time"), localize),
+                    _duration_field("extension_time", tr(t"Extension time"), localize),
+                    _duration_field("retraction_time", tr(t"Retraction time"), localize),
                 ),
             ),
         ),
     )
 
 
-def _pattern_section(localize: Callable[[str], str]) -> FormSection:
+def _pattern_section(localize: Callable[[Message], str]) -> FormSection:
     return FormSection(
         id="patterns",
-        title=localize(_("Mechanism patterns")),
+        title=localize(tr(t"Mechanism patterns")),
         fields=(
             FormField(
                 id="patterns",
-                label=localize(_("Known patterns")),
+                label=localize(tr(t"Known patterns")),
                 control=ControlKind.MULTI_CHOICE,
                 value_kind=ValueKind.STRING_LIST,
                 option_source="approved_patterns",
@@ -386,8 +392,8 @@ def _pattern_section(localize: Callable[[str], str]) -> FormSection:
             ),
             FormField(
                 id="pattern_proposals",
-                label=localize(_("Propose missing patterns")),
-                help_text=localize(_("Suggestions remain unofficial until staff promotes them.")),
+                label=localize(tr(t"Propose missing patterns")),
+                help_text=localize(tr(t"Suggestions remain unofficial until staff promotes them.")),
                 control=ControlKind.TEXT,
                 value_kind=ValueKind.STRING_LIST,
                 repeatable=True,
@@ -400,8 +406,8 @@ def _pattern_section(localize: Callable[[str], str]) -> FormSection:
 
 def _integer_field(
     field_id: str,
-    label: str,
-    localize: Callable[[str], str],
+    label: Message,
+    localize: Callable[[Message], str],
     *,
     required: bool,
     maximum: int,
@@ -416,27 +422,27 @@ def _integer_field(
     )
 
 
-def _duration_field(field_id: str, label: str, localize: Callable[[str], str]) -> FormField:
+def _duration_field(field_id: str, label: Message, localize: Callable[[Message], str]) -> FormField:
     return FormField(
         id=field_id,
         label=localize(label),
-        help_text=localize(_("Enter game ticks, redstone ticks, or seconds explicitly.")),
+        help_text=localize(tr(t"Enter game ticks, redstone ticks, or seconds explicitly.")),
         control=ControlKind.DURATION,
         value_kind=ValueKind.GAME_TICKS,
         constraints=FieldConstraints(minimum=0),
     )
 
 
-def _license_options(localize: Callable[[str], str]) -> tuple[ChoiceOption, ...]:
+def _license_options(localize: Callable[[Message], str]) -> tuple[ChoiceOption, ...]:
     return tuple(
         ChoiceOption(value, localize(label))
         for value, label in (
-            ("cc0_1_0", _("CC0 1.0")),
-            ("cc_by_4_0", _("CC BY 4.0")),
-            ("cc_by_sa_4_0", _("CC BY-SA 4.0")),
-            ("cc_by_nd_4_0", _("CC BY-ND 4.0")),
-            ("cc_by_nc_4_0", _("CC BY-NC 4.0")),
-            ("cc_by_nc_sa_4_0", _("CC BY-NC-SA 4.0")),
-            ("cc_by_nc_nd_4_0", _("CC BY-NC-ND 4.0")),
+            ("cc0_1_0", tr(t"CC0 1.0")),
+            ("cc_by_4_0", tr(t"CC BY 4.0")),
+            ("cc_by_sa_4_0", tr(t"CC BY-SA 4.0")),
+            ("cc_by_nd_4_0", tr(t"CC BY-ND 4.0")),
+            ("cc_by_nc_4_0", tr(t"CC BY-NC 4.0")),
+            ("cc_by_nc_sa_4_0", tr(t"CC BY-NC-SA 4.0")),
+            ("cc_by_nc_nd_4_0", tr(t"CC BY-NC-ND 4.0")),
         )
     )

@@ -1,6 +1,6 @@
 """The Wizard-driven poll composition screen."""
 
-from types import SimpleNamespace
+from dataclasses import dataclass
 from typing import Any, cast
 from unittest.mock import AsyncMock
 
@@ -13,12 +13,17 @@ from squid.bot.voting.poll_wizard import PollDraft, PollScreen
 from squid.voting.domain import PollScope, VoteVisibility
 from squid.voting.errors import InvalidVoteConfigurationError
 from squid_ui.testing import labels
-from squid_ui_discord.testing import fake_interaction
+from squid_ui_discord.testing import interaction_harness
 from squid_ui_widgets import testing as wt
-from tests.helpers.discord import make_layout_bot
-from tests.helpers.voting import GENERIC_OPTIONS
+from tests.support.discord import make_layout_bot
+from tests.support.voting import GENERIC_OPTIONS
 
 OWNER_ID = 11
+
+
+@dataclass(frozen=True, slots=True)
+class Guild:
+    id: int = 7
 
 
 def make_screen(*, failure: Exception | None = None) -> PollScreen:
@@ -33,9 +38,9 @@ async def open_screen(
     message: discord.Message | None = None,
 ) -> tuple[PollScreen, sd.MessageRoot, Any]:
     bot = make_layout_bot()
-    interaction = fake_interaction(user_id=OWNER_ID)
+    interaction = interaction_harness(user_id=OWNER_ID)
     interaction.client = bot
-    interaction.guild = SimpleNamespace(id=7)
+    interaction.guild = Guild()
     interaction.guild_locale = None
     interaction.locale = "en-US"
     if message is not None:
@@ -118,7 +123,7 @@ def test_settings_step_uses_typed_portable_fields() -> None:
 async def test_cancelling_finishes_with_a_terminal_screen() -> None:
     screen, message_root, _opening = await open_screen(make_screen())
 
-    await message_root.dispatch("cancel", fake_interaction(user_id=OWNER_ID))
+    await message_root.dispatch("cancel", interaction_harness(user_id=OWNER_ID))
 
     assert screen.cancelled is True
     assert labels(screen.render()) == []

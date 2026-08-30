@@ -11,7 +11,7 @@ from whenever import Instant
 from squid.auth.application.ports import ApiKeyRepository
 from squid.auth.domain import ApiKey, IssuedApiKey
 from squid.core.errors import AuthorizationError, InvalidStateError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 from squid.permissions.application.services import PermissionService
 from squid.permissions.domain import CATALOGUE, Pattern, Subject
 
@@ -50,7 +50,7 @@ class ApiKeyService:
         self._permissions = permissions
         self._pepper = pepper.encode() if isinstance(pepper, str) else pepper
         if not self._pepper:
-            msg = _("API key pepper must not be empty.")
+            msg = tr(t"API key pepper must not be empty.")
             raise InvalidStateError(msg)
         self._now = now
         self._token_bytes = token_bytes

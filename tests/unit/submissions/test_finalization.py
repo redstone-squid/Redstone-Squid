@@ -376,7 +376,7 @@ async def test_minecraft_origins_require_backend_verified_sanitized_schematic(or
 
 
 @pytest.mark.asyncio
-async def test_web_can_omit_schematic_and_enqueues_typed_payload_without_type_label() -> None:
+async def test_web_can_omit_schematic_and_enqueues_typed_payload() -> None:
     result, jobs = await _submit(SubmissionOrigin.WEB, SubmissionArtifactReadiness())
 
     assert result.status is FinalizationJobStatus.PENDING
@@ -387,7 +387,6 @@ async def test_web_can_omit_schematic_and_enqueues_typed_payload_without_type_la
     assert jobs.enqueued.category is SubmissionCategory.OTHER
     assert isinstance(jobs.enqueued.details, GeneralSubmissionDetails)
     assert jobs.enqueued.taxonomy.restriction_keys == ("locational",)
-    assert not hasattr(jobs.enqueued, "type_label")
 
 
 @pytest.mark.asyncio

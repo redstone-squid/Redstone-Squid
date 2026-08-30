@@ -35,8 +35,8 @@ from squid.voting.infrastructure.models import (
     VoteSessionOption,
 )
 from squid.voting.infrastructure.repository import VoteRepository
-from tests.helpers.schema import with_foreign_key_targets
-from tests.helpers.voting import (
+from tests.support.schema import with_foreign_key_targets
+from tests.support.voting import (
     AUTHOR_ACCOUNT_IDS,
     BUILD_ID,
     CHANNEL_ID,

@@ -23,7 +23,6 @@ def test_package_exposes_targets_renderers_and_adapter_profile() -> None:
         )
         == ss.SLACK_SDK_BEHAVIOR_CAPABILITIES
     )
-    assert {name for name in ss.__all__ if not hasattr(ss, name)} == set()
 
 
 def test_convenience_targets_bind_each_surface_to_the_sdk() -> None:

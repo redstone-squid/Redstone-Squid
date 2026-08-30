@@ -1,14 +1,14 @@
 """Voting context errors."""
 
 from squid.core.errors import ConfigurationError, ErrorCode, NotFoundError, ServiceUnavailableError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 
 
 class VoteSessionNotFoundError(NotFoundError):
     """No vote session exists for the requested identifier."""
 
-    default_message = _("Vote session not found.")
-    default_title = _("Vote session not found")
+    default_message = tr(t"Vote session not found.")
+    default_title = tr(t"Vote session not found")
     default_code = ErrorCode.VOTE_SESSION_NOT_FOUND
     default_resource = "vote_session"
 
@@ -23,7 +23,7 @@ class VoteSessionNotFoundError(NotFoundError):
 class InvalidVoteConfigurationError(ConfigurationError):
     """Vote options violate voting policy."""
 
-    default_message = _("Vote configuration is invalid.")
+    default_message = tr(t"Vote configuration is invalid.")
     default_code = ErrorCode.INVALID_VOTE_CONFIGURATION
     default_resource = "vote"
 
@@ -31,5 +31,5 @@ class InvalidVoteConfigurationError(ConfigurationError):
 class DiscordMemberServiceUnavailableError(ServiceUnavailableError):
     """Discord could not provide current guild membership facts."""
 
-    default_message = _("Discord membership information is temporarily unavailable.")
+    default_message = tr(t"Discord membership information is temporarily unavailable.")
     default_resource = "discord"

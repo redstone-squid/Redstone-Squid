@@ -12,13 +12,13 @@ from discord.ext.commands import Cog
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot._types import GuildMessageable
-from squid.bot.i18n import resolve_locale, t
+from squid.bot.i18n import localization_for, resolve_locale
 from squid.bot.routes._root import _feature_group, _feature_route
-from squid.bot.ui import L, render_payload, text_node
+from squid.bot.ui import render_payload, text_node, tr
 from squid.bot.utils.permissions import allows, enforce, hide_unless
 from squid.community.domain import RedstonerDecisionKind
-from squid.core.i18n import _
 from squid.permissions.domain.catalogue import REDSTONER_PANEL_MANAGE, REDSTONER_ROLE_RESYNC
+from squid_ui.text import localization_scope
 from squid_ui_discord import send_to
 
 if TYPE_CHECKING:
@@ -60,7 +60,6 @@ async def remove_own_redstoner_role(interaction: Interaction[squid.bot.app.Redst
     if redstoner_role is None or redstoner_role not in member.roles:
         return
 
-    locale = await resolve_locale(interaction, interaction.client.services.settings)
     invocation = await sd.Invocation.of(interaction)
     await member.remove_roles(redstoner_role)
     owner = interaction.client.get_user(interaction.client.owner_id)
@@ -79,9 +78,8 @@ async def remove_own_redstoner_role(interaction: Interaction[squid.bot.app.Redst
         render_payload(
             [
                 text_node(
-                    t(
-                        locale,
-                        _("{owner}, {member} has removed their own redstoner role."),
+                    tr(
+                        "{owner}, {member} has removed their own redstoner role.",
                         owner=owner.mention,
                         member=member.mention,
                     )
@@ -93,7 +91,7 @@ async def remove_own_redstoner_role(interaction: Interaction[squid.bot.app.Redst
 
     await member.add_roles(redstoner_role)
     await invocation.reply(
-        text_node(t(locale, _("{member} — just kidding, here is your role back."), member=member.mention)),
+        text_node(tr("{member} — just kidding, here is your role back.", member=member.mention)),
         visibility="personal",
     )
 
@@ -132,15 +130,15 @@ class RedstonerScreen(sd.Screen):
         source_channel_mention = sl.raw_md(f"<#{self._source_channel_id}>")
         actions: list[sl.semantic.ActionControl] = []
         if self._can_deploy:
-            actions.append(sl.action_control(L(t"Deploy role controls"), self._deploy, key="deploy"))
-        actions.append(sl.action_control(L(t"Close"), self._close, key="close"))
+            actions.append(sl.action_control(tr(t"Deploy role controls"), self._deploy, key="deploy"))
+        actions.append(sl.action_control(tr(t"Close"), self._close, key="close"))
         return (
             sl.section(
-                sl.heading(L(t"Redstoner automation")),
+                sl.heading(tr(t"Redstoner automation")),
                 sl.fields(
-                    sl.field(L(t"Role"), sl.md(L(t"{role_mention}"))),
-                    sl.field(L(t"Source channel"), sl.md(L(t"{source_channel_mention}"))),
-                    sl.field(L(t"Server"), str(self._guild_id)),
+                    sl.field(tr(t"Role"), sl.md(tr(t"{role_mention}"))),
+                    sl.field(tr(t"Source channel"), sl.md(tr(t"{source_channel_mention}"))),
+                    sl.field(tr(t"Server"), str(self._guild_id)),
                 ),
             ),
             sl.action_controls(*actions, key="redstoner-admin-actions"),
@@ -148,10 +146,10 @@ class RedstonerScreen(sd.Screen):
 
     async def _deploy(self, event: sl.PressEvent) -> None:
         if not await self._authorize_deploy():
-            await event.notice(L(t"You are no longer allowed to deploy Redstoner controls."))
+            await event.notice(tr(t"You are no longer allowed to deploy Redstoner controls."))
             return
         await self._publish_panel()
-        await event.notice(L(t"Redstoner role controls deployed."))
+        await event.notice(tr(t"Redstoner role controls deployed."))
 
     async def _close(self, event: sl.PressEvent) -> None:
         await event.finish()
@@ -252,11 +250,11 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
 
         locale = await resolve_locale(message, self.bot.services.settings)
         if decision.kind is RedstonerDecisionKind.MALFORMED:
-            await send_to(message.channel)(
-                render_payload(
-                    [text_node(t(locale, _("{reason} in {url}"), reason=decision.reason, url=message.jump_url))]
+            with localization_scope(localization_for(locale)):
+                payload = render_payload(
+                    [text_node(tr("{reason} in {url}", reason=decision.reason, url=message.jump_url))]
                 )
-            )
+            await send_to(message.channel)(payload)
             return
 
         assert decision.member_id is not None
@@ -265,29 +263,29 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         assert message.guild is not None
         redstoner_role = message.guild.get_role(self.bot.community_config.redstoner_role_id)
         if redstoner_role is None:
-            await send_to(message.channel)(
-                render_payload([text_node(t(locale, _("Could not find the redstoner role.")))])
-            )
+            with localization_scope(localization_for(locale)):
+                payload = render_payload([text_node(tr("Could not find the redstoner role."))])
+            await send_to(message.channel)(payload)
             return
         await member.add_roles(redstoner_role)
-        await send_to(message.channel)(
-            render_payload([text_node(t(locale, _("Gave {member} the redstoner role."), member=member.mention))])
-        )
+        with localization_scope(localization_for(locale)):
+            payload = render_payload([text_node(tr("Gave {member} the redstoner role.", member=member.mention))])
+        await send_to(message.channel)(payload)
 
-        presentation = render_payload(
-            [
-                sl.primitives.Text(
-                    t(
-                        locale,
-                        _("Hi {member}, you received the {role} role after reaching 15 upvotes in {url}."),
-                        member=member.mention,
-                        role=redstoner_role.mention,
-                        url=decision.source_message_url,
+        with localization_scope(localization_for(locale)):
+            presentation = render_payload(
+                [
+                    sl.primitives.Text(
+                        tr(
+                            "Hi {member}, you received the {role} role after reaching 15 upvotes in {url}.",
+                            member=member.mention,
+                            role=redstoner_role.mention,
+                            url=decision.source_message_url,
+                        )
                     )
-                )
-            ],
-            locale=locale,
-        )
+                ],
+                locale=locale,
+            )
         await send_to(
             self.bot.get_channel(self.bot.community_config.redstoner_announcement_channel_id),
             allowed_mentions=discord.AllowedMentions(roles=False, users=(member,), everyone=False),

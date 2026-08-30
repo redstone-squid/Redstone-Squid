@@ -16,7 +16,7 @@ from squid_ui.profiling import MemoryProfiler, OperationKind, TraceLink
 from squid_ui.runtime import LocalTopicBus, Topic
 from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler, PauseUpdates, RenewEphemeral, delivery
 from squid_ui_discord import testing as sd
-from squid_ui_discord.testing import delivered_to, fake_interaction, fake_message
+from squid_ui_discord.testing import delivered_to, interaction_harness, message_harness
 
 
 class Empty(Component[sl.ComponentsV2Target]):
@@ -157,12 +157,12 @@ async def test_follow_rejects_a_message_root_that_already_finished() -> None:
 
 async def test_expiry_sweep_flushes_pause_chrome_once_and_renewal_rearms_it() -> None:
     now = datetime.now(UTC)
-    interaction = fake_interaction()
+    interaction = interaction_harness()
     interaction.expires_at = now + timedelta(seconds=30)
     bus = LocalTopicBus()
     scheduler = MessageRootScheduler(bus, clock=lambda: now)
     message_root = MessageRoot(Empty(), access=Everyone(), scheduler=scheduler, expiry=PauseUpdates(warning=60))
-    await message_root.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
+    await message_root.send(delivered_to(message_harness(ephemeral=True), handle=delivery.handle_from(interaction)))
 
     assert message_root in scheduler._watched
 
@@ -194,7 +194,7 @@ async def test_expiry_watch_does_not_require_a_topic_follow_and_stops_on_finish(
     scheduler = MessageRootScheduler()
     message_root = MessageRoot(Empty(), access=Everyone(), scheduler=scheduler)
 
-    await message_root.send(delivered_to(fake_message()))
+    await message_root.send(delivered_to(message_harness()))
 
     assert message_root in scheduler._watched
     assert message_root not in scheduler._followed
@@ -204,11 +204,11 @@ async def test_expiry_watch_does_not_require_a_topic_follow_and_stops_on_finish(
 
 async def test_expiry_none_never_schedules_pre_expiry_chrome() -> None:
     now = datetime.now(UTC)
-    interaction = fake_interaction()
+    interaction = interaction_harness()
     interaction.expires_at = now + timedelta(seconds=5)
     scheduler = MessageRootScheduler(clock=lambda: now)
     message_root = MessageRoot(Empty(), access=Everyone(), scheduler=scheduler, expiry=None)
-    await message_root.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
+    await message_root.send(delivered_to(message_harness(ephemeral=True), handle=delivery.handle_from(interaction)))
 
     scheduler._sweep_once()
 
@@ -221,14 +221,14 @@ async def test_expiry_sweep_ignores_authority_without_a_temporary_deadline(autho
     scheduler = MessageRootScheduler(clock=lambda: now)
     if authority == "permanent":
         message_root = MessageRoot(Empty(), access=Everyone(), scheduler=scheduler)
-        await message_root.send(delivered_to(fake_message()))
+        await message_root.send(delivered_to(message_harness()))
     else:
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         handle = delivery.handle_from(interaction)
         assert handle is not None
         handle.expires_at = None
         message_root = MessageRoot(Empty(), access=Everyone(), scheduler=scheduler)
-        await message_root.send(delivered_to(fake_message(ephemeral=True), handle=handle))
+        await message_root.send(delivered_to(message_harness(ephemeral=True), handle=handle))
 
     scheduler._sweep_once()
 
@@ -240,10 +240,10 @@ async def test_expiry_sweep_queues_several_arms_without_waiting_for_discord() ->
     scheduler = MessageRootScheduler(concurrency=2, clock=lambda: now)
     message_roots = []
     for _ in range(4):
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         interaction.expires_at = now + timedelta(seconds=30)
         message_root = MessageRoot(Empty(), access=Everyone(), scheduler=scheduler, timeout=None)
-        await message_root.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
+        await message_root.send(delivered_to(message_harness(ephemeral=True), handle=delivery.handle_from(interaction)))
         message_roots.append(message_root)
 
     scheduler._sweep_once()
@@ -259,7 +259,7 @@ async def test_renewal_sweep_requires_ephemeral_visibility_and_time_to_renew(
     ephemeral: bool, timeout: float | None, expected: int
 ) -> None:
     now = datetime.now(UTC)
-    interaction = fake_interaction()
+    interaction = interaction_harness()
     interaction.expires_at = now + timedelta(seconds=30)
     scheduler = MessageRootScheduler(clock=lambda: now)
     message_root = MessageRoot(
@@ -269,7 +269,9 @@ async def test_renewal_sweep_requires_ephemeral_visibility_and_time_to_renew(
         timeout=timeout,
         expiry=RenewEphemeral(warning=60),
     )
-    await message_root.send(delivered_to(fake_message(ephemeral=ephemeral), handle=delivery.handle_from(interaction)))
+    await message_root.send(
+        delivered_to(message_harness(ephemeral=ephemeral), handle=delivery.handle_from(interaction))
+    )
 
     scheduler._sweep_once()
 
@@ -293,7 +295,7 @@ def test_collected_message_root_unsubscribes() -> None:
 async def test_collected_delivered_message_root_leaves_the_expiry_watch() -> None:
     scheduler = MessageRootScheduler()
     message_root = MessageRoot(Empty(), access=Everyone(), scheduler=scheduler)
-    await message_root.send(delivered_to(fake_message()))
+    await message_root.send(delivered_to(message_harness()))
     reference = weakref.ref(message_root)
 
     del message_root

@@ -15,7 +15,7 @@ from squid.accounts.errors import ConsentRequiredError
 from squid.bot.ui import error_node
 from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.core.errors import DomainError, JSONValue, SquidError
-from squid.core.i18n import _, translate
+from squid.core.i18n import localization_for, tr
 from squid.diagnostics.application import ErrorReportService
 from squid.diagnostics.log_capture import captured
 from squid.observability import (
@@ -129,102 +129,105 @@ def _presentation_locale(interaction: discord.Interaction[Any] | None) -> str | 
     return str(locale) if locale is not None else None
 
 
-def _present_missing_nodes(error: PermissionNodeRequired, locale: str | None) -> ErrorNotice:
+def _present_missing_nodes(error: PermissionNodeRequired) -> ErrorNotice:
     """Name the nodes a caller is missing, with what each one is for.
 
     Node names are identifiers and stay untranslated; their catalogue
     descriptions are translated, so a refusal reads as "you need this capability"
     rather than as a tier the user has no way to look up.
     """
-    described = "\n".join(
-        f"`{name}` — {translate(locale, CATALOGUE[name].description)}" for name in error.nodes if name in CATALOGUE
-    )
+    described = "\n".join(f"`{name}` — {tr(CATALOGUE[name].description)}" for name in error.nodes if name in CATALOGUE)
     if error.forbidden:
         return ErrorNotice(
-            translate(locale, _("Permission withheld")),
-            translate(
-                locale,
-                _("An administrator has explicitly withheld this from you. Ask them if you think that is a mistake."),
-            )
+            tr("Permission withheld"),
+            tr("An administrator has explicitly withheld this from you. Ask them if you think that is a mistake.")
             + f"\n\n{described}",
         )
     lead = (
-        _("You need any one of these permissions to use this command:")
+        tr("You need any one of these permissions to use this command:")
         if error.mode == "any"
-        else _("You need these permissions to use this command:")
+        else tr("You need these permissions to use this command:")
     )
     return ErrorNotice(
-        translate(locale, _("Missing permission")),
-        f"{translate(locale, lead)}\n{described}",
+        tr("Missing permission"),
+        f"{lead}\n{described}",
     )
 
 
 def build_error_notice(error: BaseException, locale: str | None = None) -> ErrorNotice:
     """Classify an exception into safe Discord-facing text, translated into `locale`."""
+    with localization_scope(localization_for(locale)):
+        return _build_error_notice(error)
+
+
+def _build_error_notice(error: BaseException) -> ErrorNotice:
     error = unwrap_error(error)
     if isinstance(error, ConsentRequiredError):
         # Every Discord path that needs consent asks for it first, so reaching here means one
         # slipped the gate. Name the command that can fix it rather than rendering the API's
         # wording, which tells a Discord user to go and accept a notice somewhere they are not.
         return ErrorNotice(
-            translate(locale, _("Consent required")),
-            translate(locale, _("Run `/account consent` to read the privacy notice and accept it.")),
+            tr("Consent required"),
+            tr("Run `/account consent` to read the privacy notice and accept it."),
         )
     if isinstance(error, DomainError):
-        return ErrorNotice(error.localized_title(locale), error.localized_public_detail(locale))
+        detail = tr(error.message)
+        if error.end_user_action:
+            detail = f"{detail} {tr(error.end_user_action)}"
+        return ErrorNotice(tr(error.title), detail)
     if isinstance(error, commands.NoPrivateMessage):
         return ErrorNotice(
-            translate(locale, _("Server only")),
-            translate(locale, _("This command cannot be used in a private message.")),
+            tr("Server only"),
+            tr("This command cannot be used in a private message."),
         )
     if isinstance(error, (commands.MissingRole, commands.MissingAnyRole, commands.MissingPermissions)):
         return ErrorNotice(
-            translate(locale, _("Missing permission")),
-            translate(locale, _("You do not have permission to use this command.")),
+            tr("Missing permission"),
+            tr("You do not have permission to use this command."),
         )
     if isinstance(error, commands.NotOwner):
         return ErrorNotice(
-            translate(locale, _("Owner only")),
-            translate(locale, _("Only the bot owner can use this command.")),
+            tr("Owner only"),
+            tr("Only the bot owner can use this command."),
         )
     if isinstance(error, PermissionNodeRequired):
-        return _present_missing_nodes(error, locale)
+        return _present_missing_nodes(error)
     if isinstance(error, (commands.CommandOnCooldown, app_commands.CommandOnCooldown)):
         return ErrorNotice(
-            translate(locale, _("Command on cooldown")),
-            translate(locale, _("Try again in {seconds:.1f} seconds."), seconds=error.retry_after),
+            tr("Command on cooldown"),
+            tr("Try again in {seconds:.1f} seconds.", seconds=error.retry_after),
         )
     if isinstance(error, commands.MaxConcurrencyReached):
         return ErrorNotice(
-            translate(locale, _("Command already running")),
-            translate(locale, _("Wait for the current operation to finish and try again.")),
+            tr("Command already running"),
+            tr("Wait for the current operation to finish and try again."),
         )
     if isinstance(error, commands.CheckFailure):
         return ErrorNotice(
-            translate(locale, _("Command unavailable")),
-            str(error) or translate(locale, _("You cannot use this command here.")),
+            tr("Command unavailable"),
+            str(error) or tr("You cannot use this command here."),
         )
     if isinstance(error, commands.UserInputError):
         return ErrorNotice(
-            translate(locale, _("Invalid command input")),
-            str(error) or translate(locale, _("Check the command arguments and try again.")),
+            tr("Invalid command input"),
+            str(error) or tr("Check the command arguments and try again."),
         )
     if isinstance(error, app_commands.TransformerError):
         return ErrorNotice(
-            translate(locale, _("Invalid command input")),
-            translate(locale, _("One of the command options is invalid.")),
+            tr("Invalid command input"),
+            tr("One of the command options is invalid."),
         )
     if isinstance(error, app_commands.CheckFailure):
         return ErrorNotice(
-            translate(locale, _("Command unavailable")),
-            translate(locale, _("You cannot use this command here.")),
+            tr("Command unavailable"),
+            tr("You cannot use this command here."),
         )
 
     error_id = correlation_id()
     reference = correlation_reference(error_id)
     return ErrorNotice(
-        translate(locale, _("Something went wrong")),
-        translate(locale, _("An unexpected error occurred. Reference: `{error_id}`"), error_id=reference),
+        tr("Something went wrong"),
+        tr("An unexpected error occurred. Reference: `{error_id}`", error_id=reference),
         error_id,
         reference,
     )

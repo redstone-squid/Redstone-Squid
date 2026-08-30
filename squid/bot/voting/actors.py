@@ -8,9 +8,8 @@ from typing import TYPE_CHECKING
 
 import discord
 
-from squid.bot.i18n import t
+from squid.bot.ui import tr
 from squid.bot.utils.permissions import build_subject
-from squid.core.i18n import _
 from squid.permissions.domain.catalogue import (
     VOTE_LOG_DELETE_CAST,
     VOTE_POLL_CLOSE_ANY,
@@ -22,12 +21,12 @@ if TYPE_CHECKING:
     import squid.bot.app
 
 REJECTION_MESSAGES = {
-    VoteRejection.NOT_FOUND: _("That message is not an open vote."),
-    VoteRejection.CLOSED: _("That vote is already closed."),
-    VoteRejection.NOT_ELIGIBLE: _("You do not have a trusted role."),
-    VoteRejection.INVALID_OPTION: _("That option is not available on this vote."),
-    VoteRejection.WRONG_GUILD: _("That vote belongs to a different server."),
-    VoteRejection.NOT_AUTHORIZED: _("Only the poll creator or staff can do that."),
+    VoteRejection.NOT_FOUND: tr(t"That message is not an open vote."),
+    VoteRejection.CLOSED: tr(t"That vote is already closed."),
+    VoteRejection.NOT_ELIGIBLE: tr(t"You do not have a trusted role."),
+    VoteRejection.INVALID_OPTION: tr(t"That option is not available on this vote."),
+    VoteRejection.WRONG_GUILD: tr(t"That vote belongs to a different server."),
+    VoteRejection.NOT_AUTHORIZED: tr(t"Only the poll creator or staff can do that."),
 }
 """One localizable sentence per typed rejection.
 
@@ -36,9 +35,9 @@ fails the lookup here instead of leaking `not_eligible` into a user's channel.
 """
 
 
-def describe_rejection(locale: str | None, rejection: VoteRejection) -> str:
-    """Render a typed rejection as a localized sentence."""
-    return t(locale, REJECTION_MESSAGES[rejection])
+def describe_rejection(rejection: VoteRejection) -> str:
+    """Render a typed rejection using the ambient localization."""
+    return tr(REJECTION_MESSAGES[rejection])
 
 
 async def resolve_actor(bot: squid.bot.app.RedstoneSquid, member: discord.Member, *, account_id: int) -> VoteActor:

@@ -1,20 +1,23 @@
 """How `/search` turns its typed options into a search request."""
 
-from types import SimpleNamespace
+from dataclasses import dataclass
 from typing import Any, cast
-from unittest.mock import AsyncMock
 
 import pytest
 from discord.ext import commands
 
 from squid.bot.submission.search import SearchCog, SearchTarget
+from squid.builds.application import BuildQueryService
+from squid.builds.domain import Build
 from squid.core.errors import ValidationError
+from squid.search.application import SearchService
 from squid.search.domain import SearchMode, SearchPage, SearchRequest, SearchScope, SortDirection
-from squid_ui_discord.testing import fake_message
-from tests.helpers.discord import make_layout_bot
+from squid.settings.application import SettingsService
+from squid_ui_discord.testing import ContextHarness, MessageHarness
+from tests.support.discord import make_layout_bot
 
 
-class RecordingSearch:
+class RecordingSearch(SearchService):
     """A search service that keeps the request it was handed."""
 
     def __init__(self) -> None:
@@ -25,29 +28,44 @@ class RecordingSearch:
         return SearchPage(hits=(), total=0, next=None, prev=None)
 
 
+class BuildQueryRecorder(BuildQueryService):
+    def __init__(self) -> None:
+        pass
+
+    async def get(self, build_id: int) -> Build | None:
+        return None
+
+
+class SettingsRecorder(SettingsService):
+    def __init__(self) -> None:
+        pass
+
+    async def get_locale(self, server_id: int) -> str | None:
+        return None
+
+
+@dataclass(frozen=True)
+class CogServices:
+    settings: SettingsService
+
+
+@dataclass(frozen=True)
+class CogBot:
+    services: CogServices
+
+
 def _cog(search: RecordingSearch) -> SearchCog[Any]:
     cog = SearchCog.__new__(SearchCog)
-    cog.bot = cast(Any, SimpleNamespace(services=SimpleNamespace(settings=SimpleNamespace())))
-    cog.queries = cast(Any, SimpleNamespace(get=AsyncMock(return_value=None)))
-    cog.search = cast(Any, search)
+    cog.bot = cast(Any, CogBot(services=CogServices(settings=SettingsRecorder())))
+    cog.queries = BuildQueryRecorder()
+    cog.search = search
     return cog
 
 
 def _context() -> commands.Context[Any]:
-    return cast(
-        commands.Context[Any],
-        cast(
-            Any,
-            SimpleNamespace(
-                bot=make_layout_bot(),
-                defer=AsyncMock(),
-                send=AsyncMock(return_value=fake_message(message_id=1)),
-                guild=None,
-                interaction=None,
-                author=SimpleNamespace(id=7),
-            ),
-        ),
-    )
+    context = ContextHarness(message=MessageHarness(message_id=1), bot=make_layout_bot(), user_id=7)
+    context.guild = None
+    return cast(commands.Context[Any], context.source)
 
 
 async def _run(cog: SearchCog[Any], **kwargs: Any) -> None:

@@ -1,8 +1,6 @@
 """Public schematic routes are attachment-scoped and publication-safe."""
 
 from dataclasses import replace
-from types import SimpleNamespace
-from typing import cast
 
 import pytest
 from whenever import Instant
@@ -14,7 +12,7 @@ from squid.api.v1.schematics import (
     router,
 )
 from squid.builds.application import BuildQueryService
-from squid.builds.domain import Status
+from squid.builds.domain import Build, DoorBuild, Status
 from squid.builds.errors import BuildNotFoundError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
 from squid.schematics.application import (
@@ -45,14 +43,26 @@ def _public_publication() -> SchematicPublication:
     )
 
 
-class ConfirmedBuilds:
-    async def get_public(self, build_id: int) -> object:
+class ConfirmedBuilds(BuildQueryService):
+    def __init__(self) -> None:
+        pass
+
+    async def get_public(self, build_id: int) -> Build:
         if build_id != 7:
             raise BuildNotFoundError(build_id)
-        return SimpleNamespace(submission_status=Status.CONFIRMED)
+        return DoorBuild(
+            id=build_id,
+            submitter_account_id=1,
+            submission_status=Status.CONFIRMED,
+            versions=["1.21"],
+            door_width=2,
+            door_height=2,
+            patterns=["Regular"],
+            orientation="Door",
+        )
 
 
-class PublicSchematics:
+class PublicSchematics(SchematicService):
     def __init__(self) -> None:
         self.stored = StoredSchematic(
             id=3,
@@ -136,8 +146,8 @@ async def test_a_render_with_no_parameters_asks_for_the_deployment_recipe() -> N
 
     response = await render_build_schematic(
         7,
-        cast(BuildQueryService, ConfirmedBuilds()),
-        cast(SchematicService, schematics),
+        ConfirmedBuilds(),
+        schematics,
     )
 
     assert schematics.rendered == [schematics.configured]
@@ -153,8 +163,8 @@ async def test_a_render_applies_only_the_controls_the_caller_named() -> None:
 
     await render_build_schematic(
         7,
-        cast(BuildQueryService, ConfirmedBuilds()),
-        cast(SchematicService, schematics),
+        ConfirmedBuilds(),
+        schematics,
         yaw=45.0,
     )
 
@@ -168,8 +178,8 @@ async def test_a_render_refusal_names_the_reason_in_public_context() -> None:
     with pytest.raises(SchematicRenderRefusedError) as refusal:
         await render_build_schematic(
             7,
-            cast(BuildQueryService, ConfirmedBuilds()),
-            cast(SchematicService, schematics),
+            ConfirmedBuilds(),
+            schematics,
         )
 
     assert refusal.value.public_context == {"reason": "over_block_budget"}
@@ -178,8 +188,8 @@ async def test_a_render_refusal_names_the_reason_in_public_context() -> None:
 async def test_public_metadata_omits_digest_and_original_filename() -> None:
     page = await list_build_schematics(
         7,
-        cast(BuildQueryService, ConfirmedBuilds()),
-        cast(SchematicService, PublicSchematics()),
+        ConfirmedBuilds(),
+        PublicSchematics(),
         page_size=50,
         offset=None,
     )
@@ -196,8 +206,8 @@ async def test_download_uses_scoped_locator_and_short_revalidation_cache() -> No
     response = await get_schematic_content(
         7,
         3,
-        cast(BuildQueryService, ConfirmedBuilds()),
-        cast(SchematicService, PublicSchematics()),
+        ConfirmedBuilds(),
+        PublicSchematics(),
     )
 
     assert response.body == b"sanitized-sponge-v3"
@@ -234,8 +244,8 @@ async def test_each_stored_format_downloads_under_its_own_extension(source_forma
     response = await get_schematic_content(
         7,
         3,
-        cast(BuildQueryService, ConfirmedBuilds()),
-        cast(SchematicService, schematics),
+        ConfirmedBuilds(),
+        schematics,
     )
 
     expected = f'attachment; filename="build-7-schematic-3.{source_format.value}"'

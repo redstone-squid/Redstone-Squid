@@ -8,7 +8,7 @@ from typing import Any, Literal, Protocol
 from whenever import Instant
 
 from squid.core.errors import InvalidStateError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 
 type SchematicJobOperation = Literal[
     "capabilities",
@@ -98,7 +98,7 @@ class SchematicJobService:
         retention_hours: int = 24,
     ) -> None:
         if max_attempts < 1 or retention_hours < 1:
-            msg = _("Schematic job retry and retention settings must be positive.")
+            msg = tr(t"Schematic job retry and retention settings must be positive.")
             raise InvalidStateError(msg)
         self._repository = repository
         self._max_attempts = max_attempts
@@ -117,7 +117,7 @@ class SchematicJobService:
 
     async def claim(self, *, limit: int = 8) -> Sequence[ClaimedSchematicJob]:
         if not 1 <= limit <= 32:
-            msg = _("Schematic job claim limit must be between 1 and 32.")
+            msg = tr(t"Schematic job claim limit must be between 1 and 32.")
             raise InvalidStateError(msg)
         return await self._repository.claim(limit=limit)
 
@@ -155,6 +155,6 @@ class SchematicJobService:
 
     async def cleanup(self, *, limit: int = 100) -> Sequence[str]:
         if not 1 <= limit <= 500:
-            msg = _("Schematic job cleanup limit must be between 1 and 500.")
+            msg = tr(t"Schematic job cleanup limit must be between 1 and 500.")
             raise InvalidStateError(msg)
         return await self._repository.cleanup(limit=limit)

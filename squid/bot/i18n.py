@@ -6,9 +6,9 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from squid.core.i18n import DEFAULT_LOCALE, catalog_for, negotiate_locale, translate
+from squid.core.i18n import DEFAULT_LOCALE, localization_for, negotiate_locale, tr
 from squid.settings.application import SettingsService
-from squid_ui.text import Localization
+from squid_ui.text import Localization, localization_scope
 from squid_ui_discord.runtime import ClientRuntime, InvocationSource
 
 
@@ -43,18 +43,6 @@ async def resolve_locale(
     return DEFAULT_LOCALE
 
 
-def t(locale: str | None, message: str, /, **params: object) -> str:
-    """Translate `message` into `locale`. Thin pass-through to `squid.core.i18n.translate`."""
-    return translate(locale, message, **params)
-
-
-def localization_for(locale: str | None) -> Localization:
-    """Build a framework localization backed by the bot's negotiated catalogue."""
-    resolved = negotiate_locale(locale)
-    catalog = catalog_for(resolved)
-    return Localization(locale=resolved, gettext=catalog.gettext, ngettext=catalog.ngettext)
-
-
 async def localization_resolver(source: InvocationSource) -> Localization:
     """Resolve one installed bot invocation into its render-time localization."""
     client = cast(Any, ClientRuntime.of(source).client)
@@ -76,4 +64,5 @@ class SquidAppCommandTranslator(app_commands.Translator):
         resolved = negotiate_locale(str(locale))
         if resolved == DEFAULT_LOCALE:
             return None  # Let discord.py fall back to the source string.
-        return t(resolved, string.message)
+        with localization_scope(localization_for(resolved)):
+            return tr(string.message)

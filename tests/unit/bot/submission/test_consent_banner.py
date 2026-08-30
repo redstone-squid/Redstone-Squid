@@ -1,7 +1,6 @@
 """Unit tests for the build log consent banner and its routed button."""
 
-from datetime import UTC, datetime, timedelta
-from types import SimpleNamespace
+from dataclasses import dataclass
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
@@ -9,6 +8,7 @@ import discord
 import pytest
 from whenever import Instant
 
+from squid.accounts.application import AccountService
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, Account, AccountConsent, AccountIdentity, IdentityProvider
 from squid.bot.consent import ConsentPrompt
 from squid.bot.submission.consent_banner import (
@@ -16,8 +16,9 @@ from squid.bot.submission.consent_banner import (
     open_consent_prompt,
 )
 from squid.bot.submission.submit import BuildSubmitCommands
-from squid_ui_discord.testing import fake_message
-from tests.helpers.discord import make_layout_bot
+from squid.settings.application import SettingsService
+from squid_ui_discord.testing import InteractionHarness, MessageHarness
+from tests.support.discord import make_layout_bot
 
 BUILD_LOG_CHANNEL = 500
 USER_ID = 42
@@ -39,27 +40,77 @@ def _discord_account(*, account_id: int = 7, consented: bool) -> Account:
     )
 
 
+@dataclass(frozen=True)
+class IdentityCreation:
+    provider: IdentityProvider
+    subject: str
+    consent: AccountConsent | None
+
+
+class AccountRecorder(AccountService):
+    def __init__(self, account: Account | None) -> None:
+        self.account = account
+        self.reads: list[tuple[IdentityProvider, str]] = []
+        self.creations: list[IdentityCreation] = []
+
+    async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
+        self.reads.append((provider, subject))
+        return self.account
+
+    async def get_or_create_identity(
+        self, provider: IdentityProvider, subject: str, *, consent: AccountConsent | None = None
+    ) -> Account:
+        self.creations.append(IdentityCreation(provider, subject, consent))
+        return _discord_account(consented=True)
+
+
+class SettingsRecorder(SettingsService):
+    def __init__(self) -> None:
+        pass
+
+    async def get_locale(self, server_id: int) -> str | None:
+        return None
+
+
+@dataclass(frozen=True)
+class Services:
+    settings: SettingsService
+    accounts: AccountService
+
+
+@dataclass(frozen=True)
+class CommunityConfig:
+    build_log_channel_ids: set[int]
+
+
+class StickyRecorder(BuildLogConsentStickyMessage):
+    def __init__(self) -> None:
+        self.triggers: list[discord.TextChannel] = []
+        self.activity: list[int] = []
+
+    async def trigger(self, channel: discord.TextChannel) -> None:
+        self.triggers.append(channel)
+
+    def record_activity(self, channel_id: int) -> None:
+        self.activity.append(channel_id)
+
+
+class InferenceBot:
+    def __init__(self, accounts: AccountService) -> None:
+        self.services = Services(settings=SettingsRecorder(), accounts=accounts)
+        self.community_config = CommunityConfig(build_log_channel_ids={BUILD_LOG_CHANNEL})
+        self.inference_model = "gpt-5.6-luna"
+        self.inference_reasoning_effort = "low"
+        self.catbox = object()
+
+    def for_build(self, build: object) -> object:
+        raise AssertionError("the stub ingestion returns no builds")
+
+
 def _make_cog(*, account: Account | None) -> BuildSubmitCommands[Any]:
     cog = BuildSubmitCommands.__new__(BuildSubmitCommands)
-    accounts = AsyncMock()
-    accounts.get_account_by_identity.return_value = account
-    accounts.get_or_create_identity.return_value = _discord_account(consented=True)
-
-    bot = SimpleNamespace(
-        services=SimpleNamespace(
-            settings=SimpleNamespace(),
-            accounts=accounts,
-        ),
-        community_config=SimpleNamespace(build_log_channel_ids={BUILD_LOG_CHANNEL}),
-        inference_model="gpt-5.6-luna",
-        inference_reasoning_effort="low",
-        catbox=SimpleNamespace(),
-        for_build=MagicMock(return_value=SimpleNamespace(post_for_voting=AsyncMock())),
-    )
-    cog.bot = cast(Any, bot)
-    cog.consent_sticky = MagicMock(spec=BuildLogConsentStickyMessage)
-    cog.consent_sticky.trigger = AsyncMock()
-    cog.consent_sticky.record_activity = MagicMock()
+    cog.bot = cast(Any, InferenceBot(AccountRecorder(account)))
+    cog.consent_sticky = StickyRecorder()
     return cog
 
 
@@ -68,10 +119,21 @@ def _make_message(*, author_id: int = USER_ID, channel_id: int = BUILD_LOG_CHANN
     channel.id = channel_id
     channel.history = MagicMock(return_value=_empty_history())
 
-    author = SimpleNamespace(id=author_id, bot=False)
+    @dataclass(frozen=True)
+    class Author:
+        id: int
+        bot: bool = False
+
+    @dataclass(frozen=True)
+    class Message:
+        id: int
+        author: Author
+        channel: discord.TextChannel
+        attachments: list[object]
+
     return cast(
         discord.Message,
-        cast(Any, SimpleNamespace(id=100, author=author, channel=channel, attachments=[])),
+        Message(id=100, author=Author(id=author_id), channel=channel, attachments=[]),
     )
 
 
@@ -90,8 +152,9 @@ async def test_unconsented_message_triggers_sticky_and_skips_ingestion(
 
     await cog.infer_build_from_message(message)
 
-    cast(Any, cog.consent_sticky).trigger.assert_awaited_once_with(message.channel)
-    cast(Any, cog.consent_sticky).record_activity.assert_not_called()
+    assert isinstance(cog.consent_sticky, StickyRecorder)
+    assert cog.consent_sticky.triggers == [message.channel]
+    assert cog.consent_sticky.activity == []
     mock_ingest.assert_not_awaited()
 
 
@@ -105,49 +168,33 @@ async def test_consented_message_records_activity_and_proceeds_with_ingestion(
 
     await cog.infer_build_from_message(message)
 
-    cast(Any, cog.consent_sticky).trigger.assert_not_awaited()
-    cast(Any, cog.consent_sticky).record_activity.assert_called_once_with(message.channel.id)
+    assert isinstance(cog.consent_sticky, StickyRecorder)
+    assert cog.consent_sticky.triggers == []
+    assert cog.consent_sticky.activity == [message.channel.id]
     mock_ingest.assert_awaited_once()
 
 
-def _make_interaction(accounts: Any) -> Any:
-    message = fake_message(message_id=999)
-    response = SimpleNamespace(_done=False)
-
-    async def send_message(**_kwargs: Any) -> Any:
-        response._done = True
-        return SimpleNamespace(resource=None, message_id=999, is_ephemeral=lambda: True)
-
-    response.is_done = lambda: response._done
-    response.send_message = AsyncMock(side_effect=send_message)
-    return SimpleNamespace(
-        user=SimpleNamespace(id=USER_ID),
-        guild=None,
-        guild_id=None,
-        guild_locale=None,
-        locale="en-US",
-        client=make_layout_bot(
-            services=SimpleNamespace(
-                settings=SimpleNamespace(get_locale=AsyncMock(return_value=None)),
-                accounts=accounts,
-            ),
-        ),
-        response=response,
-        followup=SimpleNamespace(send=AsyncMock(return_value=message)),
-        original_response=AsyncMock(return_value=message),
-        edit_original_response=AsyncMock(return_value=message),
-        expires_at=datetime.now(UTC) + timedelta(minutes=15),
+def _make_interaction(accounts: AccountService) -> Any:
+    interaction = InteractionHarness(USER_ID, message_id=999)
+    source = interaction.source
+    source.client = make_layout_bot(
+        services=Services(settings=SettingsRecorder(), accounts=accounts),
     )
+    source.guild = None
+    source.guild_id = None
+    source.guild_locale = None
+    source.locale = "en-US"
+    interaction.followup.send.result = MessageHarness(message_id=999)
+    return source
 
 
 async def test_routed_consent_button_shows_already_consented() -> None:
-    accounts = AsyncMock()
-    accounts.get_account_by_identity.return_value = _discord_account(consented=True)
+    accounts = AccountRecorder(_discord_account(consented=True))
     interaction = _make_interaction(accounts)
 
     await open_consent_prompt(cast(Any, interaction))
 
-    accounts.get_account_by_identity.assert_awaited_once_with(IdentityProvider.DISCORD, str(USER_ID))
+    assert accounts.reads == [(IdentityProvider.DISCORD, str(USER_ID))]
     interaction.response.send_message.assert_awaited_once()
     kwargs = interaction.response.send_message.await_args.kwargs
     assert kwargs.get("ephemeral") is True
@@ -156,9 +203,7 @@ async def test_routed_consent_button_shows_already_consented() -> None:
 async def test_routed_consent_button_grants_consent_when_user_agrees(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    accounts = AsyncMock()
-    accounts.get_account_by_identity.return_value = None
-    accounts.get_or_create_identity.return_value = _discord_account(consented=True)
+    accounts = AccountRecorder(None)
     interaction = _make_interaction(accounts)
 
     async def mock_wait(self: ConsentPrompt) -> AccountConsent:
@@ -169,10 +214,11 @@ async def test_routed_consent_button_grants_consent_when_user_agrees(
 
     await open_consent_prompt(cast(Any, interaction))
 
-    accounts.get_or_create_identity.assert_awaited_once()
-    call = accounts.get_or_create_identity.await_args
-    assert call.args == (IdentityProvider.DISCORD, str(USER_ID))
-    assert call.kwargs["consent"].version == CURRENT_CONSENT_VERSION
+    assert len(accounts.creations) == 1
+    creation = accounts.creations[0]
+    assert (creation.provider, creation.subject) == (IdentityProvider.DISCORD, str(USER_ID))
+    assert creation.consent is not None
+    assert creation.consent.version == CURRENT_CONSENT_VERSION
     interaction.response.send_message.assert_awaited_once()
     assert interaction.followup.send.await_count == 1
 
@@ -180,8 +226,7 @@ async def test_routed_consent_button_grants_consent_when_user_agrees(
 async def test_routed_consent_button_cancelling_stores_no_account(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    accounts = AsyncMock()
-    accounts.get_account_by_identity.return_value = None
+    accounts = AccountRecorder(None)
     interaction = _make_interaction(accounts)
 
     async def mock_wait(self: ConsentPrompt) -> None:
@@ -191,6 +236,6 @@ async def test_routed_consent_button_cancelling_stores_no_account(
 
     await open_consent_prompt(cast(Any, interaction))
 
-    accounts.get_or_create_identity.assert_not_awaited()
+    assert accounts.creations == []
     interaction.response.send_message.assert_awaited_once()
     interaction.followup.send.assert_not_awaited()

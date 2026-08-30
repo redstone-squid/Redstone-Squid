@@ -8,7 +8,7 @@ from decimal import Decimal
 from itertools import combinations, groupby, product
 
 from squid.core.errors import DataIntegrityError, InvalidStateError, ValidationError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 from squid.records.application.models import (
     CandidateFacet,
@@ -313,15 +313,9 @@ class RecordService:
         if identity is None:
             raise RecordDefinitionNotFoundError(definition_id)
         if kind is not None and kind is not identity.kind:
-            msg = _("Record category {definition_id} is a {actual} category, not {requested}.")
-            raise ValidationError(
-                msg,
-                message_params={
-                    "definition_id": definition_id,
-                    "actual": identity.kind.value,
-                    "requested": kind.value,
-                },
-            )
+            actual = identity.kind.value
+            requested = kind.value
+            raise ValidationError(tr(t"Record category {definition_id} is a {actual} category, not {requested}."))
         return await self.lookup_or_materialize(
             RecordLookupRequest(
                 kind=identity.kind,
@@ -447,7 +441,7 @@ def _serialize_category_value(value: Decimal | str | bool | None) -> str:
         return str(value).lower()
     if isinstance(value, str):
         return value
-    msg = _("Parameterized record restriction is missing a category value.")
+    msg = tr(t"Parameterized record restriction is missing a category value.")
     raise DataIntegrityError(msg)
 
 
@@ -456,8 +450,7 @@ def _coerce_category_value(facet: CandidateFacet, value: str) -> Decimal | str |
         return Decimal(value)
     if facet.value_type == "boolean":
         if value not in {"true", "false"}:
-            msg = _("Invalid boolean category value {value!r}.")
-            raise InvalidStateError(msg, message_params={"value": value})
+            raise InvalidStateError(tr(t"Invalid boolean category value {value!r}."))
         return value == "true"
     return value
 
@@ -477,8 +470,8 @@ def _base_key(source: RecordSourceCandidate) -> str:
                 f"t[{type_key or ','.join(extender.types)}]",
             )
         )
-    msg = _("Candidate {build_id} has no typed category facts.")
-    raise DataIntegrityError(msg, message_params={"build_id": source.candidate.build_id})
+    build_id = source.candidate.build_id
+    raise DataIntegrityError(tr(t"Candidate {build_id} has no typed category facts."))
 
 
 def _category_with_restrictions(
@@ -504,8 +497,8 @@ def _category_with_restrictions(
             component_restrictions=components,
             miscellaneous_restrictions=miscellaneous,
         )
-    msg = _("Candidate {build_id} has no typed category facts.")
-    raise DataIntegrityError(msg, message_params={"build_id": source.candidate.build_id})
+    build_id = source.candidate.build_id
+    raise DataIntegrityError(tr(t"Candidate {build_id} has no typed category facts."))
 
 
 def _timing_methods(kind: BuildKind) -> tuple[str, ...]:
@@ -513,8 +506,8 @@ def _timing_methods(kind: BuildKind) -> tuple[str, ...]:
         return tuple(DOOR_TIMING_METHODS)
     if kind is BuildKind.EXTENDER:
         return tuple(EXTENDER_TIMING_METHODS)
-    msg = _("Fastest records are not supported for {kind}.")
-    raise InvalidStateError(msg, message_params={"kind": kind.value})
+    kind_name = kind.value
+    raise InvalidStateError(tr(t"Fastest records are not supported for {kind_name}."))
 
 
 def _record_classes(kind: BuildKind) -> tuple[RecordClass, ...]:
@@ -528,8 +521,8 @@ def _record_classes(kind: BuildKind) -> tuple[RecordClass, ...]:
         return (RecordClass.FIRST, *shared)
     if kind is BuildKind.EXTENDER:
         return shared
-    msg = _("Records are not supported for {kind}.")
-    raise InvalidStateError(msg, message_params={"kind": kind.value})
+    kind_name = kind.value
+    raise InvalidStateError(tr(t"Records are not supported for {kind_name}."))
 
 
 def _resolve_record(

@@ -8,7 +8,7 @@ from typing import Any, cast, overload
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.errors import build_error_notice, record_operation_error
-from squid.bot.ui import L, error_node, info_node
+from squid.bot.ui import error_node, info_node, tr
 from squid_ui.document import DocumentLike
 
 type OperationWork = Callable[
@@ -74,7 +74,7 @@ class CommandOperation(sl.Component[sl.ComponentsV2Target]):
     def __init__(self, invocation: sd.Invocation, work: OperationWork) -> None:
         self._invocation = invocation
         self._work = work
-        self._initial = info_node(L(t"Working"), L(t"Getting information..."))
+        self._initial = info_node(tr(t"Working"), tr(t"Getting information..."))
         self._result: sd.delivery.DeliveryResult | None = None
         self.execution = self._execute.start()
 
@@ -144,7 +144,7 @@ def managed_result[**P](
                 work,
                 message_destination=invocation.destination(),
                 make_root=cast(sd.MessageRootFactory, _make_root(invocation)),
-                initial=cast(DocumentLike, info_node(L(t"Working"), L(t"Getting information..."))),
+                initial=cast(DocumentLike, info_node(tr(t"Working"), tr(t"Getting information..."))),
                 render_error=cast(sd.ErrorRenderer, lambda error: _render_error(invocation, error)),
                 on_error=on_error,
                 dismiss_on_success=dismiss_on_success,

@@ -1,7 +1,6 @@
 """Reusable per-open Discord session recipe."""
 
 from collections.abc import Callable
-from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock
 
@@ -22,7 +21,7 @@ from squid_ui_discord import (
     SessionSpec,
 )
 from squid_ui_discord.sessions import AdmissionSpec, Opened, Reject, Rejected, RejectionReason
-from squid_ui_discord.testing import fake_interaction, fake_message
+from squid_ui_discord.testing import ContextHarness, interaction_harness, message_harness
 
 
 class Panel(sl.Component[sl.ComponentsV2Target]):
@@ -34,7 +33,7 @@ def to_message() -> squid_ui_discord.MessageDestination:
     async def send(
         payload: squid_ui_discord.message_payload.MessagePayload,
     ) -> squid_ui_discord.delivery.DeliveryResult:
-        message = fake_message()
+        message = message_harness()
         return squid_ui_discord.delivery.DeliveryResult(message, squid_ui_discord.delivery.handle_for(message))
 
     return send
@@ -57,16 +56,17 @@ def test_session_spec_key_uses_its_declared_scope(
 
 def test_open_context_reads_an_interaction_and_a_command_context_alike() -> None:
     """`Replyable` and `discord.Interaction` never meet, and session recipe does not care."""
-    interaction = fake_interaction(user_id=7)
+    interaction = interaction_harness(user_id=7)
     interaction.guild_id = 42
-    context = SimpleNamespace(author=SimpleNamespace(id=7), guild=SimpleNamespace(id=42), send=AsyncMock())
+    context = ContextHarness(message=message_harness(guild_id=42), user_id=7)
+    context.guild = context.message.guild
 
     assert OpenContext.of(interaction) == OpenContext(7, 42)
     assert OpenContext.of(cast(Any, context)) == OpenContext(7, 42)
 
 
 def test_open_context_reads_a_command_context_in_a_dm_as_guildless() -> None:
-    context = SimpleNamespace(author=SimpleNamespace(id=7), guild=None, send=AsyncMock())
+    context = ContextHarness(message=message_harness(guild_id=None), user_id=7)
 
     assert OpenContext.of(cast(Any, context)) == OpenContext(7, None)
 
@@ -104,7 +104,7 @@ def test_a_session_key_carries_the_scope_a_pool_would_key_on() -> None:
 
 
 def test_open_context_reads_discord_identity() -> None:
-    interaction = fake_interaction(user_id=7)
+    interaction = interaction_harness(user_id=7)
     interaction.guild_id = 42
 
     assert OpenContext.of(interaction) == OpenContext(7, 42)
@@ -185,7 +185,7 @@ async def test_session_spec_resolver_failure_does_not_construct_or_deliver_a_roo
 
 async def test_session_spec_respond_derives_identity_and_delivery_from_the_interaction() -> None:
     manager = SessionManager(MessageRootDefaults(timeout=30))
-    interaction = fake_interaction(user_id=7)
+    interaction = interaction_harness(user_id=7)
     interaction.guild_id = 42
     spec = SessionSpec("panel", scope=ScopeKind.USER_GUILD)
 
@@ -212,7 +212,7 @@ async def test_session_spec_responds_with_an_attached_root() -> None:
     root_root = manager.defaults.mount(Panel(), access=Owner(7), timeout=None)
     root = await manager.open(root_root, to_message())
     assert isinstance(root, Opened)
-    interaction = fake_interaction(user_id=7)
+    interaction = interaction_harness(user_id=7)
     interaction.guild_id = None
 
     attached = await SessionSpec("child").respond_attached(

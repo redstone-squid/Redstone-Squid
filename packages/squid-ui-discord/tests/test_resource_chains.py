@@ -13,7 +13,7 @@ import squid_ui as sl
 import squid_ui_discord
 from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord import testing as sd
-from squid_ui_discord.testing import delivered_to, fake_message
+from squid_ui_discord.testing import delivered_to, message_harness
 
 TOPIC = sl.runtime.Topic("build", "1")
 
@@ -159,7 +159,7 @@ async def test_a_failed_load_moves_the_version_too() -> None:
 
 async def test_a_chain_settles_in_one_send_and_draws_once() -> None:
     panel = Chain()
-    message: Any = fake_message()
+    message: Any = message_harness()
     sent: list[discord.ui.LayoutView] = []
 
     async def destination(presentation) -> Any:
@@ -182,7 +182,7 @@ async def test_a_publish_redraws_the_whole_chain_without_a_torn_paint() -> None:
     bus = sl.runtime.LocalTopicBus()
     scheduler = squid_ui_discord.MessageRootScheduler(bus)
     panel = Chain()
-    message: Any = fake_message()
+    message: Any = message_harness()
     message_root = MessageRoot(panel, access=Everyone(), scheduler=scheduler, timeout=None)
     await message_root.send(delivered_to(message))
 
@@ -216,7 +216,7 @@ async def test_two_independent_resources_still_settle_together() -> None:
             return sl.paragraph(f"{left.value}{right.value}" if ready else "loading")
 
     message_root = MessageRoot(Pair(), access=Everyone(), timeout=None)
-    message: Any = fake_message()
+    message: Any = message_harness()
     await message_root.send(delivered_to(message))
 
     assert message_root.snapshot().suppressed >= 0  # the send completed

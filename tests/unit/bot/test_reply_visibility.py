@@ -1,8 +1,7 @@
 """The one ephemerality rule, at the sites where getting it wrong costs something (audit C2)."""
 
-from types import SimpleNamespace
+from dataclasses import dataclass
 from typing import Any, cast
-from unittest.mock import AsyncMock
 
 import discord
 import pytest
@@ -10,32 +9,51 @@ from discord.ext.commands import Context
 
 import squid_ui_discord as sd
 from squid.bot.ui import text_node
-from tests.helpers.discord import make_layout_bot
+from squid.settings.application import SettingsService
+from squid_ui_discord.testing import AsyncCallRecorder, ContextHarness, InteractionHarness, MessageHarness
+from tests.support.discord import make_layout_bot
+
+
+@dataclass(frozen=True)
+class Guild:
+    id: int
+    preferred_locale: str
+
+
+@dataclass(frozen=True)
+class HttpResponse:
+    status: int
+    reason: str
+
+
+class SettingsRecorder(SettingsService):
+    def __init__(self) -> None:
+        pass
+
+    async def get_locale(self, server_id: int) -> str | None:
+        return None
+
+
+@dataclass(frozen=True)
+class Services:
+    settings: SettingsService
 
 
 def make_context(bot: Any, *, slash: bool = False, in_guild: bool = True, dm_raises: Exception | None = None) -> Any:
-    author_send = AsyncMock(side_effect=dm_raises, return_value=AsyncMock(spec=discord.Message))
-    return SimpleNamespace(
-        interaction=(
-            SimpleNamespace(
-                guild_locale=None,
-                locale="en-US",
-                response=SimpleNamespace(is_done=lambda: False),
-                is_expired=lambda: False,
-                expires_at=None,
-            )
-            if slash
-            else None
-        ),
-        guild=SimpleNamespace(id=5, preferred_locale="en-US") if in_guild else None,
-        author=SimpleNamespace(id=1, send=author_send),
-        send=AsyncMock(return_value=AsyncMock(spec=discord.Message)),
-        bot=bot,
-    )
+    context = ContextHarness(message=MessageHarness(), bot=bot, user_id=1)
+    context.guild = Guild(5, "en-US") if in_guild else None
+    context.author.send = AsyncCallRecorder(result=MessageHarness(guild_id=None), error=dm_raises)
+    if slash:
+        interaction = InteractionHarness(user_id=1).source
+        interaction.guild_locale = None
+        interaction.locale = "en-US"
+        interaction.expires_at = None
+        context.interaction = interaction
+    return context.source
 
 
 def make_bot() -> Any:
-    return make_layout_bot(services=SimpleNamespace(settings=SimpleNamespace(get_locale=AsyncMock(return_value=None))))
+    return make_layout_bot(services=Services(settings=SettingsRecorder()))
 
 
 def _rendered(call: Any) -> str:
@@ -56,7 +74,7 @@ async def test_personal_visibility_matches_the_available_transport(slash: bool, 
 async def test_a_closed_dm_delivers_nothing_rather_than_falling_back() -> None:
     """The channel is exactly what the payload must not reach, so there is nowhere to fall back to."""
     bot = make_bot()
-    ctx = make_context(bot, dm_raises=discord.Forbidden(cast(Any, SimpleNamespace(status=403, reason="")), "no dms"))
+    ctx = make_context(bot, dm_raises=discord.Forbidden(cast(Any, HttpResponse(status=403, reason="")), "no dms"))
     invocation = await sd.Invocation.of(cast(Context[Any], ctx))
 
     with pytest.raises(sd.delivery.DeliveryAbandoned):

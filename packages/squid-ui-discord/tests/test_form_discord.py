@@ -18,7 +18,7 @@ from squid_ui_discord.modal import (
     _entity_defaults,
     build_form_modal,
 )
-from squid_ui_discord.testing import commit_render, fake_interaction
+from squid_ui_discord.testing import commit_render, interaction_harness
 
 
 async def _ignore_raw(interaction, values) -> None: ...
@@ -210,7 +210,7 @@ async def test_file_reader_wraps_discord_attachments_in_portable_values() -> Non
     attachment.read = AsyncMock(return_value=b"schematic")
     component._values = [attachment]  # pyrefly: ignore[missing-attribute]
 
-    await modal.on_submit(fake_interaction())
+    await modal.on_submit(interaction_harness())
 
     uploaded = cast(tuple[sl.forms.UploadedFile, ...], submitted["file"])[0]
     assert (uploaded.name, uploaded.media_type, uploaded.size, uploaded.url) == (
@@ -257,7 +257,7 @@ def _text_input(modal: discord.ui.Modal) -> discord.ui.TextInput:
 
 
 async def _open_form(panel: DurationPanel, message_root: MessageRoot) -> discord.ui.Modal:
-    interaction = fake_interaction()
+    interaction = interaction_harness()
     await message_root.dispatch("duration", interaction)
     modal = interaction.response.send_modal.await_args.args[0]
     assert isinstance(modal, discord.ui.Modal)
@@ -271,7 +271,7 @@ async def test_invalid_submission_preserves_input_for_framework_retry() -> None:
     modal = await _open_form(panel, message_root)
     _text_input(modal)._value = "eventually"  # pyrefly: ignore[missing-attribute]
 
-    submission = fake_interaction()
+    submission = interaction_harness()
     await modal.on_submit(submission)
 
     assert panel.events == []
@@ -280,7 +280,7 @@ async def test_invalid_submission_preserves_input_for_framework_retry() -> None:
     assert any("Duration" in text and "30m" in text for text in texts)
     retry = next(item for item in retry_view.walk_children() if isinstance(item, discord.ui.Button))
 
-    retry_interaction = fake_interaction()
+    retry_interaction = interaction_harness()
     await retry.callback(retry_interaction)
     retried = retry_interaction.response.send_modal.await_args.args[0]
     assert _text_input(retried).default == "eventually"
@@ -306,7 +306,7 @@ async def test_valid_submission_dispatches_typed_event_and_commits_the_runtime()
     modal = await _open_form(panel, message_root)
     _text_input(modal)._value = "2h"  # pyrefly: ignore[missing-attribute]
 
-    await modal.on_submit(fake_interaction())
+    await modal.on_submit(interaction_harness())
 
     assert panel.seconds == 7200
     assert len(panel.events) == 1
@@ -326,7 +326,7 @@ async def test_exclusive_submission_from_a_stale_generation_is_ignored() -> None
     panel.seconds = 60
     commit_render(message_root)
 
-    submission = fake_interaction()
+    submission = interaction_harness()
     await modal.on_submit(submission)
 
     assert panel.seconds == 60
@@ -341,7 +341,7 @@ async def test_accept_and_mark_delivers_parse_errors_to_the_handler() -> None:
     modal = await _open_form(panel, message_root)
     _text_input(modal)._value = "bad"  # pyrefly: ignore[missing-attribute]
 
-    await modal.on_submit(fake_interaction())
+    await modal.on_submit(interaction_harness())
 
     assert len(panel.events) == 1
     assert panel.events[0].errors == (sl.forms.FieldError("duration", "Enter a duration such as 30m, 12h, or 7d."),)

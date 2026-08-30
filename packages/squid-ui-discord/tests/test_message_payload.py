@@ -6,7 +6,6 @@ coherence at construction and about which mode transitions reach Discord at all.
 """
 
 import io
-from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -24,7 +23,7 @@ from squid_ui_discord import testing as sd
 from squid_ui_discord.durability import FrontendAddress
 from squid_ui_discord.durability.frontend import DiscordFrontend, Promoted, Reconnected, RecoveredBinding
 from squid_ui_discord.message_payload import MessageMode, MessageModeError, MessagePayload, message_mode
-from squid_ui_discord.testing import delivered_to, fake_interaction, fake_message
+from squid_ui_discord.testing import delivered_to, interaction_harness, message_harness
 
 CLASSIC = MessageMode.CLASSIC
 V2 = MessageMode.COMPONENTS_V2
@@ -131,15 +130,15 @@ class TestPayload:
             _ = MessagePayload.classic(content="hi").layout
 
     def test_message_mode_reads_the_flag_discord_set(self) -> None:
-        assert message_mode(fake_message()) is V2
-        assert message_mode(fake_message(components_v2=False)) is CLASSIC
+        assert message_mode(message_harness()) is V2
+        assert message_mode(message_harness(components_v2=False)) is CLASSIC
 
 
 class TestTransitions:
     """`_legacy_fields` guessed; the matrix states every case, including the illegal one."""
 
     async def test_classic_to_v2_clears_the_legacy_fields(self) -> None:
-        message = fake_message(components_v2=False)
+        message = message_harness(components_v2=False)
         handle = delivery.handle_for(message)
         assert handle.mode is CLASSIC
 
@@ -152,7 +151,7 @@ class TestTransitions:
         assert handle.mode is V2
 
     async def test_v2_to_v2_never_names_the_legacy_fields(self) -> None:
-        message = fake_message()
+        message = message_harness()
         handle = delivery.handle_for(message)
 
         await handle.write(v2())
@@ -162,7 +161,7 @@ class TestTransitions:
         assert "embeds" not in fields
 
     async def test_classic_to_classic_replaces_every_field_it_owns(self) -> None:
-        message = fake_message(components_v2=False)
+        message = message_harness(components_v2=False)
         handle = delivery.handle_for(message)
         embed = discord.Embed(title="hi")
 
@@ -175,7 +174,7 @@ class TestTransitions:
         assert handle.mode is CLASSIC
 
     async def test_v2_to_classic_is_refused_before_any_request(self) -> None:
-        message = fake_message()
+        message = message_harness()
         handle = delivery.handle_for(message)
 
         with pytest.raises(MessageModeError, match="back off a sent message"):
@@ -184,7 +183,7 @@ class TestTransitions:
         message.edit.assert_not_awaited()
 
     async def test_the_original_response_handle_runs_the_same_matrix(self) -> None:
-        interaction = fake_interaction(components_v2=False)
+        interaction = interaction_harness(components_v2=False)
         destination = delivery.respond_to(interaction, wait=True)
         result = await destination(v2())
         handle = result.handle
@@ -198,7 +197,7 @@ class TestTransitions:
             await handle.write(MessagePayload.classic(content="body"))
 
     async def test_the_webhook_handle_runs_the_same_matrix(self) -> None:
-        interaction = fake_interaction(components_v2=False)
+        interaction = interaction_harness(components_v2=False)
         handle = delivery.handle_from(interaction)
         assert handle is not None and handle.mode is CLASSIC
 
@@ -215,7 +214,7 @@ class TestTransitions:
     async def test_a_handle_with_no_readable_message_still_refuses_the_illegal_edit(self) -> None:
         # `wait=False` on a fresh response: nothing ever fetched the message, so the mode the
         # destination delivered is the only thing that knows what is on it.
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         result = await delivery.respond_to(interaction)(v2())
         handle = result.handle
         assert result.message is None
@@ -225,7 +224,7 @@ class TestTransitions:
             await handle.write(MessagePayload.classic(content="body"))
 
     async def test_keep_attachments_leaves_the_message_files_alone(self) -> None:
-        message = fake_message()
+        message = message_harness()
         handle = delivery.handle_for(message)
 
         await handle.write(v2(assets=(an_asset(),)), keep_attachments=True)
@@ -235,9 +234,9 @@ class TestTransitions:
         assert [file.filename for file in message.edit.await_args.kwargs["attachments"]] == ["report.txt"]
 
     async def test_a_refused_write_leaves_the_recorded_mode_alone(self) -> None:
-        message = fake_message(components_v2=False)
+        message = message_harness(components_v2=False)
         handle = delivery.handle_for(message)
-        message.edit.side_effect = sd.http_error()
+        message.edit.error = sd.http_error()
 
         with pytest.raises(discord.HTTPException):
             await handle.write(v2())
@@ -254,7 +253,7 @@ class _Replyable:
 
     async def send(self, **fields: Any) -> Any:
         self.sent = fields
-        return fake_message()
+        return message_harness()
 
 
 class TestDestinations:
@@ -305,7 +304,7 @@ class TestDestinations:
         assert result.handle.mode is V2
 
     async def test_edit_to_writes_a_message_the_bot_already_owns(self) -> None:
-        message = fake_message()
+        message = message_harness()
 
         result = await delivery.edit_to(message)(v2())
 
@@ -314,7 +313,7 @@ class TestDestinations:
 
     async def test_edit_to_hands_back_a_handle_carrying_the_presentations_mode(self) -> None:
         """The bare `handle_for` a host would reach for reads the flag, which is now stale."""
-        message = fake_message(components_v2=False)
+        message = message_harness(components_v2=False)
 
         result = await delivery.edit_to(message)(v2())
 
@@ -323,7 +322,7 @@ class TestDestinations:
         assert delivery.handle_for(message).mode is MessageMode.CLASSIC
 
     async def test_edit_to_runs_the_transition_matrix_for_the_message_it_edits(self) -> None:
-        message = fake_message(components_v2=False)
+        message = message_harness(components_v2=False)
 
         await delivery.edit_to(message)(v2())
 
@@ -332,7 +331,7 @@ class TestDestinations:
         assert message.edit.await_args.kwargs["embeds"] == []
 
     async def test_edit_to_refuses_a_transition_discord_does_not_offer(self) -> None:
-        message = fake_message()
+        message = message_harness()
 
         with pytest.raises(MessageModeError):
             await delivery.edit_to(message)(MessagePayload.classic(content="body"))
@@ -340,7 +339,7 @@ class TestDestinations:
         message.edit.assert_not_awaited()
 
     async def test_edit_to_merges_host_files_ahead_of_the_presentations_own(self) -> None:
-        message = fake_message()
+        message = message_harness()
         host = discord.File(io.BytesIO(b"host"), filename="host.txt")
 
         await delivery.edit_to(message, files=[host])(v2(assets=(an_asset(),)))
@@ -349,8 +348,8 @@ class TestDestinations:
         assert [file.filename for file in attachments] == ["host.txt", "report.txt"]
 
     async def test_edit_to_translates_expired_authority(self) -> None:
-        message = fake_message()
-        message.edit.side_effect = sd.stale_http_error()
+        message = message_harness()
+        message.edit.error = sd.stale_http_error()
 
         with pytest.raises(delivery.StaleHandleError):
             await delivery.edit_to(message)(v2())
@@ -364,7 +363,7 @@ class TestDestinations:
         assert result.handle is not None
 
     async def test_deliver_to_answers_an_interaction_through_respond_to(self) -> None:
-        interaction = fake_interaction(user_id=7)
+        interaction = interaction_harness(user_id=7)
 
         await delivery.deliver_to(interaction, ephemeral=True, wait=False)(v2())
 
@@ -381,15 +380,24 @@ class _Channel:
         return self._message
 
 
+class _Client:
+    def __init__(self, message: Any) -> None:
+        self.channel = _Channel(message)
+        self.fetch_channel = AsyncMock()
+
+    def get_channel(self, _channel_id: int) -> _Channel:
+        return self.channel
+
+
 class TestDurableMode:
     """The mode is recorded beside the address, so recovery does not have to re-derive it."""
 
     async def test_promotion_records_the_mode_and_recovery_restores_it(self) -> None:
-        message = fake_message()
+        message = message_harness()
         message_root = squid_ui_discord.MessageRoot(Panel(), access=squid_ui_discord.Everyone(), timeout=None)
         sent = await message_root.send(delivered_to(message))
         assert isinstance(sent, delivery.Delivered)
-        client = SimpleNamespace(get_channel=lambda _id: _Channel(message), fetch_channel=AsyncMock())
+        client = _Client(message)
         frontend = DiscordFrontend(client)  # type: ignore[arg-type]
 
         promoted = await frontend.promote(message_root, sent.result)
@@ -401,7 +409,7 @@ class TestDurableMode:
         # makes it a restored fact rather than a re-derived one.
         restored = squid_ui_discord.MessageRoot(Panel(), access=squid_ui_discord.Everyone(), timeout=None)
         address = FrontendAddress("discord", {**promoted.address.values, "mode": "classic"})
-        message.edit.reset_mock()
+        message.edit.records.clear()
 
         result = await frontend.reconnect([RecoveredBinding("mount-1", restored, address)])
 
@@ -410,9 +418,9 @@ class TestDurableMode:
         assert message.edit.await_args.kwargs["embeds"] == []
 
     async def test_a_record_written_before_the_mode_existed_falls_back_to_the_flag(self) -> None:
-        message = fake_message()
+        message = message_harness()
         message_root = squid_ui_discord.MessageRoot(Panel(), access=squid_ui_discord.Everyone(), timeout=None)
-        client = SimpleNamespace(get_channel=lambda _id: _Channel(message), fetch_channel=AsyncMock())
+        client = _Client(message)
         frontend = DiscordFrontend(client)  # type: ignore[arg-type]
         address = FrontendAddress("discord", {"channel_id": message.channel.id, "message_id": message.id})
 

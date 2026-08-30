@@ -12,7 +12,6 @@ from discord.ext.commands import Cog
 import squid_ui_discord as sd
 from squid.accounts.domain import IdentityProvider
 from squid.bot.consent import ensure_consented_account
-from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.attachments import AttachmentKind, classify_attachment
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.ingestion import ingest_message_bundle
@@ -29,7 +28,7 @@ from squid.builds.application import (
 )
 from squid.builds.domain import Build, BuildDraft, DoorOrientationLiteral
 from squid.core.errors import SquidError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 from squid.messages.application import MessageService
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_RECALC
 from squid.schematics.application import IngestedSchematic, IngestRequest
@@ -68,18 +67,18 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
     )
     @BuildCommandGroup.build_group.command(name="submit")
     @app_commands.describe(
-        door_size=app_commands.locale_str(_("The door opening, e.g. `2x2`. Width x height (x depth).")),
-        door_type=app_commands.locale_str(_("Door, Skydoor, or Trapdoor.")),
-        pattern=app_commands.locale_str(_("Pattern types, comma separated. For example: full lamp, funnel.")),
-        build_size=app_commands.locale_str(_("The whole build, e.g. `5x7x4`. Width x height (x depth).")),
-        versions=app_commands.locale_str(_("Versions the build works in, like `1.17 - 1.18.1, 1.20+`.")),
-        restrictions=app_commands.locale_str(_("Comma separated, e.g. `Seamless, Observerless`. See `/help`.")),
-        creators=app_commands.locale_str(_("In-game names of the creator(s), comma separated.")),
-        notes=app_commands.locale_str(_("Anything staff should know about the build.")),
-        first_attachment=app_commands.locale_str(_("An image, video, or schematic; sorted out automatically.")),
-        second_attachment=app_commands.locale_str(_("An image, video, or schematic; sorted out automatically.")),
-        third_attachment=app_commands.locale_str(_("An image, video, or schematic; sorted out automatically.")),
-        fourth_attachment=app_commands.locale_str(_("An image, video, or schematic; sorted out automatically.")),
+        door_size=app_commands.locale_str("The door opening, e.g. `2x2`. Width x height (x depth)."),
+        door_type=app_commands.locale_str("Door, Skydoor, or Trapdoor."),
+        pattern=app_commands.locale_str("Pattern types, comma separated. For example: full lamp, funnel."),
+        build_size=app_commands.locale_str("The whole build, e.g. `5x7x4`. Width x height (x depth)."),
+        versions=app_commands.locale_str("Versions the build works in, like `1.17 - 1.18.1, 1.20+`."),
+        restrictions=app_commands.locale_str("Comma separated, e.g. `Seamless, Observerless`. See `/help`."),
+        creators=app_commands.locale_str("In-game names of the creator(s), comma separated."),
+        notes=app_commands.locale_str("Anything staff should know about the build."),
+        first_attachment=app_commands.locale_str("An image, video, or schematic; sorted out automatically."),
+        second_attachment=app_commands.locale_str("An image, video, or schematic; sorted out automatically."),
+        third_attachment=app_commands.locale_str("An image, video, or schematic; sorted out automatically."),
+        fourth_attachment=app_commands.locale_str("An image, video, or schematic; sorted out automatically."),
     )
     async def submit_form(
         self,
@@ -101,7 +100,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         """Submit a build. Every field is optional; a guided form picks up whatever you skip."""
         await interaction.response.defer(ephemeral=True)
         invocation = await sd.Invocation.of(interaction)
-        locale = await resolve_locale(interaction, self.bot.services.settings)
+
         # Before the uploads, not after: declining should not cost the user an attachment round
         # trip, and the notice describes exactly what submitting a build publishes.
         uploader_account_id = await ensure_consented_account(interaction, self.bot.services.accounts)
@@ -116,7 +115,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
                 draft.dimensions = parse_dimensions(build_size)
         except ValueError as error:
             await invocation.reply(
-                error_node(t(locale, _("Check the dimensions")), str(error)),
+                error_node(tr("Check the dimensions"), str(error)),
                 visibility="personal",
             )
             return
@@ -349,14 +348,14 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         """
         await interaction.response.defer(ephemeral=True)
         invocation = await sd.Invocation.of(interaction)
-        locale = await resolve_locale(interaction, self.bot.services.settings)
+
         # A context menu cannot carry `requires(...)`, so the same denial is raised by hand.
         await enforce(interaction, BUILD_SUBMISSION_RECALC)
         if not self._is_build_log_message(message):
             await invocation.reply(
                 error_node(
-                    t(locale, _("Nothing to recalculate")),
-                    t(locale, _("Builds are only read out of messages posted in a build log channel.")),
+                    tr("Nothing to recalculate"),
+                    tr("Builds are only read out of messages posted in a build log channel."),
                 ),
                 visibility="personal",
             )
@@ -368,13 +367,10 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         if account is None or account.id is None or account.needs_consent_refresh:
             await invocation.reply(
                 error_node(
-                    t(locale, _("Author has not consented")),
-                    t(
-                        locale,
-                        _(
-                            "The author of this message (<@{user_id}>) has not consented to data storage. "
-                            "They must grant consent before this build can be ingested."
-                        ),
+                    tr("Author has not consented"),
+                    tr(
+                        "The author of this message (<@{user_id}>) has not consented to data storage. "
+                        "They must grant consent before this build can be ingested.",
                         user_id=message.author.id,
                     ),
                 ),
@@ -385,4 +381,4 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             return
 
         await self.infer_build_from_message(message)
-        await invocation.reply(text_node(t(locale, _("Build recalculated."))), visibility="personal")
+        await invocation.reply(text_node(tr("Build recalculated.")), visibility="personal")

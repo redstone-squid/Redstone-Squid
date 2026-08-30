@@ -1,7 +1,9 @@
-"""Discord reconciliation application service tests."""
+"""Discord reconciliation application policy tests."""
 
 import uuid
-from unittest.mock import AsyncMock
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+from typing import override
 
 import pytest
 
@@ -10,6 +12,7 @@ from squid.sync import (
     DiscordReconciliationService,
     ReconciliationAction,
     ReconciliationJob,
+    ReconciliationQueue,
     ReconciliationResource,
 )
 from squid.sync.infrastructure.models import DiscordSyncQueueItem
@@ -19,48 +22,43 @@ CLAIM_TOKEN = uuid.UUID("00000000-0000-4000-8000-000000000001")
 
 
 def _job() -> ReconciliationJob:
-    return ReconciliationJob(
-        1,
-        ReconciliationResource.BUILD,
-        "42",
-        ReconciliationAction.REFRESH,
-        1,
-        0,
-        CLAIM_TOKEN,
-    )
+    return ReconciliationJob(1, ReconciliationResource.BUILD, "42", ReconciliationAction.REFRESH, 1, 0, CLAIM_TOKEN)
 
 
-async def test_service_delegates_claim_and_acknowledgement() -> None:
-    repository = AsyncMock()
-    repository.claim.return_value = (_job(),)
-    repository.complete.return_value = True
-    service = DiscordReconciliationService(repository)
+@dataclass(slots=True)
+class QueueRecorder(ReconciliationQueue):
+    failures: list[tuple[ReconciliationJob, str, int]] = field(default_factory=list)
 
-    assert await service.claim(10) == (_job(),)
-    assert await service.complete(_job()) is True
-    repository.claim.assert_awaited_once_with(limit=10)
-    repository.complete.assert_awaited_once_with(_job())
+    @override
+    async def claim(self, *, limit: int) -> Sequence[ReconciliationJob]:
+        raise AssertionError("invalid claims must be rejected before repository access")
+
+    @override
+    async def complete(self, job: ReconciliationJob) -> bool:
+        raise AssertionError("completion is outside this policy test")
+
+    @override
+    async def fail(self, job: ReconciliationJob, error: str, *, max_attempts: int) -> bool:
+        self.failures.append((job, error, max_attempts))
+        return False
 
 
 async def test_service_truncates_failure_and_applies_attempt_ceiling() -> None:
-    repository = AsyncMock()
-    repository.fail.return_value = False
-    service = DiscordReconciliationService(repository, max_attempts=3)
+    queue = QueueRecorder()
+    job = _job()
 
-    assert await service.fail(_job(), RuntimeError("x" * 5000)) is False
-    args = repository.fail.await_args
-    assert len(args.args[1]) == 4000
-    assert args.kwargs == {"max_attempts": 3}
+    assert await DiscordReconciliationService(queue, max_attempts=3).fail(job, RuntimeError("x" * 5000)) is False
+    assert queue.failures == [(job, "x" * 4000, 3)]
 
 
 @pytest.mark.parametrize("limit", [0, 101])
 async def test_claim_rejects_unsafe_batch_sizes(limit: int) -> None:
     with pytest.raises(InvalidStateError, match="between 1 and 100"):
-        await DiscordReconciliationService(AsyncMock()).claim(limit)
+        await DiscordReconciliationService(QueueRecorder()).claim(limit)
 
 
 class TestRowMapping:
-    """Two text columns used to be cast into their types at the boundary."""
+    """Persisted spellings become typed jobs or fail at the adapter boundary."""
 
     @staticmethod
     def _row(*, resource_kind: str = "build", action: str = "refresh") -> DiscordSyncQueueItem:
@@ -77,23 +75,13 @@ class TestRowMapping:
         assert job.generation == 9
         assert job.claim_token == CLAIM_TOKEN
 
-    @pytest.mark.parametrize(
-        ("resource_kind", "action"),
-        [("shrubbery", "refresh"), ("build", "incinerate")],
-    )
+    @pytest.mark.parametrize(("resource_kind", "action"), [("shrubbery", "refresh"), ("build", "incinerate")])
     def test_a_row_outside_its_check_constraint_fails_at_the_boundary(self, resource_kind: str, action: str) -> None:
-        """A cast let such a row reach the reconciler looking valid and fail
-        somewhere else entirely."""
         with pytest.raises(DataIntegrityError) as raised:
             map_row(self._row(resource_kind=resource_kind, action=action), CLAIM_TOKEN)
 
         assert raised.value.context["id"] == 1
 
 
-def test_every_resource_kind_has_a_post_spelling() -> None:
-    """Adding a resource has to fail here rather than at the renderer lookup."""
-    assert {resource.post_kind for resource in ReconciliationResource} == {
-        "build",
-        "vote_session",
-        "starboard_entry",
-    }
+def test_every_resource_kind_maps_to_a_post_resource() -> None:
+    assert {resource.post_kind for resource in ReconciliationResource} == {"build", "vote_session", "starboard_entry"}

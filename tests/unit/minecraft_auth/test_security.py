@@ -1,20 +1,23 @@
 """Player-grant authentication at the shared API security boundary."""
 
-from types import SimpleNamespace
+from dataclasses import dataclass
+from typing import cast
 from uuid import UUID
 
 import pytest
 from fastapi import FastAPI
-from pydantic import SecretStr
 from starlette.requests import Request
+from starlette.types import Scope
 
 from squid.api.security import current_caller
 from squid.core.errors import AuthenticationError
+from squid.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
 from squid.minecraft_auth.domain import (
     AuthenticatedPaperInstallation,
     MinecraftClientOrigin,
     MinecraftPlayerContext,
 )
+from tests.unit.api.fakes import TEST_CONFIG
 
 GRANT_ID = UUID("139533d8-3172-4b0f-bb86-c76603cd75af")
 INSTALLATION_ID = UUID("a2b0b451-1591-42e0-ad75-165b43409eaf")
@@ -23,7 +26,7 @@ PLAYER_TOKEN = f"sqpt_{GRANT_ID.hex}_{'p' * 43}"
 INSTALLATION_SECRET = "s" * 43
 
 
-class FakeInstallations:
+class FakeInstallations(InstallationCredentialService):
     def __init__(self) -> None:
         self.token: str | None = None
 
@@ -32,7 +35,7 @@ class FakeInstallations:
         return AuthenticatedPaperInstallation(INSTALLATION_ID, 9, 3)
 
 
-class FakePlayers:
+class FakePlayers(PlayerAuthorizationService):
     def __init__(self) -> None:
         self.fabric_token: str | None = None
         self.paper_call: tuple[str, AuthenticatedPaperInstallation] | None = None
@@ -67,23 +70,30 @@ def request_with_services(
     *,
     headers: tuple[tuple[bytes, bytes], ...] = (),
 ) -> Request:
+    @dataclass(frozen=True, slots=True)
+    class Services:
+        minecraft_player_authorization: PlayerAuthorizationService
+        minecraft_installations: InstallationCredentialService
+        api_keys: None = None
+
+    @dataclass(frozen=True, slots=True)
+    class Runtime:
+        services: Services
+
     app = FastAPI()
-    app.state.config = SimpleNamespace(api=SimpleNamespace(secret=SecretStr("bootstrap-secret")))
-    app.state.runtime = SimpleNamespace(
-        services=SimpleNamespace(
-            minecraft_player_authorization=players,
-            minecraft_installations=installations,
-            api_keys=None,
-        )
-    )
+    app.state.config = TEST_CONFIG
+    app.state.runtime = Runtime(Services(players, installations))
     return Request(
-        {
-            "type": "http",
-            "method": "GET",
-            "path": "/v1/submissions/drafts/test",
-            "headers": list(headers),
-            "app": app,
-        }
+        cast(
+            Scope,
+            {
+                "type": "http",
+                "method": "GET",
+                "path": "/v1/submissions/drafts/test",
+                "headers": list(headers),
+                "app": app,
+            },
+        )
     )
 
 

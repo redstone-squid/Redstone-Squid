@@ -10,7 +10,7 @@ from squid.accounts.application import AccountService
 from squid.accounts.domain import Account, AccountConsent, IdentityProvider
 from squid.bot.account_view import AccountScreen, ConsentRequest
 from squid.bot.claims_view import ClaimReviewComponent
-from squid.bot.ui import L
+from squid.bot.ui import tr
 from squid.permissions.domain import PermissionNode
 
 type ClaimAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
@@ -77,23 +77,23 @@ class AccountWorkspace(sd.Screen):
             )
         tabs: list[sp.Tab[sl.ComponentsV2Target]] = []
         if self._overview is not None:
-            tabs.append(sp.Tab("overview", L(t"Overview"), self._overview))
-        tabs.append(sp.Tab("identity", L(t"Link and refresh"), self._identity_nodes()))
+            tabs.append(sp.Tab("overview", tr(t"Overview"), self._overview))
+        tabs.append(sp.Tab("identity", tr(t"Link and refresh"), self._identity_nodes()))
         if account_id is not None:
-            tabs.append(sp.Tab("claims", L(t"Creator claims"), self._claim_nodes()))
-            tabs.append(sp.Tab("merge", L(t"Merge accounts"), self._merge_nodes()))
+            tabs.append(sp.Tab("claims", tr(t"Creator claims"), self._claim_nodes()))
+            tabs.append(sp.Tab("merge", tr(t"Merge accounts"), self._merge_nodes()))
         if self._claims is not None:
-            tabs.append(sp.Tab("review", L(t"Review claims"), self._claims))
-        self._tabs = sp.Tabs(tabs, key="account-tabs", title=L(t"Account")).build_component()
+            tabs.append(sp.Tab("review", tr(t"Review claims"), self._claims))
+        self._tabs = sp.Tabs(tabs, key="account-tabs", title=tr(t"Account")).build_component()
 
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self._merge_code is not None and self._merge_decision is not None:
             return (self.boundary(self._merge_decision, key="merge-decision"),)
         if self._tabs is None:
-            return (sl.status(L(t"Loading account.")),)
+            return (sl.status(tr(t"Loading account.")),)
         return (
             self.boundary(self._tabs, key="tabs"),
-            sl.action_controls(sl.action_control(L(t"Close"), self._close, key="close"), key="account-actions"),
+            sl.action_controls(sl.action_control(tr(t"Close"), self._close, key="close"), key="account-actions"),
         )
 
     def _identity_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
@@ -102,7 +102,7 @@ class AccountWorkspace(sd.Screen):
         if account is None or account.needs_consent_refresh:
             nodes.append(
                 sl.action_controls(
-                    sl.action_control(L(t"Review privacy notice"), self._consent, key="consent"),
+                    sl.action_control(tr(t"Review privacy notice"), self._consent, key="consent"),
                     key="consent-actions",
                 )
             )
@@ -110,31 +110,31 @@ class AccountWorkspace(sd.Screen):
             nodes.extend(
                 (
                     sl.form(
-                        L(t"Link Minecraft account"),
+                        tr(t"Link Minecraft account"),
                         sl.forms.FormSpec(
-                            L(t"Link Minecraft account"),
-                            (sl.forms.TextField(key="code", label=L(t"In-game link code"), maximum=100),),
+                            tr(t"Link Minecraft account"),
+                            (sl.forms.TextField(key="code", label=tr(t"In-game link code"), maximum=100),),
                         ),
                         key="link",
                         on_submit=self._link,
                     ),
                     sl.action_controls(
-                        sl.action_control(L(t"Refresh Minecraft identity"), self._refresh_identity, key="refresh"),
+                        sl.action_control(tr(t"Refresh Minecraft identity"), self._refresh_identity, key="refresh"),
                         key="refresh-actions",
                     ),
                 )
             )
         if not nodes:
-            nodes.append(sl.note(L(t"Accept the privacy notice before linking an identity.")))
+            nodes.append(sl.note(tr(t"Accept the privacy notice before linking an identity.")))
         return tuple(nodes)
 
     def _claim_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         return (
             sl.form(
-                L(t"Claim creator credit"),
+                tr(t"Claim creator credit"),
                 sl.forms.FormSpec(
-                    L(t"Claim an older creator name"),
-                    (sl.forms.TextField(key="name", label=L(t"Creator name"), maximum=100),),
+                    tr(t"Claim an older creator name"),
+                    (sl.forms.TextField(key="name", label=tr(t"Creator name"), maximum=100),),
                 ),
                 key="claim",
                 on_submit=self._claim,
@@ -144,14 +144,14 @@ class AccountWorkspace(sd.Screen):
     def _merge_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         return (
             sl.action_controls(
-                sl.action_control(L(t"Create merge code"), self._create_merge_code, key="merge-code"),
+                sl.action_control(tr(t"Create merge code"), self._create_merge_code, key="merge-code"),
                 key="merge-code-actions",
             ),
             sl.form(
-                L(t"Merge another account into this one"),
+                tr(t"Merge another account into this one"),
                 sl.forms.FormSpec(
-                    L(t"Preview account merge"),
-                    (sl.forms.TextField(key="code", label=L(t"Merge code"), maximum=100),),
+                    tr(t"Preview account merge"),
+                    (sl.forms.TextField(key="code", label=tr(t"Merge code"), maximum=100),),
                 ),
                 key="merge",
                 on_submit=self._request_merge,
@@ -178,7 +178,7 @@ class AccountWorkspace(sd.Screen):
     async def _link(self, event: sl.SubmitEvent) -> None:
         account = self._account
         if account is None or account.id is None or account.consent is None or account.needs_consent_refresh:
-            await event.notice(L(t"Accept the current privacy notice before linking."))
+            await event.notice(tr(t"Accept the current privacy notice before linking."))
             return
         code = cast(str, event.values["code"])
         attempted_by = (IdentityProvider.DISCORD, str(self._actor_id))
@@ -198,26 +198,26 @@ class AccountWorkspace(sd.Screen):
                 await self._accounts.release_minecraft_link(code, reservation)
         current_name = refresh.current_name
         await self._rebuild()
-        await event.notice(L(t"Linked Minecraft account **{current_name}**."))
+        await event.notice(tr(t"Linked Minecraft account **{current_name}**."))
 
     async def _refresh_identity(self, event: sl.PressEvent) -> None:
         account_id = self._account_id()
         refresh = await self._accounts.refresh_java_identity(account_id)
         current_name = refresh.current_name
         await self._rebuild()
-        await event.notice(L(t"Minecraft identity refreshed as **{current_name}**."))
+        await event.notice(tr(t"Minecraft identity refreshed as **{current_name}**."))
 
     async def _claim(self, event: sl.SubmitEvent) -> None:
         claim = await self._accounts.request_alias_claim(self._account_id(), cast(str, event.values["name"]))
         claim_id = claim.id
         alias_name = claim.alias_name
-        await event.notice(L(t"Claim #{claim_id} for **{alias_name}** is awaiting staff approval."))
+        await event.notice(tr(t"Claim #{claim_id} for **{alias_name}** is awaiting staff approval."))
 
     async def _create_merge_code(self, event: sl.PressEvent) -> None:
         code, ticket = await self._accounts.create_merge_code(self._account_id())
         expiry = ticket.expires_at.to_stdlib().isoformat()
         await event.notice(
-            L(t"Merge code: `{code}`. It expires {expiry}. Keep it private: it hands this account over.")
+            tr(t"Merge code: `{code}`. It expires {expiry}. Keep it private: it hands this account over.")
         )
 
     async def _request_merge(self, event: sl.SubmitEvent) -> None:
@@ -228,13 +228,13 @@ class AccountWorkspace(sd.Screen):
         builds = preview.build_count
         self._merge_code = code
         self._merge_decision = sp.Decision[sl.ComponentsV2Target](
-            L(
+            tr(
                 t"Move {aliases} creator names, {identities} identities, and {builds} build credits here? "
                 t"This cannot be undone."
             ),
             (
-                sp.DecisionOption("confirm", L(t"Merge accounts"), sl.Tone.DANGER),
-                sp.DecisionOption("cancel", L(t"Cancel")),
+                sp.DecisionOption("confirm", tr(t"Merge accounts"), sl.Tone.DANGER),
+                sp.DecisionOption("cancel", tr(t"Cancel")),
             ),
             key="merge-account",
         ).build_component(on_decide=self._finish_merge)
@@ -250,7 +250,7 @@ class AccountWorkspace(sd.Screen):
         self._merge_code = None
         self._merge_decision = None
         await self._rebuild()
-        await event.source.notice(L(t"Merged. `{redirected}` now redirects to your creator page."))
+        await event.source.notice(tr(t"Merged. `{redirected}` now redirects to your creator page."))
 
     def _account_id(self) -> int:
         account = self._account

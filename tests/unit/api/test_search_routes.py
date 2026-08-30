@@ -1,32 +1,58 @@
 """Cross-resource search and suggestion route tests."""
 
-from types import SimpleNamespace
-from typing import NamedTuple, cast
-from unittest.mock import AsyncMock
+from collections.abc import Sequence
+from typing import NamedTuple
 
 import pytest
 
 from squid.api.v1.schemas.search import BuildSearchResult, MetadataSearchResult, RecordSearchResult
 from squid.api.v1.search import build_hit_id, search, suggest_terms
+from squid.builds.application import BuildQueryService
 from squid.builds.domain import Build, DoorBuild, Status
 from squid.core.errors import DataIntegrityError
 from squid.core.pagination import PageAnchor
-from squid.runtime import ApiServices
+from squid.search.application import SearchService
 from squid.search.domain import (
     BuildSearchHit,
     MetadataSearchHit,
     RecordSearchHit,
     SearchPage,
+    SearchQuery,
+    SearchRequest,
     SearchScope,
 )
 
 
 class Fakes(NamedTuple):
-    """A search-only service graph plus the mocks its routes are expected to drive."""
+    """Search and build-query service subclasses driven by route tests."""
 
-    services: ApiServices
-    search: AsyncMock
-    suggest: AsyncMock
+    search: SearchRecorder
+    build_queries: BuildQueryFake
+
+
+class SearchRecorder(SearchService):
+    def __init__(self, page: SearchPage) -> None:
+        self.page = page
+        self.requests: list[SearchRequest] = []
+        self.suggestions: list[tuple[str, int]] = []
+
+    async def search(self, request: SearchRequest) -> SearchPage:
+        self.requests.append(request)
+        return self.page
+
+    async def suggest(self, query: str | SearchQuery, *, limit: int = 5) -> tuple[str, ...]:
+        self.suggestions.append((str(query), limit))
+        return ("piston",)
+
+
+class BuildQueryFake(BuildQueryService):
+    def __init__(self, builds: list[Build]) -> None:
+        self.builds = builds
+        self.requested: list[tuple[int, ...]] = []
+
+    async def get_many(self, build_ids: Sequence[int]) -> list[Build]:
+        self.requested.append(tuple(build_ids))
+        return self.builds
 
 
 def indexed_build(build_id: int = 42) -> Build:
@@ -43,13 +69,7 @@ def indexed_build(build_id: int = 42) -> Build:
 
 
 def fakes(page: SearchPage, builds: list[Build] | None = None) -> Fakes:
-    search_mock = AsyncMock(return_value=page)
-    suggest_mock = AsyncMock(return_value=("piston",))
-    services = SimpleNamespace(
-        search=SimpleNamespace(search=search_mock, suggest=suggest_mock),
-        build_queries=SimpleNamespace(get_many=AsyncMock(return_value=builds or [])),
-    )
-    return Fakes(cast(ApiServices, services), search_mock, suggest_mock)
+    return Fakes(SearchRecorder(page), BuildQueryFake(builds or []))
 
 
 def empty_page() -> SearchPage:
@@ -80,7 +100,7 @@ async def test_search_renders_each_resource_kind_and_hydrates_builds() -> None:
     )
     graph = fakes(page, [indexed_build()])
 
-    result = await search(graph.services.search, graph.services.build_queries, q="piston", scope=SearchScope.ALL)
+    result = await search(graph.search, graph.build_queries, q="piston", scope=SearchScope.ALL)
 
     assert [item.resource_kind for item in result.items] == ["build", "record", "metadata"]
     build_item, record_item, metadata_item = result.items
@@ -102,14 +122,13 @@ async def test_search_never_widens_build_visibility_past_confirmed() -> None:
     graph = fakes(empty_page())
 
     await search(
-        graph.services.search,
-        graph.services.build_queries,
+        graph.search,
+        graph.build_queries,
         q="status:pending",
         scope=SearchScope.ALL,
     )
 
-    assert graph.search.await_args is not None
-    request = graph.search.await_args.args[0]
+    request = graph.search.requests[0]
     assert request.visible_statuses == frozenset({"confirmed"})
 
 
@@ -124,8 +143,8 @@ async def test_search_drops_hits_whose_build_has_vanished() -> None:
     graph = fakes(page)
 
     result = await search(
-        graph.services.search,
-        graph.services.build_queries,
+        graph.search,
+        graph.build_queries,
         q="piston",
         scope=SearchScope.BUILDS,
     )
@@ -137,10 +156,10 @@ async def test_search_drops_hits_whose_build_has_vanished() -> None:
 async def test_suggest_passes_the_caller_limit_through() -> None:
     graph = fakes(empty_page())
 
-    result = await suggest_terms(graph.services.search, q="pist", limit=3)
+    result = await suggest_terms(graph.search, q="pist", limit=3)
 
     assert result.suggestions == ["piston"]
-    graph.suggest.assert_awaited_once_with("pist", limit=3)
+    assert graph.search.suggestions == [("pist", 3)]
 
 
 def test_an_unparsable_projection_key_is_a_server_fault_not_a_bad_request() -> None:

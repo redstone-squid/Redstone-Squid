@@ -11,14 +11,13 @@ from discord.ext.commands import Context, Greedy
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.accounts.domain import IdentityProvider
-from squid.bot.i18n import resolve_locale, t
 from squid.bot.operations import managed_result
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
 from squid.bot.tags_view import TagsScreen
 from squid.bot.ui import link_node, text_node
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.permissions import allows, enforce
-from squid.core.i18n import _
+from squid.core.i18n import tr
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     MESSAGE_ARCHIVE_CREATE,
@@ -179,11 +178,10 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             else:
                 synced = await ctx.bot.tree.sync()
 
-            locale = await resolve_locale(ctx, self.bot.services.settings)
             invocation = await sd.Invocation.of(ctx)
-            scope = t(locale, _("globally")) if spec is None else t(locale, _("to the current guild"))
+            scope = tr("globally") if spec is None else tr("to the current guild")
             await invocation.reply(
-                text_node(t(locale, _("Synced {count} commands {scope}."), count=len(synced), scope=scope)),
+                text_node(tr("Synced {count} commands {scope}.", count=len(synced), scope=scope)),
             )
             return
 
@@ -196,10 +194,9 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             else:
                 ret += 1
 
-        locale = await resolve_locale(ctx, self.bot.services.settings)
         invocation = await sd.Invocation.of(ctx)
         await invocation.reply(
-            text_node(t(locale, _("Synced the tree to {synced}/{total}."), synced=ret, total=len(guilds))),
+            text_node(tr("Synced the tree to {synced}/{total}.", synced=ret, total=len(guilds))),
         )
 
     @commands.command(name="gdb", hidden=True)
@@ -207,12 +204,12 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     async def get_sheets_link(self, ctx: Context[BotT]):
         """Sends the google sheets link"""
         invocation = await sd.Invocation.of(ctx)
-        locale = await resolve_locale(ctx, self.bot.services.settings)
+
         await invocation.reply(
             link_node(
-                t(locale, _("Build spreadsheet")),
+                tr("Build spreadsheet"),
                 "https://docs.google.com/spreadsheets/d/1BiyHD6PE1Jyn1EtlT0o2DqciUzWPSdwHmeRcUJtanUs/edit#gid=2075219221",
-                label=t(locale, _("Open spreadsheet")),
+                label=tr("Open spreadsheet"),
             ),
         )
 
@@ -221,12 +218,12 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     async def get_database_link(self, ctx: Context[BotT]):
         """Sends the database link"""
         invocation = await sd.Invocation.of(ctx)
-        locale = await resolve_locale(ctx, self.bot.services.settings)
+
         await invocation.reply(
             link_node(
-                t(locale, _("Database")),
+                tr("Database"),
                 "https://supabase.com/dashboard/project/jnushtruzgnnmmxabsxi/editor/29424?sort=submission_id%3Aasc",
-                label=t(locale, _("Open database")),
+                label=tr("Open database"),
             ),
         )
 

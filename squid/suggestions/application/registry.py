@@ -10,7 +10,7 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 
 from squid.core.errors import ErrorCode, InvalidStateError, NotFoundError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 from squid.suggestions.application.ports import ComposedSuggestionProvider, SuggestionProvider
 from squid.suggestions.domain import SourceKind, ValueType, Visibility
 
@@ -21,8 +21,8 @@ SOURCE_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 class UnknownSuggestionSourceError(NotFoundError):
     """The requested suggestion source is not registered."""
 
-    default_message = "No such suggestion source."
-    default_title = "Unknown suggestion source"
+    default_message = tr(t"No such suggestion source.")
+    default_title = tr(t"Unknown suggestion source")
     default_code = ErrorCode.NOT_FOUND
     default_resource = "suggestion_source"
 
@@ -49,12 +49,13 @@ class SuggestionSource:
     """Default `Suggestion.kind` for candidates that do not set their own."""
 
     def __post_init__(self) -> None:
+        source_id = self.id
         if not SOURCE_ID_PATTERN.match(self.id):
-            msg = _("invalid suggestion source id: {source_id!r}")
-            raise InvalidStateError(msg, message_params={"source_id": self.id})
+            raise InvalidStateError(tr(t"invalid suggestion source id: {source_id!r}"))
         if (self.visibility is Visibility.REQUIRES_NODE) != (self.required_node is not None):
-            msg = _("{source_id}: required_node must be set exactly when visibility is requires_node")
-            raise InvalidStateError(msg, message_params={"source_id": self.id})
+            raise InvalidStateError(
+                tr(t"{source_id}: required_node must be set exactly when visibility is requires_node")
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,8 +70,8 @@ class SuggestionRegistry:
         registered: dict[str, SuggestionSource] = {}
         for source in sources:
             if source.id in registered:
-                msg = _("duplicate suggestion source: {source_id}")
-                raise InvalidStateError(msg, message_params={"source_id": source.id})
+                source_id = source.id
+                raise InvalidStateError(tr(t"duplicate suggestion source: {source_id}"))
             registered[source.id] = source
         return cls(registered)
 

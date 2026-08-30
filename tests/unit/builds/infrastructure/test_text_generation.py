@@ -1,6 +1,6 @@
 """Structured OpenAI text-generation adapter tests."""
 
-from types import SimpleNamespace
+from dataclasses import dataclass
 from typing import Any, cast
 
 import httpx
@@ -13,6 +13,32 @@ from squid.builds.application import InferenceResult, InlineImage
 from squid.builds.infrastructure.text_generation import OpenAITextGenerator
 
 
+@dataclass(frozen=True, slots=True)
+class _Message:
+    parsed: InferenceResult | None = None
+    content: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _Choice:
+    message: _Message
+
+
+@dataclass(frozen=True, slots=True)
+class _Response:
+    choices: tuple[_Choice, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _Chat:
+    completions: FakeCompletions
+
+
+@dataclass(frozen=True, slots=True)
+class _Client:
+    chat: _Chat
+
+
 class FakeCompletions:
     def __init__(self, *, reject_strict: bool = False, fail: bool = False) -> None:
         self.reject_strict = reject_strict
@@ -20,25 +46,22 @@ class FakeCompletions:
         self.parse_kwargs: dict[str, Any] = {}
         self.create_kwargs: dict[str, Any] = {}
 
-    async def parse(self, **kwargs: Any) -> SimpleNamespace:
+    async def parse(self, **kwargs: Any) -> _Response:
         self.parse_kwargs = kwargs
         if self.fail:
             raise openai.APIConnectionError(request=httpx.Request("POST", "https://example.invalid/chat"))
         if self.reject_strict:
             response = httpx.Response(400, request=httpx.Request("POST", "https://example.invalid/chat"))
             raise openai.BadRequestError("unsupported", response=response, body=None)
-        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(parsed=InferenceResult(builds=[])))])
+        return _Response((_Choice(_Message(parsed=InferenceResult(builds=[]))),))
 
-    async def create(self, **kwargs: Any) -> SimpleNamespace:
+    async def create(self, **kwargs: Any) -> _Response:
         self.create_kwargs = kwargs
-        return SimpleNamespace(
-            choices=[SimpleNamespace(message=SimpleNamespace(content='```json\n{"builds": []}\n```'))]
-        )
+        return _Response((_Choice(_Message(content='```json\n{"builds": []}\n```')),))
 
 
 def fake_client(completions: FakeCompletions) -> AsyncOpenAI:
-    client = SimpleNamespace(chat=SimpleNamespace(completions=completions))
-    return cast(AsyncOpenAI, client)
+    return cast(AsyncOpenAI, _Client(_Chat(completions)))
 
 
 async def test_generate_passes_schema_reasoning_and_inline_images() -> None:

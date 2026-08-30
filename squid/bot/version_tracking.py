@@ -11,12 +11,12 @@ from discord.ext.commands import Cog
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
-from squid.bot.i18n import resolve_locale, t
-from squid.bot.ui import L, render_payload, text_node
+from squid.bot.i18n import localization_for, resolve_locale
+from squid.bot.ui import render_payload, text_node, tr
 from squid.bot.utils.permissions import allows
-from squid.core.i18n import _
 from squid.permissions.domain.catalogue import VERSION_ENTRY_CREATE
 from squid.versions.domain import Edition, MinecraftVersion
+from squid_ui.text import localization_scope
 from squid_ui_discord import send_to
 
 if TYPE_CHECKING:
@@ -77,35 +77,37 @@ class VersionScreen(sd.Screen):
             label=lambda item: item.value,
             summary=lambda item: f"{item.value} · {item.edition}",
             detail=lambda item: sl.fields(
-                sl.field(L(t"Version"), item.value),
-                sl.field(L(t"Edition"), item.edition),
+                sl.field(tr(t"Version"), item.value),
+                sl.field(tr(t"Edition"), item.edition),
             ),
             page_size=15,
-            title=L(t"Recognized Minecraft versions"),
-            empty=L(t"No Minecraft versions are recognized yet."),
+            title=tr(t"Recognized Minecraft versions"),
+            empty=tr(t"No Minecraft versions are recognized yet."),
         )
 
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
-            sl.status(L(t"Loading versions.")) if self._browser is None else self.boundary(self._browser, key="browser")
+            sl.status(tr(t"Loading versions."))
+            if self._browser is None
+            else self.boundary(self._browser, key="browser")
         ]
         if self._can_create:
             nodes.append(
                 sl.form(
-                    L(t"Add version"),
+                    tr(t"Add version"),
                     sl.forms.FormSpec(
-                        L(t"Add Minecraft version"),
+                        tr(t"Add Minecraft version"),
                         (
                             sl.forms.ChoiceField(
                                 key="edition",
-                                label=L(t"Edition"),
+                                label=tr(t"Edition"),
                                 default="Java",
                                 options=(
-                                    sl.forms.ChoiceOption("java", L(t"Java"), "Java"),
-                                    sl.forms.ChoiceOption("bedrock", L(t"Bedrock"), "Bedrock"),
+                                    sl.forms.ChoiceOption("java", tr(t"Java"), "Java"),
+                                    sl.forms.ChoiceOption("bedrock", tr(t"Bedrock"), "Bedrock"),
                                 ),
                             ),
-                            sl.forms.TextField(key="version", label=L(t"Version"), maximum=100),
+                            sl.forms.TextField(key="version", label=tr(t"Version"), maximum=100),
                         ),
                     ),
                     key="add-version",
@@ -114,7 +116,7 @@ class VersionScreen(sd.Screen):
             )
         nodes.append(
             sl.action_controls(
-                sl.action_control(L(t"Close"), self._close, key="close"),
+                sl.action_control(tr(t"Close"), self._close, key="close"),
                 key="version-actions",
             )
         )
@@ -122,13 +124,13 @@ class VersionScreen(sd.Screen):
 
     async def _add(self, event: sl.SubmitEvent) -> None:
         if not await self._authorize_create():
-            await event.notice(L(t"You are no longer allowed to add versions."))
+            await event.notice(tr(t"You are no longer allowed to add versions."))
             return
         edition = cast(Edition, event.values["edition"])
         version_text = cast(str, event.values["version"])
         version = str(await self._versions.add(version_text, edition=edition))
         await self._refresh()
-        await event.notice(L(t"Added {version}."))
+        await event.notice(tr(t"Added {version}."))
 
     async def _close(self, event: sl.PressEvent) -> None:
         await event.finish()
@@ -162,8 +164,10 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="VersionTrac
             return
         version = await self.version_service.add(message.content.split("\n", 1)[0])
         locale = await resolve_locale(message, self.bot.services.settings)
+        with localization_scope(localization_for(locale)):
+            payload = render_payload([text_node(tr("Version added successfully: {version}", version=version))])
         await send_to(self.bot.get_channel(channel_id))(  # type: ignore[arg-type]
-            render_payload([text_node(t(locale, _("Version added successfully: {version}"), version=version))])
+            payload
         )
 
 

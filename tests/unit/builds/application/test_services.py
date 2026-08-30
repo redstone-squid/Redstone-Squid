@@ -4,7 +4,6 @@ import asyncio
 from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager
 from typing import Literal, cast
-from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
@@ -36,9 +35,18 @@ from squid.tags.domain import (
 class FakeBuildRepository:
     def __init__(self, build: Build | None = None) -> None:
         self.build = build
-        self.save = AsyncMock()
-        self.confirm = AsyncMock()
-        self.deny = AsyncMock()
+        self.saved: list[Build] = []
+        self.confirmed: list[Build] = []
+        self.denied: list[Build] = []
+
+    async def save(self, build: Build) -> None:
+        self.saved.append(build)
+
+    async def confirm(self, build: Build) -> None:
+        self.confirmed.append(build)
+
+    async def deny(self, build: Build) -> None:
+        self.denied.append(build)
 
     async def get_by_id(self, build_id: int) -> Build | None:
         if self.build is not None and self.build.id == build_id:
@@ -66,9 +74,20 @@ class FakeRestrictionRepository:
 
 class FakeBuildLocks:
     def __init__(self) -> None:
-        self.acquire = AsyncMock(return_value=True)
-        self.release = AsyncMock()
-        self.clean_stale = AsyncMock()
+        self.acquire_result = True
+        self.acquisitions: list[tuple[int, bool, float]] = []
+        self.releases: list[int] = []
+        self.cleanups: list[Instant] = []
+
+    async def acquire(self, build_id: int, *, blocking: bool = True, timeout: float = -1) -> bool:
+        self.acquisitions.append((build_id, blocking, timeout))
+        return self.acquire_result
+
+    async def release(self, build_id: int) -> None:
+        self.releases.append(build_id)
+
+    async def clean_stale(self, *, older_than: Instant) -> None:
+        self.cleanups.append(older_than)
 
     @asynccontextmanager
     async def locked(self, build_id: int, *, timeout: float = 30) -> AsyncGenerator[None]:
@@ -235,9 +254,9 @@ async def test_edit_applies_only_after_lock_and_releases_on_cancel(existing_buil
         assert "user" not in lease.build.extra_info
         assert lease.build.extra_info.get("server_info") == {"server_ip": "new.example"}
 
-    repository.save.assert_not_awaited()
-    locks.acquire.assert_awaited_once_with(42, blocking=False, timeout=30)
-    locks.release.assert_awaited_once_with(42)
+    assert repository.saved == []
+    assert locks.acquisitions == [(42, False, 30)]
+    assert locks.releases == [42]
 
 
 async def test_edit_commit_uses_repository_and_releases_after_save(existing_build: DoorBuild) -> None:
@@ -250,9 +269,9 @@ async def test_edit_commit_uses_repository_and_releases_after_save(existing_buil
 
     assert result is existing_build
     assert existing_build.door_dimensions == (2, 3, 4)
-    repository.save.assert_awaited_once_with(existing_build)
-    assert locks.acquire.await_args_list == [((42,), {"blocking": False, "timeout": 30})]
-    assert locks.release.await_count == 1
+    assert repository.saved == [existing_build]
+    assert locks.acquisitions == [(42, False, 30)]
+    assert locks.releases == [42]
 
 
 async def test_edit_releases_lock_when_patch_application_fails(existing_build: DoorBuild) -> None:
@@ -266,7 +285,7 @@ async def test_edit_releases_lock_when_patch_application_fails(existing_build: D
         async with service.edit(42, patch):
             pass
 
-    locks.release.assert_awaited_once_with(42)
+    assert locks.releases == [42]
 
 
 async def test_edit_releases_lease_when_cancelled_while_loading(existing_build: DoorBuild) -> None:
@@ -296,8 +315,8 @@ async def test_edit_releases_lease_when_cancelled_while_loading(existing_build: 
     with pytest.raises(asyncio.CancelledError):
         await task
 
-    locks.acquire.assert_awaited_once()
-    locks.release.assert_awaited_once_with(42)
+    assert len(locks.acquisitions) == 1
+    assert locks.releases == [42]
 
 
 async def test_edit_reports_missing_and_busy_builds(existing_build: DoorBuild) -> None:
@@ -306,10 +325,10 @@ async def test_edit_reports_missing_and_busy_builds(existing_build: DoorBuild) -
     with pytest.raises(BuildNotFoundError):
         async with missing_service.edit(42, BuildEditPatch()):
             pass
-    missing_locks.release.assert_awaited_once_with(42)
+    assert missing_locks.releases == [42]
 
     busy_locks = FakeBuildLocks()
-    busy_locks.acquire.return_value = False
+    busy_locks.acquire_result = False
     busy_service = build_service(FakeBuildRepository(existing_build), busy_locks)
     with pytest.raises(BuildBusyError):
         async with busy_service.edit(42, BuildEditPatch()):
@@ -322,7 +341,7 @@ async def test_edit_loads_build_only_after_acquiring_lease(existing_build: DoorB
     original_get = repository.get_by_id
 
     async def get_after_lock(build_id: int) -> Build | None:
-        locks.acquire.assert_awaited_once_with(42, blocking=False, timeout=30)
+        assert locks.acquisitions == [(42, False, 30)]
         return await original_get(build_id)
 
     repository.get_by_id = get_after_lock  # type: ignore[method-assign]
@@ -341,7 +360,7 @@ async def test_edit_rejects_a_stale_expected_revision(existing_build: DoorBuild)
 
     assert error.value.public_context == {"build_id": 42, "expected_revision": 2, "current_revision": 1}
     assert existing_build.dimensions == (None, None, None)
-    locks.release.assert_awaited_once_with(42)
+    assert locks.releases == [42]
 
 
 async def test_status_changes_and_cleanup_use_lock_manager(existing_build: DoorBuild) -> None:
@@ -354,11 +373,11 @@ async def test_status_changes_and_cleanup_use_lock_manager(existing_build: DoorB
     await service.deny(42)
     await service.clean_stale_locks(older_than=cutoff)
 
-    repository.confirm.assert_awaited_once_with(existing_build)
-    repository.deny.assert_awaited_once_with(existing_build)
-    assert locks.acquire.await_count == 2
-    assert locks.release.await_count == 2
-    locks.clean_stale.assert_awaited_once_with(older_than=cutoff)
+    assert repository.confirmed == [existing_build]
+    assert repository.denied == [existing_build]
+    assert len(locks.acquisitions) == 2
+    assert locks.releases == [42, 42]
+    assert locks.cleanups == [cutoff]
 
 
 async def test_submit_door_maps_input_and_saves() -> None:
@@ -384,7 +403,7 @@ async def test_submit_door_maps_input_and_saves() -> None:
     assert build.wiring_placement_restrictions == ["Seamless"]
     assert build.miscellaneous_restrictions == ["Locational"]
     assert build.extra_info.get("user") == "notes"
-    repository.save.assert_awaited_once_with(build)
+    assert repository.saved == [build]
 
 
 async def test_classify_restrictions_replaces_existing_values_without_persisting() -> None:
@@ -398,7 +417,7 @@ async def test_classify_restrictions_replaces_existing_values_without_persisting
     assert build.wiring_placement_restrictions == ["Seamless"]
     assert build.component_restrictions == []
     assert build.miscellaneous_restrictions == []
-    repository.save.assert_not_awaited()
+    assert repository.saved == []
 
 
 async def test_submit_for_account_does_not_require_a_discord_identity() -> None:
@@ -420,7 +439,7 @@ async def test_submit_for_account_does_not_require_a_discord_identity() -> None:
     assert build.display_name == "Workshop prototype"
     assert build.category is BuildCategory.OTHER
     assert build.submission_status is Status.PENDING
-    repository.save.assert_awaited_once_with(build)
+    assert repository.saved == [build]
 
 
 async def test_get_by_source_submission_draft_id_returns_an_existing_build() -> None:
@@ -451,7 +470,7 @@ async def test_submit_for_account_returns_the_build_created_by_an_earlier_retry(
     )
 
     assert result is existing
-    repository.save.assert_not_awaited()
+    assert repository.saved == []
 
 
 async def test_submit_for_account_rejects_existing_build_with_different_sponsor() -> None:
@@ -475,7 +494,7 @@ async def test_submit_for_account_rejects_existing_build_with_different_sponsor(
             ai_generated=False,
         )
 
-    repository.save.assert_not_awaited()
+    assert repository.saved == []
 
 
 async def test_save_prepares_defaults_then_indexes_after_relational_persistence() -> None:
@@ -491,9 +510,9 @@ async def test_save_prepares_defaults_then_indexes_after_relational_persistence(
 
     assert build.versions == ["Java 1.21.0"]
     assert build.embedding == [1.0, 2.0]
-    repository.save.assert_awaited_once_with(build)
-    locks.acquire.assert_awaited_once_with(42, blocking=True, timeout=30)
-    locks.release.assert_awaited_once_with(42)
+    assert repository.saved == [build]
+    assert locks.acquisitions == [(42, True, 30)]
+    assert locks.releases == [42]
     assert embeddings.prepared == [build]
     assert embeddings.indexed == [build]
 
@@ -531,7 +550,7 @@ class TestAuthorizedEditing:
         build = await service.apply_edit(self.OWNER, 42, BuildEditPatch(extra_user_info="mine"))
 
         assert build.extra_info.get("user") == "mine"
-        repository.save.assert_awaited_once()
+        assert len(repository.saved) == 1
 
     async def test_a_non_owner_without_the_node_is_refused_without_committing(self, existing_build: DoorBuild) -> None:
         repository = FakeBuildRepository(existing_build)
@@ -540,7 +559,7 @@ class TestAuthorizedEditing:
         with pytest.raises(AuthorizationError):
             await service.apply_edit(self.STRANGER, 42, BuildEditPatch(extra_user_info="theirs"))
 
-        repository.save.assert_not_awaited()
+        assert repository.saved == []
 
     async def test_a_non_owner_holding_the_node_may_edit(self, existing_build: DoorBuild) -> None:
         repository = FakeBuildRepository(existing_build)
@@ -560,7 +579,7 @@ class TestAuthorizedEditing:
         with pytest.raises(AuthorizationError):
             await service.apply_edit(self.OWNER, 42, BuildEditPatch(extra_user_info="mine"))
 
-        repository.save.assert_not_awaited()
+        assert repository.saved == []
 
     async def test_a_missing_build_is_reported_before_authorization(self) -> None:
         service = build_service(FakeBuildRepository(), permissions=self._permissions())

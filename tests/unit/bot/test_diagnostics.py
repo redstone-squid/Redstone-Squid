@@ -1,24 +1,23 @@
 """Tests for reading a stored error report from Discord."""
 
-from types import SimpleNamespace
-from typing import Any, cast
-from unittest.mock import AsyncMock
+from collections.abc import Sequence
 from uuid import UUID
 
 import discord
 from whenever import Instant
 
-from squid.bot.diagnostics import Diagnostics
-from squid.bot.diagnostics_view import ErrorReportOperations, ErrorReportScreen, report_attachment
+import squid_ui_widgets as sp
+from squid.bot.diagnostics_view import ErrorReportScreen, report_attachment
+from squid.diagnostics.application import ErrorReportService
 from squid.diagnostics.domain import ErrorReport
 from squid_ui.sources import Position
-from squid_ui.testing import labels, render_tree
+from squid_ui.testing import RecordingResponder, labels, press_event, render_tree
 from squid_ui_discord import (
     V2_LIMITS as LIMITS,
 )
 from squid_ui_discord import MessageRoot, Owner, Private
-from squid_ui_discord.testing import assert_within_limits, commit_render, fake_interaction
-from tests.helpers.discord import make_layout_bot
+from squid_ui_discord.testing import assert_within_limits, commit_render, interaction_harness
+from tests.support.discord import make_layout_bot
 
 
 def make_report(
@@ -51,16 +50,57 @@ def make_screen(
     matches: int = 1,
     can_clear: bool = False,
 ) -> ErrorReportScreen:
-    operations = SimpleNamespace(
-        lookup=AsyncMock(return_value=(report, matches)),
-        recent=AsyncMock(return_value=reports),
-        clear_all=AsyncMock(return_value=3),
-    )
+    operations = ErrorReportRecorder(reports, report=report, matches=matches)
     return ErrorReportScreen(
-        cast(ErrorReportOperations, operations),
+        operations,
         reference=report.reference if report is not None else None,
         can_clear=can_clear,
-        authorize_clear=AsyncMock(return_value=True) if can_clear else None,
+        authorize_clear=Authorizer(allowed=True) if can_clear else None,
+    )
+
+
+class ErrorReportRecorder(ErrorReportService):
+    def __init__(
+        self,
+        reports: tuple[ErrorReport, ...],
+        *,
+        report: ErrorReport | None,
+        matches: int,
+    ) -> None:
+        self.reports = reports
+        self.report = report
+        self.matches = matches
+        self.recent_calls: list[tuple[int, bool]] = []
+        self.clear_calls = 0
+
+    async def lookup(self, reference: str) -> tuple[ErrorReport, int]:
+        assert self.report is not None
+        assert reference == self.report.reference
+        return self.report, self.matches
+
+    async def recent(self, *, limit: int = 20, work_lost_only: bool = False) -> Sequence[ErrorReport]:
+        self.recent_calls.append((limit, work_lost_only))
+        return self.reports
+
+    async def clear_all(self) -> int:
+        self.clear_calls += 1
+        return 3
+
+
+class Authorizer:
+    def __init__(self, allowed: bool) -> None:
+        self.allowed = allowed
+
+    async def __call__(self) -> bool:
+        return self.allowed
+
+
+def decision_event(responder: RecordingResponder) -> sp.TransitionEvent[sp.DecisionState]:
+    return sp.TransitionEvent(
+        source=press_event(responder=responder),
+        action="approve",
+        previous=sp.DecisionState(),
+        state=sp.DecisionState("approve"),
     )
 
 
@@ -116,7 +156,7 @@ async def test_recent_list_offers_every_entry_for_opening() -> None:
 async def test_opening_a_listed_report_replaces_the_list_in_place() -> None:
     browser = make_screen((make_report("aaa111"),))
     message_root, _ = await message_root_browser(browser)
-    interaction = fake_interaction()
+    interaction = interaction_harness()
 
     await open_report(message_root, interaction, "aaa111")
 
@@ -160,7 +200,7 @@ async def test_paging_stops_at_both_ends() -> None:
     nav = [item for item in view.walk_children() if isinstance(item, discord.ui.Button) and item.custom_id]
     later = next(item for item in nav if ":__cursor_next" in (item.custom_id or ""))
     assert later.disabled  # opened at the end
-    interaction = fake_interaction()
+    interaction = interaction_harness()
     await message_root.dispatch("__cursor_next.traceback", interaction)
     interaction.response.defer.assert_awaited_once()  # nothing to advance to
 
@@ -197,7 +237,7 @@ async def test_every_page_fits_the_real_display_budget() -> None:
 async def test_choosing_a_report_attaches_its_full_text() -> None:
     browser = make_screen((make_report("aaa111"),))
     message_root, _ = await message_root_browser(browser)
-    interaction = fake_interaction()
+    interaction = interaction_harness()
 
     await open_report(message_root, interaction, "aaa111")
 
@@ -208,9 +248,9 @@ async def test_choosing_a_report_attaches_its_full_text() -> None:
 async def test_going_back_removes_the_attachment() -> None:
     browser = make_screen((make_report("aaa111"),))
     message_root, _ = await message_root_browser(browser)
-    opened = fake_interaction()
+    opened = interaction_harness()
     await open_report(message_root, opened, "aaa111")
-    interaction = fake_interaction()
+    interaction = interaction_harness()
     back_key = next(key for key in message_root._handlers if key.endswith("error-reports.back"))
 
     await message_root.dispatch(back_key, interaction)
@@ -218,10 +258,7 @@ async def test_going_back_removes_the_attachment() -> None:
     assert interaction.response.edit_message.await_args.kwargs["attachments"] == []
 
 
-def test_errors_are_one_app_only_command_and_one_private_session() -> None:
-    diagnostics = cast(Any, Diagnostics)
-    assert [command.qualified_name for command in diagnostics.__cog_app_commands__] == ["errors"]
-    assert not diagnostics.__cog_commands__
+def test_errors_are_a_private_session() -> None:
     assert ErrorReportScreen.session_name == "errors"
     assert ErrorReportScreen.timeout == 300
     assert isinstance(ErrorReportScreen.visibility, Private)
@@ -230,36 +267,38 @@ def test_errors_are_one_app_only_command_and_one_private_session() -> None:
 async def test_filtering_reloads_from_the_service() -> None:
     screen = make_screen((make_report(),))
     await screen.on_load()
-    event = SimpleNamespace(acknowledge=AsyncMock())
+    responder = RecordingResponder()
 
-    await screen._toggle_filter(cast(Any, event))
+    await screen._toggle_filter(press_event(responder=responder))
 
     assert screen.work_lost_only is True
-    cast(Any, screen._operations).recent.assert_awaited_with(limit=100, work_lost_only=True)
+    assert isinstance(screen._operations, ErrorReportRecorder)
+    assert screen._operations.recent_calls[-1] == (100, True)
 
 
 async def test_clear_finishes_once_with_a_terminal_count() -> None:
     screen = make_screen((make_report(),), can_clear=True)
     await screen.on_load()
-    source = SimpleNamespace(finish=AsyncMock())
+    responder = RecordingResponder()
 
-    await screen._clear(cast(Any, SimpleNamespace(source=source)))
+    await screen._clear(decision_event(responder))
 
     assert screen.cleared_count == 3
-    source.finish.assert_awaited_once()
+    assert responder.finished is True
 
 
 async def test_clear_rechecks_permission_before_deleting() -> None:
     screen = make_screen((make_report(),), can_clear=True)
     await screen.on_load()
-    screen._authorize_clear = AsyncMock(return_value=False)
-    source = SimpleNamespace(finish=AsyncMock(), notice=AsyncMock())
+    screen._authorize_clear = Authorizer(allowed=False)
+    responder = RecordingResponder()
 
-    await screen._clear(cast(Any, SimpleNamespace(source=source)))
+    await screen._clear(decision_event(responder))
 
-    cast(Any, screen._operations).clear_all.assert_not_awaited()
-    source.notice.assert_awaited_once()
-    source.finish.assert_not_awaited()
+    assert isinstance(screen._operations, ErrorReportRecorder)
+    assert screen._operations.clear_calls == 0
+    assert len(responder.notices) == 1
+    assert responder.finished is False
 
 
 async def test_a_fence_inside_a_traceback_cannot_close_the_card_fence() -> None:

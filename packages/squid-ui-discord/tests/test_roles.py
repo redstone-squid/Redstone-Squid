@@ -1,7 +1,7 @@
 """Focused tests for persistent Discord role panels."""
 
 import asyncio
-from types import SimpleNamespace
+from dataclasses import dataclass, field
 from typing import Any, cast
 from unittest.mock import AsyncMock, Mock
 
@@ -17,7 +17,7 @@ from squid_ui_discord.roles import (
     RoleTransitionResult,
 )
 from squid_ui_discord.routing import Router
-from squid_ui_discord.testing import fake_interaction
+from squid_ui_discord.testing import AsyncCallRecorder, interaction_harness
 
 
 class FakeRole:
@@ -29,6 +29,39 @@ class FakeRole:
 
     def is_default(self) -> bool:
         return self._default
+
+
+@dataclass
+class Member:
+    roles: list[FakeRole]
+    edit: AsyncCallRecorder = field(default_factory=AsyncCallRecorder)
+
+
+@dataclass
+class GuildPermissions:
+    manage_roles: bool
+
+
+@dataclass
+class TopRole:
+    position: int
+
+
+@dataclass
+class BotMember:
+    guild_permissions: GuildPermissions
+    top_role: TopRole
+
+
+@dataclass
+class Guild:
+    id: int
+    me: BotMember
+    roles: dict[int, FakeRole]
+    fetch_member: AsyncCallRecorder
+
+    def get_role(self, role_id: int) -> FakeRole | None:
+        return self.roles.get(role_id)
 
 
 def panel_for(
@@ -64,22 +97,17 @@ def interaction_for(
     held: tuple[int, ...] = (),
     manage_roles: bool = True,
     top_position: int = 100,
-) -> tuple[discord.Interaction[Any], Any, AsyncMock, AsyncMock]:
+) -> tuple[discord.Interaction[Any], Member, AsyncCallRecorder, AsyncCallRecorder]:
     actor = Mock(spec=discord.Member)
     actor.id = 42
     member_roles = [roles[role_id] for role_id in held]
-    member = SimpleNamespace(roles=member_roles, edit=AsyncMock())
-    bot_member = SimpleNamespace(
-        guild_permissions=SimpleNamespace(manage_roles=manage_roles),
-        top_role=SimpleNamespace(position=top_position),
+    member = Member(roles=member_roles)
+    bot_member = BotMember(
+        guild_permissions=GuildPermissions(manage_roles=manage_roles),
+        top_role=TopRole(position=top_position),
     )
-    guild = SimpleNamespace(
-        id=7,
-        me=bot_member,
-        get_role=lambda role_id: roles.get(role_id),
-        fetch_member=AsyncMock(return_value=member),
-    )
-    interaction = cast(discord.Interaction[Any], fake_interaction())
+    guild = Guild(id=7, me=bot_member, roles=roles, fetch_member=AsyncCallRecorder(result=member))
+    interaction = cast(discord.Interaction[Any], interaction_harness())
     cast(Any, interaction).user = actor
     cast(Any, interaction).guild = guild
     return interaction, member, guild.fetch_member, member.edit

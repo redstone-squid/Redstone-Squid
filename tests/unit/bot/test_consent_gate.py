@@ -1,8 +1,7 @@
 """The Discord consent gate: ask first, then continue what was asked for."""
 
-from types import SimpleNamespace
+from dataclasses import dataclass
 from typing import Any, cast
-from unittest.mock import AsyncMock
 
 import anyio
 import discord
@@ -17,8 +16,16 @@ from squid.accounts.domain import CURRENT_CONSENT_VERSION, Account, AccountConse
 from squid.bot.consent import NOT_ASKED, ensure_consented_account, prompt_for_consent, request_consent
 from squid_ui_discord import Everyone, SessionKey, SessionManager
 from squid_ui_discord.sessions import Opened
-from squid_ui_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
-from tests.helpers.discord import make_layout_bot
+from squid_ui_discord.testing import (
+    ContextHarness,
+    InteractionHarness,
+    MessageHarness,
+    commit_render,
+    delivered_to,
+    interaction_harness,
+    message_harness,
+)
+from tests.support.discord import make_layout_bot
 
 AFTER_CUTOFF = Instant.from_utc(2026, 8, 5)
 USER_ID = 123
@@ -33,33 +40,47 @@ def discord_account(*, account_id: int = 7, consented: bool) -> Account:
     )
 
 
-def make_accounts(existing: Account | None) -> Any:
-    accounts = AsyncMock()
-    accounts.get_account_by_identity.return_value = existing
-    accounts.get_or_create_identity.return_value = discord_account(consented=True)
-    return accounts
+@dataclass(frozen=True)
+class IdentityCreation:
+    provider: IdentityProvider
+    subject: str
+    consent: AccountConsent | None
+
+
+class AccountRecorder(AccountService):
+    def __init__(self, existing: Account | None) -> None:
+        self.existing = existing
+        self.identity_reads: list[tuple[IdentityProvider, str]] = []
+        self.identity_creations: list[IdentityCreation] = []
+
+    async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
+        self.identity_reads.append((provider, subject))
+        return self.existing
+
+    async def get_or_create_identity(
+        self, provider: IdentityProvider, subject: str, *, consent: AccountConsent | None = None
+    ) -> Account:
+        self.identity_creations.append(IdentityCreation(provider, subject, consent))
+        return discord_account(consented=True)
+
+
+def make_accounts(existing: Account | None) -> AccountRecorder:
+    return AccountRecorder(existing)
 
 
 def make_context() -> Any:
     """A prefix/hybrid context; `send` is the only surface the gate uses."""
     return cast(
         commands.Context[Any],
-        SimpleNamespace(
-            author=SimpleNamespace(id=USER_ID),
-            interaction=None,
-            send=AsyncMock(return_value=fake_message(message_id=1)),
-            bot=make_layout_bot(),
-        ),
+        ContextHarness(message=MessageHarness(message_id=1), bot=make_layout_bot(), user_id=USER_ID).source,
     )
 
 
 def make_interaction(*, response_done: bool) -> Any:
-    return SimpleNamespace(
-        user=SimpleNamespace(id=USER_ID),
-        response=SimpleNamespace(is_done=lambda: response_done, send_message=AsyncMock()),
-        followup=SimpleNamespace(send=AsyncMock(return_value=fake_message(message_id=1))),
-        original_response=AsyncMock(return_value=fake_message(message_id=1)),
-    )
+    interaction = InteractionHarness(USER_ID, message_id=1)
+    interaction.response._done = response_done
+    interaction.followup.send.result = MessageHarness(message_id=1)
+    return interaction.source
 
 
 def answer(view_holder: list[Any], *, agree: bool) -> None:
@@ -75,9 +96,9 @@ async def test_an_already_consented_user_is_never_prompted() -> None:
     accounts = make_accounts(discord_account(consented=True))
     ctx = make_context()
 
-    assert await ensure_consented_account(ctx, cast(AccountService, accounts)) == 7
+    assert await ensure_consented_account(ctx, accounts) == 7
     ctx.send.assert_not_awaited()
-    accounts.get_or_create_identity.assert_not_awaited()
+    assert accounts.identity_creations == []
 
 
 async def test_declining_stores_nothing_at_all(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -90,9 +111,9 @@ async def test_declining_stores_nothing_at_all(monkeypatch: pytest.MonkeyPatch) 
     ctx = make_context()
     _stub_prompt(monkeypatch, agree=False)
 
-    assert await ensure_consented_account(ctx, cast(AccountService, accounts)) is None
-    accounts.get_or_create_identity.assert_not_awaited()
-    ctx.send.assert_awaited()  # The user is told, rather than left with a silent no-op.
+    assert await ensure_consented_account(ctx, accounts) is None
+    assert accounts.identity_creations == []
+    assert ctx.send.records  # The user is told, rather than left with a silent no-op.
 
 
 async def test_agreeing_mints_the_account_and_its_receipt_in_one_write(
@@ -104,12 +125,13 @@ async def test_agreeing_mints_the_account_and_its_receipt_in_one_write(
     ctx = make_context()
     _stub_prompt(monkeypatch, agree=True)
 
-    assert await ensure_consented_account(ctx, cast(AccountService, accounts)) == 7
+    assert await ensure_consented_account(ctx, accounts) == 7
 
-    accounts.get_or_create_identity.assert_awaited_once()
-    call = accounts.get_or_create_identity.await_args
-    assert call.args == (IdentityProvider.DISCORD, str(USER_ID))
-    assert call.kwargs["consent"].version == CURRENT_CONSENT_VERSION
+    assert len(accounts.identity_creations) == 1
+    creation = accounts.identity_creations[0]
+    assert (creation.provider, creation.subject) == (IdentityProvider.DISCORD, str(USER_ID))
+    assert creation.consent is not None
+    assert creation.consent.version == CURRENT_CONSENT_VERSION
 
 
 async def test_a_stale_receipt_is_asked_again(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -117,8 +139,8 @@ async def test_a_stale_receipt_is_asked_again(monkeypatch: pytest.MonkeyPatch) -
     ctx = make_context()
     _stub_prompt(monkeypatch, agree=True)
 
-    assert await ensure_consented_account(ctx, cast(AccountService, accounts)) == 7
-    accounts.get_or_create_identity.assert_awaited_once()
+    assert await ensure_consented_account(ctx, accounts) == 7
+    assert len(accounts.identity_creations) == 1
 
 
 @pytest.mark.parametrize("response_done", [False, True], ids=["fresh", "deferred"])
@@ -131,9 +153,7 @@ async def test_the_gate_works_from_an_interaction_in_either_response_state(
     interaction = make_interaction(response_done=response_done)
     _stub_prompt(monkeypatch, agree=True)
 
-    assert (
-        await ensure_consented_account(cast(discord.Interaction[Any], interaction), cast(AccountService, accounts)) == 7
-    )
+    assert await ensure_consented_account(cast(discord.Interaction[Any], interaction), accounts) == 7
 
 
 async def test_the_gate_stays_silent_when_the_user_was_never_asked(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -150,8 +170,8 @@ async def test_the_gate_stays_silent_when_the_user_was_never_asked(monkeypatch: 
 
     monkeypatch.setattr("squid.bot.consent.prompt_for_consent", prompt)
 
-    assert await ensure_consented_account(ctx, cast(AccountService, accounts)) is None
-    accounts.get_or_create_identity.assert_not_awaited()
+    assert await ensure_consented_account(ctx, accounts) is None
+    assert accounts.identity_creations == []
     ctx.send.assert_not_awaited()
 
 
@@ -194,7 +214,7 @@ async def test_a_closing_parent_ends_the_wait_instead_of_stranding_it() -> None:
     """
     ctx = make_context()
     parent = sd.MessageRoot(_Blank(), access=Everyone(), timeout=None)
-    parent_opened = await ctx.bot.sessions.open(parent, delivered_to(fake_message()))
+    parent_opened = await ctx.bot.sessions.open(parent, delivered_to(message_harness()))
     assert isinstance(parent_opened, Opened)
     outcomes: list[Any] = []
 
@@ -255,7 +275,7 @@ class _Gate(sl.Component):
 
 def _clicked(client: Any, *, message_id: int) -> Any:
     """An interaction whose client carries the host the prompt opens through."""
-    interaction = fake_interaction(USER_ID, message_id=message_id)
+    interaction = interaction_harness(USER_ID, message_id=message_id)
     interaction.client = client
     return interaction
 
@@ -279,7 +299,7 @@ async def test_asking_for_consent_from_a_handler_leaves_the_panel_free() -> None
     registry = bot.sessions
     panel = _Gate()
     message_root = sd.MessageRoot(panel, access=Everyone(), timeout=None)
-    assert isinstance(await registry.open(message_root, delivered_to(fake_message())), Opened)
+    assert isinstance(await registry.open(message_root, delivered_to(message_harness())), Opened)
     commit_render(message_root)
 
     # Bounded well under the prompt's 120 s: a press that still waited would hang here rather
@@ -300,7 +320,7 @@ async def test_the_prompt_carries_the_answer_back_to_the_panel() -> None:
     registry = bot.sessions
     panel = _Gate()
     message_root = sd.MessageRoot(panel, access=Everyone(), timeout=None)
-    assert isinstance(await registry.open(message_root, delivered_to(fake_message())), Opened)
+    assert isinstance(await registry.open(message_root, delivered_to(message_harness())), Opened)
     commit_render(message_root)
     await message_root.dispatch("ask", _clicked(bot, message_id=1))
 

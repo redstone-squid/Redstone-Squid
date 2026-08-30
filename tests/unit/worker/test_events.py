@@ -1,13 +1,78 @@
 """Worker event tests: the worker serves no request and knows no chat client."""
 
-from unittest.mock import AsyncMock
+from typing import cast
 
 from whenever import Instant
 
+from squid.builds.domain import Build
 from squid.events import DomainEvent, DomainEventDelivery, UnsupportedEventVersionError
 from squid.voting.domain import BuildVoteTarget, VoteSessionResult, VoteSessionSnapshot, VoteStatus
 from squid.worker.events import ApplyBuildVoteOutcomeHandler, CoreDomainEventRunner, MaterializeNotificationHandler
-from tests.helpers.voting import build_snapshot
+from tests.support.voting import build_snapshot
+from tests.unit.worker.fakes import StubBuildService, StubEventService, StubNotificationService, StubVoteService
+
+
+class VoteRecorder(StubVoteService):
+    def __init__(self, snapshot: VoteSessionSnapshot) -> None:
+        self.snapshot = snapshot
+        self.requested_ids: list[int] = []
+
+    async def get_session_by_id(self, vote_session_id: int) -> VoteSessionSnapshot:
+        self.requested_ids.append(vote_session_id)
+        return self.snapshot
+
+
+class BuildRecorder(StubBuildService):
+    def __init__(self) -> None:
+        self.confirmed: list[int] = []
+        self.denied: list[int] = []
+
+    async def confirm(self, build_id: int) -> Build:
+        self.confirmed.append(build_id)
+        return cast(Build, object())
+
+    async def deny(self, build_id: int) -> Build:
+        self.denied.append(build_id)
+        return cast(Build, object())
+
+
+class EventRecorder(StubEventService):
+    def __init__(self, *deliveries: DomainEventDelivery) -> None:
+        self.deliveries = deliveries
+        self.completed: list[DomainEventDelivery] = []
+        self.failed: list[tuple[DomainEventDelivery, Exception]] = []
+        self.rejected: list[tuple[DomainEventDelivery, Exception]] = []
+
+    async def claim(self, consumer: str, limit: int = 20) -> tuple[DomainEventDelivery, ...]:
+        return self.deliveries
+
+    async def complete(self, delivery: DomainEventDelivery) -> bool:
+        self.completed.append(delivery)
+        return True
+
+    async def fail(self, delivery: DomainEventDelivery, error: Exception) -> bool:
+        self.failed.append((delivery, error))
+        return False
+
+    async def reject(self, delivery: DomainEventDelivery, error: Exception) -> bool:
+        self.rejected.append((delivery, error))
+        return True
+
+
+class FailingHandler:
+    def __init__(self, error: Exception) -> None:
+        self.error = error
+
+    async def handle(self, event: DomainEvent) -> None:
+        raise self.error
+
+
+class NotificationRecorder(StubNotificationService):
+    def __init__(self) -> None:
+        self.materialized: list[DomainEvent] = []
+
+    async def materialize(self, event: DomainEvent) -> None:
+        self.materialized.append(event)
 
 
 def _event() -> DomainEvent:
@@ -34,61 +99,57 @@ def _snapshot(result: VoteSessionResult) -> VoteSessionSnapshot:
 
 
 async def test_apply_build_vote_outcome_names_no_chat_client() -> None:
-    votes = AsyncMock()
-    votes.get_session_by_id.return_value = _snapshot(VoteSessionResult.APPROVED)
-    builds = AsyncMock()
+    votes = VoteRecorder(_snapshot(VoteSessionResult.APPROVED))
+    builds = BuildRecorder()
     handler = ApplyBuildVoteOutcomeHandler(votes, builds)
 
     await handler.handle(_event())
 
-    builds.confirm.assert_awaited_once_with(42)
-    builds.deny.assert_not_awaited()
+    assert builds.confirmed == [42]
+    assert builds.denied == []
 
 
 async def test_core_runner_acknowledges_unhandled_events() -> None:
     delivery = DomainEventDelivery(event=_event(), consumer="core", attempts=0, claimed_at=Instant.now())
-    events = AsyncMock()
-    events.claim.return_value = (delivery,)
+    events = EventRecorder(delivery)
     runner = CoreDomainEventRunner(events, {})
 
     await runner.process_batch()
 
-    events.complete.assert_awaited_once_with(delivery)
-    events.fail.assert_not_awaited()
+    assert events.completed == [delivery]
+    assert events.failed == []
 
 
 async def test_core_runner_retries_handler_failure() -> None:
     delivery = DomainEventDelivery(event=_event(), consumer="core", attempts=0, claimed_at=Instant.now())
-    events = AsyncMock()
-    events.claim.return_value = (delivery,)
-    handler = AsyncMock()
-    handler.handle.side_effect = RuntimeError("boom")
+    events = EventRecorder(delivery)
+    handler = FailingHandler(RuntimeError("boom"))
     runner = CoreDomainEventRunner(events, {"vote_session.closed": (handler,)})
 
     await runner.process_batch()
 
-    events.fail.assert_awaited_once()
-    events.complete.assert_not_awaited()
+    assert len(events.failed) == 1
+    assert events.failed[0][0] == delivery
+    assert isinstance(events.failed[0][1], RuntimeError)
+    assert events.completed == []
 
 
 async def test_core_runner_rejects_unsupported_event_versions_without_retry() -> None:
     delivery = DomainEventDelivery(event=_event(), consumer="core", attempts=0, claimed_at=Instant.now())
-    events = AsyncMock()
-    events.claim.return_value = (delivery,)
-    handler = AsyncMock()
+    events = EventRecorder(delivery)
     error = UnsupportedEventVersionError("future")
-    handler.handle.side_effect = error
+    handler = FailingHandler(error)
     runner = CoreDomainEventRunner(events, {"vote_session.closed": (handler,)})
 
     await runner.process_batch()
 
-    events.reject.assert_awaited_once_with(delivery, error)
-    events.fail.assert_not_awaited()
-    events.complete.assert_not_awaited()
+    assert events.rejected == [(delivery, error)]
+    assert events.failed == []
+    assert events.completed == []
 
 
 async def test_notification_handler_accepts_current_account_keyed_build_event_versions() -> None:
-    notifications = AsyncMock()
+    notifications = NotificationRecorder()
     handler = MaterializeNotificationHandler(notifications)
 
     events = tuple(
@@ -109,5 +170,4 @@ async def test_notification_handler_accepts_current_account_keyed_build_event_ve
     for event in events:
         await handler.handle(event)
 
-    assert notifications.materialize.await_count == len(events)
-    assert [call.args for call in notifications.materialize.await_args_list] == [(event,) for event in events]
+    assert notifications.materialized == list(events)

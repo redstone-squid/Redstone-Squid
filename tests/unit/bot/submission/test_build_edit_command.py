@@ -1,62 +1,35 @@
 """Build edit command tests."""
 
-from datetime import UTC, datetime, timedelta
-from types import SimpleNamespace
+from collections.abc import Sequence
 from typing import Any, cast
-from unittest.mock import AsyncMock
 
 import discord
 
 import squid_ui as sl
+from squid.accounts.application import AccountService
 from squid.bot.submission.edit import BuildEditCommands
 from squid.bot.submission.ui.views import BuildEditScreen
-from squid.builds.domain import DoorBuild, OtherBuild, Status
+from squid.builds.application import BuildService
+from squid.builds.domain import DoorBuild, OtherBuild, RestrictionTypeLiteral, Status
+from squid.permissions.application import PermissionService
+from squid.permissions.domain import PermissionNode, Subject
+from squid.settings.application import SettingsService
 from squid.topics import resource_topic
-from tests.helpers.discord import make_layout_bot
-
-
-class _Response:
-    def __init__(self) -> None:
-        self.deferred = False
-
-    def is_done(self) -> bool:
-        return self.deferred
-
-    async def defer(self, **kwargs: Any) -> None:
-        self.deferred = True
-
-
-class _Followup:
-    def __init__(self) -> None:
-        self.sent: list[dict[str, Any]] = []
-
-    async def send(self, **kwargs: Any) -> Any:
-        self.sent.append(kwargs)
-        return AsyncMock(spec=discord.Message)
+from squid_ui_discord.testing import InteractionHarness
+from tests.support.discord import make_layout_bot
 
 
 def _interaction(client: Any, *, user_id: int = 7) -> discord.Interaction[Any]:
-    return cast(
-        discord.Interaction[Any],
-        cast(
-            Any,
-            SimpleNamespace(
-                client=client,
-                user=SimpleNamespace(id=user_id),
-                guild=None,
-                guild_id=None,
-                guild_locale=None,
-                locale="en-US",
-                response=_Response(),
-                followup=_Followup(),
-                expires_at=datetime.now(UTC) + timedelta(minutes=15),
-                is_expired=lambda: False,
-            ),
-        ),
-    )
+    interaction = InteractionHarness(user_id=user_id).source
+    interaction.client = client
+    interaction.guild = None
+    interaction.guild_id = None
+    interaction.guild_locale = None
+    interaction.locale = "en-US"
+    return cast(discord.Interaction[Any], interaction)
 
 
-class StubBuilds:
+class StubBuilds(BuildService):
     """The slice of BuildService the command touches."""
 
     def __init__(self, build: Any) -> None:
@@ -68,8 +41,8 @@ class StubBuilds:
         self.gets += 1
         return self._build
 
-    async def sort_restrictions(self, restrictions: list[str]) -> dict[str, list[str]]:
-        self.sorted.append(restrictions)
+    async def sort_restrictions(self, restrictions: Sequence[str]) -> dict[RestrictionTypeLiteral, list[str]]:
+        self.sorted.append(list(restrictions))
         return {
             "wiring-placement": [name for name in restrictions if name == "Seamless"],
             "animated": [],
@@ -78,23 +51,65 @@ class StubBuilds:
         }
 
 
+class SettingsRecorder(SettingsService):
+    def __init__(self) -> None:
+        pass
+
+    async def get_locale(self, server_id: int) -> str | None:
+        return None
+
+
+class AccountRecorder(AccountService):
+    def __init__(self) -> None:
+        pass
+
+
+class PermissionRecorder(PermissionService):
+    def __init__(self, allowed: bool) -> None:
+        self.allowed = allowed
+
+    async def allows(self, subject: Subject, node: PermissionNode | str) -> bool:
+        return self.allowed
+
+
+class AccountIdResolver:
+    def __init__(self, account_id: int | None) -> None:
+        self.account_id = account_id
+
+    async def resolve(self, accounts: AccountService, discord_id: int) -> int | None:
+        return self.account_id
+
+
+class OwnerCheck:
+    async def __call__(self, user: object) -> bool:
+        return False
+
+
+class BuildRenderer:
+    async def render_container(self) -> discord.ui.Container:
+        return discord.ui.Container(discord.ui.TextDisplay("card"))
+
+    async def render_node(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
+        return sl.paragraph("card")
+
+
+class Services:
+    def __init__(self, allowed: bool) -> None:
+        self.settings = SettingsRecorder()
+        self.accounts = AccountRecorder()
+        self.permissions = PermissionRecorder(allowed)
+
+
 def _cog(build: Any, *, allowed: bool = True, account_id: int | None = 1) -> BuildEditCommands[Any]:
     cog = BuildEditCommands.__new__(BuildEditCommands)
-    cog.builds = cast(Any, StubBuilds(build))
+    cog.builds = StubBuilds(build)
     cog.bot = cast(
         Any,
         make_layout_bot(
-            services=SimpleNamespace(
-                settings=SimpleNamespace(),
-                accounts=SimpleNamespace(),
-                permissions=SimpleNamespace(allows=AsyncMock(return_value=allowed)),
-            ),
-            account_ids=SimpleNamespace(resolve=AsyncMock(return_value=account_id)),
-            is_owner=AsyncMock(return_value=False),
-            for_build=lambda _build: SimpleNamespace(
-                render_container=AsyncMock(return_value=discord.ui.Container(discord.ui.TextDisplay("card"))),
-                render_node=AsyncMock(return_value=sl.paragraph("card")),
-            ),
+            services=Services(allowed),
+            account_ids=AccountIdResolver(account_id),
+            is_owner=OwnerCheck(),
+            for_build=lambda _build: BuildRenderer(),
         ),
     )
     return cog
@@ -107,7 +122,7 @@ async def _run(cog: BuildEditCommands[Any], **kwargs: Any) -> discord.Interactio
 
 
 def _sent_view(interaction: discord.Interaction[Any]) -> Any:
-    return cast(Any, interaction).followup.sent[-1]["view"]
+    return cast(Any, interaction).followup.send.await_args.kwargs["view"]
 
 
 def _component(view: Any) -> BuildEditScreen | None:

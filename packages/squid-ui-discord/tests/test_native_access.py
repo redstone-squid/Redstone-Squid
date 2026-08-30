@@ -11,7 +11,7 @@ from squid_ui.primitives import Button, Row
 from squid_ui.testing import text_component
 from squid_ui_discord import Everyone, MessageRoot, native, responder
 from squid_ui_discord.actions import ActionResponder
-from squid_ui_discord.testing import commit_render, fake_interaction
+from squid_ui_discord.testing import commit_render, interaction_harness
 
 
 class Portable:
@@ -40,7 +40,7 @@ class Portable:
 
 
 def test_native_returns_the_interaction_behind_a_discord_event() -> None:
-    interaction = fake_interaction(user_id=7)
+    interaction = interaction_harness(user_id=7)
     event = PressEvent(
         Actor("7"), ActionResponder(interaction, MessageRoot(text_component(), access=Everyone(), timeout=None))
     )
@@ -49,7 +49,7 @@ def test_native_returns_the_interaction_behind_a_discord_event() -> None:
 
 
 def test_responder_returns_the_adapter_holding_the_native_surfaces() -> None:
-    adapter = ActionResponder(fake_interaction(), MessageRoot(text_component(), access=Everyone(), timeout=None))
+    adapter = ActionResponder(interaction_harness(), MessageRoot(text_component(), access=Everyone(), timeout=None))
     event = PressEvent(Actor("7"), adapter)
 
     assert responder(event) is adapter
@@ -97,7 +97,7 @@ async def test_handlers_reach_the_dispatching_interaction_through_native() -> No
 
     message_root = MessageRoot(Inspect(), access=Everyone(), timeout=None)
     commit_render(message_root)
-    interaction = fake_interaction()
+    interaction = interaction_harness()
 
     await message_root.dispatch("inspect", interaction)
 

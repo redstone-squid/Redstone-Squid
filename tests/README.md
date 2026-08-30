@@ -48,11 +48,12 @@ Fuzz targets are pure, synchronous, in-process functions that accept untrusted t
 or an API request: parsers and codecs, not the handlers around them. Handlers themselves are async and do I/O, which
 breaks the fast, deterministic, coverage-guided loop fuzzing depends on.
 
-`tests/unit/api/test_openapi_fuzz.py` covers handlers instead, using
-[Schemathesis](https://schemathesis.readthedocs.io/) to generate requests from the API's own OpenAPI schema and run
-them against the real ASGI app in-process (routing, dependency injection, header/body coercion included). It only
-asserts the app never answers with a 5xx; it runs as part of `just test` alongside every other unit test. Add every
-new route to that schema as the API grows.
+API exploration is a maintained standalone campaign, not part of `just test`. `just fuzz-api-smoke`
+starts the disposable API stack and runs the pinned Schemathesis CLI with a bounded generated-example
+and wall-clock budget. `tests/unit/fuzz/` tests the launcher, safety policy, event classification, and
+applicability manifest deterministically; `tests/integration/fuzz/` tests the disposable stack lifecycle.
+The old in-process Schemathesis experiment was removed: it hung during collection and duplicated a
+less faithful transport topology without exercising the maintained campaign lifecycle.
 
 ## What to test
 
@@ -61,7 +62,8 @@ import SQLAlchemy, Advanced Alchemy, Discord, FastAPI, or Supabase.
 
 Application tests cover use-case decisions and orchestration. Their dependencies are narrow protocols expressed in
 domain terms. Use a small stateful fake when its state matters; use `Mock` or `AsyncMock` only for a narrow interaction
-boundary.
+boundary. When adapter code accepts a concrete application service, subclass that service in the test instead of
+adding a production protocol solely to make the test double easier to construct.
 
 Infrastructure tests cover behavior owned by Squid:
 

@@ -10,7 +10,7 @@ from enum import StrEnum
 from uuid import UUID
 
 from squid.core.errors import ConflictError, JSONValue, ValidationError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 
 _FIELD_ID = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _CLIENT_ID = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
@@ -64,10 +64,10 @@ class FieldOperation:
 
     def __post_init__(self) -> None:
         if _FIELD_ID.fullmatch(self.field_id) is None:
-            msg = _("invalid draft field ID: {field_id}")
-            raise ValidationError(msg, message_params={"field_id": self.field_id})
+            field_id = self.field_id
+            raise ValidationError(tr(t"invalid draft field ID: {field_id}"))
         if self.kind is FieldOperationKind.UNSET and self.value is not None:
-            msg = _("unset operations cannot carry a value")
+            msg = tr(t"unset operations cannot carry a value")
             raise ValidationError(msg)
         if self.kind is FieldOperationKind.SET:
             _require_json_budget(
@@ -88,27 +88,27 @@ class DraftChange:
 
     def __post_init__(self) -> None:
         if self.base_revision < 0:
-            msg = _("base_revision cannot be negative")
+            msg = tr(t"base_revision cannot be negative")
             raise ValidationError(msg)
         if _CLIENT_ID.fullmatch(self.client_instance_id) is None:
-            msg = _("client_instance_id has an invalid format")
+            msg = tr(t"client_instance_id has an invalid format")
             raise ValidationError(msg)
         if _IDEMPOTENCY_KEY.fullmatch(self.idempotency_key) is None:
-            msg = _("idempotency_key must be 8-255 visible ASCII characters")
+            msg = tr(t"idempotency_key must be 8-255 visible ASCII characters")
             raise ValidationError(msg)
         if not self.operations:
-            msg = _("draft changes require at least one operation")
+            msg = tr(t"draft changes require at least one operation")
             raise ValidationError(msg)
         if len(self.operations) > MAX_DRAFT_OPERATIONS:
-            msg = _("draft changes cannot exceed {limit} operations")
-            raise ValidationError(msg, message_params={"limit": MAX_DRAFT_OPERATIONS})
+            limit = MAX_DRAFT_OPERATIONS
+            raise ValidationError(tr(t"draft changes cannot exceed {limit} operations"))
         operation_ids = [operation.operation_id for operation in self.operations]
         if len(operation_ids) != len(set(operation_ids)):
-            msg = _("operation IDs must be unique within a draft change")
+            msg = tr(t"operation IDs must be unique within a draft change")
             raise ValidationError(msg)
         field_ids = [operation.field_id for operation in self.operations]
         if len(field_ids) != len(set(field_ids)):
-            msg = _("a draft change may mutate each field at most once")
+            msg = tr(t"a draft change may mutate each field at most once")
             raise ValidationError(msg)
 
 
@@ -127,10 +127,10 @@ class DraftSnapshot:
 
     def __post_init__(self) -> None:
         if self.owner_account_id < 1:
-            msg = _("owner_account_id must be positive")
+            msg = tr(t"owner_account_id must be positive")
             raise ValidationError(msg)
         if self.schema_revision < 1 or self.revision < 0:
-            msg = _("schema_revision must be positive and revision cannot be negative")
+            msg = tr(t"schema_revision must be positive and revision cannot be negative")
             raise ValidationError(msg)
         _require_json_budget(
             self.answers,
@@ -142,12 +142,11 @@ class DraftSnapshot:
     def apply(self, change: DraftChange) -> DraftSnapshot:
         """Apply an atomic edit or reject it when the client is stale."""
         if self.status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
-            msg = _("drafts in {status} state cannot be edited")
+            current_status = self.status.value
             raise ValidationError(
-                msg,
+                tr(t"drafts in {current_status} state cannot be edited"),
                 resource="submission_draft",
                 public_context={"status": self.status.value},
-                message_params={"status": self.status.value},
             )
         if change.base_revision != self.revision:
             raise DraftRevisionConflictError(expected=change.base_revision, actual=self.revision)
@@ -164,7 +163,7 @@ class DraftSnapshot:
                 max_depth=MAX_DRAFT_JSON_DEPTH + 1,
             )
         except TypeError, ValueError:
-            msg = _("The draft answers exceed the retained data limit.")
+            msg = tr(t"The draft answers exceed the retained data limit.")
             raise ValidationError(
                 msg,
                 resource="submission_draft",
@@ -184,11 +183,11 @@ class DraftSnapshot:
             DraftStatus.EXPIRED: frozenset(),
         }
         if status not in allowed[self.status]:
-            msg = _("draft cannot transition from {current} to {next}")
+            current = self.status.value
+            next_status = status.value
             raise ValidationError(
-                msg,
+                tr(t"draft cannot transition from {current} to {next_status}"),
                 resource="submission_draft",
-                message_params={"current": self.status.value, "next": status.value},
             )
         return replace(self, status=status)
 
@@ -202,10 +201,10 @@ def _require_json_budget(value: object, *, max_bytes: int, max_depth: int) -> No
         item, depth = stack.pop()
         nodes += 1
         if nodes > MAX_DRAFT_JSON_NODES:
-            msg = _("draft JSON values contain too many nodes")
+            msg = tr(t"draft JSON values contain too many nodes")
             raise ValidationError(msg)
         if depth > max_depth:
-            msg = _("draft JSON values are nested too deeply")
+            msg = tr(t"draft JSON values are nested too deeply")
             raise ValidationError(msg)
         if item is None or isinstance(item, bool):
             estimated_bytes += 5
@@ -213,12 +212,12 @@ def _require_json_budget(value: object, *, max_bytes: int, max_depth: int) -> No
             estimated_bytes += len(item.encode("utf-8")) + 2
         elif isinstance(item, int):
             if item.bit_length() > 256:
-                msg = _("draft JSON integers are too large")
+                msg = tr(t"draft JSON integers are too large")
                 raise ValidationError(msg)
             estimated_bytes += 80
         elif isinstance(item, float):
             if not math.isfinite(item):
-                msg = _("draft JSON numbers must be finite")
+                msg = tr(t"draft JSON numbers must be finite")
                 raise ValidationError(msg)
             estimated_bytes += 32
         elif isinstance(item, Mapping):
@@ -226,7 +225,7 @@ def _require_json_budget(value: object, *, max_bytes: int, max_depth: int) -> No
             estimated_bytes += 2 + len(item)
             for key, nested in item.items():
                 if not isinstance(key, str):
-                    msg = _("draft JSON object keys must be strings")
+                    msg = tr(t"draft JSON object keys must be strings")
                     raise ValidationError(msg)
                 estimated_bytes += len(key.encode("utf-8")) + 3
                 stack.append((nested, depth + 1))
@@ -235,24 +234,24 @@ def _require_json_budget(value: object, *, max_bytes: int, max_depth: int) -> No
             estimated_bytes += 2 + len(item)
             stack.extend((nested, depth + 1) for nested in item)
         else:
-            msg = _("draft values must be JSON-compatible")
+            msg = tr(t"draft values must be JSON-compatible")
             raise ValidationError(msg)
         if estimated_bytes > max_bytes:
-            msg = _("draft JSON values exceed the retained byte limit")
+            msg = tr(t"draft JSON values exceed the retained byte limit")
             raise ValidationError(msg)
     try:
         encoded = json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode()
     except (TypeError, ValueError, RecursionError) as error:
-        msg = _("draft values must be JSON-compatible")
+        msg = tr(t"draft values must be JSON-compatible")
         raise ValidationError(msg) from error
     if len(encoded) > max_bytes:
-        msg = _("draft JSON values exceed the retained byte limit")
+        msg = tr(t"draft JSON values exceed the retained byte limit")
         raise ValidationError(msg)
 
 
 def _require_new_container(value: object, seen: set[int]) -> None:
     identity = id(value)
     if identity in seen:
-        msg = _("draft JSON values cannot contain cycles or shared containers")
+        msg = tr(t"draft JSON values cannot contain cycles or shared containers")
         raise ValidationError(msg)
     seen.add(identity)

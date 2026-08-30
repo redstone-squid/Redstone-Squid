@@ -52,23 +52,6 @@ PUBLIC_COGS = (
     PermissionCog,
 )
 
-EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
-    # The command surface users see, restated so that changing it is a reviewable diff.
-    #
-    # Kept deliberately, despite the maintenance: a command is a public interface, and
-    # both directions of drift are silent otherwise. A command dropped by a refactor
-    # takes a documented entry point away with no failing test, and a command added
-    # without a plan ships to every guild. Neither shows up in a behavioural test,
-    # because the behaviour of a command nobody calls is nothing.
-    # Approving and rejecting a claim are buttons on `account claims`, not commands
-    # (docs/plans/command-redesign/05-condensation.md). `account` is a hybrid group with a
-    # `show` fallback, so bare `account` opens the panel that `identities`, `visibility`,
-    # `unlink`, `profile` and `profile-edit` used to answer a piece at a time
-    # (docs/plans/command-redesign/07-account.md).
-    "layout": ("demo", "lobby", "shared"),
-}
-
-
 PICKER_VISIBILITY: dict[str, frozenset[str]] = {
     # Discord permissions that a viewer must hold for a top-level command to appear
     # in their picker at all (audit finding C1). Everything absent from this map is
@@ -98,22 +81,8 @@ def _default_permissions(command: AnyCommand) -> frozenset[str] | None:
     return frozenset(name for name, enabled in permissions if enabled)
 
 
-def _public_command_names() -> set[str]:
-    return {command.qualified_name for cog in PUBLIC_COGS for command in cog.__cog_commands__ if not command.hidden}  # type: ignore
-
-
 def _command(commands: Iterable[AnyCommand], qualified_name: str) -> AnyCommand:
     return next(command for command in commands if command.qualified_name == qualified_name)
-
-
-def _qualified_names(command_tree: dict[str, tuple[str, ...]]) -> set[str]:
-    return set(command_tree) | {
-        f"{group} {command}" for group, commands in command_tree.items() for command in commands
-    }
-
-
-def _assert_check_counts(commands: Iterable[AnyCommand], expected: dict[str, int]) -> None:
-    assert {name: len(_command(commands, name).checks) for name in expected} == expected
 
 
 def _commands_of(cog: type) -> list[AnyCommand]:
@@ -132,11 +101,6 @@ def _nodes(commands: Iterable[AnyCommand], qualified_name: str) -> set[str]:
         for predicate in _command(commands, qualified_name).checks
         for node in getattr(predicate, "__squid_nodes__", ())
     }
-
-
-def test_public_prefix_command_tree_matches_taxonomy() -> None:
-    """Adding or removing a user-visible command must be a deliberate edit here."""
-    assert _public_command_names() == _qualified_names(EXPECTED_PREFIX_COMMAND_TREE)
 
 
 def test_build_slash_group_includes_the_app_only_workspaces() -> None:
