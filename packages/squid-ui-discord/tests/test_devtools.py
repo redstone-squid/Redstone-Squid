@@ -2,7 +2,7 @@
 
 import json
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import discord

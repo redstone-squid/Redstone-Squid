@@ -3,16 +3,17 @@
 from collections.abc import Hashable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Literal, Unpack, cast
+from typing import Any, Unpack, cast
 
 import discord
 
 from squid_ui import ComponentsV2Target, LayoutNode, paragraph
 from squid_ui.runtime.component import Component
-from squid_ui.text import Localization, TextLike
+from squid_ui.text import Localization
 from squid_ui_discord._invocation_context import current_cell
 from squid_ui_discord._invocation_context import invocation_scope as _invocation_scope
 from squid_ui_discord.access import AccessPolicy
+from squid_ui_discord.audience import Private, Visibility
 from squid_ui_discord.delivery import (
     DeliveryAbandoned,
     DeliveryResult,
@@ -29,16 +30,6 @@ from squid_ui_discord.rendering import render_static
 from squid_ui_discord.runtime import ClientRuntime, InvocationSource
 from squid_ui_discord.session_specs import OpenContext, SessionOptions, SessionSpec
 from squid_ui_discord.sessions import OpenResult, Rejected
-
-
-@dataclass(frozen=True, slots=True)
-class Private:
-    """Deliver where a guild channel can never see the payload."""
-
-    reason: TextLike
-
-
-type Visibility = Literal["public", "personal"] | Private
 
 
 def _is_interaction(source: InvocationSource) -> bool:
