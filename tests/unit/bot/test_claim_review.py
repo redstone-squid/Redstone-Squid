@@ -67,7 +67,7 @@ def test_the_queue_names_claimants_in_a_semantic_render() -> None:
     component = make_component((make_claim(7),)).component
 
     bot = make_layout_bot()
-    payload = commit_render(bot.client_runtime.mount(component, access=sd.Owner(7), timeout=300)).to_components()
+    payload = commit_render(bot.ui.mount(component, access=sd.Owner(7), timeout=300)).to_components()
 
     assert "Claim #7" in str(payload)
     assert "Notch" in str(payload)

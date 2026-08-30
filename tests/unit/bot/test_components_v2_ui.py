@@ -124,7 +124,8 @@ async def test_build_editor_uses_semantic_state_and_forms(display_build: Build) 
 
 
 def test_build_editor_declares_keyed_topic_following_policy() -> None:
-    assert BuildEditScreen.session_name == "build-edit"
+    assert BuildEditScreen.session is not None
+    assert BuildEditScreen.session.name == "build-edit"
     assert BuildEditScreen.timeout == 900
     assert BuildEditScreen.follow_topics is True
 
@@ -173,7 +174,7 @@ def test_search_results_use_named_selection_and_direct_build_action() -> None:
     view = SearchScreen(SearchRecorder(), SearchRequest("door"), page)
 
     bot = make_layout_bot()
-    message_root = bot.client_runtime.mount(view, access=sd.Owner(123), timeout=180)
+    message_root = bot.ui.mount(view, access=sd.Owner(123), timeout=180)
     rendered = commit_render(message_root)
     result_buttons = [
         child
@@ -197,7 +198,7 @@ def test_search_results_preserve_page_warnings_without_refetching_the_initial_pa
     view = SearchScreen(service, SearchRequest("door"), page)
 
     bot = make_layout_bot()
-    payload = commit_render(bot.client_runtime.mount(view, access=sd.Owner(123), timeout=180)).to_components()
+    payload = commit_render(bot.ui.mount(view, access=sd.Owner(123), timeout=180)).to_components()
 
     assert service.calls == []
     assert "Semantic fallback used" in str(payload)
@@ -208,7 +209,7 @@ async def test_search_timeout_disables_bound_controls() -> None:
     page = SearchPage((BuildSearchHit("8", "Fast door", "confirmed"),), total=1, next=None, prev=None)
     view = SearchScreen(SearchRecorder(), SearchRequest("door"), page)
     bot = make_layout_bot()
-    message_root = bot.client_runtime.mount(view, access=sd.Owner(123), timeout=180)
+    message_root = bot.ui.mount(view, access=sd.Owner(123), timeout=180)
     message = message_harness()
     await message_root.send(delivered_to(message))
 

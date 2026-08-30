@@ -28,16 +28,17 @@ from squid.permissions.domain.catalogue import (
     TAG_PROPOSAL_REJECT,
 )
 from squid_ui.document import DocumentLike
+from squid_ui_discord.ext import Cog
 
 if TYPE_CHECKING:
     import squid.bot.app
 
 
-class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
+class Admin[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
     """Cog for admin commands."""
 
     def __init__(self, bot: BotT):
-        self.bot = bot
+        super().__init__(bot)
         self.tags = bot.services.tags
         self.restrictions = bot.services.restrictions
         self._archive_header_pattern = re.compile(r"^<@!?(\d+)>.*wrote:")
@@ -50,7 +51,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         self.bot.tree.add_command(self.archive_ctx_menu)
 
     @override
-    async def cog_unload(self) -> None:
+    async def ui_unload(self) -> None:
         self.bot.reactions.unsubscribe(self)
         self.bot.tree.remove_command(self.archive_ctx_menu.name, type=self.archive_ctx_menu.type)
 
@@ -82,14 +83,17 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         account_id = (
             account.id if account is not None and account.id is not None and not account.needs_consent_refresh else None
         )
-        await TagsScreen(
-            self.tags,
-            self.restrictions,
-            build_id=build_id,
-            actor_account_id=account_id,
-            capabilities=capabilities,
-            authorize=authorize,
-        ).show(interaction)
+        await self.ui.respond(
+            interaction,
+            TagsScreen(
+                self.tags,
+                self.restrictions,
+                build_id=build_id,
+                actor_account_id=account_id,
+                capabilities=capabilities,
+                authorize=authorize,
+            ),
+        )
 
     async def archive_message_context(
         self,

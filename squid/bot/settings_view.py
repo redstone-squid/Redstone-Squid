@@ -76,8 +76,7 @@ type SettingsAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 class SettingsPanel(sd.Screen):
     """A semantic, mount-owned settings workspace."""
 
-    session_name = "settings"
-    scope = sd.ScopeKind.USER_GUILD
+    session = sd.SessionSpec("settings", scope=sd.ScopeKind.USER_GUILD)
     timeout = SESSION_SECONDS
 
     history: sl.runtime.History = sl.runtime.history(limit=10)

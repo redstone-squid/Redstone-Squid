@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, override
 
 import discord
 from discord import app_commands
-from discord.ext import commands
 from whenever import Instant
 
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
@@ -28,6 +27,7 @@ from squid.permissions.domain.catalogue import (
 from squid.posts.domain import starboard_entry_key
 from squid.reactions.domain import ReactionActor
 from squid.starboard.domain import OriginMessage, StarboardConfig
+from squid_ui_discord.ext import Cog
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -49,17 +49,17 @@ able to reach the group that contains it.
 """
 
 
-class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
+class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
     """Mirror messages after their weighted reactions cross configured thresholds."""
 
     def __init__(self, bot: BotT) -> None:
-        self.bot = bot
+        super().__init__(bot)
         self.service = bot.services.starboards
         self._debouncer = EntryDebouncer(self._refresh_key, bot.background_tasks)
         self.bot.reactions.subscribe(self)
 
     @override
-    async def cog_unload(self) -> None:
+    async def ui_unload(self) -> None:
         self.bot.reactions.unsubscribe(self)
         await self._debouncer.close()
 
@@ -96,17 +96,17 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     async def on_reaction_clear_emoji(self, event: ReactionClearEvent) -> None:
         self._schedule(await self.service.clear_votes(event.payload.message_id, event.emoji))
 
-    @commands.Cog.listener()
+    @Cog.listener()
     async def on_raw_message_edit(self, payload: discord.RawMessageUpdateEvent) -> None:
         self._schedule(await self.service.refresh(payload.message_id, force=True), force=True)
 
-    @commands.Cog.listener()
+    @Cog.listener()
     async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent) -> None:
         # A deleted *post* is tombstoned by the shared message listener and repaired by
         # the reconciler, so only the origin's disappearance is starboard business.
         self._schedule(await self.service.mark_origin_deleted(payload.message_id), force=True)
 
-    @commands.Cog.listener()
+    @Cog.listener()
     async def on_guild_channel_delete(self, channel: discord.abc.GuildChannel) -> None:
         await self.service.disable_channel(channel.id)
 
@@ -170,13 +170,16 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
                 raise ValidationError(tr(t"I need View Channel, Send Messages, and Read Message History there."))
             return await self.service.create_starboard(guild.id, channel.id, name, required=required)
 
-        await StarboardScreen(
-            self.service,
-            guild_id=guild.id,
-            capabilities=frozenset(granted),
-            authorize=authorize,
-            create_board=create_board,
-        ).show(interaction)
+        await self.ui.respond(
+            interaction,
+            StarboardScreen(
+                self.service,
+                guild_id=guild.id,
+                capabilities=frozenset(granted),
+                authorize=authorize,
+                create_board=create_board,
+            ),
+        )
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:

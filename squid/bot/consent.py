@@ -62,9 +62,11 @@ class _Answer:
 class ConsentPrompt(sd.Screen):
     """A semantic consent prompt with a native-free waiting lifecycle."""
 
-    session_name = "consent"
-    admission = AdmissionSpec(
-        collision=Reject(notice=tr(t"You already have a consent prompt open. Please answer that one."))
+    session = sd.SessionSpec(
+        "consent",
+        admission=AdmissionSpec(
+            collision=Reject(notice=tr(t"You already have a consent prompt open. Please answer that one."))
+        ),
     )
     timeout = 120
 
@@ -157,10 +159,15 @@ def _is_context(target: ConsentTarget) -> bool:
     return callable(getattr(target, "send", None))
 
 
+def _ui(target: ConsentTarget) -> sd.DiscordUI[Any]:
+    """Return the bot-owned facade installed for this command surface."""
+    runtime = sd.DiscordUIRuntime.of(target)
+    return runtime.scope(runtime.client)
+
+
 async def _send(target: ConsentTarget, node: sl.LayoutNode[sl.ComponentsV2Target]) -> None:
     """Send a plain node where the prompt itself would have gone."""
-    invocation = await sd.Invocation.of(target)
-    await invocation.reply(node, visibility="personal")
+    await _ui(target).respond(target, node, audience="personal")
 
 
 def _user_of(target: ConsentTarget) -> discord.User | discord.Member:
@@ -197,7 +204,7 @@ async def _show_prompt(
     """The notice this reader is owed, worded for what agreeing would actually store."""
     version = CURRENT_CONSENT_VERSION
     if preview is None:
-        return await ConsentPrompt(
+        prompt = ConsentPrompt(
             user_id=user_id,
             title=tr(t"Before Redstone Squid stores anything about you"),
             summary=tr(
@@ -217,35 +224,38 @@ async def _show_prompt(
             accept_label=tr(t"Agree"),
             wait_timeout=timeout,
             on_answer=on_answer,
-        ).show(target, parent=parent, wait=True)
-    username = preview.username
-    uuid = preview.java_uuid
-    return await ConsentPrompt(
-        user_id=user_id,
-        title=tr(t"Link {username} to your Discord account"),
-        summary=tr(
-            t"Agreeing stores your Discord user ID, your Minecraft UUID and your current "
-            t"Minecraft username, and records this consent. Cancelling stores nothing."
-        ),
-        fields=(
-            CardField(
-                tr(t"Minecraft account"),
-                tr(t"**{username}**\n`{uuid}`"),
+        )
+    else:
+        username = preview.username
+        uuid = preview.java_uuid
+        prompt = ConsentPrompt(
+            user_id=user_id,
+            title=tr(t"Link {username} to your Discord account"),
+            summary=tr(
+                t"Agreeing stores your Discord user ID, your Minecraft UUID and your current "
+                t"Minecraft username, and records this consent. Cancelling stores nothing."
             ),
-            CardField(
-                tr(t"Discord account"),
-                tr(t"<@{user_id}> (`{user_id}`)"),
+            fields=(
+                CardField(
+                    tr(t"Minecraft account"),
+                    tr(t"**{username}**\n`{uuid}`"),
+                ),
+                CardField(
+                    tr(t"Discord account"),
+                    tr(t"<@{user_id}> (`{user_id}`)"),
+                ),
+                CardField(tr(t"Build credit"), _link_credit_value(preview)),
+                CardField(
+                    tr(t"Consent recorded"),
+                    tr(t"Notice {version}, timed at the moment you agree."),
+                ),
             ),
-            CardField(tr(t"Build credit"), _link_credit_value(preview)),
-            CardField(
-                tr(t"Consent recorded"),
-                tr(t"Notice {version}, timed at the moment you agree."),
-            ),
-        ),
-        accept_label=tr(t"Agree and link"),
-        wait_timeout=timeout,
-        on_answer=on_answer,
-    ).show(target, parent=parent, wait=True)
+            accept_label=tr(t"Agree and link"),
+            wait_timeout=timeout,
+            on_answer=on_answer,
+        )
+    outcome = await _ui(target).respond(target, prompt, parent=parent)
+    return prompt if isinstance(outcome, sd.Presented) else None
 
 
 async def prompt_for_consent(

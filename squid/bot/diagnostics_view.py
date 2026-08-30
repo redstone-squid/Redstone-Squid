@@ -49,9 +49,9 @@ ERROR_CHROME = dataclasses.replace(
 class ErrorReportScreen(sd.Screen):
     """An error browser that ends when closed, cleared, replaced, or timed out."""
 
-    session_name = "errors"
+    session = sd.SessionSpec("errors")
     timeout = SESSION_SECONDS
-    visibility = sd.Private(tr(t"An error report names internal paths, so it is never posted in a channel."))
+    audience = sd.Private(tr(t"An error report names internal paths, so it is never posted in a channel."))
     root_options = {"chrome": ERROR_CHROME}
 
     work_lost_only: bool = sl.state(default=False)

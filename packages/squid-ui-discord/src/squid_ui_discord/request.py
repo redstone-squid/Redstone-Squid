@@ -1,6 +1,6 @@
 """Owner-typed normalized request used by the Discord facade."""
 
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Hashable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, Unpack, cast, overload
 
@@ -23,6 +23,7 @@ from squid_ui_discord.delivery import (
     send_to,
 )
 from squid_ui_discord.message_payload import MessagePayload
+from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.modal import ModalSpec, build_form_modal, build_modal
 from squid_ui_discord.response import UNSET, Response, ResponseOverrides, ResponseResult, ResponseSpec
 
@@ -238,6 +239,8 @@ class DiscordRequest[OwnerT, SourceT: ResponseSource = ResponseSource]:
         *,
         spec: ResponseSpec | None = None,
         files: Sequence[discord.File] = (),
+        parent: MessageRoot | None = None,
+        session_key: Hashable | None = None,
         **overrides: Unpack[ResponseOverrides],
     ) -> ResponseResult[ComponentT]: ...
 
@@ -248,6 +251,8 @@ class DiscordRequest[OwnerT, SourceT: ResponseSource = ResponseSource]:
         *,
         spec: ResponseSpec | None = None,
         files: Sequence[discord.File] = (),
+        parent: MessageRoot | None = None,
+        session_key: Hashable | None = None,
         **overrides: Unpack[ResponseOverrides],
     ) -> ResponseResult: ...
 
@@ -257,6 +262,8 @@ class DiscordRequest[OwnerT, SourceT: ResponseSource = ResponseSource]:
         *,
         spec: ResponseSpec | None = None,
         files: Sequence[discord.File] = (),
+        parent: MessageRoot | None = None,
+        session_key: Hashable | None = None,
         **overrides: Unpack[ResponseOverrides],
     ) -> ResponseResult:
         """Respond safely, completing a managed defer before creating follow-ups."""
@@ -265,7 +272,11 @@ class DiscordRequest[OwnerT, SourceT: ResponseSource = ResponseSource]:
             raise RuntimeError(message)
         policy_content = content.content if isinstance(content, Response) else content
         if hasattr(type(policy_content), "__response_spec__"):
+            if policy_content.__dict__.get("_screen_presented", False):
+                message = f"{type(policy_content).__name__} has already been presented"
+                raise RuntimeError(message)
             object.__setattr__(policy_content, "_screen_opening", self)
+            object.__setattr__(policy_content, "_screen_presented", True)
         explicit = self._explicit_audience(content, spec, overrides)
         if self._deferred is not None:
             compatible = explicit in (None, "personal") or isinstance(explicit, Private)
@@ -290,6 +301,8 @@ class DiscordRequest[OwnerT, SourceT: ResponseSource = ResponseSource]:
             overrides=overrides,
             files=files,
             complete_deferred=complete_deferred,
+            parent=parent,
+            session_key=session_key,
         )
         self._responses += 1
         return result

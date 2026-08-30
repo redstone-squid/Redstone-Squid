@@ -105,7 +105,7 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
             )
             return
 
-        await show_build_editor(interaction, screen)
+        await show_build_editor(interaction, screen, self.ui)
 
     async def edit_context_menu(self, interaction: discord.Interaction[BotT], message: discord.Message) -> None:
         """A context menu command to edit a build."""
@@ -127,4 +127,4 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
         if build is None:
             await invocation.reply(text_node(tr("This does not look like a build.")), visibility="personal")
             return
-        await open_build_editor(interaction, build)
+        await open_build_editor(interaction, build, self.ui)

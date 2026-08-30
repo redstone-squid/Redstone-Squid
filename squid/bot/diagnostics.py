@@ -4,21 +4,21 @@ from typing import TYPE_CHECKING
 
 import discord
 from discord import app_commands
-from discord.ext import commands
 
 from squid.bot.diagnostics_view import ErrorReportScreen
 from squid.bot.utils.permissions import allows, enforce, hide_unless
 from squid.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR, DIAGNOSTICS_ERROR_READ
+from squid_ui_discord.ext import Cog
 
 if TYPE_CHECKING:
     import squid.bot.app
 
 
-class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
+class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
     """Read stored error reports."""
 
     def __init__(self, bot: BotT):
-        self.bot = bot
+        super().__init__(bot)
         self.error_reports = bot.services.error_reports
 
     @app_commands.command(name="errors")
@@ -31,12 +31,15 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         async def may_clear() -> bool:
             return await allows(interaction, DIAGNOSTICS_ERROR_CLEAR)
 
-        await ErrorReportScreen(
-            self.error_reports,
-            reference=reference,
-            can_clear=await may_clear(),
-            authorize_clear=may_clear,
-        ).show(interaction)
+        await self.ui.respond(
+            interaction,
+            ErrorReportScreen(
+                self.error_reports,
+                reference=reference,
+                can_clear=await may_clear(),
+                authorize_clear=may_clear,
+            ),
+        )
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:

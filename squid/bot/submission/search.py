@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, override
 import discord
 from discord import app_commands
 from discord.ext import commands
-from discord.ext.commands import Cog, Context, when_mentioned
+from discord.ext.commands import Context, when_mentioned
 
 from squid.bot.submission.build_browse import BuildBrowseScreen, BuildCapabilities
 from squid.bot.submission.consent_banner import BuildLogConsentStickyMessage
@@ -31,6 +31,7 @@ from squid.permissions.domain.catalogue import (
     BUILD_SUBMISSION_VIEW_PENDING,
 )
 from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
+from squid_ui_discord.ext import Cog
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -102,7 +103,7 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](
     """Own app-only search, build browsing, and build submission."""
 
     def __init__(self, bot: BotT):
-        self.bot = bot
+        super().__init__(bot)
         self.queries = bot.services.build_queries
         self.search = bot.services.search
         self.builds = bot.services.builds
@@ -113,7 +114,7 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](
         self.register_recalc_context_menu()
 
     @override
-    async def cog_unload(self) -> None:
+    async def ui_unload(self) -> None:
         for menu in (self.edit_ctx_menu, self.recalc_ctx_menu):
             self.bot.tree.remove_command(menu.name, type=menu.type)
 
@@ -155,13 +156,16 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](
             sort=SearchSort.parse(sort),
         )
         page = await self.search.search(request)
-        await SearchScreen(
-            self.search,
-            request,
-            page,
-            load_build=self.queries.get,
-            render_build=lambda build: self.bot.for_build(build).render_node(),
-        ).show(source)
+        await self.ui.respond(
+            source,
+            SearchScreen(
+                self.search,
+                request,
+                page,
+                load_build=self.queries.get,
+                render_build=lambda build: self.bot.for_build(build).render_node(),
+            ),
+        )
 
     @autocompletes(build_id="builds")
     @BuildCommandGroup.build_group.command(name="browse")
@@ -191,17 +195,20 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](
         async def refresh_posts(build_id: int) -> None:
             await self.bot.refresh_posts("build", str(build_id))
 
-        await BuildBrowseScreen(
-            self.queries,
-            self.builds,
-            self.bot.services.schematics,
-            initial_id=build_id,
-            render_build=lambda build: self.bot.for_build(build).render_node(),
-            capabilities=capabilities,
-            actor_account_id=subject.account_id,
-            authorize=authorize,
-            refresh_posts=refresh_posts,
-        ).show(interaction)
+        await self.ui.respond(
+            interaction,
+            BuildBrowseScreen(
+                self.queries,
+                self.builds,
+                self.bot.services.schematics,
+                initial_id=build_id,
+                render_build=lambda build: self.bot.for_build(build).render_node(),
+                capabilities=capabilities,
+                actor_account_id=subject.account_id,
+                authorize=authorize,
+                refresh_posts=refresh_posts,
+            ),
+        )
 
     @Cog.listener("on_command_error")
     async def mention_fallback_search(self, ctx: Context[BotT], exception: commands.CommandError, /) -> None:  # type: ignore[override]
