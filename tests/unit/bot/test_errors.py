@@ -185,6 +185,7 @@ async def test_application_command_binds_one_correlation_id_for_the_whole_invoca
 
 async def test_application_command_establishes_localization_scope(mocker: MockerFixture) -> None:
     client = discord.Client(intents=discord.Intents.none())
+
     async def localize(_source: object) -> Localization:
         return Localization(locale="en-GB")
 
