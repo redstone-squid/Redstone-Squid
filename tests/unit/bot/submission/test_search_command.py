@@ -6,6 +6,8 @@ from typing import Any, cast
 import pytest
 from discord.ext import commands
 
+import squid_ui_discord as sd
+
 from squid.bot.submission.search import SearchCog, SearchTarget
 from squid.builds.application import BuildQueryService
 from squid.builds.domain import Build
@@ -69,7 +71,9 @@ def _context() -> commands.Context[Any]:
 
 
 async def _run(cog: SearchCog[Any], **kwargs: Any) -> None:
-    await cog._show_search(_context(), **kwargs)
+    context = _context()
+    cog.ui = sd.DiscordUIRuntime.of(context).scope(cog)
+    await cog._show_search(context, **kwargs)
 
 
 async def test_a_descending_sort_suggestion_survives_the_trip() -> None:

@@ -121,7 +121,8 @@ async def test_starboard_screen_uses_user_guild_tabs_and_browser() -> None:
     )
     await screen.on_load()
 
-    assert screen.scope is sd.ScopeKind.USER_GUILD
+    assert screen.session is not None
+    assert screen.session.scope is sd.ScopeKind.USER_GUILD
     assert screen._browser is not None
     assert screen._tabs is not None
     assert {"Boards", "Create", "Settings", "Emojis", "Role weights"} <= set(labels(screen._tabs.render()))

@@ -28,12 +28,13 @@ CONSENT_BUTTON_CUSTOM_ID = build_log_consent.id()
 @build_log_consents.route(build_log_consent)
 async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
     """Open the ephemeral consent prompt behind the public banner button."""
-    invocation = await sd.Invocation.of(interaction)
+    ui = interaction.client.app_ui
     accounts = interaction.client.services.accounts
 
     account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(interaction.user.id))
     if account is not None and account.id is not None and not account.needs_consent_refresh:
-        await invocation.reply(
+        await ui.respond(
+            interaction,
             text_node(
                 tr(
                     t"### Consent Already Granted\n"
@@ -43,13 +44,13 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
                     t"select **Apps > Recalculate Build** to index it now."
                 )
             ),
-            visibility="personal",
+            audience="personal",
         )
         return
 
     user_id = interaction.user.id
     version = CURRENT_CONSENT_VERSION
-    component = await ConsentPrompt(
+    component = ConsentPrompt(
         user_id=user_id,
         title=tr(t"Enable Automatic Build Ingestion"),
         summary=tr(
@@ -70,8 +71,9 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
         ),
         accept_label=tr(t"Agree & Enable Ingestion"),
         wait_timeout=120,
-    ).show(invocation, wait=True)
-    if component is None:
+    )
+    outcome = await ui.respond(interaction, component)
+    if not isinstance(outcome, sd.Presented):
         return
     await component.wait()
 
@@ -79,7 +81,8 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
         await accounts.get_or_create_identity(
             IdentityProvider.DISCORD, str(interaction.user.id), consent=component.consent
         )
-        await invocation.reply(
+        await ui.respond(
+            interaction,
             text_node(
                 tr(
                     t"### Consent Recorded!\n"
@@ -89,7 +92,7 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
                     t"**Apps > Recalculate Build**.",
                 )
             ),
-            visibility="personal",
+            audience="personal",
         )
 
 

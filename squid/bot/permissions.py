@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING, Any
 
 import discord
 from discord import app_commands
-from discord.ext.commands import Cog
 
 from squid.bot.access_view import AccessScreen
 from squid.bot.utils.accounts import account_id_for
@@ -21,6 +20,7 @@ from squid.permissions.domain.catalogue import (
     ROLE_DEFINITION_MANAGE,
     ROLE_DEFINITION_MANAGE_GUILD,
 )
+from squid_ui_discord.ext import Cog
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -37,11 +37,11 @@ ACCESS_NODES = (
 )
 
 
-class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"):
+class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT], name="Permissions"):
     """Open one capability-aware access workspace per administrator and guild."""
 
     def __init__(self, bot: BotT) -> None:
-        self.bot = bot
+        super().__init__(bot)
         self.admin: PermissionAdministrationService = bot.services.permission_admin
 
     @app_commands.command(name="access", description="Inspect and manage this server's access controls")
@@ -77,16 +77,19 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
         async def authorize(node: PermissionNode) -> bool:
             return await allows(interaction, node)
 
-        await AccessScreen(
-            self.admin,
-            guild_id=guild.id,
-            account_id=account_id,
-            discord_role_id=role_id,
-            subject_label=label,
-            capabilities=capabilities,
-            actor=actor,
-            authorize=authorize,
-        ).show(interaction)
+        await self.ui.respond(
+            interaction,
+            AccessScreen(
+                self.admin,
+                guild_id=guild.id,
+                account_id=account_id,
+                discord_role_id=role_id,
+                subject_label=label,
+                capabilities=capabilities,
+                actor=actor,
+                authorize=authorize,
+            ),
+        )
 
 
 def render_decision(decision: Any, subject_label: str) -> str:

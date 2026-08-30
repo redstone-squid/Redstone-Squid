@@ -31,9 +31,10 @@ def _client() -> Any:
 
 
 def test_help_screen_owns_one_public_session() -> None:
-    assert HelpScreen.session_name == "help"
+    assert HelpScreen.session is not None
+    assert HelpScreen.session.name == "help"
     assert HelpScreen.timeout == 300
-    assert HelpScreen.visibility == "public"
+    assert HelpScreen.audience == "public"
 
 
 def test_help_screen_uses_a_browser_for_the_command_directory() -> None:

@@ -54,7 +54,7 @@ def _format_dimensions(value: tuple[int | None, ...]) -> str:
     return " x ".join("?" if item is None else str(item) for item in value)
 
 
-def _submission_basics_form(build: BuildDraft, invocation: sd.Invocation) -> sl.forms.FormSpec:
+def _submission_basics_form(build: BuildDraft) -> sl.forms.FormSpec:
     return sl.forms.FormSpec(
         tr("Build basics"),
         (
@@ -101,7 +101,7 @@ def _submission_basics_form(build: BuildDraft, invocation: sd.Invocation) -> sl.
     )
 
 
-def _submission_details_form(build: BuildDraft, invocation: sd.Invocation) -> sl.forms.FormSpec:
+def _submission_details_form(build: BuildDraft) -> sl.forms.FormSpec:
     restrictions = (
         build.wiring_placement_restrictions
         + build.animated_restrictions
@@ -166,10 +166,12 @@ class SubmissionOutcome:
 class SubmissionScreen(sd.Screen):
     """A submission draft that ends when it is submitted, cancelled, or times out."""
 
-    session_name = "build-submission"
-    admission = AdmissionSpec(collision=Reject(notice=tr(t"You already have a submission draft open.")))
+    session = sd.SessionSpec(
+        "build-submission",
+        admission=AdmissionSpec(collision=Reject(notice=tr(t"You already have a submission draft open."))),
+    )
     timeout = 300
-    visibility = "personal"
+    audience = "personal"
 
     validation_error: sl.TextLike | None = sl.state(None)
     submitting: bool = sl.state(default=False)
@@ -307,7 +309,7 @@ class SubmissionScreen(sd.Screen):
 
     async def _edit_basics(self, event: sl.PressEvent) -> None:
         await event.present_form(
-            _submission_basics_form(self.build, self.opening),
+            _submission_basics_form(self.build),
             key="submission-basics",
             on_submit=self._basics_submitted,
         )
@@ -335,7 +337,7 @@ class SubmissionScreen(sd.Screen):
 
     async def _edit_details(self, event: sl.PressEvent) -> None:
         await event.present_form(
-            _submission_details_form(self.build, self.opening),
+            _submission_details_form(self.build),
             key="submission-details",
             on_submit=self._details_submitted,
         )
@@ -393,7 +395,7 @@ class SubmissionScreen(sd.Screen):
         await event.finish()
 
 
-def _edit_form(items: Sequence[BoundBuildField], page: int, invocation: sd.Invocation) -> sl.forms.FormSpec:
+def _edit_form(items: Sequence[BoundBuildField], page: int) -> sl.forms.FormSpec:
     fields: list[sl.forms.FormField[Any]] = []
     for item in items[5 * (page - 1) : 5 * page]:
         spec = item.spec
@@ -415,9 +417,9 @@ def _edit_form(items: Sequence[BoundBuildField], page: int, invocation: sd.Invoc
 class BuildEditScreen(sd.Screen):
     """A build editor that ends when saved, closed, replaced, or timed out."""
 
-    session_name = "build-edit"
+    session = sd.SessionSpec("build-edit")
     timeout = 900
-    visibility = "personal"
+    audience = "personal"
     follow_topics = True
 
     page: int = sl.state(1)
@@ -570,7 +572,7 @@ class BuildEditScreen(sd.Screen):
     async def _open(self, event: sl.PressEvent) -> None:
         if await self._may_event(event):
             await event.present_form(
-                _edit_form(self.items, self.page, self.opening),
+                _edit_form(self.items, self.page),
                 key="edit",
                 on_submit=self._edited,
             )
