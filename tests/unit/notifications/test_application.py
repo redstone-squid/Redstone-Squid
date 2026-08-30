@@ -58,9 +58,7 @@ def _service(repository: NotificationRepositoryFake) -> NotificationService:
 
 async def test_channels_cannot_be_enabled_before_the_privacy_notice_is_accepted() -> None:
     with pytest.raises(ConsentRequiredError):
-        await _service(_repository(consent_pending=True)).set_preferences(
-            7, web_enabled=True, dm_enabled=False
-        )
+        await _service(_repository(consent_pending=True)).set_preferences(7, web_enabled=True, dm_enabled=False)
 
 
 async def test_subscriptions_require_the_privacy_notice_before_target_lookup() -> None:

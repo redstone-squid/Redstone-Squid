@@ -32,14 +32,10 @@ class NotificationRecorder(NotificationService):
         self.subscription_result: NotificationSubscription | None = None
         self.inbox_result: Page[InboxNotification] = Page(items=(), total=0, next=None, prev=None)
         self.preference_updates: list[tuple[int, bool, bool]] = []
-        self.subscription_calls: list[
-            tuple[int, SubscriptionKind, UUID | None, RecordSubscriptionFilter | None]
-        ] = []
+        self.subscription_calls: list[tuple[int, SubscriptionKind, UUID | None, RecordSubscriptionFilter | None]] = []
         self.inbox_reads: list[tuple[int, PageSelector, int, bool]] = []
 
-    async def set_preferences(
-        self, account_id: int, *, web_enabled: bool, dm_enabled: bool
-    ) -> NotificationPreferences:
+    async def set_preferences(self, account_id: int, *, web_enabled: bool, dm_enabled: bool) -> NotificationPreferences:
         self.preference_updates.append((account_id, web_enabled, dm_enabled))
         return self.preferences_result
 
