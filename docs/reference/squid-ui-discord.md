@@ -42,6 +42,24 @@ opening policy and is always presented through an owner scope.
 
 ::: squid_ui_discord.StackNavigator
 
+## Optional discord.py integration
+
+`squid_ui_discord.ext` composes owner request injection and cog lifecycle with ordinary discord.py
+decorators. Its testing stage exercises facade presentation, access, sessions, dispatch, generated
+forms, and serialized payload limits without connecting a gateway.
+
+::: squid_ui_discord.ext.Cog
+
+::: squid_ui_discord.ext.command
+
+::: squid_ui_discord.ext.context_menu
+
+::: squid_ui_discord.ext.autocomplete
+
+::: squid_ui_discord.ext.testing.stage
+
+::: squid_ui_discord.ext.testing.invoke
+
 ## Access policies
 
 Every message root names who may use it.

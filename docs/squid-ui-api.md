@@ -23,7 +23,8 @@ composition and adapter contracts.
 | Own one live message | `MessageRoot` |
 | Render Components V2 | `render_static`, `render_message`, `DISCORD_V2_DPY27` |
 | Render classic messages | `classic.render_static`, `classic.render_message`, `DISCORD_V1_DPY27` |
-| Test without a gateway | `squid_ui_discord.testing` |
+| Test roots and payloads without a gateway | `squid_ui_discord.testing` |
+| Stage the complete Discord facade | `squid_ui_discord.ext.testing.stage`, `invoke` |
 | Persist scoped bytes | `squid_storage.ScopedStore`, `MemoryScopedStore`, `PostgresScopedStore` |
 | Persist reactive state | `squid_storage.PersistentStatePool` |
 | Replicate state | `squid_replication.Replica` and a selected backend |
