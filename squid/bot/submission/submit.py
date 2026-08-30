@@ -9,7 +9,6 @@ import discord
 from discord import Message, app_commands
 from discord.ext.commands import Cog
 
-import squid_ui_discord as sd
 from squid.accounts.domain import IdentityProvider
 from squid.bot.consent import ensure_consented_account
 from squid.bot.submission.attachments import AttachmentKind, classify_attachment

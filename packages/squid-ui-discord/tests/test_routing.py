@@ -106,6 +106,7 @@ class TestRouter:
             pass
 
         client = FakeClient()
+
         async def localize(_source) -> sl.text.Localization:
             return sl.text.Localization(locale="en-GB")
 
