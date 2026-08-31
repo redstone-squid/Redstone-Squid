@@ -2,7 +2,6 @@
 members = [
     "crates/squid-cli",
     "crates/squid-cli-core",
-    "crates/squid-cli-test-support",
 ]
 resolver = "2"
 
@@ -41,7 +40,6 @@ reqwest = { version = "=0.13.4", default-features = false, features = [
 ] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
-semver = "1.0.26"
 sha2 = "0.10.8"
 shell-words = "=1.1.1"
 squid-cli-core = { path = "crates/squid-cli-core" }
