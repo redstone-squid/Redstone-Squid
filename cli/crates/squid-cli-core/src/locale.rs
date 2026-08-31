@@ -118,6 +118,12 @@ impl Locale {
             (Self::ZhCn, MessageKey::ProfileNotFound) => "找不到配置 {name}",
             (Self::En, MessageKey::NoActiveProfile) => "no active profile is configured",
             (Self::ZhCn, MessageKey::NoActiveProfile) => "尚未选择活动配置",
+            (Self::En, MessageKey::SuggestedProfileAdd) => {
+                "run squid profile add <name> --origin <url> --trust, then retry"
+            }
+            (Self::ZhCn, MessageKey::SuggestedProfileAdd) => {
+                "请运行 squid profile add <name> --origin <url> --trust，然后重试"
+            }
             (Self::En, MessageKey::ProfileTrustRequired) => {
                 "adding an API origin requires an explicit --trust decision"
             }
@@ -479,6 +485,7 @@ pub enum MessageKey {
     ProfileAlreadyExists,
     ProfileNotFound,
     NoActiveProfile,
+    SuggestedProfileAdd,
     ProfileTrustRequired,
     ProfileLocaleInvalid,
     ProfileCaInvalid,
