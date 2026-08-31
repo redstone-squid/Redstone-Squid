@@ -47,11 +47,11 @@ public object DraftFieldValueParser {
     }
 
     private fun parseGameTicks(field: FormField, rawValue: String): Long {
-        val match = DURATION.matchEntire(rawValue.lowercase())
-            ?: invalid(field, "expected ticks (20t), redstone ticks (10rt), or seconds (1.5s)")
+        val match = DURATION.matchEntire(rawValue.trim().lowercase())
+            ?: invalid(field, "expected game ticks (10gt), redstone ticks (5rt), or seconds (1.5s)")
         val amount = match.groupValues[1].toBigDecimal()
         val multiplier = when (match.groupValues[2]) {
-            "t" -> BigDecimal.ONE
+            "gt", "t" -> BigDecimal.ONE
             "rt" -> BigDecimal(2)
             "s" -> BigDecimal(20)
             else -> error("duration suffix regex and parser diverged")
@@ -122,5 +122,7 @@ public object DraftFieldValueParser {
         "${field.id}: $detail",
     )
 
-    private val DURATION = Regex("([0-9]+(?:\\.[0-9]+)?)(t|rt|s)")
+    // Unit vocabulary shared with the web catalogue and the backend's free-text parser;
+    // contracts/fixtures/duration-cases.json is the authority and the parser test asserts it.
+    private val DURATION = Regex("([0-9]+(?:\\.[0-9]+)?|\\.[0-9]+)\\s*(gt|rt|t|s)")
 }
