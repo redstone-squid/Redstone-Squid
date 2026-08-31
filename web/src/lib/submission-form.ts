@@ -139,11 +139,14 @@ export function draftValue(value: unknown): DraftValue | undefined {
   return undefined;
 }
 
+// The unit vocabulary is shared with the other surfaces; contracts/fixtures/duration-cases.json
+// is the authority, and tests/unit/submission-form.test.ts asserts every core case against it.
 export function parseDuration(value: string): number | undefined {
-  const match = /^\s*(\d+(?:\.\d+)?)\s*(gt|rt|s)\s*$/i.exec(value);
+  const match = /^\s*(\d+(?:\.\d+)?|\.\d+)\s*(gt|rt|t|s)\s*$/i.exec(value);
   if (!match?.[1] || !match[2]) return undefined;
   const amount = Number(match[1]);
-  const multiplier = match[2].toLowerCase() === "s" ? 20 : match[2].toLowerCase() === "rt" ? 2 : 1;
+  const unit = match[2].toLowerCase();
+  const multiplier = unit === "s" ? 20 : unit === "rt" ? 2 : 1;
   const ticks = amount * multiplier;
   return Number.isSafeInteger(ticks) ? ticks : undefined;
 }

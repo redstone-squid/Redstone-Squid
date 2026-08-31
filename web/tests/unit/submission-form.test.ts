@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import type {
@@ -18,6 +21,16 @@ import {
   SubmissionSchemaError,
   validateSubmissionManifest,
 } from "../../src/lib/submission-form";
+
+const durationCases = JSON.parse(
+  readFileSync(
+    join(import.meta.dirname, "../../../contracts/fixtures/duration-cases.json"),
+    "utf8",
+  ),
+) as {
+  core: { input: string; ticks: number }[];
+  client_rejects: { input: string }[];
+};
 
 const constraints = {
   minimum: null,
@@ -199,12 +212,16 @@ describe("renderer values", () => {
     expect(draftValue({})).toBeUndefined();
   });
 
-  it("parses explicit duration units into integral game ticks", () => {
-    expect(parseDuration("10gt")).toBe(10);
-    expect(parseDuration("5 rt")).toBe(10);
-    expect(parseDuration("0.5s")).toBe(10);
-    expect(parseDuration("0.1gt")).toBeUndefined();
-    expect(parseDuration("10")).toBeUndefined();
+  it("parses every core case of the shared duration fixture", () => {
+    for (const { input, ticks } of durationCases.core) {
+      expect(parseDuration(input), input).toBe(ticks);
+    }
+  });
+
+  it("rejects every client_rejects case of the shared duration fixture", () => {
+    for (const { input } of durationCases.client_rejects) {
+      expect(parseDuration(input), input).toBeUndefined();
+    }
   });
 
   it("parses text, lists, numeric values, duration values, and unset inputs", () => {
