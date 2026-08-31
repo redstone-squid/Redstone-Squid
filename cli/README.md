@@ -56,14 +56,6 @@ connected command keeps displaying a warning while that fallback is selected. `a
 the current server session before clearing its encrypted local bearer; `--local-only` is available
 for deliberate offline recovery.
 
-Mutating operations can be written to the encrypted recovery queue before network I/O. Retries
-reuse the original idempotency key, serialize concurrent queue updates, retain private JSON only in
-encrypted state, and stop automatically on permanent failures or after a bounded backoff budget.
-
-Update metadata is notification-only. The verifier authenticates the exact manifest bytes with a
-pinned Ed25519 release key before parsing them, requires HTTPS artifact URLs, compares independent
-CLI/protocol versions, and can stream-check the signed size and SHA-256 without replacing a binary.
-
 ## Terminal forms and processes
 
 The form core is deliberately independent of the unfinished API DTOs. An adapter can map a pinned
