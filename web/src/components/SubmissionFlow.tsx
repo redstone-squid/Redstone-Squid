@@ -878,6 +878,7 @@ function FieldEditor({
   const state = pending ? copy.saving : field.required ? copy.required : copy.optional;
   const message =
     parseError ?? error ?? (issue ? issueMessage(issue, field.label, locale) : undefined);
+  const invalid = message ? true : undefined;
 
   if (field.control === "boolean") {
     return (
@@ -888,6 +889,7 @@ function FieldEditor({
             type="checkbox"
             checked={draftValue(value) === true}
             disabled={disabled}
+            aria-invalid={invalid}
             aria-describedby={describedBy}
             onChange={(event) => onCommit(event.currentTarget.checked)}
           />
@@ -910,6 +912,7 @@ function FieldEditor({
     return (
       <fieldset
         className="field submission-field"
+        aria-invalid={invalid}
         aria-describedby={describedBy}
         disabled={disabled || optionsLoading}
       >
@@ -956,6 +959,7 @@ function FieldEditor({
           value={typeof draftValue(value) === "string" ? String(value) : ""}
           required={field.required}
           disabled={disabled || optionsLoading}
+          aria-invalid={invalid}
           aria-describedby={describedBy}
           onChange={(event) => onCommit(event.currentTarget.value || undefined)}
         >
@@ -989,6 +993,7 @@ function FieldEditor({
           required={field.required}
           disabled={disabled}
           maxLength={field.repeatable ? undefined : (field.constraints.max_length ?? undefined)}
+          aria-invalid={invalid}
           aria-describedby={describedBy}
           onChange={(event) => setRaw(event.currentTarget.value)}
           onBlur={commitRaw}
@@ -1008,6 +1013,7 @@ function FieldEditor({
           minLength={field.constraints.min_length ?? undefined}
           maxLength={field.constraints.max_length ?? undefined}
           placeholder={field.control === "duration" ? "10gt / 5rt / 0.5s" : undefined}
+          aria-invalid={invalid}
           aria-describedby={describedBy}
           onChange={(event) => setRaw(event.currentTarget.value)}
           onBlur={commitRaw}
