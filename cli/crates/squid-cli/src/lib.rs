@@ -2576,7 +2576,8 @@ fn profile_failure(error: ProfileError, name: Option<&str>) -> CommandFailure {
             ExitStatus::LocalState,
             "no_active_profile",
             MessageKey::NoActiveProfile,
-        ),
+        )
+        .with_suggested_action(MessageKey::SuggestedProfileAdd),
         ProfileError::TrustRequired => CommandFailure::new(
             ExitStatus::Usage,
             "profile_trust_required",
