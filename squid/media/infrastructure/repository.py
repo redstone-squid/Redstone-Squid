@@ -361,12 +361,6 @@ class PostgresMediaJobRepository(MediaJobRepository):
             current_claim = await session.scalar(
                 select(MediaNormalizationJobRecord.upload_id).where(*_claim_filter(job)).with_for_update()
             )
-            if current_claim is None:
-                # A worker that has lost its claim uploads nothing, so it must
-                # not touch the lifecycle rows either: the upsert below clears
-                # `deleted_at` and would mark an object cleanup has already
-                # deleted as live again, with no bytes behind it.
-                return False
             object_keys = tuple(sorted(artifact.object_key for artifact in artifacts))
             existing_objects = tuple(
                 (
@@ -381,7 +375,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
             cleanup_claims = tuple(
                 row.cleanup_claimed_at for row in existing_objects if row.cleanup_claim_token is not None
             )
-            if cleanup_claims:
+            if current_claim is not None and cleanup_claims:
                 retry_at = max(
                     claimed_at.add(seconds=int(MEDIA_ARTIFACT_CLEANUP_CLAIM.total_seconds()))
                     for claimed_at in cleanup_claims
@@ -419,25 +413,26 @@ class PostgresMediaJobRepository(MediaJobRepository):
                 if not outcome.rowcount:
                     msg = f"Media artifact object metadata conflicts for {artifact.object_key}."
                     raise ValueError(msg)
-                lease = insert(MediaArtifactPublicationRecord).values(
-                    object_key=artifact.object_key,
-                    upload_id=job.upload.id,
-                    claim_token=job.claim_token,
-                    expires_at=_publication_expiry(),
-                )
-                lease = lease.on_conflict_do_update(
-                    index_elements=[
-                        MediaArtifactPublicationRecord.object_key,
-                        MediaArtifactPublicationRecord.upload_id,
-                        MediaArtifactPublicationRecord.claim_token,
-                    ],
-                    set_={
-                        "expires_at": lease.excluded.expires_at,
-                        "renewed_at": func.now(),
-                    },
-                )
-                await session.execute(lease)
-        return True
+                if current_claim is not None:
+                    lease = insert(MediaArtifactPublicationRecord).values(
+                        object_key=artifact.object_key,
+                        upload_id=job.upload.id,
+                        claim_token=job.claim_token,
+                        expires_at=_publication_expiry(),
+                    )
+                    lease = lease.on_conflict_do_update(
+                        index_elements=[
+                            MediaArtifactPublicationRecord.object_key,
+                            MediaArtifactPublicationRecord.upload_id,
+                            MediaArtifactPublicationRecord.claim_token,
+                        ],
+                        set_={
+                            "expires_at": lease.excluded.expires_at,
+                            "renewed_at": func.now(),
+                        },
+                    )
+                    await session.execute(lease)
+        return current_claim is not None
 
     @override
     async def release_artifacts(
