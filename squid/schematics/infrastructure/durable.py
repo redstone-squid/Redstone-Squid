@@ -11,7 +11,7 @@ from typing import Any, cast
 
 from squid.artifacts import ArtifactStore
 from squid.config import SchematicConfig
-from squid.core.concurrency import run_all
+from squid.core.concurrency import run_all, run_all_settled
 from squid.core.errors import InfrastructureError, SquidError
 from squid.schematics.application.commands import RenderRequest, SimulationRequest
 from squid.schematics.application.jobs import (
@@ -237,9 +237,11 @@ class SchematicJobRunner:
 
     async def process_batch(self, *, limit: int = 8) -> None:
         jobs = await self._jobs.claim(limit=limit)
-        # A task group rather than gather: an abandoned sibling still holds its
-        # database claim and its result object until the next cleanup pass.
-        await run_all([partial(self._process, job) for job in jobs])
+        # Settled rather than cancelled on the first failure: the jobs are
+        # independent, and a cancelled one never reaches the handler that fails it,
+        # so it would hold its claim and its result object until the next cleanup
+        # pass. Failures still raise once the batch is done.
+        await run_all_settled([partial(self._process, job) for job in jobs])
 
     async def cleanup(self) -> None:
         for object_key in await self._jobs.cleanup():

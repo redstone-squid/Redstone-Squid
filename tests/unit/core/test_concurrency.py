@@ -3,7 +3,7 @@
 import anyio
 import pytest
 
-from squid.core.concurrency import run_all, run_all_awaitables, settle_all
+from squid.core.concurrency import run_all, run_all_awaitables, run_all_settled, settle_all
 
 
 async def test_run_all_returns_results_in_argument_order() -> None:
@@ -135,3 +135,42 @@ async def test_run_all_awaitables_awaits_every_coroutine() -> None:
         return number
 
     assert await run_all_awaitables([value(1), value(2), value(3)]) == [1, 2, 3]
+
+
+async def test_run_all_settled_finishes_every_operation_before_raising() -> None:
+    """A cancelled job never reaches its own except clause, so nothing may be cancelled."""
+    finished: list[int] = []
+    started = anyio.Event()
+
+    async def failing() -> None:
+        started.set()
+        msg = "boom"
+        raise RuntimeError(msg)
+
+    async def sibling(number: int) -> None:
+        await started.wait()
+        await anyio.sleep(0.01)
+        finished.append(number)
+
+    with anyio.fail_after(5), pytest.raises(RuntimeError):
+        await run_all_settled([lambda: failing(), lambda: sibling(1), lambda: sibling(2)])
+
+    assert finished == [1, 2]
+
+
+async def test_run_all_settled_returns_results_in_argument_order() -> None:
+    async def make(value: int, delay: float) -> int:
+        await anyio.sleep(delay)
+        return value
+
+    assert await run_all_settled([lambda: make(1, 0.02), lambda: make(2, 0.0)]) == [1, 2]
+
+
+async def test_run_all_settled_groups_several_failures() -> None:
+    async def failing(error: Exception) -> None:
+        raise error
+
+    with pytest.raises(BaseExceptionGroup) as caught:
+        await run_all_settled([lambda: failing(RuntimeError("first")), lambda: failing(ValueError("second"))])
+
+    assert [type(error) for error in caught.value.exceptions] == [RuntimeError, ValueError]
