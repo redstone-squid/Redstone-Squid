@@ -1,7 +1,7 @@
 """PostgreSQL notification persistence and domain-event materialization."""
 
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
@@ -483,17 +483,18 @@ class PostgresNotificationRepository:
         if build is None or build.submission_status != Status.PENDING:
             return
         staff_account_ids = (
-            await session.execute(select(Account.id).where(_is_staff_account(Account.id)).order_by(Account.id))
-        ).scalars()
-        for account_id in staff_account_ids:
-            await self._insert(
-                session,
-                event=event,
-                account_id=account_id,
-                kind=NotificationKind.STAFF_BUILD_SUBMITTED,
-                source_key=f"event:{event.id}:staff:{account_id}",
-                payload={"build_id": build.id, "category": None if build.category is None else str(build.category)},
-            )
+            (await session.execute(select(Account.id).where(_is_staff_account(Account.id)).order_by(Account.id)))
+            .scalars()
+            .all()
+        )
+        await self._insert_many(
+            session,
+            event=event,
+            account_ids=staff_account_ids,
+            kind=NotificationKind.STAFF_BUILD_SUBMITTED,
+            source_key=lambda account_id: f"event:{event.id}:staff:{account_id}",
+            payload={"build_id": build.id, "category": None if build.category is None else str(build.category)},
+        )
 
     async def _materialize_build_outcome(self, session: AsyncSession, event: DomainEvent) -> None:
         build = await session.get(Build, event.aggregate_id)
@@ -593,6 +594,83 @@ class PostgresNotificationRepository:
                     source_key=f"event:{event.id}:record-build:{build_id}:account:{account_id}",
                     payload=payload,
                 )
+
+    async def _insert_many(
+        self,
+        session: AsyncSession,
+        *,
+        event: DomainEvent,
+        account_ids: Sequence[int],
+        kind: NotificationKind,
+        source_key: Callable[[int], str],
+        payload: dict[str, object],
+    ) -> None:
+        """Fan one event out to many recipients in three queries rather than three each."""
+        if not account_ids:
+            return
+        eligible = (
+            (
+                await session.execute(
+                    select(NotificationProfile)
+                    .join(
+                        AccountIdentity,
+                        (AccountIdentity.account_id == NotificationProfile.account_id)
+                        & (AccountIdentity.provider == IdentityProvider.DISCORD),
+                    )
+                    .join(Account, Account.id == NotificationProfile.account_id)
+                    .where(
+                        NotificationProfile.account_id.in_(account_ids),
+                        account_consent_current(),
+                        or_(NotificationProfile.web_enabled.is_(True), NotificationProfile.dm_enabled.is_(True)),
+                    )
+                    .order_by(NotificationProfile.account_id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        # An account may hold more than one Discord identity, which the join
+        # would otherwise turn into a duplicate recipient.
+        profiles = list({profile.account_id: profile for profile in eligible}.values())
+        if not profiles:
+            return
+        created = (
+            await session.execute(
+                insert(NotificationRecord)
+                .values(
+                    [
+                        {
+                            "account_id": profile.account_id,
+                            "event_id": event.id,
+                            "source_key": source_key(profile.account_id),
+                            "kind": kind.value,
+                            "payload": payload,
+                            "web_visible": profile.web_enabled,
+                        }
+                        for profile in profiles
+                    ]
+                )
+                .on_conflict_do_nothing(index_elements=[NotificationRecord.source_key])
+                .returning(NotificationRecord.id, NotificationRecord.account_id)
+            )
+        ).all()
+        # The join above already proved a Discord identity exists; the address itself is
+        # read at claim time, so nothing is copied onto the delivery rows here.
+        deliverable = {
+            profile.account_id for profile in profiles if profile.dm_enabled and profile.dm_suspended_at is None
+        }
+        deliveries = [
+            {"notification_id": notification_id, "account_id": account_id}
+            for notification_id, account_id in created
+            if account_id in deliverable
+        ]
+        if not deliveries:
+            return
+        await session.execute(
+            insert(NotificationDeliveryRecord)
+            .values(deliveries)
+            .on_conflict_do_nothing(index_elements=[NotificationDeliveryRecord.notification_id])
+        )
 
     async def _insert(
         self,
