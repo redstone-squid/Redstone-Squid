@@ -505,6 +505,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
 
         deleted = 0
         failed = 0
+        resolutions: list[tuple[_ClaimedArtifactCleanup, str | None]] = []
         for claim in claims:
             error_name: str | None = None
             try:
@@ -514,40 +515,58 @@ class PostgresMediaJobRepository(MediaJobRepository):
                 error_name = type(error).__name__[:4000]
             else:
                 deleted += 1
-            await self._resolve_artifact_cleanup(claim, error_name=error_name)
+            resolutions.append((claim, error_name))
+        await self._resolve_artifact_cleanups(resolutions)
         return MediaArtifactCleanupOutcome(len(claims), deleted, failed)
 
-    async def _resolve_artifact_cleanup(
+    async def _resolve_artifact_cleanups(
         self,
-        claim: _ClaimedArtifactCleanup,
-        *,
-        error_name: str | None,
-    ) -> bool:
+        resolutions: Sequence[tuple[_ClaimedArtifactCleanup, str | None]],
+    ) -> None:
+        """Acknowledge a whole cleanup batch in one transaction.
+
+        Deletion is idempotent and an unacknowledged claim expires on its own,
+        so a crash here costs a repeated delete rather than a lost object --
+        which is all a transaction per object was buying.
+        """
+        if not resolutions:
+            return
+        tokens = {claim.object_key: claim.claim_token for claim, _ in resolutions}
+        errors = {claim.object_key: error_name for claim, error_name in resolutions}
         async with self._session_factory.begin() as session:
-            candidate = await session.scalar(
-                select(MediaArtifactObjectRecord)
-                .where(
-                    MediaArtifactObjectRecord.object_key == claim.object_key,
-                    MediaArtifactObjectRecord.cleanup_claim_token == claim.claim_token,
+            candidates = (
+                await session.scalars(
+                    select(MediaArtifactObjectRecord)
+                    .where(
+                        MediaArtifactObjectRecord.object_key.in_(tokens),
+                        MediaArtifactObjectRecord.cleanup_claim_token.in_(tokens.values()),
+                    )
+                    .order_by(MediaArtifactObjectRecord.object_key)
+                    .with_for_update()
                 )
-                .with_for_update()
-            )
-            if candidate is None:
-                return False
-            cleanup_started_at = candidate.cleanup_claimed_at
-            candidate.cleanup_claimed_at = None
-            candidate.cleanup_claim_token = None
-            if error_name is not None:
-                candidate.attempts += 1
-                candidate.available_at = Instant.now().add(seconds=int(retry_delay(candidate.attempts).total_seconds()))
-                candidate.last_error = error_name
-            elif cleanup_started_at is not None and candidate.last_seen_at > cleanup_started_at:
-                candidate.available_at = Instant.now()
-                candidate.last_error = None
-            else:
-                candidate.deleted_at = Instant.now()
-                candidate.last_error = None
-            return True
+            ).all()
+            for candidate in candidates:
+                # Both halves of the pair have to match, exactly as the
+                # per-object statement required: one row's key with another
+                # row's token acknowledges a claim nobody holds.
+                if tokens.get(candidate.object_key) != candidate.cleanup_claim_token:
+                    continue
+                error_name = errors[candidate.object_key]
+                cleanup_started_at = candidate.cleanup_claimed_at
+                candidate.cleanup_claimed_at = None
+                candidate.cleanup_claim_token = None
+                if error_name is not None:
+                    candidate.attempts += 1
+                    candidate.available_at = Instant.now().add(
+                        seconds=int(retry_delay(candidate.attempts).total_seconds())
+                    )
+                    candidate.last_error = error_name
+                elif cleanup_started_at is not None and candidate.last_seen_at > cleanup_started_at:
+                    candidate.available_at = Instant.now()
+                    candidate.last_error = None
+                else:
+                    candidate.deleted_at = Instant.now()
+                    candidate.last_error = None
 
     @override
     async def fail(
