@@ -11,7 +11,8 @@ The home-server extras (`build.submission.edit`, `build.submission.recalc`) are
 deliberately **not** backfilled. This migration cannot read
 `BotIdentityConfig.owner_server_id`, and granting cross-guild build-edit rights
 to every guild's Trusted roles would be a real privilege escalation. Run these
-two commands in the home guild after upgrading:
+two commands in the home guild after upgrading, and see `docs/rbac-cutover.md`, which
+also records that `trusted` now carries `vote.weight.staff`:
 
     /perm grant @Trusted build.submission.edit   --scope global
     /perm grant @Trusted build.submission.recalc --scope global
