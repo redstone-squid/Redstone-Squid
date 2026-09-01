@@ -111,7 +111,7 @@ impl<'a> DiagnosticsApi<'a> {
         work_lost: bool,
         token: &SecretBytes,
     ) -> Result<ApiResponse<ErrorReportPage>, TransportError> {
-        let mut request = ApiRequest::new(ApiMethod::Get, "/api/v1/diagnostics/errors");
+        let mut request = ApiRequest::new(ApiMethod::Get, "/v1/diagnostics/errors");
         if work_lost {
             request = request.with_query_param("work_lost", "true")?;
         }
@@ -128,7 +128,7 @@ impl<'a> DiagnosticsApi<'a> {
         self.client.send_json(
             ApiRequest::new(
                 ApiMethod::Get,
-                format!("/api/v1/diagnostics/errors/{reference}"),
+                format!("/v1/diagnostics/errors/{reference}"),
             ),
             Some(token),
         )
