@@ -17,11 +17,10 @@ from pathlib import Path, PurePosixPath
 from typing import Protocol
 from uuid import UUID, uuid4
 
-import anyio
 from whenever import Instant
 
 from squid.artifacts import ArtifactStore
-from squid.core.concurrency import run_all_settled
+from squid.core.concurrency import run_all_settled, task_group
 from squid.core.errors import InvalidStateError, SquidError, ValidationError
 from squid.core.i18n import tr
 from squid.media.application.commands import MediaNormalizationRequest
@@ -581,7 +580,7 @@ class MediaNormalizationJobRunner:
 
     async def _process(self, job: ClaimedMediaJob) -> None:
         claim_lost = asyncio.Event()
-        async with anyio.create_task_group() as heartbeat:
+        async with task_group() as heartbeat:
             heartbeat.start_soon(self._maintain_claim, job, claim_lost)
             try:
                 await self._process_claim(job, claim_lost)
