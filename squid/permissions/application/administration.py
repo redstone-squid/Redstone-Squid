@@ -38,7 +38,6 @@ from squid.permissions.domain import (
     BuiltinRoleKeys,
     Catalogue,
     Effect,
-    NodeScope,
     Pattern,
     Subject,
 )
@@ -122,7 +121,18 @@ class PermissionAdministrationService:
             subject_account_id=subject.account_id,
             guild_id=subject.guild_id,
         )
-        held_ranks = [roles[assignment.role_id].rank for assignment in assignments if assignment.role_id in roles]
+        # The same two tests the resolver applies to a rule: an assignment that
+        # confers nothing any more must not confer rank either. The store's
+        # guild filter admits every account assignment whatever its scope, so
+        # the scope test happens here rather than in SQL.
+        now = Instant.now()
+        held_ranks = [
+            roles[assignment.role_id].rank
+            for assignment in assignments
+            if assignment.role_id in roles
+            and _is_live(assignment.expires_at, now)
+            and assignment.scope_guild_id in (None, subject.guild_id)
+        ]
         # Discord's Manage Server implies the guild-admin built-in, so its rank
         # counts too; otherwise a server administrator could not manage any role
         # they had not also been explicitly assigned.
@@ -189,6 +199,16 @@ class PermissionAdministrationService:
         if not self._permissions.is_delegable_by_guild_admin(pattern):
             msg = f"{pattern} reaches permissions that are not this server's to grant."
             raise PermissionAuthorityError(msg, public_context={"pattern": pattern})
+
+    def _require_assignment_scope(self, actor: Actor, leaves: Iterable[str], scope_guild_id: int | None) -> None:
+        """Apply the delegation rule to a role's leaves as well as to raw patterns.
+
+        An assignment carries its own scope into resolution and the role's own
+        `guild_id` is not consulted there, so a guild delegate assigning a guild
+        role at global scope would otherwise hold its nodes in every guild.
+        """
+        for pattern in leaves:
+            self._require_scope(actor, pattern, scope_guild_id)
 
     def _require_role_management(self, actor: Actor, role: RoleRecord) -> None:
         node = ROLE_DEFINITION_MANAGE if role.guild_id is None else ROLE_DEFINITION_MANAGE_GUILD
@@ -312,11 +332,13 @@ class PermissionAdministrationService:
 
     async def _global_granter_count(self) -> int:
         rules = await self._store.list_rules()
+        now = Instant.now()
         granting = {
             rule.subject_account_id
             for rule in rules
             if rule.effect == int(Effect.ALLOW)
             and rule.subject_account_id is not None
+            and _is_live(rule.expires_at, now)
             and PERM_GRANT_GLOBAL.name in self._catalogue.expand(rule.pattern)
         }
         return len(granting)
@@ -561,7 +583,9 @@ class PermissionAdministrationService:
             raise ValidationError(msg, public_context={"discord_role_id": discord_role_id})
         self._require_rank(actor, role)
         roles = await self._store.list_roles()
-        self._require_authority(actor, self.resolved_leaves(role, roles))
+        leaves = self.resolved_leaves(role, roles)
+        self._require_assignment_scope(actor, leaves, scope_guild_id)
+        self._require_authority(actor, leaves)
         await self._store.assign_role(
             role.id,
             subject_account_id=account_id,
@@ -598,6 +622,8 @@ class PermissionAdministrationService:
         if role.builtin_key == BuiltinRoleKeys.OWNER:
             msg = "The owner role cannot be unassigned."
             raise ConflictError(msg, public_context={"role": role.slug})
+        roles = await self._store.list_roles()
+        self._require_assignment_scope(actor, self.resolved_leaves(role, roles), scope_guild_id)
         return await self._store.unassign_role(
             role.id,
             subject_account_id=account_id,
@@ -625,6 +651,11 @@ class PermissionAdministrationService:
         return tuple(sorted(frozenset(self.resolved_leaves(role, roles)) - actor.held))
 
 
+def _is_live(expires_at: Instant | None, now: Instant) -> bool:
+    """Whether a stored row still confers anything, on the resolver's terms."""
+    return expires_at is None or expires_at > now
+
+
 def scope_label(scope_guild_id: int | None) -> str:
     """How a rule's scope reads in `/perm list` and `/perm can`."""
     return "global" if scope_guild_id is None else f"guild {scope_guild_id}"
@@ -633,7 +664,3 @@ def scope_label(scope_guild_id: int | None) -> str:
 def effect_label(effect: int) -> str:
     """Discord's own vocabulary: allow / deny, plus the loud third one."""
     return {int(Effect.ALLOW): "allow", int(Effect.DENY): "deny", int(Effect.FORBID): "forbid"}.get(effect, "?")
-
-
-def node_scope_label(scope: NodeScope) -> str:
-    return scope.value
