@@ -60,6 +60,11 @@ class PostgresWakeListener:
                     wake.clear()
                     if active_connection.is_closed():
                         logger.warning("PostgreSQL %s listener disconnected; reconnecting", self._channel)
+                        # The same backoff the failure path takes. A server that
+                        # accepts connections and drops them at once -- a restart
+                        # or a pgbouncer failover -- would otherwise put this
+                        # loop into a connect storm.
+                        await asyncio.sleep(self._reconnect_seconds)
                         break
                     await on_wake()
             except asyncio.CancelledError:

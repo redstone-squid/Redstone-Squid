@@ -1,7 +1,6 @@
 """Durable media upload and normalization job orchestration."""
 
 import asyncio
-import contextlib
 import hashlib
 import hmac
 import json
@@ -18,6 +17,7 @@ from pathlib import Path, PurePosixPath
 from typing import Protocol
 from uuid import UUID, uuid4
 
+import anyio
 from whenever import Instant
 
 from squid.artifacts import ArtifactStore
@@ -579,16 +579,14 @@ class MediaNormalizationJobRunner:
 
     async def _process(self, job: ClaimedMediaJob) -> None:
         claim_lost = asyncio.Event()
-        heartbeat = asyncio.create_task(
-            self._maintain_claim(job, claim_lost),
-            name=f"media-heartbeat-{job.upload.id}",
-        )
-        try:
-            await self._process_claim(job, claim_lost)
-        finally:
-            heartbeat.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await heartbeat
+        async with anyio.create_task_group() as heartbeat:
+            heartbeat.start_soon(self._maintain_claim, job, claim_lost)
+            try:
+                await self._process_claim(job, claim_lost)
+            finally:
+                # The heartbeat runs until the work it fences is over, however
+                # that happens; the task group owns its lifetime either way.
+                heartbeat.cancel_scope.cancel()
 
     async def _process_claim(self, job: ClaimedMediaJob, claim_lost: asyncio.Event) -> None:
         with tempfile.TemporaryDirectory(prefix="squid-media-", dir=self._working_directory) as temporary_name:
