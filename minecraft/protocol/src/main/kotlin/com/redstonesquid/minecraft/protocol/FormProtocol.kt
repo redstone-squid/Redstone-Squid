@@ -16,7 +16,7 @@ private val stableIdPattern = Regex("[a-z][a-z0-9_]{0,63}")
 private val schemaIdPattern = Regex("[a-z][a-z0-9_.-]{0,127}")
 private val clientInstanceIdPattern = Regex("[A-Za-z0-9_.:-]{1,128}")
 private val activeDraftStatuses = setOf("editing", "processing", "needs_attention")
-private val submissionOrigins = setOf("discord", "web", "paper", "fabric")
+private val submissionOrigins = setOf("discord", "web", "cli", "paper", "fabric")
 
 /** Capabilities of a concrete renderer; this value is not sent as one object. */
 public data class ClientCapabilities(
@@ -370,9 +370,8 @@ public data class DraftSummary(
         require(status in activeDraftStatuses) { "draft summary status is not active: $status" }
         require(origin in submissionOrigins) { "draft summary origin is unsupported: $origin" }
         require(
-            displayName == null ||
-                (displayName.isNotBlank() && displayName.codePointCount(0, displayName.length) <= 120),
-        ) { "draft summary display_name must contain 1-120 characters" }
+            displayName == null || displayName.codePointCount(0, displayName.length) <= 120,
+        ) { "draft summary display_name must not exceed 120 characters" }
         val created = parseInstant(createdAt, "created_at")
         val updated = parseInstant(updatedAt, "updated_at")
         val expires = parseInstant(expiresAt, "expires_at")
