@@ -5,9 +5,12 @@ unawaited, which for job batches means abandoned work still holding database
 claims and temporary directories. A task group cancels the siblings and waits
 for them, but returns nothing, so these helpers restore the one thing gather
 was actually being used for: results in argument order.
+
+One helper per failure policy: :func:`run_all` cancels the siblings on the
+first failure, and :func:`settle_all` hands the failures back as values.
 """
 
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Awaitable, Callable, Iterable, Sequence
 from contextlib import nullcontext
 from typing import cast
 
@@ -26,12 +29,24 @@ def _limiter(limit: int | None) -> anyio.CapacityLimiter | nullcontext[None]:
     return anyio.CapacityLimiter(limit) if limit is not None else nullcontext()
 
 
+def _failure(failures: Sequence[BaseException]) -> BaseException:
+    """Pick what a fan-out raises: the lone failure itself, or a group of them.
+
+    A single failure is not wrapped. Call sites classify errors by type --
+    ``except SquidError``, ``isinstance(error, InvalidSchematicError)`` -- and an
+    ExceptionGroup matches neither, so wrapping one failure silently turns a
+    handled error into an unhandled one.
+    """
+    if len(failures) == 1:
+        return failures[0]
+    return BaseExceptionGroup("A fan-out operation failed.", failures)
+
+
 async def run_all[T](operations: Iterable[Callable[[], Awaitable[T]]], *, limit: int | None = None) -> list[T]:
     """Run every operation concurrently and return results in argument order.
 
-    The first failure cancels the rest and propagates. anyio raises an
-    ExceptionGroup when several fail at once, so callers that need to branch on
-    a specific error should catch it with ``except*``.
+    The first failure cancels the rest and propagates. One failure propagates as
+    itself, several as an ExceptionGroup the caller can split with ``except*``.
 
     Args:
         operations: Zero-argument callables, each returning an awaitable.
@@ -47,9 +62,19 @@ async def run_all[T](operations: Iterable[Callable[[], Awaitable[T]]], *, limit:
         async with limiter:
             results[index] = await factory()
 
-    async with anyio.create_task_group() as task_group:
-        for index, factory in enumerate(factories):
-            task_group.start_soon(run, index, factory)
+    failure: BaseException | None = None
+    try:
+        async with anyio.create_task_group() as task_group:
+            for index, factory in enumerate(factories):
+                task_group.start_soon(run, index, factory)
+    except BaseExceptionGroup as group:
+        if len(group.exceptions) > 1:
+            raise
+        failure = group.exceptions[0]
+    # Re-raised outside the except clause, so the group anyio wrapped it in does
+    # not become its __context__ and bury the cause it was raised from.
+    if failure is not None:
+        raise failure
     return results
 
 

@@ -40,11 +40,37 @@ async def test_run_all_cancels_siblings_on_the_first_failure() -> None:
             sibling_cancelled = True
             raise
 
-    with anyio.fail_after(5), pytest.raises(BaseExceptionGroup) as caught:
+    # Unwrapped, not an ExceptionGroup: call sites classify by type, and an
+    # ``except RuntimeError`` upstream has to keep matching.
+    with anyio.fail_after(5), pytest.raises(RuntimeError):
         await run_all([lambda: failing(), lambda: sibling()])
 
     assert sibling_cancelled is True
-    assert [type(error) for error in caught.value.exceptions] == [RuntimeError]
+
+
+async def test_run_all_groups_simultaneous_failures() -> None:
+    async def failing(error: Exception) -> None:
+        raise error
+
+    with pytest.raises(BaseExceptionGroup) as caught:
+        await run_all([lambda: failing(RuntimeError("first")), lambda: failing(ValueError("second"))])
+
+    assert [type(error) for error in caught.value.exceptions] == [RuntimeError, ValueError]
+
+
+async def test_run_all_preserves_a_lone_failures_cause() -> None:
+    """Unwrapping must not rewrite the chain the operation raised its error with."""
+
+    async def failing() -> None:
+        cause = ValueError("root")
+        msg = "wrapped"
+        raise RuntimeError(msg) from cause
+
+    with pytest.raises(RuntimeError) as caught:
+        await run_all([failing])
+
+    assert isinstance(caught.value.__cause__, ValueError)
+    assert not isinstance(caught.value.__context__, BaseExceptionGroup)
 
 
 async def test_run_all_respects_the_concurrency_limit() -> None:
