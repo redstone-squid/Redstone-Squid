@@ -173,7 +173,7 @@ def create_api_app(
     install_openapi_contract(api)
     api.add_middleware(RateLimitMiddleware)
     api.add_middleware(IdempotencyResponseMiddleware)
-    api.add_middleware(BoundedRequestBodyMiddleware)
+    api.add_middleware(BoundedRequestBodyMiddleware, routes=api.routes)
     api.add_middleware(PrivateResponseHeadersMiddleware, path_prefixes=PRIVATE_API_PATH_PREFIXES)
     # Added last of the unconditional stack so it is outermost: it stamps Request-Id onto rate-limit
     # rejections and idempotency replays alike, and its binding is visible to every inner layer.

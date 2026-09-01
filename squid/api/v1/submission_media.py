@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response, status
 from squid.api.contract import DEVICE, MINECRAFT, WEB, WEB_WRITE, cli_command, contract
 from squid.api.errors import responses
 from squid.api.idempotency import enforce_request_idempotency
+from squid.api.request_body import streams_own_body
 from squid.api.v1.schemas.submission_media import (
     DraftMediaLimitsResponse,
     DraftMediaListResponse,
@@ -163,6 +164,7 @@ router = APIRouter(prefix="/submissions/drafts/{draft_id}/media", tags=["submiss
         ),
     },
 )
+@streams_own_body
 async def upload_draft_media(
     draft_id: UUID,
     kind: MediaKind,
