@@ -1,31 +1,49 @@
 """Bound request buffering before validation and idempotency fingerprinting."""
 
-import re
+from collections.abc import Callable, Sequence
 from http import HTTPStatus
 
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
+from starlette.routing import BaseRoute
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from squid.api.errors import handle_http_error
 
 DEFAULT_MAX_REQUEST_BODY_BYTES = 256 * 1024
 _UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
-_BOUNDED_MEDIA_UPLOAD = re.compile(
-    r"^/v1/submissions/drafts/[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-"
-    r"[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}/media/(?:image|video)$"
-)
+_STREAMS_OWN_BODY = "__squid_streams_own_body__"
+
+
+def streams_own_body[EndpointT: Callable[..., object]](endpoint: EndpointT) -> EndpointT:
+    """Exempt one endpoint from buffering, because it bounds its own stream.
+
+    The exemption travels with the route rather than being described by a path
+    pattern here: a new media kind, or a move to another prefix, would otherwise
+    silently start 413-ing uploads from shared infrastructure.
+    """
+    setattr(endpoint, _STREAMS_OWN_BODY, True)
+    return endpoint
 
 
 class BoundedRequestBodyMiddleware:
     """Reject oversized mutation bodies before downstream code can buffer them."""
 
-    def __init__(self, app: ASGIApp, *, max_bytes: int = DEFAULT_MAX_REQUEST_BODY_BYTES) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        routes: Sequence[BaseRoute] = (),
+        max_bytes: int = DEFAULT_MAX_REQUEST_BODY_BYTES,
+    ) -> None:
         if max_bytes < 1:
             msg = "request body limit must be positive"
             raise ValueError(msg)
         self._app = app
         self._max_bytes = max_bytes
+        self._exempt = tuple(
+            route.path_regex for route in routes if getattr(getattr(route, "endpoint", None), _STREAMS_OWN_BODY, False)
+        )
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if not self._must_bound(scope):
@@ -51,7 +69,7 @@ class BoundedRequestBodyMiddleware:
         return (
             scope["type"] == "http"
             and scope.get("method") in _UNSAFE_METHODS
-            and _BOUNDED_MEDIA_UPLOAD.fullmatch(scope.get("path", "")) is None
+            and not any(pattern.fullmatch(scope.get("path", "")) for pattern in self._exempt)
         )
 
     def _declared_length_exceeds(self, scope: Scope) -> bool:
