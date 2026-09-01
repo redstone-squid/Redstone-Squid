@@ -57,10 +57,6 @@ class Catalogue:
         """Every node name, sorted."""
         return tuple(sorted(self._nodes))
 
-    def by_tag(self, tag: Tag) -> tuple[PermissionNode, ...]:
-        """Every node carrying `tag`, in name order."""
-        return tuple(node for node in self if tag in node.tags)
-
     def expand(self, pattern: Pattern | str) -> frozenset[str]:
         """The names of every node `pattern` currently selects.
 
