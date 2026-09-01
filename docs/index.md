@@ -23,3 +23,6 @@ or native accessible HTML.
 Operational documentation for Redstone Squid itself: internationalization, notifications,
 error reporting, and database migration guides. Deployment instructions live in the
 [repository README](https://github.com/redstone-squid/Redstone-Squid#readme).
+
+- [RBAC cut-over](rbac-cutover.md) — the grants and vote-weight change the permission
+  backfill leaves to an operator
