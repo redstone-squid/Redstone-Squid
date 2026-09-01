@@ -342,18 +342,6 @@ def resolve(
     return Decision(resolved.name, allowed=winner.effect is Effect.ALLOW, reason=Reason.RULE, trace=trace)
 
 
-def allows(
-    node: PermissionNode | str,
-    subject: Subject,
-    rules: Sequence[Rule] = (),
-    *,
-    catalogue: Catalogue = CATALOGUE,
-    now: Instant | None = None,
-) -> bool:
-    """Whether `subject` holds `node`."""
-    return resolve(node, subject, rules, catalogue=catalogue, now=now).allowed
-
-
 def resolve_many(
     nodes: Iterable[PermissionNode | str],
     subject: Subject,
