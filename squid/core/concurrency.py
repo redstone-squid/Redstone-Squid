@@ -8,14 +8,17 @@ was actually being used for: results in argument order.
 
 One helper per failure policy: :func:`run_all` cancels the siblings on the
 first failure, :func:`run_all_settled` lets every operation finish and then
-raises, and :func:`settle_all` hands the failures back as values.
+raises, and :func:`settle_all` hands the failures back as values. All three run
+on :func:`task_group`, which is also the one to reach for directly when a block
+supervises a task of its own rather than a fan-out.
 """
 
-from collections.abc import Awaitable, Callable, Iterable, Sequence
-from contextlib import nullcontext
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Sequence
+from contextlib import asynccontextmanager, nullcontext
 from typing import cast
 
 import anyio
+import anyio.abc
 
 DISCORD_FANOUT_LIMIT = 5
 """Concurrent in-flight calls per Discord fan-out.
@@ -28,6 +31,33 @@ have outstanding at once, which is otherwise unbounded in the message count.
 
 def _limiter(limit: int | None) -> anyio.CapacityLimiter | nullcontext[None]:
     return anyio.CapacityLimiter(limit) if limit is not None else nullcontext()
+
+
+@asynccontextmanager
+async def task_group() -> AsyncIterator[anyio.abc.TaskGroup]:
+    """anyio's task group, without the ExceptionGroup around a lone failure.
+
+    The scope ends when the block exits, which waits for the children and
+    cancels them if the body or a sibling fails -- anyio's semantics exactly.
+    All that differs is the exception: anyio wraps even one failure in a group,
+    and a group of one matches neither ``except SquidError`` nor the isinstance
+    classification call sites do, so a handled error arrives unhandled.
+
+    Several failures still raise as a group, and a child's own group is passed
+    through: only the wrapper this block added is stripped.
+    """
+    failure: BaseException | None = None
+    try:
+        async with anyio.create_task_group() as tasks:
+            yield tasks
+    except BaseExceptionGroup as raised:
+        if len(raised.exceptions) > 1:
+            raise
+        failure = raised.exceptions[0]
+    # Re-raised outside the except clause, so the group anyio wrapped it in does
+    # not become its __context__ and bury the cause it was raised from.
+    if failure is not None:
+        raise failure
 
 
 def _failure(failures: Sequence[BaseException]) -> BaseException:
@@ -65,19 +95,9 @@ async def run_all[T](operations: Iterable[Callable[[], Awaitable[T]]], *, limit:
         async with limiter:
             results[index] = await factory()
 
-    failure: BaseException | None = None
-    try:
-        async with anyio.create_task_group() as task_group:
-            for index, factory in enumerate(factories):
-                task_group.start_soon(run, index, factory)
-    except BaseExceptionGroup as group:
-        if len(group.exceptions) > 1:
-            raise
-        failure = group.exceptions[0]
-    # Re-raised outside the except clause, so the group anyio wrapped it in does
-    # not become its __context__ and bury the cause it was raised from.
-    if failure is not None:
-        raise failure
+    async with task_group() as tasks:
+        for index, factory in enumerate(factories):
+            tasks.start_soon(run, index, factory)
     return results
 
 
@@ -125,9 +145,9 @@ async def settle_all[T](
             except Exception as error:
                 results[index] = error
 
-    async with anyio.create_task_group() as task_group:
+    async with task_group() as tasks:
         for index, factory in enumerate(factories):
-            task_group.start_soon(run, index, factory)
+            tasks.start_soon(run, index, factory)
     return results
 
 
