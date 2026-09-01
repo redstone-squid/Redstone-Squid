@@ -9,7 +9,7 @@ import {
   type SubmissionApiError,
 } from "../lib/submission-api";
 import type { RuntimeConfig } from "../lib/config";
-import type { Locale } from "../lib/i18n";
+import { type Locale, translate } from "../lib/i18n";
 import ConsentGate from "./ConsentGate";
 
 type Props = {
@@ -23,51 +23,28 @@ type Props = {
 const USER_CODE = /^[A-Za-z0-9-]{8,32}$/;
 const SESSION_CODE_KEY = "squid.cli.enrollment_code";
 
-const COPY = {
-  en: {
-    code: "User code",
-    help: "Enter only the short code shown by the Squid CLI. Never paste a device code, private key, or session token here.",
-    review: "Review this device",
-    reviewing: "Loading device…",
-    invalid: "Enter the 8–32 character user code shown by the CLI.",
-    auth: "Sign in with Discord before reviewing this CLI device.",
-    consent: "Accept the current privacy notice before approving this CLI device.",
-    unavailable: "CLI linking is temporarily unavailable. Try again shortly.",
-    signIn: "Sign in with Discord",
-    device: "Device",
-    fingerprint: "Public-key fingerprint",
-    warning:
-      "Approve only if this label and fingerprint match the CLI you started. Approval lets that device manage your private Squid drafts.",
-    approve: "Approve this CLI device",
-    approving: "Approving…",
-    success: "CLI device approved",
-    successBody: "The CLI may now finish signing in. You can close this page.",
-    another: "Review another code",
-  },
-  "zh-CN": {
-    code: "用户代码",
-    help: "只输入 Squid CLI 显示的短代码。请勿在此粘贴设备代码、私钥或会话令牌。",
-    review: "检查此设备",
-    reviewing: "正在加载设备…",
-    invalid: "请输入 CLI 显示的 8–32 位用户代码。",
-    auth: "请先使用 Discord 登录，再检查此 CLI 设备。",
-    consent: "批准此 CLI 设备前，请接受当前隐私声明。",
-    unavailable: "CLI 关联暂时不可用，请稍后重试。",
-    signIn: "使用 Discord 登录",
-    device: "设备",
-    fingerprint: "公钥指纹",
-    warning:
-      "仅当标签和指纹与你启动的 CLI 完全一致时才批准。批准后，该设备可管理你的私密 Squid 草稿。",
-    approve: "批准此 CLI 设备",
-    approving: "正在批准…",
-    success: "CLI 设备已获批准",
-    successBody: "CLI 现在可以完成登录。你可以关闭此页面。",
-    another: "检查另一个代码",
-  },
-} as const;
+const copyFor = (locale: Locale) => ({
+  code: translate(locale, "cliLink.code"),
+  help: translate(locale, "cliLink.help"),
+  review: translate(locale, "cliLink.review"),
+  reviewing: translate(locale, "cliLink.reviewing"),
+  invalid: translate(locale, "cliLink.invalid"),
+  auth: translate(locale, "cliLink.auth"),
+  consent: translate(locale, "cliLink.consent"),
+  unavailable: translate(locale, "cliLink.unavailable"),
+  signIn: translate(locale, "cliLink.signIn"),
+  device: translate(locale, "cliLink.device"),
+  fingerprint: translate(locale, "cliLink.fingerprint"),
+  warning: translate(locale, "cliLink.warning"),
+  approve: translate(locale, "cliLink.approve"),
+  approving: translate(locale, "cliLink.approving"),
+  success: translate(locale, "cliLink.success"),
+  successBody: translate(locale, "cliLink.successBody"),
+  another: translate(locale, "cliLink.another"),
+});
 
 function errorMessage(error: SubmissionApiError, locale: Locale): string {
-  const copy = COPY[locale];
+  const copy = copyFor(locale);
   if (error.kind === "authentication") return copy.auth;
   if (error.kind === "consent") return copy.consent;
   if (error.kind === "unavailable") return copy.unavailable;
@@ -112,7 +89,7 @@ export default function CliLink({
   api: suppliedApi,
   consentApi,
 }: Props) {
-  const copy = COPY[locale];
+  const copy = copyFor(locale);
   const api = useMemo(
     () => suppliedApi ?? createCliLinkApi(locale, config),
     [config, locale, suppliedApi],
