@@ -947,11 +947,8 @@ async def test_runner_finishes_the_rest_of_the_batch_when_one_job_cannot_be_fail
     )
 
     # The batch still reports its failure, but only once every job has settled.
-    # The job's own heartbeat task group is what wraps it into a group here.
-    with pytest.raises(BaseExceptionGroup) as caught:
+    with pytest.raises(RuntimeError):
         await runner.process_batch()
-
-    assert [type(error) for error in caught.value.exceptions] == [RuntimeError]
 
     sibling = await jobs.get(sibling_id)
     assert sibling is not None
