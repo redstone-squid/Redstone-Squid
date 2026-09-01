@@ -146,7 +146,7 @@ impl<'a> SubmissionMediaApi<'a> {
         self.client.send_json(
             ApiRequest::new(
                 ApiMethod::Get,
-                format!("/api/v1/submissions/drafts/{draft_id}/media"),
+                format!("/v1/submissions/drafts/{draft_id}/media"),
             ),
             Some(token),
         )
@@ -161,7 +161,7 @@ impl<'a> SubmissionMediaApi<'a> {
         self.client.send_json(
             ApiRequest::new(
                 ApiMethod::Get,
-                format!("/api/v1/submissions/drafts/{draft_id}/media/{upload_id}"),
+                format!("/v1/submissions/drafts/{draft_id}/media/{upload_id}"),
             ),
             Some(token),
         )
@@ -182,7 +182,7 @@ impl<'a> SubmissionMediaApi<'a> {
         let request = ApiRequest::new(
             ApiMethod::Post,
             format!(
-                "/api/v1/submissions/drafts/{draft_id}/media/{}",
+                "/v1/submissions/drafts/{draft_id}/media/{}",
                 kind.as_str()
             ),
         )
@@ -202,7 +202,7 @@ impl<'a> SubmissionMediaApi<'a> {
         self.client.send_no_content(
             ApiRequest::new(
                 ApiMethod::Delete,
-                format!("/api/v1/submissions/drafts/{draft_id}/media/{upload_id}"),
+                format!("/v1/submissions/drafts/{draft_id}/media/{upload_id}"),
             )
             .with_idempotency_key(idempotency_key),
             Some(token),
