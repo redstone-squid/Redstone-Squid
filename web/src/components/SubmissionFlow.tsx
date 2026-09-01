@@ -21,7 +21,7 @@ import {
 } from "../lib/submission-api";
 import type { RuntimeConfig } from "../lib/config";
 import ConsentGate from "./ConsentGate";
-import type { Locale } from "../lib/i18n";
+import { type Locale, translate } from "../lib/i18n";
 import {
   draftValue,
   fieldInputValue,
@@ -89,102 +89,48 @@ type Copy = {
   saveBeforeSubmit: string;
 };
 
-const COPY: Record<Locale, Copy> = {
-  en: {
-    loading: "Loading the current submission form…",
-    unavailableTitle: "Submission service unavailable",
-    unavailable:
-      "The submission service is temporarily unavailable. Your browser has not discarded a saved draft.",
-    incompatibleTitle: "This browser cannot render the current form",
-    chooseTitle: "Choose a build category",
-    chooseBody: "The form is supplied by the server and will adapt to the selected category.",
-    category: "Build category",
-    start: "Start draft",
-    signIn: "Sign in with Discord",
-    auth: "Sign in with Discord to create or continue your private draft.",
-    consent: "Your account must accept the current privacy notice before it can save submissions.",
-    retry: "Try again",
-    saving: "Saving…",
-    saved: "All changes saved",
-    required: "required",
-    optional: "optional",
-    onePerLine: "Enter one value per line.",
-    chooseOption: "Choose an option",
-    choicesUnavailable:
-      "Approved choices could not be loaded. Try again before editing these fields.",
-    mediaTitle: "Images and video",
-    mediaBody:
-      "Uploads stay private while the server checks and processes them. Source resolution and frame rate are retained within the published limits. Processed uploads are not yet attached to the created build record.",
-    mediaUnavailable:
-      "Media processing is temporarily unavailable. The rest of your draft is still editable.",
-    upload: "Add images or video",
-    uploadBusy: "Uploading…",
-    stripAudio: "Remove audio from uploaded videos",
-    remove: "Discard",
-    noMedia: "No media uploaded yet.",
-    limits: "Up to {images} images and {videos} videos; {size} per upload.",
-    submissionTitle: "Finalize draft",
-    submissionBody:
-      "The server validates this exact draft revision, checks that processing is complete, and creates one pending build record.",
-    submit: "Submit draft",
-    submitting: "Submitting…",
-    pending: "Your draft is being finalized. This page will update automatically.",
-    attention: "Your draft needs attention before finalization can complete.",
-    completed:
-      "Build #{id} was created in pending state and queued for Discord staff review. Processed uploads are not yet attached to the build record; keep this build ID.",
-    dead: "Finalization could not complete. The stable issue below explains the next action.",
-    deleteDraft: "Delete draft",
-    deleteConfirm: "Delete this draft and discard its uploaded media? This cannot be undone.",
-    schematicNote:
-      "This browser flow does not attach or claim to sanitize schematics. If a schematic is required, continue the draft from a supported in-game client.",
-    saveBeforeSubmit: "Fix or retry the unsaved fields before submitting.",
-  },
-  "zh-CN": {
-    loading: "正在载入当前投稿表单…",
-    unavailableTitle: "投稿服务暂时不可用",
-    unavailable: "投稿服务暂时不可用。浏览器没有丢弃已保存的草稿。",
-    incompatibleTitle: "此浏览器无法安全显示当前表单",
-    chooseTitle: "选择作品类别",
-    chooseBody: "表单由服务器提供，并会根据所选类别调整。",
-    category: "作品类别",
-    start: "开始草稿",
-    signIn: "使用 Discord 登录",
-    auth: "请使用 Discord 登录以创建或继续私人草稿。",
-    consent: "保存投稿前，你的账号必须接受当前隐私声明。",
-    retry: "重试",
-    saving: "正在保存…",
-    saved: "所有更改均已保存",
-    required: "必填",
-    optional: "选填",
-    onePerLine: "每行输入一项。",
-    chooseOption: "请选择",
-    choicesUnavailable: "无法载入已批准的选项。编辑这些字段前请重试。",
-    mediaTitle: "图片与视频",
-    mediaBody:
-      "服务器检查和处理期间，上传内容保持私密。在公布的限制内保留源分辨率与帧率。处理后的上传内容尚未附加到所创建的作品记录。",
-    mediaUnavailable: "媒体处理暂时不可用。草稿的其他部分仍可编辑。",
-    upload: "添加图片或视频",
-    uploadBusy: "正在上传…",
-    stripAudio: "移除上传视频中的音频",
-    remove: "丢弃",
-    noMedia: "尚未上传媒体。",
-    limits: "最多 {images} 张图片和 {videos} 个视频；每次上传 {size}。",
-    submissionTitle: "完成草稿",
-    submissionBody: "服务器会验证此草稿版本、确认处理已经完成，并创建一条待处理作品记录。",
-    submit: "提交草稿",
-    submitting: "正在提交…",
-    pending: "正在完成草稿。本页将自动更新。",
-    attention: "草稿需要修改后才能完成投稿。",
-    completed:
-      "作品 #{id} 已创建为待处理状态，并已排队等待发送至 Discord 供工作人员审核。处理后的上传内容尚未附加到作品记录；请保存此作品编号。",
-    dead: "无法完成投稿。下方的稳定问题代码说明了下一步。",
-    deleteDraft: "删除草稿",
-    deleteConfirm: "删除此草稿并丢弃其上传媒体？此操作无法撤销。",
-    schematicNote:
-      "此网页流程不会附加或声称已清理原理图。如需原理图，请从受支持的游戏内客户端继续草稿。",
-    saveBeforeSubmit: "提交前请修复或重试未保存的字段。",
-  },
-};
+const copyFor = (locale: Locale): Copy => ({
+  loading: translate(locale, "submitFlow.loading"),
+  unavailableTitle: translate(locale, "submitFlow.unavailableTitle"),
+  unavailable: translate(locale, "submitFlow.unavailable"),
+  incompatibleTitle: translate(locale, "submitFlow.incompatibleTitle"),
+  chooseTitle: translate(locale, "submitFlow.chooseTitle"),
+  chooseBody: translate(locale, "submitFlow.chooseBody"),
+  category: translate(locale, "submitFlow.category"),
+  start: translate(locale, "submitFlow.start"),
+  signIn: translate(locale, "submitFlow.signIn"),
+  auth: translate(locale, "submitFlow.auth"),
+  consent: translate(locale, "submitFlow.consent"),
+  retry: translate(locale, "submitFlow.retry"),
+  saving: translate(locale, "submitFlow.saving"),
+  saved: translate(locale, "submitFlow.saved"),
+  required: translate(locale, "submitFlow.required"),
+  optional: translate(locale, "submitFlow.optional"),
+  onePerLine: translate(locale, "submitFlow.onePerLine"),
+  chooseOption: translate(locale, "submitFlow.chooseOption"),
+  choicesUnavailable: translate(locale, "submitFlow.choicesUnavailable"),
+  mediaTitle: translate(locale, "submitFlow.mediaTitle"),
+  mediaBody: translate(locale, "submitFlow.mediaBody"),
+  mediaUnavailable: translate(locale, "submitFlow.mediaUnavailable"),
+  upload: translate(locale, "submitFlow.upload"),
+  uploadBusy: translate(locale, "submitFlow.uploadBusy"),
+  stripAudio: translate(locale, "submitFlow.stripAudio"),
+  remove: translate(locale, "submitFlow.remove"),
+  noMedia: translate(locale, "submitFlow.noMedia"),
+  limits: translate(locale, "submitFlow.limits"),
+  submissionTitle: translate(locale, "submitFlow.submissionTitle"),
+  submissionBody: translate(locale, "submitFlow.submissionBody"),
+  submit: translate(locale, "submitFlow.submit"),
+  submitting: translate(locale, "submitFlow.submitting"),
+  pending: translate(locale, "submitFlow.pending"),
+  attention: translate(locale, "submitFlow.attention"),
+  completed: translate(locale, "submitFlow.completed"),
+  dead: translate(locale, "submitFlow.dead"),
+  deleteDraft: translate(locale, "submitFlow.deleteDraft"),
+  deleteConfirm: translate(locale, "submitFlow.deleteConfirm"),
+  schematicNote: translate(locale, "submitFlow.schematicNote"),
+  saveBeforeSubmit: translate(locale, "submitFlow.saveBeforeSubmit"),
+});
 
 function storedValue(key: string): string | null {
   try {
@@ -232,7 +178,9 @@ function mediaFailureMessage(error: SubmissionApiError, copy: Copy): string {
 }
 
 export default function SubmissionFlow({ locale, config, api: suppliedApi, consentApi }: Props) {
-  const copy = COPY[locale];
+  // Memoized because the effects below take `copy` as a dependency: a fresh
+  // object each render would re-run them forever.
+  const copy = useMemo(() => copyFor(locale), [locale]);
   // The call a consent refusal interrupted, or null. Held in state rather than a ref because it
   // decides what renders: its presence *is* "show the notice".
   const [pendingRetry, setPendingRetry] = useState<(() => Promise<unknown>) | null>(null);

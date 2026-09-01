@@ -9,7 +9,7 @@ import {
   type SubmissionApiError,
 } from "../lib/submission-api";
 import type { RuntimeConfig } from "../lib/config";
-import type { Locale } from "../lib/i18n";
+import { type Locale, translate } from "../lib/i18n";
 import ConsentGate from "./ConsentGate";
 
 type Props = {
@@ -22,43 +22,24 @@ type Props = {
 
 const USER_CODE = /^[A-Za-z2-7-]{8,32}$/;
 
-const COPY = {
-  en: {
-    code: "User code",
-    help: "Enter only the short user code shown by the Minecraft client. Never paste a device code or access token here.",
-    approve: "Approve this player",
-    approving: "Approving…",
-    invalid: "Enter the 8–32 character user code shown in game.",
-    auth: "Sign in with Discord before approving this player.",
-    consent: "Accept the current privacy notice before approving this player.",
-    unavailable: "Minecraft linking is temporarily unavailable. Try again shortly.",
-    signIn: "Sign in with Discord",
-    success: "Player approved",
-    successBody: "The {origin} may now finish linking Java account {uuid}.",
-    paper: "Paper server",
-    fabric: "Fabric client",
-    another: "Approve another code",
-  },
-  "zh-CN": {
-    code: "用户代码",
-    help: "只输入 Minecraft 客户端显示的短用户代码。请勿在此粘贴设备代码或访问令牌。",
-    approve: "批准此玩家",
-    approving: "正在批准…",
-    invalid: "请输入游戏内显示的 8–32 位用户代码。",
-    auth: "请先使用 Discord 登录，再批准此玩家。",
-    consent: "批准此玩家前，请接受当前隐私声明。",
-    unavailable: "Minecraft 关联暂时不可用，请稍后重试。",
-    signIn: "使用 Discord 登录",
-    success: "玩家已获批准",
-    successBody: "{origin}现在可以完成 Java 账号 {uuid} 的关联。",
-    paper: "Paper 服务端",
-    fabric: "Fabric 客户端",
-    another: "批准另一个代码",
-  },
-} as const;
+const copyFor = (locale: Locale) => ({
+  code: translate(locale, "minecraftLink.code"),
+  help: translate(locale, "minecraftLink.help"),
+  approve: translate(locale, "minecraftLink.approve"),
+  approving: translate(locale, "minecraftLink.approving"),
+  invalid: translate(locale, "minecraftLink.invalid"),
+  auth: translate(locale, "minecraftLink.auth"),
+  consent: translate(locale, "minecraftLink.consent"),
+  unavailable: translate(locale, "minecraftLink.unavailable"),
+  signIn: translate(locale, "minecraftLink.signIn"),
+  success: translate(locale, "minecraftLink.success"),
+  paper: translate(locale, "minecraftLink.paper"),
+  fabric: translate(locale, "minecraftLink.fabric"),
+  another: translate(locale, "minecraftLink.another"),
+});
 
 function errorMessage(error: SubmissionApiError, locale: Locale): string {
-  const copy = COPY[locale];
+  const copy = copyFor(locale);
   if (error.kind === "authentication") return copy.auth;
   if (error.kind === "consent") return copy.consent;
   if (error.kind === "unavailable") return copy.unavailable;
@@ -72,7 +53,7 @@ export default function MinecraftLink({
   api: suppliedApi,
   consentApi,
 }: Props) {
-  const copy = COPY[locale];
+  const copy = copyFor(locale);
   const api = useMemo(
     () => suppliedApi ?? createMinecraftLinkApi(locale, config),
     [config, locale, suppliedApi],
@@ -118,9 +99,10 @@ export default function MinecraftLink({
         <p className="kicker">MINECRAFT / APPROVED</p>
         <h2>{copy.success}</h2>
         <p>
-          {copy.successBody
-            .replace("{origin}", approval.origin === "paper" ? copy.paper : copy.fabric)
-            .replace("{uuid}", approval.java_uuid)}
+          {translate(locale, "minecraftLink.successBody", {
+            origin: approval.origin === "paper" ? copy.paper : copy.fabric,
+            uuid: approval.java_uuid,
+          })}
         </p>
         <button
           className="button"
