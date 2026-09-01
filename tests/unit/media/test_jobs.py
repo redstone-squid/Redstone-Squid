@@ -882,3 +882,78 @@ async def test_terminal_validation_failure_cleans_raw_while_retryable_failure_ke
         assert snapshot.attempts == 1
         assert (snapshot.upload.source_object_key in artifacts.objects) is raw_exists
         assert not any(tmp_path.iterdir())
+
+
+class BrokenFailurePathJobs(MemoryMediaJobs):
+    """A repository whose failure path is down for one job, as it is during an outage."""
+
+    def __init__(self, broken_upload_id: UUID) -> None:
+        super().__init__()
+        self.broken_upload_id = broken_upload_id
+
+    @override
+    async def fail(
+        self,
+        job: ClaimedMediaJob,
+        error: str,
+        *,
+        max_attempts: int,
+        terminal: bool,
+    ) -> MediaJobFailureOutcome:
+        if job.upload.id == self.broken_upload_id:
+            msg = "the failure path is unavailable too"
+            raise RuntimeError(msg)
+        return await super().fail(job, error, max_attempts=max_attempts, terminal=terminal)
+
+
+class SelectivelyFailingNormalizer(WritingNormalizer):
+    """Fail one job by its raw bytes, and hold the others at a checkpoint meanwhile."""
+
+    def __init__(self, kind: MediaKind, *, failing_source: bytes) -> None:
+        super().__init__(kind)
+        self.failing_source = failing_source
+
+    @override
+    async def probe(self, source_path: Path) -> MediaProbe:
+        if source_path.read_bytes() == self.failing_source:
+            msg = "unreadable source"
+            raise ValueError(msg)
+        await asyncio.sleep(0.05)
+        return await super().probe(source_path)
+
+
+async def test_runner_finishes_the_rest_of_the_batch_when_one_job_cannot_be_failed(tmp_path: Path) -> None:
+    """Cancelling a sibling would skip its own except clause and strand its claim."""
+    broken_id = uuid4()
+    sibling_id = uuid4()
+    artifacts = MemoryArtifacts()
+    repository = BrokenFailurePathJobs(broken_id)
+    jobs = MediaNormalizationJobService(repository, artifacts)
+    for upload_id, source in ((broken_id, b"broken-image"), (sibling_id, b"raw-image")):
+        await jobs.submit(
+            MediaUploadSubmission(
+                draft_id=DRAFT_ID,
+                kind=MediaKind.IMAGE,
+                source=source,
+                source_content_type="image/jpeg",
+                upload_id=upload_id,
+            )
+        )
+    runner = MediaNormalizationJobRunner(
+        jobs,
+        artifacts,
+        MediaNormalizationService(SelectivelyFailingNormalizer(MediaKind.IMAGE, failing_source=b"broken-image")),
+        working_directory=tmp_path,
+    )
+
+    # The batch still reports its failure, but only once every job has settled.
+    # The job's own heartbeat task group is what wraps it into a group here.
+    with pytest.raises(BaseExceptionGroup) as caught:
+        await runner.process_batch()
+
+    assert [type(error) for error in caught.value.exceptions] == [RuntimeError]
+
+    sibling = await jobs.get(sibling_id)
+    assert sibling is not None
+    assert sibling.status is MediaJobStatus.COMPLETED
+    assert not any(tmp_path.iterdir())

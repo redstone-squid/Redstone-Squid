@@ -7,7 +7,8 @@ for them, but returns nothing, so these helpers restore the one thing gather
 was actually being used for: results in argument order.
 
 One helper per failure policy: :func:`run_all` cancels the siblings on the
-first failure, and :func:`settle_all` hands the failures back as values.
+first failure, :func:`run_all_settled` lets every operation finish and then
+raises, and :func:`settle_all` hands the failures back as values.
 """
 
 from collections.abc import Awaitable, Callable, Iterable, Sequence
@@ -45,8 +46,10 @@ def _failure(failures: Sequence[BaseException]) -> BaseException:
 async def run_all[T](operations: Iterable[Callable[[], Awaitable[T]]], *, limit: int | None = None) -> list[T]:
     """Run every operation concurrently and return results in argument order.
 
-    The first failure cancels the rest and propagates. One failure propagates as
-    itself, several as an ExceptionGroup the caller can split with ``except*``.
+    The first failure cancels the rest and propagates, so use this only where a
+    cancelled sibling strands nothing; where each operation owns state that its
+    own error handling has to release, use :func:`run_all_settled`. One failure
+    propagates as itself, several as an ExceptionGroup to split with ``except*``.
 
     Args:
         operations: Zero-argument callables, each returning an awaitable.
@@ -76,6 +79,25 @@ async def run_all[T](operations: Iterable[Callable[[], Awaitable[T]]], *, limit:
     if failure is not None:
         raise failure
     return results
+
+
+async def run_all_settled[T](operations: Iterable[Callable[[], Awaitable[T]]], *, limit: int | None = None) -> list[T]:
+    """Run every operation to completion, then raise if any of them failed.
+
+    Unlike :func:`run_all`, a failure cancels nothing, so every operation reaches
+    its own ``except`` clause -- which for a claimed job is what marks it failed
+    and releases the claim. Cancelling a sibling instead skips that clause and
+    strands the claim until its lease expires.
+
+    Args:
+        operations: Zero-argument callables, each returning an awaitable.
+        limit: Maximum operations in flight at once. ``None`` runs them all.
+    """
+    outcomes = await settle_all(operations, limit=limit)
+    failures = [outcome for outcome in outcomes if isinstance(outcome, Exception)]
+    if failures:
+        raise _failure(failures)
+    return cast(list[T], outcomes)
 
 
 async def settle_all[T](
