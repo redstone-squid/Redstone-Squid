@@ -3,7 +3,7 @@
 import anyio
 import pytest
 
-from squid.core.concurrency import run_all, run_all_awaitables, run_all_settled, settle_all
+from squid.core.concurrency import run_all, run_all_awaitables, run_all_settled, settle_all, task_group
 
 
 async def test_run_all_returns_results_in_argument_order() -> None:
@@ -172,5 +172,57 @@ async def test_run_all_settled_groups_several_failures() -> None:
 
     with pytest.raises(BaseExceptionGroup) as caught:
         await run_all_settled([lambda: failing(RuntimeError("first")), lambda: failing(ValueError("second"))])
+
+    assert [type(error) for error in caught.value.exceptions] == [RuntimeError, ValueError]
+
+
+async def test_task_group_raises_a_lone_child_failure_unwrapped() -> None:
+    """A supervised child's failure has to stay matchable by its own type."""
+
+    async def child() -> None:
+        msg = "boom"
+        raise RuntimeError(msg)
+
+    async def supervise() -> None:
+        async with task_group() as tasks:
+            tasks.start_soon(child)
+            await anyio.sleep(0.01)
+
+    with pytest.raises(RuntimeError):
+        await supervise()
+
+
+async def test_task_group_passes_a_body_failure_through_untouched() -> None:
+    """The body's own error must arrive as itself, chain intact."""
+    cause = ValueError("root")
+    raised = RuntimeError("wrapped")
+    raised.__cause__ = cause
+
+    async def child() -> None:
+        await anyio.sleep(30)
+
+    async def supervise() -> None:
+        async with task_group() as tasks:
+            tasks.start_soon(child)
+            raise raised
+
+    with pytest.raises(RuntimeError) as caught:
+        await supervise()
+
+    assert caught.value is raised
+    assert caught.value.__cause__ is cause
+
+
+async def test_task_group_groups_several_child_failures() -> None:
+    async def child(error: Exception) -> None:
+        raise error
+
+    async def supervise() -> None:
+        async with task_group() as tasks:
+            tasks.start_soon(child, RuntimeError("first"))
+            tasks.start_soon(child, ValueError("second"))
+
+    with pytest.raises(BaseExceptionGroup) as caught:
+        await supervise()
 
     assert [type(error) for error in caught.value.exceptions] == [RuntimeError, ValueError]
