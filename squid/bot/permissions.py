@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 import discord
 from discord import app_commands
 
+import squid_ui_discord as sd
 from squid.bot.access_view import AccessScreen
 from squid.bot.utils.accounts import account_id_for
 from squid.bot.utils.permissions import allows, enforce, hide_unless, subject_for_interaction
@@ -20,7 +21,6 @@ from squid.permissions.domain.catalogue import (
     ROLE_DEFINITION_MANAGE,
     ROLE_DEFINITION_MANAGE_GUILD,
 )
-from squid_ui_discord.ext import Cog
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -37,7 +37,7 @@ ACCESS_NODES = (
 )
 
 
-class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT], name="Permissions"):
+class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="Permissions"):
     """Open one capability-aware access workspace per administrator and guild."""
 
     def __init__(self, bot: BotT) -> None:
