@@ -24,7 +24,9 @@ type DocumentContent = (
 )
 type StaticContent = MessagePayload | str | discord.Embed | discord.ui.View | DocumentContent
 type FacadeContent = StaticContent | Component[ComponentsV2Target]
-type SendDestination = Messageable
+# Both halves for the same reason `send_to` has two overloads: discord.py's overloaded `send`
+# does not structurally satisfy the protocol, so a real channel needs naming on its own.
+type SendDestination = discord.abc.Messageable | Messageable
 type ResolvableRuntimeSource = discord.Client | RequestSource | Replyable
 type LocalizationResolver = Callable[[LocalizationSource], Awaitable[Localization]]
 

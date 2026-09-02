@@ -2,7 +2,7 @@
 
 import contextlib
 import logging
-from typing import TYPE_CHECKING, cast, override
+from typing import TYPE_CHECKING, Self, cast, override
 
 import discord
 from discord import app_commands
@@ -12,7 +12,6 @@ from squid.accounts.domain import IdentityProvider
 from squid.bot._types import GuildMessageable
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import localization_for, resolve_locale
-from squid.bot.operations import run_command_operation
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
 from squid.bot.ui import error_node, info_node, render_payload, text_node
 from squid.bot.voting.actors import describe_rejection, resolve_actor
@@ -25,7 +24,6 @@ from squid.voting.domain import PollScope, VoteActor, VoteKind, VoteOption, Vote
 from squid.voting.errors import InvalidVoteConfigurationError
 from squid_ui.text import localization_scope
 from squid_ui_discord import send_to
-from squid_ui_discord.ext import Cog
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -41,7 +39,7 @@ would otherwise put a bot message in the channel for every stray reaction.
 """
 
 
-class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
+class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     def __init__(self, bot: BotT):
         super().__init__(bot)
         self.vote_service = bot.services.votes
@@ -49,19 +47,10 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
         self._background_tasks: set[JobHandle] = set()
         self.vote_service.set_actor_resolver(self)
         self.bot.reactions.subscribe(self)
-        # A context menu cannot be declared with a decorator on a bound method, so it is
-        # built here and taken back down on unload; the tree is the bot's, not the cog's.
-        # https://github.com/Rapptz/discord.py/issues/7823#issuecomment-1086830458
-        self.delete_ctx_menu = app_commands.ContextMenu(
-            name="Vote to Delete",
-            callback=self.delete_vote_context_menu,
-        )
-        self.bot.tree.add_command(self.delete_ctx_menu)
 
     @override
     async def ui_unload(self) -> None:
         self.bot.reactions.unsubscribe(self)
-        self.bot.tree.remove_command(self.delete_ctx_menu.name, type=self.delete_ctx_menu.type)
         await self.bot.background_tasks.cancel(*self._background_tasks)
 
     def _track(self, handle: JobHandle) -> None:
@@ -194,40 +183,30 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
         with contextlib.suppress(discord.Forbidden, discord.NotFound):
             await send_to(message.channel)(payload)
 
-    @app_commands.command(name="poll")
+    @sd.command(name="poll")
     @app_commands.guild_only()
-    async def poll(self, interaction: discord.Interaction[BotT]) -> None:
+    async def poll(self, request: sd.Request[Self]) -> sd.CommandResult:
         """Create a multi-option poll through an ephemeral preview wizard."""
-
+        actor = request.user
         # A modal has to open on an unspent interaction, and showing the notice spends this one,
         # so an unconsented author is asked here and re-runs to get the editor.
-        account = await self.bot.services.accounts.get_account_by_identity(
-            IdentityProvider.DISCORD, str(interaction.user.id)
-        )
+        account = await self.bot.services.accounts.get_account_by_identity(IdentityProvider.DISCORD, str(actor.id))
         if account is None or account.id is None or account.needs_consent_refresh:
-            if await ensure_consented_account(interaction, self.bot.services.accounts) is None:
-                return
-            await self.ui.respond(
-                interaction,
-                text_node(tr("Thanks. Run `/poll` again to open the editor.")),
-                audience="personal",
-            )
-            return
-        allow_network = isinstance(interaction.user, discord.Member) and await self.publisher.may_create_network(
-            interaction.user
-        )
-        guild = interaction.guild
-        channel = interaction.channel
+            if await ensure_consented_account(request, self.bot.services.accounts) is None:
+                return None
+            return sd.Response(text_node(tr("Thanks. Run `/poll` again to open the editor.")), audience="personal")
+        allow_network = isinstance(actor, discord.Member) and await self.publisher.may_create_network(actor)
+        guild = request.guild
+        channel = request.channel
         if guild is None or channel is None:
-            return
+            return None
 
         async def resolve_options(lines: tuple[str, ...]) -> tuple[VoteOption, ...]:
             return await self.publisher.resolve_options(guild.id, lines)
 
         async def publish(draft: PollDraft, options: tuple[VoteOption, ...]) -> str:
             if draft.scope is PollScope.NETWORK and not (
-                isinstance(interaction.user, discord.Member)
-                and await self.publisher.may_create_network(interaction.user)
+                isinstance(actor, discord.Member) and await self.publisher.may_create_network(actor)
             ):
                 raise InvalidVoteConfigurationError(tr(t"You may no longer publish a poll to every server."))
             message = await self.publisher.create_and_publish(
@@ -241,55 +220,44 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
             )
             return message.jump_url
 
-        await self.ui.respond(interaction, PollScreen(resolve_options, publish, allow_network=allow_network))
+        return PollScreen(resolve_options, publish, allow_network=allow_network)
 
-    async def delete_vote_context_menu(self, interaction: discord.Interaction[BotT], message: discord.Message) -> None:
+    @sd.context_menu(name="Vote to Delete", defer="private")
+    async def delete_vote_context_menu(self, request: sd.Request[Self], message: discord.Message) -> sd.CommandResult:
         """Open a vote on deleting the message that was right-clicked.
 
         This was `/vote delete <message>`, which in slash form meant pasting a link to a
         message you were already looking at (audit C4).
         """
-        request = await self.ui.resolve(interaction)
-        await request.defer("private")
+        if request.guild is None or message.guild != request.guild:
+            return error_node(tr("Cannot vote on this message"), tr("The message is not from this guild."))
 
-        if interaction.guild is None or message.guild != interaction.guild:
-            await request.respond(
-                error_node(
-                    tr("Cannot vote on this message"),
-                    tr("The message is not from this guild."),
-                ),
-                audience="personal",
-            )
-            return
-
-        author_account_id = await ensure_consented_account(interaction, self.bot.services.accounts)
+        author_account_id = await ensure_consented_account(request, self.bot.services.accounts)
         if author_account_id is None:
-            return
+            return None
 
-        # The card is a public artifact of a public decision, so it goes in the channel
-        # rather than into the ephemeral reply the right-click opened.
-        async def publish(_progress, result):
-            published = result.message
-            if published is None:
-                detail = "a public vote operation requires the delivered Discord message"
-                raise RuntimeError(detail)
+        # The card is a public artifact of a public decision, so it goes in the channel rather
+        # than into the ephemeral reply the right-click opened. The placeholder is adopted by the
+        # reconciler, which replaces it with the vote card.
+        placeholder = await self.ui.send(
+            message.channel, info_node(tr("Working"), tr("Getting information...")), locale=request.locale
+        )
+        published = placeholder.delivery.message if isinstance(placeholder, sd.Sent) else None
+        if published is None:
+            detail = "a public vote needs the delivered Discord message"
+            raise RuntimeError(detail)
+        try:
             await start_delete_log_vote(
                 self.bot,
                 author_account_id=author_account_id,
                 target_message=message,
                 published_message=published,
             )
-            # The reconciler has replaced the progress card with the authoritative vote card.
-            # Keeping the operation's terminal scene equal to its initial scene suppresses a
-            # mount edit that would otherwise overwrite that adopted message.
-            return info_node(tr("Working"), tr("Getting information..."))
-
-        await run_command_operation(
-            request,
-            publish,
-            destination=sd.send_to(message.channel),
-        )
-        await request.respond(text_node(tr("Deletion vote opened.")), audience="personal")
+        except BaseException:
+            with contextlib.suppress(discord.HTTPException):
+                await published.delete()
+            raise
+        return text_node(tr("Deletion vote opened."))
 
     async def _consented_account_id(self, discord_id: int) -> int | None:
         """Resolve a voter's account without creating one.
