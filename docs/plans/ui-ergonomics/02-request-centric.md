@@ -6,9 +6,11 @@ routing below the facade are untouched.
 
 ## Status
 
-Design agreed; prototype pending. The prototype ports `submit.py`/`edit.py`,
-`consent.py`+`verify.py` and `operations.py`+`admin.py:235` in a worktree and records the
-before/after numbers in [Verification](#verification) before anything lands on the branch.
+Prototyped on `cleanup/surface-audit` (commits `bd5ba7a8`..`cf697211`, 2026-09-02): the
+package half and all three call-site clusters are ported, plus `give_redstoner.py` and the
+`ext.Cog` imports. Numbers and findings are in [Verification](#verification). Still open:
+the deletions list below (the `DiscordUI` shim, `ext`, `run_managed_result`'s public name,
+`app_ui`) and the docs.
 
 ## What is wrong
 
@@ -206,17 +208,55 @@ the stale package README and `docs/plans/ui-ergonomics/README.md`.
 
 ## Verification
 
-Prototype in a worktree against the three call-site clusters, then record here:
+Measured from `f328050e` (before) to `cf697211` (after). Lines are `wc -l`; casts exclude
+the `should_remove_reaction_on_cast` false match.
 
 | Cluster | Lines before/after | `cast()` before/after | duck-typed `getattr`/`hasattr` before/after |
 |---|---|---|---|
-| `submit.py` + `edit.py` (group members, forms, defer) | | | |
-| `consent.py` + `verify.py` (child sessions from a click) | | | |
-| `operations.py` + `admin.py:235` (pending card) | | | |
+| `submit.py` + `edit.py` (+ `groups.py`, `ui/opening.py`) | 617 → 559 | 0 → 1 | 0 → 0 |
+| `consent.py` + `verify.py` | 623 → 576 | 2 → 0 | 1 → 0 |
+| `operations.py` + `admin.py` + `voting/vote.py` | 819 → 550 | 6 → 1 | 3 → 0 |
 
-Plus: the redundant `audience="personal"` count (16 → 0 expected), and one test per row of
-the request table above under `packages/squid-ui-discord/tests/`. Pyrefly must stay at zero
-for `squid/`.
+The two casts that remain narrow `request.client` to `RedstoneSquid` (`opening.py:23`, a
+shared helper typed `Request[Any]`) and a channel to `GuildMessageable` (`vote.py:214`);
+neither is about the request shape. `audience="personal"` went 25 → 14: the eleven that
+followed a private defer (nine in `submit.py`/`edit.py`, two in the vote-to-delete flow) are
+gone, and each survivor precedes a reply with no defer, where the audience is a real choice.
+The request table has a test per row in `packages/squid-ui-discord/tests/test_request.py` and
+`test_commands.py`. Pyrefly reports zero errors for every ported file.
+
+Found while porting:
+
+- **Defer-then-re-resolve bug, in production.** `/build submit` deferred privately, then
+  built a second `DiscordUI` request that did not know about the defer, so the workspace went
+  out as a follow-up and the "thinking" placeholder never resolved. `edit.py:129` →
+  `opening.py:73` had the same shape behind the Edit Build menu. Memoizing the request on
+  `interaction.extras` fixes both; `tests/unit/bot/submission/test_submit_command.py` and the
+  tightened `test_build_edit_command.py` pin it.
+- **`BuildEditCommands.edit_build` is dead.** Unregistered since `26002d83`; kept and marked,
+  not ported to a command.
+- **`ErrorReportScreen.root_options` was never read**, so the error browser shipped with the
+  default chrome. Now `Screen.chrome` (`1a85eab9`).
+- **`SendDestination` rejected real channels.** discord.py's overloaded `send` does not satisfy
+  the structural `Messageable`, which nothing noticed because `Scope.send` had no callers.
+  Widened to the same union as `send_to`.
+- **Pending-card behaviour narrowed.** `managed_result` carried a 900 s timeout and
+  `dismiss_on_success`; `pending=` posts the card and replaces it with the result or the error
+  policy's rendering, nothing else. `raise-error` is the only user and does not miss them.
+- **Vote-to-delete simplified.** The reconciler used to adopt the pending card; now the menu
+  sends a placeholder through `Scope.send`, hands the delivered message to
+  `start_delete_log_vote`, and deletes it if opening the vote fails.
+- **Middleware and error audience.** Route middleware re-homes onto the group (`OwnerGuildOnly`
+  unchanged). The error handler answers `audience="personal"` only when nothing was deferred;
+  after a defer it follows the ledger, because a public "thinking" placeholder can only be
+  completed publicly (`errors.py:_error_responder`).
+- `sd.testing.invoke_context_menu(owner, method, interaction, target)` runs a
+  `@sd.context_menu` method through its registered dispatch; `sdx.testing` is retained until
+  `ext` is deleted. `permissions.allows/enforce` accept a transitional `Caller` union of
+  `Request` and the native sources until the last native caller is gone.
+- Pre-existing, not from this work: `test_ui_ownership.py::test_localized_ui_literals_use_template_strings`
+  fails on the branch, and `tests/architecture/test_naming.py` needs `squid_ui_slack`
+  installed to collect.
 
 ## Order
 
