@@ -13,7 +13,6 @@ from squid.notifications import (
     PendingNotificationDelivery,
 )
 from squid.runtime import JobHandle
-from squid_ui_discord.ext import Cog
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
@@ -21,7 +20,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class NotificationCog(Cog[Any]):
+class NotificationCog(sd.Cog[Any]):
     """Manage notification state and deliver queued DMs without prefix commands."""
 
     bot: RedstoneSquid

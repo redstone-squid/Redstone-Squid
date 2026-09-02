@@ -8,6 +8,7 @@ import discord
 from discord import app_commands
 from whenever import Instant
 
+import squid_ui_discord as sd
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
 from squid.bot.starboard.debounce import EntryDebouncer, EntryKey
 from squid.bot.starboard.screen import StarboardScreen
@@ -27,7 +28,6 @@ from squid.permissions.domain.catalogue import (
 from squid.posts.domain import starboard_entry_key
 from squid.reactions.domain import ReactionActor
 from squid.starboard.domain import OriginMessage, StarboardConfig
-from squid_ui_discord.ext import Cog
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -49,7 +49,7 @@ able to reach the group that contains it.
 """
 
 
-class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
+class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     """Mirror messages after their weighted reactions cross configured thresholds."""
 
     def __init__(self, bot: BotT) -> None:
@@ -96,17 +96,17 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
     async def on_reaction_clear_emoji(self, event: ReactionClearEvent) -> None:
         self._schedule(await self.service.clear_votes(event.payload.message_id, event.emoji))
 
-    @Cog.listener()
+    @sd.Cog.listener()
     async def on_raw_message_edit(self, payload: discord.RawMessageUpdateEvent) -> None:
         self._schedule(await self.service.refresh(payload.message_id, force=True), force=True)
 
-    @Cog.listener()
+    @sd.Cog.listener()
     async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent) -> None:
         # A deleted *post* is tombstoned by the shared message listener and repaired by
         # the reconciler, so only the origin's disappearance is starboard business.
         self._schedule(await self.service.mark_origin_deleted(payload.message_id), force=True)
 
-    @Cog.listener()
+    @sd.Cog.listener()
     async def on_guild_channel_delete(self, channel: discord.abc.GuildChannel) -> None:
         await self.service.disable_channel(channel.id)
 
