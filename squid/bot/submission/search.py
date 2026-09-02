@@ -4,13 +4,13 @@ import json
 import logging
 from dataclasses import asdict
 from enum import Enum, StrEnum
-from typing import TYPE_CHECKING, Any, override
+from typing import TYPE_CHECKING, Any, Self
 
-import discord
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context, when_mentioned
 
+import squid_ui_discord as sd
 from squid.bot.submission.build_browse import BuildBrowseScreen, BuildCapabilities
 from squid.bot.submission.consent_banner import BuildLogConsentStickyMessage
 from squid.bot.submission.edit import BuildEditCommands
@@ -31,7 +31,6 @@ from squid.permissions.domain.catalogue import (
     BUILD_SUBMISSION_VIEW_PENDING,
 )
 from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
-from squid_ui_discord.ext import Cog
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -110,16 +109,9 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](
         self.inference = bot.services.build_inference
         self.messages = bot.services.messages
         self.consent_sticky = BuildLogConsentStickyMessage()
-        self.register_edit_context_menu()
-        self.register_recalc_context_menu()
-
-    @override
-    async def ui_unload(self) -> None:
-        for menu in (self.edit_ctx_menu, self.recalc_ctx_menu):
-            self.bot.tree.remove_command(menu.name, type=menu.type)
 
     @autocompletes(sort="search_sorts", query="search_query")
-    @app_commands.command(name="search", description="Search builds, records, and taxonomy metadata")
+    @sd.command(name="search", description="Search builds, records, and taxonomy metadata", defer="public")
     @app_commands.describe(
         query=app_commands.locale_str("Search text and filters, e.g. `width:5`."),
         scope=app_commands.locale_str("What to look through: records, builds, patterns, restrictions, or all."),
@@ -128,26 +120,24 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](
     )
     async def search_records(
         self,
-        interaction: discord.Interaction[BotT],
+        request: sd.Request[Self],
         scope: SearchTarget = SearchTarget.records,
         sort: str | None = None,
         mode: SearchModeChoice = SearchModeChoice.keyword,
         *,
         query: str,
-    ) -> None:
+    ) -> SearchScreen:
         """Search records, builds, patterns, and restrictions using text and field filters."""
-        await interaction.response.defer()
-        await self._show_search(interaction, scope=scope, sort=sort, mode=mode, query=query)
+        return await self._search_screen(scope=scope, sort=sort, mode=mode, query=query)
 
-    async def _show_search(
+    async def _search_screen(
         self,
-        source: Context[BotT] | discord.Interaction[BotT],
         *,
         scope: SearchTarget = SearchTarget.records,
         sort: str | None = None,
         mode: SearchModeChoice = SearchModeChoice.keyword,
         query: str,
-    ) -> None:
+    ) -> SearchScreen:
         search_scope, targeted_query = _targeted(scope, query)
         request = SearchRequest(
             targeted_query,
@@ -156,24 +146,21 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](
             sort=SearchSort.parse(sort),
         )
         page = await self.search.search(request)
-        await self.ui.respond(
-            source,
-            SearchScreen(
-                self.search,
-                request,
-                page,
-                load_build=self.queries.get,
-                render_build=lambda build: self.bot.for_build(build).render_node(),
-            ),
+        return SearchScreen(
+            self.search,
+            request,
+            page,
+            load_build=self.queries.get,
+            render_build=lambda build: self.bot.for_build(build).render_node(),
         )
 
     @autocompletes(build_id="builds")
     @BuildCommandGroup.build_group.command(name="browse")
     @app_commands.rename(build_id="id")
     @app_commands.describe(build_id=app_commands.locale_str("Open this build directly."))
-    async def browse_builds(self, interaction: discord.Interaction[BotT], build_id: int | None = None) -> None:
+    async def browse_builds(self, request: sd.Request[Self], build_id: int | None = None) -> BuildBrowseScreen:
         """Browse searchable build details, review actions, and schematic tools."""
-        subject = await subject_for_interaction(interaction)
+        subject = await subject_for_interaction(request)
         permissions = self.bot.services.permissions
 
         async def held(node: PermissionNode) -> bool:
@@ -190,27 +177,24 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](
         )
 
         async def authorize(node: PermissionNode) -> bool:
-            return await allows(interaction, node)
+            return await allows(request, node)
 
         async def refresh_posts(build_id: int) -> None:
             await self.bot.refresh_posts("build", str(build_id))
 
-        await self.ui.respond(
-            interaction,
-            BuildBrowseScreen(
-                self.queries,
-                self.builds,
-                self.bot.services.schematics,
-                initial_id=build_id,
-                render_build=lambda build: self.bot.for_build(build).render_node(),
-                capabilities=capabilities,
-                actor_account_id=subject.account_id,
-                authorize=authorize,
-                refresh_posts=refresh_posts,
-            ),
+        return BuildBrowseScreen(
+            self.queries,
+            self.builds,
+            self.bot.services.schematics,
+            initial_id=build_id,
+            render_build=lambda build: self.bot.for_build(build).render_node(),
+            capabilities=capabilities,
+            actor_account_id=subject.account_id,
+            authorize=authorize,
+            refresh_posts=refresh_posts,
         )
 
-    @Cog.listener("on_command_error")
+    @sd.Cog.listener("on_command_error")
     async def mention_fallback_search(self, ctx: Context[BotT], exception: commands.CommandError, /) -> None:  # type: ignore[override]
         """Search when the bot is mentioned without a command."""
         if not isinstance(exception, commands.CommandNotFound):
@@ -227,8 +211,9 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](
             logger.warning("A CommandNotFound is being raised despite a subcommand being invoked.")
             return
         assert trimmed_content != "", "Trimmed content should not be empty."
-        await ctx.defer()
-        await self._show_search(ctx, scope=SearchTarget.builds, query=trimmed_content)
+        request = await self.ui.request(ctx)
+        await request.defer("public")
+        await request.respond(await self._search_screen(scope=SearchTarget.builds, query=trimmed_content))
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:

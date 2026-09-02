@@ -3,12 +3,12 @@
 import asyncio
 import logging
 from collections.abc import Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 import discord
 from discord import Message, app_commands
-from discord.ext.commands import Cog
 
+import squid_ui_discord as sd
 from squid.accounts.domain import IdentityProvider
 from squid.bot.consent import ensure_consented_account
 from squid.bot.submission.attachments import AttachmentKind, classify_attachment
@@ -64,7 +64,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         restrictions=suggests("approved_restrictions", multi=True),
         creators=suggests("creators", multi=True),
     )
-    @BuildCommandGroup.build_group.command(name="submit")
+    @BuildCommandGroup.build_group.command(name="submit", defer="private")
     @app_commands.describe(
         door_size=app_commands.locale_str("The door opening, e.g. `2x2`. Width x height (x depth)."),
         door_type=app_commands.locale_str("Door, Skydoor, or Trapdoor."),
@@ -81,7 +81,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
     )
     async def submit_form(
         self,
-        interaction: discord.Interaction[BotT],
+        request: sd.Request[Self],
         *,
         door_size: str | None = None,
         door_type: DoorOrientationLiteral | None = None,
@@ -95,16 +95,13 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         second_attachment: discord.Attachment | None = None,
         third_attachment: discord.Attachment | None = None,
         fourth_attachment: discord.Attachment | None = None,
-    ):
+    ) -> sd.CommandResult:
         """Submit a build. Every field is optional; a guided form picks up whatever you skip."""
-        request = await self.ui.resolve(interaction)
-        await request.defer("private")
-
         # Before the uploads, not after: declining should not cost the user an attachment round
         # trip, and the notice describes exactly what submitting a build publishes.
-        uploader_account_id = await ensure_consented_account(interaction, self.bot.services.accounts)
+        uploader_account_id = await ensure_consented_account(request, self.bot.services.accounts)
         if uploader_account_id is None:
-            return
+            return None
 
         draft = BuildDraft(ai_generated=False)
         try:
@@ -113,11 +110,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             if build_size is not None:
                 draft.dimensions = parse_dimensions(build_size)
         except ValueError as error:
-            await request.respond(
-                error_node(tr("Check the dimensions"), str(error)),
-                audience="personal",
-            )
-            return
+            return error_node(tr("Check the dimensions"), str(error))
         if door_type is not None:
             draft.door_orientation = door_type
         if pattern is not None:
@@ -188,14 +181,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             await self.bot.for_build(build).post_for_voting()
             return SubmissionOutcome(build, node)
 
-        await self.ui.respond(
-            interaction,
-            SubmissionScreen(
-                draft,
-                self.builds,
-                on_submit=persist_draft,
-            ),
-        )
+        return SubmissionScreen(draft, self.builds, on_submit=persist_draft)
 
     async def _analyse_attachments(
         self, pending: Sequence[tuple[str, bytes]], *, uploader_account_id: int
@@ -298,7 +284,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             and message.channel.id in self.bot.community_config.build_log_channel_ids
         )
 
-    @Cog.listener(name="on_message")
+    @sd.Cog.listener(name="on_message")
     async def infer_build_from_message(self, message: Message):
         """Infer a build from a message."""
         if not self._is_build_log_message(message):
@@ -332,55 +318,36 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         for build in builds:
             await self.bot.for_build(build).post_for_voting(type="add")
 
-    def register_recalc_context_menu(self) -> None:
-        """Register the build recalculation context menu."""
-        # https://github.com/Rapptz/discord.py/issues/7823#issuecomment-1086830458
-        self.recalc_ctx_menu = app_commands.ContextMenu(
-            name="Recalculate Build",
-            callback=self.recalc_context_menu,
-        )
-        self.bot.tree.add_command(self.recalc_ctx_menu)
-
-    async def recalc_context_menu(self, interaction: discord.Interaction[BotT], message: discord.Message) -> None:
+    @sd.context_menu(name="Recalculate Build", defer="private")
+    async def recalc_context_menu(self, request: sd.Request[Self], message: discord.Message) -> sd.CommandResult:
         """Re-read a build out of the message that was right-clicked.
 
         This was `/build recalc <message>`, which in slash form meant copying a link to a
         message and pasting it back at the bot (audit C4). Inference is a judgement about one
         specific message, which is what a message context menu is.
         """
-        request = await self.ui.resolve(interaction)
-        await request.defer("private")
-
         # A context menu cannot carry `requires(...)`, so the same denial is raised by hand.
-        await enforce(interaction, BUILD_SUBMISSION_RECALC)
+        await enforce(request, BUILD_SUBMISSION_RECALC)
         if not self._is_build_log_message(message):
-            await request.respond(
-                error_node(
-                    tr("Nothing to recalculate"),
-                    tr("Builds are only read out of messages posted in a build log channel."),
-                ),
-                audience="personal",
+            return error_node(
+                tr("Nothing to recalculate"),
+                tr("Builds are only read out of messages posted in a build log channel."),
             )
-            return
 
         account = await self.bot.services.accounts.get_account_by_identity(
             IdentityProvider.DISCORD, str(message.author.id)
         )
         if account is None or account.id is None or account.needs_consent_refresh:
-            await request.respond(
-                error_node(
-                    tr("Author has not consented"),
-                    tr(
-                        "The author of this message (<@{user_id}>) has not consented to data storage. "
-                        "They must grant consent before this build can be ingested.",
-                        user_id=message.author.id,
-                    ),
-                ),
-                audience="personal",
-            )
             if CONSENT_STICKY_ENABLED and isinstance(message.channel, discord.TextChannel):
                 await self.consent_sticky.trigger(message.channel)
-            return
+            return error_node(
+                tr("Author has not consented"),
+                tr(
+                    "The author of this message (<@{user_id}>) has not consented to data storage. "
+                    "They must grant consent before this build can be ingested.",
+                    user_id=message.author.id,
+                ),
+            )
 
         await self.infer_build_from_message(message)
-        await request.respond(text_node(tr("Build recalculated.")), audience="personal")
+        return text_node(tr("Build recalculated."))
