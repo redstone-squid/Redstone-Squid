@@ -8,15 +8,17 @@ command runs rather than who is running it.
 
 from collections.abc import Callable
 from functools import cache
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import discord
 from discord import app_commands
 from discord.ext.commands import CheckFailure, Context, NoPrivateMessage, check
 from whenever import Instant
 
+import squid_ui_discord as sd
 from squid.accounts.application import AccountService
 from squid.accounts.domain import IdentityProvider
+from squid.permissions.application import PermissionService
 from squid.permissions.domain import CATALOGUE, Decision, PermissionNode, Reason, Subject
 
 if TYPE_CHECKING:
@@ -124,22 +126,30 @@ async def subject_for(ctx: Context[squid.bot.app.RedstoneSquid]) -> Subject:
     return subject
 
 
-async def subject_for_interaction(interaction: discord.Interaction[squid.bot.app.RedstoneSquid]) -> Subject:
-    """The subject behind a component or modal interaction."""
-    return await build_subject(interaction.client, interaction.user, interaction.guild_id)
+type Caller = discord.Interaction[squid.bot.app.RedstoneSquid] | sd.Request[Any]
+"""Whoever is asking: a request, or the bare interaction a surface not yet ported still holds."""
 
 
-async def allows(
-    interaction: discord.Interaction[squid.bot.app.RedstoneSquid],
-    node: PermissionNode | str,
-) -> bool:
-    """Whether the user behind an interaction holds `node`."""
-    subject = await subject_for_interaction(interaction)
-    return await interaction.client.services.permissions.allows(subject, node)
+async def subject_for_interaction(caller: Caller) -> Subject:
+    """The subject behind a request, component, or modal interaction."""
+    if isinstance(caller, sd.Request):
+        guild_id = None if caller.guild is None else caller.guild.id
+        return await build_subject(cast("squid.bot.app.RedstoneSquid", caller.client), caller.user, guild_id)
+    return await build_subject(caller.client, caller.user, caller.guild_id)
+
+
+def _permissions_of(caller: Caller) -> PermissionService:
+    return cast("squid.bot.app.RedstoneSquid", caller.client).services.permissions
+
+
+async def allows(caller: Caller, node: PermissionNode | str) -> bool:
+    """Whether the user behind `caller` holds `node`."""
+    subject = await subject_for_interaction(caller)
+    return await _permissions_of(caller).allows(subject, node)
 
 
 async def enforce(
-    interaction: discord.Interaction[squid.bot.app.RedstoneSquid],
+    caller: Caller,
     *nodes: PermissionNode | str,
     mode: CheckMode = "all",
 ) -> None:
@@ -154,8 +164,8 @@ async def enforce(
         PermissionNodeRequired: If the caller does not hold the nodes.
     """
     resolved = tuple(CATALOGUE[node] if isinstance(node, str) else node for node in nodes)
-    subject = await subject_for_interaction(interaction)
-    decisions = await interaction.client.services.permissions.decisions(subject, resolved)
+    subject = await subject_for_interaction(caller)
+    decisions = await _permissions_of(caller).decisions(subject, resolved)
     if _satisfied(decisions, mode):
         return
     raise PermissionNodeRequired(
