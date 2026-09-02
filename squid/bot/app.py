@@ -11,12 +11,13 @@ import discord
 from discord.ext import commands
 from discord.ext.commands import Bot
 
+import squid_ui_discord as sd
 from squid.bootstrap import create_bot_runtime
 
 # Note that every import to a package that imports back RedstoneSquid (even if it is just in TYPE_CHECKING)
 # will create an import cycle from the view of a static type checker, which slows down type checking significantly.
 from squid.bot._types import MessageableChannel
-from squid.bot.errors import SquidCommandTree
+from squid.bot.errors import COMMAND_ERRORS, SquidCommandTree
 from squid.bot.i18n import SquidAppCommandTranslator, localization_resolver
 from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRenderer, VoteSessionRenderer
 from squid.bot.reactions import ReactionRouter
@@ -53,7 +54,7 @@ from squid_reactivity import LocalTopicBus
 from squid_storage import PostgresTopicBridge
 from squid_ui.profiling import MemoryProfiler
 from squid_ui.text import localization_scope
-from squid_ui_discord import DiscordUI, DiscordUIConfig, DiscordUIRuntime, SessionManager, install
+from squid_ui_discord import DiscordUIConfig, DiscordUIRuntime, SessionManager, install
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -176,11 +177,12 @@ class RedstoneSquid(Bot):
                 bus=self.topic_bus,
                 profiler=self.layout_profiler,
                 localization=localization_resolver,
+                errors=COMMAND_ERRORS,
             ),
         )
 
     @property
-    def app_ui(self) -> DiscordUI[Self]:
+    def app_ui(self) -> sd.Scope[Self]:
         """The cached owner scope for bot-level and routed application work."""
         return self.ui.scope(self)
 
@@ -203,7 +205,7 @@ class RedstoneSquid(Bot):
         reaching here from the application command tree keeps the ID that tree already bound.
         """
         with correlation_scope():
-            request = await self.app_ui.resolve(ctx)
+            request = await sd.request(ctx)
             with localization_scope(request.localization):
                 await super().invoke(ctx)
 

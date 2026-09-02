@@ -317,22 +317,54 @@ async def _handle_discord_error(
         mark_error_presented(original)
 
 
+def _error_responder(request: sd.Request[Any]) -> ErrorResponder:
+    """Answer privately unless a managed defer already fixed the audience.
+
+    A public "thinking" placeholder can only be completed publicly; an ephemeral follow-up
+    would leave it spinning forever.
+    """
+
+    async def respond(node: sl.LayoutNode[sl.ComponentsV2Target]) -> None:
+        if request.deferred is None:
+            await request.respond(node, audience="personal")
+        else:
+            await request.respond(node)
+
+    return respond
+
+
+def render_request_error(request: sd.Request[Any], error: Exception) -> sl.LayoutNode[sl.ComponentsV2Target]:
+    """Render a failed `pending=` command's notice in the request's locale."""
+    return build_error_notice(error, request.localization.locale).to_node()
+
+
+async def observe_request_error(
+    request: sd.Request[Any], error: Exception, delivery: sd.delivery.DeliveryResult | None
+) -> None:
+    """Record a failed `pending=` command once its notice has replaced the card."""
+    await record_operation_error(
+        error,
+        locale=request.localization.locale,
+        result=delivery,
+        presented=delivery is not None,
+        reports=_reports_from(request.client),
+    )
+
+
+COMMAND_ERRORS = sd.ErrorPolicy(render=render_request_error, observe=observe_request_error)
+
+
 async def handle_context_error[BotT: commands.Bot](
     context: commands.Context[BotT],
     error: BaseException,
 ) -> None:
     """Handle an exception raised by a prefix or hybrid command."""
 
-    runtime = sd.DiscordUIRuntime.of(context)
-    request = await runtime.scope(context.bot).resolve(context)
-
-    async def respond(node: sl.LayoutNode[sl.ComponentsV2Target]) -> None:
-        await request.respond(node, audience="personal")
-
+    request = await sd.request(context)
     command_name = context.command.qualified_name if context.command is not None else None
     await _handle_discord_error(
         error,
-        respond,
+        _error_responder(request),
         surface="command",
         context={
             "command": command_name,
@@ -352,16 +384,11 @@ async def handle_interaction_error(
 ) -> None:
     """Handle an exception raised by an application command or UI interaction."""
 
-    runtime = sd.DiscordUIRuntime.of(interaction)
-    request = await runtime.scope(interaction.client).resolve(interaction)
-
-    async def respond(node: sl.LayoutNode[sl.ComponentsV2Target]) -> None:
-        await request.respond(node, audience="personal")
-
+    request = await sd.request(interaction)
     command = interaction.command
     await _handle_discord_error(
         error,
-        respond,
+        _error_responder(request),
         surface=surface,
         context={
             "command": command.name if command is not None else None,
@@ -438,8 +465,7 @@ class SquidCommandTree[ClientT: discord.Client](app_commands.CommandTree[ClientT
             correlation_scope(),
         ):
             try:
-                runtime = sd.DiscordUIRuntime.of(interaction)
-                localization = (await runtime.scope(interaction.client).resolve(interaction)).localization
+                localization = (await sd.request(interaction)).localization
             except sd.DiscordUIRuntimeMissing:
                 localization = NEUTRAL
             with localization_scope(localization):

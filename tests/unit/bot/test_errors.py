@@ -22,7 +22,7 @@ from squid.builds.errors import BuildNotFoundError
 from squid.core.errors import InternalError
 from squid.observability import correlation_id
 from squid_ui.text import Localization, current_localization
-from tests.support.discord import make_interaction, make_message
+from tests.support.discord import make_interaction, make_layout_bot, make_message
 
 
 def test_unwrap_error_finds_original_command_exception() -> None:
@@ -279,6 +279,19 @@ async def test_interaction_error_uses_followup_after_response() -> None:
     followup_call = harness.send_followup.await_args
     assert followup_call is not None
     assert followup_call.kwargs["ephemeral"] is True
+
+
+@pytest.mark.asyncio
+async def test_interaction_error_completes_a_public_defer_in_place() -> None:
+    """A public "thinking" placeholder is edited, not answered with an ephemeral follow-up."""
+    harness = sd.testing.InteractionHarness(client=make_layout_bot())
+    request = await sd.request(harness.source)
+    await request.defer("public")
+
+    await handle_interaction_error(harness.source, BuildNotFoundError(42), surface="command")
+
+    harness.edit_original_response.assert_awaited_once()
+    harness.followup.send.assert_not_awaited()
 
 
 @pytest.mark.asyncio
