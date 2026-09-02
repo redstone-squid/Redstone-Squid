@@ -107,7 +107,7 @@ def decision_event(responder: RecordingResponder) -> sp.TransitionEvent[sp.Decis
 async def message_root_browser(browser: ErrorReportScreen) -> tuple[MessageRoot, discord.ui.LayoutView]:
     await browser.on_load()
     bot = make_layout_bot()
-    message_root = bot.ui.mount(browser, access=Owner(1), chrome=browser.chrome())
+    message_root = bot.ui.mount(browser, access=Owner(1), chrome=browser.chrome)
     if browser._browser is not None:
         await browser._browser.window._load()
     return message_root, commit_render(message_root)
