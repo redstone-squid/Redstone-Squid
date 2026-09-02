@@ -408,8 +408,10 @@ async def request(source: RequestOrigin, *, owner: object | None = None) -> Requ
 
     `owner` names the object whose scope tracks what the request opens; a command decorator
     passes its binding. Without it, a click inherits the scope of the root it was raised
-    from, and anything else lands in the app scope. A memoized request keeps the scope it was
-    first resolved with.
+    from, and anything else lands in the app scope. The app scope is only a waiting room:
+    middleware that resolves a request before dispatch (for its localization, say) leaves
+    it there, and the first owner claim before any response moves it into the owner's
+    scope. A request that has responded keeps the scope it responded under.
     """
     from squid_ui_discord.runtime import DiscordUIRuntime
 
@@ -427,6 +429,8 @@ async def request(source: RequestOrigin, *, owner: object | None = None) -> Requ
         localization = root.localization
     found = _memo_get(native)
     if found is not None:
+        if owner is not None and found.scope is found.runtime.app and not found.responded:
+            found.scope = found.runtime.scope_for(owner)
         return found
     kind = _kind(native)
     runtime = DiscordUIRuntime.of(cast(Any, native))
