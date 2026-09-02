@@ -1,20 +1,24 @@
-"""Declarative response policy for owner-scoped live components."""
+"""Declarative response policy for live components."""
 
-from typing import ClassVar, cast
+from typing import Any, ClassVar, cast
 
 import discord
 
+from squid_ui.chrome import Chrome
 from squid_ui.runtime.component import Component
 from squid_ui.target_types import ComponentsV2Target
 from squid_ui_discord.audience import Audience, Private
 from squid_ui_discord.message_root_contracts import ExpiryPolicy
-from squid_ui_discord.request import DiscordRequest
+from squid_ui_discord.request import Request
 from squid_ui_discord.response import AccessSetting, ResponseSpec, invoker_only
-from squid_ui_discord.session_specs import SessionOptions, SessionSpec
+from squid_ui_discord.session_specs import SessionSpec
 
 
-class Screen[OwnerT = object](Component[ComponentsV2Target]):
-    """A component whose class compiles immutable presentation policy once."""
+class Screen[OwnerT = Any](Component[ComponentsV2Target]):
+    """A component whose class compiles immutable presentation policy once.
+
+    `Screen[Cog]` types `opening.owner`; the bare form leaves it `Any`.
+    """
 
     audience: ClassVar[Audience] = "personal"
     access: ClassVar[AccessSetting] = invoker_only
@@ -23,7 +27,7 @@ class Screen[OwnerT = object](Component[ComponentsV2Target]):
     follow_topics: ClassVar[bool] = False
     session: ClassVar[SessionSpec | None] = None
     allowed_mentions: ClassVar[discord.AllowedMentions | None] = None
-    root_options: ClassVar[SessionOptions] = {}
+    chrome: ClassVar[Chrome | None] = None
     __response_spec__: ClassVar[ResponseSpec]
 
     def __init_subclass__(cls, **kwargs: object) -> None:
@@ -31,14 +35,14 @@ class Screen[OwnerT = object](Component[ComponentsV2Target]):
         cls.__response_spec__ = cls._compile_response_spec()
 
     @property
-    def opening(self) -> DiscordRequest[OwnerT]:
+    def opening(self) -> Request[OwnerT]:
         """The request assigned before this instance's first load and render."""
         try:
             opening = self.__dict__["_screen_opening"]
         except KeyError:
             message = f"{type(self).__name__}.opening is unavailable before facade presentation"
             raise RuntimeError(message) from None
-        return cast(DiscordRequest[OwnerT], opening)
+        return cast(Request[OwnerT], opening)
 
     @classmethod
     def _compile_response_spec(cls) -> ResponseSpec:
@@ -52,15 +56,6 @@ class Screen[OwnerT = object](Component[ComponentsV2Target]):
         ):
             message = f"{cls.__name__}.access must be an access policy, invoker_only, or None"
             raise TypeError(message)
-        if not isinstance(cls.root_options, dict):
-            message = f"{cls.__name__}.root_options must be a dict"
-            raise TypeError(message)
-        root_options = cast(SessionOptions, dict(cls.root_options))
-        duplicates = {"expiry", "localization", "scheduler", "timeout"}.intersection(root_options)
-        if duplicates:
-            names = ", ".join(sorted(duplicates))
-            message = f"{cls.__name__}.root_options repeats dedicated Screen policy: {names}"
-            raise TypeError(message)
         return ResponseSpec(
             audience=cls.audience,
             access=cls.access,
@@ -69,7 +64,7 @@ class Screen[OwnerT = object](Component[ComponentsV2Target]):
             follow_topics=cls.follow_topics,
             session=cls.session,
             allowed_mentions=cls.allowed_mentions,
-            root_options=root_options,
+            chrome=cls.chrome,
         )
 
 

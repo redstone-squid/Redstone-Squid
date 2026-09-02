@@ -2805,6 +2805,7 @@ dependencies = [
     { name = "packaging" },
     { name = "squid-reactivity" },
     { name = "squid-ui" },
+    { name = "typing-extensions" },
 ]
 
 [package.optional-dependencies]
@@ -2829,6 +2830,7 @@ requires-dist = [
     { name = "squid-storage", marker = "extra == 'durable'", editable = "packages/squid-storage" },
     { name = "squid-storage", extras = ["postgres"], marker = "extra == 'postgres'", editable = "packages/squid-storage" },
     { name = "squid-ui", editable = "packages/squid-ui" },
+    { name = "typing-extensions", specifier = ">=4.13" },
 ]
 provides-extras = ["durable", "postgres"]
 

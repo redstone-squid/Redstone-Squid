@@ -8,9 +8,12 @@ import pytest
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid_reactivity import LocalTopicBus
+from squid_ui.chrome import Chrome
 from squid_ui.text import Message
 from squid_ui_discord.sessions import AdmissionSpec, Reject
 from squid_ui_discord.testing import ContextHarness, interaction_harness, message_harness
+
+CHROME = Chrome()
 
 
 class FakeClient:
@@ -27,7 +30,7 @@ def _context(client: FakeClient) -> Any:
     return cast(Any, context)
 
 
-def _ui(*, bus: LocalTopicBus | None = None) -> tuple[sd.DiscordUI[Owner], FakeClient]:
+def _ui(*, bus: LocalTopicBus | None = None) -> tuple[sd.Scope[Owner], FakeClient]:
     client = FakeClient()
     runtime = sd.install(cast(discord.Client, client), bus=bus)
     return runtime.scope(Owner()), client
@@ -56,7 +59,7 @@ def test_screen_compiles_its_class_policy_once() -> None:
         )
         timeout = 30
         expiry = sd.PauseUpdates(10)
-        root_options = {"strict": True}
+        chrome = CHROME
 
         def render(self):
             return sl.heading("Declared")
@@ -68,22 +71,12 @@ def test_screen_compiles_its_class_policy_once() -> None:
     assert compiled.access == sd.Everyone()
     assert compiled.timeout == 30
     assert compiled.session is Declared.session
-    assert compiled.root_options == {"strict": True}
+    assert compiled.chrome is CHROME
     assert Declared.__response_spec__.timeout == 30
 
 
 def test_screen_has_no_delivery_method() -> None:
     assert not hasattr(BasicScreen(), "show")
-
-
-def test_screen_rejects_duplicated_root_policy_at_class_creation() -> None:
-    with pytest.raises(TypeError, match="repeats dedicated Screen policy: timeout"):
-
-        class Invalid(sd.Screen[Owner]):
-            root_options = {"timeout": 10}  # pyrefly: ignore[bad-typed-dict-key]
-
-            def render(self):
-                return sl.heading("Invalid")
 
 
 async def test_facade_sets_opening_and_loads_before_first_render() -> None:
@@ -222,8 +215,7 @@ async def test_call_policy_overrides_screen_policy() -> None:
 
     outcome = await ui.respond(
         _context(client),
-        BasicScreen(),
-        spec=sd.ResponseSpec(timeout=40),
+        sd.Response(BasicScreen(), timeout=40),
         timeout=20,
     )
 
