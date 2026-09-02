@@ -52,7 +52,7 @@ class ErrorReportScreen(sd.Screen):
     session = sd.SessionSpec("errors")
     timeout = SESSION_SECONDS
     audience = sd.Private(tr(t"An error report names internal paths, so it is never posted in a channel."))
-    root_options = {"chrome": ERROR_CHROME}
+    chrome = ERROR_CHROME
 
     work_lost_only: bool = sl.state(default=False)
     confirming_clear: bool = sl.state(default=False)
@@ -110,10 +110,6 @@ class ErrorReportScreen(sd.Screen):
     def reports(self) -> tuple[ErrorReport, ...]:
         """The reports the list offers."""
         return self._reports
-
-    def chrome(self) -> sl.chrome.Chrome:
-        """This browser's chrome: temporal paging labels and a footer that names the attachment."""
-        return ERROR_CHROME
 
     def render(self) -> sl.Document[sl.ComponentsV2Target]:
         if self.cleared_count is not None:
