@@ -39,7 +39,7 @@ from squid_ui_discord.message_root_scheduler import MessageRootScheduler
 from squid_ui_discord.sessions import SessionManager
 
 if TYPE_CHECKING:
-    from squid_ui_discord.facade import DiscordUI
+    from squid_ui_discord.facade import Scope
     from squid_ui_discord.response import ResponseSpec
 
 type RuntimeSource = discord.Client | discord.Interaction[Any] | Replyable | discord.Message
@@ -103,7 +103,7 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         self.localization = localization
         self.response_defaults = response_defaults
         self.config = config
-        self._scopes: list[DiscordUI[object]] = []
+        self._scopes: list[Scope[Any]] = []
         self._scope_roots: dict[int, set[MessageRoot]] = {}
 
     @property
@@ -185,11 +185,11 @@ class DiscordUIRuntime[ClientT: discord.Client]:
     def scope(self, owner: None, *, defaults: ResponseSpec | None = None) -> Never: ...
 
     @overload
-    def scope[OwnerT](self, owner: OwnerT, *, defaults: ResponseSpec | None = None) -> DiscordUI[OwnerT]: ...
+    def scope[OwnerT](self, owner: OwnerT, *, defaults: ResponseSpec | None = None) -> Scope[OwnerT]: ...
 
-    def scope[OwnerT](self, owner: OwnerT | None, *, defaults: ResponseSpec | None = None) -> DiscordUI[OwnerT]:
+    def scope[OwnerT](self, owner: OwnerT | None, *, defaults: ResponseSpec | None = None) -> Scope[OwnerT]:
         """Return the one live scope registered for ``owner`` by exact identity."""
-        from squid_ui_discord.facade import DiscordUI
+        from squid_ui_discord.facade import Scope
         from squid_ui_discord.response import ResponseSpec
 
         if owner is None:
@@ -201,16 +201,40 @@ class DiscordUIRuntime[ClientT: discord.Client]:
                 if defaults is not None and scope.defaults != selected:
                     message = "owner is already registered with different response defaults"
                     raise ValueError(message)
-                return cast(DiscordUI[OwnerT], scope)
-        scope = DiscordUI(cast(DiscordUIRuntime[discord.Client], self), owner, selected)
-        self._scopes.append(cast(DiscordUI[object], scope))
+                return cast(Scope[OwnerT], scope)
+        scope = Scope(cast(DiscordUIRuntime[discord.Client], self), owner, selected)
+        self._scopes.append(cast(Scope[Any], scope))
         self._scope_roots[id(scope)] = set()
         return scope
 
-    def _track[OwnerT](self, scope: DiscordUI[OwnerT], message_root: MessageRoot) -> None:
+    @property
+    def app(self) -> Scope[ClientT]:
+        """The scope owned by the client itself, where unowned requests land."""
+        return self.scope(self.client)
+
+    def scope_for[OwnerT](self, owner: OwnerT) -> Scope[OwnerT]:
+        """The live scope registered for `owner`, or the app scope if it never registered one.
+
+        A cog that skipped `ui_load` still gets its commands answered; it just does not get
+        its own lifetime for what they open.
+        """
+        for scope in self._scopes:
+            if scope.owner is owner and not scope.closed:
+                return cast("Scope[OwnerT]", scope)
+        return cast("Scope[OwnerT]", self.app)
+
+    def scope_of_root(self, root: MessageRoot | None) -> Scope[Any]:
+        """The scope that tracked `root`, so a click inherits the lifetime of the panel it hit."""
+        if root is not None:
+            for scope in self._scopes:
+                if root in self._scope_roots.get(id(scope), ()):
+                    return scope
+        return self.app
+
+    def _track[OwnerT](self, scope: Scope[OwnerT], message_root: MessageRoot) -> None:
         self._scope_roots[id(scope)].add(message_root)
 
-    async def _close_scope[OwnerT](self, scope: DiscordUI[OwnerT]) -> None:
+    async def _close_scope[OwnerT](self, scope: Scope[OwnerT]) -> None:
         roots = self._scope_roots.pop(id(scope), set())
         for message_root in tuple(roots):
             session = self.sessions.session_for(message_root)

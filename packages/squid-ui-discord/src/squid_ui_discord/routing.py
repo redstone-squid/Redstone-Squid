@@ -719,11 +719,11 @@ class Router[BotT: discord.Client]:
                 finish_acknowledgement("handler")
 
             async def dispatch_operation() -> None:
-                from squid_ui_discord.runtime import DiscordUIRuntime, DiscordUIRuntimeMissing
+                from squid_ui_discord.request import request as resolve_request
+                from squid_ui_discord.runtime import DiscordUIRuntimeMissing
 
                 try:
-                    runtime = DiscordUIRuntime.of(interaction)
-                    localization = (await runtime.scope(runtime.client).resolve(interaction)).localization
+                    localization = (await resolve_request(interaction)).localization
                 except DiscordUIRuntimeMissing:
                     localization = NEUTRAL
                 try:

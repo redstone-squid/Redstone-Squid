@@ -2,11 +2,11 @@
 
 from dataclasses import dataclass, fields
 from enum import Enum
-from types import MappingProxyType
 from typing import TypedDict, Unpack
 
 import discord
 
+from squid_ui.chrome import Chrome
 from squid_ui.runtime.component import Component
 from squid_ui.target_types import ComponentsV2Target
 from squid_ui_discord.access import AccessPolicy
@@ -16,7 +16,7 @@ from squid_ui_discord.delivery import DeliveryResult
 from squid_ui_discord.message_payload import MessagePayload
 from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_contracts import ExpiryPolicy
-from squid_ui_discord.session_specs import SessionOptions, SessionSpec
+from squid_ui_discord.session_specs import SessionSpec
 from squid_ui_discord.sessions import RejectionReason, Session
 
 
@@ -51,7 +51,7 @@ class ResponseOverrides(TypedDict, total=False):
     follow_topics: bool
     session: SessionSpec | None
     allowed_mentions: discord.AllowedMentions | None
-    root_options: SessionOptions | None
+    chrome: Chrome | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,11 +65,7 @@ class ResponseSpec:
     follow_topics: Setting[bool] = UNSET
     session: Setting[SessionSpec | None] = UNSET
     allowed_mentions: Setting[discord.AllowedMentions | None] = UNSET
-    root_options: Setting[SessionOptions | None] = UNSET
-
-    def __post_init__(self) -> None:
-        if self.root_options is not UNSET and self.root_options is not None:
-            object.__setattr__(self, "root_options", MappingProxyType(dict(self.root_options)))
+    chrome: Setting[Chrome | None] = UNSET
 
     def overlay(self, other: ResponseSpec | None = None, /, **overrides: Unpack[ResponseOverrides]) -> ResponseSpec:
         """Return this policy with specified values from the more-specific layer."""
@@ -90,17 +86,24 @@ DEFAULT_RESPONSE_SPEC = ResponseSpec(
     follow_topics=False,
     session=None,
     allowed_mentions=None,
-    root_options=None,
+    chrome=None,
 )
 
 
-@dataclass(frozen=True, slots=True)
 class Response[ContentT: FacadeContent = FacadeContent]:
-    """Response content paired with one call-specific policy layer."""
+    """Content paired with the call-level policy it should be delivered under.
 
-    content: ContentT
-    spec: ResponseSpec | None = None
-    overrides: ResponseOverrides | None = None
+    What a command handler returns when the content alone would get the wrong audience.
+    """
+
+    __slots__ = ("content", "overrides")
+
+    def __init__(self, content: ContentT, **overrides: Unpack[ResponseOverrides]) -> None:
+        self.content = content
+        self.overrides = overrides
+
+    def __repr__(self) -> str:
+        return f"Response({self.content!r}, {self.overrides!r})"
 
 
 @dataclass(frozen=True, slots=True)

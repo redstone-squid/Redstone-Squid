@@ -1,15 +1,19 @@
-"""Owner-typed normalized request used by the Discord facade."""
+"""One request per Discord event, memoized on the event so every layer shares it."""
 
+import contextlib
+import weakref
 from collections.abc import Awaitable, Callable, Hashable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal, Unpack, cast, overload
+from typing import TYPE_CHECKING, Any, Literal, Unpack, cast, overload
 
 import discord
 
 from squid_ui.forms import FormSpec
+from squid_ui.interactions import ActionEvent
 from squid_ui.runtime.component import Component
 from squid_ui.target_types import ComponentsV2Target
 from squid_ui.text import Localization
+from squid_ui_discord.actions import ActionResponder
 from squid_ui_discord.audience import Private, Visibility
 from squid_ui_discord.contracts import FacadeContent, ResponseSource
 from squid_ui_discord.delivery import (
@@ -25,84 +29,135 @@ from squid_ui_discord.delivery import (
 from squid_ui_discord.message_payload import MessagePayload
 from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.modal import ModalSpec, build_form_modal, build_modal
-from squid_ui_discord.response import UNSET, Response, ResponseOverrides, ResponseResult, ResponseSpec
+from squid_ui_discord.response import Response, ResponseOverrides, ResponseResult
+from squid_ui_discord.sessions import Session
 
 if TYPE_CHECKING:
-    from squid_ui_discord.facade import DiscordUI
+    from squid_ui_discord.facade import Scope
     from squid_ui_discord.runtime import DiscordUIRuntime
 
-type AcknowledgementPolicy = Literal["none", "private", "public", "form"]
+type Deferral = Literal["private", "public"]
+type SourceKind = Literal["interaction", "context", "message"]
+type RequestOrigin = ResponseSource | ActionEvent
+"""Anything a request can be resolved from: a native source, or a component event."""
+
+_MEMO_KEY = "squid_ui_discord.request"
+_MEMO: weakref.WeakKeyDictionary[Any, Request[Any]] = weakref.WeakKeyDictionary()
+"""Requests for sources without an `extras` mapping (command contexts, messages, test doubles)."""
 
 
-@dataclass(slots=True)
-class DiscordRequest[OwnerT, SourceT: ResponseSource = ResponseSource]:
-    """An owner-bound Discord event; its response authority ends with dispatch."""
+def _kind(source: object) -> SourceKind:
+    """Classify a native source once, so nothing downstream sniffs attributes again.
 
-    ui: DiscordUI[OwnerT]
-    source: SourceT
+    Duck-typed rather than isinstance-dispatched so gateway-free test doubles count.
+    """
+    if hasattr(source, "response") and hasattr(source, "followup"):
+        return "interaction"
+    if callable(getattr(source, "send", None)) and hasattr(source, "author"):
+        return "context"
+    if isinstance(source, discord.Message):
+        return "message"
+    message = f"{type(source).__name__} is not an interaction, command context, or message"
+    raise TypeError(message)
+
+
+def _memo_get(source: object) -> Request[Any] | None:
+    extras = getattr(source, "extras", None)
+    if isinstance(extras, dict):
+        found = extras.get(_MEMO_KEY)
+        return found if isinstance(found, Request) else None
+    try:
+        return _MEMO.get(source)
+    except TypeError:
+        return None
+
+
+def _memo_set(source: object, request: Request[Any]) -> None:
+    extras = getattr(source, "extras", None)
+    if isinstance(extras, dict):
+        extras[_MEMO_KEY] = request
+        return
+    # Not weak-referenceable: the caller keeps the request it was handed.
+    with contextlib.suppress(TypeError):
+        _MEMO[source] = request
+
+
+@dataclass(slots=True, eq=False)
+class Request[OwnerT = Any]:
+    """One Discord event, normalized; its response authority ends with dispatch.
+
+    Resolved by :func:`request` and memoized on the event, so a helper that receives the raw
+    interaction gets the same ledger the command handler is already writing to. `OwnerT` is
+    the scope owner's type where the entry point knows it (a decorated command); a click
+    resolves its scope at runtime and is `Request[Any]`.
+    """
+
+    runtime: DiscordUIRuntime[Any]
+    scope: Scope[OwnerT]
+    source: ResponseSource
+    kind: SourceKind
     localization: Localization
     _user: discord.User | discord.Member
     _guild: discord.Guild | None
-    acknowledgement: AcknowledgementPolicy = "none"
+    root: MessageRoot | None = None
+    """The message root whose control raised this request, when it came from a click."""
     _responses: int = 0
-    _deferred: Literal["private", "public"] | None = None
+    _deferred: Deferral | None = None
     _form_opened: bool = False
-
-    @classmethod
-    async def create[RequestOwnerT, RequestSourceT: ResponseSource](
-        cls,
-        ui: DiscordUI[RequestOwnerT],
-        source: RequestSourceT,
-        *,
-        acknowledgement: AcknowledgementPolicy = "none",
-    ) -> DiscordRequest[RequestOwnerT, RequestSourceT]:
-        """Resolve localization and normalized identity exactly once."""
-        localization = ui.runtime.defaults.localization
-        if ui.runtime.localization is not None:
-            localization = await ui.runtime.localization(source)
-        user = getattr(source, "user", None) or getattr(source, "author", None)
-        if user is None:
-            message = "request source identifies no user"
-            raise TypeError(message)
-        guild = cast(discord.Guild | None, getattr(source, "guild", None))
-        return cls(ui, source, localization, cast(discord.User | discord.Member, user), guild, acknowledgement)
 
     @property
     def owner(self) -> OwnerT:
-        """The exact application object responsible for this request."""
-        return self.ui.owner
-
-    @property
-    def runtime(self) -> DiscordUIRuntime[discord.Client]:
-        """The runtime backing this request's owner scope."""
-        return self.ui.runtime
+        """The application object whose scope tracks what this request opens."""
+        return self.scope.owner
 
     @property
     def client(self) -> discord.Client:
         """The Discord client that owns this dispatch."""
-        return self.ui.runtime.client
+        return self.runtime.client
 
     @property
     def user(self) -> discord.User | discord.Member:
-        """The actor normalized across interaction, context, and message sources."""
+        """The actor, whichever kind of source named them."""
         return self._user
 
     @property
     def guild(self) -> discord.Guild | None:
-        """The guild in which this request arrived, if any."""
+        """The guild this request arrived in, if any."""
         return self._guild
 
     @property
     def channel(self) -> discord.abc.Messageable | None:
-        """The channel in which this request arrived, if any."""
+        """The channel this request arrived in, if any."""
         return cast(discord.abc.Messageable | None, getattr(self.source, "channel", None))
 
     @property
-    def interaction(self) -> discord.Interaction[discord.Client] | None:
+    def interaction(self) -> discord.Interaction[Any] | None:
         """The native interaction, including one carried by a hybrid context."""
-        if hasattr(self.source, "response") and hasattr(self.source, "followup"):
-            return cast(discord.Interaction[discord.Client], self.source)
-        return cast(discord.Interaction[discord.Client] | None, getattr(self.source, "interaction", None))
+        if self.kind == "interaction":
+            return cast(discord.Interaction[Any], self.source)
+        if self.kind == "context":
+            return cast(discord.Interaction[Any] | None, getattr(self.source, "interaction", None))
+        return None
+
+    @property
+    def context(self) -> Replyable | None:
+        """The prefix or hybrid command context, when that is what arrived."""
+        return cast(Replyable, self.source) if self.kind == "context" else None
+
+    @property
+    def message(self) -> discord.Message | None:
+        """The message, when a bare message is what arrived."""
+        return cast(discord.Message, self.source) if self.kind == "message" else None
+
+    @property
+    def command(self) -> Any:
+        """The discord.py command being invoked, if the source names one."""
+        return getattr(self.source, "command", None)
+
+    @property
+    def session(self) -> Session | None:
+        """The session the raising control's root belongs to, for click-origin requests."""
+        return None if self.root is None else self.runtime.sessions.session_for(self.root)
 
     @property
     def locale(self) -> str | None:
@@ -111,43 +166,46 @@ class DiscordRequest[OwnerT, SourceT: ResponseSource = ResponseSource]:
 
     @property
     def responded(self) -> bool:
-        """Whether this request explicitly produced a facade response."""
+        """Whether this request has produced a response through the facade."""
         return self._responses > 0
+
+    @property
+    def deferred(self) -> Deferral | None:
+        """How this request was acknowledged, which fixes the audience of what follows."""
+        return self._deferred
 
     def destination(
         self,
         audience: Visibility,
         *,
-        files: Sequence[discord.File],
-        allowed_mentions: discord.AllowedMentions,
-        complete_deferred: bool = False,
+        files: Sequence[discord.File] = (),
+        allowed_mentions: discord.AllowedMentions | None = None,
     ) -> MessageDestination:
-        """Build the source-appropriate destination for one audience policy."""
-        if isinstance(audience, Private):
-            if complete_deferred:
-                return respond_to(
-                    cast(discord.Interaction[discord.Client], self.interaction),
-                    ephemeral=True,
-                    wait=True,
-                    files=files,
-                    allowed_mentions=allowed_mentions,
-                    complete_deferred=True,
-                )
-            return self._private_destination(audience, files=files, allowed_mentions=allowed_mentions)
-        if complete_deferred:
-            return respond_to(
+        """Build the source-appropriate destination for one audience, honouring the ledger.
+
+        The first delivery after a managed defer completes it; later ones are follow-ups.
+        """
+        mentions = discord.AllowedMentions.none() if allowed_mentions is None else allowed_mentions
+        if self._responses == 0 and self._deferred is not None:
+            inner = respond_to(
                 cast(discord.Interaction[discord.Client], self.interaction),
-                ephemeral=audience == "personal",
+                ephemeral=isinstance(audience, Private) or audience == "personal",
                 wait=True,
                 files=files,
-                allowed_mentions=allowed_mentions,
+                allowed_mentions=mentions,
                 complete_deferred=True,
             )
-        return self._ordinary_destination(
-            personal=audience == "personal",
-            files=files,
-            allowed_mentions=allowed_mentions,
-        )
+        elif isinstance(audience, Private):
+            inner = self._private_destination(audience, files=files, allowed_mentions=mentions)
+        else:
+            inner = self._ordinary_destination(personal=audience == "personal", files=files, allowed_mentions=mentions)
+
+        async def deliver(payload: MessagePayload) -> DeliveryResult:
+            result = await inner(payload)
+            self._responses += 1
+            return result
+
+        return deliver
 
     def _ordinary_destination(
         self,
@@ -156,20 +214,19 @@ class DiscordRequest[OwnerT, SourceT: ResponseSource = ResponseSource]:
         files: Sequence[discord.File],
         allowed_mentions: discord.AllowedMentions,
     ) -> MessageDestination:
-        source = self.source
-        if callable(getattr(source, "send", None)):
-            context = cast(Replyable, source)
+        if self.kind == "context":
+            context = cast(Replyable, self.source)
             ephemeral = personal and getattr(context, "interaction", None) is not None
             return reply_to(context, ephemeral=ephemeral, files=files, allowed_mentions=allowed_mentions)
-        if hasattr(source, "response") and hasattr(source, "followup"):
+        if self.kind == "interaction":
             return respond_to(
-                cast(discord.Interaction[discord.Client], source),
+                cast(discord.Interaction[discord.Client], self.source),
                 ephemeral=personal,
                 wait=True,
                 files=files,
                 allowed_mentions=allowed_mentions,
             )
-        message = cast(discord.Message, source)
+        message = cast(discord.Message, self.source)
 
         async def reply(payload: MessagePayload) -> DeliveryResult:
             delivered = await message.reply(
@@ -189,20 +246,19 @@ class DiscordRequest[OwnerT, SourceT: ResponseSource = ResponseSource]:
         files: Sequence[discord.File],
         allowed_mentions: discord.AllowedMentions,
     ) -> MessageDestination:
-        source = self.source
-        if hasattr(source, "response") and hasattr(source, "followup"):
+        if self.kind == "interaction":
             return respond_to(
-                cast(discord.Interaction[discord.Client], source),
+                cast(discord.Interaction[discord.Client], self.source),
                 ephemeral=True,
                 wait=True,
                 files=files,
                 allowed_mentions=allowed_mentions,
             )
-        if callable(getattr(source, "send", None)) and (
-            getattr(source, "interaction", None) is not None or self.guild is None
-        ):
-            return reply_to(cast(Replyable, source), ephemeral=True, files=files, allowed_mentions=allowed_mentions)
-        if isinstance(source, discord.Message) and self.guild is None:
+        if self.kind == "context" and (getattr(self.source, "interaction", None) is not None or self.guild is None):
+            return reply_to(
+                cast(Replyable, self.source), ephemeral=True, files=files, allowed_mentions=allowed_mentions
+            )
+        if self.kind == "message" and self.guild is None:
             return self._ordinary_destination(personal=False, files=files, allowed_mentions=allowed_mentions)
 
         private = send_to(self.user, files=files, allowed_mentions=allowed_mentions)
@@ -214,13 +270,13 @@ class DiscordRequest[OwnerT, SourceT: ResponseSource = ResponseSource]:
             try:
                 result = await private(payload)
             except discord.Forbidden:
-                notice = self.ui.render(
+                notice = self.scope.render(
                     paragraph(self.runtime.defaults.chrome.dm_unavailable),
                     localization=self.localization,
                 )
                 await public(notice)
                 raise DeliveryAbandoned from None
-            confirmation = self.ui.render(
+            confirmation = self.scope.render(
                 [
                     paragraph(self.runtime.defaults.chrome.sent_privately),
                     paragraph(audience.reason),
@@ -237,7 +293,6 @@ class DiscordRequest[OwnerT, SourceT: ResponseSource = ResponseSource]:
         self,
         content: ComponentT | Response[ComponentT],
         *,
-        spec: ResponseSpec | None = None,
         files: Sequence[discord.File] = (),
         parent: MessageRoot | None = None,
         session_key: Hashable | None = None,
@@ -249,7 +304,6 @@ class DiscordRequest[OwnerT, SourceT: ResponseSource = ResponseSource]:
         self,
         content: FacadeContent | Response,
         *,
-        spec: ResponseSpec | None = None,
         files: Sequence[discord.File] = (),
         parent: MessageRoot | None = None,
         session_key: Hashable | None = None,
@@ -258,26 +312,27 @@ class DiscordRequest[OwnerT, SourceT: ResponseSource = ResponseSource]:
 
     async def respond(
         self,
-        content: FacadeContent | Response,
+        content: FacadeContent | Response[Any],
         *,
-        spec: ResponseSpec | None = None,
         files: Sequence[discord.File] = (),
         parent: MessageRoot | None = None,
         session_key: Hashable | None = None,
         **overrides: Unpack[ResponseOverrides],
     ) -> ResponseResult:
-        """Respond safely, completing a managed defer before creating follow-ups."""
+        """Answer this request; a managed defer fixes the audience unless one is given."""
         if self._form_opened:
             message = "a form response cannot be followed by message content in the same dispatch"
             raise RuntimeError(message)
-        policy_content = content.content if isinstance(content, Response) else content
-        if hasattr(type(policy_content), "__response_spec__"):
-            if policy_content.__dict__.get("_screen_presented", False):
-                message = f"{type(policy_content).__name__} has already been presented"
+        if isinstance(content, Response):
+            overrides = {**content.overrides, **overrides}
+            content = content.content
+        if hasattr(type(content), "__response_spec__"):
+            if content.__dict__.get("_screen_presented", False):
+                message = f"{type(content).__name__} has already been presented"
                 raise RuntimeError(message)
-            object.__setattr__(policy_content, "_screen_opening", self)
-            object.__setattr__(policy_content, "_screen_presented", True)
-        explicit = self._explicit_audience(content, spec, overrides)
+            object.__setattr__(content, "_screen_opening", self)
+            object.__setattr__(content, "_screen_presented", True)
+        explicit = overrides.get("audience")
         if self._deferred is not None:
             compatible = explicit in (None, "personal") or isinstance(explicit, Private)
             if self._deferred == "public":
@@ -288,48 +343,22 @@ class DiscordRequest[OwnerT, SourceT: ResponseSource = ResponseSource]:
             if explicit is None:
                 overrides = {**overrides, "audience": "personal" if self._deferred == "private" else "public"}
         interaction = self.interaction
-        complete_deferred = self._responses == 0 and self._deferred is not None
         if interaction is not None and self._responses == 0 and interaction.response.is_done():
             response_type = interaction.response.type
             if self._deferred is None and response_type is discord.InteractionResponseType.deferred_channel_message:
                 message = "the interaction was deferred outside this request ledger"
                 raise RuntimeError(message)
-        result = await self.ui._respond_resolved(
+        return await self.scope._respond_resolved(
             self,
             content,
-            spec=spec,
             overrides=overrides,
             files=files,
-            complete_deferred=complete_deferred,
             parent=parent,
             session_key=session_key,
         )
-        self._responses += 1
-        return result
 
-    @staticmethod
-    def _explicit_audience(
-        content: FacadeContent | Response,
-        spec: ResponseSpec | None,
-        overrides: ResponseOverrides,
-    ) -> Visibility | None:
-        explicit = overrides.get("audience")
-        if explicit is not None:
-            return explicit
-        if spec is not None and spec.audience is not UNSET:
-            return cast(Visibility, spec.audience)
-        if isinstance(content, Response):
-            if content.overrides is not None and "audience" in content.overrides:
-                return content.overrides["audience"]
-            if content.spec is not None and content.spec.audience is not UNSET:
-                return cast(Visibility, content.spec.audience)
-        return None
-
-    async def defer(self, policy: Literal["private", "public"] | None = None) -> None:
+    async def defer(self, policy: Deferral = "private") -> None:
         """Acknowledge this request; the first later response completes it."""
-        if self.acknowledgement == "form":
-            message = "a form-reserved handler cannot defer a message response"
-            raise RuntimeError(message)
         interaction = self.interaction
         if interaction is None:
             return
@@ -338,19 +367,16 @@ class DiscordRequest[OwnerT, SourceT: ResponseSource = ResponseSource]:
                 message = "the interaction was already acknowledged outside this request ledger"
                 raise RuntimeError(message)
             return
-        selected = policy
-        if selected is None:
-            selected = "public" if self.acknowledgement == "public" else "private"
-        await interaction.response.defer(ephemeral=selected == "private", thinking=True)
-        self._deferred = selected
+        await interaction.response.defer(ephemeral=policy == "private", thinking=True)
+        self._deferred = policy
 
-    async def open_form(
+    async def form(
         self,
         form: FormSpec | ModalSpec | discord.ui.Modal,
         *,
         on_submit: Callable[[discord.Interaction[discord.Client], dict[str, object]], Awaitable[None]] | None = None,
     ) -> None:
-        """Open a declarative or native-owned modal as the initial acknowledgement."""
+        """Open a declarative or native modal as this request's initial acknowledgement."""
         interaction = self.interaction
         if interaction is None:
             message = "forms require an interaction request"
@@ -373,4 +399,58 @@ class DiscordRequest[OwnerT, SourceT: ResponseSource = ResponseSource]:
         self._form_opened = True
 
 
-__all__ = ["AcknowledgementPolicy", "DiscordRequest"]
+@overload
+async def request[OwnerT](source: RequestOrigin, *, owner: OwnerT) -> Request[OwnerT]: ...
+@overload
+async def request(source: RequestOrigin) -> Request[Any]: ...
+async def request(source: RequestOrigin, *, owner: object | None = None) -> Request[Any]:
+    """The one request for `source`, resolving it on first sight.
+
+    `owner` names the object whose scope tracks what the request opens; a command decorator
+    passes its binding. Without it, a click inherits the scope of the root it was raised
+    from, and anything else lands in the app scope. A memoized request keeps the scope it was
+    first resolved with.
+    """
+    from squid_ui_discord.runtime import DiscordUIRuntime
+
+    root: MessageRoot | None = None
+    native: object = source
+    localization: Localization | None = None
+    if isinstance(source, ActionEvent):
+        responder = source.responder
+        if not isinstance(responder, ActionResponder):
+            frontend = source.context.get("frontend", type(responder).__name__)
+            message = f"this event came from frontend {frontend!r}, not Discord"
+            raise LookupError(message)  # noqa: TRY004
+        native = responder.interaction
+        root = responder.message_root
+        localization = root.localization
+    found = _memo_get(native)
+    if found is not None:
+        return found
+    kind = _kind(native)
+    runtime = DiscordUIRuntime.of(cast(Any, native))
+    if localization is None:
+        localization = runtime.defaults.localization
+        if runtime.localization is not None:
+            localization = await runtime.localization(cast(Any, native))
+    user = getattr(native, "user", None) if kind == "interaction" else getattr(native, "author", None)
+    if user is None:
+        message = "request source identifies no user"
+        raise TypeError(message)
+    scope = runtime.scope_for(owner) if owner is not None else runtime.scope_of_root(root)
+    resolved = Request[Any](
+        runtime,
+        scope,
+        cast(ResponseSource, native),
+        kind,
+        localization,
+        cast(discord.User | discord.Member, user),
+        cast(discord.Guild | None, getattr(native, "guild", None)),
+        root,
+    )
+    _memo_set(native, resolved)
+    return resolved
+
+
+__all__ = ["Deferral", "Request", "RequestOrigin", "SourceKind", "request"]
