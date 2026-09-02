@@ -333,6 +333,7 @@ class InteractionHarness:
         self.message = self.message_harness.source
         self.client = client
         self.channel = self.message.channel
+        self.channel_id = self.channel.id
         self.guild = self.message.guild
         self.guild_id = self.message.guild.id if self.message.guild is not None else None
         self.locale = "en-US"
