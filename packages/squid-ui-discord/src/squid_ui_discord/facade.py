@@ -1,17 +1,17 @@
-"""Explicit Discord UI authority bound to one application owner."""
+"""A lifetime for the roots one application object opens."""
 
 from collections.abc import Hashable, Sequence
 from dataclasses import replace
-from typing import TYPE_CHECKING, Unpack, cast, overload
+from typing import TYPE_CHECKING, Any, Unpack, cast, overload
 
 import discord
 
 from squid_ui import paragraph
-from squid_ui.interactions import ActionEvent
 from squid_ui.runtime.component import Component
 from squid_ui.target_types import ComponentsV2Target
 from squid_ui.text import Localization
 from squid_ui_discord.access import AccessPolicy, Owner
+from squid_ui_discord.audience import Audience
 from squid_ui_discord.contracts import DocumentContent, FacadeContent, ResponseSource, SendDestination
 from squid_ui_discord.delivery import Abandoned as DeliveryAbandoned
 from squid_ui_discord.delivery import DeliveryResult, edit_to, no_mentions, send_to
@@ -37,11 +37,17 @@ from squid_ui_discord.sessions import Opened
 from squid_ui_discord.sessions import Rejected as SessionRejected
 
 if TYPE_CHECKING:
+    from squid_ui_discord.request import Request
     from squid_ui_discord.runtime import DiscordUIRuntime
 
 
-class DiscordUI[OwnerT]:
-    """UI authority bound to one exact owner; ``close()`` ends its transient roots."""
+class Scope[OwnerT = Any]:
+    """The roots one owner opened; ``close()`` finishes them and unregisters the scope.
+
+    A request carries the scope of the cog (or app) it was dispatched to, so replies go
+    through `Request`. `send` and `edit` cover the no-request case: a scheduled post, an
+    edit of a message nobody just clicked.
+    """
 
     def __init__(self, runtime: DiscordUIRuntime[discord.Client], owner: OwnerT, defaults: ResponseSpec) -> None:
         self._runtime = runtime
@@ -74,31 +80,19 @@ class DiscordUI[OwnerT]:
             message = "this Discord UI scope is closed"
             raise RuntimeError(message)
 
-    def _policy(
-        self,
-        content: FacadeContent,
-        spec: ResponseSpec | None,
-        overrides: ResponseOverrides,
-    ) -> ResponseSpec:
+    def _policy(self, content: FacadeContent, overrides: ResponseOverrides) -> ResponseSpec:
         policy = self._runtime.response_defaults.overlay(self._defaults)
         screen_spec = getattr(type(content), "__response_spec__", None)
         if isinstance(screen_spec, ResponseSpec):
             policy = policy.overlay(screen_spec)
-        return policy.overlay(spec).overlay(None, **overrides)
+        return policy.overlay(None, **overrides)
 
-    async def resolve[SourceT: ResponseSource](self, source: SourceT):
-        """Normalize a Discord source into an owner-typed request."""
+    async def request(self, source: ResponseSource) -> Request[OwnerT]:
+        """The request for `source`, created under this scope if no request has seen it yet."""
         self._require_live()
-        from squid_ui_discord.request import DiscordRequest
+        from squid_ui_discord.request import request
 
-        return await DiscordRequest.create(self, source)
-
-    def action[EventT: ActionEvent](self, event: EventT):
-        """Bind a portable component event to this owner's safe Discord boundary."""
-        self._require_live()
-        from squid_ui_discord.action import DiscordAction
-
-        return DiscordAction(event, self)
+        return await request(source, owner=self._owner)
 
     def render(self, content: FacadeContent, *, localization: Localization | None = None) -> MessagePayload:
         """Render supported static content through installed rendering defaults."""
@@ -130,7 +124,6 @@ class DiscordUI[OwnerT]:
         source: ResponseSource,
         content: ComponentT | Response[ComponentT],
         *,
-        spec: ResponseSpec | None = None,
         files: Sequence[discord.File] = (),
         parent: MessageRoot | None = None,
         session_key: Hashable | None = None,
@@ -143,7 +136,6 @@ class DiscordUI[OwnerT]:
         source: ResponseSource,
         content: FacadeContent | Response,
         *,
-        spec: ResponseSpec | None = None,
         files: Sequence[discord.File] = (),
         parent: MessageRoot | None = None,
         session_key: Hashable | None = None,
@@ -153,24 +145,16 @@ class DiscordUI[OwnerT]:
     async def respond(
         self,
         source: ResponseSource,
-        content: FacadeContent | Response,
+        content: FacadeContent | Response[Any],
         *,
-        spec: ResponseSpec | None = None,
         files: Sequence[discord.File] = (),
         parent: MessageRoot | None = None,
         session_key: Hashable | None = None,
         **overrides: Unpack[ResponseOverrides],
     ) -> ResponseResult:
-        """Respond to an interaction, command context, or message."""
-        request = await self.resolve(source)
-        return await request.respond(
-            content,
-            spec=spec,
-            files=files,
-            parent=parent,
-            session_key=session_key,
-            **overrides,
-        )
+        """Transitional: `(await scope.request(source)).respond(...)` for call sites not yet ported."""
+        request = await self.request(source)
+        return await request.respond(content, files=files, parent=parent, session_key=session_key, **overrides)
 
     async def send(
         self,
@@ -178,13 +162,12 @@ class DiscordUI[OwnerT]:
         content: FacadeContent,
         *,
         locale: str | None = None,
-        spec: ResponseSpec | None = None,
         files: Sequence[discord.File] = (),
         **overrides: Unpack[ResponseOverrides],
     ) -> ResponseResult:
         """Send out-of-band content to a channel or DM destination."""
         self._require_live()
-        policy = self._policy(content, spec, overrides)
+        policy = self._policy(content, overrides)
         audience = self._setting(policy.audience, default="public")
         if audience != "public":
             message = "out-of-band send requires a concrete destination and public audience policy"
@@ -204,16 +187,15 @@ class DiscordUI[OwnerT]:
         target: discord.Message,
         content: FacadeContent,
         *,
-        spec: ResponseSpec | None = None,
         files: Sequence[discord.File] = (),
         **overrides: Unpack[ResponseOverrides],
     ) -> ResponseResult:
-        """Replace a Discord message with static or newly owner-scoped live content."""
+        """Replace a Discord message with static or newly scoped live content."""
         self._require_live()
-        if "audience" in overrides or (spec is not None and spec.audience is not UNSET):
+        if "audience" in overrides:
             message = "editing an existing message cannot change its audience"
             raise TypeError(message)
-        policy = self._policy(content, spec, overrides)
+        policy = self._policy(content, overrides)
         return await self._present(
             content,
             destination=edit_to(target, files=files, allowed_mentions=self._mentions(policy)),
@@ -225,26 +207,18 @@ class DiscordUI[OwnerT]:
 
     async def _respond_resolved(
         self,
-        request,
-        content: FacadeContent | Response,
+        request: Request[Any],
+        content: FacadeContent,
         *,
-        spec: ResponseSpec | None,
         overrides: ResponseOverrides,
         files: Sequence[discord.File],
-        complete_deferred: bool = False,
         parent: MessageRoot | None = None,
         session_key: Hashable | None = None,
     ) -> ResponseResult:
-        if isinstance(content, Response):
-            nested: ResponseOverrides = {} if content.overrides is None else content.overrides
-            policy = self._policy(content.content, content.spec, nested).overlay(spec, **overrides)
-            content = content.content
-        else:
-            policy = self._policy(content, spec, overrides)
-        audience = self._setting(policy.audience, default="public")
-        destination = request.destination(
-            audience, files=files, allowed_mentions=self._mentions(policy), complete_deferred=complete_deferred
-        )
+        self._require_live()
+        policy = self._policy(content, overrides)
+        audience: Audience = self._setting(policy.audience, default="public")
+        destination = request.destination(audience, files=files, allowed_mentions=self._mentions(policy))
         return await self._present(
             content,
             destination=destination,
@@ -341,13 +315,10 @@ class DiscordUI[OwnerT]:
         return Presented(content, root, result.session, captured)
 
     def _root_options(self, policy: ResponseSpec, localization: Localization) -> SessionOptions:
-        configured = self._setting(policy.root_options, default=None)
-        options = cast(SessionOptions, {} if configured is None else dict(configured))
-        duplicates = {"timeout", "expiry", "scheduler", "localization"}.intersection(options)
-        if duplicates:
-            names = ", ".join(sorted(duplicates))
-            message = f"root_options repeats dedicated response policy: {names}"
-            raise TypeError(message)
+        options: SessionOptions = {}
+        chrome = self._setting(policy.chrome, default=None)
+        if chrome is not None:
+            options["chrome"] = chrome
         options["timeout"] = self._setting(policy.timeout, default=180)
         options["localization"] = localization
         scheduler = self._runtime.scheduler if self._setting(policy.follow_topics, default=False) else None
@@ -389,4 +360,7 @@ class DiscordUI[OwnerT]:
         self._closed = True
 
 
-__all__ = ["DiscordUI"]
+# Transitional name; removed once the bot is ported.
+DiscordUI = Scope
+
+__all__ = ["DiscordUI", "Scope"]

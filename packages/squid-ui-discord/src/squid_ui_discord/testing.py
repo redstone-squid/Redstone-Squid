@@ -252,7 +252,9 @@ class _InteractionResponseHarness:
 
         async def record(*_args: Any, **kwargs: Any) -> _InteractionResult:
             self._done = True
-            self.type = kind
+            # A "thinking" defer is a deferred channel message, the shape discord.py reports for it.
+            thinking = kind is discord.InteractionResponseType.deferred_message_update and kwargs.get("thinking")
+            self.type = discord.InteractionResponseType.deferred_channel_message if thinking else kind
             response_message_id = message_id if kind is discord.InteractionResponseType.channel_message else None
             return _InteractionResult(response_message_id, bool(kwargs.get("ephemeral", False)))
 
@@ -335,6 +337,8 @@ class InteractionHarness:
         self.guild_id = self.message.guild.id if self.message.guild is not None else None
         self.locale = "en-US"
         self.guild_locale = "en-US"
+        self.extras: dict[Any, Any] = {}
+        self.command: Any = None
         self.response = _InteractionResponseHarness(message_id)
         self.followup = _FollowupHarness()
         self.original_response = AsyncCallRecorder(result=self.message)
@@ -386,6 +390,7 @@ class ContextHarness:
         self.reply = AsyncCallRecorder(result=self.message)
         self.bot = bot
         self.interaction: Any = None
+        self.command: Any = None
         self.author = _Identity(user_id)
         self.guild: Any = None
 

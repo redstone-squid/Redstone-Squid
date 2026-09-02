@@ -14,7 +14,7 @@ from discord.ext import commands
 from squid_ui.runtime.component import Component
 from squid_ui.target_types import ComponentsV2Target
 from squid_ui_discord.config import DiscordUIConfig
-from squid_ui_discord.facade import DiscordUI
+from squid_ui_discord.facade import Scope
 from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.response import Presented, ResponseOverrides, ResponseSpec
 from squid_ui_discord.runtime import DiscordUIRuntime, install
@@ -193,12 +193,12 @@ def _owner_config(owner: object, configured: DiscordUIConfig | None) -> DiscordU
     if configured is not None:
         return configured
     ui = getattr(owner, "ui", None)
-    if isinstance(ui, DiscordUI):
+    if isinstance(ui, Scope):
         return ui.runtime.config
     if isinstance(ui, DiscordUIRuntime):
         return ui.config
     app_ui = getattr(owner, "app_ui", None)
-    if isinstance(app_ui, DiscordUI):
+    if isinstance(app_ui, Scope):
         return app_ui.runtime.config
     return DiscordUIConfig()
 
@@ -215,17 +215,16 @@ async def stage[OwnerT, ComponentT: Component[ComponentsV2Target]](
     user_id: int = 1,
     config: DiscordUIConfig | None = None,
     defaults: ResponseSpec | None = None,
-    spec: ResponseSpec | None = None,
     **overrides: Unpack[ResponseOverrides],
 ) -> AsyncIterator[StagedUI[ComponentT]]:
     """Present a component through an isolated owner-scoped facade and run its runtime."""
     client = commands.Bot(command_prefix="!", intents=discord.Intents.none())
     runtime = install(client, _owner_config(owner, config))
     client.ui = runtime  # type: ignore[attr-defined]
-    ui = runtime.scope(owner, defaults=defaults)
+    scope = runtime.scope(owner, defaults=defaults)
     interaction = _interaction(client, user_id)
     try:
-        result = await ui.respond(interaction.source, content, spec=spec, **overrides)
+        result = await (await scope.request(interaction.source)).respond(content, **overrides)
         if not isinstance(result, Presented):
             message = f"staging live content produced {type(result).__name__}"
             raise TypeError(message)
@@ -276,7 +275,7 @@ async def invoke(
 
 def _client_for(owner: object | None) -> discord.Client:
     for candidate in (getattr(owner, "ui", None), getattr(owner, "app_ui", None)):
-        if isinstance(candidate, DiscordUI):
+        if isinstance(candidate, Scope):
             return candidate.runtime.client
         if isinstance(candidate, DiscordUIRuntime):
             return candidate.client

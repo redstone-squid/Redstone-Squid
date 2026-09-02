@@ -3,7 +3,6 @@
 from typing import Self, cast
 
 import discord
-from discord import app_commands
 from discord.ext import commands
 
 import squid_ui as sl
@@ -79,20 +78,18 @@ def _installed_bot() -> commands.Bot:
     return bot
 
 
-class Commands(sdx.Cog[commands.Bot]):
+class Commands(sd.Cog[commands.Bot]):
     def __init__(self, bot: commands.Bot) -> None:
         super().__init__(bot)
-        self.request: sdx.DiscordRequest[Self] | None = None
+        self.request: sd.Request[Self] | None = None
 
-    @app_commands.command()
-    @sdx.command(acknowledgement="private")
-    async def inspect(self, request: sdx.DiscordRequest[Self], build_id: int) -> str:
+    @sd.command(defer="private")
+    async def inspect(self, request: sd.Request[Self], build_id: int) -> str:
         self.request = request
         return f"Build {build_id}"
 
-    @commands.command()
-    @sdx.command()
-    async def prefix(self, request: sdx.DiscordRequest[Self]) -> str:
+    @sd.hybrid_command()
+    async def prefix(self, request: sd.Request[Self]) -> str:
         self.request = request
         return "Prefix"
 
