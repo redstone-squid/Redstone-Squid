@@ -37,8 +37,9 @@ The audit covered every application entry point (`DiscordUI`, `DiscordRequest`,
 5. **The slow-command shape lives in the bot.** "Acknowledge, show a pending card, replace it
    with the result or a rendered error" is `operations.py` (210 lines, five casts), used
    twice. The facade offers `run_managed_result` below it, used once.
-6. **Owner generics erase to `Any` at every helper boundary**; `DiscordUI[OwnerT]` buys nothing
-   the bot reads.
+6. **Helpers that accept several source shapes cast their way through**; `consent.py:162-176`
+   and `operations.py:25-29` re-probe interaction-vs-context on every call. (An earlier draft
+   blamed `DiscordUI[OwnerT]` for these casts; it does not cause them, see below.)
 7. **Entry-point churn.** `Invocation` (retired in `ff92dafa`), then `DiscordUI.resolve`, then
    `ext.command`; `@sdx.command/context_menu/autocomplete` have zero bot users; README and
    `docs/plans/ui-ergonomics/README.md` still describe `Invocation.reply` and `screen.show`.
@@ -73,11 +74,19 @@ becomes `Response(content, audience=…, access=…, timeout=…)` — no `spec`
 portable-component objection in `90-deferred.md` does not apply) minus `root_options`; `chrome`
 becomes a `Config` value.
 
-### Scope is a lifetime, not an owner
+### Scope is a lifetime
 
-`sd.Scope` tracks the roots a cog opened so `close()` can finish them. It has no owner type
-parameter and no `respond`; `send`/`edit` stay for the no-source case (scheduled posts,
-starboard edits). `DiscordUI` and `DiscordAction` go.
+`sd.Scope[OwnerT = Any]` tracks the roots a cog opened so `close()` can finish them. It has
+no `respond`; `send`/`edit` stay for the no-source case (scheduled posts, starboard edits).
+`DiscordUI` and `DiscordAction` go.
+
+The owner type parameter stays, on `Scope`, `Request` and `Screen`, defaulted to `Any` (PEP
+696) so the bare `sd.Screen` every bot screen uses today remains legal. It is precise where
+the entry point knows the owner — `@sd.command` passes `args[0]`, which is `Command.binding`,
+so the handler gets `Request[Cog]` and `Screen[Cog].opening.owner.db` type-checks — and `Any`
+where it cannot: a click resolves its scope from the root at runtime. The casts in finding 6
+come from helpers probing the source shape, which `sd.request()` does once; they were never
+the generic's fault.
 
 ### `sd.command` absorbs `app_commands.command`
 
@@ -148,11 +157,11 @@ layout = sd.hybrid_group(name="layout")
 - **Policy resolves at invocation.** The wrapper walks `interaction.command.parent` and
   overlays each `sd.Group`'s defaults under the command's own. This is what lets the
   class-body form work (the decorator cannot see its group) and gives nested groups for free.
-- **Scope comes from `Command.binding`.** discord.py rebinds every child of a cog-owned group
-  to the cog (`commands.py:1706`) and binds class-body members to the group instance, so
-  `binding` is a cog, a group, or `None`. `runtime.scope_for(binding)`: an `sd.Cog` → its
-  scope; anything else → the app scope. This deletes `ext/commands._ui_for` and
-  `operations._command_request`.
+- **Scope comes from `Command.binding`.** discord.py binds instance-form members to the cog
+  and class-body members to the group instance, keeping that through the cog copy
+  (`commands.py:743`), so `binding` is a cog, a group, or `None`. `runtime.scope_for(binding)`:
+  an `sd.Cog` → its scope; anything else → the app scope. This deletes `ext/commands._ui_for`
+  and `operations._command_request`.
 - A group is **not** a scope owner. Roots opened from a member belong to the binding cog or
   the app, so there is no third lifetime object.
 - `sd.hybrid_group` returns `sd.HybridGroup(commands.HybridGroup)` with the same registrar
@@ -176,14 +185,16 @@ and the testing helpers are the application API, not an extension of it.
 - **A squid-typed command wrapper** returned by `sd.command`. Breaks cog scanning, `Group`
   class bodies and every command-targeting discord.py decorator.
 - **Groups as scope owners.** Adds a lifetime object nobody closes.
+- **Dropping the owner type parameter.** Proposed in the first draft; the casts it was meant
+  to remove come from source-shape probing, not from `OwnerT`. A defaulted parameter costs
+  nothing at the bare form and types `opening.owner` at the decorated one.
 - **Keeping `DiscordUI.respond` alongside `req.respond`** "for the one-liner". The one-liner
   is `await (await sd.request(i)).respond(x)` only when the author refuses the decorator; with
   `@sd.command` the request is already in hand.
 
 ## Deletions
 
-`action.py`, `DiscordUI.respond/resolve/action`, the owner type parameter, the `acknowledgement`
-enum and its `"form"` mode, `Response.spec`/`overrides`, `root_options`, `sd.responder`,
+`action.py`, `DiscordUI.respond/resolve/action`, the `acknowledgement` enum and its `"form"` mode, `Response.spec`/`overrides`, `root_options`, `sd.responder`,
 `sd.native`, the `ext` package path, `run_managed_result`'s public surface (it becomes the
 implementation of `pending=`), the "place `@sdx.command` directly beneath the native command
 decorator" `TypeError`, and in the bot: `operations.py`, the helpers at `consent.py:156-172`,
