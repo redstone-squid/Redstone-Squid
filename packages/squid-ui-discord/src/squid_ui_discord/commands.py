@@ -31,7 +31,7 @@ from squid_ui_discord.modal import ModalSpec
 from squid_ui_discord.request import Deferral, Request, request
 from squid_ui_discord.response import Abandoned, Presented, Rejected, Response, ResponseResult, Sent
 
-type CommandResult = FacadeContent | Response | FormSpec | ModalSpec | discord.ui.Modal | ResponseResult | None
+type CommandResult = FacadeContent | Response[Any] | FormSpec | ModalSpec | discord.ui.Modal | ResponseResult | None
 type ChoiceValue = str | int | float
 type AutocompleteItem = app_commands.Choice[ChoiceValue] | tuple[str, ChoiceValue]
 type AsyncHandler = Callable[..., Awaitable[object]]
