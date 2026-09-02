@@ -17,7 +17,6 @@ from squid.config import BuildConfig
 from squid.suggestions.application import candidate, rank
 from squid.suggestions.domain import MAX_SUGGESTIONS
 from squid_ui_discord import send_to
-from squid_ui_discord.ext import Cog as SquidCog
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -168,7 +167,7 @@ def _command_section(
     )
 
 
-class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](SquidCog[BotT]):
+class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     """Show help for a command or a group of commands."""
 
     def __init__(self, bot: BotT):

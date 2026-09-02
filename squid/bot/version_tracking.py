@@ -17,7 +17,6 @@ from squid.permissions.domain.catalogue import VERSION_ENTRY_CREATE
 from squid.versions.domain import Edition, MinecraftVersion
 from squid_ui.text import localization_scope
 from squid_ui_discord import send_to
-from squid_ui_discord.ext import Cog
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -136,7 +135,7 @@ class VersionScreen(sd.Screen):
         await event.finish()
 
 
-class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT], name="VersionTracker"):
+class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="VersionTracker"):
     """Open the version catalogue and ingest configured channel announcements."""
 
     def __init__(self, bot: BotT):
@@ -159,7 +158,7 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT], name="Versi
             ),
         )
 
-    @Cog.listener(name="on_message")
+    @sd.Cog.listener(name="on_message")
     async def on_message_version_add(self, message: discord.Message) -> None:
         """Parse messages in the version-tracking channel and add them to the database."""
         channel_id = message.channel.id
