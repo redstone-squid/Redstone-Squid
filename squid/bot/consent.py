@@ -3,11 +3,9 @@
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, cast
+from typing import Any
 
 import anyio
-import discord
-from discord.ext import commands
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -30,9 +28,6 @@ class NotAskedType(Enum):
 
 NOT_ASKED = NotAskedType.NOT_ASKED
 """The question was never put to the user, and they have already been told why."""
-
-type ConsentTarget = commands.Context[Any] | discord.Interaction[Any]
-"""Anywhere the bot can identify a user and answer them."""
 
 type ConsentContinuation = Callable[[sl.PressEvent, AccountConsent | None], Awaitable[None]]
 """What to do once the reader has answered, run by the prompt's own press.
@@ -151,31 +146,6 @@ class ConsentPrompt(sd.Screen):
         return None if scope.cancel_called else self._answer.consent
 
 
-def _is_context(target: ConsentTarget) -> bool:
-    """Whether this arrived as a command rather than as a bare interaction.
-
-    By shape, the way `sd.deliver_to` dispatches: only a command context can `send`.
-    """
-    return callable(getattr(target, "send", None))
-
-
-def _ui(target: ConsentTarget) -> sd.DiscordUI[Any]:
-    """Return the bot-owned facade installed for this command surface."""
-    runtime = sd.DiscordUIRuntime.of(target)
-    return runtime.scope(runtime.client)
-
-
-async def _send(target: ConsentTarget, node: sl.LayoutNode[sl.ComponentsV2Target]) -> None:
-    """Send a plain node where the prompt itself would have gone."""
-    await _ui(target).respond(target, node, audience="personal")
-
-
-def _user_of(target: ConsentTarget) -> discord.User | discord.Member:
-    if _is_context(target):
-        return cast(commands.Context[Any], target).author
-    return cast(discord.Interaction[Any], target).user
-
-
 def _link_credit_value(preview: LinkPreview) -> sl.TextLike:
     credit = preview.credit
     if credit is None:
@@ -193,7 +163,7 @@ def _link_credit_value(preview: LinkPreview) -> sl.TextLike:
 
 
 async def _show_prompt(
-    target: ConsentTarget,
+    request: sd.Request[Any],
     *,
     user_id: int,
     preview: LinkPreview | None,
@@ -254,12 +224,12 @@ async def _show_prompt(
             wait_timeout=timeout,
             on_answer=on_answer,
         )
-    outcome = await _ui(target).respond(target, prompt, parent=parent)
+    outcome = await request.respond(prompt, parent=parent)
     return prompt if isinstance(outcome, sd.Presented) else None
 
 
 async def prompt_for_consent(
-    target: ConsentTarget,
+    request: sd.Request[Any],
     *,
     user_id: int,
     preview: LinkPreview | None = None,
@@ -273,7 +243,7 @@ async def prompt_for_consent(
     would do here happens inside the mount's transaction and dispatch lock.
     """
     component = await _show_prompt(
-        target,
+        request,
         user_id=user_id,
         preview=preview,
         timeout=timeout,
@@ -286,7 +256,7 @@ async def prompt_for_consent(
 
 
 async def request_consent(
-    target: ConsentTarget,
+    request: sd.Request[Any],
     *,
     user_id: int,
     on_answer: ConsentContinuation,
@@ -302,7 +272,7 @@ async def request_consent(
     stored, and nothing the reader did not ask for happens later.
     """
     component = await _show_prompt(
-        target,
+        request,
         user_id=user_id,
         preview=preview,
         timeout=timeout,
@@ -335,13 +305,14 @@ async def with_consented_account(
     through its own handle: the prompt's interaction addresses the prompt's message, and
     flushing the panel through it would draw the panel into the dialog.
     """
-    interaction = sd.native(event)
-    user = interaction.user
+    request = await sd.request(event)
+    user = request.user
     account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(user.id))
     if account is not None and account.id is not None and not account.needs_consent_refresh:
         await work(event, account.id)
         return
-    message_root = sd.responder(event).message_root
+    message_root = request.root
+    assert message_root is not None, "a press always arrives from a mounted message"
 
     async def answered(prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
         if consent is None:
@@ -352,7 +323,7 @@ async def with_consented_account(
         await message_root.schedule()
 
     await request_consent(
-        interaction,
+        request,
         user_id=user.id,
         on_answer=answered,
         timeout=timeout,
@@ -361,7 +332,7 @@ async def with_consented_account(
 
 
 async def ensure_consented_account(
-    target: ConsentTarget,
+    request: sd.Request[Any],
     accounts: AccountService,
     *,
     timeout: float = 120.0,
@@ -372,15 +343,15 @@ async def ensure_consented_account(
     Awaits the answer, so it belongs to a command rather than to a mounted action handler;
     `with_consented_account` is the form for the latter.
     """
-    user = _user_of(target)
+    user = request.user
     account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(user.id))
     if account is not None and account.id is not None and not account.needs_consent_refresh:
         return account.id
 
-    consent = await prompt_for_consent(target, user_id=user.id, timeout=timeout, parent=parent)
+    consent = await prompt_for_consent(request, user_id=user.id, timeout=timeout, parent=parent)
     if consent is NOT_ASKED or consent is None:
         if consent is None:
-            await _send(target, text_node(tr(t"Cancelled. No account information was stored.")))
+            await request.respond(text_node(tr(t"Cancelled. No account information was stored.")), audience="personal")
         return None
 
     granted = await accounts.get_or_create_identity(IdentityProvider.DISCORD, str(user.id), consent=consent)

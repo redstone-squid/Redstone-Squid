@@ -7,11 +7,8 @@ from tests.support.source_tree import source_tree
 
 BOT_ROOT = Path(__file__).parents[2] / "squid" / "bot"
 
-NATIVE_EVENT_ALLOWLIST = {
-    ("consent.py", "with_consented_account"),
-    ("verify.py", "open_consent"),
-}
-"""Reviewed Discord operation bridges that still need callbacks injected by their workspace."""
+NATIVE_EVENT_ALLOWLIST: set[tuple[str, str]] = set()
+"""Reviewed Discord operation bridges; `sd.request(event)` has replaced every one so far."""
 
 
 def _classes(tree: ast.AST) -> list[ast.ClassDef]:
