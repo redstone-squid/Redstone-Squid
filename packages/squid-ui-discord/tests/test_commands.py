@@ -45,6 +45,11 @@ class Builds(sd.Cog[commands.Bot]):
         self.request = request
         return "Prefix"
 
+    @sd.prefix_command(name="text-only", aliases=["t"], hidden=True)
+    async def text_only(self, request: sd.Request[Self]) -> str:
+        self.request = request
+        return "Text only"
+
     @sd.autocomplete()
     async def choices(self, request: sd.Request[Self], current: str) -> list[tuple[str, str]]:
         assert request.owner is self
@@ -92,6 +97,24 @@ async def test_hybrid_command_answers_a_prefix_context() -> None:
 
     assert isinstance(cog.prefix, commands.HybridCommand)
     await run(cog.prefix, cog, context.source)
+
+    assert cog.request is not None
+    assert cog.request.owner is cog
+    context.send.assert_awaited_once()
+
+
+async def test_prefix_command_stays_off_the_app_command_tree() -> None:
+    bot = installed_bot()
+    cog = Builds(bot)
+    context = ContextHarness(bot=bot)
+
+    assert type(cog.text_only) is commands.Command
+    assert cog.text_only.name == "text-only"
+    assert cog.text_only.aliases == ["t"]
+    assert cog.text_only.hidden
+    assert [c.name for c in cog.__cog_app_commands__] == ["build"]
+    assert {c.name for c in cog.__cog_commands__} == {"prefix", "text-only"}
+    await run(cog.text_only, cog, context.source)
 
     assert cog.request is not None
     assert cog.request.owner is cog
@@ -260,7 +283,9 @@ class Menus(sd.Cog[commands.Bot]):
         super().__init__(bot)
         self.target: object | None = None
 
-    @sd.context_menu(name="Inspect build", defer="public")
+    @sd.context_menu(
+        name="Inspect build", defer="public", default_permissions=discord.Permissions(manage_messages=True)
+    )
     async def inspect(self, request: sd.Request[Self], target: discord.Message) -> str:
         assert request.owner is self
         self.target = target
@@ -276,6 +301,7 @@ async def test_context_menu_is_registered_invoked_and_removed_with_cog() -> None
     await bot.add_cog(cog)
     menu = bot.tree.get_command("Inspect build", type=discord.AppCommandType.message)
     assert isinstance(menu, app_commands.ContextMenu)
+    assert menu.default_permissions == discord.Permissions(manage_messages=True)
     await menu._invoke(interaction.source, target)
 
     assert cog.target is target
