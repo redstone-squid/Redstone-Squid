@@ -1,16 +1,15 @@
 """Various admin commands for the bot."""
 
 import re
-from typing import TYPE_CHECKING, Literal, override
+from typing import TYPE_CHECKING, Literal, Self, override
 
 import discord
 from discord import app_commands
 from discord.ext import commands
-from discord.ext.commands import Context, Greedy
+from discord.ext.commands import Greedy
 
-import squid_ui as sl
+import squid_ui_discord as sd
 from squid.accounts.domain import IdentityProvider
-from squid.bot.operations import managed_result
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
 from squid.bot.tags_view import TagsScreen
 from squid.bot.ui import link_node, text_node
@@ -26,14 +25,12 @@ from squid.permissions.domain.catalogue import (
     TAG_PROPOSAL_LIST,
     TAG_PROPOSAL_REJECT,
 )
-from squid_ui.document import DocumentLike
-from squid_ui_discord.ext import Cog
 
 if TYPE_CHECKING:
     import squid.bot.app
 
 
-class Admin[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
+class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     """Cog for admin commands."""
 
     def __init__(self, bot: BotT):
@@ -42,22 +39,15 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
         self.restrictions = bot.services.restrictions
         self._archive_header_pattern = re.compile(r"^<@!?(\d+)>.*wrote:")
         self.bot.reactions.subscribe(self)
-        self.archive_ctx_menu = app_commands.ContextMenu(
-            name="Archive Message",
-            callback=self.archive_message_context,
-        )
-        self.archive_ctx_menu.default_permissions = discord.Permissions(manage_messages=True)
-        self.bot.tree.add_command(self.archive_ctx_menu)
 
     @override
     async def ui_unload(self) -> None:
         self.bot.reactions.unsubscribe(self)
-        self.bot.tree.remove_command(self.archive_ctx_menu.name, type=self.archive_ctx_menu.type)
 
     @autocompletes(build_id="builds")
-    @app_commands.command(name="tags", description="Browse, apply, propose, and moderate build tags")
+    @sd.command(name="tags", description="Browse, apply, propose, and moderate build tags")
     @app_commands.rename(build_id="build")
-    async def tags_workspace(self, interaction: discord.Interaction[BotT], build_id: int | None = None) -> None:
+    async def tags_workspace(self, request: sd.Request[Self], build_id: int | None = None) -> TagsScreen:
         """Open the capability-aware build tag workspace."""
         nodes = (
             TAG_PROPOSAL_LIST,
@@ -68,7 +58,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
         )
 
         async def authorize(node: PermissionNode) -> bool:
-            return await allows(interaction, node)
+            return await allows(request, node)
 
         granted: set[PermissionNode] = set()
         for node in nodes:
@@ -77,36 +67,32 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
         capabilities = frozenset(granted)
         account = await self.bot.services.accounts.get_account_by_identity(
             IdentityProvider.DISCORD,
-            str(interaction.user.id),
+            str(request.user.id),
         )
         account_id = (
             account.id if account is not None and account.id is not None and not account.needs_consent_refresh else None
         )
-        await self.ui.respond(
-            interaction,
-            TagsScreen(
-                self.tags,
-                self.restrictions,
-                build_id=build_id,
-                actor_account_id=account_id,
-                capabilities=capabilities,
-                authorize=authorize,
-            ),
+        return TagsScreen(
+            self.tags,
+            self.restrictions,
+            build_id=build_id,
+            actor_account_id=account_id,
+            capabilities=capabilities,
+            authorize=authorize,
         )
 
-    async def archive_message_context(
-        self,
-        interaction: discord.Interaction[BotT],
-        message: discord.Message,
-    ) -> None:
+    @sd.context_menu(
+        name="Archive Message",
+        defer="private",
+        default_permissions=discord.Permissions(manage_messages=True),
+    )
+    async def archive_message_context(self, request: sd.Request[Self], message: discord.Message) -> sd.CommandResult:
         """Archive the message selected through Discord's Apps menu."""
-        await enforce(interaction, MESSAGE_ARCHIVE_CREATE)
-        if interaction.guild is None or message.guild != interaction.guild:
-            await interaction.response.send_message("That message is not from this server.", ephemeral=True)
-            return
-        await interaction.response.defer(ephemeral=True)
+        await enforce(request, MESSAGE_ARCHIVE_CREATE)
+        if request.guild is None or message.guild != request.guild:
+            return text_node(tr("That message is not from this server."))
         await self._archive_message(message)
-        await interaction.followup.send("Message archived.", ephemeral=True)
+        return text_node(tr("Message archived."))
 
     async def _archive_message(self, message: discord.Message) -> None:
         """Copy one message in place and remove the original."""
@@ -164,76 +150,63 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
     async def on_reaction_clear_emoji(self, event: ReactionClearEvent) -> None:
         """Ignore emoji clears from archived messages."""
 
-    @commands.command(name="s", hidden=True)
+    @sd.prefix_command(name="s", hidden=True)
     @commands.is_owner()
-    async def sync(self, ctx: Context[BotT], guilds: Greedy[discord.Object], spec: Literal["~", "*", "^"] | None = None) -> None:  # fmt: skip
+    async def sync(self, request: sd.Request[Self], guilds: Greedy[discord.Object], spec: Literal["~", "*", "^"] | None = None) -> sd.CommandResult:  # fmt: skip
         """Syncs the slash commands with the discord API."""
+        tree = self.bot.tree
         if not guilds:
             if spec == "~":
-                synced = await ctx.bot.tree.sync(guild=ctx.guild)
+                synced = await tree.sync(guild=request.guild)
             elif spec == "*":
-                ctx.bot.tree.copy_global_to(guild=ctx.guild)  # type: ignore
-                synced = await ctx.bot.tree.sync(guild=ctx.guild)
+                tree.copy_global_to(guild=request.guild)  # type: ignore
+                synced = await tree.sync(guild=request.guild)
             elif spec == "^":
-                ctx.bot.tree.clear_commands(guild=ctx.guild)
-                await ctx.bot.tree.sync(guild=ctx.guild)
+                tree.clear_commands(guild=request.guild)
+                await tree.sync(guild=request.guild)
                 synced = []
             else:
-                synced = await ctx.bot.tree.sync()
+                synced = await tree.sync()
 
             scope = tr("globally") if spec is None else tr("to the current guild")
-            await self.ui.respond(
-                ctx,
-                text_node(tr("Synced {count} commands {scope}.", count=len(synced), scope=scope)),
-            )
-            return
+            return text_node(tr("Synced {count} commands {scope}.", count=len(synced), scope=scope))
 
         ret = 0
         for guild in guilds:
             try:
-                await ctx.bot.tree.sync(guild=guild)
+                await tree.sync(guild=guild)
             except discord.HTTPException:
                 pass
             else:
                 ret += 1
 
-        await self.ui.respond(
-            ctx,
-            text_node(tr("Synced the tree to {synced}/{total}.", synced=ret, total=len(guilds))),
-        )
+        return text_node(tr("Synced the tree to {synced}/{total}.", synced=ret, total=len(guilds)))
 
-    @commands.command(name="gdb", hidden=True)
+    @sd.prefix_command(name="gdb", hidden=True)
     @commands.is_owner()
-    async def get_sheets_link(self, ctx: Context[BotT]):
+    async def get_sheets_link(self, request: sd.Request[Self]) -> sd.CommandResult:
         """Sends the google sheets link"""
-        await self.ui.respond(
-            ctx,
-            link_node(
-                tr("Build spreadsheet"),
-                "https://docs.google.com/spreadsheets/d/1BiyHD6PE1Jyn1EtlT0o2DqciUzWPSdwHmeRcUJtanUs/edit#gid=2075219221",
-                label=tr("Open spreadsheet"),
-            ),
+        return link_node(
+            tr("Build spreadsheet"),
+            "https://docs.google.com/spreadsheets/d/1BiyHD6PE1Jyn1EtlT0o2DqciUzWPSdwHmeRcUJtanUs/edit#gid=2075219221",
+            label=tr("Open spreadsheet"),
         )
 
-    @commands.command(name="db", hidden=True)
+    @sd.prefix_command(name="db", hidden=True)
     @commands.is_owner()
-    async def get_database_link(self, ctx: Context[BotT]):
+    async def get_database_link(self, request: sd.Request[Self]) -> sd.CommandResult:
         """Sends the database link"""
-        await self.ui.respond(
-            ctx,
-            link_node(
-                tr("Database"),
-                "https://supabase.com/dashboard/project/jnushtruzgnnmmxabsxi/editor/29424?sort=submission_id%3Aasc",
-                label=tr("Open database"),
-            ),
+        return link_node(
+            tr("Database"),
+            "https://supabase.com/dashboard/project/jnushtruzgnnmmxabsxi/editor/29424?sort=submission_id%3Aasc",
+            label=tr("Open database"),
         )
 
     # Not `error`: that name now belongs to the stored-error lookup group, which is the command
     # someone reaches for while holding a reference a user reported.
-    @commands.command(name="raise-error", aliases=["e"], hidden=True)
+    @sd.prefix_command(name="raise-error", aliases=["e"], hidden=True, pending="Working…")
     @commands.is_owner()
-    @managed_result(dismiss_on_success=True)
-    async def raise_error(self, ctx: Context[BotT]) -> DocumentLike[sl.ComponentsV2Target]:
+    async def raise_error(self, request: sd.Request[Self]) -> sd.CommandResult:
         """Raises an error for testing purposes."""
         msg = "This is a test error."
         raise ValueError(msg)
