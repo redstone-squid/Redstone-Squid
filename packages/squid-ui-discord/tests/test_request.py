@@ -78,6 +78,26 @@ async def test_an_unowned_request_lands_in_the_app_scope() -> None:
     assert request.owner is ui.runtime.client
 
 
+async def test_an_owner_claims_a_request_left_waiting_in_the_app_scope() -> None:
+    """Middleware resolves before dispatch knows the owner; the owner's claim still wins."""
+    ui, interaction = installed()
+    early = await sd.request(interaction.source)
+    assert early.scope is ui.runtime.app
+
+    claimed = await ui.request(interaction.source)
+
+    assert claimed is early
+    assert claimed.scope is ui
+
+
+async def test_a_request_that_responded_keeps_its_scope() -> None:
+    ui, interaction = installed()
+    early = await sd.request(interaction.source)
+    await early.respond("first")
+
+    assert (await ui.request(interaction.source)).scope is ui.runtime.app
+
+
 async def test_defer_fixes_the_audience_of_what_follows() -> None:
     ui, interaction = installed()
     request = await ui.request(interaction.source)
