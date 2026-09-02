@@ -22,6 +22,9 @@ dependencies = [
     "discord-py>=2.7,<3",
     "anyio>=4.14,<5",
     "packaging>=24,<27",
+    # PEP 728 open TypedDicts (`extra_items=`) for the command decorators' native kwargs;
+    # the stdlib TypedDict on 3.14 does not accept the keyword yet.
+    "typing-extensions>=4.13",
 ]
 
 [project.optional-dependencies]

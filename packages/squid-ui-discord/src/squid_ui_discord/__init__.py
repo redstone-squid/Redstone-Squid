@@ -19,13 +19,14 @@ from squid_ui.planning.planner import EMPTY_RESERVATION
 from squid_ui.planning.target import ResourceCost
 from squid_ui_discord import (
     access,
-    action,
     actions,
     adapter,
     audience,
     challenges,
     classic,
     classic_renderer,
+    cog,
+    commands,
     config,
     conformance,
     contracts,
@@ -43,7 +44,6 @@ from squid_ui_discord import (
     navigation,
     renderer,
     rendering,
-    request,
     response,
     roles,
     routing,
@@ -64,7 +64,6 @@ from squid_ui_discord.access import (
     Owner,
     Users,
 )
-from squid_ui_discord.action import DiscordAction
 from squid_ui_discord.actions import (
     native,
     responder,
@@ -75,7 +74,23 @@ from squid_ui_discord.adoption import (
 )
 from squid_ui_discord.audience import Audience, Private, Visibility
 from squid_ui_discord.challenges import ChallengeRunner, DialogPresenter
-from squid_ui_discord.config import DiscordUIConfig
+from squid_ui_discord.cog import Cog
+from squid_ui_discord.commands import (
+    CommandPolicy,
+    CommandResult,
+    Group,
+    HybridGroup,
+    NativeCommandKwargs,
+    NativeContextMenuKwargs,
+    NativeHybridKwargs,
+    PendingCard,
+    autocomplete,
+    command,
+    context_menu,
+    hybrid_command,
+    hybrid_group,
+)
+from squid_ui_discord.config import DiscordUIConfig, ErrorPolicy
 from squid_ui_discord.conformance import conform
 from squid_ui_discord.contracts import LocalizationResolver, RequestSource, ResponseSource
 from squid_ui_discord.delivery import (
@@ -86,7 +101,7 @@ from squid_ui_discord.delivery import (
     respond_to,
     send_to,
 )
-from squid_ui_discord.facade import DiscordUI
+from squid_ui_discord.facade import DiscordUI, Scope
 from squid_ui_discord.fragments import contribute
 from squid_ui_discord.grids import button_grid
 from squid_ui_discord.live import message_roots
@@ -134,7 +149,7 @@ from squid_ui_discord.rendering import (
     render_message,
     render_static,
 )
-from squid_ui_discord.request import DiscordRequest
+from squid_ui_discord.request import Deferral, Request, RequestOrigin, request
 from squid_ui_discord.response import (
     Abandoned,
     Presented,
@@ -223,17 +238,22 @@ __all__ = [
     "ChallengeRequest",
     "ChallengeRunner",
     "ChallengeSupervisor",
+    "Cog",
+    "CommandPolicy",
+    "CommandResult",
+    "Deferral",
     "DialogPresenter",
-    "DiscordAction",
-    "DiscordRequest",
     "DiscordUI",
     "DiscordUIConfig",
     "DiscordUIRuntime",
     "DiscordUIRuntimeMissing",
     "ErrorObserver",
+    "ErrorPolicy",
     "ErrorRenderer",
     "Everyone",
     "ExistingLayoutError",
+    "Group",
+    "HybridGroup",
     "LimitViolationError",
     "LocalizationResolver",
     "ManagedDelivery",
@@ -249,14 +269,20 @@ __all__ = [
     "MessageRootOptions",
     "MessageRootScheduler",
     "MessageRootSchedulerSnapshot",
+    "NativeCommandKwargs",
+    "NativeContextMenuKwargs",
+    "NativeHybridKwargs",
     "OpenContext",
     "Owner",
     "PauseUpdates",
+    "PendingCard",
     "Presented",
     "Private",
     "Rejected",
     "RenderedMessage",
     "RenewEphemeral",
+    "Request",
+    "RequestOrigin",
     "RequestSource",
     "ResourceCost",
     "Response",
@@ -274,6 +300,7 @@ __all__ = [
     "RoleTransitionResult",
     "RolesUnchanged",
     "RolesUpdated",
+    "Scope",
     "ScopeKind",
     "Screen",
     "Sent",
@@ -288,18 +315,22 @@ __all__ = [
     "Visibility",
     "Work",
     "access",
-    "action",
     "actions",
     "adapter",
     "adopt",
     "audience",
+    "autocomplete",
     "button_grid",
     "challenges",
     "classic",
     "classic_renderer",
+    "cog",
+    "command",
+    "commands",
     "config",
     "conform",
     "conformance",
+    "context_menu",
     "contracts",
     "contribute",
     "deliver_to",
@@ -312,6 +343,8 @@ __all__ = [
     "fragments",
     "grids",
     "guards",
+    "hybrid_command",
+    "hybrid_group",
     "inspection",
     "install",
     "invoker_only",

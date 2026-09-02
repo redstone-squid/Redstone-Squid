@@ -23,7 +23,7 @@ class Panel(sl.Component[sl.ComponentsV2Target]):
         return sl.heading("Panel")
 
 
-def installed() -> tuple[sd.DiscordUI[Any], InteractionHarness]:
+def installed() -> tuple[sd.Scope[Any], InteractionHarness]:
     client = FakeClient()
     runtime = sd.install(cast(discord.Client, client))
     interaction = InteractionHarness(user_id=7)
@@ -82,10 +82,18 @@ def test_response_policy_overlays_in_documented_order() -> None:
     )
     ui = runtime.scope(Owner(), defaults=sd.ResponseSpec(timeout=20))
 
-    policy = ui._policy(Panel(), sd.ResponseSpec(timeout=30), {"timeout": 40})
+    class Timed(sd.Screen[Any]):
+        timeout = 30
 
-    assert policy.timeout == 40
-    assert policy.audience == "public"
+        def render(self):
+            return sl.heading("Timed")
+
+    plain = ui._policy(Panel(), {})
+    assert plain.timeout == 20
+    assert plain.audience == "public"
+
+    assert ui._policy(Timed(), {}).timeout == 30
+    assert ui._policy(Timed(), {"timeout": 40}).timeout == 40
 
 
 async def test_private_interaction_is_ephemeral() -> None:
