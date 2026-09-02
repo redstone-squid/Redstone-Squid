@@ -67,8 +67,24 @@ class NativeHybridKwargs(TypedDict, total=False, extra_items=object):
     fallback: str | app_commands.locale_str
 
 
+class NativePrefixKwargs(TypedDict, total=False, extra_items=object):
+    """Keywords forwarded to `commands.command`."""
+
+    name: str
+    aliases: list[str] | tuple[str, ...]
+    help: str
+    brief: str
+    usage: str
+    hidden: bool
+    enabled: bool
+
+
 class NativeContextMenuKwargs(TypedDict, total=False, extra_items=object):
-    """Keywords forwarded to `app_commands.ContextMenu`."""
+    """Keywords forwarded to `app_commands.ContextMenu`.
+
+    `default_permissions` is the one discord.py sets as an attribute rather than accepting
+    in the constructor; it is applied the same way here.
+    """
 
     nsfw: bool
     guild_ids: list[int]
@@ -76,6 +92,7 @@ class NativeContextMenuKwargs(TypedDict, total=False, extra_items=object):
     allowed_installs: app_commands.AppInstallationType
     auto_locale_strings: bool
     extras: dict[Any, Any]
+    default_permissions: discord.Permissions | None
 
 
 class AsyncHandlerTransform(Protocol):
@@ -122,6 +139,23 @@ class HybridCommandDecorator(Protocol):
         callback: Callable[Concatenate[Request[Any], P], Awaitable[CommandResult]],
         /,
     ) -> commands.HybridCommand[Any, P, None]: ...
+
+
+class PrefixCommandDecorator(Protocol):
+    """What `sd.prefix_command(...)` returns."""
+
+    @overload
+    def __call__[OwnerT: commands.Cog, **P](
+        self,
+        callback: Callable[Concatenate[OwnerT, Request[OwnerT], P], Awaitable[CommandResult]],
+        /,
+    ) -> commands.Command[OwnerT, P, None]: ...
+    @overload
+    def __call__[**P](
+        self,
+        callback: Callable[Concatenate[Request[Any], P], Awaitable[CommandResult]],
+        /,
+    ) -> commands.Command[Any, P, None]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -321,6 +355,26 @@ def hybrid_command(
     return cast(HybridCommandDecorator, decorate)
 
 
+def prefix_command(
+    *,
+    pending: PendingCard | None = None,
+    defer: Deferral | None = None,
+    **native: Unpack[NativePrefixKwargs],
+) -> PrefixCommandDecorator:
+    """`commands.command`, with the handler receiving a `Request` in the context slot.
+
+    `defer` is accepted for symmetry and does nothing: a prefix context has no interaction
+    to acknowledge.
+    """
+    own = CommandPolicy(defer=defer, pending=pending)
+
+    def decorate(callback: Callable[..., Awaitable[CommandResult]]) -> commands.Command[Any, ..., None]:
+        outward = _wrap(callback, own, commands.Context)
+        return commands.command(**native)(outward)  # type: ignore[arg-type]
+
+    return cast(PrefixCommandDecorator, decorate)
+
+
 class Group(app_commands.Group):
     """`app_commands.Group` whose members inherit `defer` and `pending` unless they set their own.
 
@@ -456,7 +510,12 @@ def bind_context_menu(
     invoke.__annotations__ = {"interaction": discord.Interaction, "target": target_type, "return": None}
     # discord.py rejects callbacks whose qualified name still looks like an unbound method.
     invoke.__qualname__ = invoke.__name__
-    return app_commands.ContextMenu(name=declaration.name, callback=invoke, type=declaration.type, **declaration.native)
+    native: dict[str, Any] = dict(declaration.native)
+    permissions: discord.Permissions | None = native.pop("default_permissions", None)
+    menu = app_commands.ContextMenu(name=declaration.name, callback=invoke, type=declaration.type, **native)
+    if permissions is not None:
+        menu.default_permissions = permissions
+    return menu
 
 
 def autocomplete[OwnerT, **P]() -> Callable[
@@ -533,7 +592,9 @@ __all__ = [
     "NativeCommandKwargs",
     "NativeContextMenuKwargs",
     "NativeHybridKwargs",
+    "NativePrefixKwargs",
     "PendingCard",
+    "PrefixCommandDecorator",
     "autocomplete",
     "bind_context_menu",
     "command",
@@ -541,5 +602,6 @@ __all__ = [
     "context_menu_declaration",
     "hybrid_command",
     "hybrid_group",
+    "prefix_command",
     "present_return",
 ]
