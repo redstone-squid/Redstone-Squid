@@ -23,7 +23,6 @@ from squid.bot.i18n import localization_for, resolve_locale
 from squid.bot.ui import DISCORD_BLUE, DISCORD_GREEN, DISCORD_YELLOW, tr
 from squid_replication import ReferenceBackend, Replica, ReplicatedDocument
 from squid_ui_discord import SessionKey
-from squid_ui_discord.ext import Cog
 from squid_ui_discord.session_specs import OpenContext
 from squid_ui_discord.sessions import UserScope
 
@@ -1347,7 +1346,7 @@ _LEAVE_NOTICES = {
 }
 
 
-class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
+class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     """Public commands demonstrating the layout engine."""
 
     def __init__(self, bot: BotT) -> None:
