@@ -29,6 +29,7 @@ from squid_ui.planning.discord import components_v2_target
 from squid_ui.planning.limits import COMPONENT_LIMITS, LIMITS, ComponentLimits, MessageLimits, V2Limits
 from squid_ui.planning.target import Target
 from squid_ui.planning.types import DiscordAdapter
+from squid_ui_discord.commands import bind_context_menu, context_menu_declaration
 from squid_ui_discord.delivery import DeliveryResult, EditHandle, MessageDestination, handle_for
 from squid_ui_discord.message_payload import MessagePayload
 from squid_ui_discord.message_root import MessageRoot
@@ -600,6 +601,24 @@ async def drain(scheduler: MessageRootScheduler, *, timeout: float = 1) -> None:
         tasks.cancel_scope.cancel()
 
 
+# --- Commands -------------------------------------------------------------------------------
+
+
+async def invoke_context_menu(owner: object, method: Any, interaction: Any, target: Any) -> None:
+    """Run one `@sd.context_menu` method through the dispatch its registered menu would use.
+
+    `method` is the declared function, unbound or bound; the defer and return handling of its
+    declaration apply, so a test sees the same interaction traffic as production.
+    """
+    callback: Any = getattr(method, "__func__", method)
+    declaration = context_menu_declaration(callback)
+    if declaration is None:
+        message = "the method carries no @sd.context_menu declaration"
+        raise TypeError(message)
+    menu = bind_context_menu(owner, callback, declaration)
+    await menu.callback(interaction, target)
+
+
 __all__ = [
     "CallRecord",
     "ContextHarness",
@@ -613,6 +632,7 @@ __all__ = [
     "drain",
     "http_error",
     "interaction_harness",
+    "invoke_context_menu",
     "iter_component_payloads",
     "layout_view",
     "message_harness",

@@ -2,15 +2,13 @@
 
 from typing import TYPE_CHECKING
 
-from discord import app_commands
-
-from squid_ui_discord.ext import Cog
+import squid_ui_discord as sd
 
 if TYPE_CHECKING:
     import squid.bot.app
 
 
-class BuildCommandGroup[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
+class BuildCommandGroup[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     """Own the app-only build command group."""
 
-    build_group = app_commands.Group(name="build", description="Browse and submit redstone builds")
+    build_group = sd.Group(name="build", description="Browse and submit redstone builds")

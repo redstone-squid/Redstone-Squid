@@ -17,7 +17,7 @@ from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.permissions.application import PermissionService
 from squid.permissions.domain import Decision, PermissionNode, Reason, Subject
 from squid.settings.application import SettingsService
-from squid_ui_discord.testing import InteractionHarness
+from squid_ui_discord.testing import InteractionHarness, invoke_context_menu
 from tests.support.discord import make_layout_bot
 
 BUILD_LOG_CHANNEL = 500
@@ -160,7 +160,7 @@ def _message(*, channel_id: int = BUILD_LOG_CHANNEL, from_bot: bool = False) -> 
 async def _run(cog: BuildSubmitCommands[Any], message: discord.Message) -> discord.Interaction[Any]:
     interaction = _interaction()
     cast(Any, interaction).client = cog.bot
-    await cog.recalc_context_menu(interaction, message)
+    await invoke_context_menu(cog, cog.recalc_context_menu, interaction, message)
     return interaction
 
 
