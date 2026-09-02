@@ -1,6 +1,7 @@
 """Build edit command tests."""
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any, cast
 
 import discord
@@ -15,7 +16,7 @@ from squid.permissions.application import PermissionService
 from squid.permissions.domain import PermissionNode, Subject
 from squid.settings.application import SettingsService
 from squid.topics import resource_topic
-from squid_ui_discord.testing import InteractionHarness
+from squid_ui_discord.testing import InteractionHarness, invoke_context_menu
 from tests.support.discord import make_layout_bot
 
 
@@ -123,9 +124,10 @@ async def _run(cog: BuildEditCommands[Any], **kwargs: Any) -> discord.Interactio
 
 
 def _sent_view(interaction: discord.Interaction[Any]) -> Any:
+    """The one message the command sent: it completes its own private defer in place."""
     source = cast(Any, interaction)
-    call = source.followup.send.await_args or source.edit_original_response.await_args
-    return call.kwargs["view"]
+    source.followup.send.assert_not_awaited()
+    return source.edit_original_response.await_args.kwargs["view"]
 
 
 def _component(view: Any) -> BuildEditScreen | None:
@@ -216,3 +218,62 @@ async def test_a_missing_build_is_an_error_card() -> None:
     cog = _cog(None)
 
     assert _component(_sent_view(await _run(cog))) is None
+
+
+class PostRecorder:
+    def __init__(self, resource_key: str | None) -> None:
+        self._resource_key = resource_key
+
+    async def resolve(self, message_id: int) -> Any:
+        if self._resource_key is None:
+            return None
+
+        @dataclass(frozen=True)
+        class Post:
+            resource_kind: str
+            resource_key: str
+
+        return Post("build", self._resource_key)
+
+
+def _card(*, author_id: int) -> discord.Message:
+    @dataclass(frozen=True)
+    class Author:
+        id: int
+
+    @dataclass(frozen=True)
+    class Message:
+        id: int
+        author: Author
+
+    return cast(discord.Message, Message(id=55, author=Author(author_id)))
+
+
+async def _open_from_menu(cog: BuildEditCommands[Any], message: discord.Message) -> discord.Interaction[Any]:
+    interaction = _interaction(cog.bot)
+    await invoke_context_menu(cog, cog.edit_context_menu, interaction, message)
+    return interaction
+
+
+async def test_the_menu_opens_the_editor_behind_its_own_defer() -> None:
+    """`open_build_editor` used to resolve a second request for the same interaction, which
+    did not know about the defer, so the workspace went out as a follow-up next to a
+    placeholder that never resolved."""
+    cog = _cog(_door())
+    cog.bot.user = cast(Any, discord.Object(id=1))
+    cog.bot.services.posts = PostRecorder("1")
+    cog.bot.services.builds = cog.builds
+
+    interaction = await _open_from_menu(cog, _card(author_id=1))
+
+    assert _component(_sent_view(interaction)) is not None
+
+
+async def test_the_menu_refuses_a_message_that_is_not_a_card() -> None:
+    cog = _cog(_door())
+    cog.bot.user = cast(Any, discord.Object(id=1))
+    cog.bot.services.posts = PostRecorder(None)
+
+    interaction = await _open_from_menu(cog, _card(author_id=1))
+
+    assert _component(_sent_view(interaction)) is None

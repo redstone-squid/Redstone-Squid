@@ -1,10 +1,10 @@
 """A cog with commands to editing builds."""
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 import discord
-from discord import app_commands
 
+import squid_ui_discord as sd
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.ui.opening import open_build_editor, prepare_build_editor, show_build_editor
 from squid.bot.ui import error_node, text_node
@@ -29,15 +29,6 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
     builds: BuildService
     messages: MessageService
 
-    def register_edit_context_menu(self) -> None:
-        """Register the build edit context menu."""
-        # https://github.com/Rapptz/discord.py/issues/7823#issuecomment-1086830458
-        self.edit_ctx_menu = app_commands.ContextMenu(
-            name="Edit Build",
-            callback=self.edit_context_menu,
-        )
-        self.bot.tree.add_command(self.edit_ctx_menu)
-
     async def edit_build(
         self,
         interaction: discord.Interaction[BotT],
@@ -52,19 +43,20 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
         creators: str | None = None,
         notes: str | None = None,
     ) -> None:
-        """Edit a build. Whatever you fill in is staged; the workspace opens for the rest."""
-        request = await self.ui.resolve(interaction)
+        """Edit a build. Whatever you fill in is staged; the workspace opens for the rest.
+
+        Not registered as a command since `26002d83`; kept for the staging logic until the
+        slash form returns.
+        """
+        request = await self.ui.request(interaction)
         await request.defer("private")
 
         build = await self.builds.get(build_id)
         if build is None:
-            await request.respond(
-                error_node(tr("Error"), tr("No build with that ID.")),
-                audience="personal",
-            )
+            await request.respond(error_node(tr("Error"), tr("No build with that ID.")))
             return
 
-        screen = await prepare_build_editor(interaction, build, self.builds)
+        screen = await prepare_build_editor(request, build, self.builds)
         staged: dict[str, str] = {
             attribute: value
             for attribute, value in (
@@ -99,31 +91,26 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
                         "This build has no {fields}. Open the workspace to see what it does have.",
                         fields=", ".join(sorted(inapplicable)),
                     ),
-                ),
-                audience="personal",
+                )
             )
             return
 
-        await show_build_editor(interaction, screen, self.ui)
+        await show_build_editor(request, screen)
 
-    async def edit_context_menu(self, interaction: discord.Interaction[BotT], message: discord.Message) -> None:
+    @sd.context_menu(name="Edit Build", defer="private")
+    async def edit_context_menu(self, request: sd.Request[Self], message: discord.Message) -> sd.CommandResult:
         """A context menu command to edit a build."""
-        request = await self.ui.resolve(interaction)
-        await request.defer("private")
-
         if message.author.id != self.bot.user.id:  # type: ignore
-            await request.respond(text_node(tr("This does not look like a build.")), audience="personal")
-            return
+            return text_node(tr("This does not look like a build."))
 
         # Which build a card shows is a property of the post, not of the message: the
         # same message row is just a fact about a Discord message.
         post = await self.bot.services.posts.resolve(message.id)
         if post is None or post.resource_kind != "build":
-            await request.respond(text_node(tr("This does not look like a build.")), audience="personal")
-            return
+            return text_node(tr("This does not look like a build."))
 
         build = await self.builds.get(int(post.resource_key))
         if build is None:
-            await request.respond(text_node(tr("This does not look like a build.")), audience="personal")
-            return
-        await open_build_editor(interaction, build, self.ui)
+            return text_node(tr("This does not look like a build."))
+        await open_build_editor(request, build)
+        return None
