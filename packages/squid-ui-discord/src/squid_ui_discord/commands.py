@@ -25,7 +25,7 @@ from squid_ui import paragraph
 from squid_ui.document import DocumentLike
 from squid_ui.forms import FormSpec
 from squid_ui_discord.access import Everyone
-from squid_ui_discord.contracts import FacadeContent, RequestSource
+from squid_ui_discord.contracts import DocumentContent, FacadeContent, RequestSource
 from squid_ui_discord.managed import _ManagedResult
 from squid_ui_discord.modal import ModalSpec
 from squid_ui_discord.request import Deferral, Request, request
@@ -35,7 +35,7 @@ type CommandResult = FacadeContent | Response | FormSpec | ModalSpec | discord.u
 type ChoiceValue = str | int | float
 type AutocompleteItem = app_commands.Choice[ChoiceValue] | tuple[str, ChoiceValue]
 type AsyncHandler = Callable[..., Awaitable[object]]
-type PendingCard = DocumentLike | str
+type PendingCard = DocumentContent | str
 """What a command shows while it runs; a string becomes one paragraph."""
 
 _OUTCOMES = (Sent, Presented, Rejected, Abandoned)
