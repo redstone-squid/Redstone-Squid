@@ -32,7 +32,11 @@ class Builds(sd.Cog[commands.Bot]):
     async def prefix(self, request: sd.Request[Self]) -> str:
         return "Prefix"
 
-    @sd.context_menu(name="Inspect")
+    @sd.prefix_command(name="text-only", hidden=True)
+    async def text_only(self, request: sd.Request[Self]) -> str:
+        return "Text only"
+
+    @sd.context_menu(name="Inspect", default_permissions=discord.Permissions(manage_messages=True))
     async def inspect(self, request: sd.Request[Self], target: discord.Message) -> None:
         await request.respond("Inspected")
 
@@ -40,9 +44,11 @@ class Builds(sd.Cog[commands.Bot]):
 def declarations_are_native(cog: Builds) -> None:
     build: app_commands.Command[Builds, ..., None] = cog.build
     prefix: commands.HybridCommand[Builds, ..., None] = cog.prefix
+    text_only: commands.Command[Builds, ..., None] = cog.text_only
     assert_type(cog.tools, sd.Group)
     assert_type(build.binding, Builds | None)
     assert_type(prefix.cog, Builds)
+    assert_type(text_only.cog, Builds)
 
 
 @sd.command(unknown_future_kwarg=True)
