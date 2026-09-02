@@ -83,12 +83,14 @@ from squid_ui_discord.commands import (
     NativeCommandKwargs,
     NativeContextMenuKwargs,
     NativeHybridKwargs,
+    NativePrefixKwargs,
     PendingCard,
     autocomplete,
     command,
     context_menu,
     hybrid_command,
     hybrid_group,
+    prefix_command,
 )
 from squid_ui_discord.config import DiscordUIConfig, ErrorPolicy
 from squid_ui_discord.conformance import conform
@@ -272,6 +274,7 @@ __all__ = [
     "NativeCommandKwargs",
     "NativeContextMenuKwargs",
     "NativeHybridKwargs",
+    "NativePrefixKwargs",
     "OpenContext",
     "Owner",
     "PauseUpdates",
@@ -359,6 +362,7 @@ __all__ = [
     "navigation",
     "navigation_controls",
     "owner_message_root",
+    "prefix_command",
     "render_item",
     "render_message",
     "render_static",
