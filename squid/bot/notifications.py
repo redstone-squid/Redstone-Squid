@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, override
 import discord
 from discord import app_commands
 
+import squid_ui_discord as sd
 from squid.bot.consent import ensure_consented_account
 from squid.bot.notifications_view import NotificationScreen
 from squid.notifications import (
@@ -82,7 +83,7 @@ class NotificationCog(Cog[Any]):
 
     async def _account_id(self, interaction: discord.Interaction) -> int | None:
         """The caller's consented account, or `None` once they have been told why not."""
-        return await ensure_consented_account(interaction, self.bot.services.accounts)
+        return await ensure_consented_account(await sd.request(interaction), self.bot.services.accounts)
 
 
 def render_delivery(delivery: PendingNotificationDelivery, site_url: str | None) -> str:

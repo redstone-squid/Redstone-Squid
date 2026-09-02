@@ -1,12 +1,10 @@
 """The Discord consent gate: ask first, then continue what was asked for."""
 
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any
 
 import anyio
-import discord
 import pytest
-from discord.ext import commands
 from whenever import Instant
 
 import squid_ui as sl
@@ -70,17 +68,19 @@ def make_accounts(existing: Account | None) -> AccountRecorder:
 
 def make_context() -> Any:
     """A prefix/hybrid context; `send` is the only surface the gate uses."""
-    return cast(
-        commands.Context[Any],
-        ContextHarness(message=MessageHarness(message_id=1), bot=make_layout_bot(), user_id=USER_ID).source,
-    )
+    return ContextHarness(message=MessageHarness(message_id=1), bot=make_layout_bot(), user_id=USER_ID).source
 
 
 def make_interaction(*, response_done: bool) -> Any:
-    interaction = InteractionHarness(USER_ID, message_id=1)
+    interaction = InteractionHarness(USER_ID, message_id=1, client=make_layout_bot())
     interaction.response._done = response_done
     interaction.followup.send.result = MessageHarness(message_id=1)
     return interaction.source
+
+
+async def gate(source: Any) -> sd.Request[Any]:
+    """The request a command hands the gate."""
+    return await sd.request(source)
 
 
 def answer(view_holder: list[Any], *, agree: bool) -> None:
@@ -96,7 +96,7 @@ async def test_an_already_consented_user_is_never_prompted() -> None:
     accounts = make_accounts(discord_account(consented=True))
     ctx = make_context()
 
-    assert await ensure_consented_account(ctx, accounts) == 7
+    assert await ensure_consented_account(await gate(ctx), accounts) == 7
     ctx.send.assert_not_awaited()
     assert accounts.identity_creations == []
 
@@ -111,7 +111,7 @@ async def test_declining_stores_nothing_at_all(monkeypatch: pytest.MonkeyPatch) 
     ctx = make_context()
     _stub_prompt(monkeypatch, agree=False)
 
-    assert await ensure_consented_account(ctx, accounts) is None
+    assert await ensure_consented_account(await gate(ctx), accounts) is None
     assert accounts.identity_creations == []
     assert ctx.send.records  # The user is told, rather than left with a silent no-op.
 
@@ -125,7 +125,7 @@ async def test_agreeing_mints_the_account_and_its_receipt_in_one_write(
     ctx = make_context()
     _stub_prompt(monkeypatch, agree=True)
 
-    assert await ensure_consented_account(ctx, accounts) == 7
+    assert await ensure_consented_account(await gate(ctx), accounts) == 7
 
     assert len(accounts.identity_creations) == 1
     creation = accounts.identity_creations[0]
@@ -139,7 +139,7 @@ async def test_a_stale_receipt_is_asked_again(monkeypatch: pytest.MonkeyPatch) -
     ctx = make_context()
     _stub_prompt(monkeypatch, agree=True)
 
-    assert await ensure_consented_account(ctx, accounts) == 7
+    assert await ensure_consented_account(await gate(ctx), accounts) == 7
     assert len(accounts.identity_creations) == 1
 
 
@@ -153,7 +153,7 @@ async def test_the_gate_works_from_an_interaction_in_either_response_state(
     interaction = make_interaction(response_done=response_done)
     _stub_prompt(monkeypatch, agree=True)
 
-    assert await ensure_consented_account(cast(discord.Interaction[Any], interaction), accounts) == 7
+    assert await ensure_consented_account(await gate(interaction), accounts) == 7
 
 
 async def test_the_gate_stays_silent_when_the_user_was_never_asked(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -170,7 +170,7 @@ async def test_the_gate_stays_silent_when_the_user_was_never_asked(monkeypatch: 
 
     monkeypatch.setattr("squid.bot.consent.prompt_for_consent", prompt)
 
-    assert await ensure_consented_account(ctx, accounts) is None
+    assert await ensure_consented_account(await gate(ctx), accounts) is None
     assert accounts.identity_creations == []
     ctx.send.assert_not_awaited()
 
@@ -187,16 +187,17 @@ async def _collect(into: list[Any], awaitable: Any) -> None:
 async def test_a_second_prompt_is_refused_while_the_first_is_open() -> None:
     """Two prompts for one user leave the first's waiter stranded whichever one wins."""
     ctx = make_context()
+    request = await gate(ctx)
     key = SessionKey.user("consent", USER_ID)
     outcomes: list[Any] = []
 
     async with anyio.create_task_group() as tasks:
-        tasks.start_soon(lambda: _collect(outcomes, prompt_for_consent(ctx, user_id=USER_ID)))
+        tasks.start_soon(lambda: _collect(outcomes, prompt_for_consent(request, user_id=USER_ID)))
         while not ctx.bot.sessions.get(key):
             await anyio.sleep(0)
         first = ctx.bot.sessions.get(key)
 
-        second = await prompt_for_consent(ctx, user_id=USER_ID)
+        second = await prompt_for_consent(request, user_id=USER_ID)
 
         assert second is NOT_ASKED
         assert ctx.bot.sessions.get(key) == first  # the one being awaited is the one that stands
@@ -213,6 +214,7 @@ async def test_a_closing_parent_ends_the_wait_instead_of_stranding_it() -> None:
     the 120 s, which is the leak this was supposed to close.
     """
     ctx = make_context()
+    request = await gate(ctx)
     parent = sd.MessageRoot(_Blank(), access=Everyone(), timeout=None)
     parent_opened = await ctx.bot.sessions.open(parent, delivered_to(message_harness()))
     assert isinstance(parent_opened, Opened)
@@ -222,7 +224,7 @@ async def test_a_closing_parent_ends_the_wait_instead_of_stranding_it() -> None:
     # expires would otherwise pass this test for exactly the wrong reason.
     with anyio.fail_after(5):
         async with anyio.create_task_group() as tasks:
-            tasks.start_soon(lambda: _collect(outcomes, prompt_for_consent(ctx, user_id=USER_ID, parent=parent)))
+            tasks.start_soon(lambda: _collect(outcomes, prompt_for_consent(request, user_id=USER_ID, parent=parent)))
             while len(parent_opened.session.message_roots) == 1:
                 await anyio.sleep(0)
 
@@ -258,12 +260,8 @@ class _Gate(sl.Component):
         ]
 
     async def _ask(self, event: sl.PressEvent) -> None:
-        await request_consent(
-            sd.native(event),
-            user_id=USER_ID,
-            on_answer=self._answered,
-            parent=sd.responder(event).message_root,
-        )
+        request = await sd.request(event)
+        await request_consent(request, user_id=USER_ID, on_answer=self._answered, parent=request.root)
 
     async def _count(self, event: sl.PressEvent) -> None:
         del event
