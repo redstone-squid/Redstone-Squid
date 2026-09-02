@@ -1,10 +1,10 @@
-"""Composable discord.py integration for the explicit Squid facade."""
+"""Transitional re-exports; everything here now lives at the package top level."""
 
+from squid_ui_discord.cog import Cog
+from squid_ui_discord.commands import autocomplete, command, context_menu
 from squid_ui_discord.ext import testing
-from squid_ui_discord.ext.cog import Cog
-from squid_ui_discord.ext.commands import autocomplete, command, context_menu
-from squid_ui_discord.facade import DiscordUI
-from squid_ui_discord.request import AcknowledgementPolicy, DiscordRequest
+from squid_ui_discord.facade import DiscordUI, Scope
+from squid_ui_discord.request import Request
 from squid_ui_discord.response import (
     Abandoned,
     Presented,
@@ -18,15 +18,15 @@ from squid_ui_discord.screen import Screen
 
 __all__ = [
     "Abandoned",
-    "AcknowledgementPolicy",
     "Cog",
-    "DiscordRequest",
     "DiscordUI",
     "Presented",
     "Rejected",
+    "Request",
     "Response",
     "ResponseResult",
     "ResponseSpec",
+    "Scope",
     "Screen",
     "Sent",
     "autocomplete",

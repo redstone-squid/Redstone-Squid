@@ -96,6 +96,7 @@ def test_package_metadata_keeps_its_base_and_optional_dependencies() -> None:
         "discord-py>=2.7,<3",
         "anyio>=4.14,<5",
         "packaging>=24,<27",
+        "typing-extensions>=4.13",
     ]
     assert project["optional-dependencies"]["durable"] == ["squid-storage==0.1.0a1"]
     assert project["optional-dependencies"]["postgres"] == ["squid-storage[postgres]==0.1.0a1"]
