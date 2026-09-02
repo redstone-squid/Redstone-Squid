@@ -5,16 +5,16 @@ from typing import TYPE_CHECKING
 import discord
 from discord import app_commands
 
+import squid_ui_discord as sd
 from squid.bot.diagnostics_view import ErrorReportScreen
 from squid.bot.utils.permissions import allows, enforce, hide_unless
 from squid.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR, DIAGNOSTICS_ERROR_READ
-from squid_ui_discord.ext import Cog
 
 if TYPE_CHECKING:
     import squid.bot.app
 
 
-class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
+class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     """Read stored error reports."""
 
     def __init__(self, bot: BotT):
