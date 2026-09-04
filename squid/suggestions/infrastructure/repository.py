@@ -186,7 +186,7 @@ class PostgresSuggestionRepository:
             .join(CreatorAlias, CreatorAlias.account_id == Account.id)
             .group_by(Account.public_creator_id)
         )
-        terms = query.strip().casefold()
+        terms = fold_creator_name(query)
         if terms:
             statement = statement.having(func.min(CreatorAlias.normalized_name).startswith(terms))
         statement = statement.order_by("name").limit(limit)
