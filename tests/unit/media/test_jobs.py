@@ -10,6 +10,7 @@ from typing import override
 from uuid import UUID, uuid4
 
 import pytest
+from anyio import create_task_group, fail_after, sleep
 from whenever import Instant
 
 from squid.artifacts import ArtifactMetadata
@@ -715,12 +716,13 @@ async def test_runner_heartbeats_while_normalization_is_still_running(tmp_path: 
         heartbeat_interval_seconds=0.01,
     )
 
-    processing = asyncio.create_task(runner.process_batch())
-    await asyncio.wait_for(normalizer.started.wait(), timeout=1)
-    await asyncio.sleep(0.035)
-    assert repository.heartbeat_calls >= 2
-    normalizer.resume.set()
-    await asyncio.wait_for(processing, timeout=1)
+    with fail_after(1):
+        async with create_task_group() as tasks:
+            tasks.start_soon(runner.process_batch)
+            await normalizer.started.wait()
+            await sleep(0.035)
+            assert repository.heartbeat_calls >= 2
+            normalizer.resume.set()
 
     snapshot = await jobs.get(UPLOAD_ID)
     assert snapshot is not None
@@ -749,12 +751,13 @@ async def test_runner_stops_before_publication_after_heartbeat_loses_the_claim(t
         heartbeat_interval_seconds=0.01,
     )
 
-    processing = asyncio.create_task(runner.process_batch())
-    await asyncio.wait_for(normalizer.started.wait(), timeout=1)
-    assert await jobs.discard(DRAFT_ID, UPLOAD_ID)
-    await asyncio.sleep(0.02)
-    normalizer.resume.set()
-    await asyncio.wait_for(processing, timeout=1)
+    with fail_after(1):
+        async with create_task_group() as tasks:
+            tasks.start_soon(runner.process_batch)
+            await normalizer.started.wait()
+            assert await jobs.discard(DRAFT_ID, UPLOAD_ID)
+            await sleep(0.02)
+            normalizer.resume.set()
 
     snapshot = await jobs.get(UPLOAD_ID)
     assert snapshot is not None
@@ -762,6 +765,41 @@ async def test_runner_stops_before_publication_after_heartbeat_loses_the_claim(t
     assert snapshot.attempts == 0
     assert snapshot.artifacts == ()
     assert set(artifacts.objects) == {snapshot.upload.source_object_key}
+
+
+async def test_cancelling_runner_stops_heartbeat_and_cleans_private_working_tree(tmp_path: Path) -> None:
+    artifacts = MemoryArtifacts()
+    repository = MemoryMediaJobs()
+    jobs = MediaNormalizationJobService(repository, artifacts)
+    await jobs.submit(
+        MediaUploadSubmission(
+            draft_id=DRAFT_ID,
+            kind=MediaKind.IMAGE,
+            source=b"raw-image",
+            source_content_type="image/jpeg",
+            upload_id=UPLOAD_ID,
+        )
+    )
+    normalizer = BlockingNormalizer(MediaKind.IMAGE)
+    runner = MediaNormalizationJobRunner(
+        jobs,
+        artifacts,
+        MediaNormalizationService(normalizer),
+        working_directory=tmp_path,
+        heartbeat_interval_seconds=0.01,
+    )
+
+    with fail_after(1):
+        async with create_task_group() as tasks:
+            tasks.start_soon(runner.process_batch)
+            await normalizer.started.wait()
+            await sleep(0.025)
+            tasks.cancel_scope.cancel()
+
+    heartbeat_calls = repository.heartbeat_calls
+    await sleep(0.025)
+    assert repository.heartbeat_calls == heartbeat_calls
+    assert not any(tmp_path.iterdir())
 
 
 async def test_cleanup_contention_defers_without_consuming_an_attempt(tmp_path: Path) -> None:
