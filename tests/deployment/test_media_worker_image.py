@@ -114,6 +114,14 @@ def test_deployment_consumers_select_named_runtime_targets() -> None:
 def test_runtime_targets_install_only_their_declared_features(runtime_images: dict[str, str]) -> None:
     for target, image in runtime_images.items():
         with_media, with_software_gpu = RUNTIME_TARGETS[target]
+        python = _run_image(
+            image,
+            "/usr/local/bin/python",
+            "-c",
+            "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')",
+        )
+        assert python.stdout.strip() == _required_python_version()
+
         ffmpeg = _run_image(
             image,
             "/usr/bin/dpkg-query",
