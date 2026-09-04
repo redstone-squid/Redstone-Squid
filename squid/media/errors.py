@@ -55,10 +55,7 @@ class MediaLimitExceededError(ValidationError):
             {"measure": violation.measure.value, "actual": violation.actual, "limit": violation.limit}
             for violation in ordered
         ]
-        public = [
-            {"measure": violation.measure.value, "limit": violation.limit}
-            for violation in ordered
-        ]
+        public = [{"measure": violation.measure.value, "limit": violation.limit} for violation in ordered]
         super().__init__(
             context={
                 "reason": "limit_exceeded",

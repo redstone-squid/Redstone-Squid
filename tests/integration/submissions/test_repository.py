@@ -325,9 +325,7 @@ async def test_expiry_fences_finalization_and_discards_media(
             )
         )
         await session.flush()
-        session.add(
-            MediaNormalizationJobRecord(upload_id=upload_id, status=MediaJobStatus.PENDING, available_at=NOW)
-        )
+        session.add(MediaNormalizationJobRecord(upload_id=upload_id, status=MediaJobStatus.PENDING, available_at=NOW))
 
     assert await repository.expire_due(now=NOW.add(seconds=2)) == 1
     async with async_session_factory() as session:

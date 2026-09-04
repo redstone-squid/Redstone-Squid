@@ -599,10 +599,6 @@ def _validate_completed_artifacts(kind: MediaKind, artifacts: Sequence[StoredMed
     expected = {MediaArtifactRole.OUTPUT, MediaArtifactRole.REPORT}
     role_set = set(roles)
     valid_thumbnail = len(role_set & MEDIA_VIDEO_THUMBNAIL_ROLES) == int(kind is MediaKind.VIDEO)
-    if (
-        len(roles) != len(role_set)
-        or role_set - MEDIA_VIDEO_THUMBNAIL_ROLES != expected
-        or not valid_thumbnail
-    ):
+    if len(roles) != len(role_set) or role_set - MEDIA_VIDEO_THUMBNAIL_ROLES != expected or not valid_thumbnail:
         msg = f"Completed {kind.value} media requires exactly these artifacts: {sorted(expected)}."
         raise ValueError(msg)
