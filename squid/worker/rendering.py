@@ -1,5 +1,6 @@
 """Durable worker-owned schematic preview publication."""
 
+import hashlib
 import logging
 
 from squid.artifacts import ArtifactStore
@@ -77,9 +78,19 @@ class SchematicPreviewWorker:
             msg = "Schematic rendering requires a public API base URL."
             raise RuntimeError(msg)
         object_key = f"schematic-renders/{render.recipe_hash[:2]}/{render.recipe_hash}.png"
-        metadata = await self._artifacts.put(object_key, render.png, content_type="image/png")
-        if metadata.byte_size != len(render.png):
-            msg = "Object storage did not confirm the rendered preview size."
-            raise RuntimeError(msg)
+        reservation = await self._schematics.reserve_preview_object(render, object_key)
+        if reservation.upload_required:
+            metadata = await self._artifacts.put(object_key, render.png, content_type="image/png")
+            if metadata.byte_size != reservation.byte_size or metadata.sha256 not in (None, reservation.sha256):
+                msg = "Object storage did not confirm the rendered preview bytes."
+                raise RuntimeError(msg)
+            if hashlib.sha256(render.png).hexdigest() != reservation.sha256:
+                msg = "The generated preview changed after its object was reserved."
+                raise RuntimeError(msg)
+            await self._schematics.mark_preview_object_ready(reservation)
         url = f"{self._public_base_url}/v1/schematic-renders/{render.recipe_hash}/content"
         await self._schematics.publish_fresh_preview(render, url, object_key)
+
+    async def cleanup(self, *, retention_hours: int = 24, limit: int = 50) -> int:
+        """Run one bounded reference-safe generated-preview cleanup batch."""
+        return await self._schematics.cleanup_preview_objects(retention_hours=retention_hours, limit=limit)

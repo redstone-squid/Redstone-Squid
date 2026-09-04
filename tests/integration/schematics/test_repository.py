@@ -5,6 +5,7 @@ upsert, the partial unique index enforcing one primary per build, and the versio
 fingerprint indexes — are all database semantics rather than Python ones.
 """
 
+import hashlib
 from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import cast
@@ -49,6 +50,7 @@ _TABLES: tuple[Table, ...] = (
     Base.metadata.tables["schematic_files"],
     Base.metadata.tables["build_schematics"],
     Base.metadata.tables["schematic_render_queue"],
+    Base.metadata.tables["schematic_preview_objects"],
     Base.metadata.tables["schematic_renders"],
 )
 
@@ -72,23 +74,47 @@ async def schematic_tables(async_engine: AsyncEngine) -> AsyncGenerator[AsyncEng
 def preview_publisher(
     schematic_tables: AsyncEngine,
     async_session_factory: async_sessionmaker[AsyncSession],
-    tmp_path: Path,
+    preview_artifacts: LocalArtifactStore,
 ) -> PostgresSchematicPreviewPublisher:
-    return PostgresSchematicPreviewPublisher(async_session_factory, LocalArtifactStore(tmp_path / "objects"))
+    return PostgresSchematicPreviewPublisher(async_session_factory, preview_artifacts)
+
+
+@pytest.fixture
+def preview_artifacts(schematic_tables: AsyncEngine, tmp_path: Path) -> LocalArtifactStore:
+    del schematic_tables
+    return LocalArtifactStore(tmp_path / "objects")
 
 
 @pytest.fixture
 def repository(
     schematic_tables: AsyncEngine,
     async_session_factory: async_sessionmaker[AsyncSession],
-    tmp_path: Path,
+    preview_artifacts: LocalArtifactStore,
     preview_publisher: PostgresSchematicPreviewPublisher,
 ) -> PostgresSchematicStore:
     return PostgresSchematicStore(
         async_session_factory,
-        LocalArtifactStore(tmp_path / "objects"),
+        preview_artifacts,
         preview_publisher,
     )
+
+
+async def _ready_preview_object(
+    publisher: PostgresSchematicPreviewPublisher,
+    artifacts: LocalArtifactStore,
+    object_key: str,
+    *,
+    byte_size: int = 42,
+) -> None:
+    content = b"p" * byte_size
+    reservation = await publisher.reserve_preview_object(
+        object_key,
+        byte_size=byte_size,
+        sha256=hashlib.sha256(content).hexdigest(),
+    )
+    if reservation.upload_required:
+        await artifacts.put(object_key, content, content_type="image/png")
+        await publisher.mark_preview_object_ready(reservation)
 
 
 async def test_storing_the_same_bytes_twice_yields_one_row_and_one_digest(
@@ -184,6 +210,7 @@ async def test_promoting_a_new_primary_demotes_the_previous_one(repository: Post
 async def test_replacing_a_featured_attachment_fences_its_render_and_replaces_the_generated_url(
     repository: PostgresSchematicStore,
     preview_publisher: PostgresSchematicPreviewPublisher,
+    preview_artifacts: LocalArtifactStore,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     first_digest = await repository.put_file(b"first", source_format=SchematicFormat.LITEMATIC)
@@ -196,6 +223,7 @@ async def test_replacing_a_featured_attachment_fences_its_render_and_replaces_th
             {"url": manual_url},
         )
     first_url = "https://api.example/v1/schematic-renders/first/content"
+    await _ready_preview_object(preview_publisher, preview_artifacts, "renders/first.png")
     first_render = await preview_publisher.publish_fresh_preview(
         first_id,
         "first-recipe",
@@ -218,6 +246,7 @@ async def test_replacing_a_featured_attachment_fences_its_render_and_replaces_th
             await session.scalars(text("SELECT url FROM build_links WHERE build_id = 1 AND media_type = 'render'"))
         )
     assert links_after_replacement == {manual_url}
+    await _ready_preview_object(preview_publisher, preview_artifacts, "renders/stale.png")
     stale_render = await preview_publisher.publish_fresh_preview(
         first_id,
         "stale-recipe",
@@ -231,6 +260,7 @@ async def test_replacing_a_featured_attachment_fences_its_render_and_replaces_th
     assert await preview_publisher.publish_cached_preview(first_id, "first-recipe", first_url) is False
 
     second_url = "https://api.example/v1/schematic-renders/second/content"
+    await _ready_preview_object(preview_publisher, preview_artifacts, "renders/second.png")
     second_render = await preview_publisher.publish_fresh_preview(
         second_id,
         "second-recipe",
@@ -242,6 +272,7 @@ async def test_replacing_a_featured_attachment_fences_its_render_and_replaces_th
     )
     assert second_render is not None
     replacement_url = "https://api.example/v1/schematic-renders/replacement/content"
+    await _ready_preview_object(preview_publisher, preview_artifacts, "renders/replacement.png")
     replacement = await preview_publisher.publish_fresh_preview(
         second_id,
         "replacement-recipe",
@@ -268,12 +299,14 @@ async def test_replacing_a_featured_attachment_fences_its_render_and_replaces_th
 async def test_primary_replacement_wins_a_concurrent_render_publication(
     repository: PostgresSchematicStore,
     preview_publisher: PostgresSchematicPreviewPublisher,
+    preview_artifacts: LocalArtifactStore,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     first_digest = await repository.put_file(b"first", source_format=SchematicFormat.LITEMATIC)
     second_digest = await repository.put_file(b"second", source_format=SchematicFormat.LITEMATIC)
     first_id = await repository.record_analysis(1, first_digest, make_analysis(), primary=True)
     second_id = await repository.record_analysis(1, second_digest, make_analysis(), primary=False)
+    await _ready_preview_object(preview_publisher, preview_artifacts, "renders/late.png")
 
     published = anyio.Event()
     results: list[object | None] = []
@@ -315,6 +348,109 @@ async def test_primary_replacement_wins_a_concurrent_render_publication(
             text("SELECT count(*) FROM schematic_renders WHERE recipe_hash = 'late-recipe'")
         )
     assert stale_rows == 0
+
+
+async def test_republishing_the_same_recipe_replaces_its_prior_generated_url(
+    repository: PostgresSchematicStore,
+    preview_publisher: PostgresSchematicPreviewPublisher,
+    preview_artifacts: LocalArtifactStore,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    digest = await repository.put_file(b"same-recipe", source_format=SchematicFormat.LITEMATIC)
+    schematic_id = await repository.record_analysis(1, digest, make_analysis(), primary=True)
+    object_key = "renders/same-recipe.png"
+    await _ready_preview_object(preview_publisher, preview_artifacts, object_key)
+
+    first = await preview_publisher.publish_fresh_preview(
+        schematic_id,
+        "same-recipe",
+        "https://old.example/v1/schematic-renders/same-recipe/content",
+        object_key,
+        width=768,
+        height=768,
+        byte_size=42,
+    )
+    second = await preview_publisher.publish_fresh_preview(
+        schematic_id,
+        "same-recipe",
+        "https://new.example/v1/schematic-renders/same-recipe/content",
+        object_key,
+        width=768,
+        height=768,
+        byte_size=42,
+    )
+
+    assert first is not None
+    assert second is not None
+    async with async_session_factory() as session:
+        links = set(await session.scalars(text("SELECT url FROM build_links WHERE build_id = 1")))
+    assert links == {"https://new.example/v1/schematic-renders/same-recipe/content"}
+
+
+async def test_preview_cleanup_retains_an_object_referenced_by_multiple_builds(
+    repository: PostgresSchematicStore,
+    preview_publisher: PostgresSchematicPreviewPublisher,
+    preview_artifacts: LocalArtifactStore,
+) -> None:
+    digest = await repository.put_file(b"shared-preview", source_format=SchematicFormat.LITEMATIC)
+    first_id = await repository.record_analysis(1, digest, make_analysis(), primary=True)
+    second_id = await repository.record_analysis(2, digest, make_analysis(), primary=True)
+    shared_key = "renders/shared.png"
+    orphan_key = "renders/orphan.png"
+    await _ready_preview_object(preview_publisher, preview_artifacts, shared_key)
+    await _ready_preview_object(preview_publisher, preview_artifacts, orphan_key)
+    for schematic_id, build_id in ((first_id, 1), (second_id, 2)):
+        rendered = await preview_publisher.publish_fresh_preview(
+            schematic_id,
+            "shared-recipe",
+            f"https://api.example/builds/{build_id}/shared-preview",
+            shared_key,
+            width=768,
+            height=768,
+            byte_size=42,
+        )
+        assert rendered is not None
+
+    removed = await preview_publisher.cleanup_unreferenced_preview_objects(
+        older_than=Instant.now().add(hours=1),
+        limit=10,
+    )
+
+    assert removed == 1
+    assert await preview_artifacts.stat(orphan_key) is None
+    assert await preview_artifacts.stat(shared_key) is not None
+
+
+async def test_missing_cached_preview_is_marked_for_safe_regeneration(
+    repository: PostgresSchematicStore,
+    preview_publisher: PostgresSchematicPreviewPublisher,
+    preview_artifacts: LocalArtifactStore,
+) -> None:
+    digest = await repository.put_file(b"missing-preview", source_format=SchematicFormat.LITEMATIC)
+    schematic_id = await repository.record_analysis(1, digest, make_analysis(), primary=True)
+    object_key = "renders/missing.png"
+    await _ready_preview_object(preview_publisher, preview_artifacts, object_key)
+    rendered = await preview_publisher.publish_fresh_preview(
+        schematic_id,
+        "missing-recipe",
+        "https://api.example/v1/schematic-renders/missing-recipe/content",
+        object_key,
+        width=768,
+        height=768,
+        byte_size=42,
+    )
+    assert rendered is not None
+    await preview_artifacts.delete(object_key)
+
+    cached = await preview_publisher.get_render(schematic_id, "missing-recipe")
+    reservation = await preview_publisher.reserve_preview_object(
+        object_key,
+        byte_size=42,
+        sha256=hashlib.sha256(b"p" * 42).hexdigest(),
+    )
+
+    assert cached is None
+    assert reservation.upload_required is True
 
 
 async def test_a_fingerprint_lookup_finds_the_same_build_resubmitted_under_another_id(
