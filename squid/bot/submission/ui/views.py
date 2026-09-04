@@ -45,9 +45,9 @@ EDIT_FIELDS: tuple[BuildFieldSpec, ...] = (
     field_spec("normal_closing_time", "in gameticks", categories=_DOOR_ONLY),
     field_spec("normal_opening_time", "in gameticks", categories=_DOOR_ONLY),
     field_spec("creators_ign", "Me, My Dog"),
-    field_spec("image_urls", "any urls, comma separated"),
-    field_spec("video_urls", "any urls, comma separated"),
-    field_spec("world_download_urls", "any urls, comma separated"),
+    field_spec("image_urls", "any urls, comma separated", parser=parse_web_urls),
+    field_spec("video_urls", "any urls, comma separated", parser=parse_web_urls),
+    field_spec("world_download_urls", "any urls, comma separated", parser=parse_web_urls),
     field_spec("completion_time", "Any time format works"),
     field_spec("extra_user_info", "Anything a reader should know", display=FieldDisplay.PARAGRAPH),
     field_spec("server_ip", "play.example.com"),
@@ -89,6 +89,54 @@ def _all_restrictions(build: BuildDraft) -> list[str]:
     ]
 
 
+async def _set_door_dimensions(
+    build: BuildDraft,
+    value: tuple[int | None, int | None, int | None],
+    _builds: BuildService,
+) -> None:
+    build.door_dimensions = value
+
+
+async def _set_patterns(build: BuildDraft, value: list[str], _builds: BuildService) -> None:
+    build.patterns = value
+
+
+async def _set_dimensions(
+    build: BuildDraft,
+    value: tuple[int | None, int | None, int | None],
+    _builds: BuildService,
+) -> None:
+    build.dimensions = value
+
+
+async def _set_version(build: BuildDraft, value: str | None, _builds: BuildService) -> None:
+    build.version_spec = value
+
+
+async def _set_creators(build: BuildDraft, value: list[str], _builds: BuildService) -> None:
+    build.creators_ign = value
+
+
+async def _set_restrictions(build: BuildDraft, value: list[str], builds: BuildService) -> None:
+    await builds.classify_restrictions(build, value)
+
+
+def _link_target(
+    media_type: Literal["image", "video", "world-download"],
+) -> Callable[[BuildDraft, list[str], BuildService], Awaitable[None]]:
+    async def apply(build: BuildDraft, value: list[str], _builds: BuildService) -> None:
+        build.replace_links(media_type, value)
+
+    return apply
+
+
+async def _set_notes(build: BuildDraft, value: str | None, _builds: BuildService) -> None:
+    if value:
+        build.extra_info["user"] = value
+    else:
+        build.extra_info.pop("user", None)
+
+
 DOOR_SIZE_FIELD = CreationFieldSpec(
     "door_size",
     "Door opening size",
@@ -96,6 +144,7 @@ DOOR_SIZE_FIELD = CreationFieldSpec(
     _parse_door_dimensions,
     _format_dimensions,
     lambda build: build.door_dimensions,
+    _set_door_dimensions,
     required=True,
     maximum=100,
 )
@@ -106,6 +155,7 @@ PATTERN_FIELD = CreationFieldSpec(
     lambda value: split_values(value) or ["Regular"],
     lambda values: ", ".join(values),
     lambda build: build.patterns,
+    _set_patterns,
     maximum=500,
 )
 DIMENSIONS_FIELD = CreationFieldSpec(
@@ -115,6 +165,7 @@ DIMENSIONS_FIELD = CreationFieldSpec(
     _parse_optional_dimensions,
     _format_dimensions,
     lambda build: build.dimensions,
+    _set_dimensions,
     maximum=100,
 )
 VERSIONS_FIELD = CreationFieldSpec(
@@ -124,6 +175,7 @@ VERSIONS_FIELD = CreationFieldSpec(
     optional_text,
     _format_optional_text,
     lambda build: build.version_spec,
+    _set_version,
     maximum=200,
 )
 CREATORS_FIELD = CreationFieldSpec(
@@ -133,6 +185,7 @@ CREATORS_FIELD = CreationFieldSpec(
     split_values,
     lambda values: ", ".join(values),
     lambda build: build.creators_ign,
+    _set_creators,
     maximum=500,
 )
 RESTRICTIONS_FIELD = CreationFieldSpec(
@@ -142,6 +195,7 @@ RESTRICTIONS_FIELD = CreationFieldSpec(
     split_values,
     lambda values: ", ".join(values),
     _all_restrictions,
+    _set_restrictions,
     maximum=1000,
 )
 IMAGE_URLS_FIELD = CreationFieldSpec(
@@ -151,6 +205,7 @@ IMAGE_URLS_FIELD = CreationFieldSpec(
     parse_web_urls,
     lambda values: ", ".join(values),
     lambda build: list(build.image_urls),
+    _link_target("image"),
     maximum=4000,
 )
 VIDEO_URLS_FIELD = CreationFieldSpec(
@@ -160,6 +215,7 @@ VIDEO_URLS_FIELD = CreationFieldSpec(
     parse_web_urls,
     lambda values: ", ".join(values),
     lambda build: list(build.video_urls),
+    _link_target("video"),
     maximum=4000,
 )
 WORLD_URLS_FIELD = CreationFieldSpec(
@@ -169,6 +225,7 @@ WORLD_URLS_FIELD = CreationFieldSpec(
     parse_web_urls,
     lambda values: ", ".join(values),
     lambda build: list(build.world_download_urls),
+    _link_target("world-download"),
     maximum=4000,
 )
 NOTES_FIELD = CreationFieldSpec(
@@ -178,6 +235,7 @@ NOTES_FIELD = CreationFieldSpec(
     optional_text,
     _format_optional_text,
     lambda build: cast(str | None, build.extra_info.get("user")),
+    _set_notes,
     maximum=4000,
     display=FieldDisplay.PARAGRAPH,
 )
@@ -215,26 +273,16 @@ def _submission_details_form(build: BuildDraft) -> sl.forms.FormSpec:
     return _creation_form(tr("Links and optional details"), DETAIL_FIELDS, build)
 
 
-@dataclass(frozen=True, slots=True)
-class SubmissionBasicsInput:
-    """Typed result of the build-basics creation form."""
-
-    door_dimensions: tuple[int | None, int | None, int | None]
-    patterns: list[str]
-    dimensions: tuple[int | None, int | None, int | None]
-    version_spec: str | None
-    creators: list[str]
-
-
-@dataclass(frozen=True, slots=True)
-class SubmissionDetailsInput:
-    """Typed result of the links-and-details creation form."""
-
-    restrictions: list[str]
-    image_urls: list[str]
-    video_urls: list[str]
-    world_urls: list[str]
-    notes: str | None
+async def _apply_creation_fields(
+    fields: Sequence[CreationFieldSpec[Any]],
+    values: Mapping[str, object],
+    build: BuildDraft,
+    builds: BuildService,
+) -> None:
+    """Parse every field before applying any typed target to the draft."""
+    applications = tuple(field.prepare(values[field.key]) for field in fields)
+    for apply in applications:
+        await apply(build, builds)
 
 
 @dataclass(frozen=True, slots=True)
@@ -487,19 +535,7 @@ class SubmissionScreen(sd.Screen):
         )
 
     async def _basics_submitted(self, event: sl.SubmitEvent) -> None:
-        values = event.values
-        submitted = SubmissionBasicsInput(
-            DOOR_SIZE_FIELD.parse(values["door_size"]),
-            PATTERN_FIELD.parse(values["pattern"]),
-            DIMENSIONS_FIELD.parse(values["dimensions"]),
-            VERSIONS_FIELD.parse(values["versions"]),
-            CREATORS_FIELD.parse(values["creators"]),
-        )
-        self.build.door_dimensions = submitted.door_dimensions
-        self.build.patterns = submitted.patterns
-        self.build.dimensions = submitted.dimensions
-        self.build.version_spec = submitted.version_spec
-        self.build.creators_ign = submitted.creators
+        await _apply_creation_fields(BASICS_FIELDS, event.values, self.build, self.builds)
         self.validation_error = None
         self.mutated(self.build)
 
@@ -511,22 +547,7 @@ class SubmissionScreen(sd.Screen):
         )
 
     async def _details_submitted(self, event: sl.SubmitEvent) -> None:
-        values = event.values
-        submitted = SubmissionDetailsInput(
-            RESTRICTIONS_FIELD.parse(values["restrictions"]),
-            IMAGE_URLS_FIELD.parse(values["image_urls"]),
-            VIDEO_URLS_FIELD.parse(values["video_urls"]),
-            WORLD_URLS_FIELD.parse(values["world_urls"]),
-            NOTES_FIELD.parse(values["notes"]),
-        )
-        await self.builds.classify_restrictions(self.build, submitted.restrictions)
-        self.build.replace_links("image", submitted.image_urls)
-        self.build.replace_links("video", submitted.video_urls)
-        self.build.replace_links("world-download", submitted.world_urls)
-        if submitted.notes:
-            self.build.extra_info["user"] = submitted.notes
-        else:
-            self.build.extra_info.pop("user", None)
+        await _apply_creation_fields(DETAIL_FIELDS, event.values, self.build, self.builds)
         self.validation_error = None
         self.mutated(self.build)
 
@@ -574,7 +595,7 @@ def _edit_form(items: Sequence[BoundBuildField], page: int) -> sl.forms.FormSpec
             field_type(
                 key=item.attribute,
                 label=tr(spec.label),
-                placeholder=spec.placeholder,
+                placeholder=tr(spec.placeholder),
                 default=item.current_text,
                 required=spec.required,
                 minimum=spec.minimum,
