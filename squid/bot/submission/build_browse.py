@@ -267,7 +267,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target]):
         )
 
     async def _primary(self, event: sl.ActionEvent):
-        stored = await self._schematics.primary_for_build(self._build_id)
+        stored = await self._schematics.featured_for_build(self._build_id)
         if stored is None:
             await event.notice(tr(t"This build has no schematic attached."))
         return stored

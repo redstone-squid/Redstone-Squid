@@ -154,7 +154,7 @@ class SchematicRepository:
                 )
             schematic_id = await session.scalar(statement)
             if primary:
-                await self._clear_projected_render(session, build_id)
+                await self._clear_generated_preview_link(session, build_id)
                 render_job = insert(SchematicRenderQueueItem).values(build_id=build_id)
                 await session.execute(
                     render_job.on_conflict_do_update(
@@ -186,7 +186,7 @@ class SchematicRepository:
         )
         return found[0] if found else None
 
-    async def get_primary(self, build_id: int) -> StoredSchematic | None:
+    async def get_featured(self, build_id: int) -> StoredSchematic | None:
         found = await self._fetch(
             self._joined().where(and_(BuildSchematic.build_id == build_id, BuildSchematic.is_primary)).limit(1)
         )
@@ -269,7 +269,7 @@ class SchematicRepository:
             )
         return _stored_render(row) if row is not None else None
 
-    async def record_render(
+    async def publish_fresh_preview(
         self,
         schematic_id: int,
         recipe_hash: str,
@@ -280,7 +280,7 @@ class SchematicRepository:
         height: int,
         byte_size: int,
     ) -> StoredRender | None:
-        """Publish one render only if its source remains the build's primary schematic.
+        """Publish one generated preview only if its source remains the featured attachment.
 
         Primary replacement takes the same build-row lock before changing the attachment.
         Whichever transaction wins therefore leaves a coherent result: either this URL is
@@ -323,13 +323,13 @@ class SchematicRepository:
             if current_id != schematic_id:
                 return None
             row = await session.scalar(statement)
-            await self._replace_projected_render(session, build_id, url)
+            await self.replace_generated_preview_link(session, build_id, url)
             await session.commit()
         assert row is not None
         return _stored_render(row)
 
-    async def project_render(self, schematic_id: int, recipe_hash: str, url: str) -> bool:
-        """Project an existing recipe only if its source remains primary."""
+    async def publish_cached_preview(self, schematic_id: int, recipe_hash: str, url: str) -> bool:
+        """Publish an existing recipe only if its source remains featured."""
         async with self._session_factory() as session:
             build_id = await session.scalar(select(BuildSchematic.build_id).where(BuildSchematic.id == schematic_id))
             if build_id is None:
@@ -352,13 +352,14 @@ class SchematicRepository:
             )
             if render_exists is None:
                 return False
-            await self._replace_projected_render(session, build_id, url)
+            await self.replace_generated_preview_link(session, build_id, url)
             await session.commit()
         return True
 
     @staticmethod
-    async def _replace_projected_render(session: AsyncSession, build_id: int, url: str) -> None:
-        registered_urls = SchematicRepository._registered_render_urls(build_id)
+    async def replace_generated_preview_link(session: AsyncSession, build_id: int, url: str) -> None:
+        """Atomically replace only the build link owned by registered preview artifacts."""
+        registered_urls = SchematicRepository._registered_preview_urls(build_id)
         existing = tuple(
             await session.scalars(
                 select(BuildLink.url).where(
@@ -383,8 +384,8 @@ class SchematicRepository:
         )
 
     @staticmethod
-    async def _clear_projected_render(session: AsyncSession, build_id: int) -> None:
-        registered_urls = SchematicRepository._registered_render_urls(build_id)
+    async def _clear_generated_preview_link(session: AsyncSession, build_id: int) -> None:
+        registered_urls = SchematicRepository._registered_preview_urls(build_id)
         existing = await session.scalar(
             select(BuildLink.url)
             .where(
@@ -408,8 +409,8 @@ class SchematicRepository:
         )
 
     @staticmethod
-    def _registered_render_urls(build_id: int) -> Select[tuple[str]]:
-        """Return URLs whose lifecycle is owned by this schematic projection."""
+    def _registered_preview_urls(build_id: int) -> Select[tuple[str]]:
+        """Return generated preview URLs whose lifecycle this publisher owns."""
         return (
             select(SchematicRender.url)
             .join(BuildSchematic, SchematicRender.build_schematic_id == BuildSchematic.id)

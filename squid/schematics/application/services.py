@@ -247,8 +247,9 @@ class SchematicService:
             source_format=stored.analysis.metrics.source_format,
         )
 
-    async def primary_for_build(self, build_id: int) -> StoredSchematic | None:
-        return await self._store.get_primary(build_id)
+    async def featured_for_build(self, build_id: int) -> StoredSchematic | None:
+        """Return the attachment selected to supply this build's generated preview."""
+        return await self._store.get_featured(build_id)
 
     async def find_duplicates(
         self,
@@ -375,7 +376,7 @@ class SchematicService:
         if not self._render_enabled:
             return SkippedRender(RenderSkipReason.RENDERING_DISABLED)
 
-        stored = await self._store.get_primary(build_id)
+        stored = await self._store.get_featured(build_id)
         if stored is None:
             return SkippedRender(RenderSkipReason.NO_PRIMARY_SCHEMATIC)
         reason = self._render_skip_reason(stored)
@@ -438,13 +439,13 @@ class SchematicService:
     async def render_now(self, build_id: int, *, request: RenderRequest | None = None) -> RenderedSchematic:
         """Render a build's primary schematic for a caller who is waiting for the image.
 
-        Distinct from `prepare_render`, which serves the durable projection queue: that path
+        Distinct from `prepare_render`, which serves durable preview publication: that path
         decides what a build's *published* preview should be and hands its transport a PNG to
         upload, while this one answers one request and publishes nothing. A recipe the queue
         has already rendered is served from its stored artifact, so the default framing costs
         an object-storage read rather than a render.
 
-        Deliberately not written back to the cache. Recording a render also projects it onto
+        Deliberately not written back to the cache. Recording a render also publishes it onto
         the build as its preview, and a request whose only claim to authority is that somebody
         asked for it must not decide what a build looks like to everyone else.
         """
@@ -457,7 +458,7 @@ class SchematicService:
                 "resource pack to enable it.",
             )
 
-        stored = await self._store.get_primary(build_id)
+        stored = await self._store.get_featured(build_id)
         if stored is None:
             raise SchematicNotFoundError(context={"build_id": build_id}, public_context={"build_id": build_id})
         # Judged before the resource pack is acquired: a build that can never be previewed
@@ -580,9 +581,9 @@ class SchematicService:
             extra={**_log_fields(stored, "render"), "squid.schematic.render_skip_reason": reason.value},
         )
 
-    async def record_render(self, render: FreshRender, url: str, object_key: str) -> StoredRender | None:
-        """Persist and project a fresh render if its source is still the primary schematic."""
-        return await self._store.record_render(
+    async def publish_fresh_preview(self, render: FreshRender, url: str, object_key: str) -> StoredRender | None:
+        """Persist and publish a fresh preview if its source attachment is still featured."""
+        return await self._store.publish_fresh_preview(
             render.schematic_id,
             render.recipe_hash,
             url,
@@ -592,9 +593,9 @@ class SchematicService:
             byte_size=len(render.png),
         )
 
-    async def project_render(self, render: CachedRender) -> bool:
-        """Project a cached render if its source is still the primary schematic."""
-        return await self._store.project_render(render.schematic_id, render.recipe_hash, render.url)
+    async def publish_cached_preview(self, render: CachedRender) -> bool:
+        """Publish a cached preview if its source attachment is still featured."""
+        return await self._store.publish_cached_preview(render.schematic_id, render.recipe_hash, render.url)
 
     async def render_content(self, recipe_hash: str, *, max_bytes: int = _MAX_RENDER_CONTENT_BYTES) -> bytes:
         """Return one registered PNG preview from private object storage."""
@@ -652,7 +653,7 @@ class SchematicService:
     ) -> tuple[bytes, tuple[VersionLossEntry, ...]]:
         """Re-encode a build's primary schematic, optionally retargeting its data version."""
         self._require_available()
-        stored = await self._store.get_primary(build_id)
+        stored = await self._store.get_featured(build_id)
         if stored is None:
             raise SchematicNotFoundError(context={"build_id": build_id}, public_context={"build_id": build_id})
 
@@ -678,7 +679,7 @@ class SchematicService:
     async def detect_lattice(self, build_id: int) -> AutostackLattice | None:
         """Return the opportunistically detected repeating unit for a build."""
         self._require_available()
-        stored = await self._store.get_primary(build_id)
+        stored = await self._store.get_featured(build_id)
         if stored is None:
             raise SchematicNotFoundError(context={"build_id": build_id}, public_context={"build_id": build_id})
         return stored.analysis.lattice
@@ -696,7 +697,7 @@ class SchematicService:
         if not capabilities.can_simulate:
             msg = "This schematic engine does not provide the verified tick simulator."
             raise SchematicSupportUnavailableError(msg)
-        stored = await self._store.get_primary(build_id)
+        stored = await self._store.get_featured(build_id)
         if stored is None:
             raise SchematicNotFoundError(context={"build_id": build_id}, public_context={"build_id": build_id})
         self._refuse_poisoned(stored.file_sha256)

@@ -159,7 +159,7 @@ async def test_promoting_a_new_primary_demotes_the_previous_one(repository: Sche
 
     await repository.record_analysis(1, second, make_analysis(), primary=True, original_filename="second.litematic")
 
-    primary = await repository.get_primary(1)
+    primary = await repository.get_featured(1)
     assert primary is not None
     assert primary.original_filename == "second.litematic"
     assert sum(stored.is_primary for stored in await repository.list_for_build(1)) == 1
@@ -179,7 +179,7 @@ async def test_replacing_a_primary_fences_its_render_and_replaces_the_projected_
             {"url": manual_url},
         )
     first_url = "https://api.example/v1/schematic-renders/first/content"
-    first_render = await repository.record_render(
+    first_render = await repository.publish_fresh_preview(
         first_id,
         "first-recipe",
         first_url,
@@ -201,7 +201,7 @@ async def test_replacing_a_primary_fences_its_render_and_replaces_the_projected_
             await session.scalars(text("SELECT url FROM build_links WHERE build_id = 1 AND media_type = 'render'"))
         )
     assert links_after_replacement == {manual_url}
-    stale_render = await repository.record_render(
+    stale_render = await repository.publish_fresh_preview(
         first_id,
         "stale-recipe",
         "https://api.example/v1/schematic-renders/stale/content",
@@ -211,10 +211,10 @@ async def test_replacing_a_primary_fences_its_render_and_replaces_the_projected_
         byte_size=42,
     )
     assert stale_render is None
-    assert await repository.project_render(first_id, "first-recipe", first_url) is False
+    assert await repository.publish_cached_preview(first_id, "first-recipe", first_url) is False
 
     second_url = "https://api.example/v1/schematic-renders/second/content"
-    second_render = await repository.record_render(
+    second_render = await repository.publish_fresh_preview(
         second_id,
         "second-recipe",
         second_url,
@@ -225,7 +225,7 @@ async def test_replacing_a_primary_fences_its_render_and_replaces_the_projected_
     )
     assert second_render is not None
     replacement_url = "https://api.example/v1/schematic-renders/replacement/content"
-    replacement = await repository.record_render(
+    replacement = await repository.publish_fresh_preview(
         second_id,
         "replacement-recipe",
         replacement_url,
@@ -262,7 +262,7 @@ async def test_primary_replacement_wins_a_concurrent_render_publication(
 
     async def publish_late_render() -> None:
         results.append(
-            await repository.record_render(
+            await repository.publish_fresh_preview(
                 first_id,
                 "late-recipe",
                 "https://api.example/v1/schematic-renders/late/content",
@@ -435,7 +435,7 @@ async def test_simulation_evidence_round_trips_without_changing_the_analysis(
 
     await repository.record_simulation(schematic_id, evidence)
 
-    stored = await repository.get_primary(1)
+    stored = await repository.get_featured(1)
     assert stored is not None
     assert stored.simulation_evidence == evidence
     assert stored.analysis.metrics.block_count == make_analysis().metrics.block_count

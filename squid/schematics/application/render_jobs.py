@@ -20,7 +20,7 @@ class ClaimedRenderJob:
 
 
 class SchematicRenderJobRepository(Protocol):
-    """Persistence contract for build-render projection work."""
+    """Persistence contract for durable build-preview publication work."""
 
     async def claim(self, *, limit: int) -> Sequence[ClaimedRenderJob]: ...
 
@@ -30,7 +30,7 @@ class SchematicRenderJobRepository(Protocol):
 
 
 class SchematicRenderJobService:
-    """Claim and acknowledge durable build-render projections."""
+    """Claim and acknowledge durable build-preview publication intents."""
 
     def __init__(self, repository: SchematicRenderJobRepository, *, max_attempts: int = 5) -> None:
         if max_attempts < 1:
