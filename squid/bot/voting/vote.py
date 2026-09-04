@@ -483,7 +483,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
                 isinstance(actor, discord.Member) and await self.publisher.may_create_network(actor)
             ):
                 raise InvalidVoteConfigurationError(tr(t"You may no longer publish a poll to every server."))
-            message = await self.publisher.create_and_publish(
+            publication = await self.publisher.create_and_publish(
                 author_account_id=account.id,
                 channel=cast(GuildMessageable, channel),
                 question=draft.question,
@@ -492,7 +492,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
                 options=options,
                 scope=draft.scope,
             )
-            return message.jump_url
+            return publication.message.jump_url
 
         return PollScreen(resolve_options, publish, allow_network=allow_network)
 
