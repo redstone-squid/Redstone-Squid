@@ -40,9 +40,16 @@ class FakeJobs:
 
 
 class FakeSchematics:
-    def __init__(self, prepared: RenderPreparation | Exception, *, current: bool = True) -> None:
+    def __init__(
+        self,
+        prepared: RenderPreparation | Exception,
+        *,
+        current: bool = True,
+        publication_failures: list[Exception] | None = None,
+    ) -> None:
         self.prepared = prepared
         self.current = current
+        self.publication_failures = publication_failures or []
         self.recorded: list[tuple[FreshRender, str, str]] = []
         self.projected: list[CachedRender] = []
         self.published_urls: list[str] = []
@@ -54,6 +61,8 @@ class FakeSchematics:
 
     async def publish_fresh_preview(self, render: FreshRender, url: str, object_key: str) -> object | None:
         self.recorded.append((render, url, object_key))
+        if self.publication_failures:
+            raise self.publication_failures.pop(0)
         if not self.current:
             return None
         self.published_urls[:] = [url]
@@ -114,6 +123,32 @@ async def test_render_failure_is_released_for_retry() -> None:
 
     assert jobs.failed == [(job, error)]
     assert jobs.completed == []
+
+
+async def test_failure_after_object_upload_retries_the_same_recipe_and_publishes() -> None:
+    job = ClaimedRenderJob(7, 0, uuid.uuid4())
+    jobs = FakeJobs(job)
+    failure = RuntimeError("database unavailable after upload")
+    fresh = FreshRender(3, RECIPE_HASH, 768, 768, PNG)
+    schematics = FakeSchematics(fresh, publication_failures=[failure])
+    artifacts = FakeArtifacts()
+    worker = SchematicPreviewWorker(
+        cast(Any, jobs),
+        cast(Any, schematics),
+        cast(Any, artifacts),
+        "https://api.example",
+        enabled=True,
+    )
+
+    await worker.process_batch()
+    await worker.process_batch()
+
+    object_key = f"schematic-renders/aa/{RECIPE_HASH}.png"
+    expected_upload = (object_key, PNG, "image/png")
+    assert artifacts.puts == [expected_upload, expected_upload]
+    assert jobs.failed == [(job, failure)]
+    assert jobs.completed == [job]
+    assert schematics.published_urls == [f"https://api.example/v1/schematic-renders/{RECIPE_HASH}/content"]
 
 
 async def test_replaced_primary_cannot_publish_its_completed_render() -> None:
