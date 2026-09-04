@@ -15,7 +15,7 @@ from squid.builds.domain import (
 )
 from squid.builds.errors import InvalidBuildError
 from squid.core.errors import InvalidStateError, JSONValue
-from squid.submissions.application.finalization import ActionableSubmissionError
+from squid.submissions.application.finalization import BuildSubmissionRejectedError
 from squid.submissions.domain.finalization import (
     DoorSubmissionDetails,
     ExtenderOrientation,
@@ -79,7 +79,7 @@ class CanonicalSubmissionVersions(Protocol):
     async def list_all(self) -> Sequence[MinecraftVersion]: ...
 
 
-class BuildSubmissionTarget:
+class CanonicalBuildSubmissionWriter:
     """Create or retrieve one build using its source draft as the retry key."""
 
     def __init__(
@@ -120,7 +120,7 @@ class BuildSubmissionTarget:
     async def _validate_source_version(self, source_version: str) -> None:
         canonical_versions = {str(version) for version in await self._versions.list_all()}
         if source_version not in canonical_versions:
-            raise ActionableSubmissionError(
+            raise BuildSubmissionRejectedError(
                 (SubmissionAttentionIssue("source_version", SubmissionAttentionReason.UNKNOWN_OPTION),)
             )
 
@@ -162,7 +162,7 @@ class BuildSubmissionTarget:
         if not any(creator.strip() for creator in submission.creators):
             issues.append(SubmissionAttentionIssue("creators", SubmissionAttentionReason.TOO_SHORT))
         if issues:
-            raise ActionableSubmissionError(tuple(issues))
+            raise BuildSubmissionRejectedError(tuple(issues))
         return selected
 
 
@@ -246,8 +246,8 @@ def _target_result(build: Build, submission: NormalizedSubmission) -> Submission
     )
 
 
-def _target_rejected() -> ActionableSubmissionError:
-    return ActionableSubmissionError(
+def _target_rejected() -> BuildSubmissionRejectedError:
+    return BuildSubmissionRejectedError(
         (SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED),)
     )
 
