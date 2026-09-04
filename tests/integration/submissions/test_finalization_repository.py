@@ -14,6 +14,7 @@ from whenever import Instant
 from squid.accounts.infrastructure.models import Account
 from squid.core.errors import DataIntegrityError
 from squid.media.application.jobs import MediaJobStatus
+from squid.media.domain import MediaKind
 from squid.media.infrastructure.models import MediaNormalizationJobRecord, MediaUploadRecord
 from squid.persistence.base import Base
 from squid.submissions.application import StoredDraft
@@ -204,7 +205,7 @@ async def _store_media(
             MediaUploadRecord(
                 id=upload_id,
                 draft_id=DRAFT_ID,
-                kind="image",
+                kind=MediaKind.IMAGE,
                 source_content_type="image/jpeg",
                 source_byte_size=len(source),
                 source_sha256="a" * 64,
@@ -217,7 +218,7 @@ async def _store_media(
             session.add(
                 MediaNormalizationJobRecord(
                     upload_id=upload_id,
-                    status=status.value,
+                    status=status,
                     completed_at=NOW if status is MediaJobStatus.COMPLETED else None,
                     dead_at=NOW if status is MediaJobStatus.DEAD else None,
                     discarded_at=NOW if status is MediaJobStatus.DISCARDED else None,

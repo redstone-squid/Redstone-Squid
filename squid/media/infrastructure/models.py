@@ -19,8 +19,10 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
+from squid.media.application.jobs import MediaArtifactRole, MediaJobStatus
+from squid.media.domain import MediaKind
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC, now
+from squid.persistence.types import InstantUTC, StrEnumText, now
 
 
 class MediaUploadRecord(Base, kw_only=True):
@@ -53,7 +55,7 @@ class MediaUploadRecord(Base, kw_only=True):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     draft_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    kind: Mapped[MediaKind] = mapped_column(StrEnumText(MediaKind), nullable=False)
     source_content_type: Mapped[str] = mapped_column(Text, nullable=False)
     source_byte_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
     source_sha256: Mapped[str] = mapped_column(Text, nullable=False)
@@ -94,7 +96,7 @@ class MediaArtifactRecord(Base, kw_only=True):
         ForeignKey("media_uploads.id", name="media_artifacts_upload_id_fkey", ondelete="CASCADE"),
         nullable=False,
     )
-    role: Mapped[str] = mapped_column(Text, nullable=False)
+    role: Mapped[MediaArtifactRole] = mapped_column(StrEnumText(MediaArtifactRole), nullable=False)
     object_key: Mapped[str] = mapped_column(Text, nullable=False)
     content_type: Mapped[str] = mapped_column(Text, nullable=False)
     byte_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
@@ -221,7 +223,12 @@ class MediaNormalizationJobRecord(Base, kw_only=True):
         ForeignKey("media_uploads.id", name="media_normalization_jobs_upload_id_fkey", ondelete="CASCADE"),
         primary_key=True,
     )
-    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'pending'"), default="pending")
+    status: Mapped[MediaJobStatus] = mapped_column(
+        StrEnumText(MediaJobStatus),
+        nullable=False,
+        server_default=text("'pending'"),
+        default=MediaJobStatus.PENDING,
+    )
     available_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
