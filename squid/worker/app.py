@@ -14,7 +14,7 @@ from squid.bootstrap import create_worker_runtime
 from squid.config import WorkerConfig, WorkerProcessConfig, load_or_exit, load_worker_process_config
 from squid.health import ProcessHealthServer
 from squid.logging_config import configure_service_worker_logging
-from squid.observability import configure_observability, record_histogram, trace_span
+from squid.observability import TraceSurface, configure_observability, record_histogram, trace_span
 from squid.runtime import BackgroundTaskSupervisor, WorkerServices, start_log_capture
 from squid.schematics.infrastructure.capability import NullSchematicAnalyzer, engine_installed
 from squid.schematics.infrastructure.durable import SchematicJobRunner
@@ -222,34 +222,34 @@ class DatabaseWorker:
 
     async def _process_events(self) -> None:
         async with self._event_lock:
-            with trace_span("squid.worker.domain_events", {"squid.surface": "background_loop"}):
+            with trace_span("squid.worker.domain_events", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
                 await self._events.process_batch()
 
     async def _process_schematic_jobs(self) -> None:
-        with trace_span("squid.worker.schematic_jobs", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.schematic_jobs", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             await self._schematic_jobs.process_batch()
 
     async def _process_schematic_renders(self) -> None:
-        with trace_span("squid.worker.schematic_renders", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.schematic_renders", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             await self._schematic_renders.process_batch()
 
     async def _process_media_jobs(self) -> None:
         runner = self._services.media_runner
         if runner is None:
             return
-        with trace_span("squid.worker.media_normalization", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.media_normalization", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             await runner.process_batch(limit=self._config.media_job_concurrency)
 
     async def _cleanup_media_storage(self) -> None:
-        with trace_span("squid.worker.media_storage_cleanup", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.media_storage_cleanup", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             await self._services.media_cleanup.process_batch()
 
     async def _process_submission_finalization(self) -> None:
-        with trace_span("squid.worker.submission_finalization", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.submission_finalization", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             await self._services.submission_finalization.process_batch()
 
     async def _refresh_search(self) -> None:
-        with trace_span("squid.worker.search_projection", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.search_projection", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             succeeded, failed = await self._services.refresh_search_index()
         if failed:
             logger.warning(
@@ -258,7 +258,7 @@ class DatabaseWorker:
             )
 
     async def _process_search_embeddings(self) -> None:
-        with trace_span("squid.worker.search_embeddings", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.search_embeddings", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             succeeded, failed = await self._services.search_embeddings.process_batch()
         if failed:
             logger.warning(
@@ -267,11 +267,11 @@ class DatabaseWorker:
             )
 
     async def _process_records(self) -> None:
-        with trace_span("squid.worker.record_maintenance", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.record_maintenance", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             await self._services.records.process_queue()
 
     async def _close_due_votes(self) -> None:
-        with trace_span("squid.worker.close_due_votes", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.close_due_votes", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             now = Instant.now()
             snapshots = await self._services.votes.close_due(now)
         for snapshot in snapshots:
@@ -283,19 +283,19 @@ class DatabaseWorker:
                 )
 
     async def _clean_stale_build_locks(self) -> None:
-        with trace_span("squid.worker.stale_build_locks", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.stale_build_locks", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             await self._services.builds.clean_stale_locks(older_than=Instant.now().subtract(minutes=5))
 
     async def _cleanup_schematic_jobs(self) -> None:
-        with trace_span("squid.worker.schematic_job_cleanup", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.schematic_job_cleanup", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             await self._schematic_jobs.cleanup()
 
     async def _cleanup_notifications(self) -> None:
-        with trace_span("squid.worker.notification_retention", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.notification_retention", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             await self._services.notifications.cleanup()
 
     async def _cleanup_idempotency(self) -> None:
-        with trace_span("squid.worker.idempotency_retention", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.idempotency_retention", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             deleted = await self._services.purge_idempotency()
         if deleted:
             logger.info(
@@ -304,7 +304,7 @@ class DatabaseWorker:
             )
 
     async def _expire_submission_drafts(self) -> None:
-        with trace_span("squid.worker.submission_draft_expiry", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.submission_draft_expiry", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             expired = await self._services.expire_submission_drafts()
         if expired:
             logger.info(
@@ -313,7 +313,7 @@ class DatabaseWorker:
             )
 
     async def _cleanup_error_reports(self) -> None:
-        with trace_span("squid.worker.error_report_retention", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.error_report_retention", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             deleted = await self._services.error_reports.purge_expired()
         if deleted:
             logger.info(

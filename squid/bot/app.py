@@ -41,7 +41,7 @@ from squid.config import (
 )
 from squid.health import ProcessHealthServer
 from squid.logging_config import configure_bot_logging
-from squid.observability import configure_observability, correlation_scope
+from squid.observability import TraceSurface, configure_observability, correlation_scope, trace_span
 from squid.posts.domain import ResourceKind
 from squid.runtime import (
     BackgroundTaskSupervisor,
@@ -204,10 +204,21 @@ class RedstoneSquid(Bot):
         and mint a second ID unrelated to the log lines the command produced. A hybrid command
         reaching here from the application command tree keeps the ID that tree already bound.
         """
-        with correlation_scope():
+        command_name = ctx.command.qualified_name if ctx.command is not None else "unknown"
+        attributes: dict[str, str | int] = {
+            "squid.command.name": command_name,
+            "squid.surface": TraceSurface.PREFIX_COMMAND,
+        }
+        if ctx.guild is not None:
+            attributes["squid.guild.id"] = ctx.guild.id
+        if ctx.channel is not None:
+            attributes["squid.channel.id"] = ctx.channel.id
+        with trace_span(f"discord.command {command_name}", attributes) as span, correlation_scope():
             request = await sd.request(ctx)
             with localization_scope(request.localization):
                 await super().invoke(ctx)
+                if ctx.command_failed:
+                    span.set_error()
 
     @override
     async def close(self) -> None:

@@ -66,7 +66,15 @@ async def test_prefix_invoke_establishes_localization_scope(mocker: MockerFixtur
     )
     bot.ui = cast(Any, runtime)
     context = cast(Context[Any], ContextHarness(message=MessageHarness(), bot=bot, user_id=7).source)
+    context.command = None
+    context.guild = None
+    context.channel = None  # type: ignore[assignment]
+    context.command_failed = False
     seen: list[str | None] = []
+    span = mocker.Mock()
+    span_context = mocker.MagicMock()
+    span_context.__enter__.return_value = span
+    trace = mocker.patch.object(bot_app, "trace_span", return_value=span_context)
 
     async def invoke(_bot: object, source: Context[Any]) -> None:
         del source
@@ -79,6 +87,35 @@ async def test_prefix_invoke_establishes_localization_scope(mocker: MockerFixtur
 
     assert seen == ["en-GB"]
     assert current_localization().locale is None
+    assert trace.call_args.args == (
+        "discord.command unknown",
+        {"squid.command.name": "unknown", "squid.surface": "prefix_command"},
+    )
+    span.set_error.assert_not_called()
+
+
+async def test_failed_prefix_command_marks_its_invocation_span(mocker: MockerFixture) -> None:
+    bot = bot_app.RedstoneSquid.__new__(bot_app.RedstoneSquid)
+    scope = mocker.Mock()
+    scope.resolve = mocker.AsyncMock(return_value=mocker.Mock(localization=Localization(locale="en-GB")))
+    bot.ui = mocker.Mock()
+    bot.ui.scope.return_value = scope
+    context = mocker.Mock(
+        command=mocker.Mock(qualified_name="admin sync"),
+        command_failed=True,
+        guild=None,
+        channel=None,
+    )
+    mocker.patch.object(Bot, "invoke", new=mocker.AsyncMock())
+    span = mocker.Mock()
+    span_context = mocker.MagicMock()
+    span_context.__enter__.return_value = span
+    trace = mocker.patch.object(bot_app, "trace_span", return_value=span_context)
+
+    await bot_app.RedstoneSquid.invoke(bot, context)
+
+    assert trace.call_args.args[0] == "discord.command admin sync"
+    span.set_error.assert_called_once_with()
 
 
 async def _localization(locale: str) -> Localization:
