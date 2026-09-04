@@ -1,6 +1,6 @@
 """A semantic drill-down menu with component and routed shells."""
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from squid_ui.document import DocumentLike
@@ -9,7 +9,7 @@ from squid_ui.semantic import ControlDisplay
 from squid_ui.target_types import RenderTarget
 from squid_ui.text import Message, ResolvedText, TextLike
 from squid_ui_widgets._content import ContentItem, ContentLike, normalize_content, require_key, slug
-from squid_ui_widgets.drivers import ComponentDriver, MachineControls
+from squid_ui_widgets.drivers import ComponentDriver, FormValues, MachineControls
 
 
 class _Missing:
@@ -126,7 +126,7 @@ class Menu[RenderTargetT: RenderTarget = RenderTarget]:
         action: str,
         *,
         values: tuple[str, ...] = (),
-        submitted: Mapping[str, object] | None = None,
+        submitted: FormValues | None = None,
     ) -> MenuState:
         del submitted
         if action == "back":

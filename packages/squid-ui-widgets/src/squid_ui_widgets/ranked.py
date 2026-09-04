@@ -1,6 +1,6 @@
 """A pure materialized ranking machine for component and router shells."""
 
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 from squid_ui.document import DocumentLike
@@ -12,7 +12,7 @@ from squid_ui.text import TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 from squid_ui_widgets._paging import FIRST_PAGE, PagePosition, window
 from squid_ui_widgets._ranked import Projector, RankedEntry, RankedRows
-from squid_ui_widgets.drivers import ComponentDriver, MachineControls
+from squid_ui_widgets.drivers import ComponentDriver, FormValues, MachineControls
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,7 +81,7 @@ class RankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget]:
         action: str,
         *,
         values: tuple[str, ...] = (),
-        submitted: Mapping[str, object] | None = None,
+        submitted: FormValues | None = None,
     ) -> RankedListState:
         del values, submitted
         last_page = self._page_count() - 1

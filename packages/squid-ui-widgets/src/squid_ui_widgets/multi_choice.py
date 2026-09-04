@@ -1,6 +1,6 @@
 """Paged multi-selection with explicit staging and commit semantics."""
 
-from collections.abc import Awaitable, Callable, Iterable, Mapping
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 
 from squid_ui.document import DocumentLike
@@ -18,7 +18,7 @@ from squid_ui_widgets._actions import (
 from squid_ui_widgets._content import display_text, require_key
 from squid_ui_widgets._paging import PagePosition, window
 from squid_ui_widgets.commit import CommitMode
-from squid_ui_widgets.drivers import ComponentDriver, MachineControls, TransitionEvent
+from squid_ui_widgets.drivers import ComponentDriver, FormValues, MachineControls, TransitionEvent
 
 
 @dataclass(frozen=True, slots=True)
@@ -199,7 +199,7 @@ class MultiChoice:
         action: str,
         *,
         values: tuple[str, ...] = (),
-        submitted: Mapping[str, object] | None = None,
+        submitted: FormValues | None = None,
     ) -> MultiChoiceState:
         if action == "apply" and self.commit is CommitMode.EXPLICIT:
             return state if self.errors(state) else MultiChoiceState(state.staged, state.staged, state.pages)

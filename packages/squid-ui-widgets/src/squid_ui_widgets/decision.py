@@ -1,6 +1,6 @@
 """One-way decisions and confirmation sugar over the shared machine shells."""
 
-from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping
+from collections.abc import Awaitable, Callable, Collection, Iterable
 from dataclasses import dataclass
 
 from squid_ui.document import DocumentLike
@@ -9,7 +9,7 @@ from squid_ui.semantic import ControlDisplay, Emphasis, Tone
 from squid_ui.target_types import RenderTarget
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
-from squid_ui_widgets.drivers import ComponentDriver, MachineControls, TransitionEvent
+from squid_ui_widgets.drivers import ComponentDriver, FormValues, MachineControls, TransitionEvent
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,7 +82,7 @@ class Decision[RenderTargetT: RenderTarget = RenderTarget]:
         action: str,
         *,
         values: tuple[str, ...] = (),
-        submitted: Mapping[str, object] | None = None,
+        submitted: FormValues | None = None,
     ) -> DecisionState:
         del values, submitted
         if state.decided is not None or not action.startswith("choose:"):

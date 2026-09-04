@@ -27,6 +27,9 @@ from squid_ui.target_types import RenderTarget
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import ContentItem
 
+type FormValues = Mapping[str, object]
+"""Values submitted by a heterogeneous form schema."""
+
 
 @dataclass(frozen=True, slots=True)
 class TransitionRoute[StateT]:
@@ -51,7 +54,7 @@ class TransitionEvent[StateT]:
     previous: StateT
     state: StateT
     values: tuple[str, ...] = ()
-    submitted: Mapping[str, object] | None = None
+    submitted: FormValues | None = None
 
 
 type TransitionHandler[StateT] = Callable[[TransitionEvent[StateT]], Awaitable[None]]
@@ -81,7 +84,7 @@ class StateMachine[StateT, RenderTargetT: RenderTarget = RenderTarget](Protocol)
         action: str,
         *,
         values: tuple[str, ...] = (),
-        submitted: Mapping[str, object] | None = None,
+        submitted: FormValues | None = None,
     ) -> StateT: ...
 
 
@@ -197,7 +200,7 @@ class ComponentDriver[StateT, RenderTargetT: RenderTarget = RenderTarget](Compon
         action_name: str,
         *,
         values: tuple[str, ...] = (),
-        submitted: Mapping[str, object] | None = None,
+        submitted: FormValues | None = None,
     ) -> None:
         previous = self.machine_state
         current = self.machine.transition(previous, action_name, values=values, submitted=submitted)
@@ -306,7 +309,7 @@ class RouteDriver[StateT, RenderTargetT: RenderTarget = RenderTarget]:
         action_name: str,
         *,
         values: tuple[str, ...] = (),
-        submitted: Mapping[str, object] | None = None,
+        submitted: FormValues | None = None,
     ) -> StateT:
         """Apply input received by a routed select or form handler."""
         return machine.transition(state, action_name, values=values, submitted=submitted)

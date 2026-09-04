@@ -1,6 +1,6 @@
 """Editable form-value collections over component and routed machine shells."""
 
-from collections.abc import Awaitable, Callable, Iterable, Mapping
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
@@ -11,7 +11,7 @@ from squid_ui.forms import Form, FormLike, FormSpec
 from squid_ui.semantic import ControlDisplay, FormTrigger, Tone
 from squid_ui.text import TextLike
 from squid_ui_widgets._paging import PagePosition, window
-from squid_ui_widgets.drivers import ComponentDriver, MachineControls, TransitionEvent
+from squid_ui_widgets.drivers import ComponentDriver, FormValues, MachineControls, TransitionEvent
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,9 +27,7 @@ class CollectionState:
     page: int = 0
 
 
-type CollectionChangeHandler = Callable[
-    [TransitionEvent[CollectionState], tuple[Mapping[str, object], ...]], Awaitable[None]
-]
+type CollectionChangeHandler = Callable[[TransitionEvent[CollectionState], tuple[FormValues, ...]], Awaitable[None]]
 
 
 class _Action(StrEnum):
@@ -52,9 +50,9 @@ class CollectionEditor:
         *,
         key: str = "collection",
         create: FormLike,
-        edit: Callable[[Mapping[str, object]], FormLike] | None = None,
-        label: Callable[[Mapping[str, object]], TextLike],
-        identity: Callable[[Mapping[str, object]], str] | None = None,
+        edit: Callable[[FormValues], FormLike] | None = None,
+        label: Callable[[FormValues], TextLike],
+        identity: Callable[[FormValues], str] | None = None,
         minimum: int = 0,
         maximum: int | None = None,
         reorder: bool = True,
@@ -85,10 +83,10 @@ class CollectionEditor:
         return CollectionState()
 
     @staticmethod
-    def _mapping(entry: CollectionEntry) -> Mapping[str, object]:
+    def _mapping(entry: CollectionEntry) -> FormValues:
         return MappingProxyType(dict(entry.values))
 
-    def initial_from(self, entries: Iterable[Mapping[str, object]]) -> CollectionState:
+    def initial_from(self, entries: Iterable[FormValues]) -> CollectionState:
         collected: list[CollectionEntry] = []
         keys: set[str] = set()
         for index, values in enumerate(entries, start=1):
@@ -116,7 +114,7 @@ class CollectionEditor:
             return ComponentDriver(self, on_change=changed)
         return ComponentDriver(self, initial=initial, on_change=changed)
 
-    def values(self, state: CollectionState) -> tuple[Mapping[str, object], ...]:
+    def values(self, state: CollectionState) -> tuple[FormValues, ...]:
         """Project state to its ordered public form-value mappings."""
         return tuple(self._mapping(entry) for entry in state.entries)
 
@@ -145,7 +143,7 @@ class CollectionEditor:
         action: str,
         *,
         values: tuple[str, ...] = (),
-        submitted: Mapping[str, object] | None = None,
+        submitted: FormValues | None = None,
     ) -> CollectionState:
         if action == _Action.SELECT:
             selected = values[0] if len(values) == 1 and values[0] in {entry.key for entry in state.entries} else None
