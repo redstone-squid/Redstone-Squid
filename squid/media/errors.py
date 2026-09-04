@@ -107,6 +107,7 @@ class MediaDraftNotFoundError(NotFoundError):
     default_message = tr(t"Submission draft not found.")
     default_title = tr(t"Draft not found")
     default_resource = "submission_draft"
+    default_end_user_action = tr(t"Reload your drafts before uploading the attachment again.")
 
     def __init__(self, draft_id: UUID) -> None:
         super().__init__(public_context={"draft_id": str(draft_id)})
@@ -130,6 +131,7 @@ class DraftMediaNotFoundError(NotFoundError):
     default_message = tr(t"Draft attachment not found.")
     default_title = tr(t"Attachment not found")
     default_resource = "submission_media"
+    default_end_user_action = tr(t"Reload the draft and choose one of its current attachments.")
 
     def __init__(self, upload_id: UUID) -> None:
         super().__init__(public_context={"upload_id": str(upload_id)})
@@ -141,6 +143,7 @@ class DraftMediaConflictError(ConflictError):
     default_message = tr(t"The attachment upload identifier is already in use.")
     default_title = tr(t"Attachment upload conflict")
     default_resource = "submission_media"
+    default_end_user_action = tr(t"Retry the upload with a new attachment identifier.")
 
     def __init__(self, upload_id: UUID) -> None:
         super().__init__(public_context={"upload_id": str(upload_id)})
@@ -150,7 +153,9 @@ class DraftMediaUnavailableError(ServiceUnavailableError):
     """Draft attachment processing is not enabled for this API process."""
 
     default_message = tr(t"Draft attachment processing is temporarily unavailable.")
+    default_title = tr(t"Attachment processing unavailable")
     default_resource = "submission_media"
+    default_end_user_action = tr(t"Keep the attachment locally and try uploading it again later.")
 
 
 class InvalidMediaError(ValidationError):

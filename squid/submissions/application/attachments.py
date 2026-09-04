@@ -45,19 +45,31 @@ class DraftAttachmentOwnership(Protocol):
     async def get_owned(self, draft_id: UUID, account_id: int) -> StoredDraft: ...
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class DraftUploadAuthority:
-    """Short-lived authority for one draft revision and attachment kind."""
+    """Short-lived authority whose lifetime ends when registration consumes it."""
 
     draft_id: UUID
     account_id: int
     draft_revision: int
     kind: MediaKind
+    _available: bool = field(default=True, init=False, repr=False)
 
     def __post_init__(self) -> None:
         if self.draft_id.int == 0 or self.account_id < 1 or self.draft_revision < 0:
             msg = tr(t"Draft attachment upload authority is invalid.")
             raise ValidationError(msg)
+
+    def consume(self) -> MediaDraftUploadAuthorization:
+        """End this authority and return its persistence authorization exactly once."""
+        if not self._available:
+            msg = tr(t"The draft attachment upload authority is no longer available.")
+            raise InvalidStateError(msg)
+        self._available = False
+        return MediaDraftUploadAuthorization(
+            owner_account_id=self.account_id,
+            draft_revision=self.draft_revision,
+        )
 
 
 @dataclass(slots=True)
@@ -118,10 +130,7 @@ class DraftAttachmentService:
                     strip_audio=strip_audio,
                     upload_id=upload_id,
                 ),
-                authorization=MediaDraftUploadAuthorization(
-                    owner_account_id=authority.account_id,
-                    draft_revision=authority.draft_revision,
-                ),
+                authorization=authority.consume(),
             )
         except MediaUploadConflictError as error:
             raise DraftMediaConflictError(error.upload_id) from None
