@@ -279,11 +279,12 @@ async def test_equivalent_subscriptions_are_idempotent_at_the_database_boundary(
         assert len((await session.scalars(select(NotificationSubscriptionRecord))).all()) == 2
 
 
-@pytest.mark.parametrize("recipient_count", [1, 100])
+@pytest.mark.parametrize(("recipient_count", "expected_statements"), [(0, 0), (1, 3), (100, 3)])
 async def test_candidate_materialization_has_constant_query_count(
     repository: PostgresNotificationRepository,
     async_session_factory: async_sessionmaker[AsyncSession],
     recipient_count: int,
+    expected_statements: int,
 ) -> None:
     async with async_session_factory.begin() as session:
         accounts = [
@@ -314,7 +315,7 @@ async def test_candidate_materialization_has_constant_query_count(
         async with async_session_factory.begin() as session:
             await repository._insert_candidates(session, event=materialized_event, candidates=candidates)
 
-    assert len(statements) == 3
+    assert len(statements) == expected_statements
 
 
 async def test_an_unconsented_account_keeps_its_switches_but_receives_nothing(
