@@ -4,9 +4,11 @@ Kept free of the native engine so the whole unit suite runs on a machine without
 extra installed, which is the deployment the null analyzer exists to support.
 """
 
+from whenever import Instant
+
 from squid.schematics.application.attachments import SchematicPublication, StoredSchematic
 from squid.schematics.application.commands import RenderRequest, SimulationRequest
-from squid.schematics.application.previews import StoredRender
+from squid.schematics.application.previews import PreviewObjectReservation, StoredRender
 from squid.schematics.domain.models import (
     AnalyzerCapabilities,
     AutostackLattice,
@@ -279,6 +281,18 @@ class FakeSchematicStore:
     async def get_render(self, schematic_id: int, recipe_hash: str) -> StoredRender | None:
         return self.renders.get((schematic_id, recipe_hash))
 
+    async def reserve_preview_object(
+        self,
+        object_key: str,
+        *,
+        byte_size: int,
+        sha256: str,
+    ) -> PreviewObjectReservation:
+        return PreviewObjectReservation(object_key, byte_size, sha256, upload_required=True)
+
+    async def mark_preview_object_ready(self, reservation: PreviewObjectReservation) -> None:
+        del reservation
+
     async def publish_fresh_preview(
         self,
         schematic_id: int,
@@ -305,6 +319,10 @@ class FakeSchematicStore:
     async def get_render_content(self, recipe_hash: str, *, max_bytes: int) -> bytes | None:
         content = self.render_content.get(recipe_hash)
         return content if content is not None and len(content) <= max_bytes else None
+
+    async def cleanup_unreferenced_preview_objects(self, *, older_than: Instant, limit: int) -> int:
+        del older_than, limit
+        return 0
 
     async def record_simulation(self, schematic_id: int, result: SimulationResult) -> None:
         self.simulations[schematic_id] = result

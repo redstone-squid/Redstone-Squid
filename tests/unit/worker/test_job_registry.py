@@ -20,6 +20,15 @@ class MediaRunnerRecorder:
         self.limits.append(limit)
 
 
+class PreviewCleanupRecorder:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def cleanup(self) -> int:
+        self.calls += 1
+        return 1
+
+
 @pytest.mark.parametrize("media_enabled", [False, True])
 def test_worker_scheduling_and_readiness_derive_from_the_same_registry(media_enabled: bool) -> None:
     services = worker_services()
@@ -73,3 +82,20 @@ async def test_media_job_captures_the_runner_registered_at_construction() -> Non
     await media_job.run()
 
     assert runner.limits == [3]
+
+
+async def test_preview_cleanup_is_registered_with_worker_maintenance() -> None:
+    previews = PreviewCleanupRecorder()
+    worker = DatabaseWorker(
+        worker_services(),
+        cast(Any, object()),
+        WorkerConfig(maintenance_interval_seconds=11),
+        cast(Any, object()),
+        cast(Any, previews),
+    )
+    cleanup = next(spec for spec in worker.job_specs if spec.name == "schematic-preview-cleanup")
+
+    await cleanup.run()
+
+    assert cleanup.interval_seconds == 300
+    assert previews.calls == 1

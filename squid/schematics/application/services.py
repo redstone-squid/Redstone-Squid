@@ -9,6 +9,8 @@ import logging
 from collections.abc import Generator, Iterable, Sequence
 from dataclasses import dataclass
 
+from whenever import Instant
+
 from squid.core.errors import DataIntegrityError, SquidError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
 from squid.schematics.application.attachments import PublicSchematicDownload, SchematicPublication, StoredSchematic
@@ -24,6 +26,7 @@ from squid.schematics.application.ports import (
 from squid.schematics.application.previews import (
     CachedRender,
     FreshRender,
+    PreviewObjectReservation,
     RenderedSchematic,
     RenderPreparation,
     RenderSkipReason,
@@ -594,6 +597,25 @@ class SchematicService:
             width=render.width,
             height=render.height,
             byte_size=len(render.png),
+        )
+
+    async def reserve_preview_object(self, render: FreshRender, object_key: str) -> PreviewObjectReservation:
+        """Reserve durable ownership before the transport uploads generated preview bytes."""
+        return await self._previews.reserve_preview_object(
+            object_key,
+            byte_size=len(render.png),
+            sha256=hashlib.sha256(render.png).hexdigest(),
+        )
+
+    async def mark_preview_object_ready(self, reservation: PreviewObjectReservation) -> None:
+        """Make a verified upload eligible for generated-link publication."""
+        await self._previews.mark_preview_object_ready(reservation)
+
+    async def cleanup_preview_objects(self, *, retention_hours: int = 24, limit: int = 50) -> int:
+        """Reclaim old generated objects only after all durable references disappear."""
+        return await self._previews.cleanup_unreferenced_preview_objects(
+            older_than=Instant.now().subtract(hours=retention_hours),
+            limit=limit,
         )
 
     async def publish_cached_preview(self, render: CachedRender) -> bool:
