@@ -38,7 +38,9 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         self.tags = bot.services.tags
         self.restrictions = bot.services.restrictions
         self._archive_header_pattern = re.compile(r"^<@!?(\d+)>.*wrote:")
-        self._reaction_subscription = self.bot.reactions.subscribe(type(self).__qualname__, add=self.on_reaction_add)
+        self._reaction_subscription = self.bot.reactions.subscribe(
+            type(self).__qualname__, add=self.on_reaction_add, recover_add=self.on_reaction_add
+        )
 
     @override
     async def ui_unload(self) -> None:

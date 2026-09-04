@@ -383,7 +383,7 @@ async def test_shutdown_routes_an_unadmitted_vote_event_to_consumer_recovery() -
     assert sorted(recovered) == [1, 2, 3]
 
 
-async def test_reaction_arriving_after_close_is_deferred_to_periodic_reconciliation() -> None:
+async def test_reaction_arriving_after_close_uses_bounded_recovery() -> None:
     recovered: list[int] = []
 
     async def handle(_event: ReactionEvent) -> None:
@@ -398,7 +398,7 @@ async def test_reaction_arriving_after_close_is_deferred_to_periodic_reconciliat
         await router.close()
         await router.dispatch_add(make_reaction_payload(user_id=4))
 
-    assert recovered == []
+    assert recovered == [4]
 
 
 async def test_close_bounds_a_hanging_recovery_handoff(caplog: pytest.LogCaptureFixture) -> None:

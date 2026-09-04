@@ -356,11 +356,12 @@ class ReactionRouter:
             else:
                 self._active_enqueues += 1
         if closing:
-            # Discord remains the durable source: public reactions are desired state and
-            # anonymous reactions are only removed after their ballot commits. The voting
-            # reconciler will therefore observe this event on its next periodic pass.
-            logger.warning("Deferred a reaction received during router shutdown to reconciliation")
-            add_counter("squid.reaction.intake.deferred", attributes={"squid.reaction.kind": item.kind})
+            with anyio.move_on_after(0.5) as recovery_scope:
+                await self._recover_unadmitted(item)
+            outcome = "deferred" if recovery_scope.cancelled_caught else "recovered"
+            add_counter(f"squid.reaction.intake.{outcome}", attributes={"squid.reaction.kind": item.kind})
+            if recovery_scope.cancelled_caught:
+                logger.error("A reaction received during shutdown was deferred to periodic reconciliation")
             return
         self._ensure_workers()
         try:
