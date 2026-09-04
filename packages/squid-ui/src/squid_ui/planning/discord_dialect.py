@@ -38,6 +38,7 @@ from squid_ui.primitives.nodes import (
     Button,
     EntitySelect,
     FormButton,
+    GalleryItem,
     LinkButton,
     Node,
     PremiumButton,
@@ -49,6 +50,14 @@ from squid_ui.primitives.nodes import (
 
 if TYPE_CHECKING:
     from squid_ui.planning.target import Target
+
+
+def require_gallery_item(value: str | GalleryItem) -> GalleryItem:
+    """Return a normalized gallery item or fail at the compiler invariant boundary."""
+    if isinstance(value, str):
+        message = "Gallery left a shorthand URL unnormalized"
+        raise LayoutInvariantError(message)
+    return value
 
 
 @dataclass(slots=True)
