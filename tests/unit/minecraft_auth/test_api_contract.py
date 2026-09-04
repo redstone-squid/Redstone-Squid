@@ -304,9 +304,22 @@ async def test_openapi_declares_paper_headers_and_server_scoped_idempotency() ->
     contract = app_with_fakes(FakeInstallations(), FakePlayers()).openapi()
     paths = contract["paths"]
     paper_start = paths["/minecraft/auth/paper/challenges"]["post"]
-    header_names = {parameter["name"] for parameter in paper_start["parameters"] if parameter["in"] == "header"}
+    headers = {parameter["name"]: parameter for parameter in paper_start["parameters"] if parameter["in"] == "header"}
+    header_names = headers.keys()
 
     assert {"Squid-Installation-ID", "Squid-Installation-Secret"} <= header_names
+    assert headers["Squid-Installation-ID"]["schema"] == {
+        "anyOf": [{"type": "string"}, {"type": "null"}],
+        "minLength": 32,
+        "maxLength": 45,
+        "title": "Squid-Installation-Id",
+    }
+    assert headers["Squid-Installation-Secret"]["schema"] == {
+        "anyOf": [{"type": "string"}, {"type": "null"}],
+        "minLength": 32,
+        "maxLength": 512,
+        "title": "Squid-Installation-Secret",
+    }
     assert "Idempotency-Key" in header_names
     mutations = (
         ("/minecraft/auth/paper/installations", "post"),
@@ -464,6 +477,14 @@ async def test_invalid_paper_installation_headers_are_indistinguishable() -> Non
                 {
                     "Squid-Installation-ID": str(INSTALLATION_ID),
                     "Squid-Installation-Secret": "short",
+                },
+                {
+                    "Squid-Installation-ID": "x" * 46,
+                    "Squid-Installation-Secret": INSTALLATION_SECRET,
+                },
+                {
+                    "Squid-Installation-ID": str(INSTALLATION_ID),
+                    "Squid-Installation-Secret": "x" * 513,
                 },
             )
         ]
