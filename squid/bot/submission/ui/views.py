@@ -752,10 +752,10 @@ def _edit_form(items: Sequence[BoundBuildField[Any]], page: int) -> sl.forms.For
             try:
                 item.spec.parser(cast(str, values[item.key]))
             except ValueError as error:
-                errors.append(sl.forms.FieldError(item.key, str(error) or tr("Invalid value")))
+                errors.append(sl.forms.FieldError(item.key, str(error) or tr(t"Invalid value")))
         return tuple(errors)
 
-    return sl.forms.FormSpec(tr("Edit build, section {page}", page=page), tuple(fields), validator=validate)
+    return sl.forms.FormSpec(tr(t"Edit build, section {page}"), tuple(fields), validator=validate)
 
 
 class BuildEditScreen(sd.Screen):
