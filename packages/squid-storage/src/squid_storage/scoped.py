@@ -30,29 +30,42 @@ _MISSING = object()
 
 
 class StorageError(Exception):
-    """Base class for every failure squid-storage raises deliberately."""
+    """Root of every exception class squid-storage defines.
+
+    Bad arguments and schema mismatches are plain `ValueError`, `TypeError` and
+    `RuntimeError`, so `except StorageError` does not catch them.
+    """
 
 
 class SlotVersionError(StorageError, ValueError):
-    """A stored slot value was written by a newer declaration than the reader supports."""
+    """`get` found a value written by a `Slot.version` above the reader's; the value is left in place."""
 
 
 class SlotCodec[ValueT](Protocol):
-    """Encode one slot value and decode it from the version that wrote it."""
+    """Text form of one slot's values, read back with the version that wrote them."""
 
-    def encode(self, value: ValueT) -> str: ...
+    def encode(self, value: ValueT) -> str:
+        """Return the text to store; a store raises `TypeError` for any non-`str` result."""
+        ...
 
-    def decode(self, payload: str, version: int) -> ValueT: ...
+    def decode(self, payload: str, version: int) -> ValueT:
+        """Rebuild a value; `version` is the writer's `Slot.version`, never above the reader's."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
 class Slot[ScopeT: Hashable, ValueT]:
-    """One declared, typed place for a value belonging to an application scope."""
+    """One named, typed place per application scope.
+
+    Raises `ValueError` for an empty name, a version below 1, or a non-positive `ttl`.
+    """
 
     name: str
     codec: SlotCodec[ValueT]
     ttl: timedelta | None = None
+    """Default lifetime of each written value; `None` never expires. `put(ttl=...)` overrides it per write."""
     version: int = 1
+    """Stored beside every value and passed to `codec.decode`; raise it when the encoding changes."""
 
     def __post_init__(self) -> None:
         if not self.name:
@@ -66,9 +79,18 @@ class Slot[ScopeT: Hashable, ValueT]:
 
 @runtime_checkable
 class ScopedStore(Protocol):
-    """Store declared values by exact slot and application scope."""
+    """One value per `(slot, scope)`, expiring on the slot's terms.
 
-    async def get[S: Hashable, V](self, slot: Slot[S, V], scope: S, *, touch: bool = False) -> V | None: ...
+    An expired value is invisible to `get` but occupies storage until `purge` or an
+    overwrite removes it.
+    """
+
+    async def get[S: Hashable, V](self, slot: Slot[S, V], scope: S, *, touch: bool = False) -> V | None:
+        """Return the live value or `None`; `touch` restarts a TTL from now.
+
+        Raises `SlotVersionError` when the stored version is above `slot.version`.
+        """
+        ...
 
     async def put[S: Hashable, V](
         self,
@@ -77,11 +99,20 @@ class ScopedStore(Protocol):
         value: V,
         *,
         ttl: timedelta | None = None,
-    ) -> None: ...
+    ) -> None:
+        """Overwrite the value and restart its lifetime; `ttl` replaces `slot.ttl` for this write only.
 
-    async def delete[S: Hashable, V](self, slot: Slot[S, V], scope: S) -> bool: ...
+        Raises `TypeError` when the codec encodes to a non-`str`, `ValueError` for a non-positive `ttl`.
+        """
+        ...
 
-    async def purge(self) -> int: ...
+    async def delete[S: Hashable, V](self, slot: Slot[S, V], scope: S) -> bool:
+        """Remove the value, expired or not; `True` when one was there."""
+        ...
+
+    async def purge(self) -> int:
+        """Remove every expired value across all slots and return how many."""
+        ...
 
 
 @dataclass(slots=True)
@@ -126,7 +157,7 @@ def _encode_scope(scope: Hashable, encoder: Callable[[Hashable], str] | None) ->
 
 
 def _default_scope_key(scope: Hashable) -> str:
-    """Encode common scopes without claiming to define an application's wire format."""
+    """Row key for `str`, `bytes`, `bool`, `int` and `float`; anything else falls back to `repr`, which is unstable."""
     if isinstance(scope, str):
         return scope
     if isinstance(scope, bytes):
@@ -146,7 +177,7 @@ def _decode(slot: Slot[Any, Any], stored: _StoredValue) -> Any:
 
 
 class MemoryScopedStore:
-    """In-process implementation of ScopedStore."""
+    """`ScopedStore` over a dict keyed by the scope object itself, so no scope encoder is involved."""
 
     def __init__(self, *, clock: Callable[[], float] = time.time) -> None:
         self._values: dict[tuple[str, Hashable], _MemoryValue] = {}
@@ -200,10 +231,20 @@ class MemoryScopedStore:
 
 
 class SQLiteScopedStore:
-    """Persist scoped values in SQLite using sqlite3 outside the event loop.
+    """`ScopedStore` in a SQLite file, one short-lived WAL connection per call, off the event loop.
 
     SQLite expiry uses the supplied process wall clock. Every process sharing one
-    database file must therefore have a sufficiently synchronized clock.
+    database file must therefore have a sufficiently synchronized clock. The schema is
+    created on the first call.
+
+    Args:
+        scope_encoder: Maps a scope to its row key. `None` accepts `str`, `bytes`, `bool`,
+            `int` and `float` and falls back to `repr` for anything else.
+
+    Raises:
+        ValueError: From the constructor, for a table name that is not an identifier of
+            at most 48 characters.
+        RuntimeError: From the first call, when the file holds another schema version.
     """
 
     def __init__(
@@ -359,7 +400,19 @@ class SQLiteScopedStore:
 
 
 class PostgresScopedStore:
-    """Persist scoped values in PostgreSQL with database-owned expiry deadlines."""
+    """`ScopedStore` through an asyncpg pool; every deadline is `clock_timestamp()`, so host clock skew is harmless.
+
+    The schema is created on the first call.
+
+    Args:
+        scope_encoder: Maps a scope to its row key. `None` accepts `str`, `bytes`, `bool`,
+            `int` and `float` and falls back to `repr` for anything else.
+
+    Raises:
+        ValueError: From the constructor, for a table name that is not an identifier of
+            at most 48 characters.
+        RuntimeError: From the first call, when the table holds another schema version.
+    """
 
     def __init__(
         self,
@@ -512,7 +565,10 @@ class PostgresScopedStore:
 
 @dataclass(frozen=True, slots=True)
 class JsonSlotCodec[ValueT]:
-    """A small JSON codec for values already represented by JSON-compatible data."""
+    """`SlotCodec` over `json.dumps` with sorted keys and no whitespace; `encode` raises `TypeError` for anything else.
+
+    `decoder` receives the parsed JSON and the writer's version; `None` returns the parsed JSON as is.
+    """
 
     decoder: Callable[[Any, int], ValueT] | None = None
 
@@ -527,7 +583,7 @@ class JsonSlotCodec[ValueT]:
 
 
 def json_codec[ValueT](decoder: Callable[[Any, int], ValueT] | None = None) -> JsonSlotCodec[ValueT]:
-    """Build a JSON slot codec, optionally applying a version-aware decoder."""
+    """`JsonSlotCodec(decoder)`, with `ValueT` inferred from `decoder`'s return type."""
     return JsonSlotCodec(decoder)
 
 

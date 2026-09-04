@@ -38,9 +38,11 @@ logger = logging.getLogger(__name__)
 
 
 class _NotifyConnection(Protocol):
-    """The small asyncpg connection surface needed for transactional notifications."""
+    """What `PostgresTopicBridge.publish_in` needs from a connection; `asyncpg.Connection` satisfies it."""
 
-    async def execute(self, query: str, *args: object) -> object: ...
+    async def execute(self, query: str, *args: object) -> object:
+        """Run `query` with `$n` parameters inside the connection's open transaction, if any."""
+        ...
 
 
 _DEFAULT_TABLE_NAME = "squid_sessions"
@@ -53,18 +55,22 @@ _MAX_NOTIFY_PAYLOAD = 8000
 
 
 class PostgresSessionStore:
-    """Persist fenced durable sessions through an asyncpg pool.
+    """`DurableSessionStore` through an asyncpg pool, the one option for several hosts.
 
-    PostgreSQL is the multi-host store. Every expiry comparison and every new
-    deadline uses ``clock_timestamp()`` in the database; hosts supply lease
-    durations, never absolute timestamps, so process clock skew cannot create
-    overlapping owners. Claim and admission fences come from one PostgreSQL
-    sequence and therefore increase monotonically across all callers.
+    Every expiry comparison and every new deadline uses ``clock_timestamp()`` in the
+    database; hosts supply lease durations, never absolute timestamps, so process clock
+    skew cannot create overlapping owners. Claim and admission fences come from one
+    PostgreSQL sequence and therefore increase monotonically across all callers. The
+    schema is created on the first call, under an advisory lock keyed by `table_name`.
 
     Args:
-        pool: An asyncpg connection pool.
         table_name: Unqualified database table name. Derived helper objects use
             the same prefix.
+
+    Raises:
+        ValueError: From the constructor, for a table name that is not an identifier of
+            at most 48 characters.
+        RuntimeError: From the first call, when the table holds another schema version.
     """
 
     def __init__(self, pool: Pool, *, table_name: str = _DEFAULT_TABLE_NAME) -> None:
@@ -238,6 +244,11 @@ class PostgresSessionStore:
         victims: tuple[str, ...],
         lease_seconds: float,
     ) -> ClaimToken | None:
+        """One transaction that locks the reservation row and any existing row under `key` `FOR UPDATE`.
+
+        Two commits on one scope, or on one key, therefore serialize instead of interleaving
+        their checks and writes.
+        """
         _validate_key(key)
         _validate_victims(victims)
         _validate_lease_seconds(lease_seconds)
@@ -390,26 +401,34 @@ def _stored_record(row: Record) -> SessionRecord:
 
 @dataclass(frozen=True, slots=True)
 class TopicBridgeSnapshot:
-    """One immutable diagnostic view of a cross-process topic bridge."""
+    """Counters `PostgresTopicBridge.snapshot()` returns, accumulated since the bridge was constructed."""
 
     origin: str
     channel: str
     published: int
+    """Addresses passed to `publish`, whether or not they reached the wire."""
     local_only: int
+    """Published addresses with no wire form: a `CellAddress`, a topic the codec declined, or an oversized payload."""
     notified: int
+    """NOTIFYs sent, by the outbound sender and by `publish_in`."""
     undelivered: int
+    """Notifications lost to a full outbound queue or a failed NOTIFY."""
     received: int
+    """Remote notifications republished on the local bus."""
     ignored: int
+    """This process's own `publish` notifications, echoed back by PostgreSQL and dropped."""
     undecodable: int
+    """Inbound payloads with bad framing, an unknown delivery mode, or a topic the codec rejected."""
 
 
 class PostgresTopicBridge:
-    """Carry encodable host topics between processes over PostgreSQL LISTEN/NOTIFY.
+    """Carry encodable topics between processes over PostgreSQL LISTEN/NOTIFY while `run()` serves the channel.
 
-    The bridge is one more caller of `TopicBus.publish`, never a relay attached to the bus:
-    a remote notification becomes a local publish, so the bus contract composes unchanged,
-    and nothing loops back out. The payload is an encoded *address* and never application
-    state, so subscribers still re-read their source of truth.
+    `run()` returns only when the host cancels it; both directions, including the outbound
+    sender that `publish` feeds, live inside it. The bridge is one more caller of
+    `TopicBus.publish`, never a relay attached to the bus: a remote notification becomes a
+    local publish, so nothing loops back out. The payload is an encoded *address* and never
+    application state, so subscribers still re-read their source of truth.
 
     Delivery is exactly as durable as the bus itself, which is to say not at all. NOTIFY is
     delivered only to processes listening at commit time, so a restart, a dropped connection
@@ -428,6 +447,10 @@ class PostgresTopicBridge:
         queue_size: Outbound notifications held while the sender is busy or stopped.
         origin: This process's identity, used to drop its own notifications. Defaults to a
             fresh UUID, which is what every process should use.
+
+    Raises:
+        ValueError: From the constructor, for an empty channel, a queue size below one, or
+            an origin containing ``:``.
     """
 
     def __init__(
@@ -478,6 +501,10 @@ class PostgresTopicBridge:
         this returns, so it is *not* ordered against a write the caller has not committed
         yet. Use `publish_in()` when the notification must be ordered with an application
         transaction.
+
+        Never raises for a topic the wire cannot carry: a `CellAddress`, a topic the codec
+        declines, or a payload of 8000 bytes or more stays local, and a full outbound queue
+        drops the notification, each counted in `snapshot()`.
         """
         self.bus.publish(*addresses)
         for address in addresses:
@@ -498,16 +525,17 @@ class PostgresTopicBridge:
             self._pending.add(payload)
 
     async def publish_in(self, connection: _NotifyConnection, topic: Topic) -> None:
-        """Publish `topic` when the supplied PostgreSQL transaction commits.
+        """Publish `topic` when the transaction open on `connection` commits.
 
-        The supplied connection owns the `pg_notify` call, so PostgreSQL holds the
-        notification until its current transaction commits. The bridge listener then
-        publishes it to this process's bus as well as to listeners in other processes.
-        This method does not commit the transaction.
+        `pg_notify` runs on the caller's connection, so PostgreSQL holds the notification
+        until that transaction commits and drops it on rollback. Nothing is published locally
+        before then: this process hears the topic through its own listener like every other
+        process. Waits for the listener connection to be up before running `pg_notify`, and
+        does not commit the transaction.
 
         Raises:
-            RuntimeError: If the bridge has not been started with :meth:`run`.
-            ValueError: If the topic cannot fit on the configured NOTIFY channel.
+            ValueError: When the codec declines `topic` or its payload is 8000 bytes or more.
+            RuntimeError: When `run()` is not serving, or stops while this waits for the listener.
         """
         payload = self._wire_payload(topic, _TRANSACTION_DELIVERY)
         if payload is None:
@@ -540,6 +568,8 @@ class PostgresTopicBridge:
         A process that only publishes still has to run the bridge: the outbound sender lives
         here. Its listener is then harmless, and keeps the process ready to consume topics
         the day it grows a subscriber.
+
+        Raises `RuntimeError` when the bridge is already running.
         """
         if self._running:
             message = "topic bridge is already running"

@@ -15,22 +15,19 @@ _logger = logging.getLogger(__name__)
 
 
 class PersistentStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
-    """Hydrate one shared namespace per scope and persist committed changes.
+    """Hydrate and persist one shared namespace per scope; `run()` owns the writer until `close()` drains it.
 
-    Loading is explicit and asynchronous because it reads the store. Once a namespace is
-    loaded, commits enqueue a snapshot synchronously and a supervised anyio worker performs
-    the best-effort write. Store failures are sent to on_error and never travel back
-    through the action that produced the state change.
+    `run()` also returns when the host cancels it, and `close()` refuses every later `load`.
+    Loading is possible only while running, because hydration is a store read and a read
+    must not quietly acquire a task.
 
-    The pool owns that worker for the whole life of :meth:`run`, which the host supervises;
-    :meth:`close` drains what is queued and lets `run` return. A pool is loadable only while
-    it is running, because hydration is a read and a read must not quietly acquire a task.
+    Once a namespace is loaded, each commit enqueues a snapshot synchronously and the worker
+    writes it best-effort. Store failures go to `on_error` (default: logged) and never
+    travel back through the action that produced the change.
 
-    The canonical-handle machinery is a :class:`~squid_reactivity.state_pool.SharedStatePool` held privately.
-    This class composes one rather than subclassing it because `SharedStatePool.get` is synchronous and
-    would publish a handle before the store had been read: a concurrent `load` of the same scope
-    would then be handed an un-hydrated namespace and hydrate nothing. The pool's `_create` and
-    `_adopt` halves exist for exactly this, so hydration can happen between them.
+    This class composes a `SharedStatePool` rather than subclassing it: `SharedStatePool.get`
+    is synchronous and would publish a handle before the store had been read, so a concurrent
+    `load` of the same scope would receive an un-hydrated namespace.
     """
 
     def __init__(
@@ -67,12 +64,13 @@ class PersistentStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
         return self._pool.bus
 
     async def run(self, *, task_status: TaskStatus[None] = anyio.TASK_STATUS_IGNORED) -> None:
-        """Own the persistence worker until :meth:`close` drains it, or the caller cancels.
+        """Own the persistence worker until `close()` drains it, or the caller cancels.
 
-        The task group is entered and exited by this one coroutine. An earlier version
-        entered it inside `load` and exited it inside `close`, which anyio rejects whenever
-        those run in different tasks -- the ordinary case, since `load` belongs to whichever
-        request first needed the namespace.
+        The task group is entered and exited by this one coroutine: anyio rejects a task
+        group whose enter and exit happen in different tasks, and `load` and `close` are
+        ordinarily called from different ones.
+
+        Raises `RuntimeError` when the pool is already running or has been closed.
         """
         if self._running:
             msg = "persisted pool is already running"
@@ -89,7 +87,11 @@ class PersistentStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
             self._running = False
 
     async def load(self, scope: ScopeT) -> SharedT:
-        """Return the canonical namespace for scope, hydrating it on the first load."""
+        """Return the canonical namespace for `scope`, reading the store only on its first load.
+
+        Raises `RuntimeError` when the pool is closed, or is not running and `scope` is not
+        already loaded. A store failure during hydration propagates.
+        """
         async with self._load_lock:
             # Checked before the cache: `close` is terminal for the pool, even for a scope it
             # already holds. A caller still holding that namespace keeps an ordinary `SharedState`;
@@ -115,7 +117,7 @@ class PersistentStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
             return canonical
 
     def get_existing(self, scope: ScopeT) -> SharedT | None:
-        """Return the namespace already loaded for scope, or None. Reads nothing."""
+        """Return the namespace already loaded for `scope`, or `None`; never reads the store."""
         return self._pool.get_existing(scope)
 
     def active(self) -> Mapping[ScopeT, SharedT]:
@@ -123,13 +125,12 @@ class PersistentStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
         return self._pool.active()
 
     async def delete(self, scope: ScopeT) -> SharedT | None:
-        """Retire scope and stop persisting through the handle that owned it.
+        """Retire `scope` and stop persisting through the handle that owned it; `None` if it was not loaded.
 
-        The retired namespace stays usable, reactive and readable; it simply stops writing to a
-        slot it no longer owns. Detaching is not optional: two generations sharing one slot would
-        race for the row, and retired state would resurrect on the next load. Anything this handle
-        already staged still gets written -- deleting retires a lifetime, it does not undo a
-        committed action -- which is why this drains before returning.
+        The retired namespace stays usable and reactive but no longer writes: two generations
+        sharing one slot would race for the row, and retired state would resurrect on the next
+        load. Snapshots it staged before retirement are still written, so this drains before
+        returning. The stored value is not removed.
         """
         async with self._load_lock:
             retired = self._pool.delete(scope)
@@ -148,13 +149,16 @@ class PersistentStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
         await self.flush()
 
     async def flush(self) -> None:
-        """Wait until every snapshot queued so far has been attempted."""
+        """Wait until every snapshot queued so far has been attempted; returns at once when not running."""
         if not self._running:
             return
         await self._idle.wait()
 
     async def close(self) -> None:
-        """Drain pending writes and stop accepting loads; `run` returns once drained."""
+        """Drain pending writes and stop accepting loads; `run` returns once drained.
+
+        A commit after this is dropped and reported to `on_error` rather than written.
+        """
         # Listeners stay attached deliberately. Detaching here would block the write but also
         # silence it; `_stage`'s closed guard blocks it and reports it, which is what a host
         # that outlived its pool needs to hear.

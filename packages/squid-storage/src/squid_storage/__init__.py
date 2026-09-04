@@ -1,4 +1,7 @@
-"""Backing stores and their backend discipline for Squid applications."""
+"""Durable session stores, scoped values, shared-state persistence and the PostgreSQL topic bridge.
+
+Memory and SQLite backends are single-host; the asyncpg backends are the only ones safe across hosts.
+"""
 
 from squid_storage.persistent_state import PersistentStatePool
 from squid_storage.postgres import PostgresSessionStore, PostgresTopicBridge, TopicBridgeSnapshot

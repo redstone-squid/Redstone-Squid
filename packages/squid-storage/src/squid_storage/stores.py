@@ -18,21 +18,23 @@ _DEFAULT_TABLE_NAME = "squid_sessions"
 
 @dataclass(frozen=True, slots=True)
 class SessionRecord:
-    """One published durable session and its admission snapshot."""
+    """One published durable session; the claim on it, if any, is not part of the record."""
 
     key: str
     scope: str
     snapshot_payload: str
+    """Opaque text `inspect` returns for every record in a scope; admission decisions read it in bulk."""
     record_payload: str
+    """Opaque text a recovering host reads once it holds the claim; the store never parses either payload."""
 
 
 @dataclass(frozen=True, slots=True)
 class ClaimToken:
-    """Opaque proof of one record claim.
+    """Proof of one claim on one record, valid until the lease lapses or a newer fence replaces it.
 
-    Stores mint a strictly newer fence for every successful claim or admission
-    commit. Callers must carry the token unchanged and must not interpret its
-    private fence value.
+    Stores mint a strictly newer fence for every successful `claim` or `commit`, so a token
+    stops matching as soon as anyone, including its own owner, claims the key again.
+    Carry it unchanged; the fence is private.
     """
 
     key: str
@@ -42,7 +44,7 @@ class ClaimToken:
 
 @dataclass(frozen=True, slots=True)
 class AdmissionToken:
-    """Opaque proof of a short-lived exclusive reservation on one scope."""
+    """Proof of one reservation on one scope, consumed by `commit` or `abandon` and lost on expiry."""
 
     scope: str
     owner: str
@@ -51,32 +53,67 @@ class AdmissionToken:
 
 @runtime_checkable
 class DurableSessionStore(Protocol):
-    """Claim-fenced storage and distributed scope admission.
+    """Claim-fenced session records plus one exclusive reservation per scope.
 
-    Token-conditional operations fail after expiry, takeover, or retirement.
-    ``inspect`` returns ``None`` for a lost reservation and an empty tuple for
-    a valid empty scope. ``commit`` consumes a valid reservation, retires only
-    named records in that reservation's scope, and publishes the claimed
-    newcomer atomically. A target already present must be named as a victim.
+    A claim ends when its lease expires unrenewed, when `release()` or `delete()` consumes
+    it, or when a later `claim()` or `commit()` on the same key mints a newer fence; a
+    reservation ends on expiry, `commit()`, `abandon()`, or a newer `reserve()` on the
+    scope. Every token-conditional method then reports the loss as `False` or `None`
+    instead of raising. Fences increase strictly per store, so a stale token never
+    matches again.
+
+    Every implementation raises `ValueError`, before touching storage, for an empty key,
+    scope or owner, a non-finite or non-positive lease, or duplicate victims.
     """
 
-    async def list(self) -> tuple[SessionRecord, ...]: ...
+    async def list(self) -> tuple[SessionRecord, ...]:
+        """Return every record in every scope, ordered by key, whoever holds its claim."""
+        ...
 
-    async def load(self, key: str) -> SessionRecord | None: ...
+    async def load(self, key: str) -> SessionRecord | None:
+        """Return the record under `key` regardless of claim state, or `None` when absent."""
+        ...
 
-    async def claim(self, key: str, owner: str, lease_seconds: float) -> ClaimToken | None: ...
+    async def claim(self, key: str, owner: str, lease_seconds: float) -> ClaimToken | None:
+        """Take or retake the claim on an existing record for `lease_seconds` from now.
 
-    async def renew(self, token: ClaimToken, lease_seconds: float) -> bool: ...
+        Returns `None` when no record has `key` or another owner's lease is still live. The
+        same owner always succeeds, and the token it held before stops matching.
+        """
+        ...
 
-    async def save(self, token: ClaimToken, snapshot_payload: str, record_payload: str) -> bool: ...
+    async def renew(self, token: ClaimToken, lease_seconds: float) -> bool:
+        """Restart the lease from now; `False` once the claim is lost or the record is gone."""
+        ...
 
-    async def delete(self, token: ClaimToken) -> bool: ...
+    async def save(self, token: ClaimToken, snapshot_payload: str, record_payload: str) -> bool:
+        """Replace both payloads, keeping the scope; `False` once the claim is lost."""
+        ...
 
-    async def release(self, token: ClaimToken) -> bool: ...
+    async def delete(self, token: ClaimToken) -> bool:
+        """Remove the record and its claim; `False` once the claim is lost."""
+        ...
 
-    async def reserve(self, scope: str, owner: str, lease_seconds: float) -> AdmissionToken | None: ...
+    async def release(self, token: ClaimToken) -> bool:
+        """Drop the claim without touching the record.
 
-    async def inspect(self, reservation: AdmissionToken) -> tuple[SessionRecord, ...] | None: ...
+        Unlike `renew`, an expired lease still releases as long as no newer fence has
+        replaced the token; `False` only when it has, or the record is gone.
+        """
+        ...
+
+    async def reserve(self, scope: str, owner: str, lease_seconds: float) -> AdmissionToken | None:
+        """Take or retake the reservation on `scope` for `lease_seconds` from now.
+
+        Returns `None` while another owner's reservation is live. The same owner always
+        succeeds, and the reservation it held before stops matching. A reservation blocks
+        other reservations only; it does not block `claim` on records in the scope.
+        """
+        ...
+
+    async def inspect(self, reservation: AdmissionToken) -> tuple[SessionRecord, ...] | None:
+        """Return the scope's records ordered by key, or `None` once the reservation is lost."""
+        ...
 
     async def commit(
         self,
@@ -87,9 +124,19 @@ class DurableSessionStore(Protocol):
         record_payload: str,
         victims: tuple[str, ...],
         lease_seconds: float,
-    ) -> ClaimToken | None: ...
+    ) -> ClaimToken | None:
+        """Atomically retire `victims`, publish `key` in the reservation's scope, and consume the reservation.
 
-    async def abandon(self, reservation: AdmissionToken) -> bool: ...
+        The new record is claimed by the reservation's owner for `lease_seconds`, and every
+        victim loses its record and its claim. A victim that does not exist is ignored.
+        Returns `None`, changing nothing, when the reservation is lost, when `key` already
+        exists and is not among `victims`, or when a victim exists in another scope.
+        """
+        ...
+
+    async def abandon(self, reservation: AdmissionToken) -> bool:
+        """Drop the reservation, expired or not; `False` once it was consumed or superseded."""
+        ...
 
 
 @dataclass(slots=True)
@@ -100,7 +147,7 @@ class _MemoryLease:
 
 
 class MemorySessionStore:
-    """In-process implementation of the complete fenced store contract."""
+    """`DurableSessionStore` over dicts: state dies with the process, and `clock` stands in for `time.time`."""
 
     def __init__(self, *, clock: Callable[[], float] = time.time) -> None:
         self._records: dict[str, SessionRecord] = {}
@@ -254,17 +301,22 @@ class MemorySessionStore:
 
 
 class SQLiteSessionStore:
-    """Persist fenced durable sessions in a SQLite file.
+    """`DurableSessionStore` in a SQLite file, one short-lived WAL connection per call, off the event loop.
 
     SQLite is a single-host/shared-filesystem option. Lease expiry uses the
     supplied process wall clock, so every process accessing one file must share
-    a sufficiently synchronized clock.
+    a sufficiently synchronized clock. The schema is created on the first call.
 
     Args:
         path: Database file path. Parent directories must already exist.
         table_name: Unqualified database table name. Derived helper tables use
             the same prefix.
         clock: Wall clock used for lease and reservation expiry.
+
+    Raises:
+        ValueError: From the constructor, for a table name that is not an identifier of
+            at most 48 characters.
+        RuntimeError: From the first call, when the file holds another schema version.
     """
 
     def __init__(
