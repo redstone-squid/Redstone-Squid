@@ -6,6 +6,7 @@ to read off `list` and type back. A subscription is a thing you look at and then
 looking at it and removing it belong to the same message (audit C5's retyping half).
 """
 
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, cast
 from uuid import UUID
 
@@ -30,6 +31,8 @@ SESSION_SECONDS = 300
 
 MAX_LISTED = 25
 """A select holds 25 options, which is also as many as a card should list."""
+
+type VisibilityResolver = Callable[[sl.ActionEvent], Awaitable[InboxVisibility]]
 
 
 def _kind_label(kind: SubscriptionKind) -> sl.TextLike:
@@ -64,17 +67,21 @@ class NotificationScreen(sd.Screen):
         account_id: int,
         author_id: int,
         visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY,
+        visibility_resolver: VisibilityResolver | None = None,
     ) -> None:
         self._notifications = notifications
         self._account_id = account_id
         self._author_id = author_id
         self._visibility = visibility
+        self._visibility_resolver = visibility_resolver
 
     async def on_load(self) -> None:
         await self._refresh()
 
-    async def _refresh(self) -> None:
+    async def _refresh(self, event: sl.ActionEvent | None = None) -> None:
         """Re-read this account's channels and follows. Also what unfollowing calls afterwards."""
+        if event is not None:
+            await self._resolve_visibility(event)
         self._preferences = await self._notifications.preferences(self._account_id)
         self._subscriptions = tuple(await self._notifications.subscriptions(self._account_id))
         self._inbox = tuple(
@@ -260,9 +267,10 @@ class NotificationScreen(sd.Screen):
 
     async def _set_selected_read_state(self, event: sl.PressEvent, *, read: bool) -> None:
         await event.acknowledge()
+        visibility = await self._resolve_visibility(event)
         operation = self._notifications.mark_read if read else self._notifications.mark_unread
         for notification_id in self.selected_inbox_ids:
-            await operation(self._account_id, int(notification_id), visibility=self._visibility)
+            await operation(self._account_id, int(notification_id), visibility=visibility)
         await self._refresh()
         self.invalidate()
 
@@ -273,6 +281,7 @@ class NotificationScreen(sd.Screen):
             web_enabled=event.value,
             dm_enabled=self.dm_enabled,
         )
+        await self._refresh(event)
 
     async def _toggle_dm(self, event: sl.ToggleEvent) -> None:
         await event.acknowledge()
@@ -281,12 +290,13 @@ class NotificationScreen(sd.Screen):
             web_enabled=self.web_enabled,
             dm_enabled=event.value,
         )
+        await self._refresh(event)
 
     async def _unfollow(self, event: sl.PressEvent) -> None:
         await event.acknowledge()
         for subscription_id in self.selected_ids:
             await self._notifications.unsubscribe(self._account_id, int(subscription_id))
-        await self._refresh()
+        await self._refresh(event)
         self.invalidate()
 
     async def _follow_creator(self, event: sl.SubmitEvent) -> None:
@@ -338,8 +348,13 @@ class NotificationScreen(sd.Screen):
         await self._followed(event, tr(t"Following records matching that filter."))
 
     async def _followed(self, event: sl.SubmitEvent, notice: sl.TextLike) -> None:
-        await self._refresh()
+        await self._refresh(event)
         await event.notice(notice)
+
+    async def _resolve_visibility(self, event: sl.ActionEvent) -> InboxVisibility:
+        if self._visibility_resolver is not None:
+            self._visibility = await self._visibility_resolver(event)
+        return self._visibility
 
     @staticmethod
     def _uuid(value: object) -> UUID | None:
