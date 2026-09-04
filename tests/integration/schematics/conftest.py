@@ -6,7 +6,9 @@ engine can produce exactly the shapes each test needs.
 """
 
 import base64
+import gzip
 import json
+import struct
 from collections.abc import Callable
 
 import pytest
@@ -16,14 +18,69 @@ from squid.schematics.domain.models import SchematicFormat
 nucleation = pytest.importorskip("nucleation", reason="requires the optional 'schematics' extra")
 
 
+def _nbt_tag(kind: int, name: str, payload: bytes) -> bytes:
+    encoded_name = name.encode()
+    return bytes((kind,)) + struct.pack(">H", len(encoded_name)) + encoded_name + payload
+
+
+def _nbt_string(value: str) -> bytes:
+    encoded = value.encode()
+    return struct.pack(">H", len(encoded)) + encoded
+
+
+def _nbt_list(kind: int, values: list[bytes]) -> bytes:
+    return bytes((kind,)) + struct.pack(">i", len(values)) + b"".join(values)
+
+
+def _nbt_compound(name: str, entries: list[bytes]) -> bytes:
+    return _nbt_tag(10, name, b"".join(entries) + b"\x00")
+
+
+def _legacy_schematic() -> bytes:
+    return _nbt_compound(
+        "Schematic",
+        [
+            _nbt_tag(2, "Width", struct.pack(">h", 1)),
+            _nbt_tag(2, "Height", struct.pack(">h", 1)),
+            _nbt_tag(2, "Length", struct.pack(">h", 1)),
+            _nbt_tag(8, "Materials", _nbt_string("Alpha")),
+            _nbt_tag(7, "Blocks", struct.pack(">i", 1) + b"\x01"),
+            _nbt_tag(7, "Data", struct.pack(">i", 1) + b"\x00"),
+            _nbt_tag(9, "Entities", _nbt_list(10, [])),
+            _nbt_tag(9, "TileEntities", _nbt_list(10, [])),
+        ],
+    )
+
+
+def _structure_nbt() -> bytes:
+    palette_entry = _nbt_tag(8, "Name", _nbt_string("minecraft:stone")) + b"\x00"
+    block_entry = (
+        _nbt_tag(9, "pos", _nbt_list(3, [struct.pack(">i", 0)] * 3))
+        + _nbt_tag(3, "state", struct.pack(">i", 0))
+        + b"\x00"
+    )
+    return _nbt_compound(
+        "",
+        [
+            _nbt_tag(3, "DataVersion", struct.pack(">i", 3465)),
+            _nbt_tag(9, "size", _nbt_list(3, [struct.pack(">i", 1)] * 3)),
+            _nbt_tag(9, "palette", _nbt_list(10, [palette_entry])),
+            _nbt_tag(9, "blocks", _nbt_list(10, [block_entry])),
+            _nbt_tag(9, "entities", _nbt_list(10, [])),
+        ],
+    )
+
+
 @pytest.fixture
-def native_format_exports() -> dict[SchematicFormat, bytes]:
-    """Return every supported format the pinned native wheel can generate itself."""
+def native_format_inputs() -> dict[SchematicFormat, bytes]:
+    """Return a reviewable one-block fixture for every declared readable format."""
     schematic = nucleation.Schematic.create("format-round-trip")
     schematic.set_block(0, 0, 0, "minecraft:stone")
     return {
         SchematicFormat.LITEMATIC: base64.b64decode(schematic.to_litematic_b64()),
         SchematicFormat.SPONGE_SCHEM: base64.b64decode(schematic.to_schematic_b64()),
+        SchematicFormat.LEGACY_SCHEMATIC: gzip.compress(_legacy_schematic(), mtime=0),
+        SchematicFormat.STRUCTURE_NBT: _structure_nbt(),
         SchematicFormat.MCSTRUCTURE: base64.b64decode(schematic.to_mcstructure_b64()),
     }
 
