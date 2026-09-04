@@ -52,17 +52,36 @@ async def test_routine_reference_moves_compile_as_core_updates() -> None:
     assert "WHERE builds.submitter_account_id =" in compiled
 
 
-def test_irreducible_postgres_merge_statements_are_named_multiline_contracts() -> None:
-    statements = (
-        repository._COLLAPSE_DRAFT_ACCESS_SQL,
-        repository._COLLAPSE_ALIAS_CLAIMS_SQL,
-        repository._COLLAPSE_VOTES_SQL,
-        repository._MERGE_NOTIFICATION_PROFILE_SQL,
-        repository._COLLAPSE_NOTIFICATION_SUBSCRIPTIONS_SQL,
-        repository._MERGE_PERMISSION_EFFECTS_SQL,
-        repository._COLLAPSE_PERMISSION_GRANTS_SQL,
-        repository._COLLAPSE_PERMISSION_ROLE_ASSIGNMENTS_SQL,
-    )
+def test_only_owner_precedence_retains_raw_postgres_with_a_specific_reason() -> None:
+    assert repository._RETAINED_MERGE_SQL_REASONS == {
+        repository._COLLAPSE_DRAFT_ACCESS_SQL: (
+            "The winner depends on the draft's pre-merge owner while deleting one of two conflicting access rows; "
+            "the joined CASE delete is clearer and safer than duplicating that precedence across correlated subqueries."
+        )
+    }
+    statement = repository._COLLAPSE_DRAFT_ACCESS_SQL
+    assert statement.startswith("\n")
+    assert "\n" in statement.strip()
+    assert ":survivor" in statement
+    assert ":absorbed" in statement
 
-    assert all(statement.startswith("\n") and "\n" in statement.strip() for statement in statements)
-    assert all(":survivor" in statement and ":absorbed" in statement for statement in statements)
+
+@pytest.mark.parametrize(
+    "builder",
+    [
+        repository._collapse_alias_claims_statement,
+        repository._collapse_votes_statement,
+        repository._merge_notification_profile_statement,
+        repository._collapse_notification_subscriptions_statement,
+        repository._merge_permission_effects_statement,
+        repository._collapse_permission_grants_statement,
+        repository._collapse_permission_role_assignments_statement,
+    ],
+)
+def test_conflict_merge_statements_are_orm_backed_core(builder) -> None:
+    statement = builder(repository._AccountMergeContext(survivor=7, absorbed=9))
+
+    compiled = str(statement.compile(dialect=postgresql.dialect()))
+
+    assert compiled
+    assert "survivor" in compiled or "notification_profiles" in compiled or "permission_grants" in compiled
