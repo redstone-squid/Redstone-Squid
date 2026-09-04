@@ -102,8 +102,8 @@ class PostgresMediaJobRepository(MediaJobRepository):
                 source_bytes=totals.source_bytes + upload.source_byte_size,
                 output_bytes=totals.output_bytes,
             )
-            if violation := limits.batch_violation(candidate):
-                raise MediaLimitExceededError(violation)
+            if violations := limits.batch_violations(candidate):
+                raise MediaLimitExceededError(violations)
             session.add(
                 MediaUploadRecord(
                     id=upload.id,
@@ -330,8 +330,8 @@ class PostgresMediaJobRepository(MediaJobRepository):
                 if artifact.role in {MediaArtifactRole.OUTPUT, MediaArtifactRole.POSTER}
             )
             totals = MediaBatchTotals(output_bytes=int(existing_output_bytes or 0) + proposed_output_bytes)
-            if violation := limits.batch_violation(totals):
-                raise MediaLimitExceededError(violation)
+            if violations := limits.batch_violations(totals):
+                raise MediaLimitExceededError(violations)
             statement = (
                 update(MediaNormalizationJobRecord)
                 .where(*_claim_filter(job))
