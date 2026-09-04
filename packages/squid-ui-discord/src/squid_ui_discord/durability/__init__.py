@@ -17,7 +17,7 @@ from squid_storage import (
     TopicBridgeSnapshot,
 )
 from squid_ui.errors import SquidUiError
-from squid_ui.runtime.component import AnyComponent, Component, render_component_tree
+from squid_ui.runtime.component import AnyComponent, render_component_tree
 from squid_ui.runtime.presentation_state import (
     CursorState,
     DisclosureState,
@@ -81,6 +81,16 @@ __all__ = [
 
 class MessageRootStateError(SquidUiError, ValueError):
     """A snapshot is malformed, incompatible, or unsafe to restore."""
+
+
+from squid_ui_discord.durability._json import (
+    optional_string,
+    require_boolean,
+    require_integer,
+    require_object,
+    require_string,
+    require_strings,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -166,14 +176,14 @@ class DurableMessageRootCodec:
             raw = json.loads(payload)
         except json.JSONDecodeError as error:
             raise MessageRootStateError(str(error)) from error
-        item = _object(raw)
-        protocol = _integer(item, "protocol")
+        item = require_object(raw, "durable mount record")
+        protocol = require_integer(item, "protocol", description="mount record field")
         if protocol != cls.protocol or "state" not in item:
             message = f"unsupported durable mount record protocol {protocol}"
             raise MessageRootStateError(message)
-        address = _object(item.get("address"))
+        address = require_object(item.get("address"), "mount address")
         values: dict[str, str | int] = {}
-        for key, value in _object(address.get("values")).items():
+        for key, value in require_object(address.get("values"), "mount address values").items():
             if not isinstance(key, str) or not isinstance(value, str | int):
                 message = "mount address values must contain string keys and string or integer values"
                 raise MessageRootStateError(message)
@@ -186,7 +196,7 @@ class DurableMessageRootCodec:
         return DurableMessageRootRecord(
             protocol,
             MessageRootStateCodec.loads(state_payload),
-            FrontendAddress(_string(address, "frontend"), values),
+            FrontendAddress(require_string(address, "frontend", description="mount address field"), values),
             float(expires_at) if expires_at is not None else None,
         )
 
@@ -232,7 +242,7 @@ class MessageRootStateCodec:
         if not isinstance(raw, dict):
             message = "mount state must be an object"
             raise MessageRootStateError(message)
-        protocol = _integer(raw, "protocol")
+        protocol = require_integer(raw, "protocol", description="snapshot field")
         if protocol != cls.protocol:
             message = f"unsupported mount state protocol {protocol}"
             raise MessageRootStateError(message)
@@ -243,19 +253,19 @@ class MessageRootStateCodec:
             raise MessageRootStateError(message)
         decoded_components: list[ComponentState] = []
         for value in components:
-            item = _object(value)
+            item = require_object(value, "component snapshot")
             state = item.get("state")
             if not isinstance(state, dict) or not all(isinstance(key, str) for key in state):
                 message = "component snapshot state must be an object with string keys"
                 raise MessageRootStateError(message)
             decoded_components.append(
                 ComponentState(
-                    path=_string(item, "path"),
-                    type_id=_string(item, "type_id"),
+                    path=require_string(item, "path", description="snapshot field"),
+                    type_id=require_string(item, "type_id", description="snapshot field"),
                     state=state,
                 )
             )
-        target = _object(raw.get("target"))
+        target = require_object(raw.get("target"), "mount target")
         adapter_capabilities = target.get("adapter_capabilities")
         if not isinstance(adapter_capabilities, list) or not all(
             isinstance(capability, str) for capability in adapter_capabilities
@@ -267,13 +277,13 @@ class MessageRootStateCodec:
             raise MessageRootStateError(message)
         return MessageRootState(
             protocol,
-            _string(raw, "component_key"),
-            _integer(raw, "component_version"),
+            require_string(raw, "component_key", description="snapshot field"),
+            require_integer(raw, "component_version", description="snapshot field"),
             tuple(decoded_components),
             _presentation_from_dict(presentation),
-            _string(target, "triple"),
-            _integer(target, "version"),
-            _string(target, "fingerprint"),
+            require_string(target, "triple", description="snapshot target field"),
+            require_integer(target, "version", description="snapshot target field"),
+            require_string(target, "fingerprint", description="snapshot target field"),
             tuple(adapter_capabilities),
         )
 
@@ -346,31 +356,49 @@ def _presentation_to_dict(state: PresentationSnapshot) -> dict[str, object]:
 
 
 def _presentation_from_dict(raw: Mapping[str, object]) -> PresentationSnapshot:
-    cursors = _object(raw.get("cursors"))
-    selections = _object(raw.get("selections"))
-    disclosures = _object(raw.get("disclosures"))
-    strategies = _object(raw.get("strategies"))
+    cursors = require_object(raw.get("cursors"), "presentation cursors")
+    selections = require_object(raw.get("selections"), "presentation selections")
+    disclosures = require_object(raw.get("disclosures"), "presentation disclosures")
+    strategies = require_object(raw.get("strategies"), "presentation strategies")
     return PresentationSnapshot(
         cursors={
             key: CursorState(
                 Position(
-                    _optional_string(position := _object((item := _object(value)).get("position")), "anchor"),
-                    _integer(position, "offset"),
-                    Direction(_string(position, "direction")),
+                    optional_string(
+                        position := require_object(
+                            (item := require_object(value, "cursor state")).get("position"), "cursor position"
+                        ),
+                        "anchor",
+                        description="cursor position field",
+                    ),
+                    require_integer(position, "offset", description="cursor position field"),
+                    Direction(require_string(position, "direction", description="cursor position field")),
                 ),
-                _integer(item, "extent"),
-                _string(item, "fingerprint"),
+                require_integer(item, "extent", description="cursor field"),
+                require_string(item, "fingerprint", description="cursor field"),
             )
             for key, value in cursors.items()
         },
-        selections={key: SelectionState(_strings(_object(value), "selected")) for key, value in selections.items()},
-        disclosures={key: DisclosureState(_boolean(_object(value), "open")) for key, value in disclosures.items()},
+        selections={
+            key: SelectionState(
+                require_strings(require_object(value, "selection state"), "selected", description="selection field")
+            )
+            for key, value in selections.items()
+        },
+        disclosures={
+            key: DisclosureState(
+                require_boolean(require_object(value, "disclosure state"), "open", description="disclosure field")
+            )
+            for key, value in disclosures.items()
+        },
         strategies={
             key: StrategyState(
-                _string(item := _object(value), "node_key"),
-                _string(item, "adapter_id"),
-                _integer(item, "adapter_version"),
-                _string(item, "strategy_id"),
+                require_string(
+                    item := require_object(value, "strategy state"), "node_key", description="strategy field"
+                ),
+                require_string(item, "adapter_id", description="strategy field"),
+                require_integer(item, "adapter_version", description="strategy field"),
+                require_string(item, "strategy_id", description="strategy field"),
             )
             for key, value in strategies.items()
         },
@@ -396,7 +424,7 @@ type MessageRootStateMigration = Callable[[MessageRootState], MessageRootState]
 @dataclass(frozen=True, slots=True)
 class _Registration:
     version: int
-    factory: Callable[[], Component[Any]] | None
+    factory: Callable[[], AnyComponent] | None
     restore: Callable[[RestoreContext], MessageRoot] | None
     migrations: Mapping[int, MessageRootStateMigration]
 
@@ -418,7 +446,7 @@ class ComponentRegistry:
         version: int,
         restore: Callable[[RestoreContext], MessageRoot] | None = None,
         migrations: Mapping[int, MessageRootStateMigration] | None = None,
-        factory: Callable[[], Component[Any]] | None = None,
+        factory: Callable[[], AnyComponent] | None = None,
     ) -> None:
         """Register one known root and every sequential migration to its current version.
 
@@ -574,56 +602,10 @@ def _restore_component(component: AnyComponent, state: ComponentState) -> None:
         raise MessageRootStateError(str(error)) from error
 
 
-def _type_id(component: Component[Any]) -> str:
+def _type_id(component: AnyComponent) -> str:
+    """Return the stable module-qualified identity of a component class."""
     cls = type(component)
     return f"{cls.__module__}:{cls.__qualname__}"
-
-
-def _object(value: object) -> dict[str, object]:
-    if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
-        message = "snapshot entry must be an object"
-        raise MessageRootStateError(message)
-    return value
-
-
-def _string(raw: Mapping[str, object], key: str) -> str:
-    value = raw.get(key)
-    if not isinstance(value, str):
-        message = f"snapshot field {key!r} must be a string"
-        raise MessageRootStateError(message)
-    return value
-
-
-def _integer(raw: Mapping[str, object], key: str) -> int:
-    value = raw.get(key)
-    if not isinstance(value, int) or isinstance(value, bool):
-        message = f"snapshot field {key!r} must be an integer"
-        raise MessageRootStateError(message)
-    return value
-
-
-def _optional_string(raw: Mapping[str, object], key: str) -> str | None:
-    value = raw.get(key)
-    if value is not None and not isinstance(value, str):
-        message = f"snapshot field {key!r} must be a string or null"
-        raise MessageRootStateError(message)
-    return value
-
-
-def _boolean(raw: Mapping[str, object], key: str) -> bool:
-    value = raw.get(key)
-    if not isinstance(value, bool):
-        message = f"snapshot field {key!r} must be a boolean"
-        raise MessageRootStateError(message)
-    return value
-
-
-def _strings(raw: Mapping[str, object], key: str) -> tuple[str, ...]:
-    value = raw.get(key)
-    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
-        message = f"snapshot field {key!r} must be an array of strings"
-        raise MessageRootStateError(message)
-    return tuple(value)
 
 
 from .bot import DurableBot

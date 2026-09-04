@@ -2,9 +2,9 @@
 
 import json
 import math
+from collections.abc import Hashable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
 
 from squid_ui_discord.sessions import (
     CustomScope,
@@ -16,6 +16,7 @@ from squid_ui_discord.sessions import (
 )
 
 from . import FrontendAddress, MessageRootState, MessageRootStateCodec, MessageRootStateError
+from ._json import require_integer, require_number, require_object, require_string
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,8 +89,8 @@ class DurableSessionCodec:
             raw = json.loads(payload)
         except json.JSONDecodeError as error:
             raise MessageRootStateError(str(error)) from error
-        item = _object(raw, "durable session record")
-        protocol = _integer(item, "protocol")
+        item = require_object(raw, "durable session record")
+        protocol = require_integer(item, "protocol", description="session record field")
         if protocol != cls.protocol:
             message = f"unsupported durable session record protocol {protocol}"
             raise MessageRootStateError(message)
@@ -99,9 +100,9 @@ class DurableSessionCodec:
             raise MessageRootStateError(message)
         message_roots: list[SessionRootRecord] = []
         for raw_root in raw_roots:
-            message_root = _object(raw_root, "durable mount")
-            address = _object(message_root.get("address"), "mount address")
-            values = _object(address.get("values"), "mount address values")
+            message_root = require_object(raw_root, "durable mount")
+            address = require_object(message_root.get("address"), "mount address")
+            values = require_object(address.get("values"), "mount address values")
             if not all(isinstance(key, str) and isinstance(value, str | int) for key, value in values.items()):
                 message = "mount address values must contain string keys and string or integer values"
                 raise MessageRootStateError(message)
@@ -115,11 +116,13 @@ class DurableSessionCodec:
                 raise MessageRootStateError(message)
             message_roots.append(
                 SessionRootRecord(
-                    id=_string(message_root, "id"),
+                    id=require_string(message_root, "id", description="mount field"),
                     state=MessageRootStateCodec.loads(
                         json.dumps(message_root.get("state"), ensure_ascii=False, separators=(",", ":"))
                     ),
-                    address=FrontendAddress(_string(address, "frontend"), values),
+                    address=FrontendAddress(
+                        require_string(address, "frontend", description="mount address field"), values
+                    ),
                     parent_id=parent_id,
                     actor_id=actor_id,
                 )
@@ -128,7 +131,7 @@ class DurableSessionCodec:
         if actor_id is not None and (not isinstance(actor_id, int) or isinstance(actor_id, bool)):
             message = "session actor_id must be an integer or null"
             raise MessageRootStateError(message)
-        opened_at = _number(item, "opened_at")
+        opened_at = require_number(item, "opened_at", description="session record field")
         expires_at = item.get("expires_at")
         if expires_at is not None and (
             not isinstance(expires_at, int | float) or isinstance(expires_at, bool) or not math.isfinite(expires_at)
@@ -137,8 +140,8 @@ class DurableSessionCodec:
             raise MessageRootStateError(message)
         record = DurableSessionRecord(
             protocol=protocol,
-            id=_string(item, "id"),
-            key=decode_session_key(_object(item.get("key"), "session key")),
+            id=require_string(item, "id", description="session record field"),
+            key=decode_session_key(require_object(item.get("key"), "session key")),
             actor_id=actor_id,
             opened_at=opened_at,
             expires_at=None if expires_at is None else float(expires_at),
@@ -204,11 +207,11 @@ class SessionScopeKind(StrEnum):
     CUSTOM = "custom"
 
 
-def encode_session_key(key: SessionKey) -> dict[str, Any]:
+def encode_session_key(key: SessionKey) -> dict[str, object]:
     """Return the canonical JSON object used for storage scope and record payloads."""
     scope = key.scope
     if isinstance(scope, UserScope):
-        encoded = {"type": SessionScopeKind.USER, "user_id": scope.user_id}
+        encoded: dict[str, object] = {"type": SessionScopeKind.USER, "user_id": scope.user_id}
     elif isinstance(scope, GuildScope):
         encoded = {"type": SessionScopeKind.GUILD, "guild_id": scope.guild_id}
     elif isinstance(scope, UserGuildScope):
@@ -226,17 +229,21 @@ def encode_session_key(key: SessionKey) -> dict[str, Any]:
     return {"name": key.name, "scope": encoded}
 
 
-def decode_session_key(raw: dict[str, Any]) -> SessionKey:
+def decode_session_key(raw: Mapping[str, object]) -> SessionKey:
     """Decode a session key produced by :func:`encode_session_key`."""
-    name = _string(raw, "name")
-    scope = _object(raw.get("scope"), "session scope")
-    kind = _string(scope, "type")
+    name = require_string(raw, "name", description="session key field")
+    scope = require_object(raw.get("scope"), "session scope")
+    kind = require_string(scope, "type", description="session scope field")
     if kind == SessionScopeKind.USER:
-        return SessionKey.user(name, _integer(scope, "user_id"))
+        return SessionKey.user(name, require_integer(scope, "user_id", description="session scope field"))
     if kind == SessionScopeKind.GUILD:
-        return SessionKey.guild(name, _integer(scope, "guild_id"))
+        return SessionKey.guild(name, require_integer(scope, "guild_id", description="session scope field"))
     if kind == SessionScopeKind.USER_GUILD:
-        return SessionKey.user_guild(name, _integer(scope, "user_id"), _integer(scope, "guild_id"))
+        return SessionKey.user_guild(
+            name,
+            require_integer(scope, "user_id", description="session scope field"),
+            require_integer(scope, "guild_id", description="session scope field"),
+        )
     if kind == SessionScopeKind.GLOBAL:
         return SessionKey.global_(name)
     if kind == SessionScopeKind.CUSTOM:
@@ -250,11 +257,14 @@ def encode_session_scope(key: SessionKey) -> str:
     return json.dumps(encode_session_key(key), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
-def _encode_custom_scope(value: Any) -> Any:
+def _encode_custom_scope(value: object) -> object:
+    """Encode the supported hashable scope vocabulary as JSON values."""
     if value is None or isinstance(value, str | bool):
         return value
     if isinstance(value, int | float) and not isinstance(value, bool):
-        json.dumps(value, allow_nan=False)
+        if not math.isfinite(value):
+            message = "durable custom scope numbers must be finite"
+            raise MessageRootStateError(message)
         return value
     if isinstance(value, tuple):
         return [_encode_custom_scope(item) for item in value]
@@ -262,10 +272,11 @@ def _encode_custom_scope(value: Any) -> Any:
     raise MessageRootStateError(message)
 
 
-def _decode_custom_scope(value: Any) -> Any:
+def _decode_custom_scope(value: object) -> Hashable:
+    """Decode JSON values into the immutable custom-scope vocabulary."""
     if value is None or isinstance(value, str | bool):
         return value
-    if isinstance(value, int | float) and not isinstance(value, bool):
+    if isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value):
         return value
     if isinstance(value, list):
         return tuple(_decode_custom_scope(item) for item in value)
@@ -273,22 +284,8 @@ def _decode_custom_scope(value: Any) -> Any:
     raise MessageRootStateError(message)
 
 
-def _object(value: object, description: str) -> dict[str, Any]:
-    if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
-        message = f"{description} must be an object with string keys"
-        raise MessageRootStateError(message)
-    return value
-
-
-def _string(raw: dict[str, Any], key: str) -> str:
-    value = raw.get(key)
-    if not isinstance(value, str):
-        message = f"{key} must be a string"
-        raise MessageRootStateError(message)
-    return value
-
-
 def _member_ids(value: object) -> frozenset[int]:
+    """Narrow a stored member list to positive Discord snowflakes."""
     if not isinstance(value, list | tuple) or not all(
         isinstance(item, int) and not isinstance(item, bool) and item > 0 for item in value
     ):
@@ -298,6 +295,7 @@ def _member_ids(value: object) -> frozenset[int]:
 
 
 def _capacity(value: object) -> int | None:
+    """Narrow an optional stored capacity to a positive integer."""
     if value is None:
         return None
     if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
@@ -307,25 +305,10 @@ def _capacity(value: object) -> int | None:
 
 
 def _domain(value: object) -> str | None:
+    """Narrow an optional stored quota domain to a non-empty string."""
     if value is None:
         return None
     if not isinstance(value, str) or not value:
         message = "durable session domain must be a non-empty string or null"
         raise MessageRootStateError(message)
     return value
-
-
-def _integer(raw: dict[str, Any], key: str) -> int:
-    value = raw.get(key)
-    if not isinstance(value, int) or isinstance(value, bool):
-        message = f"{key} must be an integer"
-        raise MessageRootStateError(message)
-    return value
-
-
-def _number(raw: dict[str, Any], key: str) -> float:
-    value = raw.get(key)
-    if not isinstance(value, int | float) or isinstance(value, bool) or not math.isfinite(value):
-        message = f"{key} must be a number"
-        raise MessageRootStateError(message)
-    return float(value)
