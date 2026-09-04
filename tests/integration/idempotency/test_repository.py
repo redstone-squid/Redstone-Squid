@@ -8,7 +8,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.idempotency.domain import ExistingRequest, PendingRequest, Reservation, StoredResponse
+from squid.idempotency.domain import ExistingRequest, PendingRequest, Reservation, StoredResponse, UnsafeHttpMethod
 from squid.idempotency.infrastructure.crypto import IdempotencyCiphertextError, IdempotencyResponseCipher
 from squid.idempotency.infrastructure.models import IdempotencyRequest
 from squid.idempotency.infrastructure.repository import PostgresIdempotencyRepository
@@ -53,7 +53,7 @@ async def reserve(
         caller="user:1",
         key=key,
         fingerprint=b"request-fingerprint",
-        method="POST",
+        method=UnsafeHttpMethod.POST,
         route="/v1/builds",
         expires_at=expires_at or now.add(hours=24),
         now=now,
