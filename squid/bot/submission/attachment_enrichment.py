@@ -10,6 +10,9 @@ from squid.schematics.application import DuplicateCandidate, IngestedSchematic, 
 
 type AttachmentFailureStage = Literal["classification", "download", "mirror", "analysis", "record"]
 
+ATTACHMENT_FAILURE_SUMMARY_LIMIT = 900
+"""Leave room for surrounding Discord component copy inside a 1,024-character field."""
+
 
 @dataclass(frozen=True, slots=True)
 class AttachmentFailure:
@@ -75,6 +78,20 @@ def primary_schematic(attachments: Sequence[AttachmentLifecycle]) -> AttachmentL
     return selected[0] if len(selected) == 1 else None
 
 
+def compact_failure_summary(
+    attachments: Sequence[AttachmentLifecycle], *, maximum: int = ATTACHMENT_FAILURE_SUMMARY_LIMIT
+) -> str:
+    """Render bounded, single-line-per-file failures for a Discord component."""
+    lines = []
+    for attachment in attachments:
+        if attachment.failure is None:
+            continue
+        filename = _truncate(_plain(attachment.filename), 80)
+        detail = _truncate(_plain(attachment.failure.detail), 180)
+        lines.append(f"- `{filename}` — {detail}")
+    return _truncate("\n".join(lines), maximum)
+
+
 def merge_duplicate_evidence(
     matches: Iterable[tuple[AttachmentLifecycle, DuplicateCandidate]],
     titles: Mapping[int, str],
@@ -116,3 +133,15 @@ def merge_duplicate_evidence(
         }
         for candidate in ordered
     ]
+
+
+def _plain(value: str) -> str:
+    return " ".join(value.replace("`", "'").replace("@", "@\u200b").split())
+
+
+def _truncate(value: str, maximum: int) -> str:
+    if len(value) <= maximum:
+        return value
+    if maximum <= 1:
+        return "…"[:maximum]
+    return value[: maximum - 1].rstrip() + "…"

@@ -7,6 +7,8 @@ import pytest
 
 import squid_ui as sl
 import squid_ui_discord as sd
+from squid.bot.submission.attachment_enrichment import AttachmentFailure, AttachmentLifecycle, primary_schematic
+from squid.bot.submission.attachments import ClassifiedAttachment
 from squid.bot.submission.input import format_invalid_values, invalid_web_urls, split_values
 from squid.bot.submission.ui.views import (
     BASICS_FIELDS,
@@ -19,11 +21,13 @@ from squid.bot.submission.ui.views import (
 )
 from squid.builds.application import BuildService
 from squid.builds.domain import BuildDraft, BuildLink, DoorBuild
+from squid.schematics.application import IngestedSchematic, IngestRequest
 from squid_ui.testing import RecordingResponder, choice_event, press, press_event
 from squid_ui_discord.modal import build_form_modal
 from squid_ui_discord.sessions import Reject
 from squid_ui_discord.testing import assert_within_limits, commit_render
 from tests.support.discord import make_layout_bot
+from tests.unit.schematics.fakes import make_analysis
 
 
 class BuildRecorder(BuildService):
@@ -31,12 +35,31 @@ class BuildRecorder(BuildService):
         pass
 
 
-async def _unused_submit() -> SubmissionOutcome:
+async def _unused_submit(_attachments: tuple[AttachmentLifecycle, ...]) -> SubmissionOutcome:
     raise AssertionError("this test does not submit the draft")
 
 
 def _component(**kwargs: Any) -> SubmissionScreen:
     return SubmissionScreen(BuildDraft(**kwargs), BuildRecorder(), on_submit=_unused_submit)
+
+
+def _schematic(
+    identity: str,
+    filename: str,
+    dimensions: tuple[int, int, int],
+    *,
+    failed: bool = False,
+) -> AttachmentLifecycle:
+    classified = ClassifiedAttachment("schematic", filename, "application/octet-stream")
+    request = IngestRequest(data=identity.encode(), filename=filename)
+    return AttachmentLifecycle(
+        identity,
+        filename,
+        classification=classified,
+        request=request,
+        analysis=None if failed else IngestedSchematic(identity * 64, make_analysis(dimensions=dimensions)),
+        failure=AttachmentFailure("analysis", "This schematic could not be analyzed.") if failed else None,
+    )
 
 
 def test_submission_form_uses_semantic_controls() -> None:
@@ -47,6 +70,70 @@ def test_submission_form_uses_semantic_controls() -> None:
     assert isinstance(nodes[0], sl.semantic.Section)
     assert any(isinstance(node, sl.semantic.Choices) for node in nodes)
     assert any(isinstance(node, sl.semantic.ActionControls) for node in nodes)
+
+
+def test_the_only_usable_schematic_defaults_and_failed_files_remain_visible() -> None:
+    failed = _schematic("a", "broken.litematic", (1, 1, 1), failed=True)
+    usable = _schematic("b", "working.litematic", (4, 5, 6))
+    component = SubmissionScreen(
+        BuildDraft(door_orientation="Door", door_width=2, door_height=2),
+        BuildRecorder(),
+        attachments=(failed, usable),
+        on_submit=_unused_submit,
+    )
+
+    selected = primary_schematic(component.attachments)
+    assert selected is not None
+    assert selected.identity == "b"
+    assert component.build.dimensions == (4, 5, 6)
+    assert component.is_ready
+    rendered = str(component.render())
+    assert "broken.litematic" in rendered
+    assert "could not be analyzed" in rendered
+    assert "working.litematic" in rendered
+
+
+async def test_many_usable_schematics_require_an_explicit_primary_and_prefill_from_it() -> None:
+    first = _schematic("a", "first.litematic", (3, 4, 5))
+    second = _schematic("b", "second.litematic", (7, 8, 9))
+    component = SubmissionScreen(
+        BuildDraft(door_orientation="Door", door_width=2, door_height=2),
+        BuildRecorder(),
+        attachments=(first, second),
+        on_submit=_unused_submit,
+    )
+
+    assert component.requires_primary
+    assert not component.is_ready
+    assert component.build.dimensions == (None, None, None)
+    assert "Choose which usable schematic is primary" in str(component.render())
+
+    await component._primary_changed(choice_event("b"))
+
+    selected = primary_schematic(component.attachments)
+    assert selected is not None
+    assert selected.identity == "b"
+    assert component.build.dimensions == (7, 8, 9)
+    assert component.is_ready
+
+
+async def test_switching_primary_updates_only_an_untouched_prefill() -> None:
+    first = _schematic("a", "first.litematic", (3, 4, 5))
+    second = _schematic("b", "second.litematic", (7, 8, 9))
+    component = SubmissionScreen(
+        BuildDraft(door_orientation="Door", door_width=2, door_height=2),
+        BuildRecorder(),
+        attachments=(first, second),
+        on_submit=_unused_submit,
+    )
+
+    await component._primary_changed(choice_event("a"))
+    await component._primary_changed(choice_event("b"))
+    assert component.build.dimensions == (7, 8, 9)
+
+    component.build.dimensions = (10, 11, 12)
+    await component._primary_changed(choice_event("a"))
+    assert component.build.dimensions == (10, 11, 12)
 
 
 def test_submission_screen_rejects_a_second_live_draft() -> None:
@@ -183,7 +270,7 @@ async def test_submission_persists_only_once_after_duplicate_finish() -> None:
         def __init__(self) -> None:
             self.calls = 0
 
-        async def __call__(self) -> SubmissionOutcome:
+        async def __call__(self, _attachments: tuple[AttachmentLifecycle, ...]) -> SubmissionOutcome:
             self.calls += 1
             return outcome
 
@@ -207,7 +294,7 @@ async def test_submission_persists_only_once_after_duplicate_finish() -> None:
 async def test_post_persistence_failure_never_claims_nothing_was_saved() -> None:
     build = DoorBuild(id=7)
 
-    async def fail_delivery() -> SubmissionOutcome:
+    async def fail_delivery(_attachments: tuple[AttachmentLifecycle, ...]) -> SubmissionOutcome:
         outcome = SubmissionOutcome(build, sl.status("delivery pending"), delivery_complete=False)
         raise SubmissionDeliveryError(outcome)
 
