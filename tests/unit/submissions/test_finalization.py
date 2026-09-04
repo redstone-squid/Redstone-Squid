@@ -12,7 +12,6 @@ from squid.sponsors import PublicSponsor
 from squid.submissions.application import (
     AppliedDraftChange,
     AppliedDraftUpgrade,
-    BuildSubmissionRejectedError,
     ClaimedFinalizationJob,
     FinalizationFailureOutcome,
     FinalizationJobSnapshot,
@@ -24,6 +23,8 @@ from squid.submissions.application import (
     build_submission_manifest,
 )
 from squid.submissions.domain import (
+    BuildSubmissionRejected,
+    BuildSubmissionResult,
     DoorSubmissionDetails,
     DraftChange,
     DraftChangeKey,
@@ -282,11 +283,11 @@ class FakeFinalizationJobs:
 
 
 class FakeWriter:
-    def __init__(self, result: FinalizedBuild | Exception) -> None:
+    def __init__(self, result: BuildSubmissionResult | Exception) -> None:
         self.result = result
         self.payloads: list[NormalizedSubmission] = []
 
-    async def create_or_get(self, submission: NormalizedSubmission) -> FinalizedBuild:
+    async def create_or_get(self, submission: NormalizedSubmission) -> BuildSubmissionResult:
         self.payloads.append(submission)
         if isinstance(self.result, Exception):
             raise self.result
@@ -710,7 +711,7 @@ async def test_actionable_target_failure_returns_draft_to_attention() -> None:
     jobs.claimed = (_claim(payload),)
     worker = SubmissionFinalizationWorker(
         jobs,
-        FakeWriter(BuildSubmissionRejectedError((issue,))),
+        FakeWriter(BuildSubmissionRejected((issue,))),
     )
 
     await worker.process_batch(now=NOW)

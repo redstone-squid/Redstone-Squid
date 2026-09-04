@@ -339,6 +339,21 @@ class FinalizedBuild:
             raise ValidationError(msg)
 
 
+@dataclass(frozen=True, slots=True)
+class BuildSubmissionRejected:
+    """Owner-repair issues returned when canonical build creation is refused."""
+
+    issues: tuple[SubmissionAttentionIssue, ...]
+
+    def __post_init__(self) -> None:
+        if not self.issues:
+            msg = tr(t"rejected build submission requires at least one issue")
+            raise ValidationError(msg)
+
+
+type BuildSubmissionResult = FinalizedBuild | BuildSubmissionRejected
+
+
 def _require_stable_keys(values: tuple[str, ...], label: str) -> None:
     if len(values) != len(set(values)):
         raise ValidationError(tr(t"{label} keys must be unique"))

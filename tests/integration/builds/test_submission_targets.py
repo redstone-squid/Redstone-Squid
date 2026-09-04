@@ -23,8 +23,9 @@ from squid.builds.infrastructure.restrictions import RestrictionRepository
 from squid.builds.infrastructure.taxonomy import OfficialTagResolver
 from squid.core.errors import DataIntegrityError
 from squid.sponsors import PublicSponsor
-from squid.submissions.application import BuildSubmissionRejectedError, StoredDraft
+from squid.submissions.application import StoredDraft
 from squid.submissions.domain import (
+    BuildSubmissionRejected,
     DraftSnapshot,
     DraftStatus,
     FinalizationJobStatus,
@@ -242,15 +243,17 @@ async def test_submission_target_persists_only_the_exact_canonical_source_versio
 
     result = await target.create_or_get(_normalized_submission(account_id, canonical_draft_id, "Java 1.21.0"))
 
+    assert isinstance(result, FinalizedBuild)
     persisted = await repository.get_by_id(result.build_id)
     assert persisted is not None
     assert persisted.versions == ["Java 1.21.0"]
 
     unknown_draft_id = uuid.UUID("88888888-8888-4888-8888-888888888888")
-    with pytest.raises(BuildSubmissionRejectedError) as error:
-        await target.create_or_get(_normalized_submission(account_id, unknown_draft_id, "Java 1.21.99"))
+    rejected = await target.create_or_get(_normalized_submission(account_id, unknown_draft_id, "Java 1.21.99"))
 
-    assert error.value.issues == (SubmissionAttentionIssue("source_version", SubmissionAttentionReason.UNKNOWN_OPTION),)
+    assert rejected == BuildSubmissionRejected(
+        (SubmissionAttentionIssue("source_version", SubmissionAttentionReason.UNKNOWN_OPTION),)
+    )
     assert await repository.get_by_source_submission_draft_id(unknown_draft_id) is None
 
     invalid_build = _build(BuildCategory.OTHER, account_id)
