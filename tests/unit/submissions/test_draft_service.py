@@ -32,6 +32,7 @@ from squid.submissions.errors import (
     DraftIncompleteError,
     DraftSchemaUnsupportedError,
     DraftStateConflictError,
+    DraftValidationError,
 )
 
 DRAFT_ID = UUID("00000000-0000-4000-8000-000000000101")
@@ -551,9 +552,10 @@ async def test_manifest_upgrade_preserves_answers_and_is_idempotent_by_target_re
     created = await service.create(
         owner_account_id=7,
         category="other",
-        origin=SubmissionOrigin.WEB,
+        origin=SubmissionOrigin.PAPER,
         client_capabilities=frozenset({"repeatable_text"}),
         locale="en",
+        source_installation_id=INSTALLATION_ID,
         now=NOW,
         draft_id=DRAFT_ID,
     )
@@ -562,7 +564,11 @@ async def test_manifest_upgrade_preserves_answers_and_is_idempotent_by_target_re
         snapshot=replace(
             created.snapshot,
             schema_revision=1,
-            answers={"completion": "Built at spawn"},
+            answers={
+                "completion": "Built at spawn",
+                "ai_generated": False,
+                "sponsor_attribution": False,
+            },
         ),
     )
 
@@ -583,7 +589,98 @@ async def test_manifest_upgrade_preserves_answers_and_is_idempotent_by_target_re
 
     assert upgraded.draft.snapshot.schema_revision == 2
     assert upgraded.draft.snapshot.revision == 1
-    assert upgraded.draft.snapshot.answers == {"completion": "Built at spawn"}
+    assert upgraded.draft.snapshot.answers == {
+        "completion": "Built at spawn",
+        "ai_generated": False,
+        "sponsor_attribution": False,
+    }
     assert not upgraded.replayed
     assert replayed.replayed
     assert replayed.draft == upgraded.draft
+
+
+@pytest.mark.asyncio
+async def test_manifest_upgrade_failure_does_not_touch_the_draft() -> None:
+    repository = FakeDraftRepository()
+    service = SubmissionDraftService(repository, CheckedInFormManifestRegistry(), now=lambda: NOW)
+    created = await service.create(
+        owner_account_id=7,
+        category="other",
+        origin=SubmissionOrigin.WEB,
+        client_capabilities=frozenset({"repeatable_text"}),
+        locale="en",
+        now=NOW,
+        draft_id=DRAFT_ID,
+    )
+    before = replace(
+        created,
+        snapshot=replace(created.snapshot, schema_revision=1, answers={"unknown_answer": True}),
+    )
+    repository.drafts[DRAFT_ID] = before
+
+    with pytest.raises(DraftValidationError):
+        await service.upgrade_manifest(
+            DRAFT_ID,
+            7,
+            expected_revision=0,
+            target_revision=2,
+            locale="en",
+        )
+
+    assert repository.drafts[DRAFT_ID] == before
+
+
+@pytest.mark.asyncio
+async def test_manifest_upgrade_rejects_stale_edit_without_touching_the_draft() -> None:
+    repository = FakeDraftRepository()
+    service = SubmissionDraftService(repository, CheckedInFormManifestRegistry(), now=lambda: NOW)
+    created = await service.create(
+        owner_account_id=7,
+        category="other",
+        origin=SubmissionOrigin.WEB,
+        client_capabilities=frozenset({"repeatable_text"}),
+        locale="en",
+        now=NOW,
+        draft_id=DRAFT_ID,
+    )
+    before = replace(created, snapshot=replace(created.snapshot, schema_revision=1, revision=2))
+    repository.drafts[DRAFT_ID] = before
+
+    with pytest.raises(DraftRevisionConflictError):
+        await service.upgrade_manifest(
+            DRAFT_ID,
+            7,
+            expected_revision=1,
+            target_revision=2,
+            locale="en",
+        )
+
+    assert repository.drafts[DRAFT_ID] == before
+
+
+@pytest.mark.asyncio
+async def test_manifest_upgrade_rejects_an_unretained_source_without_touching_the_draft() -> None:
+    repository = FakeDraftRepository()
+    service = SubmissionDraftService(repository, CheckedInFormManifestRegistry(), now=lambda: NOW)
+    created = await service.create(
+        owner_account_id=7,
+        category="other",
+        origin=SubmissionOrigin.WEB,
+        client_capabilities=frozenset({"repeatable_text"}),
+        locale="en",
+        now=NOW,
+        draft_id=DRAFT_ID,
+    )
+    before = replace(created, snapshot=replace(created.snapshot, schema_revision=999))
+    repository.drafts[DRAFT_ID] = before
+
+    with pytest.raises(DraftSchemaUnsupportedError):
+        await service.upgrade_manifest(
+            DRAFT_ID,
+            7,
+            expected_revision=0,
+            target_revision=2,
+            locale="en",
+        )
+
+    assert repository.drafts[DRAFT_ID] == before
