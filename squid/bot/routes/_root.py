@@ -65,7 +65,7 @@ async def _route_gone_hook(interaction: discord.Interaction[RedstoneSquid]) -> N
 
     await interaction.client.app_ui.respond(
         interaction,
-        text_node(tr("This control is no longer available.")),
+        text_node(tr(t"This control is no longer available.")),
         audience="personal",
     )
 
