@@ -406,10 +406,11 @@ class MediaNormalizationJobService:
         authorization: MediaDraftUploadAuthorization | None = None,
     ) -> UUID:
         """Stage a bounded regular file without buffering it in application memory."""
-        byte_size, digest = await asyncio.to_thread(
+        byte_size, digest = await anyio.to_thread.run_sync(
             _staged_source_metadata,
             submission.source_path,
             self._limits.max_source_bytes,
+            abandon_on_cancel=False,
         )
         upload_id = submission.upload_id or uuid4()
         object_key = f"media/raw/{upload_id}/{digest}"
