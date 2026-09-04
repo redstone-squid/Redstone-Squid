@@ -424,7 +424,7 @@ class DurableSessionRuntime:
         *,
         task_status: TaskStatus[RecoveryReport] = anyio.TASK_STATUS_IGNORED,
     ) -> None:
-        """Recover once, report readiness, then supervise claims and checkpoints."""
+        """Own this runtime until cancellation releases its claims and ends supervision."""
         if self._running:
             message = "durable session runtime is already running"
             raise RuntimeError(message)

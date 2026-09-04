@@ -205,6 +205,7 @@ class _DispatchProfile:
             self.acknowledgement.finish()
 
     def finish(self, disposition: DispatchDisposition, error: Exception | None = None) -> None:
+        """End this dispatch profile with its terminal disposition."""
         if self.finished:
             return
         self.finished = True
@@ -307,7 +308,7 @@ class _BusyPaint:
                 profile.acknowledge("busy")
 
     async def close(self) -> bool:
-        """Stop any further painting and report whether one is on screen."""
+        """End this busy paint, preventing future writes and reporting if one is visible."""
         async with self._lock:
             self._closed = True
             return self._shown
