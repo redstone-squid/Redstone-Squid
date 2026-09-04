@@ -314,12 +314,22 @@ async def test_cast_vote_applies_choice_and_staff_weight(
     assert repository.cast_calls == [(100, 7, 10, option_id, emoji, abs(expected_weight), {})]
 
 
-async def test_cast_vote_by_session_resolves_guild_option_alias() -> None:
+@pytest.mark.parametrize(
+    ("guild_id", "message_id", "emoji"),
+    [(OWNER_GUILD_ID, 100, "<:yes:1>"), (VOTING_GUILD_ID, 101, "✅")],
+)
+async def test_cast_vote_by_session_resolves_a_stable_option_to_each_guild_alias(
+    guild_id: int,
+    message_id: int,
+    emoji: str,
+) -> None:
     options = (
-        VoteOption("<:yes:1>", VoteChoice.APPROVE, identifier="approve", guild_id=10),
-        VoteOption("<:no:2>", VoteChoice.DENY, identifier="deny", guild_id=10),
+        VoteOption("<:yes:1>", VoteChoice.APPROVE, identifier="approve", guild_id=OWNER_GUILD_ID),
+        VoteOption("<:no:2>", VoteChoice.DENY, identifier="deny", guild_id=OWNER_GUILD_ID),
+        VoteOption("✅", VoteChoice.APPROVE, identifier="approve", guild_id=VOTING_GUILD_ID),
+        VoteOption("❌", VoteChoice.DENY, identifier="deny", guild_id=VOTING_GUILD_ID),
     )
-    initial = replace(snapshot(), options=options)
+    initial = replace(shared_snapshot(), options=options)
     repository = FakeVoteRepository(initial)
     repository.mutation = StoredVoteMutation(
         session=initial,
@@ -329,10 +339,10 @@ async def test_cast_vote_by_session_resolves_guild_option_alias() -> None:
     )
     service = VoteService(repository)
 
-    result = await service.cast_vote_by_session(12, VoteActor(7, 70, guild_id=10), "approve")
+    result = await service.cast_vote_by_session(12, VoteActor(7, 70, guild_id=guild_id), "approve")
 
     assert result.accepted
-    assert repository.cast_calls == [(100, 7, 10, "approve", "<:yes:1>", 1.0, {})]
+    assert repository.cast_calls == [(message_id, 7, guild_id, "approve", emoji, 1.0, {})]
 
 
 async def test_cast_vote_by_session_rejects_missing_session() -> None:
