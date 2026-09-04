@@ -391,6 +391,28 @@ async def test_preparation_attention_can_be_repaired_without_changing_revision(
     assert pending.issues == ()
 
 
+async def test_status_translates_malformed_attention_entries_to_data_integrity_error(
+    stored_draft: StoredDraft,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = PostgresFinalizationJobRepository(async_session_factory)
+    await repository.record_preparation_attention(
+        stored_draft,
+        (SubmissionAttentionIssue("schematic", SubmissionAttentionReason.SCHEMATIC_PROCESSING),),
+        now=NOW,
+        expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
+    )
+    async with async_session_factory.begin() as session:
+        await session.execute(
+            update(SubmissionFinalizationJob)
+            .where(SubmissionFinalizationJob.draft_id == DRAFT_ID)
+            .values(attention_issues=[42])
+        )
+
+    with pytest.raises(DataIntegrityError, match="attention issues"):
+        await repository.get(DRAFT_ID)
+
+
 async def test_unexpected_failures_dead_letter_without_deleting_draft(
     stored_draft: StoredDraft,
     async_session_factory: async_sessionmaker[AsyncSession],
