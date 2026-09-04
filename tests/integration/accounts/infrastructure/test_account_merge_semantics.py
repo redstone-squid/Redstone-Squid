@@ -164,6 +164,41 @@ async def test_profile_merge_inserts_an_absorbed_only_profile_for_the_survivor(
     assert absorbed_profile is None
 
 
+async def test_no_collision_notification_and_delivery_move_together_at_merge_commit(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    accounts = AccountRepository(migrated_session_factory, "test-pepper")
+    survivor = await accounts.create()
+    absorbed = await accounts.create()
+    assert survivor.id is not None
+    assert absorbed.id is not None
+    async with migrated_session_factory.begin() as session:
+        event = DomainEventRecord(event_type="build.confirmed", aggregate_kind="build", aggregate_id=42)
+        session.add(event)
+        await session.flush()
+        notification = NotificationRecord(
+            account_id=absorbed.id,
+            event_id=event.id,
+            source_key=f"event:{event.id}:owner:{absorbed.id}",
+            kind=NotificationKind.BUILD_CONFIRMED,
+            payload={"build_id": 42},
+            web_visible=True,
+        )
+        session.add(notification)
+        await session.flush()
+        session.add(NotificationDeliveryRecord(notification_id=notification.id, account_id=absorbed.id))
+
+    await accounts.merge(survivor.id, absorbed.id)
+
+    async with migrated_session_factory() as session:
+        merged_notification = (await session.scalars(select(NotificationRecord))).one()
+        merged_delivery = (await session.scalars(select(NotificationDeliveryRecord))).one()
+    assert merged_notification.account_id == survivor.id
+    assert merged_notification.source_key == f"event:{event.id}:owner:{survivor.id}"
+    assert merged_delivery.notification_id == merged_notification.id
+    assert merged_delivery.account_id == survivor.id
+
+
 async def test_legacy_record_key_merge_replay_and_stale_delivery_completion_are_idempotent(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:

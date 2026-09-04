@@ -152,6 +152,8 @@ class NotificationDeliveryRecord(Base, kw_only=True):
             ("notifications.id", "notifications.account_id"),
             name="notification_deliveries_notification_owner_fkey",
             ondelete="CASCADE",
+            deferrable=True,
+            initially="DEFERRED",
         ),
         Index("notification_deliveries_account_idx", "account_id"),
         UniqueConstraint("notification_id", name="notification_deliveries_notification_id_key"),
