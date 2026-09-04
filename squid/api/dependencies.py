@@ -8,8 +8,10 @@ from squid.accounts.application import AccountService
 from squid.api.security import Caller, current_caller
 from squid.auth.application.web import WebSessionService
 from squid.builds.application import BuildQueryService, BuildService
+from squid.core.errors import ServiceUnavailableError
 from squid.diagnostics.application import ErrorReportService
 from squid.media.errors import DraftMediaUnavailableError
+from squid.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
 from squid.notifications import NotificationService
 from squid.permissions.application import PermissionService
 from squid.records.application import RecordService
@@ -93,6 +95,20 @@ def get_error_reports(services: Services) -> ErrorReportService:
     return services.error_reports
 
 
+def get_minecraft_installations(services: Services) -> InstallationCredentialService:
+    service = services.minecraft_installations
+    if service is None:
+        raise ServiceUnavailableError(resource="minecraft_auth")
+    return service
+
+
+def get_minecraft_player_authorization(services: Services) -> PlayerAuthorizationService:
+    service = services.minecraft_player_authorization
+    if service is None:
+        raise ServiceUnavailableError(resource="minecraft_auth")
+    return service
+
+
 async def get_draft_attachments(services: Services) -> DraftAttachmentService:
     """Return the attachment boundary only when this API enables media jobs."""
     attachments = draft_attachment_service(services.submission_drafts, services.media_jobs)
@@ -118,3 +134,8 @@ type Versions = Annotated[VersionService, Depends(get_versions)]
 type VoteMembers = Annotated[InteractiveVoteActorResolver | None, Depends(get_vote_members)]
 type Votes = Annotated[VoteService, Depends(get_votes)]
 type WebAuth = Annotated[WebSessionService | None, Depends(get_web_auth)]
+type MinecraftInstallations = Annotated[InstallationCredentialService, Depends(get_minecraft_installations)]
+type MinecraftPlayerAuthorization = Annotated[
+    PlayerAuthorizationService,
+    Depends(get_minecraft_player_authorization),
+]
