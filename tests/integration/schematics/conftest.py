@@ -11,7 +11,21 @@ from collections.abc import Callable
 
 import pytest
 
+from squid.schematics.domain.models import SchematicFormat
+
 nucleation = pytest.importorskip("nucleation", reason="requires the optional 'schematics' extra")
+
+
+@pytest.fixture
+def native_format_exports() -> dict[SchematicFormat, bytes]:
+    """Return every supported format the pinned native wheel can generate itself."""
+    schematic = nucleation.Schematic.create("format-round-trip")
+    schematic.set_block(0, 0, 0, "minecraft:stone")
+    return {
+        SchematicFormat.LITEMATIC: base64.b64decode(schematic.to_litematic_b64()),
+        SchematicFormat.SPONGE_SCHEM: base64.b64decode(schematic.to_schematic_b64()),
+        SchematicFormat.MCSTRUCTURE: base64.b64decode(schematic.to_mcstructure_b64()),
+    }
 
 
 @pytest.fixture
