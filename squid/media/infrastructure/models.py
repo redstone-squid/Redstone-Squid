@@ -66,12 +66,15 @@ class MediaUploadRecord(Base, kw_only=True):
 
 
 class MediaArtifactRecord(Base, kw_only=True):
-    """Content-addressed normalized output, poster, or disclosure report metadata."""
+    """Content-addressed normalized output, video thumbnail, or report metadata."""
 
     __tablename__ = "media_artifacts"
     __table_args__ = (
         UniqueConstraint("upload_id", "role", name="media_artifacts_upload_role_key"),
-        CheckConstraint("role IN ('output', 'poster', 'report')", name="media_artifacts_role_check"),
+        CheckConstraint(
+            "role IN ('output', 'poster', 'video_thumbnail', 'report')",
+            name="media_artifacts_role_check",
+        ),
         CheckConstraint("byte_size > 0", name="media_artifacts_size_positive"),
         CheckConstraint(
             "sha256 ~ '^[0-9a-f]{64}$'",

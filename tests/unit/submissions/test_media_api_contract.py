@@ -303,7 +303,7 @@ async def test_list_get_and_discard_keep_stable_states_without_private_artifacts
     assert listed[str(OTHER_UPLOAD_ID)]["status"] == "dead"
     assert listed[str(UPLOAD_ID)]["artifacts"] == [
         {"role": "output", "content_type": "video/mp4", "width": 8, "height": 6},
-        {"role": "poster", "content_type": "image/jpeg", "width": 8, "height": 6},
+        {"role": "video_thumbnail", "content_type": "image/jpeg", "width": 8, "height": 6},
     ]
     serialized = list_response.text
     assert "object_key" not in serialized

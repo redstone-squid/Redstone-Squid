@@ -40,6 +40,7 @@ from squid.submissions.infrastructure.repository import PostgresDraftRepository
 pytestmark = pytest.mark.asyncio
 
 DRAFT_ID = UUID("84ab2da9-c27e-4d37-98c6-973bcc92f5e4")
+OTHER_DRAFT_ID = UUID("95bc3eba-d38f-4e48-a9d7-a84cda03f6e5")
 UPLOAD_ID = UUID("75043a53-05ae-4097-bbf4-4eae1d6b088c")
 LIMITS = MediaLimits()
 _TABLES: tuple[Table, ...] = (
@@ -75,6 +76,7 @@ async def submission_draft(
 async def create_submission_draft(
     session_factory: async_sessionmaker[AsyncSession],
     *,
+    draft_id: UUID = DRAFT_ID,
     status: DraftStatus = DraftStatus.EDITING,
 ) -> None:
     now = Instant.now()
@@ -84,7 +86,7 @@ async def create_submission_draft(
         await session.flush()
         session.add(
             SubmissionDraft(
-                id=DRAFT_ID,
+                id=draft_id,
                 owner_account_id=account.id,
                 schema_id="build_submission.v1",
                 schema_revision=1,
@@ -718,3 +720,42 @@ async def test_deleting_completed_media_retains_normalized_keys_in_tombstone(
     assert snapshot is not None
     assert snapshot.status is MediaJobStatus.DISCARDED
     assert {artifact.object_key for artifact in snapshot.artifacts} == {artifact.object_key for artifact in artifacts}
+
+
+async def test_deleting_one_draft_keeps_objects_referenced_by_another_draft(
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    media = PostgresMediaJobRepository(async_session_factory)
+    drafts = PostgresDraftRepository(async_session_factory)
+    await create_submission_draft(async_session_factory, draft_id=OTHER_DRAFT_ID)
+    first = upload()
+    second = upload(upload_id=uuid4(), draft_id=OTHER_DRAFT_ID, source=b"second-source")
+    artifacts = completed_artifacts()
+    await media.enqueue(first, LIMITS)
+    await media.enqueue(second, LIMITS)
+    first_claim, second_claim = await media.claim(limit=2)
+    claims = {claim.upload.id: claim for claim in (first_claim, second_claim)}
+    assert await media.complete(claims[first.id], artifacts, LIMITS)
+    assert await media.complete(claims[second.id], artifacts, LIMITS)
+    async with async_session_factory() as session:
+        account_id = await session.scalar(
+            select(SubmissionDraft.owner_account_id).where(SubmissionDraft.id == DRAFT_ID)
+        )
+    assert account_id is not None
+
+    assert await drafts.delete_owned(DRAFT_ID, account_id)
+    deleted: list[str] = []
+
+    async def delete(object_key: str) -> None:
+        deleted.append(object_key)
+
+    cleanup = await media.cleanup_artifacts(delete, limit=10)
+    retained = await media.get(second.id)
+
+    assert cleanup.attempted == 0
+    assert deleted == []
+    assert retained is not None
+    assert retained.status is MediaJobStatus.COMPLETED
+    assert {artifact.object_key for artifact in retained.artifacts} == {
+        artifact.object_key for artifact in artifacts
+    }

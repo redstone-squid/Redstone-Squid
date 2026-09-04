@@ -79,8 +79,13 @@ class MediaArtifactRole(StrEnum):
     """The purpose of a durable artifact produced by normalization."""
 
     OUTPUT = "output"
+    # Read-only compatibility for rows written before the video-thumbnail rollout.
     POSTER = "poster"
+    VIDEO_THUMBNAIL = "video_thumbnail"
     REPORT = "report"
+
+
+MEDIA_VIDEO_THUMBNAIL_ROLES = frozenset({MediaArtifactRole.POSTER, MediaArtifactRole.VIDEO_THUMBNAIL})
 
 
 @dataclass(frozen=True, slots=True)
@@ -750,7 +755,7 @@ class MediaNormalizationJobRunner:
             prepared.append(
                 (
                     self._artifact_metadata(
-                        MediaArtifactRole.POSTER,
+                        MediaArtifactRole.VIDEO_THUMBNAIL,
                         poster,
                         result.report.poster.content_type,
                         result.report.poster.sha256,
@@ -805,6 +810,7 @@ class MediaNormalizationJobRunner:
         namespace = {
             MediaArtifactRole.OUTPUT: "normalized",
             MediaArtifactRole.POSTER: "posters",
+            MediaArtifactRole.VIDEO_THUMBNAIL: "posters",
             MediaArtifactRole.REPORT: "reports",
         }[role]
         object_key = f"media/{namespace}/{digest[:2]}/{digest}"
