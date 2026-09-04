@@ -99,6 +99,10 @@ class _ReactionRegistration:
     remove: ReactionActionCallback | None
     clear: ReactionClearCallback | None
     clear_emoji: ReactionClearCallback | None
+    recover_add: ReactionActionCallback | None
+    recover_remove: ReactionActionCallback | None
+    recover_clear: ReactionClearCallback | None
+    recover_clear_emoji: ReactionClearCallback | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,6 +128,7 @@ class _QueuedReaction[EventT]:
     kind: ReactionKind
     event: EventT
     callbacks: tuple[_ReactionCallback[EventT], ...]
+    recoveries: tuple[_ReactionCallback[EventT], ...]
     created_at: float
     accepted_at: float | None = None
 
@@ -177,18 +182,35 @@ class ReactionRouter:
         remove: ReactionActionCallback | None = None,
         clear: ReactionClearCallback | None = None,
         clear_emoji: ReactionClearCallback | None = None,
+        recover_add: ReactionActionCallback | None = None,
+        recover_remove: ReactionActionCallback | None = None,
+        recover_clear: ReactionClearCallback | None = None,
+        recover_clear_emoji: ReactionClearCallback | None = None,
     ) -> ReactionSubscription:
         """Register only the reaction callbacks one consumer implements.
 
         Events use a snapshot of registrations taken before enqueue, so detaching does not
-        retract work the router has already accepted.
+        retract work the router has already accepted. A ``recover_*`` callback is the
+        consumer-owned reconciliation path for an event that cannot enter its shard before
+        shutdown exhausts the drain deadline; it must either complete the state transition or
+        record durable intent for a later retry.
         """
         if all(callback is None for callback in (add, remove, clear, clear_emoji)):
             msg = "A reaction subscription requires at least one callback."
             raise ValueError(msg)
         registration_id = self._next_registration_id
         self._next_registration_id += 1
-        self._registrations[registration_id] = _ReactionRegistration(consumer, add, remove, clear, clear_emoji)
+        self._registrations[registration_id] = _ReactionRegistration(
+            consumer,
+            add,
+            remove,
+            clear,
+            clear_emoji,
+            recover_add,
+            recover_remove,
+            recover_clear,
+            recover_clear_emoji,
+        )
         return ReactionSubscription(self, registration_id)
 
     def _detach(self, registration_id: int) -> None:
@@ -202,12 +224,16 @@ class ReactionRouter:
 
     async def dispatch_clear(self, payload: discord.RawReactionClearEvent) -> None:
         callbacks = self._clear_callbacks("clear")
-        await self._dispatch(_QueuedReaction("clear", ReactionClearEvent(payload), callbacks, time.monotonic()))
+        recoveries = self._clear_callbacks("clear", recovery=True)
+        await self._dispatch(
+            _QueuedReaction("clear", ReactionClearEvent(payload), callbacks, recoveries, time.monotonic())
+        )
 
     async def dispatch_clear_emoji(self, payload: discord.RawReactionClearEmojiEvent) -> None:
         callbacks = self._clear_callbacks("clear_emoji")
+        recoveries = self._clear_callbacks("clear_emoji", recovery=True)
         event = ReactionClearEvent(payload, str(payload.emoji))
-        await self._dispatch(_QueuedReaction("clear_emoji", event, callbacks, time.monotonic()))
+        await self._dispatch(_QueuedReaction("clear_emoji", event, callbacks, recoveries, time.monotonic()))
 
     async def close(self) -> None:
         """Stop intake, drain accepted events, then stop every owned shard worker."""
@@ -257,22 +283,54 @@ class ReactionRouter:
             guild = self._bot.get_guild(payload.guild_id)
             member = guild.get_member(payload.user_id) if guild is not None else None
         event = ReactionEvent(payload, str(payload.emoji), ReactionResolver(self._bot, member))
-        await self._dispatch(_QueuedReaction(kind, event, self._action_callbacks(kind), time.monotonic()))
+        await self._dispatch(
+            _QueuedReaction(
+                kind,
+                event,
+                self._action_callbacks(kind),
+                self._action_callbacks(kind, recovery=True),
+                time.monotonic(),
+            )
+        )
 
-    def _action_callbacks(self, kind: Literal["add", "remove"]) -> tuple[_ReactionCallback[ReactionEvent], ...]:
+    def _action_callbacks(
+        self, kind: Literal["add", "remove"], *, recovery: bool = False
+    ) -> tuple[_ReactionCallback[ReactionEvent], ...]:
         return tuple(
             _ReactionCallback(registration.consumer, callback)
             for registration in self._registrations.values()
-            if (callback := registration.add if kind == "add" else registration.remove) is not None
+            if (
+                callback := (
+                    registration.recover_add
+                    if recovery and kind == "add"
+                    else registration.recover_remove
+                    if recovery
+                    else registration.add
+                    if kind == "add"
+                    else registration.remove
+                )
+            )
+            is not None
         )
 
     def _clear_callbacks(
-        self, kind: Literal["clear", "clear_emoji"]
+        self, kind: Literal["clear", "clear_emoji"], *, recovery: bool = False
     ) -> tuple[_ReactionCallback[ReactionClearEvent], ...]:
         return tuple(
             _ReactionCallback(registration.consumer, callback)
             for registration in self._registrations.values()
-            if (callback := registration.clear if kind == "clear" else registration.clear_emoji) is not None
+            if (
+                callback := (
+                    registration.recover_clear
+                    if recovery and kind == "clear"
+                    else registration.recover_clear_emoji
+                    if recovery
+                    else registration.clear
+                    if kind == "clear"
+                    else registration.clear_emoji
+                )
+            )
+            is not None
         )
 
     async def _dispatch(self, item: _QueuedEvent) -> None:
@@ -294,6 +352,7 @@ class ReactionRouter:
                 accepted = await self._enqueue_or_abort(queue, item, shard)
             if not accepted:
                 add_counter("squid.reaction.enqueue.aborted", attributes={"squid.reaction.kind": item.kind})
+                await self._recover_unadmitted(item)
         finally:
             async with self._intake_changed:
                 self._active_enqueues -= 1
@@ -334,6 +393,37 @@ class ReactionRouter:
             await finished.wait()
             tasks.cancel_scope.cancel()
         return accepted
+
+    async def _recover_unadmitted(self, item: _QueuedEvent) -> None:
+        """Hand a shutdown-aborted event to each consumer that declared recovery."""
+        if not item.recoveries:
+            return
+        add_counter(
+            "squid.reaction.recovery.attempts",
+            attributes={"squid.reaction.kind": item.kind},
+        )
+        await run_all(
+            functools.partial(self._run_recovery, callback, item.kind, item.event)
+            for callback in item.recoveries
+        )
+
+    @staticmethod
+    async def _run_recovery[EventT](
+        callback: _ReactionCallback[EventT],
+        kind: ReactionKind,
+        event: EventT,
+    ) -> None:
+        attributes = {"squid.reaction.kind": kind, "squid.reaction.consumer": callback.consumer}
+        try:
+            await callback.callback(event)
+        except Exception:
+            add_counter("squid.reaction.recovery.failures", attributes=attributes)
+            logger.exception(
+                "Reaction consumer %s failed to recover an unadmitted %s event",
+                callback.consumer,
+                kind,
+                extra=dict(attributes),
+            )
 
     def _ensure_workers(self) -> None:
         if self._workers:
