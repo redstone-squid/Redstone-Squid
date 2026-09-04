@@ -6,6 +6,7 @@ from typing import cast, override
 from uuid import UUID, uuid4
 
 import pytest
+from anyio import create_task_group
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from starlette.responses import StreamingResponse
@@ -274,6 +275,23 @@ async def test_completion_failure_sends_no_partial_response() -> None:
     recorder = CompletionRecorder(RuntimeError("database unavailable"))
     with pytest.raises(RuntimeError, match="database unavailable"):
         await run_completion_middleware(app, recorder)
+
+
+@pytest.mark.asyncio
+async def test_cancellation_after_handler_success_does_not_interrupt_completion() -> None:
+    async def app(_scope: Scope, _receive, send) -> None:
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok", "more_body": False})
+
+    recorder = CompletionRecorder()
+    recorder.release.clear()
+    async with create_task_group() as tasks:
+        tasks.start_soon(run_completion_middleware, app, recorder)
+        await recorder.started.wait()
+        tasks.cancel_scope.cancel()
+        recorder.release.set()
+
+    assert recorder.responses == [StoredResponse(200, (), b"ok")]
 
 
 @pytest.mark.asyncio
