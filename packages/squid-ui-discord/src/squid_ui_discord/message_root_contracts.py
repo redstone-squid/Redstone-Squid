@@ -38,9 +38,19 @@ if TYPE_CHECKING:
 
 
 class ErrorHook(Protocol):
-    """Host-provided handler for exceptions escaping a component callback."""
+    """Host-provided handler for exceptions escaping a component callback.
 
-    def __call__(self, interaction: discord.Interaction, error: Exception, source: str) -> Awaitable[None]: ...
+    The interaction may still be unanswered, so the hook may respond to it. Without a hook the
+    mount logs the error and does nothing else.
+    """
+
+    def __call__(self, interaction: discord.Interaction, error: Exception, source: str) -> Awaitable[None]:
+        """Handle `error`.
+
+        `source` says where it escaped from: `action:<key>`, `form:<key>`, `guard:<key>`,
+        `access`, `renewal`, or `item:<discord.py item type>` for a view callback.
+        """
+        ...
 
 
 class FinishHook(Protocol):
@@ -48,7 +58,13 @@ class FinishHook(Protocol):
 
     # Positional-only, as `MessageDestination` is: a named parameter would make the protocol demand
     # that every observer spell the argument `mount`.
-    def __call__(self, message_root: AnyMessageRoot, /) -> Awaitable[None]: ...
+    def __call__(self, message_root: AnyMessageRoot, /) -> Awaitable[None]:
+        """Called once per mount, from every terminal path; an exception is logged and swallowed.
+
+        `message_root.finished` is already true, its view is stopped and its runtime is
+        finished. Calling `finish` on it here is a no-op.
+        """
+        ...
 
 
 class PresentedHook(Protocol):
@@ -59,7 +75,14 @@ class PresentedHook(Protocol):
     to wait on the mount that is calling it.
     """
 
-    def __call__(self, message_root: AnyMessageRoot, /) -> None: ...
+    def __call__(self, message_root: AnyMessageRoot, /) -> None:
+        """Called under the render lock after each Discord write commits, renewal screens included.
+
+        Not called for a render suppressed as identical to the live one; `CommittedHook` is.
+        Must not await or call anything that takes the render lock. An exception is logged
+        and swallowed.
+        """
+        ...
 
 
 class CommittedHook(Protocol):
@@ -69,13 +92,26 @@ class CommittedHook(Protocol):
     render lock, where awaiting or re-entering the mount would deadlock.
     """
 
-    def __call__(self, message_root: AnyMessageRoot, /) -> None: ...
+    def __call__(self, message_root: AnyMessageRoot, /) -> None:
+        """Called under the render lock after each application render commits, delivered or suppressed.
+
+        Not called for a renewal screen, which commits no runtime state. Must not await or
+        call anything that takes the render lock. An exception is logged and swallowed.
+        """
+        ...
 
 
 class Scheduler(Protocol):
     """Anything that can absorb out-of-band refresh requests (see `MessageRootScheduler`)."""
 
-    def schedule(self, message_root: AnyMessageRoot) -> None: ...
+    def schedule(self, message_root: AnyMessageRoot) -> None:
+        """Arrange for `message_root.refresh()` to run later, in a task the scheduler owns.
+
+        Called from `MessageRoot.schedule` and from bus subscription callbacks. The scheduler
+        calls `message_root.invalidate()` before the refresh, ignores a mount whose `finished`
+        is true, and may coalesce several requests for one mount into one refresh.
+        """
+        ...
 
 
 @runtime_checkable
@@ -83,14 +119,23 @@ class ProfiledScheduler(Protocol):
     """A scheduler that carries the profiler its mounts should inherit."""
 
     @property
-    def profiler(self) -> Profiler: ...
+    def profiler(self) -> Profiler:
+        """Adopted by a mount constructed with this scheduler and no `profiler` of its own."""
+        ...
 
 
 @runtime_checkable
 class ReactiveScheduler(Protocol):
     """A scheduler that can preserve the component attribution of a bus change."""
 
-    def schedule_reactive(self, message_root: AnyMessageRoot, address: Address) -> None: ...
+    def schedule_reactive(self, message_root: AnyMessageRoot, address: Address) -> None:
+        """Like `Scheduler.schedule`, for a change to one bus `address`.
+
+        Must call `message_root.runtime.invalidate_address(address)` rather than
+        `invalidate()`, so only the components that read the address re-render. A mount uses
+        this instead of `schedule` whenever its scheduler provides it.
+        """
+        ...
 
 
 type ResumedPress = Callable[[], Awaitable[None]]
@@ -112,7 +157,14 @@ class ChallengeSupervisor(Protocol):
     implementation that could await would be tempted to await the press itself.
     """
 
-    def resume(self, press: ResumedPress) -> None: ...
+    def resume(self, press: ResumedPress) -> None:
+        """Queue `press` to be awaited by a task whose context predates the dialog, and return.
+
+        `press` is a `ChallengeRequest.approve` or `decline`. Application failures inside it
+        already go through the mount's error hook; anything that still escapes is the
+        supervisor's to log.
+        """
+        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,14 +196,31 @@ class ChallengePresenter(Protocol):
     challenges without one configured treats that as a programmer error.
     """
 
-    async def present(self, request: ChallengeRequest) -> None: ...
+    async def present(self, request: ChallengeRequest) -> None:
+        """Respond to `request.interaction` with the question, before anything else is awaited.
+
+        That response is the press's only acknowledgement and has the click's 3-second
+        deadline; nothing in the mount defers it first. Once the actor answers, hand
+        `request.approve` or `request.decline` to a `ChallengeSupervisor` rather than
+        awaiting either here. An exception raised here reaches the mount's error hook as
+        `guard:<key>`.
+        """
+        ...
 
 
 @runtime_checkable
 class ExpirySupervisor(Protocol):
     """A scheduler that observes mount edit-authority deadlines."""
 
-    def watch(self, message_root: AnyMessageRoot) -> Callable[[], None]: ...
+    def watch(self, message_root: AnyMessageRoot) -> Callable[[], None]:
+        """Start checking `message_root.handle` against its expiry policy; return the stop callback.
+
+        Called once, under the render lock, after the mount's first successful send. On each
+        sweep the supervisor asks `message_root._should_arm_expiry(handle, now)` and, once per
+        handle it says yes to, calls `message_root._queue_expiry_arm(handle)` then `schedule`.
+        The mount calls the returned callback at teardown; calling it twice is harmless.
+        """
+        ...
 
 
 @runtime_checkable
@@ -163,8 +232,11 @@ class TopicScheduler(Protocol):
     """
 
     bus: TopicBus
+    """Where a mount subscribes the cell addresses its committed render read."""
 
-    def schedule(self, message_root: AnyMessageRoot) -> None: ...
+    def schedule(self, message_root: AnyMessageRoot) -> None:
+        """See `Scheduler.schedule`."""
+        ...
 
 
 def _validate_warning(warning: float) -> None:
@@ -175,9 +247,14 @@ def _validate_warning(warning: float) -> None:
 
 @dataclass(frozen=True, slots=True)
 class PauseUpdates:
-    """Show status chrome before temporary edit authority expires."""
+    """Append `Chrome.updates_paused` to the panel before temporary edit authority expires.
+
+    The default policy; it needs no scheduler support beyond `ExpirySupervisor`. Raises
+    `ValueError` for a `warning` that is not a finite positive number of seconds.
+    """
 
     warning: float = 60.0
+    """Seconds of edit authority left at which the status is shown."""
 
     def __post_init__(self) -> None:
         _validate_warning(self.warning)
@@ -185,10 +262,17 @@ class PauseUpdates:
 
 @dataclass(frozen=True, slots=True)
 class RenewEphemeral:
-    """Replace an expiring ephemeral panel with an explicit renewal screen."""
+    """Replace an expiring ephemeral panel with a single "continue" button that restores it.
+
+    Only an ephemeral message gets the screen; on any other message this policy does nothing.
+    A mount built with it requires a scheduler that is an `ExpirySupervisor`. Raises
+    `ValueError` for a `warning` that is not a finite positive number of seconds.
+    """
 
     warning: float = 90.0
+    """Seconds of edit authority left at which the renewal screen replaces the panel."""
     label: TextLike | None = None
+    """Button text, defaulting to `Chrome.continue_session`."""
 
     def __post_init__(self) -> None:
         _validate_warning(self.warning)
@@ -234,7 +318,7 @@ class MessageRootOptions[
 
     Paired with :class:`MessageRootConfig`, which holds the same set with its defaults. Two
     declarations is the floor: a TypedDict cannot be derived from a dataclass at type-check
-    time. `tests/test_sessions.py` pins them against each other, and `access` is in neither
+    time. `tests/test_message_root_options.py` pins them against each other, and `access` is in neither
     -- it identifies who may use one specific mount, so it is never a default.
     """
 
@@ -260,21 +344,31 @@ class MessageRootConfig[
     localization: Localization = NEUTRAL
     palette: Palette = DEFAULT_PALETTE
     strict: bool = False
+    """Whether a lossy layout adaptation fails the render with `LayoutDegradedError` instead of logging."""
     timeout: float | None = 900
+    """Idle seconds, counted from the send or last accepted click, after which the mount finishes."""
     on_error: ErrorHook | None = None
     middleware: Sequence[ActionMiddleware] = ()
+    """Outermost first; the same instance listed twice runs once."""
     profiler: Profiler | None = None
+    """Falls back to the scheduler's when it is a `ProfiledScheduler`, then to a no-op."""
     render_cache: RenderProgramCache | None = None
+    """Shared across mounts when given; a mount that builds its own clears it at finish."""
     scheduler: Scheduler | None = None
+    """Without one, `MessageRoot.schedule` refreshes inline and bus changes never reach the mount."""
     expiry: ExpiryPolicy | None = DEFAULT_EXPIRY
     nav: NavFactory | None = None
+    """Draws pager controls; `default_nav` when `None`."""
     challenge: ChallengePresenter | None = None
     acknowledgement_timeout: float = 2.5
+    """Seconds a handler may run before the click is deferred for it; must lie in (0, 3)."""
     pending_after: float = 1.0
+    """Seconds a handler with a `BusySpec` may run before its interim paint appears."""
     clock: Callable[[], float] = monotonic
+    """Monotonic seconds; what `timeout` and the snapshot's ages are measured with."""
 
     def replace(self, **changes: Unpack[MessageRootOptions[RenderTargetT, AdapterT]]) -> Self:
-        """Return a copy with selected values replaced."""
+        """`dataclasses.replace`, with the keywords type-checked against `MessageRootOptions`."""
         return replace(self, **changes)
 
 
@@ -285,7 +379,9 @@ class MessageRootStatus(StrEnum):
     """Which mount-owned generation the reader can currently see."""
 
     ACTIVE = "active"
+    """The application tree; its controls dispatch to component handlers."""
     RENEWAL_ARMED = "renewal_armed"
+    """The `RenewEphemeral` screen; the tree is retained but hidden until its button is pressed."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -321,6 +417,7 @@ class MessageRootSnapshot:
     address: MessageAddress | None
     generation: int
     pending: bool
+    """Whether the mount holds state Discord has not seen yet."""
     finished: bool
     age: float
     """Seconds since the mount was constructed."""
@@ -339,5 +436,6 @@ class MessageRootSnapshot:
     """Renders committed without a Discord edit because they matched the live generation."""
     render_cache: RenderProgramCacheSnapshot
     scene: scene.Scene | None
+    """The plan on screen, with `report` and `metrics`; all three are `None` before the first commit."""
     report: PlanReport | None
     metrics: PlanMetrics | None

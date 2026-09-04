@@ -83,7 +83,7 @@ class _Candidate[RenderTargetT: DiscordTarget]:
 
     @property
     def payload(self) -> MessagePayload:
-        """The complete message this render delivers to.
+        """The complete message this render delivers.
 
         The render already built it, in whichever mode the target chose. A message root does
         not reassemble one, because doing so would be a second place that has to know what
@@ -98,7 +98,11 @@ class _Candidate[RenderTargetT: DiscordTarget]:
 
 @dataclass(slots=True)
 class _PlannedCandidate[RenderTargetT: DiscordTarget]:
-    """A staged application render whose visible identity was checked before drawing."""
+    """An application render planned but not drawn.
+
+    `_preflight` stages one to compare against the live scene; it is committed as a
+    suppressed render when identical and drawn into a `_Candidate` otherwise.
+    """
 
     plan: PlanResult
     tree: ComponentTree[RenderTargetT]
@@ -115,7 +119,11 @@ type _ApplicationCandidate[RenderTargetT: DiscordTarget] = _Candidate[RenderTarg
 
 @dataclass(frozen=True, slots=True)
 class _PlanEnvironment:
-    """Every mutable owner input not carried by a component tree."""
+    """Every mount-owned planner input outside the component tree.
+
+    Equality with the committed one, for the same tree, lets `_preflight` reuse the
+    committed plan without planning again.
+    """
 
     target: AnyTarget
     chrome: Chrome
@@ -130,6 +138,11 @@ class _PlanEnvironment:
 def _drawn[RenderTargetT: DiscordTarget](
     candidate: _ApplicationCandidate[RenderTargetT],
 ) -> _Candidate[RenderTargetT]:
+    """Narrow a preflight result to a drawn candidate; raises `LayoutInvariantError` for an undrawn one.
+
+    Undrawn means `_preflight` found the live scene identical, so the caller must have taken
+    the suppression branch before reaching this.
+    """
     if not isinstance(candidate, _Candidate):
         message = "an undrawn preflight candidate did not match the live scene"
         raise LayoutInvariantError(message)
@@ -176,7 +189,11 @@ class _LifecycleCandidate:
 
 @dataclass(slots=True)
 class _DispatchProfile:
-    """Mutable operation-local facts frozen into a dispatch result at the terminal branch."""
+    """One dispatch's mutable trace facts; `finish()` freezes them into the operation's `DispatchResult`.
+
+    Every terminal branch of the funnel calls `finish` once with its disposition; later
+    calls are ignored.
+    """
 
     operation: OperationRecorder
     interaction: discord.Interaction
@@ -252,13 +269,11 @@ _ADMITTED = _Admission(admitted=True)
 
 
 _REFUSED = _Admission(admitted=False)
-
-
 """Refused *and already answered*: the guard denied or raised, and the profile is finished."""
 
 
 class _BusyPaint:
-    """One action's interim "working" render, and the ordering between it and the flush.
+    """One action's interim "working" render; `close()` latches it so nothing paints over the flush.
 
     The paint is scheduled by the acknowledgement watchdog and the flush by the handler
     returning, so the two race. They are ordered by this object's lock rather than by

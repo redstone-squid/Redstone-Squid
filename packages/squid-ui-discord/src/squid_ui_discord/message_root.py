@@ -22,8 +22,6 @@ from typing import Any, Unpack, cast, overload
 import anyio
 import discord
 
-# `discord.ui.select` names the decorator, so the submodule holding `BaseSelect` is only
-# reachable by importing from it directly.
 from squid_reactivity.actions import ActionContext, ActorRef
 from squid_ui import scene
 from squid_ui.chrome import CHROME_CONTEXT, LOCALIZATION_CONTEXT, localize_chrome
@@ -159,9 +157,9 @@ class _DiscordBinding:
     """Everything a Discord dialect decides about a mount, in one value.
 
     The target decides how to plan and render, the renderer, the view factory, and the message
-    mode — and nothing else. Keying on the dialect id says so once, in place of four
-    branches that each re-derived the answer from a limits subclass. `MessageMode` keeps its
-    own job of describing an *observed* message through `message_mode`; it is no longer inferred.
+    mode — and nothing else, which is why `_BINDINGS` is keyed on the dialect id alone.
+    `mode` is what this mount's messages are sent in; `EditHandle.mode` separately tracks
+    what an observed message is in now.
     """
 
     render_message: Callable[..., Any]
@@ -345,7 +343,14 @@ class MessageRoot[
     RenderTargetT: DiscordTarget = ComponentsV2Target,
     AdapterT: DiscordPyAdapter = DiscordPy27Adapter,
 ]:
-    """Binds a component to a message and owns its whole interaction lifecycle."""
+    """Binds a component to one Discord message; `finish()` stops dispatch and releases the message.
+
+    `send` delivers the first render, every control click re-enters through `dispatch`, and
+    `refresh`/`schedule` re-render out of band. The idle `timeout` calls `finish`;
+    `finish_via` and `dismiss` are the interaction-edit and delete endings. After any of
+    them `finished` is true and a click on a still-visible control is answered with
+    `Chrome.session_ended`.
+    """
 
     @overload
     def __init__(
@@ -394,6 +399,12 @@ class MessageRoot[
         `config` supplies every value at once -- a host that configures its mounts the same
         way builds one and reuses it -- and keywords override it for this mount. `access` is
         neither, because it names who may use this specific mount.
+
+        Raises:
+            ValueError: `acknowledgement_timeout` is outside (0, 3).
+            TypeError: `expiry` is `RenewEphemeral` but `scheduler` is not an `ExpirySupervisor`.
+            LayoutInvariantError: The target's dialect is not a Discord one, or its adapter
+                cannot render, dispatch, or deliver it.
         """
         resolved_config = cast(
             MessageRootConfig[RenderTargetT, AdapterT],
@@ -470,7 +481,6 @@ class MessageRoot[
         require_discord_py_target(target, self._binding.render_capability, "mount this message mode")
         require_discord_py_target(target, AdapterCapability.DISPATCH, "dispatch mounted interactions")
         require_discord_py_target(target, AdapterCapability.INTERACTION_DELIVERY, "deliver mounted interactions")
-        """Which kind of Discord message this mount owns, for its whole life."""
         self.strict = config.strict
         self.timeout = config.timeout
         self.access = access
@@ -564,14 +574,17 @@ class MessageRoot[
 
         Frontends use this after trading temporary delivery credentials for durable ones.
         Adoption shares the render lock with every Discord write, rejects already-stale
-        authority, and never replaces permanent authority with a temporary handle.
+        authority, and never replaces permanent authority with a temporary handle. On a
+        mount showing its renewal screen, adoption also restores the application tree
+        through the new handle.
 
-        The caller is responsible for establishing that ``handle`` addresses this mount's
+        The caller is responsible for establishing that `handle` addresses this mount's
         message; :class:`EditHandle` deliberately exposes capability, not coordinates.
 
         Raises:
             RuntimeError: The mount has already finished.
             StaleHandleError: The supplied handle is already expired.
+            discord.HTTPException: The renewal restore's edit failed; the handle is kept.
         """
         async with self._render_lock:
             if self._finished:
@@ -637,7 +650,7 @@ class MessageRoot[
 
     @property
     def finished(self) -> bool:
-        """Whether this mount has stopped dispatching, by close, timeout or error."""
+        """Whether `finish`, `finish_via`, `dismiss` or the idle timeout has ended dispatch."""
         return self._finished
 
     @property
@@ -761,7 +774,7 @@ class MessageRoot[
         Private, because a staged generation is not the mount's state: nothing here moves
         handlers, lifecycle hooks, page positions or the live generation, so handing one to a
         send path shows Discord a generation the mount does not own. Delivery goes through
-        :meth:`send` or :meth:`flush`, which stage their own render and commit it; a view
+        :meth:`send` or :meth:`refresh`, which stage their own render and commit it; a view
         staged here and never delivered is superseded by the next one.
         """
         pending = self._pending
@@ -1069,9 +1082,10 @@ class MessageRoot[
 
         Through `invalidate` rather than `_dirty` directly, because a candidate delivered
         while the handler ran commits `runtime.dirty` over whatever this set: the revision is
-        the only dirtiness a render in flight is measured against. Against `_watched` rather
-        than `_observed`, because a candidate that newly reads the written cell must not
-        commit a value it has already been told is stale.
+        the only dirtiness a render in flight is measured against. Against
+        `_subscriptions.watched` (committed plus staged) rather than `committed`, because a
+        candidate that newly reads the written cell must not commit a value it has already
+        been told is stale.
         """
         watched = self._subscriptions.watched
         if not watched:
@@ -1144,10 +1158,10 @@ class MessageRoot[
         self._commit_delivery(candidate)
 
     def _settle(self, candidate: _ApplicationCandidate[RenderTargetT], ending: str) -> None:
-        """Record that `candidate` has reached its one ending, refusing a second.
+        """Record that `candidate` has reached its one ending; raise `LayoutInvariantError` on a second.
 
-        The discipline `_Subscriptions.commit`/`discard` already keeps for the reactive
-        half, kept here for the visible half.
+        The discipline `SubscriptionReconciler.commit`/`discard` already keeps for the
+        reactive half, kept here for the visible half.
         """
         if candidate.settled:
             generation = candidate.generation if isinstance(candidate, _Candidate) else "undrawn"
@@ -1256,6 +1270,11 @@ class MessageRoot[
 
     @property
     def presentation(self) -> PresentationState:
+        """`runtime.presentation`: cursors, selections and the other planner-owned session state.
+
+        Assignable, which is how durability restores a saved session before the first send;
+        assigning to a delivered mount does not invalidate it.
+        """
         return self.runtime.presentation
 
     @presentation.setter
@@ -1268,6 +1287,10 @@ class MessageRoot[
             self._settlement_wake.set()
 
     def invalidate(self) -> None:
+        """Mark every component stale, so the next `refresh` or click re-renders the whole tree.
+
+        Marks `pending` without delivering anything; `schedule` or `refresh` does that.
+        """
         self.runtime.invalidate()
 
     def localize(self, localization: Localization) -> None:
@@ -1331,13 +1354,14 @@ class MessageRoot[
         tier's loaded render is what reveals the next. Siblings within a tier load together.
         A tier that still owes loads is never drawn -- only rendered, and only to find out
         who they are -- so an incomplete document is never planned. A tree that declares no
-        loads is rendered and drawn exactly once, as it was before this existed.
+        loads is rendered and drawn exactly once.
 
         Pending atomic resources use the same discovery passes. Their pending render is
         complete but deliberately not drawn or delivered; failed state is settled state.
 
         A raise leaves every completed load completed, every other one eligible to retry, and
-        nothing staged, so the mount is exactly as deliverable as it was.
+        nothing staged, so the mount is exactly as deliverable as it was. Raises
+        `LayoutInvariantError` when `_MAX_LOAD_PASSES` tiers do not settle.
         """
         for pass_index in range(_MAX_LOAD_PASSES):
             cached_atomic = self.runtime.pending_cached_atomic_resources()
@@ -1542,7 +1566,7 @@ class MessageRoot[
         return candidate
 
     async def _load_all(self, components: Sequence[Component[RenderTargetT]]) -> None:
-        """Load one tier concurrently. A failure cancels its siblings; the render is doomed."""
+        """Load one tier concurrently; a failure cancels its siblings and propagates unwrapped."""
         if len(components) == 1:
             # The overwhelmingly common case, and no group to unwrap.
             await self._load_one(components[0])
@@ -1562,13 +1586,12 @@ class MessageRoot[
         """Deliver this mount's first render through `message_destination`.
 
         The commit point for an initial send, and the same stage -> deliver -> commit sequence
-        `flush` runs for an interaction edit: the host chooses where the message goes, the
-        mount owns everything around the call. A message_destination that raises leaves the mount on
+        `refresh` runs for an interaction edit: the host chooses where the message goes, the
+        mount owns everything around the call. A destination that raises leaves the mount on
         its previous generation with the render still pending, so a second `send` is a clean
-        retry.
-
-        The structured result distinguishes a committed delivery, including a handle-less
-        one, from a message_destination that deliberately abandoned delivery.
+        retry; a destination that raises `DeliveryAbandoned` yields an `Abandoned` result
+        instead. Anything a component's `on_load` or the planner raises (`LayoutError`)
+        propagates the same way. Returns `Abandoned` without staging on a finished mount.
         """
         component = type(self.component)
         name = f"{component.__module__}.{component.__qualname__}"
@@ -1718,6 +1741,9 @@ class MessageRoot[
         rather than resuming mid-funnel on purpose: the actor may have lost access and the
         panel may have re-rendered while the dialog was open, so every stage runs again
         against current truth.
+
+        A failing access policy, guard, presenter or handler goes to `handle_error` and ends
+        the dispatch; only a failure of the re-render or its Discord edit propagates.
         """
         kind = InteractionKind.PRESS if values is None else InteractionKind.SELECTION
         with (
@@ -1878,6 +1904,8 @@ class MessageRoot[
         presented ad hoc from a handler has no render-time binding, and a trigger the newest
         render dropped has no newer one; both run what the reader submitted, because
         discarding a filled-in form is the worse of the two surprises.
+
+        Errors are routed as in `dispatch`, with a failing handler reported as `form:<key>`.
         """
         with (
             localization_scope(self.localization),
@@ -2026,7 +2054,7 @@ class MessageRoot[
 
         Every pass is staged and committed only when it did not end in a question, so the
         guards that ran ahead of a challenge have spent nothing by the time the actor is
-        asked. Denial keeps its writes, exactly as it always has.
+        asked. A denial's ledger writes are committed.
         """
         guard = binding.guard
         if guard is None:
@@ -2604,7 +2632,13 @@ class MessageRoot[
         return presentation
 
     async def finish_via(self, interaction: discord.Interaction) -> None:
-        """Finish through an interaction edit — the shape a Close button wants."""
+        """Finish through an interaction edit — the shape a Close button wants.
+
+        Disables the controls through `interaction`'s own handle when it has one, the standing
+        handle otherwise, and defers the click when neither wrote. A failed edit propagates
+        (`discord.HTTPException`) after the mount is torn down and its finish hooks have run.
+        No-op on a finished mount.
+        """
         run_hooks = False
         try:
             async with self._render_lock:
@@ -2649,6 +2683,7 @@ class MessageRoot[
         Shows the newest state at the next opportunity rather than this instant: a scheduler
         coalesces requests, and a mount with no live `handle` — an ephemeral message nobody
         has clicked lately — keeps the render in `pending` until someone clicks it again.
+        Without a scheduler this is `refresh()` inline, and raises what it raises.
         """
         if self.scheduler is not None:
             self.scheduler.schedule(self)
@@ -2664,9 +2699,12 @@ class MessageRoot[
     ) -> PresentationStatus:
         """Re-render and deliver right now, reporting how the presentation settled.
 
-        With an `interaction`, the delivery is that interaction's edit; without one it is an
-        out-of-band render against the mount's own edit authority. One verb rather than the
-        three this used to have, because both do the same thing to the same subject.
+        With an `interaction`, the delivery is that interaction's edit and the click is
+        always answered, by the edit or a deferral. Without one it is an out-of-band render
+        against the mount's own edit authority: `ABANDONED` when there is none, with the
+        render left `pending` for the next click. A render identical to the live one is
+        committed without an edit as `UNCHANGED`. A failed edit (`discord.HTTPException`),
+        `on_load` or plan (`LayoutError`) propagates after the candidate is rolled back.
         """
         if interaction is not None:
             return await self._refresh_through(interaction, profile=profile)
@@ -2763,19 +2801,24 @@ class MessageRoot[
     def on_finish(self, callback: FinishHook) -> None:
         """Call `callback` once this mount has finished, after its teardown.
 
-        Fires from every terminal path -- `finish`, `finish_via`, and the timeout that
-        delegates to `finish` -- including one whose disable-edit failed. Callbacks run in
-        registration order, and an exception is logged and swallowed: a broken observer must
-        not abort another's cleanup, nor teardown itself.
+        Fires from every terminal path -- `finish`, `finish_via`, `dismiss`, and the timeout
+        that delegates to `finish` -- including one whose disable-edit failed. Callbacks run
+        in registration order, and an exception is logged and swallowed: a broken observer
+        must not abort another's cleanup, nor teardown itself.
 
         Calling `finish` from inside a hook is a no-op, so an observer that cascades to other
-        message roots cannot loop back into this one. A hook registered on an already-finished message root
-        never fires -- `finished` is the caller's to check first.
+        message roots cannot loop back into this one. A hook registered on an already-finished
+        message root never fires -- `finished` is the caller's to check first.
         """
         self._hooks.finish.append(callback)
 
     async def finish(self, *, disable: bool = True) -> None:
-        """Stop dispatching; optionally leave the message with its controls disabled."""
+        """Stop dispatching; with `disable`, leave the message showing its controls disabled.
+
+        The disable edit goes through the standing handle and is skipped without one; a
+        `discord.HTTPException` from it is logged, not raised. Teardown and the finish hooks
+        run either way. No-op on a finished mount.
+        """
         run_hooks = False
         try:
             async with self._render_lock:
@@ -2815,7 +2858,12 @@ class MessageRoot[
             await self._hooks.run_finish(self)
 
     async def dismiss(self) -> None:
-        """Delete the delivered message and finish this mount."""
+        """Delete the delivered message and finish this mount.
+
+        Deletes only when the send handed back a delete handle. A failed delete
+        (`StaleHandleError`, `discord.HTTPException`) propagates after teardown and the finish
+        hooks. No-op on a finished mount.
+        """
         run_hooks = False
         try:
             async with self._render_lock:
@@ -2850,9 +2898,14 @@ class MessageRoot[
             self.render_cache.clear()
 
     async def handle_timeout(self) -> None:
+        """Called by the live view when the idle `timeout` lapses; `finish` with the controls disabled."""
         await self.finish(disable=True)
 
     async def handle_error(self, interaction: discord.Interaction, error: Exception, source: str) -> None:
+        """Route `error` to the `on_error` hook, or log it when there is none.
+
+        `source` follows `ErrorHook`'s vocabulary. The hook's own exceptions propagate.
+        """
         if self.on_error is not None:
             await self.on_error(interaction, error, source)
             return

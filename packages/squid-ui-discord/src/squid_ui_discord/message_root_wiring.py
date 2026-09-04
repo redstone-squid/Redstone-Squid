@@ -243,6 +243,7 @@ class _WiredMentionableSelect(_EntityDispatch, discord.ui.MentionableSelect[AnyM
 def _wired_entity_select(
     node: scene.EntitySelect, message_root: AnyMessageRoot, key: str, generation: int
 ) -> BaseSelect[Any]:
+    """Raises `DrawInvariantError` for a conversation type or a non-snowflake default discord.py cannot express."""
     kwargs = _entity_kwargs(node, message_root, key, generation)
     if node.entity_type is EntityType.USER:
         item = _WiredUserSelect(**kwargs)

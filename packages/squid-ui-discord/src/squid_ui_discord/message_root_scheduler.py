@@ -32,9 +32,12 @@ class MessageRootSchedulerSnapshot:
     queued: int
     in_flight: int
     redeliver: int
+    """Mounts scheduled again while their refresh was in flight; each is re-queued when it ends."""
     watched: int
     scheduled: int
+    """Every `schedule`/`schedule_reactive` call, coalesced ones included."""
     coalesced: int
+    """Requests absorbed into a refresh already queued or in flight for the same mount."""
     delivered: int
     failed: int
     unchanged: int = 0
@@ -63,7 +66,12 @@ class _Causes:
 
 
 class MessageRootScheduler:
-    """Own concurrent, per-mount-coalesced refreshes and live-update expiry checks.
+    """Owns per-mount-coalesced refreshes and expiry sweeps; `run()` serves them until the host cancels it.
+
+    Refreshes for different mounts run concurrently; one mount is never refreshed
+    concurrently with itself, and a refresh that fails is logged and counted, not raised.
+    Raises `ValueError` for `concurrency` below one, a non-positive `sweep_interval`, or a
+    negative `max_causal_links`.
 
     Args:
         bus: Process-local topic bus used by :meth:`follow`. Without one, the scheduler remains
@@ -120,7 +128,10 @@ class MessageRootScheduler:
         self._unchanged = 0
 
     def watch(self, message_root: MessageRoot) -> Callable[[], None]:
-        """Observe a delivered mount's edit-authority deadline until it finishes."""
+        """Sweep `message_root`'s edit handle against its expiry policy until the returned callback runs.
+
+        Raises `ValueError` for a finished mount or one whose `scheduler` is not this one.
+        """
         if message_root.finished:
             message = "cannot watch a finished mount"
             raise ValueError(message)
@@ -143,14 +154,14 @@ class MessageRootScheduler:
         return unwatch
 
     def schedule(self, message_root: MessageRoot) -> None:
-        """Enqueue a refresh while coalescing requests for the same mount."""
+        """Invalidate `message_root` and enqueue one refresh for it; a finished mount is ignored."""
         if message_root.finished:
             return
         message_root.invalidate()
         self._enqueue(message_root)
 
     def schedule_reactive(self, message_root: MessageRoot, address: Address) -> None:
-        """Enqueue a refresh attributed to one bus address."""
+        """Like `schedule`, invalidating only the components that read `address`."""
         if message_root.finished:
             return
         message_root.runtime.invalidate_address(address)
@@ -195,10 +206,10 @@ class MessageRootScheduler:
         )
 
     async def wait_idle(self) -> None:
-        """Wait until every refresh queued before the call has settled.
+        """Wait until every refresh queued before the call has settled, redeliveries included.
 
-        A running scheduler owns the queue workers. Calling this while it is stopped would
-        otherwise wait forever, so an operator gets an explicit lifecycle error instead.
+        Raises `RuntimeError` when the scheduler is not running but has work queued or in
+        flight, since nothing would ever drain it.
         """
         if not self._running:
             if self._queued or self._in_flight:
@@ -214,12 +225,16 @@ class MessageRootScheduler:
     def follow(self, message_root: MessageRoot, *topics: CellAddress) -> Callable[[], None]: ...
 
     def follow(self, message_root: MessageRoot, *topics: Address) -> Callable[[], None]:
-        """Refresh ``mount`` when any exact topic changes, returning an unfollow callback.
+        """Refresh `message_root` on any change to `topics`, until the returned callback runs or it finishes.
 
         Call this before the mount's initial send so a write cannot land between its first
         read and subscription. The mount must use this scheduler as its scheduler; that lets
         several topic callbacks coalesce without running a mount concurrently with itself.
         Bindings are live-process state and must be recreated by a host recovery hook.
+
+        Raises:
+            RuntimeError: The scheduler has no `bus`.
+            ValueError: `message_root` is finished or uses another scheduler, or `topics` is empty.
         """
         if self.bus is None:
             message = "cannot follow topics without a topic bus"
@@ -269,7 +284,11 @@ class MessageRootScheduler:
         return unfollow
 
     async def run(self) -> None:
-        """Serve refreshes and expiry checks until the host cancels this coroutine."""
+        """Serve refreshes and expiry sweeps until the host cancels this coroutine.
+
+        Raises `RuntimeError` when already running. Work queued before or after a run is
+        served only while one is active.
+        """
         if self._running:
             message = "scheduler is already running"
             raise RuntimeError(message)
@@ -342,7 +361,7 @@ class MessageRootScheduler:
             self._sweep_once()
 
     def _sweep_once(self) -> None:
-        """Schedule the final honest refresh for handles approaching expiry."""
+        """Queue one expiry-arm refresh per handle whose policy's warning window has opened."""
         now = self.clock()
         for message_root in tuple(self._watched):
             handle = message_root.handle

@@ -36,7 +36,7 @@ class MessageRootDefaults[
         access: AccessPolicy,
         **overrides: Unpack[MessageRootBehaviorOptions],
     ) -> MessageRoot[RenderTargetT, AdapterT]:
-        """Construct a mount, applying per-call overrides over these defaults."""
+        """Construct a mount, applying per-call overrides over these defaults; raises what `MessageRoot` does."""
         return MessageRoot(component, access=access, config=self, **overrides)
 
 
