@@ -22,7 +22,7 @@ from squid.bot.submission.ui.views import (
 from squid.builds.application import BuildService
 from squid.builds.domain import BuildDraft, BuildLink, DoorBuild
 from squid.schematics.application import IngestedSchematic, IngestRequest
-from squid_ui.testing import RecordingResponder, choice_event, press, press_event
+from squid_ui.testing import RecordingResponder, choice_event, press, press_event, submit_event
 from squid_ui_discord.modal import build_form_modal
 from squid_ui_discord.sessions import Reject
 from squid_ui_discord.testing import assert_within_limits, commit_render
@@ -184,6 +184,34 @@ async def test_details_form_groups_actual_invalid_urls_by_field_and_preserves_at
             "Use complete https:// or http:// links. Invalid: `ftp://invalid-video`, `relative-video`",
         ),
     ]
+
+
+async def test_invalid_creation_urls_do_not_mutate_any_draft_field() -> None:
+    draft = BuildDraft(
+        wiring_placement_restrictions=["Old restriction"],
+        links=[BuildLink(url="https://old.example/image.png", media_type="image")],
+        extra_info={"user": "Old note"},
+    )
+    component = SubmissionScreen(draft, BuildRecorder(), on_submit=_unused_submit)
+
+    with pytest.raises(ValueError, match="invalid-video"):
+        await component._details_submitted(
+            submit_event(
+                {
+                    "restrictions": "New restriction",
+                    "image_urls": "https://new.example/image.png",
+                    "video_urls": "invalid-video",
+                    "world_urls": "https://new.example/world.zip",
+                    "notes": "New note",
+                }
+            )
+        )
+
+    assert component.build.wiring_placement_restrictions == ["Old restriction"]
+    assert component.build.image_urls == ("https://old.example/image.png",)
+    assert component.build.video_urls == ()
+    assert component.build.world_download_urls == ()
+    assert component.build.extra_info == {"user": "Old note"}
 
 
 @pytest.mark.parametrize("field", [*BASICS_FIELDS, *DETAIL_FIELDS], ids=lambda field: field.key)
