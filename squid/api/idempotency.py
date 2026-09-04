@@ -4,7 +4,9 @@ import hashlib
 from dataclasses import dataclass
 from typing import Annotated, cast
 
+from anyio import CancelScope
 from fastapi import Depends, Header, Request
+from fastapi.applications import FastAPI
 from starlette.responses import Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -14,6 +16,8 @@ from squid.idempotency import IdempotencyService, PendingRequest, StoredResponse
 _UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 _REPLAYED_HEADERS = frozenset({"cache-control", "content-language", "content-type", "etag", "location", "pragma"})
 _STATE_KEY = "squid_idempotency"
+MAX_IDEMPOTENT_RESPONSE_BYTES = 1024 * 1024
+"""Largest mutation response retained in memory and encrypted for replay."""
 
 IdempotencyKey = Annotated[
     str | None,
@@ -36,21 +40,23 @@ class IdempotencyReplay(Exception):
 
 
 @dataclass(frozen=True, slots=True)
-class _PendingResponse:
+class IdempotencyReservationState:
+    """Reservation handed from the authenticated dependency to response completion."""
+
     service: IdempotencyService
     request: PendingRequest
 
 
-async def enforce_request_idempotency(
+async def reserve_idempotent_request(
     request: Request,
     caller: Annotated[Caller, Depends(current_caller)],
     idempotency_key: IdempotencyKey = None,
 ) -> None:
     """Reserve a caller key when an unsafe request supplies one."""
-    await enforce_request_idempotency_for(request, caller.subject, idempotency_key)
+    await reserve_idempotent_request_for(request, caller.subject, idempotency_key)
 
 
-async def enforce_request_idempotency_for(
+async def reserve_idempotent_request_for(
     request: Request,
     caller: str,
     idempotency_key: str | None,
@@ -70,7 +76,12 @@ async def enforce_request_idempotency_for(
     )
     if isinstance(reservation, StoredResponse):
         raise IdempotencyReplay(reservation)
-    setattr(request.state, _STATE_KEY, _PendingResponse(service, reservation))
+    setattr(request.state, _STATE_KEY, IdempotencyReservationState(service, reservation))
+
+
+# Route declarations keep these compatibility names during the terminology transition.
+enforce_request_idempotency = reserve_idempotent_request
+enforce_request_idempotency_for = reserve_idempotent_request_for
 
 
 async def replay_response(_request: Request, error: Exception) -> Response:
@@ -84,7 +95,7 @@ async def replay_response(_request: Request, error: Exception) -> Response:
     )
 
 
-class IdempotencyResponseMiddleware:
+class CompleteIdempotentResponseMiddleware:
     """Buffer and durably complete responses for newly reserved requests."""
 
     def __init__(self, app: ASGIApp) -> None:
@@ -107,12 +118,26 @@ class IdempotencyResponseMiddleware:
         await self.app(scope, receive, capture)
         state = scope.get("state", {})
         pending = state.get(_STATE_KEY)
-        if not isinstance(pending, _PendingResponse):
+        if not isinstance(pending, IdempotencyReservationState):
             return
         response = _stored_response(buffered)
-        await pending.service.complete(pending.request, response)
+        # A disconnect or server shutdown must not interrupt completion after the
+        # application mutation has succeeded. No bytes reach the caller until the
+        # durable response commit settles.
+        with CancelScope(shield=True):
+            await pending.service.complete(pending.request, response)
         for message in buffered:
             await send(message)
+
+
+IdempotencyResponseMiddleware = CompleteIdempotentResponseMiddleware
+
+
+def assert_idempotency_completion_installed(app: FastAPI) -> None:
+    """Fail application construction when reservation has no completion middleware."""
+    if not any(middleware.cls is CompleteIdempotentResponseMiddleware for middleware in app.user_middleware):
+        msg = "Idempotent routes require CompleteIdempotentResponseMiddleware."
+        raise RuntimeError(msg)
 
 
 async def _request_fingerprint(request: Request, route_path: str) -> bytes:
@@ -142,4 +167,7 @@ def _stored_response(messages: list[Message]) -> StoredResponse:
     body = b"".join(
         cast(bytes, message.get("body", b"")) for message in messages if message["type"] == "http.response.body"
     )
+    if len(body) > MAX_IDEMPOTENT_RESPONSE_BYTES:
+        msg = f"An idempotent response exceeds the {MAX_IDEMPOTENT_RESPONSE_BYTES}-byte replay limit."
+        raise RuntimeError(msg)
     return StoredResponse(status_code=start["status"], headers=headers, body=body)
