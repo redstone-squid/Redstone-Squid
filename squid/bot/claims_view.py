@@ -5,9 +5,10 @@ from typing import cast
 
 import squid_ui as sl
 from squid.accounts.application import AccountService
-from squid.accounts.domain import AliasClaim, IdentityProvider
+from squid.accounts.domain import AliasClaim
 from squid.accounts.errors import AliasAlreadyClaimedError
 from squid.bot.consent import with_consented_account
+from squid.bot.profile_render import present_claimant
 from squid.bot.ui import DISCORD_BLUE, tr
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import ACCOUNT_CLAIM_APPROVE, ACCOUNT_CLAIM_REJECT
@@ -78,7 +79,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
                         sl.choice(
                             _claim_label(claim),
                             key=str(claim.id),
-                            description=_claimant(claim, mention=False),
+                            description=present_claimant(claim, mention=False),
                         )
                         for claim in self._claims
                     ),
@@ -176,7 +177,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
             return
         await self._reload()
         name = resolved.alias_name
-        claimant = _claimant(resolved)
+        claimant = sl.md(present_claimant(resolved))
         message = (
             tr(t"Credited **{name}** to {claimant}.")
             if approve
@@ -194,30 +195,11 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
         await event.finish()
 
 
-def _claimant(claim: AliasClaim, *, mention: bool = True) -> sl.TextLike:
-    claimant = claim.claimant
-    if claimant is not None:
-        discord = claimant.identity(IdentityProvider.DISCORD)
-        if mention and discord is not None and discord.discord_id is not None:
-            return sl.md(t"<@{discord.discord_id}>")
-        java = claimant.identity(IdentityProvider.JAVA)
-        if java is not None and java.display_name is not None:
-            return java.display_name
-        if claimant.public_creator_id is not None:
-            creator_id = claimant.public_creator_id
-            return tr(t"creator `{creator_id}`")
-        if discord is not None and discord.discord_id is not None:
-            discord_id = discord.discord_id
-            return tr(t"Discord user `{discord_id}`")
-    account_id = claim.account_id
-    return tr(t"unidentified account (internal ID `{account_id}`)")
-
-
 def _claim_entry(claim: AliasClaim) -> sl.TextLike:
     claim_id = claim.id
     name = claim.alias_name
     heading = tr(t"Claim #{claim_id} — {name}")
-    claimant = _claimant(claim)
+    claimant = sl.md(present_claimant(claim))
     age = sl.md(t"{sl.timestamp(claim.created_at.to_stdlib(), style=sl.semantic.TimeStyle.RELATIVE)}")
     detail = tr(t"{claimant} — opened {age}")
     return tr(t"**{heading}**\n{detail}")
