@@ -68,7 +68,7 @@ class AddressedOwner(Protocol):
     write does -- by publishing an address they follow.
     """
 
-    def _resource_binding(self, name: str) -> tuple[Address, Callable[[Any], None]]:
+    def _resource_binding(self, name: str) -> tuple[Address, Callable[[Address], None]]:
         """The address this resource publishes under, and what to publish it with."""
         ...
 
@@ -241,7 +241,7 @@ class _Replacement:
         """Installing already invalidated the owner, which is the only watcher there is."""
 
 
-class _Load:
+class _Load[ValueT]:
     """One generation's private notebook: what it read, how to stop it, and how to wake joiners.
 
     The reads are held here rather than on the resource because a superseded loader does not
@@ -255,7 +255,13 @@ class _Load:
 
     __slots__ = ("completion", "owner", "scope", "sources", "token")
 
-    def __init__(self, owner: Resource[Any], token: int, completion: Completion[Any], scope: LoadScope) -> None:
+    def __init__(
+        self,
+        owner: Resource[ValueT],
+        token: int,
+        completion: Completion[ResourceStatus[ValueT]],
+        scope: LoadScope,
+    ) -> None:
         # `owner` is what keeps `Resource.track` able to recognise a self-read. While the load
         # runs it, not the resource, is the `_CONSUMER`, so an identity check against the
         # consumer alone would let a loader that reads its own resource subscribe the resource
@@ -287,7 +293,7 @@ class Resource[ValueT](AsyncBinding):
         name: str,
         pending_mode: PendingMode,
         address: Address | None = None,
-        publish: Callable[[Any], None] | None = None,
+        publish: Callable[[Address], None] | None = None,
     ) -> None:
         self._owner = owner
         self._loader = loader
@@ -301,7 +307,7 @@ class Resource[ValueT](AsyncBinding):
         """
         self._publish = publish
         self._status: ResourceStatus[ValueT] = Pending()
-        self._loading: _Load | None = None
+        self._loading: _Load[ValueT] | None = None
         self._request_token = 0
         self._generation_id = uuid.uuid7()
         causality = current_causality()
