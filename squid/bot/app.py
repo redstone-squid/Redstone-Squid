@@ -320,49 +320,57 @@ class RedstoneSquid(Bot):
         await self.post_reconciler.reconcile(resource_kind, resource_key, generation)
 
 
+async def _run_bot(
+    config: BotProcessConfig,
+    identity_config: BotIdentityConfig = DEFAULT_BOT_IDENTITY,
+) -> None:
+    """Run the configured Discord process until the gateway client stops."""
+    async with create_bot_runtime(config.runtime) as runtime:
+        bot = RedstoneSquid(
+            runtime.services,
+            config=identity_config,
+            catbox_config=config.catbox,
+            build_config=config.build,
+            community_config=config.community,
+            notification_config=config.notification,
+            database_config=config.runtime.database,
+            inference_model=config.openai.chat_model,
+            inference_reasoning_effort=config.openai.reasoning_effort,
+            development_mode=config.development_mode,
+        )
+
+        async def bot_ready() -> bool:
+            await runtime.ready()
+            return bot.is_operational()
+
+        # The supervisor's task group has to be entered and exited by the same
+        # task, and Bot.close() can be driven from more than one place, so the
+        # group is held here and close() only cancels what it owns.
+        async with (
+            bot.background_tasks.running(),
+            bot,
+            ProcessHealthServer(bot_ready, port=config.bot.health_port),
+        ):
+            start_log_capture(
+                bot.background_tasks,
+                runtime.services.error_reports,
+                enabled=config.diagnostics.capture_logged_errors,
+                capacity=config.diagnostics.log_capture_queue,
+            )
+            await bot.start(config.discord.token.get_secret_value())
+
+
 async def main(
     process_config: BotProcessConfig | None = None,
     identity_config: BotIdentityConfig = DEFAULT_BOT_IDENTITY,
 ) -> None:
-    """Main entry point for the bot."""
+    """Run the Discord process with process-owned logging and telemetry."""
     resolved_config = process_config or load_or_exit(load_bot_process_config)
     queue_listener = configure_bot_logging(resolved_config.logging, dev_mode=resolved_config.development_mode)
     observability = configure_observability(resolved_config.observability, service_name="bot")
 
     try:
-        async with create_bot_runtime(resolved_config.runtime) as runtime:
-            bot = RedstoneSquid(
-                runtime.services,
-                config=identity_config,
-                catbox_config=resolved_config.catbox,
-                build_config=resolved_config.build,
-                community_config=resolved_config.community,
-                notification_config=resolved_config.notification,
-                database_config=resolved_config.runtime.database,
-                inference_model=resolved_config.openai.chat_model,
-                inference_reasoning_effort=resolved_config.openai.reasoning_effort,
-                development_mode=resolved_config.development_mode,
-            )
-
-            async def bot_ready() -> bool:
-                await runtime.ready()
-                return bot.is_operational()
-
-            # The supervisor's task group has to be entered and exited by the same
-            # task, and Bot.close() can be driven from more than one place, so the
-            # group is held here and close() only cancels what it owns.
-            async with (
-                bot.background_tasks.running(),
-                bot,
-                ProcessHealthServer(bot_ready, port=resolved_config.bot.health_port),
-            ):
-                start_log_capture(
-                    bot.background_tasks,
-                    runtime.services.error_reports,
-                    enabled=resolved_config.diagnostics.capture_logged_errors,
-                    capacity=resolved_config.diagnostics.log_capture_queue,
-                )
-                await bot.start(resolved_config.discord.token.get_secret_value())
+        await _run_bot(resolved_config, identity_config)
     finally:
         observability.shutdown()
         queue_listener.stop()
