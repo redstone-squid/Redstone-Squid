@@ -29,4 +29,7 @@ Duplicate evidence covers every successful analysis, merges by strongest match w
 summaries, and records partial lookup failures. Same-digest uploads coalesce without upload-order
 effects, while post-save record failures become persisted recovery evidence and truthful UI.
 Zero/one/many, reorder, one/all-failure, record-failure, boundary, and nested JSON round-trip cases
-are present; PostgreSQL execution of the round trip remains externally gated.
+are present. `39b645d3` applies the same lifecycle to automatic build-log ingestion: ambiguous
+schematics remain unselected, all usable files contribute duplicate evidence, same-digest files
+coalesce, and per-file processing failures remain visible and recoverably persisted. PostgreSQL
+execution of the round trip remains externally gated.
