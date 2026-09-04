@@ -125,6 +125,8 @@ def worker_services(
     *,
     cleanup: MediaCleanupRecorder | None = None,
     maintenance: MaintenanceRecorder | None = None,
+    events: DomainEventService | None = None,
+    notifications: NotificationService | None = None,
 ) -> WorkerServices:
     """Build the concrete worker service container around stateful test services."""
     maintenance = maintenance or MaintenanceRecorder()
@@ -134,9 +136,9 @@ def worker_services(
         artifacts=cast(Any, object()),
         votes=StubVoteService(),
         records=cast(Any, object()),
-        events=StubEventService(),
+        events=events or StubEventService(),
         event_wake_listener=None,
-        notifications=StubNotificationService(),
+        notifications=notifications or StubNotificationService(),
         schematics=cast(Any, object()),
         schematic_jobs=cast(Any, object()),
         schematic_renders=cast(Any, object()),
