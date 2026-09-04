@@ -1,5 +1,6 @@
 """What `/account` answers with, and to whom."""
 
+from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from typing import Any, cast, override
 from uuid import UUID
@@ -27,7 +28,7 @@ from squid.accounts.domain import (
     ProfileUpdate,
     PublicCreatorProfile,
 )
-from squid.bot.account_view import AccountScreen
+from squid.bot.account_view import AccountScreen, ConsentAnswer
 from squid.bot.account_workspace import AccountWorkspace
 from squid.bot.verify import VerifyCog
 from squid.permissions.domain import PermissionNode
@@ -44,8 +45,41 @@ DISCORD = replace(AccountIdentity.discord(AUTHOR_ID), id=1, verified_at=NOW)
 JAVA = replace(AccountIdentity.java(JAVA_UUID, username="Notch"), id=2, verified_at=NOW)
 
 
-async def no_consent_request(_event: sl.ActionEvent, _callback: Any) -> None:
-    pass
+async def no_consent_request(
+    event: sl.ActionEvent,
+    answered: ConsentAnswer,
+    *,
+    preview: LinkPreview | None = None,
+    on_abandon: Callable[[], Awaitable[None]] | None = None,
+    timeout: float = 120.0,
+) -> bool:
+    del event, answered, preview, on_abandon, timeout
+    return False
+
+
+class ConsentCapture:
+    def __init__(self, *, opened: bool = True) -> None:
+        self.opened = opened
+        self.answered: ConsentAnswer | None = None
+        self.preview: LinkPreview | None = None
+        self.on_abandon: Callable[[], Awaitable[None]] | None = None
+        self.timeout: float | None = None
+
+    async def __call__(
+        self,
+        event: sl.ActionEvent,
+        answered: ConsentAnswer,
+        *,
+        preview: LinkPreview | None = None,
+        on_abandon: Callable[[], Awaitable[None]] | None = None,
+        timeout: float = 120.0,
+    ) -> bool:
+        del event
+        self.answered = answered
+        self.preview = preview
+        self.on_abandon = on_abandon
+        self.timeout = timeout
+        return self.opened
 
 
 async def no_refresh() -> None:
@@ -111,6 +145,7 @@ class LinkAccountService(AccountService):
     def __init__(self) -> None:
         self.linked: list[tuple[int, str]] = []
         self.released: list[str] = []
+        self.reservation_ttls: list[int] = []
         self.reservation = LinkReservation("held", NOW.add(minutes=5), LinkPreview(JAVA_UUID, "Notch"))
 
     @override
@@ -121,8 +156,9 @@ class LinkAccountService(AccountService):
         attempted_by: tuple[IdentityProvider, str],
         ttl_seconds: int = 120,
     ) -> LinkReservation:
-        del attempted_by, ttl_seconds
+        del attempted_by
         assert code == "abcd"
+        self.reservation_ttls.append(ttl_seconds)
         return self.reservation
 
     @override
@@ -231,6 +267,7 @@ async def test_somebody_elses_creator_page_uses_the_public_profile_projection() 
 async def test_linking_runs_inside_the_workspace_and_refreshes_it() -> None:
     account = Account((DISCORD,), AccountConsent.grant_current(), ACCOUNT_ID, NOW)
     accounts = LinkAccountService()
+    consent = ConsentCapture()
 
     async def authorize(_node: PermissionNode) -> bool:
         return False
@@ -239,7 +276,7 @@ async def test_linking_runs_inside_the_workspace_and_refreshes_it() -> None:
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=account,
-        request_consent=no_consent_request,
+        request_consent=consent,
         can_review_claims=False,
         can_approve_claims=False,
         can_reject_claims=False,
@@ -250,9 +287,76 @@ async def test_linking_runs_inside_the_workspace_and_refreshes_it() -> None:
 
     await workspace._link(cast(sl.SubmitEvent, event))
 
+    assert accounts.linked == []
+    assert consent.preview is accounts.reservation.preview
+    assert consent.timeout == 120.0
+    assert accounts.reservation_ttls == [120]
+
+    assert consent.answered is not None
+    await consent.answered(cast(sl.PressEvent, event), AccountConsent.grant_current())
+
     assert accounts.linked == [(ACCOUNT_ID, "abcd")]
     assert accounts.released == []
     assert len(event.notices) == 1
+    assert "linked to **Notch**" in str(event.notices[0])
+
+
+@pytest.mark.parametrize("abandoned", [False, True], ids=["cancel", "timeout"])
+async def test_link_reservation_is_released_when_consent_does_not_complete(abandoned: bool) -> None:
+    account = Account((DISCORD,), AccountConsent.grant_current(), ACCOUNT_ID, NOW)
+    accounts = LinkAccountService()
+    consent = ConsentCapture()
+
+    async def authorize(_node: PermissionNode) -> bool:
+        return False
+
+    workspace = AccountWorkspace(
+        accounts=accounts,
+        actor_id=AUTHOR_ID,
+        account=account,
+        request_consent=consent,
+        can_review_claims=False,
+        can_approve_claims=False,
+        can_reject_claims=False,
+        authorize_claim=authorize,
+    )
+    workspace._rebuild = no_refresh  # type: ignore[method-assign]
+
+    await workspace._link(cast(sl.SubmitEvent, NoticeSource(code="abcd")))
+    if abandoned:
+        assert consent.on_abandon is not None
+        await consent.on_abandon()
+    else:
+        assert consent.answered is not None
+        await consent.answered(cast(sl.PressEvent, NoticeSource()), None)
+
+    assert accounts.linked == []
+    assert accounts.released == ["abcd"]
+
+
+async def test_link_reservation_is_released_when_prompt_is_not_opened() -> None:
+    account = Account((DISCORD,), AccountConsent.grant_current(), ACCOUNT_ID, NOW)
+    accounts = LinkAccountService()
+    consent = ConsentCapture(opened=False)
+
+    async def authorize(_node: PermissionNode) -> bool:
+        return False
+
+    workspace = AccountWorkspace(
+        accounts=accounts,
+        actor_id=AUTHOR_ID,
+        account=account,
+        request_consent=consent,
+        can_review_claims=False,
+        can_approve_claims=False,
+        can_reject_claims=False,
+        authorize_claim=authorize,
+    )
+
+    await workspace._link(cast(sl.SubmitEvent, NoticeSource(code="abcd")))
+
+    assert accounts.linked == []
+    assert accounts.released == ["abcd"]
 
 
 async def test_merge_requires_the_workspace_decision() -> None:
@@ -363,13 +467,23 @@ def _gated_panel(monkeypatch: pytest.MonkeyPatch) -> tuple[AccountScreen, dict[s
     del monkeypatch
     opened: dict[str, Any] = {}
 
-    async def request(event: sl.ActionEvent, on_answer: Any) -> None:
+    async def request(
+        event: sl.ActionEvent,
+        on_answer: Any,
+        *,
+        preview: LinkPreview | None = None,
+        on_abandon: Any = None,
+        timeout: float = 120.0,
+    ) -> bool:
+        del preview, on_abandon, timeout
+
         async def answer(consent: AccountConsent | None) -> None:
-            await on_answer(consent)
+            await on_answer(cast(sl.PressEvent, event), consent)
             if consent is not None:
                 await cast(Any, event).responder.message_root.schedule()
 
         opened["on_answer"] = answer
+        return True
 
     panel = AccountScreen(
         accounts=AccountMutationService(),
