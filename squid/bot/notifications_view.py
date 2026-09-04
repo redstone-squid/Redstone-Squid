@@ -13,7 +13,9 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.ui import tr
 from squid.notifications import (
+    DEFAULT_INBOX_VISIBILITY,
     InboxNotification,
+    InboxVisibility,
     NotificationPreferences,
     NotificationSubscription,
     RecordSubscriptionFilter,
@@ -61,10 +63,12 @@ class NotificationScreen(sd.Screen):
         notifications: NotificationService,
         account_id: int,
         author_id: int,
+        visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY,
     ) -> None:
         self._notifications = notifications
         self._account_id = account_id
         self._author_id = author_id
+        self._visibility = visibility
 
     async def on_load(self) -> None:
         await self._refresh()
@@ -73,7 +77,15 @@ class NotificationScreen(sd.Screen):
         """Re-read this account's channels and follows. Also what unfollowing calls afterwards."""
         self._preferences = await self._notifications.preferences(self._account_id)
         self._subscriptions = tuple(await self._notifications.subscriptions(self._account_id))
-        self._inbox = tuple((await self._notifications.inbox(self._account_id, page_size=MAX_LISTED)).items)
+        self._inbox = tuple(
+            (
+                await self._notifications.inbox(
+                    self._account_id,
+                    page_size=MAX_LISTED,
+                    visibility=self._visibility,
+                )
+            ).items
+        )
         self.selected_ids = tuple(
             selected for selected in self.selected_ids if any(str(item.id) == selected for item in self.subscriptions)
         )
@@ -250,7 +262,7 @@ class NotificationScreen(sd.Screen):
         await event.acknowledge()
         operation = self._notifications.mark_read if read else self._notifications.mark_unread
         for notification_id in self.selected_inbox_ids:
-            await operation(self._account_id, int(notification_id))
+            await operation(self._account_id, int(notification_id), visibility=self._visibility)
         await self._refresh()
         self.invalidate()
 
