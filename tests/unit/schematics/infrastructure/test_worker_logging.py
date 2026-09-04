@@ -298,7 +298,7 @@ async def test_leaving_the_pool_lifetime_stops_every_stderr_pump(mocker: MockerF
 async def test_worker_request_injects_trace_context_into_frame(mocker: MockerFixture) -> None:
     worker = unowned_worker()
     stdout = asyncio.StreamReader()
-    stdout.feed_data(Frame({"id": 1, "ok": True}).encode())
+    stdout.feed_data(Frame({"id": 1, "ok": True, "result": {}}).encode())
     stdin = mocker.Mock()
     stdin.drain = mocker.AsyncMock()
     process = mocker.Mock(stdin=stdin, stdout=stdout)
@@ -321,7 +321,7 @@ async def test_worker_request_injects_trace_context_into_frame(mocker: MockerFix
 async def test_worker_request_carries_the_durable_job_id(mocker: MockerFixture, job_id: int | None) -> None:
     worker = unowned_worker()
     stdout = asyncio.StreamReader()
-    stdout.feed_data(Frame({"id": 1, "ok": True}).encode())
+    stdout.feed_data(Frame({"id": 1, "ok": True, "result": {}}).encode())
     stdin = mocker.Mock()
     stdin.drain = mocker.AsyncMock()
     mocker.patch.object(
