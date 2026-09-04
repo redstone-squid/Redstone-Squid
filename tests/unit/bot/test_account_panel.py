@@ -151,7 +151,28 @@ class LinkAccountService(AccountService):
         self.linked: list[tuple[int, str]] = []
         self.released: list[str] = []
         self.reservation_ttls: list[int] = []
+        self.created_consents: list[AccountConsent] = []
+        self.granted: list[int] = []
         self.reservation = LinkReservation("held", NOW.add(minutes=5), LinkPreview(JAVA_UUID, "Notch"))
+
+    @override
+    async def get_or_create_identity(
+        self,
+        provider: IdentityProvider,
+        subject: str,
+        *,
+        consent: AccountConsent | None = None,
+    ) -> Account:
+        assert provider is IdentityProvider.DISCORD
+        assert subject == str(AUTHOR_ID)
+        assert consent is not None
+        self.created_consents.append(consent)
+        return Account((AccountIdentity.discord(AUTHOR_ID),), consent, ACCOUNT_ID, NOW)
+
+    @override
+    async def grant_current_consent(self, account_id: int) -> Account:
+        self.granted.append(account_id)
+        return Account((DISCORD,), AccountConsent.grant_current(), account_id, NOW)
 
     @override
     async def reserve_minecraft_link(
@@ -381,6 +402,95 @@ async def test_link_reservation_is_released_when_prompt_is_not_opened() -> None:
 
     assert accounts.linked == []
     assert accounts.released == ["abcd"]
+
+
+async def test_accountless_link_cancel_releases_without_creating_personal_rows() -> None:
+    accounts = LinkAccountService()
+    consent = ConsentCapture()
+
+    async def authorize(_node: PermissionNode) -> bool:
+        return False
+
+    workspace = AccountWorkspace(
+        accounts=accounts,
+        actor_id=AUTHOR_ID,
+        account=None,
+        request_consent=consent,
+        can_review_claims=False,
+        can_approve_claims=False,
+        can_reject_claims=False,
+        authorize_claim=authorize,
+    )
+
+    assert "Link Minecraft account" in labels(workspace._identity_nodes())
+    await workspace._link(cast(sl.SubmitEvent, NoticeSource(code="abcd")))
+    assert accounts.created_consents == []
+    assert consent.answered is not None
+    await consent.answered(cast(sl.PressEvent, NoticeSource()), None)
+
+    assert accounts.created_consents == []
+    assert accounts.linked == []
+    assert accounts.released == ["abcd"]
+
+
+async def test_accountless_link_agreement_creates_the_account_then_consumes_the_hold() -> None:
+    accounts = LinkAccountService()
+    consent = ConsentCapture()
+
+    async def authorize(_node: PermissionNode) -> bool:
+        return False
+
+    workspace = AccountWorkspace(
+        accounts=accounts,
+        actor_id=AUTHOR_ID,
+        account=None,
+        request_consent=consent,
+        can_review_claims=False,
+        can_approve_claims=False,
+        can_reject_claims=False,
+        authorize_claim=authorize,
+    )
+    workspace._rebuild = no_refresh  # type: ignore[method-assign]
+    prompt = NoticeSource()
+
+    await workspace._link(cast(sl.SubmitEvent, NoticeSource(code="abcd")))
+    granted = AccountConsent.grant_current()
+    assert consent.answered is not None
+    await consent.answered(cast(sl.PressEvent, prompt), granted)
+
+    assert accounts.created_consents == [granted]
+    assert accounts.linked == [(ACCOUNT_ID, "abcd")]
+    assert accounts.released == []
+    assert "linked to **Notch**" in str(prompt.notices[0])
+
+
+async def test_stale_consent_is_refreshed_only_after_link_agreement() -> None:
+    account = Account((DISCORD,), AccountConsent("older-notice", NOW), ACCOUNT_ID, NOW)
+    accounts = LinkAccountService()
+    consent = ConsentCapture()
+
+    async def authorize(_node: PermissionNode) -> bool:
+        return False
+
+    workspace = AccountWorkspace(
+        accounts=accounts,
+        actor_id=AUTHOR_ID,
+        account=account,
+        request_consent=consent,
+        can_review_claims=False,
+        can_approve_claims=False,
+        can_reject_claims=False,
+        authorize_claim=authorize,
+    )
+    workspace._rebuild = no_refresh  # type: ignore[method-assign]
+
+    await workspace._link(cast(sl.SubmitEvent, NoticeSource(code="abcd")))
+    assert accounts.granted == []
+    assert consent.answered is not None
+    await consent.answered(cast(sl.PressEvent, NoticeSource()), AccountConsent.grant_current())
+
+    assert accounts.granted == [ACCOUNT_ID]
+    assert accounts.linked == [(ACCOUNT_ID, "abcd")]
 
 
 def test_staff_refresh_picker_is_visible_only_with_the_moderation_permission() -> None:
