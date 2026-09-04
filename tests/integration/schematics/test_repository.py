@@ -5,11 +5,11 @@ upsert, the partial unique index enforcing one primary per build, and the versio
 fingerprint indexes — are all database semantics rather than Python ones.
 """
 
-import asyncio
 from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import cast
 
+import anyio
 import pytest
 from sqlalchemy import Table, text
 from sqlalchemy.exc import IntegrityError
@@ -229,10 +229,12 @@ async def test_primary_replacement_wins_a_concurrent_render_publication(
     first_id = await repository.record_analysis(1, first_digest, make_analysis(), primary=True)
     second_id = await repository.record_analysis(1, second_digest, make_analysis(), primary=False)
 
-    async with async_session_factory() as replacement, replacement.begin():
-        await replacement.execute(text("SELECT id FROM builds WHERE id = 1 FOR UPDATE"))
-        late_render = asyncio.create_task(
-            repository.record_render(
+    published = anyio.Event()
+    results: list[object | None] = []
+
+    async def publish_late_render() -> None:
+        results.append(
+            await repository.record_render(
                 first_id,
                 "late-recipe",
                 "https://api.example/v1/schematic-renders/late/content",
@@ -242,18 +244,26 @@ async def test_primary_replacement_wins_a_concurrent_render_publication(
                 byte_size=42,
             )
         )
-        with pytest.raises(TimeoutError):
-            await asyncio.wait_for(asyncio.shield(late_render), timeout=0.1)
-        await replacement.execute(
-            text("UPDATE build_schematics SET is_primary = false WHERE id = :schematic_id"),
-            {"schematic_id": first_id},
-        )
-        await replacement.execute(
-            text("UPDATE build_schematics SET is_primary = true WHERE id = :schematic_id"),
-            {"schematic_id": second_id},
-        )
+        published.set()
 
-    assert await late_render is None
+    async with anyio.create_task_group() as tasks:
+        async with async_session_factory() as replacement, replacement.begin():
+            await replacement.execute(text("SELECT id FROM builds WHERE id = 1 FOR UPDATE"))
+            tasks.start_soon(publish_late_render)
+            with anyio.move_on_after(0.1) as scope:
+                await published.wait()
+            assert scope.cancelled_caught
+            await replacement.execute(
+                text("UPDATE build_schematics SET is_primary = false WHERE id = :schematic_id"),
+                {"schematic_id": first_id},
+            )
+            await replacement.execute(
+                text("UPDATE build_schematics SET is_primary = true WHERE id = :schematic_id"),
+                {"schematic_id": second_id},
+            )
+        await published.wait()
+
+    assert results == [None]
     async with async_session_factory() as session:
         stale_rows = await session.scalar(
             text("SELECT count(*) FROM schematic_renders WHERE recipe_hash = 'late-recipe'")

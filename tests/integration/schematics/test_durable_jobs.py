@@ -1,10 +1,10 @@
 """Real-PostgreSQL coverage for durable schematic execution."""
 
-import asyncio
 from collections.abc import AsyncGenerator, Coroutine
 from pathlib import Path
 from typing import Any
 
+import anyio
 import pytest
 from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
@@ -58,11 +58,27 @@ def durable_components(
 
 
 async def _with_runner[ResultT](runner: SchematicJobRunner, request: Coroutine[Any, Any, ResultT]) -> ResultT:
-    task = asyncio.create_task(request)
-    while not task.done():
-        await runner.process_batch()
-        await asyncio.sleep(0.005)
-    return await task
+    finished = anyio.Event()
+    results: list[ResultT] = []
+    failures: list[Exception] = []
+
+    async def execute() -> None:
+        try:
+            results.append(await request)
+        except Exception as error:
+            failures.append(error)
+        finally:
+            finished.set()
+
+    async with anyio.create_task_group() as tasks:
+        tasks.start_soon(execute)
+        while not finished.is_set():
+            await runner.process_batch()
+            await anyio.sleep(0.005)
+
+    if failures:
+        raise failures[0]
+    return results[0]
 
 
 async def test_every_native_operation_crosses_the_durable_worker_boundary(
