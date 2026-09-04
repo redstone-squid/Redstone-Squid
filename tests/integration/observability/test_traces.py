@@ -134,6 +134,28 @@ def test_squid_telemetry_composes_with_a_live_sdk() -> None:
     assert worker_span.parent.span_id == supervisor_span.context.span_id
 
 
+def test_worker_without_trace_header_starts_a_root_span() -> None:
+    """A request from an uninstrumented supervisor must not inherit ambient state."""
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    previous_active = observability._ACTIVE  # pyright: ignore[reportPrivateUsage]
+    observability._ACTIVE = _live_telemetry(provider=provider)  # pyright: ignore[reportPrivateUsage]
+    try:
+        with extracted_trace_span(
+            "schematic.worker capabilities",
+            {},
+            {"squid.schematic.operation": "capabilities"},
+        ):
+            pass
+    finally:
+        provider.shutdown()
+        observability._ACTIVE = previous_active  # pyright: ignore[reportPrivateUsage]
+
+    (span,) = exporter.get_finished_spans()
+    assert span.parent is None
+
+
 def test_worker_metrics_are_recorded_by_the_optional_sdk() -> None:
     reader = InMemoryMetricReader()
     provider = MeterProvider(metric_readers=(reader,))
