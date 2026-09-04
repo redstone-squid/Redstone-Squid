@@ -8,6 +8,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
+from squid.core.errors import DataIntegrityError
+from squid.messages.errors import MessageNotFoundError
 from squid.messages.infrastructure.models import Message
 from squid.persistence.repository import BaseAsyncRepository
 from squid.posts.infrastructure.models import DiscordPost
@@ -33,6 +35,7 @@ from squid.voting.domain import (
     VoteVisibility,
     normalize_vote_options,
 )
+from squid.voting.errors import VoteSessionNotFoundError
 from squid.voting.infrastructure.models import (
     BuildVoteSession,
     DeleteLogVoteSession,
@@ -158,6 +161,75 @@ class VoteRepository:
                 )
             )
             return session_id
+
+    async def attach_message(self, vote_session_id: int, message_id: int) -> None:
+        """Attach one recorded message to a vote session, tolerating an exact replay.
+
+        A message belongs to at most one resource, while the partial unique index on
+        ``discord_posts`` prevents a second live card for this session in the same
+        channel. Retrying the same pair is a no-op; silently accepting a different
+        resource for the same message would make the caller believe the wrong card was
+        attached, so that case is rejected explicitly.
+        """
+        async with self._session_factory.begin() as session:
+            if await session.scalar(select(VoteSession.id).where(VoteSession.id == vote_session_id)) is None:
+                raise VoteSessionNotFoundError(vote_session_id)
+            channel_id = await session.scalar(select(Message.channel_id).where(Message.id == message_id))
+            if channel_id is None:
+                raise MessageNotFoundError(message_id)
+
+            expected = (channel_id, "vote_session", str(vote_session_id), "vote_card")
+            existing = await session.execute(
+                select(
+                    DiscordPost.channel_id,
+                    DiscordPost.resource_kind,
+                    DiscordPost.resource_key,
+                    DiscordPost.surface,
+                ).where(DiscordPost.message_id == message_id)
+            )
+            existing_values = existing.tuples().one_or_none()
+            if existing_values is not None:
+                if existing_values == expected:
+                    return
+                msg = "Discord message is already attached to a different resource."
+                raise DataIntegrityError(
+                    msg,
+                    context={"message_id": message_id, "vote_session_id": vote_session_id},
+                )
+
+            attached = await session.scalar(
+                pg_insert(DiscordPost)
+                .values(
+                    message_id=message_id,
+                    channel_id=channel_id,
+                    resource_kind="vote_session",
+                    resource_key=str(vote_session_id),
+                    surface="vote_card",
+                    applied_revision=0,
+                )
+                .on_conflict_do_nothing(index_elements=[DiscordPost.message_id])
+                .returning(DiscordPost.message_id)
+            )
+            if attached is not None:
+                return
+
+            # A concurrent exact replay may have won after the read above. The
+            # primary-key conflict is the only one the insert suppresses; the live
+            # resource/channel uniqueness constraint still rejects a second card.
+            raced = await session.execute(
+                select(
+                    DiscordPost.channel_id,
+                    DiscordPost.resource_kind,
+                    DiscordPost.resource_key,
+                    DiscordPost.surface,
+                ).where(DiscordPost.message_id == message_id)
+            )
+            if raced.tuples().one_or_none() != expected:
+                msg = "Discord message was concurrently attached to a different resource."
+                raise DataIntegrityError(
+                    msg,
+                    context={"message_id": message_id, "vote_session_id": vote_session_id},
+                )
 
     @staticmethod
     async def _create_session(

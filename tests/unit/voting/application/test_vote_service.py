@@ -78,6 +78,7 @@ class FakeVoteRepository:
         self.build_create_calls: list[tuple[int, int, int, int, list[VoteChange], tuple[VoteOption, ...]]] = []
         self.delete_create_calls: list[tuple[int, int, int, int, int, int, tuple[VoteOption, ...]]] = []
         self.generic_create_calls: list[tuple[int, str, VoteVisibility, Instant, int | None]] = []
+        self.attach_calls: list[tuple[int, int]] = []
 
     async def get_or_create_build_submission_session(
         self,
@@ -108,6 +109,9 @@ class FakeVoteRepository:
         self.generic_create_calls.append((author_account_id, question, visibility, deadline, guild_id))
         self.generic_scopes.append(scope)
         return 26
+
+    async def attach_message(self, vote_session_id: int, message_id: int) -> None:
+        self.attach_calls.append((vote_session_id, message_id))
 
     async def create_build_session(
         self,
@@ -258,6 +262,16 @@ async def test_initial_build_vote_creation_uses_idempotent_repository_operation(
 
     assert session_id == 23
     assert repository.build_create_calls == [(7, 3, -3, 42, changes, DEFAULT_VOTE_OPTIONS)]
+
+
+async def test_message_attachment_stays_an_explicit_application_operation() -> None:
+    repository = FakeVoteRepository(None)
+    service = VoteService(repository)
+
+    await service.attach_message(26, 9001)
+    await service.attach_message(26, 9001)
+
+    assert repository.attach_calls == [(26, 9001), (26, 9001)]
 
 
 async def test_refresh_log_carries_session_id_without_user_attributes(caplog: pytest.LogCaptureFixture) -> None:
