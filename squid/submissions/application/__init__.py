@@ -1,5 +1,11 @@
 """Submission application services."""
 
+from squid.submissions.application.attachments import (
+    DraftAttachmentService,
+    DraftUploadAuthority,
+    StagedUpload,
+    draft_attachment_service,
+)
 from squid.submissions.application.drafts import (
     DEFAULT_ACCOUNT_DRAFT_CAPACITY,
     DEFAULT_DRAFT_RETENTION_DAYS,
@@ -61,7 +67,9 @@ __all__ = [
     "CheckedInFormRevisionMigration",
     "ClaimedFinalizationJob",
     "DraftArtifactReadiness",
+    "DraftAttachmentService",
     "DraftRepository",
+    "DraftUploadAuthority",
     "FinalizationFailureOutcome",
     "FinalizationJobRepository",
     "FinalizationJobSnapshot",
@@ -73,6 +81,7 @@ __all__ = [
     "PreparationRejected",
     "PreparationResult",
     "PreparedSubmission",
+    "StagedUpload",
     "StoredDraft",
     "SubmissionDraftService",
     "SubmissionFinalizationService",
@@ -82,4 +91,5 @@ __all__ = [
     "SubmissionSponsorResolver",
     "ValidatedDraft",
     "build_submission_manifest",
+    "draft_attachment_service",
 ]

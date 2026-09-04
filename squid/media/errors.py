@@ -74,6 +74,21 @@ class MediaDraftStateConflictError(ConflictError):
         super().__init__(public_context={"reason": "draft_state", "status": status})
 
 
+class MediaDraftRevisionConflictError(ConflictError):
+    """An authorized upload raced with another draft mutation."""
+
+    default_message = tr(t"The submission draft changed while its attachment was uploading.")
+    default_title = tr(t"Draft changed")
+    default_resource = "media"
+    default_end_user_action = tr(t"Reload the draft and upload the attachment again.")
+
+    def __init__(self, *, expected: int, actual: int) -> None:
+        super().__init__(
+            context={"expected_revision": expected, "actual_revision": actual},
+            public_context={"reason": "draft_revision", "actual_revision": actual},
+        )
+
+
 class MediaDraftNotFoundError(NotFoundError):
     """A media mutation cannot re-establish ownership after draft deletion."""
 
@@ -83,6 +98,47 @@ class MediaDraftNotFoundError(NotFoundError):
 
     def __init__(self, draft_id: UUID) -> None:
         super().__init__(public_context={"draft_id": str(draft_id)})
+
+
+class DraftMediaRequestError(ValidationError):
+    """A raw attachment request is ambiguous or violates declared framing."""
+
+    default_message = tr(t"The draft attachment upload request is invalid.")
+    default_title = tr(t"Invalid attachment upload")
+    default_resource = "submission_media"
+    default_end_user_action = tr(t"Check the attachment type and upload it again.")
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(public_context={"reason": reason})
+
+
+class DraftMediaNotFoundError(NotFoundError):
+    """No owner-visible attachment upload matches the requested UUID."""
+
+    default_message = tr(t"Draft attachment not found.")
+    default_title = tr(t"Attachment not found")
+    default_resource = "submission_media"
+
+    def __init__(self, upload_id: UUID) -> None:
+        super().__init__(public_context={"upload_id": str(upload_id)})
+
+
+class DraftMediaConflictError(ConflictError):
+    """A caller-provided retry UUID was already used for different bytes."""
+
+    default_message = tr(t"The attachment upload identifier is already in use.")
+    default_title = tr(t"Attachment upload conflict")
+    default_resource = "submission_media"
+
+    def __init__(self, upload_id: UUID) -> None:
+        super().__init__(public_context={"upload_id": str(upload_id)})
+
+
+class DraftMediaUnavailableError(ServiceUnavailableError):
+    """Draft attachment processing is not enabled for this API process."""
+
+    default_message = tr(t"Draft attachment processing is temporarily unavailable.")
+    default_resource = "submission_media"
 
 
 class InvalidMediaError(ValidationError):

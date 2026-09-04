@@ -19,6 +19,7 @@ from squid.media.application.jobs import (
     MediaArtifactCleanupInProgressError,
     MediaArtifactCleanupOutcome,
     MediaArtifactRole,
+    MediaDraftUploadAuthorization,
     MediaEnqueueOutcome,
     MediaJobFailureOutcome,
     MediaJobSnapshot,
@@ -140,7 +141,14 @@ class MemoryMediaJobs:
         self.heartbeat_calls = 0
         self.artifact_cleanup_calls = 0
 
-    async def enqueue(self, upload: MediaUploadMetadata, limits: MediaLimits) -> MediaEnqueueOutcome:
+    async def enqueue(
+        self,
+        upload: MediaUploadMetadata,
+        limits: MediaLimits,
+        *,
+        authorization: MediaDraftUploadAuthorization | None = None,
+    ) -> MediaEnqueueOutcome:
+        del authorization
         existing = self.states.get(upload.id)
         if existing is not None:
             if replace(existing.upload, created_at=None, raw_deleted_at=None) != upload:
@@ -359,8 +367,14 @@ class RejectingMediaJobs(MemoryMediaJobs):
         self.error = error
 
     @override
-    async def enqueue(self, upload: MediaUploadMetadata, limits: MediaLimits) -> MediaEnqueueOutcome:
-        del upload, limits
+    async def enqueue(
+        self,
+        upload: MediaUploadMetadata,
+        limits: MediaLimits,
+        *,
+        authorization: MediaDraftUploadAuthorization | None = None,
+    ) -> MediaEnqueueOutcome:
+        del upload, limits, authorization
         raise self.error
 
 
