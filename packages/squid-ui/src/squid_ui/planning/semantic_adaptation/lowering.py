@@ -10,6 +10,7 @@ from squid_ui.errors import LayoutInvariantError
 from squid_ui.factories import is_builtin_layout_node
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.cursors import CursorCoordinator
+from squid_ui.planning.discord_dialect import require_gallery_item
 from squid_ui.planning.limits import MessageLimits
 from squid_ui.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_ui.planning.semantic_adaptation.common import (
@@ -676,17 +677,9 @@ def _required_card_text(value: CardText, context: _Context) -> Text:
     return resolved
 
 
-def _gallery_item(value: str | GalleryItem) -> GalleryItem:
-    """Return the normalized item guaranteed by Gallery construction."""
-    if isinstance(value, str):
-        message = "Gallery left a shorthand URL unnormalized"
-        raise LayoutInvariantError(message)
-    return value
-
-
 def _resolved_gallery_item(value: str | GalleryItem, context: _Context) -> GalleryItem:
     """Resolve the optional description on one normalized gallery item."""
-    item = _gallery_item(value)
+    item = require_gallery_item(value)
     description = item.description
     return replace(item, description=None if description is None else _resolve(description, context))
 
