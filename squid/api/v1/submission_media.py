@@ -82,11 +82,11 @@ async def upload_draft_media(
     upload_id: UploadId = None,
 ) -> DraftMediaResponse:
     """Stream one owned-draft upload through a private bounded staging file."""
-    authority = await attachments.authorize_upload(draft_id, account_id, kind)
-    _require_query_names(request, _UPLOAD_QUERY_NAMES)
     _require_non_nil(draft_id, reason="nil_draft_id")
     if upload_id is not None:
         _require_non_nil(upload_id, reason="nil_upload_id")
+    authority = await attachments.authorize_upload(draft_id, account_id, kind)
+    _require_query_names(request, _UPLOAD_QUERY_NAMES)
     if kind is MediaKind.IMAGE and strip_audio:
         reason = "strip_audio_requires_video"
         raise DraftMediaRequestError(reason)
@@ -219,7 +219,9 @@ def _source_content_type(request: Request, kind: MediaKind) -> str:
         content_type = values[0].decode("ascii").lower()
     except UnicodeDecodeError:
         raise DraftMediaRequestError(_CONTENT_TYPE_INVALID) from None
-    if not _MEDIA_TYPE.fullmatch(content_type) or not content_type.startswith(f"{kind.value}/"):
+    if not _MEDIA_TYPE.fullmatch(content_type):
+        raise DraftMediaRequestError(_CONTENT_TYPE_INVALID)
+    if not content_type.startswith(f"{kind.value}/"):
         reason = "content_type_kind_mismatch"
         raise DraftMediaRequestError(reason)
     return content_type
