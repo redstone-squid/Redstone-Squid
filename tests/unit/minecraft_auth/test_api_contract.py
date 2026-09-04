@@ -11,12 +11,11 @@ from pydantic import ValidationError as PydanticValidationError
 from whenever import Instant
 
 from squid.accounts.errors import ConsentRequiredError
+from squid.api.dependencies import get_minecraft_installations, get_minecraft_player_authorization
 from squid.api.errors import register_exception_handlers
 from squid.api.security import ANONYMOUS, Caller, current_caller
 from squid.api.v1.minecraft_auth import (
     current_account_id,
-    get_installation_service,
-    get_player_authorization_service,
     router,
 )
 from squid.api.v1.schemas.minecraft_auth import (
@@ -277,8 +276,8 @@ def app_with_fakes(
     async def caller_dependency() -> Caller:
         return Caller(kind="account", subject=f"account:{ACCOUNT_ID}", account_id=ACCOUNT_ID)
 
-    app.dependency_overrides[get_installation_service] = installation_dependency
-    app.dependency_overrides[get_player_authorization_service] = player_dependency
+    app.dependency_overrides[get_minecraft_installations] = installation_dependency
+    app.dependency_overrides[get_minecraft_player_authorization] = player_dependency
     app.dependency_overrides[current_account_id] = account_dependency
     app.dependency_overrides[current_caller] = caller_dependency
     return app
