@@ -755,7 +755,9 @@ class MediaNormalizationJobRunner:
             prepared.append(
                 (
                     self._artifact_metadata(
-                        MediaArtifactRole.VIDEO_THUMBNAIL,
+                        # Keep the legacy durable value until every reader that
+                        # predates the dual-read rollout has drained.
+                        MediaArtifactRole.POSTER,
                         poster,
                         result.report.poster.content_type,
                         result.report.poster.sha256,

@@ -639,7 +639,7 @@ async def test_draft_capacity_is_reserved_atomically_and_discard_releases_it() -
     assert next(snapshot for snapshot in snapshots if snapshot.upload.id == first_id).status is MediaJobStatus.DISCARDED
 
 
-async def test_runner_persists_video_output_thumbnail_and_report_then_cleans_raw_and_temp(tmp_path: Path) -> None:
+async def test_runner_keeps_legacy_poster_writes_during_dual_reader_rollout(tmp_path: Path) -> None:
     artifacts = MemoryArtifacts()
     repository = MemoryMediaJobs()
     jobs = MediaNormalizationJobService(repository, artifacts)
@@ -673,7 +673,7 @@ async def test_runner_persists_video_output_thumbnail_and_report_then_cleans_raw
     assert snapshot.upload.raw_deleted_at == NOW
     assert {artifact.role for artifact in snapshot.artifacts} == {
         MediaArtifactRole.OUTPUT,
-        MediaArtifactRole.VIDEO_THUMBNAIL,
+        MediaArtifactRole.POSTER,
         MediaArtifactRole.REPORT,
     }
     assert snapshot.upload.source_object_key not in artifacts.objects
@@ -684,9 +684,7 @@ async def test_runner_persists_video_output_thumbnail_and_report_then_cleans_raw
     assert report_payload["actions"] == ["video_transcoded"]
     assert "poster" in report_payload
     assert "video_thumbnail" not in report_payload
-    thumbnail = next(
-        artifact for artifact in snapshot.artifacts if artifact.role is MediaArtifactRole.VIDEO_THUMBNAIL
-    )
+    thumbnail = next(artifact for artifact in snapshot.artifacts if artifact.role is MediaArtifactRole.POSTER)
     assert thumbnail.object_key.startswith("media/posters/")
     assert not any(tmp_path.iterdir())
     assert all(not directory.exists() for directory in normalizer.seen_directories)
