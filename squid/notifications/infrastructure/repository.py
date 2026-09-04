@@ -1,7 +1,7 @@
 """PostgreSQL notification persistence and domain-event materialization."""
 
 from collections import defaultdict
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
@@ -21,6 +21,7 @@ from squid.events.infrastructure.models import DomainEventDeliveryRecord, Domain
 from squid.notifications.domain import (
     InboxNotification,
     InboxVisibility,
+    NotificationCandidate,
     NotificationKind,
     NotificationPreferences,
     NotificationSubscription,
@@ -159,7 +160,7 @@ class PostgresNotificationRepository:
         async with self._session_factory() as session, session.begin():
             predicates = [
                 NotificationSubscriptionRecord.account_id == account_id,
-                NotificationSubscriptionRecord.kind == kind.value,
+                NotificationSubscriptionRecord.kind == kind,
                 NotificationSubscriptionRecord.enabled.is_(True),
             ]
             if subject_id is None:
@@ -178,7 +179,7 @@ class PostgresNotificationRepository:
                 insert(NotificationSubscriptionRecord)
                 .values(
                     account_id=account_id,
-                    kind=kind.value,
+                    kind=kind,
                     subject_id=subject_id,
                     filter=filter_value,
                 )
@@ -357,7 +358,7 @@ class PostgresNotificationRepository:
                             NotificationProfile.dm_enabled.is_(True),
                             NotificationProfile.dm_suspended_at.is_(None),
                             or_(
-                                NotificationRecord.kind != NotificationKind.STAFF_BUILD_SUBMITTED.value,
+                                NotificationRecord.kind != NotificationKind.STAFF_BUILD_SUBMITTED,
                                 claimable_staff,
                             ),
                         )
@@ -402,7 +403,7 @@ class PostgresNotificationRepository:
                     nonce=delivery.nonce,
                     claim_token=_claim_token(delivery),
                     attempts=delivery.attempts,
-                    kind=NotificationKind(notification_by_id[delivery.notification_id].kind),
+                    kind=notification_by_id[delivery.notification_id].kind,
                     payload=dict(notification_by_id[delivery.notification_id].payload),
                 )
                 for delivery in deliveries
@@ -490,17 +491,21 @@ class PostgresNotificationRepository:
         if build is None or build.submission_status != Status.PENDING:
             return
         staff_account_ids = (
-            (await session.execute(select(Account.id).where(_is_staff_account(Account.id)).order_by(Account.id)))
-            .scalars()
-            .all()
-        )
-        await self._insert_many(
+            await session.execute(select(Account.id).where(_is_staff_account(Account.id)).order_by(Account.id))
+        ).scalars()
+        payload = {"build_id": build.id, "category": None if build.category is None else str(build.category)}
+        await self._insert_candidates(
             session,
             event=event,
-            account_ids=staff_account_ids,
-            kind=NotificationKind.STAFF_BUILD_SUBMITTED,
-            source_key=lambda account_id: f"event:{event.id}:staff:{account_id}",
-            payload={"build_id": build.id, "category": None if build.category is None else str(build.category)},
+            candidates=tuple(
+                NotificationCandidate(
+                    account_id=account_id,
+                    kind=NotificationKind.STAFF_BUILD_SUBMITTED,
+                    source_key=f"event:{event.id}:staff:{account_id}",
+                    payload=payload,
+                )
+                for account_id in staff_account_ids
+            ),
         )
 
     async def _materialize_build_outcome(self, session: AsyncSession, event: DomainEvent) -> None:
@@ -515,39 +520,40 @@ class PostgresNotificationRepository:
         kind = (
             NotificationKind.BUILD_CONFIRMED if event.event_type == "build.confirmed" else NotificationKind.BUILD_DENIED
         )
-        await self._insert(
-            session,
-            event=event,
-            account_id=build.submitter_account_id,
-            kind=kind,
-            source_key=f"event:{event.id}:owner:{build.submitter_account_id}",
-            payload={"build_id": build.id},
-        )
+        candidates = [
+            NotificationCandidate(
+                account_id=build.submitter_account_id,
+                kind=kind,
+                source_key=f"event:{event.id}:owner:{build.submitter_account_id}",
+                payload={"build_id": build.id},
+            )
+        ]
         if event.event_type != "build.confirmed" or not await self._is_first_confirmation(session, event):
+            await self._insert_candidates(session, event=event, candidates=candidates)
             return
         creator_ids = tuple(await self._creator_public_ids(session, build.id))
-        if not creator_ids:
-            return
-        subscriber_ids = (
-            await session.execute(
-                select(NotificationSubscriptionRecord.account_id)
-                .where(
-                    NotificationSubscriptionRecord.kind == SubscriptionKind.CREATOR.value,
-                    NotificationSubscriptionRecord.subject_id.in_(creator_ids),
-                    NotificationSubscriptionRecord.enabled.is_(True),
+        if creator_ids:
+            subscriber_ids = (
+                await session.execute(
+                    select(NotificationSubscriptionRecord.account_id)
+                    .where(
+                        NotificationSubscriptionRecord.kind == SubscriptionKind.CREATOR,
+                        NotificationSubscriptionRecord.subject_id.in_(creator_ids),
+                        NotificationSubscriptionRecord.enabled.is_(True),
+                    )
+                    .distinct()
                 )
-                .distinct()
+            ).scalars()
+            candidates.extend(
+                NotificationCandidate(
+                    account_id=account_id,
+                    kind=NotificationKind.CREATOR_BUILD_CONFIRMED,
+                    source_key=f"event:{event.id}:creator:{account_id}",
+                    payload={"build_id": build.id, "creator_ids": [str(value) for value in creator_ids]},
+                )
+                for account_id in subscriber_ids
             )
-        ).scalars()
-        for account_id in subscriber_ids:
-            await self._insert(
-                session,
-                event=event,
-                account_id=account_id,
-                kind=NotificationKind.CREATOR_BUILD_CONFIRMED,
-                source_key=f"event:{event.id}:creator:{account_id}",
-                payload={"build_id": build.id, "creator_ids": [str(value) for value in creator_ids]},
-            )
+        await self._insert_candidates(session, event=event, candidates=candidates)
 
     async def _materialize_record_gains(self, session: AsyncSession, event: DomainEvent) -> None:
         if event.payload.get("baseline") is True:
@@ -556,6 +562,7 @@ class PostgresNotificationRepository:
         if isinstance(previous_run_id, bool) or not isinstance(previous_run_id, int):
             return
         gains = await self._record_gains(session, event.aggregate_id, previous_run_id)
+        candidates: list[NotificationCandidate] = []
         for build_id, build_gains in gains.items():
             recipients = set(await self._creator_account_ids(session, build_id))
             creator_ids = tuple(await self._creator_public_ids(session, build_id))
@@ -566,11 +573,11 @@ class PostgresNotificationRepository:
                         NotificationSubscriptionRecord.enabled.is_(True),
                         or_(
                             (
-                                (NotificationSubscriptionRecord.kind == SubscriptionKind.CREATOR.value)
+                                (NotificationSubscriptionRecord.kind == SubscriptionKind.CREATOR)
                                 & NotificationSubscriptionRecord.subject_id.in_(creator_ids)
                             ),
                             (
-                                (NotificationSubscriptionRecord.kind == SubscriptionKind.RECORD.value)
+                                (NotificationSubscriptionRecord.kind == SubscriptionKind.RECORD)
                                 & NotificationSubscriptionRecord.subject_id.in_(competition_ids)
                             ),
                         ),
@@ -592,142 +599,80 @@ class PostgresNotificationRepository:
                     for gain in build_gains
                 ],
             }
-            for account_id in recipients:
-                await self._insert(
-                    session,
-                    event=event,
+            candidates.extend(
+                NotificationCandidate(
                     account_id=account_id,
                     kind=NotificationKind.RECORD_GAINED,
                     source_key=f"event:{event.id}:record-build:{build_id}:account:{account_id}",
                     payload=payload,
                 )
+                for account_id in sorted(recipients)
+            )
+        await self._insert_candidates(session, event=event, candidates=candidates)
 
-    async def _insert_many(
+    async def _insert_candidates(
         self,
         session: AsyncSession,
         *,
         event: DomainEvent,
-        account_ids: Sequence[int],
-        kind: NotificationKind,
-        source_key: Callable[[int], str],
-        payload: dict[str, object],
+        candidates: Sequence[NotificationCandidate],
     ) -> None:
-        """Fan one event out to many recipients in three queries rather than three each."""
-        if not account_ids:
+        if not candidates:
             return
-        eligible = (
-            (
-                await session.execute(
+        account_ids = {candidate.account_id for candidate in candidates}
+        profiles = {
+            profile.account_id: profile
+            for profile in (
+                await session.scalars(
                     select(NotificationProfile)
-                    .join(
-                        AccountIdentity,
-                        (AccountIdentity.account_id == NotificationProfile.account_id)
-                        & (AccountIdentity.provider == IdentityProvider.DISCORD),
-                    )
                     .join(Account, Account.id == NotificationProfile.account_id)
                     .where(
                         NotificationProfile.account_id.in_(account_ids),
                         account_consent_current(),
                         or_(NotificationProfile.web_enabled.is_(True), NotificationProfile.dm_enabled.is_(True)),
                     )
-                    .order_by(NotificationProfile.account_id)
                 )
-            )
-            .scalars()
-            .all()
-        )
-        # An account may hold more than one Discord identity, which the join
-        # would otherwise turn into a duplicate recipient.
-        profiles = list({profile.account_id: profile for profile in eligible}.values())
-        if not profiles:
-            return
-        created = (
-            await session.execute(
-                insert(NotificationRecord)
-                .values(
-                    [
-                        {
-                            "account_id": profile.account_id,
-                            "event_id": event.id,
-                            "source_key": source_key(profile.account_id),
-                            "kind": kind.value,
-                            "payload": payload,
-                            "web_visible": profile.web_enabled,
-                        }
-                        for profile in profiles
-                    ]
-                )
-                .on_conflict_do_nothing(index_elements=[NotificationRecord.source_key])
-                .returning(NotificationRecord.id, NotificationRecord.account_id)
-            )
-        ).all()
-        # The join above already proved a Discord identity exists; the address itself is
-        # read at claim time, so nothing is copied onto the delivery rows here.
-        deliverable = {
-            profile.account_id for profile in profiles if profile.dm_enabled and profile.dm_suspended_at is None
+            ).all()
         }
-        deliveries = [
-            {"notification_id": notification_id, "account_id": account_id}
-            for notification_id, account_id in created
-            if account_id in deliverable
+        values = [
+            {
+                "account_id": candidate.account_id,
+                "event_id": event.id,
+                "source_key": candidate.source_key,
+                "kind": candidate.kind,
+                "payload": dict(candidate.payload),
+                "web_visible": profiles[candidate.account_id].web_enabled,
+            }
+            for candidate in sorted(candidates, key=lambda item: (item.account_id, item.source_key))
+            if candidate.account_id in profiles
         ]
-        if not deliveries:
+        if not values:
             return
         await session.execute(
-            insert(NotificationDeliveryRecord)
-            .values(deliveries)
-            .on_conflict_do_nothing(index_elements=[NotificationDeliveryRecord.notification_id])
-        )
-
-    async def _insert(
-        self,
-        session: AsyncSession,
-        *,
-        event: DomainEvent,
-        account_id: int,
-        kind: NotificationKind,
-        source_key: str,
-        payload: dict[str, object],
-    ) -> None:
-        row = (
-            await session.execute(
-                select(NotificationProfile, AccountIdentity.subject)
-                .join(
-                    AccountIdentity,
-                    (AccountIdentity.account_id == NotificationProfile.account_id)
-                    & (AccountIdentity.provider == IdentityProvider.DISCORD),
-                )
-                .join(Account, Account.id == NotificationProfile.account_id)
-                .where(
-                    NotificationProfile.account_id == account_id,
-                    account_consent_current(),
-                    or_(NotificationProfile.web_enabled.is_(True), NotificationProfile.dm_enabled.is_(True)),
-                )
-            )
-        ).one_or_none()
-        if row is None:
-            return
-        profile, _discord_subject = row
-        notification_id = await session.scalar(
             insert(NotificationRecord)
-            .values(
-                account_id=account_id,
-                event_id=event.id,
-                source_key=source_key,
-                kind=kind.value,
-                payload=payload,
-                web_visible=profile.web_enabled,
-            )
+            .values(values)
             .on_conflict_do_nothing(index_elements=[NotificationRecord.source_key])
-            .returning(NotificationRecord.id)
         )
-        # The join above already proved a Discord identity exists; the address itself is
-        # read at claim time, so nothing is copied onto the delivery row here.
-        if notification_id is None or not profile.dm_enabled or profile.dm_suspended_at is not None:
-            return
+        source_keys = [value["source_key"] for value in values]
+        deliverable = (
+            select(NotificationRecord.id, NotificationRecord.account_id)
+            .join(NotificationProfile, NotificationProfile.account_id == NotificationRecord.account_id)
+            .where(
+                NotificationRecord.source_key.in_(source_keys),
+                NotificationProfile.dm_enabled.is_(True),
+                NotificationProfile.dm_suspended_at.is_(None),
+                exists().where(
+                    AccountIdentity.account_id == NotificationRecord.account_id,
+                    AccountIdentity.provider == IdentityProvider.DISCORD,
+                ),
+            )
+        )
         await session.execute(
             insert(NotificationDeliveryRecord)
-            .values(notification_id=notification_id, account_id=account_id)
+            .from_select(
+                [NotificationDeliveryRecord.notification_id, NotificationDeliveryRecord.account_id],
+                deliverable,
+            )
             .on_conflict_do_nothing(index_elements=[NotificationDeliveryRecord.notification_id])
         )
 
@@ -827,7 +772,7 @@ class PostgresNotificationRepository:
         rows = (
             await session.execute(
                 select(NotificationSubscriptionRecord.account_id, NotificationSubscriptionRecord.filter).where(
-                    NotificationSubscriptionRecord.kind == SubscriptionKind.RECORD_FILTER.value,
+                    NotificationSubscriptionRecord.kind == SubscriptionKind.RECORD_FILTER,
                     NotificationSubscriptionRecord.enabled.is_(True),
                 )
             )
@@ -876,7 +821,7 @@ def _subscription(row: NotificationSubscriptionRecord) -> NotificationSubscripti
     return NotificationSubscription(
         id=row.id,
         account_id=row.account_id,
-        kind=SubscriptionKind(row.kind),
+        kind=row.kind,
         subject_id=row.subject_id,
         record_filter=None if row.filter is None else RecordSubscriptionFilter.from_dict(dict(row.filter)),
         created_at=row.created_at,
@@ -901,7 +846,7 @@ def _inbox_filter[S: Select[Any]](statement: S, *, account_id: int, visibility: 
 def _inbox(row: NotificationRecord) -> InboxNotification:
     return InboxNotification(
         id=row.id,
-        kind=NotificationKind(row.kind),
+        kind=row.kind,
         payload=dict(row.payload),
         created_at=row.created_at,
         read_at=row.read_at,

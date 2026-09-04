@@ -1,11 +1,13 @@
 """Integration coverage for notification opt-ins and fenced DM delivery."""
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Generator
+from contextlib import contextmanager
 from typing import cast
 from uuid import UUID
 
 import pytest
-from sqlalchemy import Table, select
+from sqlalchemy import Table, event, select
+from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
@@ -13,7 +15,13 @@ from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.accounts.infrastructure.models import Account, AccountIdentity
 from squid.events import DomainEvent
 from squid.events.infrastructure.models import DomainEventRecord
-from squid.notifications.domain import InboxVisibility, NotificationKind, RecordSubscriptionFilter, SubscriptionKind
+from squid.notifications.domain import (
+    InboxVisibility,
+    NotificationCandidate,
+    NotificationKind,
+    RecordSubscriptionFilter,
+    SubscriptionKind,
+)
 from squid.notifications.infrastructure.models import (
     NotificationDeliveryRecord,
     NotificationProfile,
@@ -60,6 +68,29 @@ def repository(
     return PostgresNotificationRepository(async_session_factory)
 
 
+@contextmanager
+def _counting(session_factory: async_sessionmaker[AsyncSession]) -> Generator[list[str]]:
+    statements: list[str] = []
+    engine = session_factory.kw["bind"].sync_engine
+
+    def before_cursor_execute(
+        connection: Connection,
+        cursor: object,
+        statement: str,
+        parameters: object,
+        context: object,
+        executemany: bool,
+    ) -> None:
+        del connection, cursor, parameters, context, executemany
+        statements.append(statement)
+
+    event.listen(engine, "before_cursor_execute", before_cursor_execute)
+    try:
+        yield statements
+    finally:
+        event.remove(engine, "before_cursor_execute", before_cursor_execute)
+
+
 async def _seed_delivery(session_factory: async_sessionmaker[AsyncSession], *, consented: bool = True) -> int:
     async with session_factory.begin() as session:
         account = Account(
@@ -88,7 +119,7 @@ async def _seed_delivery(session_factory: async_sessionmaker[AsyncSession], *, c
             account_id=account.id,
             event_id=event.id,
             source_key="event:1:account:1",
-            kind="build_confirmed",
+            kind=NotificationKind.BUILD_CONFIRMED,
             payload={"build_id": 42},
             web_visible=True,
         )
@@ -246,6 +277,44 @@ async def test_equivalent_subscriptions_are_idempotent_at_the_database_boundary(
     assert filtered.id == filtered_again.id
     async with async_session_factory() as session:
         assert len((await session.scalars(select(NotificationSubscriptionRecord))).all()) == 2
+
+
+@pytest.mark.parametrize("recipient_count", [1, 100])
+async def test_candidate_materialization_has_constant_query_count(
+    repository: PostgresNotificationRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+    recipient_count: int,
+) -> None:
+    async with async_session_factory.begin() as session:
+        accounts = [
+            Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now()) for _ in range(recipient_count)
+        ]
+        session.add_all(accounts)
+        await session.flush()
+        for index, account in enumerate(accounts, start=1):
+            session.add(AccountIdentity(account_id=account.id, provider=IdentityProvider.DISCORD, subject=str(index)))
+            session.add(NotificationProfile(account_id=account.id, web_enabled=True, dm_enabled=True))
+        event = DomainEventRecord(event_type="build.confirmed", aggregate_kind="build", aggregate_id=42)
+        session.add(event)
+        await session.flush()
+        materialized_event = DomainEvent(
+            event.id, event.event_type, event.aggregate_kind, event.aggregate_id, Instant.now()
+        )
+        candidates = tuple(
+            NotificationCandidate(
+                account_id=account.id,
+                source_key=f"event:{event.id}:account:{account.id}",
+                kind=NotificationKind.BUILD_CONFIRMED,
+                payload={"build_id": 42},
+            )
+            for account in accounts
+        )
+
+    with _counting(async_session_factory) as statements:
+        async with async_session_factory.begin() as session:
+            await repository._insert_candidates(session, event=materialized_event, candidates=candidates)
+
+    assert len(statements) == 3
 
 
 async def test_an_unconsented_account_keeps_its_switches_but_receives_nothing(

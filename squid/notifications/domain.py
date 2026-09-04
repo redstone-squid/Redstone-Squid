@@ -1,5 +1,6 @@
 """Notification domain values and subscription validation."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import cast
@@ -41,6 +42,16 @@ class InboxVisibility:
 
 
 DEFAULT_INBOX_VISIBILITY = InboxVisibility()
+
+
+@dataclass(frozen=True, slots=True)
+class NotificationCandidate:
+    """One recipient-specific notification awaiting preference materialization."""
+
+    account_id: int
+    source_key: str
+    kind: NotificationKind
+    payload: Mapping[str, object]
 
 
 @dataclass(frozen=True, slots=True)
