@@ -29,7 +29,7 @@ def test_combine_preserves_every_typed_patch_field() -> None:
         coordinates="1 2 3",
         command_to_get_to_build="/warp door",
         completion_time="2026-08-30",
-        extra_info={"source": "test"},
+        extra_info={"user": "test"},
         ai_generated=False,
     )
 
