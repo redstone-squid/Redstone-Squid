@@ -493,6 +493,7 @@ def test_schematic_render_settings_load_from_flat_environment_names(
         SQUID_SCHEMATIC_RENDER_PUBLIC_BASE_URL="https://api.example",
         SQUID_SCHEMATIC_RENDER_WIDTH="640",
         SQUID_SCHEMATIC_RENDER_HEIGHT="480",
+        SQUID_SCHEMATIC_RENDER_BACKGROUND="[0.1, 0.2, 0.3, 1.0]",
         SQUID_SCHEMATIC_RENDER_MAX_BLOCK_COUNT="12345",
     )
 
@@ -501,6 +502,7 @@ def test_schematic_render_settings_load_from_flat_environment_names(
     assert config.render_enabled is True
     assert config.render_pack_path == pack_path
     assert (config.render_width, config.render_height) == (640, 480)
+    assert config.render_background.as_tuple() == (0.1, 0.2, 0.3, 1.0)
     assert config.render_max_block_count == 12345
 
 

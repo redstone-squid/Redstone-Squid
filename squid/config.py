@@ -35,6 +35,7 @@ from sqlalchemy import make_url
 
 from squid.accounts.domain import IdentityProvider
 from squid.core.errors import ConfigurationError
+from squid.schematics.domain.values import RgbaColor
 
 if TYPE_CHECKING:
     from squid.permissions.domain import Pattern
@@ -723,7 +724,7 @@ class SchematicConfig(_FrozenModel):
     render_height: int = Field(default=768, ge=64, le=4096)
     render_max_block_count: int = Field(default=400_000, ge=1)
     render_max_bounding_volume: int = Field(default=2_000_000, ge=1)
-    render_background: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
+    render_background: RgbaColor = RgbaColor(0.0, 0.0, 0.0, 0.0)
 
     duplicate_metric_tolerance: float = Field(default=0.2, gt=0, le=1)
     """Relative block-count and dimension tolerance for the fuzzy SQL shortlist."""
@@ -763,13 +764,15 @@ class SchematicConfig(_FrozenModel):
             raise ValueError(msg)
         return normalized
 
-    @field_validator("render_background")
+    @field_validator("render_background", mode="before")
     @classmethod
-    def _validate_render_background(cls, value: tuple[float, float, float, float]) -> tuple[float, float, float, float]:
-        if any(channel < 0 or channel > 1 for channel in value):
-            msg = "Every background channel must be between 0 and 1."
-            raise ValueError(msg)
-        return value
+    def _decode_render_background(cls, value: object) -> RgbaColor:
+        if isinstance(value, RgbaColor):
+            return value
+        if not isinstance(value, list | tuple):
+            msg = "Render background must be a four-channel JSON array."
+            raise TypeError(msg)
+        return RgbaColor.from_channels(value)
 
     @model_validator(mode="after")
     def _validate_render_source(self) -> Self:

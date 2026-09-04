@@ -15,6 +15,7 @@ from squid.persistence.base import Base
 from squid.schematics.application.commands import RenderRequest, SimulationRequest
 from squid.schematics.application.jobs import SchematicJobService
 from squid.schematics.domain.models import AutostackLattice, FingerprintPreset, SchematicFormat, SchematicLimits
+from squid.schematics.domain.values import VerifiedResourcePack
 from squid.schematics.errors import InvalidSchematicError
 from squid.schematics.infrastructure.durable import QueuedSchematicAnalyzer, SchematicJobRunner
 from squid.schematics.infrastructure.jobs import PostgresSchematicJobRepository
@@ -87,7 +88,7 @@ async def test_every_native_operation_crosses_the_durable_worker_boundary(
     assert (
         await _with_runner(
             runner,
-            client.render(data, request=RenderRequest(), resource_pack=b"pack"),
+            client.render(data, request=RenderRequest(), resource_pack=VerifiedResourcePack.from_bytes(b"pack")),
         )
         == native.render_output
     )
