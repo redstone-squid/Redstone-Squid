@@ -83,6 +83,8 @@ dev = [
     # type-check suite exercises them together as the production/conformance pair.
     "loro==1.13.2",
     "pycrdt==0.14.2",
+    # The bot does not use Slack, but the architecture tests walk every suite package.
+    "squid-ui-slack",
     "pip-tools>=7.4.1",
     "pytest-archon>=0.0.6",
     "ruff>=0.5.1",

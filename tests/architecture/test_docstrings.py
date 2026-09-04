@@ -1,0 +1,97 @@
+"""A type that defines a terminating verb says what ends it, in one clause, up front.
+
+The rule is CLAUDE.md's and the verb table is `docs/squid-ui-architecture.md`. Everything
+else states nothing, so only classes defining one of the six verbs are checked. Protocols,
+private classes and overriding subclasses all count: the trigger is the method defined.
+"""
+
+import ast
+import re
+from pathlib import Path
+
+import pytest
+
+from tests.support.source_tree import TERMINATING_VERBS, classes_in_source
+
+LIFETIME_EXEMPTIONS: frozenset[str] = frozenset(
+    {
+        # Seeded with the offenders at the start of the docstring pass; each unit of that
+        # pass removes its own. Nothing should be added here without a reason beside it.
+        "packages/squid-reactivity/src/squid_reactivity/completion.py::Completion",
+        "packages/squid-reactivity/src/squid_reactivity/resources.py::LoadScope",
+        "packages/squid-reactivity/src/squid_reactivity/resources.py::_NoAbandonment",
+        "packages/squid-reactivity/src/squid_reactivity/topics.py::SubscriptionReconciler",
+        "packages/squid-replication/src/squid_replication/document.py::ReplicatedSet",
+        "packages/squid-storage/src/squid_storage/persistent_state.py::PersistentStatePool",
+        "packages/squid-storage/src/squid_storage/postgres.py::PostgresTopicBridge",
+        "packages/squid-ui-discord/src/squid_ui_discord/actions.py::ActionResponder",
+        "packages/squid-ui-discord/src/squid_ui_discord/challenges.py::ChallengeRunner",
+        "packages/squid-ui-discord/src/squid_ui_discord/durability/runtime.py::DurableSessionRuntime",
+        "packages/squid-ui-discord/src/squid_ui_discord/message_root.py::MessageRoot",
+        "packages/squid-ui-discord/src/squid_ui_discord/message_root_scheduler.py::MessageRootScheduler",
+        "packages/squid-ui-discord/src/squid_ui_discord/runtime.py::DiscordUIRuntime",
+        "packages/squid-ui-discord/src/squid_ui_discord/sessions.py::Session",
+        "packages/squid-ui-discord/src/squid_ui_discord/sessions.py::SessionManager",
+        "packages/squid-ui-discord/src/squid_ui_discord/message_root_candidates.py::_BusyPaint",
+        "packages/squid-ui-discord/src/squid_ui_discord/message_root_candidates.py::_DispatchProfile",
+        "packages/squid-ui/src/squid_ui/interactions.py::ActionEvent",
+        "packages/squid-ui/src/squid_ui/interactions.py::ActionResponder",
+        "packages/squid-ui/src/squid_ui/profiling/profiler.py::DetachedSpanRecorder",
+        "packages/squid-ui/src/squid_ui/profiling/profiler.py::_DetachedSpan",
+        "packages/squid-ui/src/squid_ui/profiling/profiler.py::_NoOpDetachedSpan",
+        "packages/squid-ui/src/squid_ui/runtime/component.py::_TreeRender",
+        "packages/squid-ui/src/squid_ui/runtime/owner.py::ComponentRuntime",
+        "packages/squid-ui/src/squid_ui/testing.py::RecordingResponder",
+    }
+)
+"""`path::Class` whose first paragraph does not yet name its verb. Listed so an exemption is a decision."""
+
+
+def _classes_defining_terminating_verbs() -> list[pytest.ParameterSet]:
+    found: list[pytest.ParameterSet] = []
+    for path, node in classes_in_source():
+        verbs = sorted(
+            child.name
+            for child in node.body
+            if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef) and child.name in TERMINATING_VERBS
+        )
+        if verbs:
+            found.append(pytest.param(path, node, verbs, id=f"{path.stem}::{node.name}"))
+    return found
+
+
+def _first_paragraph(node: ast.ClassDef) -> str:
+    return (ast.get_docstring(node) or "").split("\n\n", 1)[0]
+
+
+@pytest.mark.parametrize(("path", "node", "verbs"), _classes_defining_terminating_verbs())
+def test_a_type_that_defines_a_terminating_verb_says_what_ends_it(
+    path: Path, node: ast.ClassDef, verbs: list[str]
+) -> None:
+    if f"{path.as_posix()}::{node.name}" in LIFETIME_EXEMPTIONS:
+        pytest.skip("listed in LIFETIME_EXEMPTIONS")
+    paragraph = _first_paragraph(node)
+    missing = [verb for verb in verbs if re.search(rf"\b{verb}\b", paragraph) is None]
+    assert not missing, (
+        f"{path}::{node.name} defines {missing} but its first docstring paragraph does not name it; "
+        f"say what `{missing[0]}()` ends in one clause. Current: {paragraph!r}"
+    )
+
+
+def test_every_exemption_still_names_a_class_that_needs_one() -> None:
+    """An exemption for a class that was fixed, renamed or removed is stale and must go."""
+    current = {
+        f"{path.as_posix()}::{node.name}"
+        for path, node in classes_in_source()
+        if any(
+            isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef) and child.name in TERMINATING_VERBS
+            for child in node.body
+        )
+        and any(
+            re.search(rf"\b{child.name}\b", _first_paragraph(node)) is None
+            for child in node.body
+            if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef) and child.name in TERMINATING_VERBS
+        )
+    }
+    stale = sorted(LIFETIME_EXEMPTIONS - current)
+    assert not stale, f"remove exemptions that no longer apply: {stale}"

@@ -31,20 +31,7 @@ import squid_ui
 import squid_ui_discord
 import squid_ui_slack
 import squid_ui_widgets
-from tests.support.source_tree import source_tree
-
-PACKAGE_SOURCE_ROOTS = (
-    Path("packages/squid-ui/src"),
-    Path("packages/squid-reactivity/src"),
-    Path("packages/squid-replication/src"),
-    Path("packages/squid-storage/src"),
-    Path("packages/squid-ui-discord/src"),
-    Path("packages/squid-ui-slack/src"),
-    Path("packages/squid-ui-widgets/src"),
-)
-
-TERMINATING_VERBS = frozenset({"close", "detach", "finish", "cancel", "discard", "run"})
-"""What ends something, and nothing else. See `docs/squid-ui-architecture.md`."""
+from tests.support.source_tree import PACKAGE_SOURCE_ROOTS, TERMINATING_VERBS, classes_in_source, source_tree
 
 OBJECT_ENDING_VERBS = frozenset({"close", "finish"})
 """The two that end *the object itself*, and so may not appear on one class together.
@@ -308,16 +295,6 @@ def _exported_classes() -> dict[str, set[str]]:
     return found
 
 
-def _classes_in_source() -> list[tuple[Path, ast.ClassDef]]:
-    return [
-        (path, node)
-        for root in PACKAGE_SOURCE_ROOTS
-        for path in root.rglob("*.py")
-        for node in ast.walk(source_tree(path))
-        if isinstance(node, ast.ClassDef)
-    ]
-
-
 def _functions_in_source() -> list[tuple[Path, ast.FunctionDef | ast.AsyncFunctionDef]]:
     return [
         (path, node)
@@ -351,7 +328,7 @@ def test_no_class_claims_to_end_itself_twice() -> None:
     """`close` and `finish` both mean "this object is done", so a class picks one."""
     offenders = [
         f"{path}::{node.name}"
-        for path, node in _classes_in_source()
+        for path, node in classes_in_source()
         if len(_method_names(node) & OBJECT_ENDING_VERBS) > 1
     ]
     assert not offenders, f"both close() and finish() on one class: {offenders}"
@@ -361,7 +338,7 @@ def test_termination_uses_the_agreed_verbs() -> None:
     """A seventh synonym for "it is over" puts the reader back where they started."""
     offenders = [
         f"{path}::{node.name}.{verb}"
-        for path, node in _classes_in_source()
+        for path, node in classes_in_source()
         for verb in sorted(_method_names(node) & DISCOURAGED_VERBS)
         if not verb.startswith("_")
     ]
@@ -381,7 +358,7 @@ def test_retired_words_stay_retired() -> None:
     """
     offenders = [
         f"{path}::{node.name}"
-        for path, node in _classes_in_source()
+        for path, node in classes_in_source()
         if _last_word(node.name) in RETIRED_SUFFIXES and node.name not in RETIRED_SUFFIX_EXEMPTIONS
     ]
     assert not offenders, f"these words retired into the suffix table; see docs/squid-vocabulary.md: {offenders}"
@@ -389,7 +366,7 @@ def test_retired_words_stay_retired() -> None:
 
 def test_replaced_concept_names_stay_retired() -> None:
     """Exact old concepts cannot return while their ordinary words remain available."""
-    offenders = [f"{path}::{node.name}" for path, node in _classes_in_source() if node.name in RETIRED_CLASS_NAMES]
+    offenders = [f"{path}::{node.name}" for path, node in classes_in_source() if node.name in RETIRED_CLASS_NAMES]
     assert not offenders, f"use the current concept vocabulary: {offenders}"
 
 
@@ -543,6 +520,6 @@ def test_agent_nouns_name_a_verb_the_dictionary_has() -> None:
 def test_no_single_letter_prefixes() -> None:
     """`RText` and `RPanel` spent a word on a letter; the word is `Measured`."""
     offenders = [
-        f"{path}::{node.name}" for path, node in _classes_in_source() if re.match(r"^[A-Z][A-Z][a-z]", node.name)
+        f"{path}::{node.name}" for path, node in classes_in_source() if re.match(r"^[A-Z][A-Z][a-z]", node.name)
     ]
     assert not offenders, f"spell the prefix as a word: {offenders}"
