@@ -2,10 +2,13 @@
 
 from typing import Any, cast
 
+import pytest
+
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.submission.input import format_invalid_values, invalid_web_urls, split_values
 from squid.bot.submission.ui.views import (
+    SubmissionDeliveryError,
     SubmissionOutcome,
     SubmissionScreen,
     _submission_basics_form,
@@ -155,3 +158,27 @@ async def test_submission_persists_only_once_after_duplicate_finish() -> None:
     assert persist.calls == 1
     assert responder.finished is True
     assert len(responder.notices) == 1
+
+
+async def test_post_persistence_failure_never_claims_nothing_was_saved() -> None:
+    build = DoorBuild(id=7)
+
+    async def fail_delivery() -> SubmissionOutcome:
+        outcome = SubmissionOutcome(build, sl.status("delivery pending"), delivery_complete=False)
+        raise SubmissionDeliveryError(outcome)
+
+    component = SubmissionScreen(
+        BuildDraft(door_orientation="Door", door_width=2, door_height=2),
+        BuildRecorder(),
+        on_submit=fail_delivery,
+    )
+
+    with pytest.raises(SubmissionDeliveryError):
+        await component._submit(press_event(responder=RecordingResponder()))
+
+    rendered = str(component.render())
+    assert component.outcome is not None
+    assert component.outcome.build is build
+    assert "was saved" in rendered
+    assert "could not be delivered" in rendered
+    assert "nothing was saved" not in rendered
