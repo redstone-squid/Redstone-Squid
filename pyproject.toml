@@ -279,9 +279,6 @@ select = [
     "G",
 ]
 ignore = [
-    "UP040",  # Type alias {name} uses {type_alias_method} instead of the type keyword
-    "UP046",  # Generic class {name} uses Generic subclass instead of type parameters
-    "UP047",  # Generic function {name} should use type parameters
     "E731",  # Lambda assignment
     "SIM108",  # Use ternary operator {contents} instead of if-else-block
     # This is too rigid
@@ -310,6 +307,8 @@ known-first-party = [
 "env.py" = ["E402"]
 
 "alembic/**.py" = ["INP"]
+# Migration history stays immutable; several revisions retain their original TypeVar helpers.
+"alembic/versions/**.py" = ["UP047"]
 "alembic/versions/*.py" = ["D"]
 "scripts/**.py" = ["INP"]
 
@@ -336,6 +335,9 @@ known-first-party = [
     "D102",
     "D103"
 ]
+
+# Target's covariant adapter markers cannot be spelled with PEP 695, which only infers variance.
+"packages/squid-ui/src/squid_ui/planning/target.py" = ["UP046"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
