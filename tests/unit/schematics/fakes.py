@@ -224,7 +224,7 @@ class FakeSchematicStore:
             None,
         )
 
-    async def get_primary(self, build_id: int) -> StoredSchematic | None:
+    async def get_featured(self, build_id: int) -> StoredSchematic | None:
         return next((s for s in self.stored if s.build_id == build_id and s.is_primary), None)
 
     async def find_file_matches(
@@ -279,7 +279,7 @@ class FakeSchematicStore:
     async def get_render(self, schematic_id: int, recipe_hash: str) -> StoredRender | None:
         return self.renders.get((schematic_id, recipe_hash))
 
-    async def record_render(
+    async def publish_fresh_preview(
         self,
         schematic_id: int,
         recipe_hash: str,
@@ -297,7 +297,7 @@ class FakeSchematicStore:
         self.renders[(schematic_id, recipe_hash)] = render
         return render
 
-    async def project_render(self, schematic_id: int, recipe_hash: str, url: str) -> bool:
+    async def publish_cached_preview(self, schematic_id: int, recipe_hash: str, url: str) -> bool:
         stored = next((item for item in self.stored if item.id == schematic_id), None)
         render = self.renders.get((schematic_id, recipe_hash))
         return stored is not None and stored.is_primary and render is not None and render.url == url

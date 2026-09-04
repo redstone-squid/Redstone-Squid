@@ -10,13 +10,13 @@ from squid.schematics.application import SchematicService
 
 
 class SchematicServiceSummaryProvider:
-    """Project a build's primary schematic into the narrow summary `builds` asked for."""
+    """Map a build's featured schematic into the narrow summary `builds` asked for."""
 
     def __init__(self, schematics: SchematicService) -> None:
         self._schematics = schematics
 
     async def summary_for(self, build_id: int) -> BuildSchematicSummary | None:
-        """Return the primary schematic's facts, or `None` when there is nothing to show.
+        """Return the featured schematic's facts, or `None` when there is nothing to show.
 
         An instance without the engine installed has no schematics at all, so the `None` path
         is the normal one there rather than an error.
@@ -24,7 +24,7 @@ class SchematicServiceSummaryProvider:
         if not self._schematics.available:
             return None
 
-        stored = await self._schematics.primary_for_build(build_id)
+        stored = await self._schematics.featured_for_build(build_id)
         if stored is None:
             return None
 
