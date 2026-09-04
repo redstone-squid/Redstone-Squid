@@ -1,6 +1,7 @@
 """Isolated tests for the submission HTTP contract, which no client has to draw one way."""
 
 from dataclasses import replace
+from typing import override
 from uuid import UUID, uuid4
 
 import pytest
@@ -19,6 +20,9 @@ from squid.api.v1.schemas.submissions import (
 )
 from squid.api.v1.submissions import (
     AuthenticatedSubmissionActor,
+    SubmissionDraftCommands,
+    SubmissionFinalizationCommands,
+    SubmissionFormReader,
     SubmissionFormRevisionNotFoundError,
     authenticated_account,
     authenticated_submission_actor,
@@ -41,6 +45,7 @@ from squid.submissions.domain import (
     DraftChange,
     DraftSnapshot,
     FinalizationJobStatus,
+    FormManifest,
     SubmissionAttentionIssue,
     SubmissionAttentionReason,
     SubmissionOrigin,
@@ -75,34 +80,44 @@ def stored_draft(
     )
 
 
-class FakeForms:
+class FakeForms(SubmissionFormReader):
     def __init__(self) -> None:
         self.manifest_locales: list[str | None] = []
         self.revision_calls: list[tuple[str, int, str | None]] = []
         self.option_calls: list[tuple[str, str, str | None]] = []
 
-    async def manifest(self, *, locale: str | None):
+    @override
+    async def manifest(self, *, locale: str | None) -> FormManifest:
         self.manifest_locales.append(locale)
         return build_submission_manifest(locale)
 
-    async def manifest_revision(self, schema_id: str, revision: int, *, locale: str | None):
+    @override
+    async def manifest_revision(
+        self,
+        schema_id: str,
+        revision: int,
+        *,
+        locale: str | None,
+    ) -> FormManifest | None:
         self.revision_calls.append((schema_id, revision, locale))
         if schema_id == "build_submission.v1" and revision == 1:
-            return build_submission_manifest(locale)
+            return build_submission_manifest(locale, revision=revision)
         return None
 
+    @override
     async def options(self, source: str, category: str, *, locale: str | None) -> FormOptionSet:
         self.option_calls.append((source, category, locale))
         return FormOptionSet(source, category, 8, (ChoiceOption("slim", "Slim"),))
 
 
-class FakeDrafts:
+class FakeDrafts(SubmissionDraftCommands):
     def __init__(self) -> None:
         self.current = stored_draft()
         self.created_with: tuple[int, str, SubmissionOrigin, frozenset[str], str | None, UUID | None] | None = None
         self.change_seen: DraftChange | None = None
         self.deleted: tuple[UUID, int] | None = None
 
+    @override
     async def create(
         self,
         *,
@@ -128,16 +143,19 @@ class FakeDrafts:
         )
         return self.current
 
+    @override
     async def list_active(self, account_id: int, *, limit: int = 10) -> tuple[StoredDraft, ...]:
         assert account_id == ACCOUNT_ID
         assert limit == 10
         return (self.current,)
 
+    @override
     async def get_owned(self, draft_id: UUID, account_id: int) -> StoredDraft:
         assert draft_id == self.current.snapshot.id
         assert account_id == ACCOUNT_ID
         return self.current
 
+    @override
     async def apply_change(
         self,
         draft_id: UUID,
@@ -153,6 +171,7 @@ class FakeDrafts:
         self.current = replace(self.current, snapshot=self.current.snapshot.apply(change))
         return AppliedDraftChange(self.current)
 
+    @override
     async def upgrade_manifest(
         self,
         draft_id: UUID,
@@ -177,11 +196,12 @@ class FakeDrafts:
         )
         return AppliedDraftUpgrade(self.current)
 
+    @override
     async def delete(self, draft_id: UUID, account_id: int) -> None:
         self.deleted = (draft_id, account_id)
 
 
-class FakeFinalization:
+class FakeFinalization(SubmissionFinalizationCommands):
     def __init__(self, draft_id: UUID) -> None:
         self.snapshot = FinalizationJobSnapshot(
             job_id=UUID("3ff2c7e7-8df7-4147-853f-fea71a8c39e4"),
@@ -196,6 +216,7 @@ class FakeFinalization:
         self.submit_calls: list[tuple[UUID, int, str | None]] = []
         self.status_calls: list[tuple[UUID, int]] = []
 
+    @override
     async def submit(
         self,
         draft_id: UUID,
@@ -206,6 +227,7 @@ class FakeFinalization:
         self.submit_calls.append((draft_id, account_id, locale))
         return self.snapshot
 
+    @override
     async def status(self, draft_id: UUID, account_id: int) -> FinalizationJobSnapshot | None:
         self.status_calls.append((draft_id, account_id))
         return self.snapshot
