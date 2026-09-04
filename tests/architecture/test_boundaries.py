@@ -70,12 +70,50 @@ FRAMEWORK_URLS = {
 }
 
 
-def _scanned_files() -> list[Path]:
-    return [path for root in SCAN_ROOTS for path in root.rglob("*.py")]
+def _scanned_files(roots: tuple[Path, ...] = SCAN_ROOTS) -> list[Path]:
+    return [path for root in roots for path in root.rglob("*.py")]
 
 
 def _dependency_name(requirement: str) -> str:
     return re.split(r"[<>=!~;\[]", requirement, maxsplit=1)[0].strip().lower()
+
+
+def test_background_tasks_use_owned_anyio_task_groups() -> None:
+    """Task lifetime stays with an anyio owner instead of escaping through asyncio."""
+    banned = {"TaskGroup", "create_task", "ensure_future"}
+    violations: list[str] = []
+    for path in _scanned_files(SCAN_ROOTS[1:]):
+        tree = source_tree(path)
+        asyncio_aliases = {
+            alias.asname or alias.name
+            for node in tree.body
+            if isinstance(node, ast.Import)
+            for alias in node.names
+            if alias.name == "asyncio"
+        }
+        direct_aliases = {
+            alias.asname or alias.name
+            for node in tree.body
+            if isinstance(node, ast.ImportFrom) and node.module == "asyncio"
+            for alias in node.names
+            if alias.name in banned
+        }
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if isinstance(node.func, ast.Name) and node.func.id in direct_aliases:
+                violations.append(f"{path}:{node.lineno}: {node.func.id}")
+            elif (
+                isinstance(node.func, ast.Attribute)
+                and node.func.attr in banned
+                and (
+                    node.func.attr != "TaskGroup"
+                    or (isinstance(node.func.value, ast.Name) and node.func.value.id in asyncio_aliases)
+                )
+            ):
+                violations.append(f"{path}:{node.lineno}: {node.func.attr}")
+
+    assert violations == [], f"use anyio.create_task_group() with an explicit owner: {violations}"
 
 
 def test_framework_runtime_imports_are_declared_in_package_metadata() -> None:
