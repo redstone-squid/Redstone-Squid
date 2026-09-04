@@ -163,6 +163,10 @@ $$;
 
 def upgrade() -> None:
     """Reject existing drift, then install the deferred aggregate invariant."""
+    op.execute(
+        "LOCK TABLE public.vote_sessions, public.build_vote_sessions, "
+        "public.delete_log_vote_sessions, public.generic_vote_sessions IN SHARE ROW EXCLUSIVE MODE"
+    )
     op.execute(_VALIDATE)
     op.execute(_FUNCTION)
     for trigger in _TRIGGERS:
