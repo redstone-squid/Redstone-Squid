@@ -39,10 +39,10 @@ from squid.permissions.domain import BuiltinRoleKeys
 from squid.permissions.infrastructure.models import PermissionRole, PermissionRoleAssignment
 from squid.persistence.queue import VISIBILITY_TIMEOUT, retry_delay
 from squid.records.infrastructure.models import (
-    RecordCompetition,
-    RecordDefinition,
-    RecordResult,
     RecordResultHolder,
+    RecordRule,
+    RecordSeries,
+    RecordStanding,
 )
 from squid.tags.infrastructure.models import BuildTagAssignment
 
@@ -151,7 +151,7 @@ class PostgresNotificationRepository:
                     )
                 )
             else:
-                statement = select(exists().where(RecordCompetition.public_id == subject_id))
+                statement = select(exists().where(RecordSeries.public_id == subject_id))
             return bool(await session.scalar(statement))
 
     async def add_subscription(
@@ -482,9 +482,7 @@ class PostgresNotificationRepository:
             return
         staff_account_ids = (
             await session.execute(
-                select(Account.id)
-                .where(_is_durable_staff_notification_recipient(Account.id))
-                .order_by(Account.id)
+                select(Account.id).where(_is_durable_staff_notification_recipient(Account.id)).order_by(Account.id)
             )
         ).scalars()
         payload = {"build_id": build.id, "category": None if build.category is None else str(build.category)}
@@ -695,25 +693,25 @@ class PostgresNotificationRepository:
         new_rows = (
             await session.execute(
                 select(
-                    RecordDefinition.competition_id,
+                    RecordRule.competition_id,
                     RecordResultHolder.build_id,
-                    RecordDefinition.title,
-                    RecordDefinition.record_class,
-                    RecordDefinition.build_kind,
-                    RecordDefinition.version_scope,
+                    RecordRule.title,
+                    RecordRule.record_class,
+                    RecordRule.build_kind,
+                    RecordRule.version_scope,
                 )
-                .join(RecordResult, RecordResult.definition_id == RecordDefinition.id)
-                .join(RecordResultHolder, RecordResultHolder.result_id == RecordResult.id)
-                .where(RecordResult.run_id == run_id)
+                .join(RecordStanding, RecordStanding.definition_id == RecordRule.id)
+                .join(RecordResultHolder, RecordResultHolder.result_id == RecordStanding.id)
+                .where(RecordStanding.run_id == run_id)
             )
         ).all()
         old_holders = set(
             (
                 await session.execute(
-                    select(RecordDefinition.competition_id, RecordResultHolder.build_id)
-                    .join(RecordResult, RecordResult.definition_id == RecordDefinition.id)
-                    .join(RecordResultHolder, RecordResultHolder.result_id == RecordResult.id)
-                    .where(RecordResult.run_id == previous_run_id)
+                    select(RecordRule.competition_id, RecordResultHolder.build_id)
+                    .join(RecordStanding, RecordStanding.definition_id == RecordRule.id)
+                    .join(RecordResultHolder, RecordResultHolder.result_id == RecordStanding.id)
+                    .where(RecordStanding.run_id == previous_run_id)
                 )
             ).tuples()
         )

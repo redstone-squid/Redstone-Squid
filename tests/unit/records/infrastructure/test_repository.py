@@ -24,9 +24,9 @@ from squid.records.domain import (
 )
 from squid.records.infrastructure.models import (
     RecordComputationRun,
-    RecordDefinition,
     RecordHolderHistory,
-    RecordResult,
+    RecordRule,
+    RecordStanding,
 )
 from squid.records.infrastructure.repository import (
     CALCULATOR_VERSION,
@@ -62,7 +62,7 @@ class FakeSession:
         for value in self.added:
             identity = id(value)
             if (
-                isinstance(value, (RecordComputationRun, RecordResult, RecordHolderHistory))
+                isinstance(value, (RecordComputationRun, RecordStanding, RecordHolderHistory))
                 and identity not in self.assigned
             ):
                 value.id = len(self.assigned) + 1
@@ -92,7 +92,7 @@ def test_requested_category_parser_ignores_malformed_legacy_key() -> None:
 
 
 def test_gap_rows_carry_the_definition_title() -> None:
-    definition = RecordDefinition(
+    definition = RecordRule(
         ruleset_id=1,
         record_class=RecordClass.FASTEST.value,
         build_kind=BuildKind.DOOR.value,
@@ -103,7 +103,7 @@ def test_gap_rows_carry_the_definition_title() -> None:
         materialization_source="eager",
     )
     definition.id = 5
-    result = RecordResult(
+    result = RecordStanding(
         run_id=1,
         definition_id=5,
         status="unresolved",
@@ -120,11 +120,11 @@ def test_gap_rows_carry_the_definition_title() -> None:
 
 
 def test_record_definitions_persist_canonical_title_metadata() -> None:
-    assert {"title", "subtitle", "title_diagnostics"} <= set(RecordDefinition.__table__.columns.keys())
+    assert {"title", "subtitle", "title_diagnostics"} <= set(RecordRule.__table__.columns.keys())
 
 
 def test_record_definitions_allow_every_record_class() -> None:
-    table = cast(Table, RecordDefinition.__table__)
+    table = cast(Table, RecordRule.__table__)
     constraint = next(
         constraint
         for constraint in table.constraints
@@ -182,7 +182,7 @@ async def test_activate_flushes_holder_history_as_one_batch() -> None:
         ),
     )
     batch = ComputationBatch(ruleset_id=7, kind=BuildKind.DOOR, version_id=None, records=(computed,))
-    definition = RecordDefinition(
+    definition = RecordRule(
         ruleset_id=7,
         record_class=RecordClass.SMALLEST.value,
         build_kind=BuildKind.DOOR.value,
