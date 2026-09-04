@@ -3,7 +3,8 @@
 from collections.abc import Sequence
 from typing import Protocol
 
-from squid.accounts.domain import AliasClaim, IdentityProvider
+from squid.accounts.domain import AliasClaim
+from squid.bot.profile_render import present_claimant
 from squid.suggestions.application import Candidate, candidate
 from squid.suggestions.domain import MAX_SUGGESTIONS, SuggestionRequest
 
@@ -94,19 +95,8 @@ class PendingAliasClaims(Protocol):
 
 
 def _claimant_description(claim: AliasClaim) -> str:
-    """Describe a claimant in the little room an autocomplete row has.
-
-    Not `present_claimant`: this surface cannot render a mention, so it reaches for the names a
-    reviewer can actually read and falls back to the internal ID only when there is nothing else.
-    """
-    claimant = claim.claimant
-    if claimant is not None:
-        java = claimant.identity(IdentityProvider.JAVA)
-        if java is not None and java.display_name is not None:
-            return java.display_name[:100]
-        if claimant.public_creator_id is not None:
-            return f"creator {claimant.public_creator_id}"[:100]
-    return f"account {claim.account_id}"
+    """Present a claimant canonically within Discord's autocomplete limit."""
+    return present_claimant(claim, mention=False)[:100]
 
 
 class AliasClaimProvider:
