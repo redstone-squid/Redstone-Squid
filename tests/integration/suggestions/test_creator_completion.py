@@ -87,6 +87,20 @@ async def test_prefix_matches_across_compatibility_and_case_folding(
 
 
 @pytest.mark.usefixtures("creator_tables")
+@pytest.mark.parametrize("typed", ["alice", "ＡL"])
+async def test_public_creator_profile_prefix_uses_the_same_compatibility_fold(
+    async_session_factory: async_sessionmaker[AsyncSession],
+    typed: str,
+) -> None:
+    await seed(async_session_factory)
+    repository = PostgresSuggestionRepository(async_session_factory)
+
+    profiles = await repository.creator_profiles(typed, limit=10)
+
+    assert [name for _public_id, name in profiles] == ["Ａlice"]
+
+
+@pytest.mark.usefixtures("creator_tables")
 async def test_claimed_flag_is_reported(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
