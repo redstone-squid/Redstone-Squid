@@ -48,19 +48,27 @@ jobs:
           script: |
             const fs = require('node:fs');
             const path = require('node:path');
-            const {planScreenshotArtifact} = require(process.env.TRUSTED_SCREENSHOT_PLANNER);
+            const {
+              planScreenshotArtifact,
+              validateScreenshotMetadata,
+            } = require(process.env.TRUSTED_SCREENSHOT_PLANNER);
 
             const directory = process.env.SCREENSHOT_DIRECTORY;
-            const artifactPlan = planScreenshotArtifact(fs.readdirSync(directory).map((filename) => {
+            const artifactMetadata = validateScreenshotMetadata(fs.readdirSync(directory).map((filename) => {
               const filePath = path.join(directory, filename);
               const stats = fs.lstatSync(filePath);
               return {
                 name: filename,
                 isFile: stats.isFile(),
                 isSymbolicLink: stats.isSymbolicLink(),
-                contents: stats.isFile() && !stats.isSymbolicLink() ? fs.readFileSync(filePath) : Buffer.alloc(0),
+                size: stats.size,
               };
             }));
+            const artifactContents = artifactMetadata.files.map((entry) => ({
+              ...entry,
+              contents: fs.readFileSync(path.join(directory, entry.name)),
+            }));
+            const artifactPlan = planScreenshotArtifact(artifactContents);
 
             const run = context.payload.workflow_run;
             const runPull = run.pull_requests[0];
