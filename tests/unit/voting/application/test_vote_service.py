@@ -10,6 +10,7 @@ from squid.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_WEIGHT
 from squid.voting.application import VoteService
 from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
+    BuildVoteTarget,
     DeleteLogVoteTarget,
     EmojiPreset,
     PollScope,
@@ -747,6 +748,32 @@ async def test_each_kind_names_the_guild_that_owns_its_weights() -> None:
     assert service._owner_guild_id(poll) == 77
     assert service._owner_guild_id(replace(poll, poll=replace(poll.poll, guild_id=None))) is None
     assert VoteService(FakeVoteRepository(None))._owner_guild_id(snapshot()) is None
+
+
+@pytest.mark.parametrize(
+    ("session", "target_type", "visibility", "owner_guild_id"),
+    [
+        (build_snapshot(), BuildVoteTarget, None, OWNER_GUILD_ID),
+        (snapshot(kind=VoteKind.DELETE_LOG), DeleteLogVoteTarget, None, OWNER_GUILD_ID),
+        *[
+            (poll_snapshot(visibility=visibility, guild_id=77), None, visibility, 77)
+            for visibility in VoteVisibility
+        ],
+    ],
+    ids=["build", "delete-log", *[f"generic-{visibility.value}" for visibility in VoteVisibility]],
+)
+def test_kind_visibility_target_matrix_reaches_application_policy(
+    session: VoteSessionSnapshot,
+    target_type: type[BuildVoteTarget] | type[DeleteLogVoteTarget] | None,
+    visibility: VoteVisibility | None,
+    owner_guild_id: int,
+) -> None:
+    """Every valid domain payload keeps its discriminator at the service boundary."""
+    service = VoteService(FakeVoteRepository(session), build_owner_guild_id=OWNER_GUILD_ID)
+
+    assert (type(session.target) if session.target is not None else None) is target_type
+    assert session.visibility is visibility
+    assert service._owner_guild_id(session) == owner_guild_id
 
 
 async def test_a_weight_edit_reaches_only_the_sessions_that_guild_owns() -> None:
