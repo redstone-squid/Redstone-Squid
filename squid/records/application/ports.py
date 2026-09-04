@@ -5,6 +5,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
+from squid.builds.application.queries import PublicBuildSummary
 from squid.records.application.models import (
     CategoryIdentity,
     ComputationBatch,
@@ -37,6 +38,12 @@ class RecordCandidateRepository(Protocol):
     """Load confirmed builds eligible to become computation candidates."""
 
     async def list_confirmed(self, kind: BuildKind) -> Sequence[RecordSourceCandidate]: ...
+
+
+class PublicBuildSummaryReader(Protocol):
+    """Load only build fields approved for public record details."""
+
+    async def get_public_summaries(self, build_ids: Sequence[int]) -> Sequence[PublicBuildSummary]: ...
 
 
 class RecordRunRepository(Protocol):
