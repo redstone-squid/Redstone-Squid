@@ -20,6 +20,7 @@ DYNAMIC_VOTING_REVISION = "4c9e7a2b1d63"
 
 NULLABLE_VOTE_THRESHOLDS_REVISION = "b2c3d4e5f6a8"
 VOTE_SUBTYPE_INVARIANT_REVISION = "a9b5c8d3e6f0"
+IDEMPOTENCY_CALLER_REVISION = "b0c6d9e4f7a1"
 
 pytestmark = pytest.mark.filterwarnings("ignore:Expression #.* detected to include an operator clause:UserWarning")
 """Autogenerate cannot compare an index expression carrying an operator class.
@@ -361,6 +362,85 @@ def test_vote_subtype_invariant_downgrade_removes_triggers_and_function(
                 ).scalars()
             )
             assert triggers == set()
+    finally:
+        engine.dispose()
+
+
+def test_idempotency_caller_migration_dual_writes_and_downgrades(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Old and new API binaries share one caller namespace during the rollout window."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, f"{IDEMPOTENCY_CALLER_REVISION}-1")
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO idempotency_requests "
+                    "(id, principal, idempotency_key, request_fingerprint, method, route, expires_at) VALUES "
+                    "('11111111-1111-4111-8111-111111111111', 'account:old', 'old', '\\x01', "
+                    "'POST', '/v1/builds', now() + interval '1 day')"
+                )
+            )
+
+        command.upgrade(config, IDEMPOTENCY_CALLER_REVISION)
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO idempotency_requests "
+                    "(id, caller, idempotency_key, request_fingerprint, method, route, expires_at) VALUES "
+                    "('22222222-2222-4222-8222-222222222222', 'account:new', 'new', '\\x02', "
+                    "'DELETE', '/v1/builds/2', now() + interval '1 day')"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO idempotency_requests "
+                    "(id, principal, idempotency_key, request_fingerprint, method, route, expires_at) VALUES "
+                    "('33333333-3333-4333-8333-333333333333', 'account:old-rolling', 'rolling', '\\x03', "
+                    "'PATCH', '/v1/builds/3', now() + interval '1 day')"
+                )
+            )
+            identities = connection.execute(
+                text("SELECT principal, caller FROM idempotency_requests ORDER BY id")
+            ).all()
+            assert identities == [
+                ("account:old", "account:old"),
+                ("account:new", "account:new"),
+                ("account:old-rolling", "account:old-rolling"),
+            ]
+
+        with engine.connect() as connection:
+            with pytest.raises(DBAPIError):
+                connection.execute(
+                    text(
+                        "INSERT INTO idempotency_requests "
+                        "(id, caller, idempotency_key, request_fingerprint, method, route, expires_at) VALUES "
+                        "('44444444-4444-4444-8444-444444444444', 'account:bad', 'bad', '\\x04', "
+                        "'TRACE', '/v1/builds', now() + interval '1 day')"
+                    )
+                )
+            connection.rollback()
+
+        command.downgrade(config, f"{IDEMPOTENCY_CALLER_REVISION}-1")
+        with engine.connect() as connection:
+            columns = set(
+                connection.execute(
+                    text(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_schema = 'public' AND table_name = 'idempotency_requests'"
+                    )
+                ).scalars()
+            )
+            assert "caller" not in columns
+            assert set(connection.execute(text("SELECT principal FROM idempotency_requests")).scalars()) == {
+                "account:old",
+                "account:new",
+                "account:old-rolling",
+            }
     finally:
         engine.dispose()
 

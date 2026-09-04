@@ -15,6 +15,15 @@ class IdempotencyState(StrEnum):
     COMPLETED = "completed"
 
 
+class UnsafeHttpMethod(StrEnum):
+    """HTTP methods eligible for durable mutation replay."""
+
+    POST = "POST"
+    PUT = "PUT"
+    PATCH = "PATCH"
+    DELETE = "DELETE"
+
+
 @dataclass(frozen=True, slots=True)
 class PendingRequest:
     """A newly reserved request whose response is not stored yet."""

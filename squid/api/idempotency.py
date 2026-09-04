@@ -11,9 +11,9 @@ from starlette.responses import Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from squid.api.security import Caller, current_caller
-from squid.idempotency import IdempotencyService, PendingRequest, StoredResponse
+from squid.idempotency import IdempotencyService, PendingRequest, StoredResponse, UnsafeHttpMethod
 
-_UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+_UNSAFE_METHODS = frozenset(UnsafeHttpMethod)
 _REPLAYED_HEADERS = frozenset({"cache-control", "content-language", "content-type", "etag", "location", "pragma"})
 _STATE_KEY = "squid_idempotency"
 MAX_IDEMPOTENT_RESPONSE_BYTES = 1024 * 1024
@@ -71,7 +71,7 @@ async def reserve_idempotent_request_for(
         caller=caller,
         key=idempotency_key,
         fingerprint=await _request_fingerprint(request, route_path),
-        method=request.method,
+        method=UnsafeHttpMethod(request.method),
         route=route_path,
     )
     if isinstance(reservation, StoredResponse):

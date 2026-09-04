@@ -10,7 +10,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.idempotency.application import IdempotencyRepository
-from squid.idempotency.domain import ExistingRequest, PendingRequest, Reservation, StoredResponse
+from squid.idempotency.domain import (
+    ExistingRequest,
+    IdempotencyState,
+    PendingRequest,
+    Reservation,
+    StoredResponse,
+    UnsafeHttpMethod,
+)
 from squid.idempotency.infrastructure.crypto import (
     EncryptedResponseBody,
     IdempotencyCiphertextError,
@@ -39,7 +46,7 @@ class PostgresIdempotencyRepository(IdempotencyRepository):
         caller: str,
         key: str,
         fingerprint: bytes,
-        method: str,
+        method: UnsafeHttpMethod,
         route: str,
         expires_at: Instant,
         now: Instant,
@@ -51,6 +58,7 @@ class PostgresIdempotencyRepository(IdempotencyRepository):
                 insert(IdempotencyRequest)
                 .values(
                     id=candidate_id,
+                    caller=caller,
                     principal=caller,
                     idempotency_key=key,
                     request_fingerprint=fingerprint,
@@ -59,7 +67,7 @@ class PostgresIdempotencyRepository(IdempotencyRepository):
                     expires_at=expires_at,
                 )
                 .on_conflict_do_nothing(
-                    index_elements=[IdempotencyRequest.principal, IdempotencyRequest.idempotency_key]
+                    index_elements=[IdempotencyRequest.caller, IdempotencyRequest.idempotency_key]
                 )
                 .returning(IdempotencyRequest.id)
             )
@@ -67,12 +75,12 @@ class PostgresIdempotencyRepository(IdempotencyRepository):
                 return PendingRequest(request_id)
             existing = await session.scalar(
                 select(IdempotencyRequest).where(
-                    IdempotencyRequest.principal == caller,
+                    IdempotencyRequest.caller == caller,
                     IdempotencyRequest.idempotency_key == key,
                 )
             )
         assert existing is not None
-        response = self._stored_response(existing) if existing.state == "completed" else None
+        response = self._stored_response(existing) if existing.state is IdempotencyState.COMPLETED else None
         return ExistingRequest(bytes(existing.request_fingerprint), response)
 
     @override
@@ -82,14 +90,14 @@ class PostgresIdempotencyRepository(IdempotencyRepository):
             existing = await session.scalar(
                 select(IdempotencyRequest).where(IdempotencyRequest.id == request.request_id).with_for_update()
             )
-            if existing is None or existing.state != "in_progress":
+            if existing is None or existing.state is not IdempotencyState.IN_PROGRESS:
                 msg = f"Idempotency request {request.request_id} was not pending."
                 raise RuntimeError(msg)
             encrypted = self._cipher_or_raise().encrypt(
                 response.body,
                 self._metadata(existing, response.status_code, headers),
             )
-            existing.state = "completed"
+            existing.state = IdempotencyState.COMPLETED
             existing.response_status = response.status_code
             existing.response_headers = headers
             existing.response_body_ciphertext = encrypted.ciphertext
@@ -146,7 +154,7 @@ class PostgresIdempotencyRepository(IdempotencyRepository):
     ) -> ResponseEncryptionMetadata:
         return ResponseEncryptionMetadata(
             request_id=request.id,
-            caller=request.principal,
+            caller=request.caller,
             idempotency_key=request.idempotency_key,
             request_fingerprint=bytes(request.request_fingerprint),
             method=request.method,
