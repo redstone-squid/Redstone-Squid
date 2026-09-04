@@ -25,6 +25,7 @@ IDEMPOTENCY_CALLER_REVISION = "b0c6d9e4f7a1"
 FINALIZATION_RESULT_METADATA_REVISION = "c1d7e0f5a8b2"
 SCHEMATIC_RENDER_PROJECTION_REVISION = "e1f2a3b4c5d6"
 SCHEMATIC_PUBLICATION_REVISION = "f8b9c0d1e2f3"
+NOTIFICATION_DELIVERY_OWNER_REVISION = "b5d9f2a7c0e3"
 
 pytestmark = pytest.mark.filterwarnings("ignore:Expression #.* detected to include an operator clause:UserWarning")
 """Autogenerate cannot compare an index expression carrying an operator class.
@@ -256,6 +257,74 @@ def test_migrations_create_schema_without_drift(
     # re-enqueueing keeps the generation rather than restarting it.
     assert stale_post is True
     assert reissued_generation == seeded_generation
+
+
+def test_notification_delivery_owner_migration_rejects_corruption_and_downgrades(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The forward key validates old rows and the downgrade restores the legacy shape."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, f"{NOTIFICATION_DELIVERY_OWNER_REVISION}-1")
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            owner_id = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+            other_id = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+            event_id = connection.execute(
+                text(
+                    "INSERT INTO domain_events (event_type, aggregate_kind, aggregate_id) "
+                    "VALUES ('build.confirmed', 'build', 42) RETURNING id"
+                )
+            ).scalar_one()
+            notification_id = connection.execute(
+                text(
+                    "INSERT INTO notifications (account_id, event_id, source_key, kind, payload, web_visible) "
+                    "VALUES (:owner_id, :event_id, 'event:migration:owner', 'build_confirmed', "
+                    "'{\"build_id\": 42}'::jsonb, true) RETURNING id"
+                ),
+                {"owner_id": owner_id, "event_id": event_id},
+            ).scalar_one()
+            connection.execute(
+                text(
+                    "INSERT INTO notification_deliveries (notification_id, account_id) "
+                    "VALUES (:notification_id, :other_id)"
+                ),
+                {"notification_id": notification_id, "other_id": other_id},
+            )
+
+        with pytest.raises(DBAPIError, match="notification_deliveries_notification_owner_fkey"):
+            command.upgrade(config, NOTIFICATION_DELIVERY_OWNER_REVISION)
+
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "UPDATE notification_deliveries SET account_id = :owner_id WHERE notification_id = :notification_id"
+                ),
+                {"owner_id": owner_id, "notification_id": notification_id},
+            )
+        command.upgrade(config, NOTIFICATION_DELIVERY_OWNER_REVISION)
+
+        with (
+            pytest.raises(DBAPIError, match="notification_deliveries_notification_owner_fkey"),
+            engine.begin() as connection,
+        ):
+            connection.execute(
+                text(
+                    "UPDATE notification_deliveries SET account_id = :other_id WHERE notification_id = :notification_id"
+                ),
+                {"notification_id": notification_id, "other_id": other_id},
+            )
+
+        command.downgrade(config, f"{NOTIFICATION_DELIVERY_OWNER_REVISION}-1")
+        with engine.begin() as connection:
+            connection.execute(
+                text("UPDATE notification_deliveries SET account_id = :other_id WHERE notification_id = :id"),
+                {"other_id": other_id, "id": notification_id},
+            )
+    finally:
+        engine.dispose()
 
 
 def test_applied_schematic_render_projection_migration_upgrades_and_downgrades(
