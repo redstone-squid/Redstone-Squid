@@ -106,6 +106,20 @@ def test_process_entry_points_use_concrete_runtime_constructors() -> None:
     assert api_factory.args.defaults[0].id == "create_api_runtime"
 
 
+def test_submission_domain_and_application_do_not_import_pydantic() -> None:
+    """Transport validation stays outside submission policy and orchestration."""
+    violations = [
+        f"{path}:{node.lineno}"
+        for root in (Path("squid/submissions/domain"), Path("squid/submissions/application"))
+        for path in root.rglob("*.py")
+        for node in ast.walk(source_tree(path))
+        if (isinstance(node, ast.Import) and any(alias.name == "pydantic" for alias in node.names))
+        or (isinstance(node, ast.ImportFrom) and node.module == "pydantic")
+    ]
+
+    assert violations == []
+
+
 def test_background_tasks_use_owned_anyio_task_groups() -> None:
     """Task lifetime stays with an anyio owner instead of escaping through asyncio."""
     banned = {"TaskGroup", "create_task", "ensure_future"}
