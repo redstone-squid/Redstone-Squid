@@ -1,6 +1,8 @@
 """Public application API for schematics."""
 
+from squid.schematics.application.attachments import SchematicPublication, StoredSchematic
 from squid.schematics.application.commands import ConvertRequest, IngestRequest, RenderRequest, SimulationRequest
+from squid.schematics.application.duplicates import DuplicateCandidate
 from squid.schematics.application.jobs import (
     ClaimedSchematicJob,
     SchematicJobErrorKind,
@@ -10,16 +12,13 @@ from squid.schematics.application.jobs import (
     SchematicJobSnapshot,
 )
 from squid.schematics.application.ports import SchematicAnalyzer, SchematicStore, SchematicVersionResolver
-from squid.schematics.application.queries import (
+from squid.schematics.application.previews import (
     CachedRender,
-    DuplicateCandidate,
     FreshRender,
     RenderedSchematic,
     RenderPreparation,
     RenderSkipReason,
-    SchematicPublication,
     SkippedRender,
-    StoredSchematic,
 )
 from squid.schematics.application.render_jobs import ClaimedRenderJob, SchematicRenderJobService
 from squid.schematics.application.services import (
