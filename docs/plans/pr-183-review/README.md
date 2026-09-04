@@ -41,13 +41,24 @@ shared reaction routing (8).
 12. [Runtime and observability](12-runtime-observability.md)
 13. [Test and tooling cleanup](13-test-tooling-cleanup.md) —
     [thread dispositions](13-test-tooling-dispositions.md)
+14. [Later review batch](14-review-comment-inventory.md), split into ownership-based implementation plans:
+    [platform/delivery/tooling](14a-platform-delivery-tooling.md),
+    [API idempotency/rate limits](14b-api-idempotency-rate-limits.md),
+    [notifications](14c-notifications.md),
+    [submission forms/drafts](14d-submission-form-drafts.md),
+    [finalization/builds](14e-submission-finalization-builds.md),
+    [media](14f-media-processing-api.md),
+    [schematics](14g-schematics-persistence-publication.md),
+    [accounts/records](14h-accounts-records-persistence.md), and
+    [Minecraft auth](14i-minecraft-auth.md)
 
 ## Review inventories
 
-- [Comments from `2605367` through `aa85f68`](14-review-comment-inventory.md) records the later
-  pending review batch: 104 comments grouped by primary concern. It excludes the CLI, web
-  frontend, and Minecraft plugin by their `cli/`, `web/`, and `minecraft/` paths, while retaining
-  comments on shared backend code under `squid/` regardless of commit-subject prefix.
+- [Comments from `2605367` through `aa85f68`](14-review-comment-inventory.md) records and triages the
+  later review batch: 104 comments grouped by primary concern and assigned exactly once across
+  plans 14A–14I. It excludes the CLI, web frontend, and Minecraft plugin by their `cli/`, `web/`,
+  and `minecraft/` paths, while retaining comments on shared backend code under `squid/`
+  regardless of commit-subject prefix.
 - **Uncovered:** 52 further `Glinte` threads anchor to commits after `aa85f68` and so fall outside
   both the `5edfd3e` plan cutoff and that inventory's range. They cluster on `squid/accounts/`
   (repository, services, models, ports), `squid/bot/verify.py`, `squid/bot/voting/vote.py`,
@@ -56,12 +67,16 @@ shared reaction routing (8).
 
 ## Status
 
-As of the final 2026-08-30 audit, the numbered plans have been implemented and independently
+As of the final 2026-08-30 audit, plans 1–13 have been implemented and independently
 re-audited against their production entry points, not only their focused test helpers. Each plan's
 findings and dispositions remain the historical reasoning; this table records the resulting
 implementation state. **Done** means every in-scope
 implementation and test case is present. **Blocked** is reserved for verification that requires
 external CI infrastructure rather than more repository work.
+
+Plan 14 was triaged afterward against the resulting current code. **Planned** means its detailed
+thread dispositions, milestones, compatibility requirements, and tests are written, but the
+repository changes have not been implemented.
 
 The review inventories below the numbered plans are scoping records, not implementation plans.
 GitHub replies and thread resolution also remain separately authorized work.
@@ -81,6 +96,7 @@ GitHub replies and thread resolution also remain separately authorized work.
 | 11 | [API, auth, records, and sync](11-api-auth-records-sync.md) | Done | Existing caller/error/sync decisions and persistence coverage remain intact. `0bdb3918` declares dependency/pagination aliases with PEP 695 and removes the last abstract provider wording; `4b33ba75` gives submission finalization its concrete application name. |
 | 12 | [Runtime and observability](12-runtime-observability.md) | Done | The authoritative log transport, correlation display, resolved telemetry record, explicit worker trace field, typed public command surfaces, FastAPI error registration, join/message correlation, and three-process lifecycle contract all landed from `ae9edae0` through `89d9dde0`. |
 | 13 | [Test and tooling cleanup](13-test-tooling-cleanup.md) / [dispositions](13-test-tooling-dispositions.md) | Blocked | All repository work and thread dispositions are complete, including the typed reaction-callback update in `df1302d1`. The remaining condition is the already-documented green GitHub CI/PostgreSQL verification; local Docker access is unavailable. |
+| 14 | [Later review batch](14-review-comment-inventory.md) / [plans 14A–14I](#plans) | Planned | All 104 comments through `aa85f68` have one current-state disposition and a detailed implementation/validation owner. The 52 still-later comments remain outside this cutoff. |
 
 ## Suggested sequence
 
@@ -90,6 +106,11 @@ GitHub replies and thread resolution also remain separately authorized work.
 4. Redesign voting contracts before simplifying reaction routing in plans 9 and 10.
 5. Handle runtime/observability decisions in plan 12, then perform the test cleanup in plan 13
    alongside or immediately after the affected implementation plan.
+
+For plan 14, first land the cross-cutting typed boundaries in 14A–14B; then 14H identity semantics
+before 14I, and 14D draft contracts before 14E–14F. Plan 14G can proceed independently once its
+current locking invariants are pinned. Plan 14C is independent except for the shared enum and API
+dependency conventions from 14B.
 
 Treat each numbered plan as a separate planning and implementation unit. Before closing GitHub
 threads, produce a thread-level checklist that records one of four dispositions: fixed by the new
