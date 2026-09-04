@@ -13,6 +13,7 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.ui import tr
 from squid.notifications import (
+    InboxNotification,
     NotificationPreferences,
     NotificationSubscription,
     RecordSubscriptionFilter,
@@ -47,10 +48,12 @@ class NotificationScreen(sd.Screen):
     audience = "personal"
 
     selected_ids: tuple[str, ...] = sl.state(())
+    selected_inbox_ids: tuple[str, ...] = sl.state(())
     closed: bool = sl.state(default=False)
     # Refreshed from the service by load(), so a snapshot would only restore them stale.
     _preferences: NotificationPreferences | None = sl.state(None, persist=False)
     _subscriptions: tuple[NotificationSubscription, ...] = sl.state((), persist=False)
+    _inbox: tuple[InboxNotification, ...] = sl.state((), persist=False)
 
     def __init__(
         self,
@@ -70,8 +73,12 @@ class NotificationScreen(sd.Screen):
         """Re-read this account's channels and follows. Also what unfollowing calls afterwards."""
         self._preferences = await self._notifications.preferences(self._account_id)
         self._subscriptions = tuple(await self._notifications.subscriptions(self._account_id))
+        self._inbox = tuple((await self._notifications.inbox(self._account_id, page_size=MAX_LISTED)).items)
         self.selected_ids = tuple(
             selected for selected in self.selected_ids if any(str(item.id) == selected for item in self.subscriptions)
+        )
+        self.selected_inbox_ids = tuple(
+            selected for selected in self.selected_inbox_ids if any(str(item.id) == selected for item in self._inbox)
         )
 
     @property
@@ -94,6 +101,7 @@ class NotificationScreen(sd.Screen):
             sl.field(tr(t"Web inbox"), on if self.web_enabled else off),
             sl.field(tr(t"Discord DMs"), on if self.dm_enabled else off),
             sl.field(tr(t"Following"), self._subscription_list()),
+            sl.field(tr(t"Unread"), str(sum(item.read_at is None for item in self._inbox))),
         )
         description = tr(t"Toggle where notifications arrive, and unfollow what you no longer want.")
         suspension_note = self._suspension_note()
@@ -120,6 +128,23 @@ class NotificationScreen(sd.Screen):
                     selection=sl.controlled(self.selected_ids, self._selection_changed),
                     minimum=0,
                     maximum=len(self.subscriptions),
+                )
+            )
+        if self._inbox:
+            nodes.append(
+                sl.choices(
+                    *(
+                        sl.choice(
+                            self._inbox_label(notification),
+                            key=str(notification.id),
+                            description=tr(t"Unread") if notification.read_at is None else tr(t"Read"),
+                        )
+                        for notification in self._inbox
+                    ),
+                    key="inbox",
+                    selection=sl.controlled(self.selected_inbox_ids, self._inbox_selection_changed),
+                    minimum=0,
+                    maximum=len(self._inbox),
                 )
             )
         nodes.extend(
@@ -188,6 +213,18 @@ class NotificationScreen(sd.Screen):
                     available=bool(self.selected_ids),
                 ),
                 sl.action_control(
+                    tr(t"Mark selected read"),
+                    self._mark_selected_read,
+                    key="mark_selected_read",
+                    available=bool(self.selected_inbox_ids),
+                ),
+                sl.action_control(
+                    tr(t"Mark selected unread"),
+                    self._mark_selected_unread,
+                    key="mark_selected_unread",
+                    available=bool(self.selected_inbox_ids),
+                ),
+                sl.action_control(
                     tr(t"Close"),
                     self._close,
                     key="close",
@@ -199,6 +236,23 @@ class NotificationScreen(sd.Screen):
 
     async def _selection_changed(self, event: sl.ChoiceEvent) -> None:
         self.selected_ids = event.selected
+
+    async def _inbox_selection_changed(self, event: sl.ChoiceEvent) -> None:
+        self.selected_inbox_ids = event.selected
+
+    async def _mark_selected_read(self, event: sl.PressEvent) -> None:
+        await self._set_selected_read_state(event, read=True)
+
+    async def _mark_selected_unread(self, event: sl.PressEvent) -> None:
+        await self._set_selected_read_state(event, read=False)
+
+    async def _set_selected_read_state(self, event: sl.PressEvent, *, read: bool) -> None:
+        await event.acknowledge()
+        operation = self._notifications.mark_read if read else self._notifications.mark_unread
+        for notification_id in self.selected_inbox_ids:
+            await operation(self._account_id, int(notification_id))
+        await self._refresh()
+        self.invalidate()
 
     async def _toggle_web(self, event: sl.ToggleEvent) -> None:
         await event.acknowledge()
@@ -319,6 +373,22 @@ class NotificationScreen(sd.Screen):
             params["remainder"] = tr(t"…and {count} more.")
             lines.append("{remainder}")
         return sl.text.Message("\n".join(lines), params)
+
+    @staticmethod
+    def _inbox_label(notification: InboxNotification) -> sl.TextLike:
+        match notification.kind.value:
+            case "build_confirmed":
+                return tr(t"Build confirmed")
+            case "build_denied":
+                return tr(t"Build denied")
+            case "creator_build_confirmed":
+                return tr(t"Creator build confirmed")
+            case "record_gained":
+                return tr(t"Record gained")
+            case "staff_build_submitted":
+                return tr(t"Build awaiting review")
+            case _:
+                return tr(t"Build notification")
 
     def describe(self, subscription: NotificationSubscription) -> sl.TextLike:
         return _kind_label(subscription.kind)

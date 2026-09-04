@@ -7,13 +7,15 @@ from whenever import Instant
 
 from squid.bot.notifications_view import NotificationScreen
 from squid.notifications import (
+    InboxNotification,
     NotificationPreferences,
     NotificationService,
     NotificationSubscription,
     RecordSubscriptionFilter,
     SubscriptionKind,
 )
-from squid_ui.testing import RecordingResponder, labels, submit
+from squid.notifications.domain import NotificationKind
+from squid_ui.testing import RecordingResponder, choose, labels, press, submit
 
 
 @dataclass(frozen=True)
@@ -28,6 +30,8 @@ class NotificationRecorder(NotificationService):
     def __init__(self) -> None:
         self.subscription_reads = 0
         self.subscribe_calls: list[SubscribeCall] = []
+        self.inbox_reads = 0
+        self.read_changes: list[tuple[int, int, bool]] = []
 
     async def preferences(self, account_id: int) -> NotificationPreferences:
         return NotificationPreferences(account_id, consent_pending=False)
@@ -47,6 +51,23 @@ class NotificationRecorder(NotificationService):
     ) -> NotificationSubscription:
         self.subscribe_calls.append(SubscribeCall(account_id, kind, subject_id, record_filter))
         return NotificationSubscription(1, account_id, kind, subject_id, record_filter, Instant.now())
+
+    async def inbox(self, account_id: int, *, selector=None, page_size: int = 20, visibility=None):
+        from squid.core.pagination import Page
+
+        self.inbox_reads += 1
+        return Page(
+            items=(InboxNotification(3, NotificationKind.BUILD_CONFIRMED, {"build_id": 9}, Instant.now()),),
+            total=1,
+            next=None,
+            prev=None,
+        )
+
+    async def mark_read(self, account_id: int, notification_id: int, *, visibility=None) -> None:
+        self.read_changes.append((account_id, notification_id, True))
+
+    async def mark_unread(self, account_id: int, notification_id: int, *, visibility=None) -> None:
+        self.read_changes.append((account_id, notification_id, False))
 
 
 @dataclass(frozen=True)
@@ -139,3 +160,16 @@ async def test_empty_record_filter_does_not_call_the_service() -> None:
 
     assert harness.notifications.subscribe_calls == []
     assert len(responder.notices) == 1
+
+
+async def test_inbox_items_can_be_marked_read_and_unread_without_typing_ids() -> None:
+    harness = make_screen()
+    screen = harness.screen
+    await screen.on_load()
+
+    await choose(screen, "inbox", "3")
+    await press(screen, "mark_selected_read")
+    await choose(screen, "inbox", "3")
+    await press(screen, "mark_selected_unread")
+
+    assert harness.notifications.read_changes == [(7, 3, True), (7, 3, False)]

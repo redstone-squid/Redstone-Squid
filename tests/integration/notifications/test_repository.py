@@ -13,7 +13,7 @@ from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.accounts.infrastructure.models import Account, AccountIdentity
 from squid.events import DomainEvent
 from squid.events.infrastructure.models import DomainEventRecord
-from squid.notifications.domain import NotificationKind, RecordSubscriptionFilter, SubscriptionKind
+from squid.notifications.domain import InboxVisibility, NotificationKind, RecordSubscriptionFilter, SubscriptionKind
 from squid.notifications.infrastructure.models import (
     NotificationDeliveryRecord,
     NotificationProfile,
@@ -153,6 +153,40 @@ async def test_disabling_dms_cancels_pending_deliveries_without_hiding_the_inbox
         assert delivery.dead_at is not None
         assert notification is not None
         assert notification.web_visible is True
+
+
+async def test_read_state_changes_are_idempotent_and_visibility_safe(
+    repository: PostgresNotificationRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await _seed_delivery(async_session_factory)
+    async with async_session_factory.begin() as session:
+        account_id = (await session.scalars(select(NotificationProfile.account_id))).one()
+        ordinary_id = (await session.scalars(select(NotificationRecord.id))).one()
+        event = DomainEventRecord(event_type="build.submitted", aggregate_kind="build", aggregate_id=43)
+        session.add(event)
+        await session.flush()
+        staff = NotificationRecord(
+            account_id=account_id,
+            event_id=event.id,
+            source_key="event:2:staff:1",
+            kind=NotificationKind.STAFF_BUILD_SUBMITTED,
+            payload={"build_id": 43},
+            web_visible=True,
+        )
+        session.add(staff)
+        await session.flush()
+        staff_id = staff.id
+
+    ordinary = InboxVisibility()
+    staff = InboxVisibility(include_staff=True)
+    assert await repository.mark_read(account_id, ordinary_id, visibility=ordinary) is True
+    assert await repository.mark_read(account_id, ordinary_id, visibility=ordinary) is True
+    assert await repository.mark_unread(account_id, ordinary_id, visibility=ordinary) is True
+    assert await repository.mark_unread(account_id, ordinary_id, visibility=ordinary) is True
+    assert await repository.mark_read(account_id, staff_id, visibility=ordinary) is False
+    assert await repository.mark_read(account_id + 1, ordinary_id, visibility=staff) is False
+    assert await repository.mark_read(account_id, staff_id, visibility=staff) is True
 
 
 async def test_cleanup_removes_expired_inbox_and_unreferenced_source_event(

@@ -20,6 +20,7 @@ from squid.events import DomainEvent
 from squid.events.infrastructure.models import DomainEventDeliveryRecord, DomainEventRecord
 from squid.notifications.domain import (
     InboxNotification,
+    InboxVisibility,
     NotificationKind,
     NotificationPreferences,
     NotificationSubscription,
@@ -225,13 +226,13 @@ class PostgresNotificationRepository:
         after_id: int | None,
         before_id: int | None,
         limit: int,
-        include_staff: bool,
+        visibility: InboxVisibility,
     ) -> Sequence[InboxNotification]:
         """List one newest-first inbox page; a `before_id` page carries its overfetch at the front."""
         async with self._session_factory() as session:
             if not await self._web_inbox_enabled(session, account_id):
                 return ()
-            statement = _inbox_filter(select(NotificationRecord), account_id=account_id, include_staff=include_staff)
+            statement = _inbox_filter(select(NotificationRecord), account_id=account_id, visibility=visibility)
             reverse = before_id is not None
             if before_id is not None:
                 # Walk away from the anchor in reversed display order; the page is flipped back below.
@@ -246,7 +247,7 @@ class PostgresNotificationRepository:
             ordered = reversed(rows) if reverse else rows
             return tuple(_inbox(row) for row in ordered)
 
-    async def count_inbox(self, account_id: int, *, include_staff: bool) -> int:
+    async def count_inbox(self, account_id: int, *, visibility: InboxVisibility) -> int:
         """Count web-visible inbox items, mirroring the visibility rules of `list_inbox`."""
         async with self._session_factory() as session:
             if not await self._web_inbox_enabled(session, account_id):
@@ -254,7 +255,7 @@ class PostgresNotificationRepository:
             statement = _inbox_filter(
                 select(func.count()).select_from(NotificationRecord),
                 account_id=account_id,
-                include_staff=include_staff,
+                visibility=visibility,
             )
             return await session.scalar(statement) or 0
 
@@ -270,19 +271,25 @@ class PostgresNotificationRepository:
         )
         return bool(enabled)
 
-    async def mark_read(self, account_id: int, notification_id: int, *, include_staff: bool) -> bool:
+    async def mark_read(self, account_id: int, notification_id: int, *, visibility: InboxVisibility) -> bool:
+        return await self._set_read_state(account_id, notification_id, visibility=visibility, read=True)
+
+    async def mark_unread(self, account_id: int, notification_id: int, *, visibility: InboxVisibility) -> bool:
+        return await self._set_read_state(account_id, notification_id, visibility=visibility, read=False)
+
+    async def _set_read_state(
+        self,
+        account_id: int,
+        notification_id: int,
+        *,
+        visibility: InboxVisibility,
+        read: bool,
+    ) -> bool:
         async with self._session_factory() as session, session.begin():
-            predicates = [
-                NotificationRecord.id == notification_id,
-                NotificationRecord.account_id == account_id,
-                NotificationRecord.web_visible.is_(True),
-            ]
-            if not include_staff:
-                predicates.append(NotificationRecord.kind != NotificationKind.STAFF_BUILD_SUBMITTED.value)
             updated = await session.scalar(
                 update(NotificationRecord)
-                .where(*predicates)
-                .values(read_at=func.coalesce(NotificationRecord.read_at, func.now()))
+                .where(NotificationRecord.id == notification_id, *_inbox_predicates(account_id, visibility))
+                .values(read_at=func.coalesce(NotificationRecord.read_at, func.now()) if read else None)
                 .returning(NotificationRecord.id)
             )
             return updated is not None
@@ -876,15 +883,19 @@ def _subscription(row: NotificationSubscriptionRecord) -> NotificationSubscripti
     )
 
 
-def _inbox_filter[S: Select[Any]](statement: S, *, account_id: int, include_staff: bool) -> S:
-    """Apply the web-visibility rules shared by inbox page and count queries."""
-    statement = statement.where(
+def _inbox_predicates(account_id: int, visibility: InboxVisibility) -> tuple[ColumnElement[bool], ...]:
+    predicates = (
         NotificationRecord.account_id == account_id,
         NotificationRecord.web_visible.is_(True),
     )
-    if not include_staff:
-        statement = statement.where(NotificationRecord.kind != NotificationKind.STAFF_BUILD_SUBMITTED.value)
-    return statement
+    if visibility.include_staff:
+        return predicates
+    return (*predicates, NotificationRecord.kind != NotificationKind.STAFF_BUILD_SUBMITTED)
+
+
+def _inbox_filter[S: Select[Any]](statement: S, *, account_id: int, visibility: InboxVisibility) -> S:
+    """Apply the visibility rules shared by inbox reads and state transitions."""
+    return statement.where(*_inbox_predicates(account_id, visibility))
 
 
 def _inbox(row: NotificationRecord) -> InboxNotification:

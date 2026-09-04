@@ -2,7 +2,9 @@
 
 from squid.notifications.application import NotificationService
 from squid.notifications.domain import (
+    DEFAULT_INBOX_VISIBILITY,
     InboxNotification,
+    InboxVisibility,
     NotificationPreferences,
     NotificationSubscription,
     PendingNotificationDelivery,
@@ -12,7 +14,9 @@ from squid.notifications.domain import (
 )
 
 __all__ = [
+    "DEFAULT_INBOX_VISIBILITY",
     "InboxNotification",
+    "InboxVisibility",
     "NotificationPreferences",
     "NotificationService",
     "NotificationSubscription",
