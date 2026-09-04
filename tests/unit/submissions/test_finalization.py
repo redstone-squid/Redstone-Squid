@@ -10,9 +10,9 @@ from whenever import Instant
 from squid.core.errors import DataIntegrityError, JSONValue
 from squid.sponsors import PublicSponsor
 from squid.submissions.application import (
-    ActionableSubmissionError,
     AppliedDraftChange,
     AppliedDraftUpgrade,
+    BuildSubmissionRejectedError,
     ClaimedFinalizationJob,
     FinalizationFailureOutcome,
     FinalizationJobSnapshot,
@@ -20,9 +20,7 @@ from squid.submissions.application import (
     SubmissionDraftService,
     SubmissionFinalizationService,
     SubmissionFinalizationWorker,
-    SubmissionNotificationEvent,
     SubmissionPreparation,
-    SubmissionReviewEvent,
     build_submission_manifest,
 )
 from squid.submissions.domain import (
@@ -282,7 +280,7 @@ class FakeFinalizationJobs:
         return FinalizationFailureOutcome(applied=True, dead=job.attempts >= max_attempts)
 
 
-class FakeTarget:
+class FakeWriter:
     def __init__(self, result: SubmissionTargetResult | Exception) -> None:
         self.result = result
         self.payloads: list[NormalizedSubmission] = []
@@ -292,22 +290,6 @@ class FakeTarget:
         if isinstance(self.result, Exception):
             raise self.result
         return self.result
-
-
-class FakeNotifications:
-    def __init__(self) -> None:
-        self.events: list[SubmissionNotificationEvent] = []
-
-    async def publish(self, event: SubmissionNotificationEvent) -> None:
-        self.events.append(event)
-
-
-class FakeReviews:
-    def __init__(self) -> None:
-        self.events: list[SubmissionReviewEvent] = []
-
-    async def publish(self, event: SubmissionReviewEvent) -> None:
-        self.events.append(event)
 
 
 def _answers() -> dict[str, JSONValue]:
@@ -659,21 +641,16 @@ def _claim(payload: NormalizedSubmission, attempts: int = 1) -> ClaimedFinalizat
 
 
 @pytest.mark.asyncio
-async def test_worker_completes_and_emits_events_naming_no_chat_client() -> None:
+async def test_worker_completes_after_retry_safe_build_creation() -> None:
     payload = await _payload()
     jobs = FakeFinalizationJobs()
     jobs.claimed = (_claim(payload),)
     target_result = SubmissionTargetResult(41, "postgres_builds", {"source": "draft"})
-    notifications = FakeNotifications()
-    reviews = FakeReviews()
-    worker = SubmissionFinalizationWorker(jobs, FakeTarget(target_result), notifications, reviews)
+    worker = SubmissionFinalizationWorker(jobs, FakeWriter(target_result))
 
     await worker.process_batch(now=NOW)
 
     assert jobs.completed == target_result
-    assert notifications.events[0].build_id == 41
-    assert reviews.events[0].build_id == 41
-    assert notifications.events[0].event_id != reviews.events[0].event_id
 
 
 @pytest.mark.asyncio
@@ -682,31 +659,23 @@ async def test_actionable_target_failure_returns_draft_to_attention() -> None:
     issue = SubmissionAttentionIssue("restrictions", SubmissionAttentionReason.TARGET_REJECTED)
     jobs = FakeFinalizationJobs()
     jobs.claimed = (_claim(payload),)
-    notifications = FakeNotifications()
     worker = SubmissionFinalizationWorker(
         jobs,
-        FakeTarget(ActionableSubmissionError((issue,))),
-        notifications,
-        FakeReviews(),
+        FakeWriter(BuildSubmissionRejectedError((issue,))),
     )
 
     await worker.process_batch(now=NOW)
 
     assert jobs.worker_attention == (issue,)
-    assert notifications.events[0].issues == (issue,)
 
 
 @pytest.mark.asyncio
-async def test_unexpected_failure_retries_then_notifies_after_dead_letter() -> None:
+async def test_unexpected_failure_retries_then_dead_letters() -> None:
     payload = await _payload()
     jobs = FakeFinalizationJobs()
     jobs.claimed = (_claim(payload, attempts=3),)
-    notifications = FakeNotifications()
-    worker = SubmissionFinalizationWorker(jobs, FakeTarget(RuntimeError("secret")), notifications, FakeReviews())
+    worker = SubmissionFinalizationWorker(jobs, FakeWriter(RuntimeError("secret")))
 
     await worker.process_batch(now=NOW)
 
     assert jobs.failures == ["RuntimeError"]
-    assert notifications.events[0].issues == (
-        SubmissionAttentionIssue("submission", SubmissionAttentionReason.RETRY_EXHAUSTED),
-    )

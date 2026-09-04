@@ -114,11 +114,7 @@ from squid.submissions.infrastructure.artifact_readiness import (
     AuthoritativeDraftArtifactReadiness,
     FailClosedDraftSchematicReader,
 )
-from squid.submissions.infrastructure.build_target import BuildSubmissionTarget
-from squid.submissions.infrastructure.finalization_events import (
-    ExistingBuildReviewPublisher,
-    PollableFinalizationStatusPublisher,
-)
+from squid.submissions.infrastructure.build_target import CanonicalBuildSubmissionWriter
 from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
 from squid.submissions.infrastructure.sponsors import PaperSponsorResolver
@@ -456,9 +452,7 @@ class _ServiceGraph:
     def submission_finalization_worker(self) -> SubmissionFinalizationWorker:
         return SubmissionFinalizationWorker(
             self.submission_finalization_jobs,
-            BuildSubmissionTarget(self.builds, self.tags, self.version_service),
-            PollableFinalizationStatusPublisher(),
-            ExistingBuildReviewPublisher(),
+            CanonicalBuildSubmissionWriter(self.builds, self.tags, self.version_service),
         )
 
     @cached_property

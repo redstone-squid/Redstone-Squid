@@ -1,11 +1,10 @@
 """Durable submission finalization, driven the same way by the bot and the API."""
 
-import logging
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol, cast
-from uuid import UUID, uuid5
+from uuid import UUID
 
 from whenever import Instant
 
@@ -42,8 +41,6 @@ from squid.submissions.domain.finalization import (
     SubmissionTaxonomy,
 )
 from squid.submissions.errors import DraftSchemaUnsupportedError, DraftValidationError
-
-logger = logging.getLogger(__name__)
 
 MAX_FINALIZATION_JOB_CLAIM = 32
 DEFAULT_FINALIZATION_ATTEMPTS = 3
@@ -118,32 +115,8 @@ class PreparationRejected:
 type PreparationResult = PreparedSubmission | PreparationRejected
 
 
-@dataclass(frozen=True, slots=True)
-class SubmissionNotificationEvent:
-    """Idempotent account notification emitted after a durable transition."""
-
-    event_id: UUID
-    draft_id: UUID
-    owner_account_id: int
-    status: FinalizationJobStatus
-    build_id: int | None = None
-    issues: tuple[SubmissionAttentionIssue, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class SubmissionReviewEvent:
-    """Idempotent request to place a newly created build into staff review."""
-
-    event_id: UUID
-    draft_id: UUID
-    build_id: int
-    owner_account_id: int
-    category: SubmissionCategory
-    target_key: str
-
-
-class ActionableSubmissionError(ValidationError):
-    """A target rejected fields that the draft owner can repair."""
+class BuildSubmissionRejectedError(ValidationError):
+    """Canonical build creation rejected fields that the draft owner can repair."""
 
     def __init__(self, issues: Sequence[SubmissionAttentionIssue]) -> None:
         if not issues:
@@ -214,7 +187,7 @@ class SubmissionPreparation:
         return sponsor, ()
 
 
-class SubmissionTarget(Protocol):
+class BuildSubmissionWriter(Protocol):
     """Create or find a build using the source draft UUID as its idempotency key.
 
     Implementations must return the previously-created result when called again for the
@@ -222,18 +195,6 @@ class SubmissionTarget(Protocol):
     """
 
     async def create_or_get(self, submission: NormalizedSubmission) -> SubmissionTargetResult: ...
-
-
-class SubmissionNotificationPort(Protocol):
-    """Deliver an idempotent status notification without assuming a transport."""
-
-    async def publish(self, event: SubmissionNotificationEvent) -> None: ...
-
-
-class SubmissionReviewEventPort(Protocol):
-    """Deliver an idempotent staff-review event without assuming a transport."""
-
-    async def publish(self, event: SubmissionReviewEvent) -> None: ...
 
 
 class FinalizationJobRepository(Protocol):
@@ -382,9 +343,7 @@ class SubmissionFinalizationWorker:
     def __init__(
         self,
         jobs: FinalizationJobRepository,
-        target: SubmissionTarget,
-        notifications: SubmissionNotificationPort,
-        reviews: SubmissionReviewEventPort,
+        writer: BuildSubmissionWriter,
         *,
         max_attempts: int = DEFAULT_FINALIZATION_ATTEMPTS,
         retention_days: int = DEFAULT_DRAFT_RETENTION_DAYS,
@@ -393,9 +352,7 @@ class SubmissionFinalizationWorker:
             msg = tr(t"finalization retry and retention limits must be positive")
             raise InvalidStateError(msg)
         self._jobs = jobs
-        self._target = target
-        self._notifications = notifications
-        self._reviews = reviews
+        self._writer = writer
         self._max_attempts = max_attempts
         self._retention_days = retention_days
 
@@ -411,20 +368,18 @@ class SubmissionFinalizationWorker:
     async def _process(self, job: ClaimedFinalizationJob, *, now: Instant) -> None:
         expires_at = now.add(days=self._retention_days, days_assumed_24h_ok=True)
         try:
-            result = await self._target.create_or_get(job.payload)
-        except ActionableSubmissionError as error:
-            applied = await self._jobs.needs_attention(
+            result = await self._writer.create_or_get(job.payload)
+        except BuildSubmissionRejectedError as error:
+            await self._jobs.needs_attention(
                 job,
                 error.issues,
                 now=now,
                 expires_at=expires_at,
             )
-            if applied:
-                await self._notify_attention(job, error.issues)
             return
         except Exception as error:
             retry_at = now.add(seconds=_retry_delay(job.attempts))
-            outcome = await self._jobs.fail(
+            await self._jobs.fail(
                 job,
                 type(error).__name__,
                 now=now,
@@ -432,63 +387,9 @@ class SubmissionFinalizationWorker:
                 expires_at=expires_at,
                 max_attempts=self._max_attempts,
             )
-            if outcome.applied and outcome.dead:
-                issues = (SubmissionAttentionIssue("submission", SubmissionAttentionReason.RETRY_EXHAUSTED),)
-                await self._notify_attention(job, issues)
             return
 
-        if not await self._jobs.complete(job, result, now=now):
-            return
-        await self._publish_success(job, result)
-
-    async def _publish_success(self, job: ClaimedFinalizationJob, result: SubmissionTargetResult) -> None:
-        notification = SubmissionNotificationEvent(
-            event_id=uuid5(job.job_id, "submission-completed"),
-            draft_id=job.draft_id,
-            owner_account_id=job.payload.owner_account_id,
-            status=FinalizationJobStatus.COMPLETED,
-            build_id=result.build_id,
-        )
-        review = SubmissionReviewEvent(
-            event_id=uuid5(job.job_id, "review-requested"),
-            draft_id=job.draft_id,
-            build_id=result.build_id,
-            owner_account_id=job.payload.owner_account_id,
-            category=job.payload.category,
-            target_key=result.target_key,
-        )
-        await self._publish_safely(self._notifications, notification)
-        await self._publish_safely(self._reviews, review)
-
-    async def _notify_attention(
-        self,
-        job: ClaimedFinalizationJob,
-        issues: tuple[SubmissionAttentionIssue, ...],
-    ) -> None:
-        event = SubmissionNotificationEvent(
-            event_id=uuid5(job.job_id, f"needs-attention-{job.draft_revision}-{job.attempts}"),
-            draft_id=job.draft_id,
-            owner_account_id=job.payload.owner_account_id,
-            status=FinalizationJobStatus.NEEDS_ATTENTION,
-            issues=issues,
-        )
-        await self._publish_safely(self._notifications, event)
-
-    @staticmethod
-    async def _publish_safely(
-        destination: SubmissionNotificationPort | SubmissionReviewEventPort,
-        event: SubmissionNotificationEvent | SubmissionReviewEvent,
-    ) -> None:
-        try:
-            if isinstance(event, SubmissionNotificationEvent):
-                await cast(SubmissionNotificationPort, destination).publish(event)
-            else:
-                await cast(SubmissionReviewEventPort, destination).publish(event)
-        except Exception:
-            logger.exception(
-                "Submission finalization event delivery failed",
-                extra={"squid.submission.event_id": str(event.event_id)},
-            )
+        await self._jobs.complete(job, result, now=now)
 
 
 def _manifest_issues(context: Mapping[str, JSONValue]) -> tuple[SubmissionAttentionIssue, ...]:

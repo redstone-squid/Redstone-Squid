@@ -23,7 +23,7 @@ from squid.builds.infrastructure.restrictions import RestrictionRepository
 from squid.builds.infrastructure.taxonomy import OfficialTagResolver
 from squid.core.errors import DataIntegrityError
 from squid.sponsors import PublicSponsor
-from squid.submissions.application import ActionableSubmissionError, StoredDraft
+from squid.submissions.application import BuildSubmissionRejectedError, StoredDraft
 from squid.submissions.domain import (
     DraftSnapshot,
     DraftStatus,
@@ -41,7 +41,7 @@ from squid.submissions.domain import (
     SubmissionTaxonomy,
     VerifiedSubmissionArtifacts,
 )
-from squid.submissions.infrastructure.build_target import BuildSubmissionTarget
+from squid.submissions.infrastructure.build_target import CanonicalBuildSubmissionWriter
 from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
 from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
 from squid.submissions.infrastructure.models import SubmissionDraft
@@ -237,7 +237,7 @@ async def test_submission_target_persists_only_the_exact_canonical_source_versio
         NoopEmbeddings(),
         OfficialTagResolver(migrated_session_factory),
     )
-    target = BuildSubmissionTarget(builds, NoApprovedTags(), versions)
+    target = CanonicalBuildSubmissionWriter(builds, NoApprovedTags(), versions)
     canonical_draft_id = uuid.UUID("77777777-7777-4777-8777-777777777777")
 
     result = await target.create_or_get(_normalized_submission(account_id, canonical_draft_id, "Java 1.21.0"))
@@ -247,7 +247,7 @@ async def test_submission_target_persists_only_the_exact_canonical_source_versio
     assert persisted.versions == ["Java 1.21.0"]
 
     unknown_draft_id = uuid.UUID("88888888-8888-4888-8888-888888888888")
-    with pytest.raises(ActionableSubmissionError) as error:
+    with pytest.raises(BuildSubmissionRejectedError) as error:
         await target.create_or_get(_normalized_submission(account_id, unknown_draft_id, "Java 1.21.99"))
 
     assert error.value.issues == (SubmissionAttentionIssue("source_version", SubmissionAttentionReason.UNKNOWN_OPTION),)
