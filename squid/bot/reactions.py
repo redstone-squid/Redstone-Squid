@@ -2,16 +2,20 @@
 
 import asyncio
 import contextlib
+import functools
 import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal, override
 
+import anyio
 import discord
 from discord.ext import commands
 
+from squid.core.concurrency import run_all
 from squid.observability import record_histogram
+from squid.runtime import BackgroundTaskSupervisor, JobHandle
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -112,11 +116,18 @@ type _QueuedEvent = _QueuedReaction[ReactionEvent] | _QueuedReaction[ReactionCle
 
 
 class ReactionRouter:
-    """Dispatch reactions through bounded message-keyed FIFO shards."""
+    """Dispatch reactions through bounded FIFO shards until :meth:`close` stops them.
+
+    Calls admitted before shutdown wait for capacity rather than dropping a ballot. A dispatch
+    is accepted once its item enters the queue; returning from ``dispatch_*`` confirms that
+    acceptance. Events for one message share a shard and remain ordered, while different shards
+    and the callbacks in one registration snapshot may run concurrently.
+    """
 
     def __init__(
         self,
         bot: squid.bot.app.RedstoneSquid,
+        supervisor: BackgroundTaskSupervisor,
         *,
         concurrency: int = 16,
         max_pending: int = 1024,
@@ -129,12 +140,16 @@ class ReactionRouter:
             msg = "Reaction queue capacity must be at least the worker concurrency."
             raise ValueError(msg)
         self._bot = bot
+        self._supervisor = supervisor
         self._registrations: dict[int, _ReactionRegistration] = {}
         self._next_registration_id = 0
         capacity = (max_pending + concurrency - 1) // concurrency
         self._queues = tuple(asyncio.Queue[_QueuedEvent](maxsize=capacity) for _ in range(concurrency))
-        self._workers: tuple[asyncio.Task[None], ...] = ()
-        self._producers: set[asyncio.Task[object]] = set()
+        self._workers: tuple[JobHandle, ...] = ()
+        self._intake_changed = asyncio.Condition()
+        self._active_enqueues = 0
+        self._outstanding = 0
+        self._abort_enqueues = anyio.Event()
         self._shutdown_timeout = shutdown_timeout
         self._closing = False
 
@@ -179,24 +194,34 @@ class ReactionRouter:
         await self._dispatch(_QueuedReaction("clear_emoji", event, callbacks, time.monotonic()))
 
     async def close(self) -> None:
-        """Stop intake, drain accepted events, then await every shard worker."""
-        if self._closing:
-            return
-        self._closing = True
-        current = asyncio.current_task()
-        producers = tuple(task for task in self._producers if task is not current)
-        try:
-            async with asyncio.timeout(self._shutdown_timeout):
-                if producers:
-                    await asyncio.gather(*producers, return_exceptions=True)
-                await asyncio.gather(*(queue.join() for queue in self._queues))
-        except TimeoutError:
-            logger.exception("Reaction work did not drain before the shutdown deadline")
-        finally:
-            for worker in self._workers:
-                worker.cancel()
-            if self._workers:
-                await asyncio.gather(*self._workers, return_exceptions=True)
+        """Stop intake, drain accepted events, then stop every owned shard worker."""
+        async with self._intake_changed:
+            if self._closing:
+                return
+            self._closing = True
+
+        started = time.monotonic()
+        with anyio.move_on_after(self._shutdown_timeout) as drain_scope:
+            async with self._intake_changed:
+                await self._intake_changed.wait_for(lambda: self._active_enqueues == 0)
+            for queue in self._queues:
+                await queue.join()
+
+        if drain_scope.cancelled_caught:
+            self._abort_enqueues.set()
+            logger.error(
+                "Reaction work did not drain before the shutdown deadline",
+                extra={
+                    "squid.reaction.active_enqueues": self._active_enqueues,
+                    "squid.reaction.accepted_pending": self._outstanding,
+                    "squid.reaction.shutdown_seconds": time.monotonic() - started,
+                },
+            )
+            with anyio.move_on_after(1.0):
+                async with self._intake_changed:
+                    await self._intake_changed.wait_for(lambda: self._active_enqueues == 0)
+        if self._workers:
+            await self._supervisor.cancel(*self._workers)
 
     async def _dispatch_action(self, kind: Literal["add", "remove"], payload: discord.RawReactionActionEvent) -> None:
         member = payload.member
@@ -223,24 +248,53 @@ class ReactionRouter:
         )
 
     async def _dispatch(self, item: _QueuedEvent) -> None:
-        if self._closing:
-            logger.warning("Ignored a reaction received during router shutdown")
-            return
+        async with self._intake_changed:
+            if self._closing:
+                logger.warning("Ignored a reaction received during router shutdown")
+                return
+            self._active_enqueues += 1
         self._ensure_workers()
-        producer = asyncio.current_task()
-        if producer is not None:
-            self._producers.add(producer)
         try:
-            await self._queues[item.event.payload.message_id % len(self._queues)].put(item)
+            queue = self._queues[item.event.payload.message_id % len(self._queues)]
+            try:
+                queue.put_nowait(item)
+                accepted = True
+            except asyncio.QueueFull:
+                accepted = await self._enqueue_or_abort(queue, item)
+            if accepted:
+                self._outstanding += 1
         finally:
-            if producer is not None:
-                self._producers.discard(producer)
+            async with self._intake_changed:
+                self._active_enqueues -= 1
+                self._intake_changed.notify_all()
+
+    async def _enqueue_or_abort(self, queue: asyncio.Queue[_QueuedEvent], item: _QueuedEvent) -> bool:
+        """Wait losslessly for queue capacity unless shutdown exhausts its drain budget."""
+        finished = anyio.Event()
+        accepted = False
+
+        async def enqueue() -> None:
+            nonlocal accepted
+            await queue.put(item)
+            accepted = True
+            finished.set()
+
+        async def abort() -> None:
+            await self._abort_enqueues.wait()
+            finished.set()
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(enqueue)
+            tasks.start_soon(abort)
+            await finished.wait()
+            tasks.cancel_scope.cancel()
+        return accepted
 
     def _ensure_workers(self) -> None:
         if self._workers:
             return
         self._workers = tuple(
-            asyncio.create_task(self._run_shard(queue), name=f"reaction-shard-{index}")
+            self._supervisor.start(self._run_shard(queue), name=f"reaction-shard-{index}")
             for index, queue in enumerate(self._queues)
         )
 
@@ -249,10 +303,11 @@ class ReactionRouter:
             item = await queue.get()
             try:
                 record_histogram("squid.reaction.queue_latency", time.monotonic() - item.enqueued_at)
-                await asyncio.gather(
-                    *(self._run_callback(callback, item.kind, item.event) for callback in item.callbacks)
+                await run_all(
+                    functools.partial(self._run_callback, callback, item.kind, item.event)
+                    for callback in item.callbacks
                 )
-            except asyncio.CancelledError:
+            except anyio.get_cancelled_exc_class():
                 raise
             except Exception:
                 # A shard that escapes this loop stops draining its queue for the
@@ -260,6 +315,7 @@ class ReactionRouter:
                 # shutdown deadline rather than reporting the real failure.
                 logger.exception("Reaction shard failed to dispatch %s", item.kind)
             finally:
+                self._outstanding -= 1
                 queue.task_done()
 
     @staticmethod
