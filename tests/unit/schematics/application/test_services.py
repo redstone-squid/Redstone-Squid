@@ -21,6 +21,7 @@ from squid.schematics.application import (
     SkippedRender,
 )
 from squid.schematics.domain.models import (
+    SCHEMATIC_FILE_SCHEMA_MAX_BYTES,
     AutostackLattice,
     FingerprintPreset,
     SchematicAnalysis,
@@ -139,7 +140,7 @@ def sanitized_publication(*, public: bool = False) -> SchematicPublication:
 def test_default_upload_budgets_match_the_public_plugin_contract() -> None:
     limits = SchematicLimits()
 
-    assert limits.max_upload_bytes == 16 * 1024 * 1024
+    assert limits.max_upload_bytes == SCHEMATIC_FILE_SCHEMA_MAX_BYTES
     assert limits.max_inflated_bytes == 64 * 1024 * 1024
     assert limits.max_allocated_volume == 20_000_000
     assert limits.max_axis_length == 512

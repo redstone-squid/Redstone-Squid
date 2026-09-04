@@ -22,6 +22,7 @@ from squid.artifacts.infrastructure import LocalArtifactStore
 from squid.persistence.base import Base
 from squid.schematics.application import SchematicPublication
 from squid.schematics.domain.models import (
+    SCHEMATIC_FILE_SCHEMA_MAX_BYTES,
     FingerprintPreset,
     SchematicFormat,
     SchematicLicense,
@@ -430,7 +431,10 @@ async def test_oversized_bytes_are_refused_by_the_database_as_well_as_the_upload
 ) -> None:
     """Defence in depth: the size cap is a check constraint, not only an application rule."""
     with pytest.raises(IntegrityError):
-        await repository.put_file(b"\x00" * (16 * 1024 * 1024 + 1), source_format=SchematicFormat.LITEMATIC)
+        await repository.put_file(
+            b"\x00" * (SCHEMATIC_FILE_SCHEMA_MAX_BYTES + 1),
+            source_format=SchematicFormat.LITEMATIC,
+        )
 
 
 async def test_simulation_evidence_round_trips_without_changing_the_analysis(
