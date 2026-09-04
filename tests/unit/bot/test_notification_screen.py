@@ -1,5 +1,6 @@
 """The notification preference and subscription workspace."""
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -96,10 +97,20 @@ class ScreenHarness:
     notifications: NotificationRecorder
 
 
-def make_screen(*, visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY) -> ScreenHarness:
+def make_screen(
+    *,
+    visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY,
+    visibility_resolver: Callable[[object], Awaitable[InboxVisibility]] | None = None,
+) -> ScreenHarness:
     notifications = NotificationRecorder()
     return ScreenHarness(
-        NotificationScreen(notifications=notifications, account_id=7, author_id=42, visibility=visibility),
+        NotificationScreen(
+            notifications=notifications,
+            account_id=7,
+            author_id=42,
+            visibility=visibility,
+            visibility_resolver=visibility_resolver,
+        ),
         notifications,
     )
 
@@ -195,3 +206,23 @@ async def test_inbox_items_can_be_marked_read_and_unread_without_typing_ids() ->
 
     assert harness.notifications.inbox_reads == [visibility, visibility, visibility]
     assert harness.notifications.read_changes == [(7, 3, True, visibility), (7, 3, False, visibility)]
+
+
+async def test_inbox_mutation_rechecks_staff_visibility_for_the_component_interaction() -> None:
+    refreshed = InboxVisibility()
+
+    async def resolve(_event: object) -> InboxVisibility:
+        return refreshed
+
+    harness = make_screen(
+        visibility=InboxVisibility(include_staff=True),
+        visibility_resolver=resolve,
+    )
+    screen = harness.screen
+    await screen.on_load()
+
+    await choose(screen, "inbox", "3")
+    await press(screen, "mark_selected_read")
+
+    assert harness.notifications.read_changes == [(7, 3, True, refreshed)]
+    assert harness.notifications.inbox_reads[-1] == refreshed

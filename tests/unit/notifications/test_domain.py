@@ -1,5 +1,7 @@
 """Notification filter and delivery rendering contracts."""
 
+import inspect
+from typing import Any
 from uuid import UUID
 
 import pytest
@@ -123,3 +125,7 @@ def test_delivery_renderer_localizes_at_send_time(monkeypatch: pytest.MonkeyPatc
 def test_notification_management_is_one_slash_workspace() -> None:
     assert NotificationCog.__cog_commands__ == []
     assert {command.name for command in NotificationCog.__cog_app_commands__} == {"notifications"}
+
+
+def test_notification_extension_entry_point_annotations_resolve_at_runtime() -> None:
+    assert inspect.get_annotations(notification_module.setup)["bot"] is Any
