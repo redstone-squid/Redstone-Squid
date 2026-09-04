@@ -9,6 +9,7 @@ from squid.accounts.infrastructure.repository import (
     _canonical_notification_source_key,
     _coalesce_notification_deliveries,
 )
+from squid.core.errors import DataIntegrityError
 from squid.notifications.domain import NotificationKind
 from squid.notifications.infrastructure.models import NotificationDeliveryRecord, NotificationRecord
 from squid.persistence.types import now
@@ -49,6 +50,25 @@ def test_notification_source_keys_follow_the_survivor_and_upgrade_legacy_record_
         )
         == expected
     )
+
+
+@pytest.mark.parametrize(
+    ("kind", "source_key"),
+    [
+        (NotificationKind.BUILD_CONFIRMED, "event:999:owner:9"),
+        (NotificationKind.BUILD_CONFIRMED, "event:3:creator:9"),
+        (NotificationKind.RECORD_GAINED, "event:3:record-build:99:account:9"),
+    ],
+)
+def test_notification_source_keys_validate_the_complete_event_kind_and_payload_grammar(
+    kind: NotificationKind,
+    source_key: str,
+) -> None:
+    with pytest.raises(DataIntegrityError, match="does not match"):
+        _canonical_notification_source_key(
+            _notification(kind, source_key),
+            _AccountMergeContext(survivor=7, absorbed=9),
+        )
 
 
 def test_delivery_collision_keeps_live_work_and_fences_both_prior_claims() -> None:
