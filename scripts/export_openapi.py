@@ -5,7 +5,8 @@ from pathlib import Path
 
 from squid.api.app import create_api_app
 
-OUTPUT_PATH = Path(__file__).resolve().parents[1] / "contracts" / "openapi.json"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+OUTPUT_PATH = PROJECT_ROOT / "contracts" / "openapi.json"
 
 
 def main() -> None:
