@@ -1,6 +1,5 @@
 """Strict streaming HTTP routes for account-owned draft media."""
 
-import asyncio
 import logging
 import os
 import re
@@ -12,6 +11,7 @@ from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
+import anyio
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 
 from squid.api.contract import DEVICE, MINECRAFT, WEB, WEB_WRITE, cli_command, contract
@@ -276,7 +276,7 @@ async def _stream_to_private_file(
             if received > max_bytes:
                 raise MediaLimitExceededError(MediaViolation(MediaLimitMeasure.SOURCE_BYTES, received, max_bytes))
             if chunk:
-                await asyncio.to_thread(_write_all, descriptor, chunk)
+                await anyio.to_thread.run_sync(_write_all, descriptor, chunk, abandon_on_cancel=False)
         if received != content_length:
             raise DraftMediaRequestError(_CONTENT_LENGTH_MISMATCH)
     finally:
