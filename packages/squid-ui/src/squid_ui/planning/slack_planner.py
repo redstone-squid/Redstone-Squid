@@ -75,6 +75,7 @@ def _class_names(element: scene.HtmlElement) -> frozenset[str]:
 
 
 def _html_text(node: scene.HtmlNode) -> str:
+    """Concatenated text content; `<br>`, `<li>` and `<tr>` children join with newlines, all others with nothing."""
     if isinstance(node, scene.HtmlText):
         return node.content
     separator = "\n" if node.tag in {scene.HtmlTag.BR, scene.HtmlTag.LI, scene.HtmlTag.TR} else ""
@@ -82,6 +83,7 @@ def _html_text(node: scene.HtmlNode) -> str:
 
 
 def _plain_text(value: str) -> str:
+    """Strip markdown links and emphasis for Block Kit `plain_text` fields, which render markup literally."""
     value = _LINK.sub(r"\1", value)
     for token in ("**", "__", "~~", "`", "*", "_"):
         value = value.replace(token, "")
@@ -89,6 +91,7 @@ def _plain_text(value: str) -> str:
 
 
 def _mrkdwn(value: str, markup: Markup = Markup.DISCORD_MARKDOWN) -> str:
+    """Escape `&<>` and rewrite Discord markdown links, bold, italic and strike into Slack mrkdwn."""
     escaped = value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     if markup is Markup.PLAIN:
         return escaped
@@ -113,6 +116,11 @@ def _nested_form(node: object) -> bool:
 
 
 def _modal_form(rendered: DocumentLike[Any]) -> sem.FormTrigger:
+    """The single top-level form a modal is built around.
+
+    Raises `LayoutInvariantError` unless exactly one `FormTrigger` is a direct child of the
+    document and no other child nests one.
+    """
     document = as_document(rendered)
     roots = tuple(child for child in document.children if isinstance(child, sem.FormTrigger))
     if len(roots) != 1:
@@ -125,7 +133,11 @@ def _modal_form(rendered: DocumentLike[Any]) -> sem.FormTrigger:
 
 
 class _Lowerer:
-    """Lower one semantic HTML intermediate into surface-specific Block Kit."""
+    """Lower one HTML intermediate scene into Block Kit for a message, modal or home surface.
+
+    Every text limit is enforced by truncation recorded as a `DEGRADATION` event; a control
+    or field Block Kit cannot represent raises `LayoutInvariantError`.
+    """
 
     def __init__(
         self,
@@ -142,6 +154,7 @@ class _Lowerer:
 
     @property
     def surface(self) -> str:
+        """`"message"`, `"modal"` or `"home"`, read off the target id's last segment."""
         return self.target.id.rsplit(".", 1)[-1]
 
     def event(
@@ -157,6 +170,7 @@ class _Lowerer:
         self.events.append(PlanEvent(code, path, message, severity, before or {}, after or {}))
 
     def fit(self, value: str, capacity: int, path: str, subject: str) -> str:
+        """Truncate to `capacity` with a trailing ellipsis; anything dropped records `slack.<subject>.truncated`."""
         if len(value) <= capacity:
             return value
         fitted = value[: max(0, capacity - 1)] + ("…" if capacity else "")
@@ -171,12 +185,14 @@ class _Lowerer:
         return fitted
 
     def text(self, value: str, path: str, *, capacity: int | None = None) -> scene.SlackText:
+        """An mrkdwn text object, truncated to `capacity` when one is given."""
         rendered = _mrkdwn(value)
         if capacity is not None:
             rendered = self.fit(rendered, capacity, path, "text")
         return scene.SlackText(rendered)
 
     def plain(self, value: str, path: str, *, capacity: int) -> scene.SlackText:
+        """A `plain_text` object with markup stripped, for headers, labels, placeholders and options."""
         return scene.SlackText(
             self.fit(_plain_text(value), capacity, path, "plain_text"),
             scene.SlackTextKind.PLAIN,
@@ -185,6 +201,7 @@ class _Lowerer:
         )
 
     def blocks(self, nodes: Sequence[scene.HtmlNode], path: str = "$") -> tuple[scene.SlackBlock, ...]:
+        """Lower every node, keeping the first `limits.blocks` blocks (50 per message, 100 per modal or home)."""
         blocks = tuple(block for index, node in enumerate(nodes) for block in self.node_blocks(node, f"{path}.{index}"))
         if len(blocks) <= self.limits.blocks:
             return blocks
@@ -200,6 +217,11 @@ class _Lowerer:
         return kept
 
     def node_blocks(self, node: scene.HtmlNode, path: str) -> tuple[scene.SlackBlock, ...]:
+        """Dispatch on tag, then `squid-*` class, then `role`; a container matching none of them lowers its children.
+
+        A `<form>` on the modal surface expands to input blocks from the root form schema; on
+        other surfaces only its submit button survives, as an actions block.
+        """
         if isinstance(node, scene.HtmlText):
             if not node.content.strip():
                 return ()
@@ -326,6 +348,7 @@ class _Lowerer:
         return tuple(elements)
 
     def _time(self, node: scene.HtmlElement, path: str) -> scene.SlackText:
+        """A `<!date^…>` token with the element text as fallback; an unparsable instant becomes literal text."""
         assert node.time is not None
         try:
             instant = datetime.fromisoformat(node.time.instant)
@@ -343,6 +366,7 @@ class _Lowerer:
         return scene.SlackText(f"<!date^{epoch}^{token}|{fallback}>")
 
     def _image(self, node: scene.HtmlElement, path: str) -> tuple[scene.SlackBlock, ...]:
+        """An image block; Slack needs a public URL, so an image without one is omitted with a `DEGRADATION` event."""
         if node.url is None:
             self.event("slack.image.omitted", path, "Image without a public URL was omitted", PlanSeverity.DEGRADATION)
             return ()
@@ -357,6 +381,11 @@ class _Lowerer:
         )
 
     def _table(self, node: scene.HtmlElement, path: str) -> scene.SlackTable:
+        """A table block cut to `table_columns` x `table_rows` (20 x 100).
+
+        When the surviving cells still exceed `table_text` (10000 characters) each row is
+        joined into one bullet-separated cell so the block stays within the aggregate limit.
+        """
         rows: list[tuple[scene.SlackText, ...]] = []
         for row in (item for item in self._elements(node) if item.tag is scene.HtmlTag.TR):
             cells = tuple(
@@ -382,6 +411,7 @@ class _Lowerer:
         return scene.SlackTable(tuple(rows))
 
     def _card(self, node: scene.HtmlElement, path: str) -> scene.SlackCard:
+        """An `<article>` as a card: its first heading is the title, the rest of its text the description."""
         heading = next(
             (child for child in node.children if isinstance(child, scene.HtmlElement) and child.tag in _HEADINGS),
             None,
@@ -400,6 +430,7 @@ class _Lowerer:
         )
 
     def _gallery(self, node: scene.HtmlElement, path: str) -> tuple[scene.SlackBlock, ...]:
+        """Up to `carousel_cards` (10) images as one carousel; a single image, or any modal, gets plain image blocks."""
         images = tuple(item for item in self._elements(node) if item.tag is scene.HtmlTag.IMG and item.url is not None)
         cards = tuple(
             scene.SlackCard(
@@ -429,6 +460,11 @@ class _Lowerer:
         }.get(tone, scene.SlackAlertStyle.INFO)
 
     def _control_blocks(self, controls: Sequence[scene.HtmlElement], path: str) -> tuple[scene.SlackBlock, ...]:
+        """Actions blocks of at most `actions_elements` (25) controls each, followed by context blocks.
+
+        Block Kit has no disabled state, so a `disabled` control becomes a context line
+        reading "<label> — Unavailable" and a `DEGRADATION` event.
+        """
         elements: list[scene.SlackButton | scene.SlackSelect] = []
         context: list[scene.SlackBlock] = []
         for index, control in enumerate(controls):
@@ -457,6 +493,7 @@ class _Lowerer:
         return (*rows, *context)
 
     def _button(self, node: scene.HtmlElement, path: str) -> scene.SlackButton:
+        """Bound by action, route, URL or asset, in that precedence; raises `LayoutInvariantError` with none."""
         label = self.plain(_html_text(node) or "Action", path, capacity=self.limits.components.button_label)
         style = self._button_style(node)
         if node.action is not None:
@@ -483,6 +520,7 @@ class _Lowerer:
 
     @staticmethod
     def _button_style(node: scene.HtmlElement) -> scene.SlackButtonStyle:
+        """`danger` tone is DANGER; `success`, `info` or a checked toggle is PRIMARY; anything else is DEFAULT."""
         tone = str(_attribute(node, scene.HtmlAttributeName.TONE) or "neutral")
         if tone == "danger":
             return scene.SlackButtonStyle.DANGER
@@ -491,6 +529,16 @@ class _Lowerer:
         return scene.SlackButtonStyle.DEFAULT
 
     def _select(self, node: scene.HtmlElement, path: str) -> scene.SlackSelect:
+        """A users or conversations select for those entity families, else a static select over the options.
+
+        A conversation selector falls back to static options when it asks for a conversation
+        type Slack cannot filter on. A single-select keeps its first `select_options` (100)
+        options with a `DEGRADATION` event.
+
+        Raises `LayoutInvariantError` for an entity family with no native select and no
+        options, a static select with no options, a multi-select over 100 options, or an
+        action id or option value outside its length limit.
+        """
         action = None if node.action is None else scene.SlackActionRef(node.action.action, node.action.mode)
         route = None if node.route is None else scene.SlackRouteRef(node.route.route_id)
         identity = (
@@ -568,6 +616,10 @@ class _Lowerer:
         )
 
     def _options(self, node: scene.HtmlElement, path: str) -> tuple[tuple[scene.SlackOption, bool], ...]:
+        """Each `<option>` with its selected flag; disabled ones are omitted with a `DEGRADATION` event.
+
+        Raises `LayoutInvariantError` for a value that is empty or over `option_value` (150) characters.
+        """
         options: list[tuple[scene.SlackOption, bool]] = []
         for index, child in enumerate(node.children):
             if not isinstance(child, scene.HtmlElement) or child.tag is not scene.HtmlTag.OPTION:
@@ -609,6 +661,7 @@ class _Lowerer:
 
     @staticmethod
     def _entity_ids(values: Sequence[str], path: str) -> tuple[str, ...]:
+        """Bare Slack ids from encoded entity refs; raises `LayoutInvariantError` for one that does not decode."""
         identifiers: list[str] = []
         for value in values:
             try:
@@ -619,6 +672,7 @@ class _Lowerer:
         return tuple(identifiers)
 
     def _stable_id(self, value: str, path: str) -> None:
+        """Raises `LayoutInvariantError` for an action id that is empty or over `action_id` (255) characters."""
         if not value or len(value) > self.limits.components.action_id:
             message = f"{path}: Slack action ids must contain 1-{self.limits.components.action_id} characters"
             raise LayoutInvariantError(message)
@@ -642,6 +696,7 @@ class _Lowerer:
         field: forms.FormField[Any],
         path: str,
     ) -> scene.SlackInput:
+        """An input block whose id is `<form>:<field>`, or `form:<blake2s>` when that exceeds `block_id` (255)."""
         self._stable_id(field.key, path)
         label_value = resolve_text(cast(TextLike, field.label), self.request.localization).content
         label = self.plain(label_value, path, capacity=2000)
@@ -659,6 +714,7 @@ class _Lowerer:
         return scene.SlackInput(block_id, label, element, optional=not field.required, hint=hint)
 
     def _form_element(self, field: forms.FormField[Any], prefill: object, path: str) -> scene.SlackInputElement:
+        """The Block Kit input element for a field; raises `LayoutInvariantError` for a field type with none."""
         placeholder_value = getattr(field, "placeholder", None)
         placeholder = (
             None
@@ -757,6 +813,7 @@ class _Lowerer:
         multiple: bool,
         path: str,
     ) -> scene.SlackInputElement:
+        """Checkboxes or radios up to 10 options, a static select above; raises `LayoutInvariantError` past 100."""
         if len(options) > self.limits.components.select_options:
             message = f"{path}: Slack form choices cannot exceed 100 options"
             raise LayoutInvariantError(message)
@@ -779,6 +836,7 @@ class _Lowerer:
 
 
 def _action_keys(body: SlackBody) -> set[str]:
+    """Action keys the Block Kit body references, so bindings the lowering dropped are not returned."""
     actions: set[str] = set()
 
     def element(value: scene.SlackElement) -> None:
@@ -802,7 +860,11 @@ def _action_keys(body: SlackBody) -> set[str]:
 
 
 class SlackPlanner:
-    """Compile portable semantic documents into deterministic Slack scenes."""
+    """Backend for the three Slack surfaces: plans through `HTML_PLANNER`, then lowers that scene to Block Kit.
+
+    Accepts only the portable semantic vocabulary. A modal target is built around exactly one
+    top-level `FormTrigger`, whose spec becomes the view's input blocks.
+    """
 
     def plan[BodyT: SlackBody, RenderTargetT: SlackTarget, AdapterT](
         self,
@@ -812,6 +874,23 @@ class SlackPlanner:
         cache: PlanCache[BodyT] | None = None,
         memo: PlanMemo[BodyT] | None = None,
     ) -> PlanResult[BodyT]:
+        """Compile the document into a `SlackMessage`, `SlackModalView` or `SlackHomeView` scene.
+
+        The result's `bindings` are filtered to the action keys the Block Kit body references;
+        `form_bindings`, `resources`, `session_updates` and the leading `report` events come
+        from the HTML intermediate, with the lowering's own events appended. A message body
+        also carries the whole document as plain text, truncated to `fallback_text`. A cache
+        hit swaps in the cached scene and report and reports `PlanReuse.STRUCTURAL`.
+
+        Raises:
+            LayoutInvariantError: `request.reservation` names an axis the target lacks, a modal
+                document has other than one top-level form or nests one, a node is outside the
+                portable vocabulary, a control or field has no Block Kit form, or an action id
+                or option value is outside its length limit.
+            LayoutDegradedError: `request.strict` and the HTML pass or the lowering dropped
+                content.
+            UnsolvableLayoutError: a `Paged` region has no feasible break set.
+        """
         target = cast(SlackTargetT, request.target.reserve(request.reservation))
         modal_form = _modal_form(cast(DocumentLike[Any], rendered)) if target.id.endswith(".modal") else None
         key = stable_fingerprint((rendered, request.cache_context(target=target, chrome=request.chrome)))

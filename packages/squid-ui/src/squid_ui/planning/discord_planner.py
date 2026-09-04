@@ -85,17 +85,21 @@ from squid_ui.text import Localization
 
 @dataclass(frozen=True, slots=True)
 class _DynamicSlot:
+    """Placeholder in a compiled template for `dynamic[index]` at replay time."""
+
     index: int
 
 
 @dataclass(frozen=True, slots=True)
 class _GeneratedHandlerTemplate:
+    """A `GeneratedHandler` stored by type and templated init fields, rebuilt on replay."""
+
     handler_type: type[GeneratedHandler[Any]]
     values: tuple[tuple[str, object], ...]
 
 
 class _UnboundDynamic(Exception):
-    pass
+    """A callable or opaque value in the tree has no slot in the dynamic tuple, so no template exists."""
 
 
 def _walk_value(value: object, visit: Callable[[object], None]) -> None:
@@ -121,6 +125,7 @@ def _walk_value(value: object, visit: Callable[[object], None]) -> None:
 
 
 def _dynamic_values(value: object) -> tuple[object, ...]:
+    """Every callable or opaque leaf reachable from `value`, in a deterministic walk order."""
     found: list[object] = []
     _walk_value(value, found.append)
     return tuple(found)
@@ -142,9 +147,7 @@ def _program_dynamic_values(
 ) -> tuple[object, ...]:
     """Every process-local value a compiled template must be handed back to be replayed.
 
-    Typed even though the result is a heterogeneous tuple: seven of these were `object`
-    only because of where they end up, and seven interchangeable `object` keywords is
-    exactly the shape in which a swapped argument goes unnoticed.
+    Keyword-only and individually typed so a swapped argument fails at the call, not at replay.
     """
     external = (
         target,
@@ -172,6 +175,7 @@ def _dynamic_index(value: object, dynamic: tuple[object, ...]) -> int | None:
 
 
 def _template(value: object, dynamic: tuple[object, ...]) -> object:
+    """Replace every dynamic leaf with its `_DynamicSlot`; raises `_UnboundDynamic` for one not in `dynamic`."""
     if (index := _dynamic_index(value, dynamic)) is not None:
         return _DynamicSlot(index)
     if isinstance(value, GeneratedHandler):
@@ -202,6 +206,7 @@ def _template(value: object, dynamic: tuple[object, ...]) -> object:
 
 
 def _materialize(value: object, dynamic: tuple[object, ...]) -> object:
+    """Inverse of `_template`: fill slots from `dynamic` and rebuild generated handlers."""
     if isinstance(value, _DynamicSlot):
         return dynamic[value.index]
     if isinstance(value, _GeneratedHandlerTemplate):
@@ -221,6 +226,7 @@ def _materialize(value: object, dynamic: tuple[object, ...]) -> object:
 
 
 def _compile_template(nodes: Sequence[Node], dynamic: tuple[object, ...]) -> object | None:
+    """The template for `nodes`, or `None` when some value cannot be slotted and replay must re-lower."""
     try:
         return _template(tuple(nodes), dynamic)
     except _UnboundDynamic:
@@ -228,6 +234,7 @@ def _compile_template(nodes: Sequence[Node], dynamic: tuple[object, ...]) -> obj
 
 
 def _declared_assets(document: Document[Any]) -> tuple[Asset, ...]:
+    """`document.assets` plus every `Asset` embedded in its children; raises `LayoutInvariantError` on a key clash."""
     found: list[Asset] = list(document.assets)
 
     def walk(value: object) -> None:
@@ -252,7 +259,11 @@ def _declared_assets(document: Document[Any]) -> tuple[Asset, ...]:
 
 
 def _incremental_shape(document: Document[Any]) -> str | None:
-    """Identify one independent text region while excluding pagination and shared allocation."""
+    """Fingerprint a document that is one unpaginated text node with no assets; `None` otherwise.
+
+    Only such documents are eligible for incremental reuse: their fit depends on nothing
+    shared, so a previous certification still holds when only the text changes.
+    """
     if document.assets or len(document.children) != 1:
         return None
     node = document.children[0]
@@ -300,6 +311,7 @@ def _certifies_incremental(candidate: _Candidate) -> bool:
 
 
 def _merge_assets(*groups: Sequence[Asset]) -> tuple[Asset, ...]:
+    """Dedupe by key; raises `LayoutInvariantError` when one key names two unequal assets."""
     merged: dict[str, Asset] = {}
     for asset in (asset for group in groups for asset in group):
         existing = merged.get(asset.key)
@@ -374,10 +386,9 @@ class _Expansion:
 class _Compilation[BodyT: scene.Body, RenderTargetT, AdapterT]:
     """One document compiled for one target: everything that does not vary between candidates.
 
-    The target is already reserved and the chrome already localized, which is the whole reason
-    this is a value rather than the request itself. Everything else is read back off the
-    request, so a search candidate, a structural replay and the final assembly all see one
-    set of inputs instead of three re-spreadings of the same eight fields.
+    The target is already reserved and the chrome already localized; everything else is read
+    off the request, so search candidates, structural replay and final assembly share one set
+    of inputs.
     """
 
     request: PlanRequest[BodyT, RenderTargetT, AdapterT]
@@ -391,7 +402,10 @@ class _Compilation[BodyT: scene.Body, RenderTargetT, AdapterT]:
         document: Document[ResolvedRenderTargetT],
         request: PlanRequest[ResolvedBodyT, ResolvedRenderTargetT, ResolvedAdapterT],
     ) -> _Compilation[ResolvedBodyT, ResolvedRenderTargetT, ResolvedAdapterT]:
-        """Withhold the reservation and localize the chrome, once, for every phase below."""
+        """Reserve the target and localize the chrome once, for every phase that follows.
+
+        Raises `LayoutInvariantError` when the reservation names an axis the target lacks.
+        """
         # Every axis is withheld the same way: by planning against a smaller target.
         return _Compilation(
             request=request,
@@ -434,10 +448,10 @@ class _Compilation[BodyT: scene.Body, RenderTargetT, AdapterT]:
     def replay(self, cached: CachedPlan[BodyT]) -> PlanResult[BodyT]:
         """Rebuild a result around a cached scene, recovering only what could not be cached.
 
-        The scene, its report and its staged session updates come back untouched. Callbacks
-        cannot be cached, so the primitive tree carrying them is recovered first -- from the
-        compiled template when it materializes, and by re-lowering under the cached decisions
-        when it does not. Both routes reach the same bindings; only their cost differs.
+        The scene, report and session updates come back untouched. Callbacks cannot be cached,
+        so the primitive tree carrying them is recovered from the compiled template when it
+        materializes, else by re-lowering under the cached decisions. Raises
+        `LayoutInvariantError` when re-lowering finds an asset key clash or fails validation.
         """
         nodes = self._materialized(cached)
         if nodes is not None:
@@ -507,7 +521,8 @@ class _Compilation[BodyT: scene.Body, RenderTargetT, AdapterT]:
         """Lower, validate, and measure exactly one candidate in its own coordinator.
 
         The coordinator is per candidate rather than per plan: a rejected state must not
-        leave its pagers, assets, events, bindings, or staged session writes behind.
+        leave its pagers, assets, events, bindings, or staged session writes behind. Raises
+        `LayoutInvariantError` when the lowered tree fails the dialect's validation.
         """
         broker = CursorCoordinator(self.presentation, self.chrome, self.nav, self.positions)
         fallbacks = dict(state.fallbacks)
@@ -644,18 +659,15 @@ class _Compilation[BodyT: scene.Body, RenderTargetT, AdapterT]:
 class _ParetoArchive:
     """The non-dominated states seen so far, in fidelity and per-axis resource cost.
 
-    A state is worth expanding only if it reaches somewhere no explored state already
-    reaches more cheaply. "More cheaply" is per axis and never traded: a candidate that
-    spends fewer components but more embed text is not dominated by one that does the
-    reverse, because a document blocked on components and a document blocked on embed text
-    need different steps to become feasible. Collapsing that to a scalar is exactly how a
-    component-only heuristic starves a second budget.
+    Dominance is per axis and never traded: a candidate that spends fewer components but
+    more embed text is not dominated by one that does the reverse, because the two need
+    different steps to become feasible. A scalar cost would let one budget starve another.
     """
 
     points: list[tuple[DegradationProfile, ResourceCost]] = field(default_factory=list)
 
     def admit(self, candidate: _Candidate) -> bool:
-        """Record this candidate and report whether anything already dominates it."""
+        """Admit the candidate unless an explored point dominates it; `True` when it was admitted."""
         point = (candidate.degradation, candidate.layout.cost)
         for degradation, cost in self.points:
             if degradation <= point[0] and not point[1].cheaper_anywhere(cost):
@@ -690,7 +702,7 @@ def _canonical_strategies(axes: Sequence[StrategyAxis], selected: Mapping[str, s
 
 
 def _fallback_profile(occurrences: Sequence[FallbackAxis], selected: Mapping[str, int]) -> DegradationProfile:
-    """Price opened fallback branches as the author-granted loss they are."""
+    """Loss for opened fallback branches: an optional one is a dropped node, a named alternate `rung` semantic steps."""
     profile = DegradationProfile()
     for occurrence in occurrences:
         rung = selected.get(occurrence.path, 0)
@@ -735,6 +747,10 @@ def _search(search: _Compilation[Any, Any, Any], *, search_budget: int) -> _Cand
     Strategies, semantic fallbacks, and primitive ladders are all decisions in the same
     frontier, so a lossless representation is never traded for a structural fallback the
     author priced higher, and an alternative hidden behind an unopened branch costs nothing.
+
+    When nothing fits within `search_budget` evaluations the least-overspent candidate is
+    returned instead. Exhausting the budget or taking a guided ladder step adds a
+    `planner.search_fallback` warning event and sets `search_fallback` on the result.
     """
     frontier: list[tuple[DegradationProfile, CostVector, int, _State]] = []
     serial = count()
@@ -806,13 +822,24 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
     cache: PlanCache[BodyT] | None = None,
     memo: PlanMemo[BodyT] | None = None,
 ) -> PlanResult[BodyT]:
-    """Resolve a complete logical document for one target.
+    """Resolve a complete logical document for one Discord target.
 
-    Planning owns every fit and fallback decision. The resulting scene contains visual action
-    references, while callbacks remain in the plan result for the mounted frontend.
+    Planning owns every fit and fallback decision. The result's scene carries only action
+    references; `bindings` and `form_bindings` hold the callbacks, `resources` the assets
+    under `asset:<key>`, `report` the adaptation and degradation events, and
+    `session_updates` the presentation writes the frontend applies after delivery.
+    `metrics.reuse` says which way in was taken, cheapest first: an exact memo hit returns
+    the previous result, a structural cache hit replays a stored scene, an incremental
+    certification skips the search, and a miss runs it.
 
-    Three ways in, cheapest first: an exact memo hit returns the previous result outright, a
-    structural cache hit replays a stored scene, and a miss runs the layout search.
+    Raises:
+        UnsolvableLayoutError: the document exceeds a target budget and cannot be root-paginated
+            (no document key, no `nav`, or local pagination already in use), or a hard fit
+            failure remains after search.
+        LayoutDegradedError: `request.strict` and the chosen layout lost content.
+        LayoutInvariantError: `request.reservation` names an axis the target lacks, two assets
+            share a key, the dialect rejects the lowered tree, or the dialect produces a body
+            of the wrong type for the target.
     """
     exact_key = request.exact_key()
     if memo is not None and (exact := memo.replay(rendered, exact_key, request.presentation)) is not None:
@@ -853,7 +880,12 @@ def _compile[RenderTargetT, AdapterT, BodyT: scene.Body](
     incremental_key: str | None,
     memo: PlanMemo[BodyT] | None,
 ) -> PlanResult[BodyT]:
-    """Search the layout space, assemble the scene, and record what may be reused."""
+    """Search the layout space, assemble the scene, and record what may be reused.
+
+    Root pagination is the last resort after the search: it is only attempted when the
+    chosen candidate still overspends, the document has a key, `nav` is given, and no local
+    pager exists. Raises the `LayoutError` subclasses `plan` documents.
+    """
     request = compilation.request
     document = compilation.document
     target = compilation.target
@@ -1001,13 +1033,10 @@ def _compile[RenderTargetT, AdapterT, BodyT: scene.Body](
 
 
 def _reconcile_pagers(measured: MeasuredLayout, broker: CursorCoordinator) -> None:
-    """Move each measured pager to the page its reader belongs on.
+    """Move each measured pager to the page its stored cursor selects.
 
-    Measuring a page means rendering *some* page, and the choice is made before anyone knows
-    how many there are — the count is an output of fitting. This is the first moment a
-    stored cursor can be reconciled against it, and because the page is a projection it
-    costs a slot rewrite rather than a second measurement. The mount used to do this by
-    drawing twice.
+    The page count is an output of fitting, so the cursor can only be resolved against it
+    here. The page is a projection, so the move is a slot rewrite, not a second measurement.
     """
     positions: dict[str, Position] = {}
     for pager in measured.pagers:
@@ -1029,6 +1058,8 @@ def _plan_cache_key(nodes: Sequence[object], *, context: Mapping[str, object]) -
 
 
 def _cacheable(nodes: Sequence[Node]) -> bool:
+    """`Extension` and `RawItem` carry frontend objects the cache cannot hold, so trees containing them are skipped."""
+
     def check(node: Node) -> bool:
         if isinstance(node, Extension | RawItem):
             return False
@@ -1072,6 +1103,7 @@ def _collect_cached_bindings(
     nav: PlannedNav | None,
     chrome: Chrome,
 ) -> SceneBindings:
+    """Bindings from the recovered tree plus those of the navigation controls each cached pager shows."""
     collected = _collect_bindings(nodes)
     if nav is None:
         return collected
@@ -1085,7 +1117,7 @@ def _collect_cached_bindings(
 
 
 class DiscordPlanner:
-    """The complete planner backend for both Discord message dialects."""
+    """Planner backend the classic and v2 Discord dialects hand out; `plan` is the module-level function."""
 
     plan = staticmethod(plan)
 

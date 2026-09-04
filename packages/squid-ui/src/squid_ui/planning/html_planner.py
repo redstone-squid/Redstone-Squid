@@ -147,6 +147,7 @@ def _html_size(node: scene.HtmlNode) -> int:
 def _truncate_nodes(
     nodes: Sequence[scene.HtmlNode], capacity: int, *, keep: str = "head"
 ) -> tuple[tuple[scene.HtmlNode, ...], int]:
+    """Cut text nodes in document order until `capacity` characters remain; returns the nodes and the count dropped."""
     remaining = capacity
     omitted = 0
 
@@ -165,6 +166,7 @@ def _truncate_nodes(
 
 
 def _action_keys(nodes: Sequence[scene.HtmlNode]) -> tuple[set[str], set[str]]:
+    """The action keys and form keys the emitted tree references, so unused bindings are dropped from the result."""
     actions: set[str] = set()
     forms: set[str] = set()
 
@@ -185,6 +187,12 @@ def _action_keys(nodes: Sequence[scene.HtmlNode]) -> tuple[set[str], set[str]]:
 
 @dataclass(slots=True)
 class _Compiler:
+    """One planning pass: the fixed inputs plus the bindings, assets, events, pagers and updates it accumulates.
+
+    `_fork` copies the accumulators so a speculative branch can be compiled and discarded;
+    `_adopt` keeps a fork's. `states_explored` counts the branches tried.
+    """
+
     target: HtmlTargetT
     chrome: Chrome
     localization: Localization
@@ -242,6 +250,7 @@ class _Compiler:
         label: TextLike = "",
         record: History | None = None,
     ) -> scene.HtmlActionRef:
+        """Register the handler under `key`; raises `LayoutInvariantError` when the key is already bound."""
         if key in self.bindings:
             message = f"duplicate action key {key!r}"
             raise LayoutInvariantError(message)
@@ -267,10 +276,11 @@ class _Compiler:
     def compile(self, node: sem.AnyLayoutNode, path: str) -> tuple[scene.HtmlNode, ...]:
         """Resolve one semantic node into the HTML nodes that stand for it.
 
-        The stages partition the portable union by what compiling a member actually needs: a
-        wrapper around compiled children, a self-contained display element, a binding into
-        session state, or an adaptation to unwrap. The open `Renderable` escape is rejected
-        before the match, so the match is over the closed union and provably exhaustive.
+        The stages partition the portable union by what compiling a member needs: a wrapper
+        around compiled children, a self-contained display element, a binding into session
+        state, or an adaptation to unwrap. Raises `LayoutInvariantError` for anything outside
+        the portable vocabulary (a Discord-shaped primitive or an open `Renderable`) before the
+        match, so the match is over the closed union and exhaustive.
         """
         if not is_portable_node(node):
             if is_builtin_layout_node(node):
@@ -711,6 +721,7 @@ class _Compiler:
         self.updates = candidate.updates
 
     def _fit_budget(self, compiled: tuple[scene.HtmlNode, ...], capacity: int, path: str) -> tuple[scene.HtmlNode, ...]:
+        """Truncate to `capacity` characters; anything dropped records `html.budget.truncated` as a `DEGRADATION`."""
         fitted, omitted = _truncate_nodes(compiled, capacity)
         if omitted:
             self.events.append(
@@ -728,6 +739,7 @@ class _Compiler:
     def _budgeted_fallback(
         self, fallback: sem.FallbackContent[Any], capacity: int, path: str
     ) -> tuple[scene.HtmlNode, ...]:
+        """First branch, in authored order, whose HTML fits `capacity`; else the primary truncated to fit."""
         branches = (fallback.primary, *fallback.alternates)
         paths = branch_paths(path, len(branches))
         for index, branch in enumerate(branches):
@@ -753,6 +765,7 @@ class _Compiler:
         return self._fit_budget(compiled, capacity, path)
 
     def _heading(self, heading: sem.Heading) -> scene.HtmlElement:
+        """`<h1>`..`<h6>`; a level outside that range is clamped."""
         level = min(6, max(1, heading.level))
         tag = getattr(scene.HtmlTag, f"H{level}")
         return self.element(tag, self.text(heading.content))
@@ -768,6 +781,7 @@ class _Compiler:
         )
 
     def _asset(self, asset: Asset) -> None:
+        """Declare an asset; raises `LayoutInvariantError` when its key already names a different asset."""
         existing = self.assets.get(asset.key)
         if existing is not None and existing != asset:
             message = f"asset key {asset.key!r} identifies two different assets"
@@ -1120,6 +1134,7 @@ class _Compiler:
                 return tuple(by_key[key] for key in selected if key in by_key)
 
     def _entities(self, node: sem.Entities) -> scene.HtmlElement:
+        """A `<select>` when the node enumerates choices, else a text `<input>` of comma-joined entity keys."""
         previous = self._entity_state(node)
         commit = EntityCommit(cast(Any, node.selection), node.key, cast(Any, previous), self.presentation)
         action = self.bind(node.key, SelectEntities(commit))
@@ -1254,6 +1269,11 @@ class _Compiler:
         )
 
     def _paged(self, node: sem.Paged, path: str) -> tuple[scene.HtmlNode, ...]:
+        """Break the wrapped node's children into `node.chars`-sized pages and emit the one the cursor selects.
+
+        A pager and cursor update are recorded only when there is more than one page. Raises
+        `UnsolvableLayoutError` when no break set satisfies the page budget.
+        """
         children = getattr(node.node, "children", (node.node,))
         compiled = tuple(self.compile(child, f"{path}.page.{index}") for index, child in enumerate(children))
         sizes = [sum(_html_size(item) for item in group) for group in compiled]
@@ -1298,7 +1318,11 @@ class _Compiler:
 
 
 class HtmlPlanner:
-    """Compile semantic documents directly into safe HTML scene data."""
+    """Backend for the HTML target, and the intermediate the Slack planner lowers from.
+
+    Accepts only the portable semantic vocabulary; there is no layout search, since HTML has
+    no message budget. Every fit decision is an authored `Budgeted` or `Paged` region.
+    """
 
     def plan(
         self,
@@ -1308,6 +1332,20 @@ class HtmlPlanner:
         cache: PlanCache[scene.HtmlBody] | None = None,
         memo: PlanMemo[scene.HtmlBody] | None = None,
     ) -> PlanResult[scene.HtmlBody]:
+        """Compile the document into an `HtmlBody` scene.
+
+        The result's `bindings` and `form_bindings` are filtered to the keys the emitted tree
+        references; `resources` holds each asset under `asset:<key>`; `session_updates` ends
+        with an `ActivePagers` entry. A cache hit swaps in the cached scene and report and
+        reports `PlanReuse.EXACT`.
+
+        Raises:
+            LayoutInvariantError: `request.reservation` is non-empty (HTML has no reservable
+                axes), a node is outside the portable vocabulary, an action key is bound
+                twice, or an asset key names two different assets.
+            LayoutDegradedError: `request.strict` and an authored budget dropped content.
+            UnsolvableLayoutError: a `Paged` region has no feasible break set.
+        """
         # HTML has neither a bounded document nor a global resource budget, so the two request
         # fields that exist to bound one are refused rather than quietly ignored.
         if request.reservation.values:
