@@ -9,14 +9,8 @@ from discord import app_commands
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.accounts.domain import (
-    Account,
-    AccountConsent,
-    AccountIdentity,
-    IdentityProvider,
-    IdentityRefresh,
-    LinkPreview,
-)
+from squid.accounts.domain import Account, AccountConsent, IdentityProvider, LinkPreview
+from squid.bot.account_view import ConsentAnswer
 from squid.bot.account_workspace import AccountWorkspace
 from squid.bot.consent import request_consent
 from squid.bot.profile_render import (
@@ -56,18 +50,30 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="verify"
 
         async def open_consent(
             event: sl.ActionEvent,
-            answered: Callable[[AccountConsent | None], Awaitable[None]],
-        ) -> None:
+            answered: ConsentAnswer,
+            *,
+            preview: LinkPreview | None = None,
+            on_abandon: Callable[[], Awaitable[None]] | None = None,
+            timeout: float = 120.0,
+        ) -> bool:
             press = await sd.request(event)
             message_root = press.root
             assert message_root is not None, "a press always arrives from a mounted message"
 
-            async def completed(_prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
-                await answered(consent)
+            async def completed(prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
+                await answered(prompt, consent)
                 if consent is not None:
                     await message_root.schedule()
 
-            await request_consent(press, user_id=actor.id, on_answer=completed, parent=message_root)
+            return await request_consent(
+                press,
+                user_id=actor.id,
+                on_answer=completed,
+                preview=preview,
+                on_abandon=on_abandon,
+                timeout=timeout,
+                parent=message_root,
+            )
 
         async def authorize_claim(node) -> bool:
             return await allows(request, node)
@@ -130,86 +136,6 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="verify"
         key = user.avatar.key if user.avatar is not None else None
         if key != identity.avatar_key:
             await self.account_service.record_identity_avatar_key(account.id, identity.id, key)
-
-
-def _link_conflict(preview: LinkPreview, existing_java: AccountIdentity | None) -> UUID | None:
-    """Return the Minecraft UUID that makes this link impossible, or `None` if it can proceed.
-
-    Both cases used to surface only after the notice had been read and agreed to, because they are
-    checked inside the redemption. The reservation makes them answerable first, which is the
-    difference between "that cannot work" and "you consented to something that then failed".
-
-    Relinking the *same* UUID is not a conflict: it is how a renamed player refreshes their name.
-    """
-    if existing_java is not None and existing_java.java_uuid != preview.java_uuid:
-        return existing_java.java_uuid
-    if preview.java_uuid_held_elsewhere and (existing_java is None or existing_java.java_uuid != preview.java_uuid):
-        return preview.java_uuid
-    return None
-
-
-def _link_message(refresh: IdentityRefresh) -> str:
-    """Render the outcome of a link in the same words a refresh uses.
-
-    Linking used to report only the alias it claimed, which cannot express the contested case at all:
-    a user whose verified name belonged to somebody else was told the link succeeded and never that
-    their credit had not moved. The reconciliation is the same operation in both commands, so it gets
-    the same vocabulary; only the headline differs.
-    """
-    lines = [
-        tr(
-            "Your Discord account is now linked to **{name}**.",
-            name=refresh.current_name,
-        )
-    ]
-    lines.extend(_reconciliation_lines(refresh))
-    return "\n".join(lines)
-
-
-def _refresh_message(refresh: IdentityRefresh) -> str:
-    """Render every branch of a refresh, including the one where nothing changed."""
-    if not refresh.renamed:
-        lines = [tr("Your Minecraft name is still **{name}**. Nothing changed.", name=refresh.current_name)]
-    else:
-        lines = [
-            tr(
-                "Your Minecraft name changed from **{old}** to **{new}**.",
-                old=refresh.previous_name,
-                new=refresh.current_name,
-            )
-        ]
-    lines.extend(_reconciliation_lines(refresh))
-    return "\n".join(lines)
-
-
-def _reconciliation_lines(refresh: IdentityRefresh) -> list[str]:
-    """Describe what happened to the creator credit, shared by linking and refreshing."""
-    lines: list[str] = []
-    if refresh.claimed_alias is not None:
-        lines.append(
-            tr(
-                "Build credits under **{name}** are attributed to your account.",
-                name=refresh.claimed_alias.name,
-            )
-        )
-    elif refresh.contested_alias is not None:
-        lines.append(
-            tr(
-                "**{name}** is already credited to another account, so it was not moved. "
-                "Claim #{id} is awaiting staff review.",
-                name=refresh.contested_alias.name,
-                id=refresh.opened_claim.id if refresh.opened_claim is not None else 0,
-            )
-        )
-
-    if refresh.retained_alias_names:
-        lines.append(
-            tr(
-                "You are still credited under: {names}.",
-                names=", ".join(f"**{name}**" for name in refresh.retained_alias_names),
-            )
-        )
-    return lines
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid):

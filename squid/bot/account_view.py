@@ -9,7 +9,7 @@ the shape 5.3 and 5.4 already removed from notifications and claim review).
 """
 
 from collections.abc import Awaitable, Callable, Iterable, Mapping
-from typing import cast
+from typing import Protocol, cast
 
 import discord
 
@@ -28,6 +28,7 @@ from squid.accounts.domain import (
     AccountIdentity,
     AccountProfile,
     IdentityProvider,
+    LinkPreview,
     ProfileLink,
     ProfileUpdate,
 )
@@ -41,10 +42,21 @@ SESSION_SECONDS = 300
 MAX_LISTED = 25
 """A select holds 25 options, and only a long merge history reaches even a handful."""
 
-type ConsentRequest = Callable[
-    [sl.ActionEvent, Callable[[AccountConsent | None], Awaitable[None]]],
-    Awaitable[None],
-]
+type ConsentAnswer = Callable[[sl.PressEvent, AccountConsent | None], Awaitable[None]]
+
+
+class ConsentRequest(Protocol):
+    """Open a consent prompt whose mount owns any unanswered cleanup."""
+
+    def __call__(
+        self,
+        event: sl.ActionEvent,
+        answered: ConsentAnswer,
+        *,
+        preview: LinkPreview | None = None,
+        on_abandon: Callable[[], Awaitable[None]] | None = None,
+        timeout: float = 120.0,
+    ) -> Awaitable[bool]: ...
 
 
 def _link_count(count: int) -> sl.text.Message:
@@ -408,7 +420,7 @@ class AccountScreen(sd.Screen):
             await work()
             return
 
-        async def answered(consent: AccountConsent | None) -> None:
+        async def answered(_prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
             if consent is None:
                 # Cancelled. The notice said agreeing is what stores anything, and the prompt
                 # closing is the whole answer; the panel already shows the unchanged truth.

@@ -19,13 +19,13 @@ from squid.accounts.domain import (
     IdentityRefresh,
     LinkPreview,
 )
-from squid.bot.profile_render import present_claimant
-from squid.bot.verify import (
-    _link_conflict,
-    _link_message,
-    _reconciliation_lines,
-    _refresh_message,
+from squid.bot.account_presentation import (
+    link_conflict,
+    link_message,
+    reconciliation_lines,
+    refresh_message,
 )
+from squid.bot.profile_render import present_claimant
 from squid.suggestions.infrastructure.providers.records import _claimant_description
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
@@ -44,27 +44,27 @@ def _refresh(**overrides: object) -> IdentityRefresh:
 
 
 def test_unchanged_name_says_nothing_changed() -> None:
-    message = _refresh_message(_refresh(current_name="Steve", previous_name="Steve"))
+    message = refresh_message(_refresh(current_name="Steve", previous_name="Steve"))
 
     assert "still **Steve**" in message
     assert "changed from" not in message
 
 
 def test_rename_names_both_the_old_and_new_name() -> None:
-    message = _refresh_message(_refresh())
+    message = refresh_message(_refresh())
 
     assert "**OldName**" in message
     assert "**NewName**" in message
 
 
 def test_a_claimed_credit_is_reported() -> None:
-    message = _refresh_message(_refresh(claimed_alias=CreatorAlias(5, "NewName", account_id=1)))
+    message = refresh_message(_refresh(claimed_alias=CreatorAlias(5, "NewName", account_id=1)))
 
     assert "Build credits under **NewName**" in message
 
 
 def test_a_contested_name_says_it_was_not_moved_and_names_the_claim() -> None:
-    message = _refresh_message(
+    message = refresh_message(
         _refresh(
             current_name="Contested",
             contested_alias=CreatorAlias(9, "Contested", account_id=2),
@@ -78,7 +78,7 @@ def test_a_contested_name_says_it_was_not_moved_and_names_the_claim() -> None:
 
 
 def test_retained_names_are_listed() -> None:
-    message = _refresh_message(
+    message = refresh_message(
         _refresh(
             claimed_alias=CreatorAlias(5, "NewName", account_id=1),
             retained_alias_names=("OldName", "OlderName"),
@@ -90,7 +90,7 @@ def test_retained_names_are_listed() -> None:
 
 
 def test_a_link_names_the_account_it_linked() -> None:
-    message = _link_message(_refresh(current_name="Notch", previous_name=None))
+    message = link_message(_refresh(current_name="Notch", previous_name=None))
 
     assert "linked to **Notch**" in message
     # Not the refresh headline: a first link never "changed" or "stayed the same".
@@ -99,7 +99,7 @@ def test_a_link_names_the_account_it_linked() -> None:
 
 
 def test_a_link_reports_the_credit_it_claimed() -> None:
-    message = _link_message(
+    message = link_message(
         _refresh(current_name="Notch", previous_name=None, claimed_alias=CreatorAlias(5, "Notch", account_id=1)),
     )
 
@@ -112,7 +112,7 @@ def test_a_link_reports_a_contested_credit() -> None:
     A user whose verified name belonged to someone else was told the link succeeded, and never that
     their credit had not moved or that a staff claim was now open.
     """
-    message = _link_message(
+    message = link_message(
         _refresh(
             current_name="Notch",
             previous_name=None,
@@ -129,11 +129,11 @@ def test_link_and_refresh_describe_a_credit_in_the_same_words() -> None:
     """One vocabulary for the reconciliation, which is the same operation in both commands."""
     refresh = _refresh(claimed_alias=CreatorAlias(5, "NewName", account_id=1), retained_alias_names=("OldName",))
 
-    shared = _reconciliation_lines(refresh)
+    shared = reconciliation_lines(refresh)
 
     assert shared
-    assert all(line in _link_message(refresh) for line in shared)
-    assert all(line in _refresh_message(refresh) for line in shared)
+    assert all(line in link_message(refresh) for line in shared)
+    assert all(line in refresh_message(refresh) for line in shared)
 
 
 def _preview(*, held_elsewhere: bool = False) -> LinkPreview:
@@ -141,32 +141,32 @@ def _preview(*, held_elsewhere: bool = False) -> LinkPreview:
 
 
 def test_a_fresh_link_has_no_conflict() -> None:
-    assert _link_conflict(_preview(), None) is None
+    assert link_conflict(_preview(), None) is None
 
 
 def test_relinking_the_same_uuid_is_not_a_conflict() -> None:
     """It is how a renamed player refreshes their name, so it must not be refused."""
     existing = AccountIdentity.java(JAVA_UUID, username="OldName")
 
-    assert _link_conflict(_preview(held_elsewhere=True), existing) is None
+    assert link_conflict(_preview(held_elsewhere=True), existing) is None
 
 
 def test_holding_a_different_java_identity_conflicts() -> None:
     existing = AccountIdentity.java(OTHER_UUID, username="Other")
 
-    assert _link_conflict(_preview(), existing) == OTHER_UUID
+    assert link_conflict(_preview(), existing) == OTHER_UUID
 
 
 def test_a_uuid_linked_to_somebody_else_conflicts() -> None:
     """Detected before the prompt now; it used to surface only after consent was given."""
-    assert _link_conflict(_preview(held_elsewhere=True), None) == JAVA_UUID
+    assert link_conflict(_preview(held_elsewhere=True), None) == JAVA_UUID
 
 
 def test_a_uuid_linked_elsewhere_conflicts_even_with_another_identity_held() -> None:
     existing = AccountIdentity.java(OTHER_UUID, username="Other")
 
     # The caller's own mismatch is reported, because unlinking that is the action they must take.
-    assert _link_conflict(_preview(held_elsewhere=True), existing) == OTHER_UUID
+    assert link_conflict(_preview(held_elsewhere=True), existing) == OTHER_UUID
 
 
 def _claim(claimant: Account | None) -> AliasClaim:
@@ -246,4 +246,4 @@ def test_the_autocomplete_description_respects_discords_limit() -> None:
 )
 def test_every_branch_renders_something(refresh: IdentityRefresh) -> None:
     """No combination may produce an empty message, which Discord rejects outright."""
-    assert _refresh_message(refresh).strip()
+    assert refresh_message(refresh).strip()

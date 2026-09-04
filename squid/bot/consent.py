@@ -39,6 +39,8 @@ the reader takes to read. A continuation runs in the *prompt's* dispatch instead
 a separate mount, so the press that opened it is already finished by then.
 """
 
+CONSENT_PROMPT_TIMEOUT_SECONDS = 120.0
+
 
 @dataclass(slots=True)
 class _Answer:
@@ -63,7 +65,7 @@ class ConsentPrompt(sd.Screen):
             collision=Reject(notice=tr(t"You already have a consent prompt open. Please answer that one."))
         ),
     )
-    timeout = 120
+    timeout = CONSENT_PROMPT_TIMEOUT_SECONDS
 
     closed: bool = sl.state(default=False)
 
@@ -169,6 +171,7 @@ async def _show_prompt(
     preview: LinkPreview | None,
     timeout: float,
     on_answer: ConsentContinuation | None,
+    on_abandon: Callable[[], Awaitable[None]] | None,
     parent: sd.MessageRoot | None,
 ) -> ConsentPrompt | None:
     """The notice this reader is owed, worded for what agreeing would actually store."""
@@ -179,7 +182,19 @@ async def _show_prompt(
         on_answer=on_answer,
     )
     outcome = await request.respond(prompt, parent=parent)
-    return prompt if isinstance(outcome, sd.Presented) else None
+    if not isinstance(outcome, sd.Presented):
+        return None
+    if on_abandon is not None:
+
+        async def abandon_unanswered(_root: sd.MessageRoot) -> None:
+            if not prompt.closed:
+                await on_abandon()
+
+        if outcome.root.finished:
+            await abandon_unanswered(outcome.root)
+        else:
+            outcome.root.on_finish(abandon_unanswered)
+    return prompt
 
 
 def _consent_prompt(
@@ -263,6 +278,7 @@ async def prompt_for_consent(
         preview=preview,
         timeout=timeout,
         on_answer=None,
+        on_abandon=None,
         parent=parent,
     )
     if component is None:
@@ -275,6 +291,7 @@ async def request_consent(
     *,
     user_id: int,
     on_answer: ConsentContinuation,
+    on_abandon: Callable[[], Awaitable[None]] | None = None,
     preview: LinkPreview | None = None,
     timeout: float = 120.0,
     parent: sd.MessageRoot | None = None,
@@ -283,8 +300,8 @@ async def request_consent(
 
     Returns whether the prompt was opened; `False` means the reader has already been told
     why not, and `on_answer` will never run. An unanswered prompt expires with its mount and
-    also never runs it, which is the right reading of an abandoned question: nothing was
-    stored, and nothing the reader did not ask for happens later.
+    also never runs it. When supplied, `on_abandon` runs from the prompt root's owned finish
+    lifecycle so callers can release expiring authority without starting a detached task.
     """
     component = await _show_prompt(
         request,
@@ -292,6 +309,7 @@ async def request_consent(
         preview=preview,
         timeout=timeout,
         on_answer=on_answer,
+        on_abandon=on_abandon,
         parent=parent,
     )
     return component is not None
