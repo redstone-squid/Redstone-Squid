@@ -50,7 +50,7 @@ class RecordRuleset(Base, kw_only=True):
     )
 
 
-class RecordDefinition(Base, kw_only=True):
+class RecordRule(Base, kw_only=True):
     """A ruleset-specific definition of one stable record competition."""
 
     __tablename__ = "record_definitions"
@@ -112,7 +112,7 @@ class RecordDefinition(Base, kw_only=True):
     )
 
 
-class RecordCompetition(Base, kw_only=True):
+class RecordSeries(Base, kw_only=True):
     """A stable public identity for a logical record competition across rulesets."""
 
     __tablename__ = "record_competitions"
@@ -220,7 +220,7 @@ class RecordComputationRun(Base, kw_only=True):
     error: Mapped[str | None] = mapped_column(Text, default=None)
 
 
-class RecordResult(Base, kw_only=True):
+class RecordStanding(Base, kw_only=True):
     """The outcome for one definition in a computation run."""
 
     __tablename__ = "record_results"
@@ -413,3 +413,10 @@ class ExtenderTimingVariant(Base, kw_only=True):
     extension_time: Mapped[int | None] = mapped_column(BigInteger, default=None)
     retraction_reset_time: Mapped[int | None] = mapped_column(BigInteger, default=None)
     extension_reset_time: Mapped[int | None] = mapped_column(BigInteger, default=None)
+
+
+# Temporary compatibility names while downstream persistence consumers adopt the
+# series/rule/standing vocabulary in reviewable stages.
+RecordCompetition = RecordSeries
+RecordDefinition = RecordRule
+RecordResult = RecordStanding
