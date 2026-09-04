@@ -3,6 +3,7 @@
 import asyncio
 import hashlib
 import json
+import threading
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -10,9 +11,10 @@ from typing import override
 from uuid import UUID, uuid4
 
 import pytest
-from anyio import create_task_group, fail_after, sleep
+from anyio import CancelScope, Event, create_task_group, fail_after, sleep
 from whenever import Instant
 
+import squid.media.application.jobs as media_jobs
 from squid.artifacts import ArtifactMetadata
 from squid.media.application.commands import MediaNormalizationRequest
 from squid.media.application.jobs import (
@@ -575,6 +577,55 @@ async def test_submit_staged_streams_a_regular_file_and_rejects_empty_source(tmp
         pass
     else:
         raise AssertionError
+
+
+async def test_submit_staged_cancellation_settles_metadata_reader_before_returning(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    jobs = MediaNormalizationJobService(MemoryMediaJobs(), MemoryArtifacts())
+    source = tmp_path / "source"
+    source.write_bytes(b"image")
+    started = threading.Event()
+    release = threading.Event()
+    real_metadata = media_jobs._staged_source_metadata
+
+    def blocking_metadata(path: Path, max_bytes: int) -> tuple[int, str]:
+        started.set()
+        if not release.wait(timeout=5):
+            msg = "test did not release the staged metadata reader"
+            raise TimeoutError(msg)
+        return real_metadata(path, max_bytes)
+
+    monkeypatch.setattr(media_jobs, "_staged_source_metadata", blocking_metadata)
+    cancel_scope = CancelScope()
+    settled = Event()
+
+    async def submit() -> None:
+        try:
+            with cancel_scope:
+                await jobs.submit_staged(
+                    StagedMediaUploadSubmission(
+                        draft_id=DRAFT_ID,
+                        kind=MediaKind.IMAGE,
+                        source_path=source,
+                        source_content_type="image/jpeg",
+                    )
+                )
+        finally:
+            settled.set()
+
+    async with create_task_group() as tasks:
+        tasks.start_soon(submit)
+        with fail_after(2):
+            while not started.is_set():
+                await sleep(0)
+
+        cancel_scope.cancel()
+        await sleep(0)
+        assert not settled.is_set()
+        release.set()
+        await settled.wait()
 
 
 @pytest.mark.parametrize(
