@@ -17,7 +17,7 @@ promotes no names to `squid_ui_widgets` itself.
 
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field
-from typing import Any, overload
+from typing import overload
 
 from squid_ui import testing as engine
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
@@ -27,6 +27,7 @@ from squid_ui.target_types import RenderTarget
 from squid_ui_widgets.drivers import (
     _MISSING_INITIAL_STATE,
     ComponentDriver,
+    FormValues,
     RouteDriver,
     StateMachine,
     TransitionHandler,
@@ -75,7 +76,7 @@ class MachineHarness[StateT, RenderTargetT: RenderTarget = RenderTarget]:
         """Settle the picker keyed `key` on `values`."""
         await engine.choose(self.driver, key, *values, actor=actor, responder=self.responder)
 
-    async def submit(self, key: str, values: Mapping[str, object], *, actor: str = "1") -> None:
+    async def submit(self, key: str, values: FormValues, *, actor: str = "1") -> None:
         """Submit `values` to the form the trigger keyed `key` opens."""
         await engine.submit(self.driver, key, values, actor=actor, responder=self.responder)
 
@@ -89,34 +90,34 @@ class MachineHarness[StateT, RenderTargetT: RenderTarget = RenderTarget]:
 
 
 @overload
-def mounted[StateT](
-    machine: StateMachine[StateT, Any],
+def mounted[StateT, RenderTargetT: RenderTarget](
+    machine: StateMachine[StateT, RenderTargetT],
     *,
     on_change: TransitionHandler[StateT] | None = None,
     handlers: Mapping[str, TransitionHandler[StateT]] | None = None,
     finish_actions: Collection[str] = (),
-) -> MachineHarness[StateT, Any]: ...
+) -> MachineHarness[StateT, RenderTargetT]: ...
 
 
 @overload
-def mounted[StateT](
-    machine: StateMachine[StateT, Any],
+def mounted[StateT, RenderTargetT: RenderTarget](
+    machine: StateMachine[StateT, RenderTargetT],
     *,
     initial: StateT,
     on_change: TransitionHandler[StateT] | None = None,
     handlers: Mapping[str, TransitionHandler[StateT]] | None = None,
     finish_actions: Collection[str] = (),
-) -> MachineHarness[StateT, Any]: ...
+) -> MachineHarness[StateT, RenderTargetT]: ...
 
 
-def mounted[StateT](
-    machine: StateMachine[StateT, Any],
+def mounted[StateT, RenderTargetT: RenderTarget](
+    machine: StateMachine[StateT, RenderTargetT],
     *,
     initial: StateT | _MissingInitialState = _MISSING_INITIAL_STATE,
     on_change: TransitionHandler[StateT] | None = None,
     handlers: Mapping[str, TransitionHandler[StateT]] | None = None,
     finish_actions: Collection[str] = (),
-) -> MachineHarness[StateT, Any]:
+) -> MachineHarness[StateT, RenderTargetT]:
     """A `machine` in a bare component shell, ready to be driven by key.
 
     Builds the driver directly, so a machine's *own* wiring is not applied -- `Menu` finishes
@@ -124,7 +125,7 @@ def mounted[StateT](
     `build_component`. A test about any of it wants `driving(machine.build_component(...))`.
     """
     if isinstance(initial, _MissingInitialState):
-        driver: ComponentDriver[StateT, Any] = ComponentDriver(
+        driver: ComponentDriver[StateT, RenderTargetT] = ComponentDriver(
             machine,
             on_change=on_change,
             handlers=handlers,
@@ -192,35 +193,35 @@ class _RouteRecorder[StateT]:
 
 
 @overload
-def routed[StateT](
-    machine: StateMachine[StateT, Any],
+def routed[StateT, RenderTargetT: RenderTarget](
+    machine: StateMachine[StateT, RenderTargetT],
     *,
     chrome: Chrome = DEFAULT_CHROME,
-) -> RoutedRender[StateT, Any]: ...
+) -> RoutedRender[StateT, RenderTargetT]: ...
 
 
 @overload
-def routed[StateT](
-    machine: StateMachine[StateT, Any],
+def routed[StateT, RenderTargetT: RenderTarget](
+    machine: StateMachine[StateT, RenderTargetT],
     state: StateT,
     *,
     chrome: Chrome = DEFAULT_CHROME,
-) -> RoutedRender[StateT, Any]: ...
+) -> RoutedRender[StateT, RenderTargetT]: ...
 
 
-def routed[StateT](
-    machine: StateMachine[StateT, Any],
+def routed[StateT, RenderTargetT: RenderTarget](
+    machine: StateMachine[StateT, RenderTargetT],
     state: StateT | _MissingInitialState = _MISSING_INITIAL_STATE,
     *,
     chrome: Chrome = DEFAULT_CHROME,
-) -> RoutedRender[StateT, Any]:
+) -> RoutedRender[StateT, RenderTargetT]:
     """Render `machine` in its stateless shell and report the routes it asked for.
 
     The encoder is supplied rather than taken, because what a test wants to see is *which*
     routes a render requested and in what order -- not what a particular host spells them.
     """
     recorder: _RouteRecorder[StateT] = _RouteRecorder()
-    driver: RouteDriver[StateT, Any] = RouteDriver(recorder, chrome)
+    driver: RouteDriver[StateT, RenderTargetT] = RouteDriver(recorder, chrome)
     result = driver.render(machine, machine.initial_state if isinstance(state, _MissingInitialState) else state)
     return RoutedRender(_as_nodes(result), tuple(recorder.routes))
 
