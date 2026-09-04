@@ -2,6 +2,7 @@
 
 import logging
 import mimetypes
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Literal, cast, override
 
 import discord
@@ -21,6 +22,7 @@ from squid.bot.ui import (
 )
 from squid.bot.voting.sessions import configured_vote_channels, ensure_build_review
 from squid.builds.domain import Build, DoorBuild, Status
+from squid.builds.domain.models import AttachmentFailureInfo, SchematicDuplicateInfo
 from squid.builds.domain.titles import format_build_display_title
 from squid.observability import add_counter
 
@@ -31,6 +33,51 @@ logger = logging.getLogger(__name__)
 
 _SPONSOR_CREDIT_MAX_CHARACTERS = 255
 _SPONSOR_WEBSITE_MAX_CHARACTERS = 512
+_EVIDENCE_FIELD_MAX_CHARACTERS = 1_000
+_EVIDENCE_LINE_MAX_CHARACTERS = 240
+
+
+def _compact_plain(value: str) -> str:
+    return escape_markdown(" ".join(value.replace("@", "@\u200b").split()))
+
+
+def _duplicate_summary(duplicates: Sequence[SchematicDuplicateInfo]) -> str:
+    labels = {
+        "identical": "byte-identical file",
+        "structural-match": "same structure, moved or rotated",
+        "near": "near structural match",
+    }
+    lines: list[str] = []
+    for candidate in duplicates[:5]:
+        build_id = candidate["build_id"]
+        title = truncate_display_text(_compact_plain(candidate.get("title") or f"Build #{build_id}"), 100)
+        filenames = [
+            truncate_display_text(_compact_plain(source["filename"]), 70)
+            for source in candidate.get("source_attachments", [])[:2]
+        ]
+        source = f" · from {', '.join(filenames)}" if filenames else ""
+        lines.append(
+            truncate_display_text(
+                f"{title} (#{build_id}) — {labels[candidate['tier']]}{source}",
+                _EVIDENCE_LINE_MAX_CHARACTERS,
+            )
+        )
+    if len(duplicates) > 5:
+        lines.append(f"…and {len(duplicates) - 5} more")
+    return truncate_display_text("\n".join(lines), _EVIDENCE_FIELD_MAX_CHARACTERS)
+
+
+def _attachment_failure_summary(failures: Sequence[AttachmentFailureInfo]) -> str:
+    lines = [
+        truncate_display_text(
+            f"{_compact_plain(failure['filename'])} — {_compact_plain(failure['detail'])}",
+            _EVIDENCE_LINE_MAX_CHARACTERS,
+        )
+        for failure in failures[:4]
+    ]
+    if len(failures) > 4:
+        lines.append(f"…and {len(failures) - 4} more")
+    return truncate_display_text("\n".join(lines), _EVIDENCE_FIELD_MAX_CHARACTERS)
 
 
 def _status_colour(status: Status | None, *, build_id: int | None) -> int:
@@ -339,13 +386,8 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
             fields["Videos"] = ", ".join(build.video_urls)
 
         if duplicates := build.extra_info.get("schematic_duplicates"):
-            labels = {
-                "identical": "byte-identical file",
-                "structural-match": "same structure, moved or rotated",
-                "near": "near structural match",
-            }
-            fields["⚠ Possible duplicate"] = "\n".join(
-                f"Build #{candidate['build_id']} ({labels[candidate['tier']]})" for candidate in duplicates
-            )
+            fields["⚠ Possible duplicate"] = _duplicate_summary(duplicates)
+        if failures := build.extra_info.get("attachment_failures"):
+            fields["⚠ Attachment issues"] = _attachment_failure_summary(failures)
 
         return fields
