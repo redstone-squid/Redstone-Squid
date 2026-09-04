@@ -745,6 +745,7 @@ def _edit_form(items: Sequence[BoundBuildField[Any]], page: int) -> sl.forms.For
                 maximum=spec.maximum,
             )
         )
+
     def validate(values: Mapping[str, object]) -> tuple[sl.forms.FormIssue, ...]:
         errors: list[sl.forms.FormIssue] = []
         for item in page_items:
