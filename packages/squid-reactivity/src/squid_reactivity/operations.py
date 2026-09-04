@@ -2,7 +2,7 @@
 
 import asyncio
 import uuid
-from collections.abc import Awaitable, Callable, Generator
+from collections.abc import Awaitable, Callable, Generator, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -182,7 +182,7 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
         return self._status
 
     @contextmanager
-    def start_action(self, name: str, *, kind: ActionPurpose = ActionPurpose.SYSTEM):
+    def start_action(self, name: str, *, kind: ActionPurpose = ActionPurpose.SYSTEM) -> Iterator[ActionContext]:
         """Start a fresh state-publishing action caused by this execution."""
         from squid_reactivity.core import fresh_action_transaction
 
