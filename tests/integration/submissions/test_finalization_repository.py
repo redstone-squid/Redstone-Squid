@@ -188,7 +188,7 @@ async def test_claim_refuses_a_payload_with_a_conflicting_digest(
             select(SubmissionFinalizationJob).where(SubmissionFinalizationJob.draft_id == DRAFT_ID)
         )
     assert job is not None
-    assert job.status == FinalizationJobStatus.PENDING.value
+    assert job.status is FinalizationJobStatus.PENDING
     assert job.attempts == 0
     assert job.claim_token is None
 

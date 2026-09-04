@@ -8,7 +8,72 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC, now
+from squid.persistence.types import InstantUTC, StrEnumText, now
+from squid.submissions.domain import FinalizationJobStatus
+
+_LEGACY_SPONSOR_FORBIDDEN_SQL = """
+payload IS NULL OR NOT (
+    payload ->> 'payload_schema' = '1'
+    AND payload ->> 'sponsor_attribution' = 'true'
+)
+"""
+
+_FINALIZATION_STATE_SHAPE_SQL = """
+(
+    status = 'pending'
+    AND payload IS NOT NULL
+    AND payload_sha256 IS NOT NULL
+    AND claimed_at IS NULL
+    AND claim_token IS NULL
+    AND claim_expires_at IS NULL
+    AND completed_at IS NULL
+    AND attention_at IS NULL
+    AND dead_at IS NULL
+    AND jsonb_array_length(attention_issues) = 0
+) OR (
+    status = 'claimed'
+    AND payload IS NOT NULL
+    AND payload_sha256 IS NOT NULL
+    AND claimed_at IS NOT NULL
+    AND claim_token IS NOT NULL
+    AND claim_expires_at IS NOT NULL
+    AND completed_at IS NULL
+    AND attention_at IS NULL
+    AND dead_at IS NULL
+    AND jsonb_array_length(attention_issues) = 0
+) OR (
+    status = 'needs_attention'
+    AND claimed_at IS NULL
+    AND claim_token IS NULL
+    AND claim_expires_at IS NULL
+    AND completed_at IS NULL
+    AND attention_at IS NOT NULL
+    AND dead_at IS NULL
+    AND jsonb_array_length(attention_issues) > 0
+) OR (
+    status = 'completed'
+    AND payload IS NOT NULL
+    AND payload_sha256 IS NOT NULL
+    AND claimed_at IS NULL
+    AND claim_token IS NULL
+    AND claim_expires_at IS NULL
+    AND completed_at IS NOT NULL
+    AND attention_at IS NULL
+    AND dead_at IS NULL
+    AND jsonb_array_length(attention_issues) = 0
+) OR (
+    status = 'dead'
+    AND payload IS NOT NULL
+    AND payload_sha256 IS NOT NULL
+    AND claimed_at IS NULL
+    AND claim_token IS NULL
+    AND claim_expires_at IS NULL
+    AND completed_at IS NULL
+    AND attention_at IS NULL
+    AND dead_at IS NOT NULL
+    AND jsonb_array_length(attention_issues) > 0
+)
+"""
 
 
 class SubmissionFinalizationJob(Base, kw_only=True):
@@ -24,8 +89,7 @@ class SubmissionFinalizationJob(Base, kw_only=True):
             name="submission_finalization_jobs_payload_sha256_check",
         ),
         CheckConstraint(
-            "payload IS NULL OR NOT (payload ->> 'payload_schema' = '1' "
-            "AND payload ->> 'sponsor_attribution' = 'true')",
+            _LEGACY_SPONSOR_FORBIDDEN_SQL,
             name="submission_finalization_jobs_legacy_sponsor_forbidden",
         ),
         CheckConstraint(
@@ -33,25 +97,7 @@ class SubmissionFinalizationJob(Base, kw_only=True):
             name="submission_finalization_jobs_status_check",
         ),
         CheckConstraint(
-            "(status = 'pending' AND payload IS NOT NULL AND payload_sha256 IS NOT NULL "
-            "AND claimed_at IS NULL AND claim_token IS NULL AND claim_expires_at IS NULL "
-            "AND completed_at IS NULL AND attention_at IS NULL AND dead_at IS NULL "
-            "AND jsonb_array_length(attention_issues) = 0) OR "
-            "(status = 'claimed' AND payload IS NOT NULL AND payload_sha256 IS NOT NULL "
-            "AND claimed_at IS NOT NULL AND claim_token IS NOT NULL AND claim_expires_at IS NOT NULL "
-            "AND completed_at IS NULL AND attention_at IS NULL AND dead_at IS NULL "
-            "AND jsonb_array_length(attention_issues) = 0) OR "
-            "(status = 'needs_attention' AND claimed_at IS NULL AND claim_token IS NULL "
-            "AND claim_expires_at IS NULL AND completed_at IS NULL AND attention_at IS NOT NULL "
-            "AND dead_at IS NULL AND jsonb_array_length(attention_issues) > 0) OR "
-            "(status = 'completed' AND payload IS NOT NULL AND payload_sha256 IS NOT NULL "
-            "AND claimed_at IS NULL AND claim_token IS NULL AND claim_expires_at IS NULL "
-            "AND completed_at IS NOT NULL AND attention_at IS NULL AND dead_at IS NULL "
-            "AND jsonb_array_length(attention_issues) = 0) OR "
-            "(status = 'dead' AND payload IS NOT NULL AND payload_sha256 IS NOT NULL "
-            "AND claimed_at IS NULL AND claim_token IS NULL AND claim_expires_at IS NULL "
-            "AND completed_at IS NULL AND attention_at IS NULL AND dead_at IS NOT NULL "
-            "AND jsonb_array_length(attention_issues) > 0)",
+            _FINALIZATION_STATE_SHAPE_SQL,
             name="submission_finalization_jobs_state_shape",
         ),
         Index(
@@ -75,7 +121,7 @@ class SubmissionFinalizationJob(Base, kw_only=True):
     draft_revision: Mapped[int] = mapped_column(Integer, nullable=False)
     payload: Mapped[dict[str, object] | None] = mapped_column(JSONB, default=None)
     payload_sha256: Mapped[str | None] = mapped_column(Text, default=None)
-    status: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[FinalizationJobStatus] = mapped_column(StrEnumText(FinalizationJobStatus), nullable=False)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     available_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now

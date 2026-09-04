@@ -22,6 +22,7 @@ from squid.submissions.domain import (
     DraftStatus,
     FieldOperation,
     FieldOperationKind,
+    FinalizationJobStatus,
     SubmissionOrigin,
 )
 from squid.submissions.errors import DraftStateConflictError
@@ -300,7 +301,7 @@ async def test_expiry_fences_finalization_and_discards_media(
                 draft_revision=0,
                 payload=None,
                 payload_sha256=None,
-                status="needs_attention",
+                status=FinalizationJobStatus.NEEDS_ATTENTION,
                 available_at=NOW,
                 attention_at=NOW,
                 attention_issues=[{"field_id": "schematic", "reason": "schematic_required"}],

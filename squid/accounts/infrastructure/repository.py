@@ -55,6 +55,7 @@ from squid.accounts.infrastructure.models import VerificationCode as Verificatio
 from squid.core.errors import DataIntegrityError
 from squid.core.i18n import tr
 from squid.persistence.types import InstantUTC, now
+from squid.submissions.domain import FinalizationJobStatus
 from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
 from squid.submissions.infrastructure.models import SubmissionDraft
 from squid.submissions.payload_integrity import submission_payload_digest
@@ -1348,8 +1349,8 @@ async def _canonicalize_finalization_job_owners(
         job.payload = rewritten
         job.payload_sha256 = submission_payload_digest(rewritten)
         job.updated_at = rewritten_at
-        if job.status == "claimed":
-            job.status = "pending"
+        if job.status is FinalizationJobStatus.CLAIMED:
+            job.status = FinalizationJobStatus.PENDING
             job.available_at = rewritten_at
             job.claimed_at = None
             job.claim_token = None
