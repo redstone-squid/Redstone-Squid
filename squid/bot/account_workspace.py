@@ -17,7 +17,7 @@ from squid.bot.claims_view import ClaimReviewComponent
 from squid.bot.consent import CONSENT_PROMPT_TIMEOUT_SECONDS
 from squid.bot.ui import tr
 from squid.permissions.domain import PermissionNode
-from squid.permissions.domain.catalogue import ACCOUNT_IDENTITY_REFRESH_ANY
+from squid.permissions.domain.catalogue import ACCOUNT_IDENTITY_REFRESH, ACCOUNT_IDENTITY_REFRESH_ANY
 from squid_ui_discord.modal import EntityField
 
 type ClaimAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
@@ -42,6 +42,7 @@ class AccountWorkspace(sd.Screen):
         can_reject_claims: bool,
         authorize_claim: ClaimAuthorizer,
         can_refresh_any: bool = False,
+        can_refresh_identity: bool = False,
     ) -> None:
         self._accounts = accounts
         self._actor_id = actor_id
@@ -52,6 +53,7 @@ class AccountWorkspace(sd.Screen):
         self._can_reject_claims = can_reject_claims
         self._authorize_claim = authorize_claim
         self._can_refresh_any = can_refresh_any
+        self._can_refresh_identity = can_refresh_identity
         self._overview: AccountScreen | None = None
         self._claims: ClaimReviewComponent | None = None
         self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target] | None = None
@@ -126,7 +128,12 @@ class AccountWorkspace(sd.Screen):
                 on_submit=self._link,
             )
         )
-        if account is not None and account.id is not None and not account.needs_consent_refresh:
+        if (
+            account is not None
+            and account.id is not None
+            and not account.needs_consent_refresh
+            and self._can_refresh_identity
+        ):
             nodes.append(
                 sl.action_controls(
                     sl.action_control(tr(t"Refresh Minecraft identity"), self._refresh_identity, key="refresh"),
@@ -268,6 +275,9 @@ class AccountWorkspace(sd.Screen):
             await release()
 
     async def _refresh_identity(self, event: sl.PressEvent) -> None:
+        if not await self._authorize_claim(ACCOUNT_IDENTITY_REFRESH):
+            await event.notice(tr(t"You are no longer allowed to refresh your Minecraft identity."))
+            return
         account_id = self._account_id()
         refresh = await self._accounts.refresh_java_identity(account_id)
         await self._rebuild()
