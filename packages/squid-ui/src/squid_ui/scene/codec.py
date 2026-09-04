@@ -73,28 +73,36 @@ class CodecError(SquidUiError, ValueError):
 
 
 class Codec:
-    """Encode and decode deterministic resolved-scene protocol 1."""
+    """Encode and decode resolved-scene protocol 1 as canonical JSON.
+
+    Canonical means sorted keys, no whitespace, and raw UTF-8, so equal scenes encode to equal
+    strings and `fingerprint` is stable across processes. Decoding checks shape and types field
+    by field and raises `CodecError`; it does not validate against `SCHEMA`, so unknown keys
+    are ignored and an unknown enum value surfaces as that enum's own `ValueError`.
+    """
 
     protocol = 1
 
     @classmethod
     def schema(cls) -> dict[str, Any]:
-        """Return an isolated JSON Schema for cross-language scene consumers."""
+        """A fresh copy of `SCHEMA`, safe for the caller to mutate."""
         return deepcopy(SCHEMA)
 
     @classmethod
     def schema_json(cls, *, indent: int | None = None) -> str:
-        """Return the scene schema in deterministic JSON form."""
+        """`schema()` as JSON with sorted keys; compact unless `indent` is given."""
         if indent is None:
             return json.dumps(cls.schema(), sort_keys=True, separators=(",", ":"))
         return json.dumps(cls.schema(), indent=indent, sort_keys=True)
 
     @classmethod
     def dumps(cls, scene: Scene[Any]) -> str:
+        """Encode to canonical JSON; raises `CodecError` as `to_dict` does."""
         return json.dumps(cls.to_dict(scene), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
     @classmethod
     def loads(cls, payload: str) -> Scene:
+        """Decode canonical JSON; raises `CodecError` for invalid JSON, a non-object, or anything `from_dict` rejects."""
         try:
             raw = json.loads(payload)
         except json.JSONDecodeError as error:
@@ -106,10 +114,12 @@ class Codec:
 
     @classmethod
     def fingerprint(cls, scene: Scene[Any]) -> str:
+        """32 hex characters: blake2s-128 of `dumps(scene)`."""
         return hashlib.blake2s(cls.dumps(scene).encode(), digest_size=16).hexdigest()
 
     @classmethod
     def to_dict(cls, scene: Scene[Any]) -> dict[str, Any]:
+        """Raises `CodecError` for a scene of another protocol or an `Extension` payload JSON cannot serialize."""
         if scene.protocol != cls.protocol:
             msg = f"unsupported scene protocol {scene.protocol}"
             raise CodecError(msg)
@@ -134,6 +144,12 @@ class Codec:
 
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> Scene:
+        """Decode one scene object.
+
+        Raises `CodecError` for a protocol other than 1, a missing or mistyped field, an
+        unknown body or node `kind`, or a child in a slot its container does not accept. Slack
+        body failures are re-raised as `CodecError` too.
+        """
         protocol = _integer(raw, "protocol")
         if protocol != cls.protocol:
             msg = f"unsupported scene protocol {protocol}"

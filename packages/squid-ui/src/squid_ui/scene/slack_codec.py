@@ -1,4 +1,4 @@
-"""Canonical data conversion for Slack scene bodies."""
+"""JSON-compatible dicts for Slack scene bodies; `Codec` calls these for the `slack_*` body kinds."""
 
 from collections.abc import Mapping
 from typing import Any, cast
@@ -45,7 +45,7 @@ from squid_ui.scene.slack import (
 
 
 class SlackSceneCodecError(SquidUiError, ValueError):
-    """A Slack scene body has an invalid shape."""
+    """A Slack scene body has an invalid shape; `Codec.from_dict` re-raises it as `CodecError`."""
 
 
 def _object(value: object, name: str) -> Mapping[str, Any]:
@@ -469,7 +469,7 @@ def _block_from(value: object) -> SlackBlock:
 
 
 def slack_body_to_dict(body: SlackBody) -> dict[str, object]:
-    """Encode one Slack body into canonical JSON-compatible data."""
+    """Encode one Slack body; every optional field is written explicitly as `null`, never omitted."""
     match body:
         case SlackMessage(text, blocks):
             return {"kind": SlackMessage.KIND, "text": text, "blocks": [_block(block) for block in blocks]}
@@ -493,7 +493,13 @@ def slack_body_to_dict(body: SlackBody) -> dict[str, object]:
 
 
 def slack_body_from_dict(raw: Mapping[str, Any]) -> SlackBody:
-    """Decode one Slack body from canonical JSON-compatible data."""
+    """Decode one Slack body.
+
+    Raises `SlackSceneCodecError` for an unknown body, block, or element `kind`, a missing or
+    mistyped field, or an element in a slot that rejects it (a button in an `input`, a
+    non-button in `card.actions`, a non-card in a `carousel`). Unknown `SlackTextKind`,
+    `ActionMode`, or `ConversationType` values raise that enum's own `ValueError`.
+    """
     kind = _string(raw, "kind")
     blocks = tuple(_block_from(block) for block in _array(raw, "blocks"))
     match kind:

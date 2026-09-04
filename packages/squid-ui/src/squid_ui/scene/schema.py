@@ -1,4 +1,11 @@
-"""JSON Schema for the experimental resolved-scene protocol."""
+"""JSON Schema for resolved-scene protocol 1.
+
+`SCHEMA` is published verbatim as `docs/schema/scene-v1.schema.json`; `test_scene_schema.py`
+fails when the two drift. An additive change (a new body or node kind) stays protocol 1 and
+keeps stored scenes loadable. An incompatible one bumps `protocol`, the `$id` version, and
+`Codec.protocol` together, after which `Codec.from_dict` rejects every scene stored under the
+old number; those are re-planned from their documents, not migrated.
+"""
 
 from typing import Any
 

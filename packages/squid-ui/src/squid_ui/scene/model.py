@@ -18,6 +18,12 @@ from squid_ui.text import Markup
 
 @dataclass(frozen=True, slots=True)
 class Text:
+    """A `TextDisplay` component.
+
+    `content` is already escaped for `markup` and counts against the message's shared
+    4000-character text budget.
+    """
+
     KIND: ClassVar[str] = "text"
 
     content: str
@@ -26,15 +32,20 @@ class Text:
 
 @dataclass(frozen=True, slots=True)
 class Time:
+    """Drawn as a Discord `<t:unix:style>` tag; `style` is one of its letters `t T d D f F R`."""
+
     KIND: ClassVar[str] = "time"
 
     instant: str
+    """An ISO-8601 instant, stored as text so the scene stays plain data."""
     style: str
     prefix: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class ZonedTime:
+    """Drawn as literal ISO-8601 text in `timezone`, for an instant that must not shift with the reader."""
+
     KIND: ClassVar[str] = "zoned_time"
 
     instant: str
@@ -44,6 +55,8 @@ class ZonedTime:
 
 @dataclass(frozen=True, slots=True)
 class File:
+    """A Components V2 file component; `asset_key` names the `Scene.assets` entry that carries its bytes."""
+
     KIND: ClassVar[str] = "file"
 
     asset_key: str
@@ -54,6 +67,8 @@ class File:
 
 @dataclass(frozen=True, slots=True)
 class Separator:
+    """A Components V2 separator; `visible=False` keeps the spacing but drops the line."""
+
     KIND: ClassVar[str] = "separator"
 
     large: bool = False
@@ -62,6 +77,8 @@ class Separator:
 
 @dataclass(frozen=True, slots=True)
 class Link:
+    """A link-style button; Discord opens `url` itself, so it carries no action and needs no binding."""
+
     KIND: ClassVar[str] = "link"
 
     label: str | None
@@ -72,6 +89,8 @@ class Link:
 
 @dataclass(frozen=True, slots=True)
 class PremiumButton:
+    """Discord's premium-upsell button for `sku_id`; Discord fixes its label and style."""
+
     KIND: ClassVar[str] = "premium_button"
 
     sku_id: int
@@ -79,6 +98,8 @@ class PremiumButton:
 
 @dataclass(frozen=True, slots=True)
 class Button:
+    """A session-bound button; `action` is a `PlanResult.bindings` key, so drawing it needs the live plan."""
+
     KIND: ClassVar[str] = "button"
 
     label: str | None
@@ -91,11 +112,10 @@ class Button:
 
 @dataclass(frozen=True, slots=True)
 class RoutedButton:
-    """A button carrying its own route id, with no binding for a frontend to wire.
+    """A button dispatched by `route_id` through the host's route registry, with no session binding.
 
-    That absence is the point: a renderer can draw one without a live session, which is
-    what lets a sessionless document hold a control, and a codec can round-trip one,
-    which a process-local handler could never be.
+    A renderer draws it without a live plan and the codec round-trips it, which is what lets
+    a stored or sessionless document keep a working control.
     """
 
     KIND: ClassVar[str] = "routed_button"
@@ -109,6 +129,8 @@ class RoutedButton:
 
 @dataclass(frozen=True, slots=True)
 class Option:
+    """One `SelectOption`; `label` and `value` are at most 100 characters, and `value` is what the interaction reports."""
+
     label: str
     value: str
     description: str | None = None
@@ -118,6 +140,8 @@ class Option:
 
 @dataclass(frozen=True, slots=True)
 class Select:
+    """A string select bound to `action`, drawn in an `ActionRow` of its own; at most 25 `options`."""
+
     KIND: ClassVar[str] = "select"
 
     options: tuple[Option, ...]
@@ -131,6 +155,8 @@ class Select:
 
 @dataclass(frozen=True, slots=True)
 class RoutedSelect:
+    """A `Select` dispatched by `route_id` through the host's route registry, so it needs no session binding."""
+
     KIND: ClassVar[str] = "routed_select"
 
     options: tuple[Option, ...]
@@ -143,6 +169,8 @@ class RoutedSelect:
 
 @dataclass(frozen=True, slots=True)
 class EntitySelect:
+    """A native user, role, or conversation picker; `entity_type` chooses the Discord select component."""
+
     KIND: ClassVar[str] = "entity_select"
 
     entity_type: EntityType
@@ -150,6 +178,7 @@ class EntitySelect:
     placeholder: str | None = None
     default_values: tuple[EntityRef, ...] = ()
     conversation_types: tuple[ConversationType, ...] = ()
+    """Filter for `EntityType.CONVERSATION` only; empty means every type the host offers."""
     min_values: int = 1
     max_values: int = 1
     disabled: bool = False
@@ -158,6 +187,8 @@ class EntitySelect:
 
 @dataclass(frozen=True, slots=True)
 class Row:
+    """An `ActionRow` of at most five buttons; selects never appear here, each takes a row of its own."""
+
     KIND: ClassVar[str] = "row"
 
     items: tuple[Link | PremiumButton | Button | RoutedButton | Extension, ...]
@@ -165,6 +196,8 @@ class Row:
 
 @dataclass(frozen=True, slots=True)
 class Thumbnail:
+    """A `Thumbnail` component; only legal as a `Section.accessory`."""
+
     KIND: ClassVar[str] = "thumbnail"
 
     url: str
@@ -174,6 +207,8 @@ class Thumbnail:
 
 @dataclass(frozen=True, slots=True)
 class GalleryItem:
+    """One `MediaGalleryItem`; `description` is its alt text, at most 1024 characters."""
+
     url: str
     description: str | None = None
     spoiler: bool = False
@@ -181,6 +216,8 @@ class GalleryItem:
 
 @dataclass(frozen=True, slots=True)
 class Gallery:
+    """A `MediaGallery` of 1-10 items."""
+
     KIND: ClassVar[str] = "gallery"
 
     items: tuple[GalleryItem, ...]
@@ -188,6 +225,8 @@ class Gallery:
 
 @dataclass(frozen=True, slots=True)
 class Section:
+    """A `Section` component: 1-3 `texts` beside one `accessory`."""
+
     KIND: ClassVar[str] = "section"
 
     texts: tuple[Text, ...]
@@ -196,6 +235,8 @@ class Section:
 
 @dataclass(frozen=True, slots=True)
 class Panel:
+    """A `Container`: a bordered group with an optional `accent` stripe; `spoiler` blurs the whole group."""
+
     KIND: ClassVar[str] = "panel"
 
     children: tuple[Node, ...]
@@ -204,16 +245,22 @@ class Panel:
 
 
 type JsonValue = str | int | float | bool | None | Sequence[JsonValue] | Mapping[str, JsonValue]
-"""What may cross the scene codec. Stated by the type rather than only by prose."""
+"""What an `Extension.payload` may hold: only values the scene codec can serialize."""
 
 
 @dataclass(frozen=True, slots=True)
 class Extension:
-    """Versioned target payload prepared by a registered extension adapter."""
+    """Versioned target payload prepared by a registered extension adapter.
+
+    `Codec.to_dict` normalizes `payload` through `json` and raises `CodecError` when it is not
+    serializable, so the failure lands at planning rather than in a remote renderer.
+    """
 
     KIND: ClassVar[str] = "extension"
 
     kind: str
+    """The extension's registered name; serialized under the JSON key `extension`, since `kind`
+    is the node-type tag."""
     version: int
     payload: Mapping[str, JsonValue]
 
@@ -351,7 +398,10 @@ type HtmlAttributeValue = str | int | float | bool
 
 @dataclass(frozen=True, slots=True)
 class HtmlAttribute:
-    """One allowlisted ordinary HTML attribute with an escapable scalar value."""
+    """One allowlisted ordinary HTML attribute with an escapable scalar value.
+
+    `__post_init__` raises `TypeError` when `name` is not an `HtmlAttributeName`.
+    """
 
     name: HtmlAttributeName
     value: HtmlAttributeValue
@@ -364,7 +414,7 @@ class HtmlAttribute:
 
 @dataclass(frozen=True, slots=True)
 class HtmlActionRef:
-    """A host-dispatched action reference; no transport behavior crosses the scene."""
+    """A `PlanResult.bindings` key the browser host dispatches by name; the scene carries no handler."""
 
     action: str
     mode: ActionMode = ActionMode.EXCLUSIVE
@@ -379,7 +429,11 @@ class HtmlRouteRef:
 
 @dataclass(frozen=True, slots=True)
 class HtmlFormRef:
-    """A stable form binding and optional submitted field name."""
+    """Ties an element to a `PlanResult.form_bindings` key.
+
+    `field_name` is the field an input submits under; it is `None` on the `form` element and
+    its submit button.
+    """
 
     key: str
     field_name: str | None = None
@@ -387,14 +441,17 @@ class HtmlFormRef:
 
 @dataclass(frozen=True, slots=True)
 class HtmlUrlRef:
-    """A URL whose scheme the HTML renderer validates before emitting it."""
+    """An `href` or `src`, only on `a` or `img`; the renderer drops any URL that is not absolute `http(s)`."""
 
     url: str
 
 
 @dataclass(frozen=True, slots=True)
 class HtmlTimeRef:
-    """An ISO-8601 instant with optional portable display metadata."""
+    """An ISO-8601 instant, only on a `time` element; drawn as `datetime` plus `data-squid-*` hints.
+
+    `style` is a Discord timestamp letter for a reader-local display; `timezone` pins a zone.
+    """
 
     instant: str
     timezone: str | None = None
@@ -403,7 +460,11 @@ class HtmlTimeRef:
 
 @dataclass(frozen=True, slots=True)
 class HtmlColourRef:
-    """An exact sRGB colour, constrained to six hexadecimal digits by its integer type."""
+    """An exact sRGB colour as an integer from `0x000000` to `0xFFFFFF`.
+
+    `__post_init__` raises `TypeError` for a non-integer (including `bool`) and `ValueError`
+    when the value is out of range.
+    """
 
     value: Color
 
@@ -418,7 +479,11 @@ class HtmlColourRef:
 
 @dataclass(frozen=True, slots=True)
 class HtmlAssetRef:
-    """A declared scene asset referenced without embedding its source or transport URL."""
+    """Names one `Scene.assets` entry, only on an `a` element.
+
+    The HTML renderer resolves it to an `href` through its asset resolver, a data URL, or a
+    `StoredAsset` reference, and draws the anchor `aria-disabled` when none applies.
+    """
 
     key: str
     name: str
@@ -427,7 +492,7 @@ class HtmlAssetRef:
 
 @dataclass(frozen=True, slots=True)
 class HtmlText:
-    """Escapable text, optionally carrying safe Markdown for token conversion."""
+    """A text node; `PLAIN` is HTML-escaped whole, any other `markup` is tokenized as Markdown into inline tags."""
 
     KIND: ClassVar[str] = "html_text"
 
@@ -437,7 +502,11 @@ class HtmlText:
 
 @dataclass(frozen=True, slots=True)
 class HtmlElement:
-    """One allowlisted element with typed references and no raw HTML or style escape hatch."""
+    """One allowlisted element with typed references and no raw HTML or style escape hatch.
+
+    `__post_init__` raises `TypeError` for a `tag` or attribute name outside the allowlist and
+    `ValueError` when two attributes share a name.
+    """
 
     KIND: ClassVar[str] = "html_element"
 
@@ -470,12 +539,13 @@ type HtmlNode = HtmlText | HtmlElement
 
 @dataclass(frozen=True, slots=True)
 class HtmlBody:
-    """A semantic HTML fragment whose nodes are safe plain data."""
+    """A semantic HTML fragment; the renderer wraps `children` in a `main` element."""
 
     KIND: ClassVar[str] = "html"
 
     children: tuple[HtmlNode, ...] = ()
     locale: str | None = None
+    """Drawn as the `lang` attribute; a full page falls back to `und` when unset."""
 
 
 # --- Message bodies -------------------------------------------------------------------------
@@ -609,6 +679,8 @@ del _kind_cls
 
 @dataclass(frozen=True, slots=True)
 class Asset:
+    """Metadata for one attachment; its bytes travel outside the scene in `PlanResult.resources["asset:<key>"]`."""
+
     key: str
     name: str
     media_type: str
@@ -616,10 +688,13 @@ class Asset:
 
 @dataclass(frozen=True, slots=True)
 class Pager:
+    """One pagination cursor the scene is showing: zero-based `page` of `pages`."""
+
     key: str
     page: int
     pages: int
     content_fingerprint: str
+    """Hash of the paged content; a later plan that hashes differently treats the stored position as stale."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -627,8 +702,11 @@ class Scene[BodyT = Body]:
     """A target-resolved scene with no callbacks or native frontend objects."""
 
     protocol: int
+    """The codec protocol; `Codec` accepts only 1."""
     target: str
+    """The planning target id, such as `discord.components-v2`."""
     target_version: int
+    """The target dialect's version; each renderer refuses a version it was not built for."""
     body: BodyT
     assets: tuple[Asset, ...] = ()
     pagers: tuple[Pager, ...] = ()
@@ -646,7 +724,10 @@ class Scene[BodyT = Body]:
         return self.body
 
     def expect_body[ExpectedT](self, body_type: type[ExpectedT]) -> ExpectedT:
-        """Narrow a broadly decoded scene at an explicit frontend boundary."""
+        """Narrow a broadly decoded scene at an explicit frontend boundary.
+
+        Raises `LayoutInvariantError` when the body is not a `body_type`.
+        """
         if not isinstance(self.body, body_type):
             message = (
                 f"scene for target {self.target!r} has a {type(self.body).__name__} body, not {body_type.__name__}"
@@ -656,13 +737,24 @@ class Scene[BodyT = Body]:
 
 
 class PlanSeverity(StrEnum):
+    """How much a `PlanEvent` cost the reader.
+
+    `ADAPTATION` is lossless; `DEGRADATION` dropped or truncated content and fails the plan
+    with `LayoutDegradedError` under `PlanRequest.strict`; `WARNING` is neither, for content
+    rendered literally because it could not be interpreted.
+    """
+
     ADAPTATION = "adaptation"
     DEGRADATION = "degradation"
     WARNING = "warning"
 
 
 class PlanReuse(StrEnum):
-    """How much prior planner work produced this result."""
+    """How much prior planner work produced this result.
+
+    `EXACT` replays a memoized result; `STRUCTURAL` reuses a cached scene with live values
+    re-bound; `INCREMENTAL` certifies the previous layout still fits without a search.
+    """
 
     MISS = "miss"
     EXACT = "exact"
@@ -672,19 +764,27 @@ class PlanReuse(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class PlanEvent:
+    """One planning decision, keyed by a stable dotted `code` at a `$.n.m` document `path`."""
+
     code: str
     path: str
     message: str
     severity: PlanSeverity = PlanSeverity.ADAPTATION
     before: Mapping[str, int] = field(default_factory=dict)
+    """Measured counts per axis (`characters`, `blocks`, `options`, ...) before the decision."""
     after: Mapping[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
 class PlanReport:
+    """The deterministic part of a plan: equal document, target, and session give an equal report."""
+
     events: tuple[PlanEvent, ...] = ()
     logical_fingerprint: str = ""
+    """Hash of the planner's chosen layout before it is lowered to a scene; unlike `scene_fingerprint`
+    it does not cover the payload."""
     scene_fingerprint: str = ""
+    """`Codec.fingerprint` of the scene; equal fingerprints draw identically."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -694,18 +794,26 @@ class PlanMetrics:
     states_explored: int = 0
     """`measure()` calls the search spent, across strategies, fallbacks, and ladder rungs."""
     cache_hit: bool = False
+    """`True` for any `reuse` other than `MISS`."""
     reuse: PlanReuse = PlanReuse.MISS
     search_fallback: bool = False
+    """The layout search ran out of budget and kept its best incumbent; a `planner.search_fallback`
+    warning event says so."""
 
 
 @dataclass(frozen=True, slots=True)
 class PlanResult[BodyT = Body]:
+    """A planned scene plus the process-local side tables a live frontend needs to serve it."""
+
     scene: Scene[BodyT]
     bindings: Mapping[str, ActionBinding]
+    """Handlers keyed by action name; only the actions the scene actually shows are present."""
     report: PlanReport
     form_bindings: Mapping[str, FormBinding] = field(default_factory=dict)
     """What each declared form key presents right now, for resolving a late submission."""
     resources: Mapping[str, object] = field(default_factory=dict)
+    """Process-local objects the scene names by key: `asset:<key>` is the `Asset` with its bytes,
+    `native:<path>` a frontend object an `Extension` payload points at."""
     metrics: PlanMetrics = field(default_factory=PlanMetrics)
     session_updates: tuple[SessionUpdate, ...] = ()
     """Presentation writes this plan earned but did not make.
