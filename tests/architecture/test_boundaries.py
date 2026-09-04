@@ -80,30 +80,61 @@ def _dependency_name(requirement: str) -> str:
 
 def test_process_entry_points_use_concrete_runtime_constructors() -> None:
     """Production startup may not inject an arbitrary service factory into bootstrap."""
-    expected_calls = {
+    expected_runtimes = {
         Path("squid/bot/app.py"): ("_run_bot", "create_bot_runtime"),
         Path("squid/worker/app.py"): ("_run_worker", "create_worker_runtime"),
     }
-    for path, (function_name, constructor_name) in expected_calls.items():
-        function = next(
-            node
-            for node in source_tree(path).body
-            if isinstance(node, ast.AsyncFunctionDef) and node.name == function_name
-        )
-        calls = {
-            node.func.id
-            for node in ast.walk(function)
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    for path, (function_name, constructor_name) in expected_runtimes.items():
+        tree = source_tree(path)
+        bootstrap_imports = {
+            alias.name
+            for node in tree.body
+            if isinstance(node, ast.ImportFrom) and node.module == "squid.bootstrap"
+            for alias in node.names
         }
-        assert constructor_name in calls
+        assert bootstrap_imports == {constructor_name}
+        function = next(
+            node for node in tree.body if isinstance(node, ast.AsyncFunctionDef) and node.name == function_name
+        )
+        runtime_contexts = [
+            item.context_expr
+            for node in ast.walk(function)
+            if isinstance(node, ast.AsyncWith)
+            for item in node.items
+            if isinstance(item.optional_vars, ast.Name) and item.optional_vars.id == "runtime"
+        ]
+        assert len(runtime_contexts) == 1
+        runtime_call = runtime_contexts[0]
+        assert isinstance(runtime_call, ast.Call)
+        assert isinstance(runtime_call.func, ast.Name)
+        assert runtime_call.func.id == constructor_name
+        assert len(runtime_call.args) == 1
+        assert ast.unparse(runtime_call.args[0]) == "config.runtime"
+        assert runtime_call.keywords == []
 
+    api_tree = source_tree(Path("squid/api/app.py"))
+    assert {
+        alias.name
+        for node in api_tree.body
+        if isinstance(node, ast.ImportFrom) and node.module == "squid.bootstrap"
+        for alias in node.names
+    } == {"create_api_runtime"}
     api_factory = next(
-        node
-        for node in source_tree(Path("squid/api/app.py")).body
-        if isinstance(node, ast.FunctionDef) and node.name == "create_api_app"
+        node for node in api_tree.body if isinstance(node, ast.FunctionDef) and node.name == "create_api_app"
     )
     assert isinstance(api_factory.args.defaults[0], ast.Name)
     assert api_factory.args.defaults[0].id == "create_api_runtime"
+
+    production_calls = [
+        call
+        for owner in api_tree.body
+        if not isinstance(owner, ast.FunctionDef) or owner.name != "create_api_app"
+        for call in ast.walk(owner)
+        if isinstance(call, ast.Call) and isinstance(call.func, ast.Name) and call.func.id == "create_api_app"
+    ]
+    assert len(production_calls) == 2
+    assert all(call.args == [] for call in production_calls)
+    assert all({keyword.arg for keyword in call.keywords} <= {"config"} for call in production_calls)
 
 
 def test_submission_domain_and_application_do_not_import_pydantic() -> None:
