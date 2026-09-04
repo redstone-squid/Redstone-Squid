@@ -7,7 +7,8 @@ from typing import Annotated, cast
 from anyio import CancelScope
 from fastapi import Depends, Header, Request
 from fastapi.applications import FastAPI
-from starlette.responses import Response
+from fastapi.routing import APIRoute
+from starlette.responses import Response, StreamingResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from squid.api.security import Caller, current_caller
@@ -120,7 +121,7 @@ class CompleteIdempotentResponseMiddleware:
         pending = state.get(_STATE_KEY)
         if not isinstance(pending, IdempotencyReservationState):
             return
-        response = _stored_response(buffered)
+        response = _stored_response(buffered, max_bytes=_response_limit(scope))
         # A disconnect or server shutdown must not interrupt completion after the
         # application mutation has succeeded. No bytes reach the caller until the
         # durable response commit settles.
@@ -138,6 +139,16 @@ def assert_idempotency_completion_installed(app: FastAPI) -> None:
     if not any(middleware.cls is CompleteIdempotentResponseMiddleware for middleware in app.user_middleware):
         msg = "Idempotent routes require CompleteIdempotentResponseMiddleware."
         raise RuntimeError(msg)
+    for route in app.routes:
+        if not isinstance(route, APIRoute):
+            continue
+        dependencies = {dependency.call for dependency in route.dependant.dependencies}
+        if reserve_idempotent_request not in dependencies:
+            continue
+        response_class = route.response_class
+        if isinstance(response_class, type) and issubclass(response_class, StreamingResponse):
+            msg = f"Idempotent route {route.path} cannot declare a streaming response."
+            raise TypeError(msg)
 
 
 async def _request_fingerprint(request: Request, route_path: str) -> bytes:
@@ -154,7 +165,15 @@ async def _request_fingerprint(request: Request, route_path: str) -> bytes:
     return digest.digest()
 
 
-def _stored_response(messages: list[Message]) -> StoredResponse:
+def _response_limit(scope: Scope) -> int:
+    app = scope.get("app")
+    config = getattr(getattr(app, "state", None), "config", None)
+    return cast(int, getattr(getattr(config, "api", None), "idempotency_max_response_bytes", None)) or (
+        MAX_IDEMPOTENT_RESPONSE_BYTES
+    )
+
+
+def _stored_response(messages: list[Message], *, max_bytes: int) -> StoredResponse:
     start = next((message for message in messages if message["type"] == "http.response.start"), None)
     if start is None:
         msg = "An idempotent request completed without starting an HTTP response."
@@ -167,7 +186,7 @@ def _stored_response(messages: list[Message]) -> StoredResponse:
     body = b"".join(
         cast(bytes, message.get("body", b"")) for message in messages if message["type"] == "http.response.body"
     )
-    if len(body) > MAX_IDEMPOTENT_RESPONSE_BYTES:
-        msg = f"An idempotent response exceeds the {MAX_IDEMPOTENT_RESPONSE_BYTES}-byte replay limit."
+    if len(body) > max_bytes:
+        msg = f"An idempotent response exceeds the {max_bytes}-byte replay limit."
         raise RuntimeError(msg)
     return StoredResponse(status_code=start["status"], headers=headers, body=body)
