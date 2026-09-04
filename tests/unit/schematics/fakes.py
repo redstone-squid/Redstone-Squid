@@ -155,6 +155,7 @@ class FakeSchematicStore:
     def __init__(self) -> None:
         self.files: dict[str, bytes] = {}
         self.records: list[tuple[int, str, SchematicAnalysis, bool]] = []
+        self.uploaded_by_account_ids: list[int | None] = []
         self.stored: list[StoredSchematic] = []
         self.renders: dict[tuple[int, str], StoredRender] = {}
         self.render_content: dict[str, bytes] = {}
@@ -184,6 +185,7 @@ class FakeSchematicStore:
         publication: SchematicPublication | None = None,
     ) -> int:
         self.records.append((build_id, sha256, analysis, primary))
+        self.uploaded_by_account_ids.append(uploaded_by_account_id)
         if primary:
             self.stored = [
                 StoredSchematic(

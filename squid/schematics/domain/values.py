@@ -48,7 +48,11 @@ class RgbaColor:
 
 @dataclass(frozen=True, slots=True)
 class VerifiedResourcePack:
-    """Resource-pack bytes whose SHA-256 digest has been verified for ZIP consumption."""
+    """Immutable resource-pack bytes with a verified SHA-256 and declared media type.
+
+    The native renderer owns ZIP parsing. This value verifies transport identity and the
+    media contract; it does not claim that arbitrary bytes form a valid Minecraft pack.
+    """
 
     data: bytes
     sha256: str
@@ -68,7 +72,7 @@ class VerifiedResourcePack:
 
     @classmethod
     def from_bytes(cls, data: bytes) -> Self:
-        """Build a verified ZIP payload by deriving its content digest."""
+        """Build a digest-verified resource-pack payload from immutable bytes."""
         return cls(data=data, sha256=hashlib.sha256(data).hexdigest())
 
 

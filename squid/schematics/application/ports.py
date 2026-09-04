@@ -173,7 +173,7 @@ class SchematicStore(Protocol):
 
 
 class SchematicResourcePackProvider(Protocol):
-    """Lazy source for verified resource-pack bytes and their SHA-256 digest."""
+    """Lazy source for digest-verified resource-pack bytes and media metadata."""
 
     async def load(self) -> VerifiedResourcePack: ...
 
