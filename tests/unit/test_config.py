@@ -11,6 +11,7 @@ from squid.config import (
     EMBEDDING_DIMENSION,
     ApplicationConfig,
     ObjectStorageConfig,
+    RateLimitConfig,
     UpstreamHttpConfig,
     default_render_cache_dir,
     load_api_process_config,
@@ -897,14 +898,15 @@ def test_api_rate_limit_and_trusted_proxy_settings_load(monkeypatch: pytest.Monk
         SQUID_RATE_LIMIT_LOCAL_MAX_KEYS="4096",
     )
 
-    config = load_api_process_config(dotenv_path=dotenv)
+    with pytest.warns(DeprecationWarning, match="CALLER_REQUESTS"):
+        config = load_api_process_config(dotenv_path=dotenv)
 
     assert config.api.trusted_proxy_ips == ("127.0.0.1", "10.0.0.0/8")
     assert config.rate_limit.redis_url is not None
     assert config.rate_limit.redis_url.get_secret_value() == "rediss://user:secret@redis.example/0"
     assert config.rate_limit.window_seconds == 60
     assert config.rate_limit.ip_requests == 120
-    assert config.rate_limit.principal_requests == 90
+    assert config.rate_limit.caller_requests == 90
     assert config.rate_limit.write_requests == 30
     assert config.rate_limit.vote_requests == 10
     assert config.rate_limit.minecraft_challenge_start_requests == 6
@@ -914,6 +916,13 @@ def test_api_rate_limit_and_trusted_proxy_settings_load(monkeypatch: pytest.Monk
     assert config.rate_limit.redis_retry_seconds == 7
     assert config.rate_limit.local_max_keys == 4_096
     assert "secret@redis" not in repr(config)
+
+
+def test_new_caller_quota_wins_over_the_deprecated_name() -> None:
+    config = RateLimitConfig.model_validate({"caller_requests": 120, "principal_requests": 90})
+
+    assert config.caller_requests == 120
+    assert config.principal_requests == 120
 
 
 @pytest.mark.parametrize(

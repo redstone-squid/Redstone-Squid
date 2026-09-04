@@ -151,7 +151,7 @@ def test_api_ip_limit_returns_quota_headers_and_retry_after() -> None:
         update={
             "rate_limit": RateLimitConfig(
                 ip_requests=1,
-                principal_requests=10,
+                caller_requests=10,
                 write_requests=10,
                 vote_requests=10,
             )
@@ -198,7 +198,7 @@ def test_minecraft_device_flows_use_polling_aware_dedicated_quotas() -> None:
         update={
             "rate_limit": RateLimitConfig(
                 ip_requests=100,
-                principal_requests=100,
+                caller_requests=100,
                 write_requests=1,
                 minecraft_challenge_start_requests=1,
                 minecraft_challenge_exchange_requests=2,

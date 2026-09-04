@@ -38,12 +38,16 @@ from squid.media.infrastructure.models import (
     MediaNormalizationJobRecord,
     MediaUploadRecord,
 )
-from squid.persistence.advisory_locks import SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE, lock_uuid
+from squid.persistence.advisory_locks import (
+    SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE,
+    AdvisoryLockNamespace,
+    lock_uuid,
+)
 from squid.persistence.queue import VISIBILITY_TIMEOUT, retry_delay
 from squid.submissions.domain import DraftStatus
 from squid.submissions.infrastructure.models import SubmissionDraft
 
-_MEDIA_UPLOAD_LOCK_NAMESPACE = "media-upload-registration-v1"
+_MEDIA_UPLOAD_LOCK_NAMESPACE = AdvisoryLockNamespace.MEDIA_UPLOAD_REGISTRATION
 
 
 @dataclass(frozen=True, slots=True)
