@@ -462,3 +462,4 @@ Things found while building that the plan did not predict:
 adds the previously missing consent-card payload and interaction branches, claimant-aware
 approve/reject/conflict presentation, and the resolution query-count scenario. PostgreSQL
 execution of the query-count case is externally gated; the test is present and collects.
+`eb51214e` also routes the production claim autocomplete through that canonical claimant presenter.
