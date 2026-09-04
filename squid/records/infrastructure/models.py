@@ -460,10 +460,3 @@ class ExtenderTimingVariant(Base, kw_only=True):
     extension_time: Mapped[int | None] = mapped_column(BigInteger, default=None)
     retraction_reset_time: Mapped[int | None] = mapped_column(BigInteger, default=None)
     extension_reset_time: Mapped[int | None] = mapped_column(BigInteger, default=None)
-
-
-# Temporary compatibility names while downstream persistence consumers adopt the
-# series/rule/standing vocabulary in reviewable stages.
-RecordCompetition = RecordSeries
-RecordDefinition = RecordRule
-RecordResult = RecordStanding

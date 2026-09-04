@@ -141,7 +141,7 @@ class PostgresSuggestionRepository:
         `/records lookup` materializes the all-time definition regardless of which id it gets.
         """
         statement = select(RecordRule.id, RecordRule.title, RecordRule.build_kind).where(
-            RecordRule.version_scope == VersionScope.ALL_TIME.value
+            RecordRule.version_scope == VersionScope.ALL_TIME
         )
         terms = query.strip()
         if terms:
