@@ -51,11 +51,10 @@ def _duplicate_summary(duplicates: Sequence[SchematicDuplicateInfo]) -> str:
     for candidate in duplicates[:5]:
         build_id = candidate["build_id"]
         title = truncate_display_text(_compact_plain(candidate.get("title") or f"Build #{build_id}"), 100)
-        filenames = [
-            truncate_display_text(_compact_plain(source["filename"]), 70)
-            for source in candidate.get("source_attachments", [])[:2]
-        ]
-        source = f" · from {', '.join(filenames)}" if filenames else ""
+        sources = candidate.get("source_attachments", [])
+        filenames = [truncate_display_text(_compact_plain(source["filename"]), 70) for source in sources[:2]]
+        omitted = f" and {len(sources) - 2} more" if len(sources) > 2 else ""
+        source = f" · from {', '.join(filenames)}{omitted}" if filenames else ""
         lines.append(
             truncate_display_text(
                 f"{title} (#{build_id}) — {labels[candidate['tier']]}{source}",
@@ -208,7 +207,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
             "Sponsor Website",
         }
         credit_names = {"Creators", "Date Of Completion", "Sponsoring Server"}
-        review_names = {"⚠ Possible duplicate"}
+        review_names = {"⚠ Possible duplicate", "⚠ Attachment issues"}
 
         ladders = self._field_ladders()
 
