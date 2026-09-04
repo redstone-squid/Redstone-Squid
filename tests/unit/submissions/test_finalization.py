@@ -43,7 +43,8 @@ from squid.submissions.domain import (
     SubmissionTargetResult,
 )
 from squid.submissions.errors import DraftAccessDeniedError
-from squid.submissions.infrastructure.finalization_repository import _decode_submission, _encode_submission
+from squid.submissions.infrastructure.finalization_payloads import decode_submission, encode_submission
+from squid.submissions.payload_integrity import submission_payload_digest
 
 DRAFT_ID = UUID("00000000-0000-4000-8000-000000000401")
 JOB_ID = UUID("00000000-0000-4000-8000-000000000402")
@@ -442,7 +443,7 @@ async def test_paper_sponsor_request_snapshots_only_resolved_public_profile() ->
     assert jobs.enqueued is not None
     assert jobs.enqueued.source_installation_id == INSTALLATION_ID
     assert jobs.enqueued.sponsor == sponsor
-    assert _encode_submission(jobs.enqueued)["payload_schema"] == 2
+    assert encode_submission(jobs.enqueued)["payload_schema"] == 2
 
 
 @pytest.mark.asyncio
@@ -457,8 +458,8 @@ async def test_non_attributed_paper_payload_stays_schema_one_and_retains_new_pro
 
     assert result.status is FinalizationJobStatus.PENDING
     assert jobs.enqueued is not None
-    encoded = _encode_submission(jobs.enqueued)
-    decoded = _decode_submission(encoded)
+    encoded = encode_submission(jobs.enqueued)
+    decoded = decode_submission(encoded)
     assert encoded["payload_schema"] == 1
     assert decoded.source_installation_id == INSTALLATION_ID
     assert decoded.sponsor_attribution is False
@@ -620,12 +621,58 @@ async def _payload() -> NormalizedSubmission:
 
 @pytest.mark.asyncio
 async def test_legacy_sponsor_request_is_refused_instead_of_silently_dropped() -> None:
-    encoded = _encode_submission(await _payload())
+    encoded = encode_submission(await _payload())
     encoded["payload_schema"] = 1
     encoded["sponsor_attribution"] = True
 
     with pytest.raises(DataIntegrityError, match="persisted normalized submission payload is invalid"):
-        _decode_submission(encoded)
+        decode_submission(encoded)
+
+
+@pytest.mark.asyncio
+async def test_schema_one_fixture_retains_shape_digest_and_round_trip() -> None:
+    payload = await _payload()
+    encoded = encode_submission(payload)
+
+    assert encoded["payload_schema"] == 1
+    assert encoded["sponsor_attribution"] is False
+    assert encoded["source_installation_id"] is None
+    assert encoded["sponsor"] is None
+    assert submission_payload_digest(encoded) == "d48727ce2b8d2b8a57a2e754387fe7ecf8134e683ae7cc3aa64e3647317acd67"
+    assert decode_submission(encoded) == payload
+
+
+@pytest.mark.asyncio
+async def test_payload_codec_rejects_unknown_fields_and_type_coercion() -> None:
+    encoded = encode_submission(await _payload())
+
+    with pytest.raises(DataIntegrityError, match="persisted normalized submission payload is invalid"):
+        decode_submission(encoded | {"unknown": "field"})
+
+    with pytest.raises(DataIntegrityError, match="persisted normalized submission payload is invalid"):
+        decode_submission(encoded | {"owner_account_id": True})
+
+
+@pytest.mark.asyncio
+async def test_schema_two_requires_attribution_and_verified_sponsor() -> None:
+    sponsor = PublicSponsor(INSTALLATION_ID, display_name="Example server")
+    _, jobs = await _submit(
+        SubmissionOrigin.PAPER,
+        SubmissionArtifactReadiness(
+            schematic_state=SchematicArtifactState.SANITIZED,
+            sanitized_schematic_id=SCHEMATIC_ID,
+        ),
+        answers=_answers() | {"sponsor_attribution": True},
+        sponsor=sponsor,
+    )
+    assert jobs.enqueued is not None
+    encoded = encode_submission(jobs.enqueued)
+
+    with pytest.raises(DataIntegrityError, match="persisted normalized submission payload is invalid"):
+        decode_submission(encoded | {"sponsor_attribution": False})
+
+    with pytest.raises(DataIntegrityError, match="persisted normalized submission payload is invalid"):
+        decode_submission(encoded | {"sponsor": None})
 
 
 def _claim(payload: NormalizedSubmission, attempts: int = 1) -> ClaimedFinalizationJob:

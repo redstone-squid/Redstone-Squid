@@ -12,7 +12,6 @@ from squid.core.errors import DataIntegrityError, InvalidStateError, JSONValue, 
 from squid.media.application.jobs import MediaJobStatus
 from squid.media.infrastructure.models import MediaNormalizationJobRecord, MediaUploadRecord
 from squid.persistence.advisory_locks import SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE, lock_uuid
-from squid.sponsors import PublicSponsor
 from squid.submissions.application.drafts import StoredDraft
 from squid.submissions.application.finalization import (
     MAX_FINALIZATION_JOB_CLAIM,
@@ -21,33 +20,20 @@ from squid.submissions.application.finalization import (
     FinalizationJobRepository,
     FinalizationJobSnapshot,
 )
-from squid.submissions.domain import DraftRevisionConflictError, DraftStatus, SubmissionOrigin
+from squid.submissions.domain import DraftRevisionConflictError, DraftStatus
 from squid.submissions.domain.finalization import (
-    DoorOrientation,
-    DoorSubmissionDetails,
-    DoorTiming,
-    ExtenderOrientation,
-    ExtenderSubmissionDetails,
-    ExtenderTiming,
     FinalizationJobStatus,
-    GeneralSubmissionDetails,
     NormalizedSubmission,
-    SchematicRightsPolicy,
     SubmissionAttentionIssue,
     SubmissionAttentionReason,
-    SubmissionCategory,
-    SubmissionDimensions,
-    SubmissionSchematicLicense,
-    SubmissionSchematicVisibility,
     SubmissionTargetResult,
-    SubmissionTaxonomy,
-    VerifiedSubmissionArtifacts,
 )
 from squid.submissions.errors import DraftAccessDeniedError, DraftArtifactsChangedError, DraftNotFoundError
 from squid.submissions.infrastructure.finalization_models import (
     SubmissionFinalizationJob,
     SubmissionFinalizationResult,
 )
+from squid.submissions.infrastructure.finalization_payloads import decode_submission, encode_submission
 from squid.submissions.infrastructure.models import SubmissionDraft
 from squid.submissions.payload_integrity import submission_payload_digest
 
@@ -92,7 +78,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
         ):
             msg = "normalized submission provenance does not match its source draft"
             raise ValueError(msg)
-        encoded = _encode_submission(payload)
+        encoded = encode_submission(payload)
         digest = submission_payload_digest(encoded)
         async with self._session_factory.begin() as session:
             draft_model = await _locked_draft(session, draft.snapshot.id)
@@ -236,7 +222,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
                         job_id=job.id,
                         draft_id=job.draft_id,
                         draft_revision=job.draft_revision,
-                        payload=_decode_submission(payload),
+                        payload=decode_submission(payload),
                         attempts=job.attempts,
                         claimed_at=now,
                         claim_token=token,
@@ -527,289 +513,3 @@ def _decode_issues(values: Sequence[Mapping[str, object]]) -> tuple[SubmissionAt
 
 def _unique_issues(issues: Sequence[SubmissionAttentionIssue]) -> tuple[SubmissionAttentionIssue, ...]:
     return tuple(dict.fromkeys(issues))
-
-
-def _encode_submission(submission: NormalizedSubmission) -> dict[str, object]:
-    details: dict[str, object]
-    if isinstance(submission.details, DoorSubmissionDetails):
-        details = {
-            "kind": "door",
-            "opening": _encode_dimensions(submission.details.opening),
-            "orientation": submission.details.orientation.value,
-            "pattern_keys": list(submission.details.pattern_keys),
-            "pattern_proposals": list(submission.details.pattern_proposals),
-            "timing": {
-                "opening": submission.details.timing.opening,
-                "visible_opening": submission.details.timing.visible_opening,
-                "closing": submission.details.timing.closing,
-                "visible_closing": submission.details.timing.visible_closing,
-            },
-        }
-    elif isinstance(submission.details, ExtenderSubmissionDetails):
-        details = {
-            "kind": "extender",
-            "orientation": submission.details.orientation.value,
-            "extension_length": submission.details.extension_length,
-            "pattern_keys": list(submission.details.pattern_keys),
-            "pattern_proposals": list(submission.details.pattern_proposals),
-            "timing": {
-                "extension": submission.details.timing.extension,
-                "retraction": submission.details.timing.retraction,
-            },
-        }
-    else:
-        details = {"kind": "general"}
-    return {
-        "payload_schema": 2 if submission.sponsor_attribution else 1,
-        "source_draft_id": str(submission.source_draft_id),
-        "owner_account_id": submission.owner_account_id,
-        "origin": submission.origin.value,
-        "schema_id": submission.schema_id,
-        "schema_revision": submission.schema_revision,
-        "category": submission.category.value,
-        "display_name": submission.display_name,
-        "description": submission.description,
-        "creators": list(submission.creators),
-        "capture_dimensions": _encode_dimensions(submission.capture_dimensions),
-        "source_version": submission.source_version,
-        "version_compatibility": submission.version_compatibility,
-        "taxonomy": {
-            "restriction_keys": list(submission.taxonomy.restriction_keys),
-            "restriction_proposals": list(submission.taxonomy.restriction_proposals),
-            "showcase_tag_keys": list(submission.taxonomy.showcase_tag_keys),
-        },
-        "schematic_policy": {
-            "visibility": submission.schematic_policy.visibility.value,
-            "license": (
-                submission.schematic_policy.license.value if submission.schematic_policy.license is not None else None
-            ),
-            "rights_attested": submission.schematic_policy.rights_attested,
-            "include_inventories": submission.schematic_policy.include_inventories,
-            "include_free_text": submission.schematic_policy.include_free_text,
-        },
-        "completion": submission.completion,
-        "ai_generated": submission.ai_generated,
-        "sponsor_attribution": submission.sponsor_attribution,
-        "source_installation_id": (
-            str(submission.source_installation_id) if submission.source_installation_id is not None else None
-        ),
-        "sponsor": _encode_sponsor(submission.sponsor),
-        "artifacts": {
-            "normalized_media_upload_ids": [str(value) for value in submission.artifacts.normalized_media_upload_ids],
-            "sanitized_schematic_id": (
-                str(submission.artifacts.sanitized_schematic_id)
-                if submission.artifacts.sanitized_schematic_id is not None
-                else None
-            ),
-        },
-        "details": details,
-    }
-
-
-def _decode_submission(value: Mapping[str, object]) -> NormalizedSubmission:
-    try:
-        payload_schema = _payload_schema(value["payload_schema"])
-        _reject_unresolved_legacy_sponsor(payload_schema, value["sponsor_attribution"])
-        sponsor_attribution = _boolean(value["sponsor_attribution"]) if payload_schema == 2 else False
-        _require_attributed_schema_two(payload_schema, sponsor_attribution)
-        taxonomy = _mapping(value["taxonomy"])
-        policy = _mapping(value["schematic_policy"])
-        artifacts = _mapping(value["artifacts"])
-        details = _mapping(value["details"])
-        category = SubmissionCategory(_string(value["category"]))
-        category_details = _decode_details(category, details)
-        return NormalizedSubmission(
-            source_draft_id=UUID(_string(value["source_draft_id"])),
-            owner_account_id=_integer(value["owner_account_id"]),
-            origin=SubmissionOrigin(_string(value["origin"])),
-            schema_id=_string(value["schema_id"]),
-            schema_revision=_integer(value["schema_revision"]),
-            category=category,
-            display_name=_optional_string(value["display_name"]),
-            description=_optional_string(value["description"]),
-            creators=_strings(value["creators"]),
-            capture_dimensions=_decode_dimensions(_mapping(value["capture_dimensions"])),
-            source_version=_string(value["source_version"]),
-            version_compatibility=_optional_string(value["version_compatibility"]),
-            taxonomy=SubmissionTaxonomy(
-                restriction_keys=_strings(taxonomy["restriction_keys"]),
-                restriction_proposals=_strings(taxonomy["restriction_proposals"]),
-                showcase_tag_keys=_strings(taxonomy["showcase_tag_keys"]),
-            ),
-            schematic_policy=SchematicRightsPolicy(
-                visibility=SubmissionSchematicVisibility(_string(policy["visibility"])),
-                license=(
-                    SubmissionSchematicLicense(license_code)
-                    if (license_code := _optional_string(policy["license"])) is not None
-                    else None
-                ),
-                rights_attested=_boolean(policy["rights_attested"]),
-                include_inventories=_boolean(policy["include_inventories"]),
-                include_free_text=_boolean(policy["include_free_text"]),
-            ),
-            completion=_optional_string(value["completion"]),
-            ai_generated=_boolean(value["ai_generated"]),
-            sponsor_attribution=sponsor_attribution,
-            artifacts=VerifiedSubmissionArtifacts(
-                normalized_media_upload_ids=tuple(
-                    UUID(item) for item in _strings(artifacts["normalized_media_upload_ids"])
-                ),
-                sanitized_schematic_id=(
-                    UUID(identifier)
-                    if (identifier := _optional_string(artifacts["sanitized_schematic_id"])) is not None
-                    else None
-                ),
-            ),
-            details=category_details,
-            source_installation_id=(
-                UUID(identifier)
-                if (
-                    identifier := _optional_string(
-                        value["source_installation_id"] if payload_schema == 2 else value.get("source_installation_id")
-                    )
-                )
-                is not None
-                else None
-            ),
-            sponsor=_decode_sponsor(value["sponsor"]) if payload_schema == 2 else None,
-        )
-    except (KeyError, TypeError, ValueError) as error:
-        msg = "persisted normalized submission payload is invalid"
-        raise DataIntegrityError(msg) from error
-
-
-def _payload_schema(value: object) -> int:
-    if not isinstance(value, int) or isinstance(value, bool) or value not in {1, 2}:
-        msg = "unknown normalized submission payload schema"
-        raise ValueError(msg)
-    return value
-
-
-def _reject_unresolved_legacy_sponsor(payload_schema: int, sponsor_attribution: object) -> None:
-    if payload_schema == 1 and _boolean(sponsor_attribution):
-        msg = "legacy normalized submission lacks a verified sponsor projection"
-        raise ValueError(msg)
-
-
-def _require_attributed_schema_two(payload_schema: int, sponsor_attribution: bool) -> None:
-    if payload_schema == 2 and not sponsor_attribution:
-        msg = "schema-two normalized submission does not contain sponsor attribution"
-        raise ValueError(msg)
-
-
-def _encode_sponsor(sponsor: PublicSponsor | None) -> dict[str, object] | None:
-    if sponsor is None:
-        return None
-    return {
-        "installation_id": str(sponsor.installation_id),
-        "display_name": sponsor.display_name,
-        "address": sponsor.address,
-        "description": sponsor.description,
-        "website_url": sponsor.website_url,
-    }
-
-
-def _decode_sponsor(value: object) -> PublicSponsor | None:
-    if value is None:
-        return None
-    sponsor = _mapping(value)
-    return PublicSponsor(
-        installation_id=UUID(_string(sponsor["installation_id"])),
-        display_name=_optional_string(sponsor["display_name"]),
-        address=_optional_string(sponsor["address"]),
-        description=_optional_string(sponsor["description"]),
-        website_url=_optional_string(sponsor["website_url"]),
-    )
-
-
-def _decode_details(
-    category: SubmissionCategory,
-    value: Mapping[str, object],
-) -> DoorSubmissionDetails | ExtenderSubmissionDetails | GeneralSubmissionDetails:
-    kind = _string(value["kind"])
-    if category is SubmissionCategory.DOOR and kind == "door":
-        timing = _mapping(value["timing"])
-        return DoorSubmissionDetails(
-            opening=_decode_dimensions(_mapping(value["opening"])),
-            orientation=DoorOrientation(_string(value["orientation"])),
-            pattern_keys=_strings(value["pattern_keys"]),
-            pattern_proposals=_strings(value["pattern_proposals"]),
-            timing=DoorTiming(
-                _optional_integer(timing["opening"]),
-                _optional_integer(timing["visible_opening"]),
-                _optional_integer(timing["closing"]),
-                _optional_integer(timing["visible_closing"]),
-            ),
-        )
-    if category is SubmissionCategory.EXTENDER and kind == "extender":
-        timing = _mapping(value["timing"])
-        return ExtenderSubmissionDetails(
-            orientation=ExtenderOrientation(_string(value["orientation"])),
-            extension_length=_integer(value["extension_length"]),
-            pattern_keys=_strings(value["pattern_keys"]),
-            pattern_proposals=_strings(value["pattern_proposals"]),
-            timing=ExtenderTiming(
-                _optional_integer(timing["extension"]),
-                _optional_integer(timing["retraction"]),
-            ),
-        )
-    if (
-        category in {SubmissionCategory.UTILITY, SubmissionCategory.ENTRANCE, SubmissionCategory.OTHER}
-        and kind == "general"
-    ):
-        return GeneralSubmissionDetails()
-    raise ValueError
-
-
-def _encode_dimensions(value: SubmissionDimensions) -> dict[str, object]:
-    return {"width": value.width, "height": value.height, "depth": value.depth}
-
-
-def _decode_dimensions(value: Mapping[str, object]) -> SubmissionDimensions:
-    return SubmissionDimensions(_integer(value["width"]), _integer(value["height"]), _integer(value["depth"]))
-
-
-def _mapping(value: object) -> Mapping[str, object]:
-    if not isinstance(value, Mapping) or not all(isinstance(key, str) for key in value):
-        raise TypeError
-    return cast(Mapping[str, object], value)
-
-
-def _string(value: object) -> str:
-    if not isinstance(value, str):
-        raise TypeError
-    return value
-
-
-def _optional_string(value: object) -> str | None:
-    if value is None:
-        return None
-    return _string(value)
-
-
-def _integer(value: object) -> int:
-    if not isinstance(value, int) or isinstance(value, bool):
-        raise TypeError
-    return value
-
-
-def _optional_integer(value: object) -> int | None:
-    if value is None:
-        return None
-    return _integer(value)
-
-
-def _boolean(value: object) -> bool:
-    if not isinstance(value, bool):
-        raise TypeError
-    return value
-
-
-def _strings(value: object) -> tuple[str, ...]:
-    if (
-        not isinstance(value, Sequence)
-        or isinstance(value, str | bytes)
-        or not all(isinstance(item, str) for item in value)
-    ):
-        raise TypeError
-    return tuple(cast(Sequence[str], value))
