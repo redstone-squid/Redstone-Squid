@@ -8,6 +8,7 @@ from collections.abc import Callable, Generator, Mapping
 from contextlib import AbstractContextManager, contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import TYPE_CHECKING, Protocol, override
 from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
@@ -19,6 +20,19 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 type SpanAttribute = str | bool | int | float
+
+
+class TraceSurface(StrEnum):
+    """Low-cardinality application surfaces attached to telemetry spans."""
+
+    APPLICATION_COMMAND = "application_command"
+    BACKGROUND_LOOP = "background_loop"
+    BACKGROUND_WORK = "background_work"
+    DISCORD_ROUTE = "discord_route"
+    MODAL = "modal"
+    PREFIX_COMMAND = "prefix_command"
+    RUNNING_MESSAGE = "running_message"
+    VIEW = "view"
 
 
 class _SpanContext(Protocol):
@@ -589,6 +603,7 @@ __all__ = [
     "ObservabilityHandle",
     "TraceContextFilter",
     "TraceSpan",
+    "TraceSurface",
     "active_trace_id",
     "add_counter",
     "bind_correlation_id",

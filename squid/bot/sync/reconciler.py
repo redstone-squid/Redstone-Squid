@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, override
 
 from discord.ext.commands import Cog
 
-from squid.observability import trace_span
+from squid.observability import TraceSurface, trace_span
 from squid.runtime import JobHandle
 from squid.sync import ReconciliationJob
 from squid.topics import resource_topic
@@ -39,7 +39,7 @@ class ReconciliationCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def process_reconciliation(self) -> None:
         """Drain bounded Discord refresh work."""
         await self.bot.wait_until_ready()
-        with trace_span("squid.background.reconciliation", {"squid.surface": "background_loop"}):
+        with trace_span("squid.background.reconciliation", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             for job in await self.bot.services.discord_reconciliation.claim():
                 await self._process_job(job)
 

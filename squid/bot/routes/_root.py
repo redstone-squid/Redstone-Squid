@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 import discord
 
 import squid_ui_discord as sd
-from squid.observability import SpanAttribute, correlation_scope, trace_span
+from squid.observability import SpanAttribute, TraceSurface, correlation_scope, trace_span
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
@@ -47,7 +47,7 @@ class TraceRoutes[BotT: discord.Client](sd.routing.Middleware[BotT]):
 
     async def dispatch(self, request: sd.routing.RouteRequest[BotT], proceed: sd.routing.RouteProceed) -> None:
         attributes: dict[str, SpanAttribute] = {
-            "squid.surface": "discord_route",
+            "squid.surface": TraceSurface.DISCORD_ROUTE,
             "squid.route.component": request.component.value,
             "squid.route.matched_alias": request.matched_alias,
         }

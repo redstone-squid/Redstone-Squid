@@ -74,6 +74,7 @@ async def test_application_command_span_excludes_user_id(mocker: MockerFixture) 
         "name": "admin",
         "options": [{"name": "records", "type": 1, "options": []}],
     }
+    interaction.command = mocker.Mock(qualified_name="admin records")
     interaction.guild_id = 10
     interaction.channel_id = 20
     interaction.command_failed = False
@@ -165,6 +166,7 @@ async def test_application_command_binds_one_correlation_id_for_the_whole_invoca
     interaction = mocker.Mock()
     interaction.type = discord.InteractionType.application_command
     interaction.data = {"name": "settings"}
+    interaction.command = mocker.Mock(qualified_name="settings")
     interaction.guild_id = None
     interaction.channel_id = None
     interaction.command_failed = False
@@ -197,6 +199,7 @@ async def test_application_command_establishes_localization_scope(mocker: Mocker
         guild_id=None,
         channel_id=None,
         command_failed=False,
+        command=mocker.Mock(qualified_name="settings"),
         client=client,
         user=mocker.Mock(id=7),
         guild=None,
@@ -225,6 +228,7 @@ async def test_application_command_failure_marks_span(mocker: MockerFixture) -> 
         guild_id=None,
         channel_id=20,
         command_failed=True,
+        command=mocker.Mock(qualified_name="submit"),
     )
     mocker.patch.object(app_commands.CommandTree, "_call", new=mocker.AsyncMock())
     span = mocker.Mock()
@@ -235,6 +239,39 @@ async def test_application_command_failure_marks_span(mocker: MockerFixture) -> 
     await tree._call(interaction)  # pyright: ignore[reportPrivateUsage]
 
     span.set_error.assert_called_once_with()
+
+
+async def test_unknown_application_command_uses_bounded_fallback_name(mocker: MockerFixture) -> None:
+    client = discord.Client(intents=discord.Intents.none())
+    tree = SquidCommandTree(client)
+    interaction = mocker.Mock(
+        type=discord.InteractionType.application_command,
+        command=None,
+        guild_id=None,
+        channel_id=None,
+        command_failed=False,
+    )
+    mocker.patch.object(app_commands.CommandTree, "_call", new=mocker.AsyncMock())
+    span_context = mocker.MagicMock()
+    trace = mocker.patch("squid.bot.errors.trace_span", return_value=span_context)
+
+    await tree._call(interaction)  # pyright: ignore[reportPrivateUsage]
+
+    assert trace.call_args.args[0] == "discord.command unknown"
+    assert trace.call_args.args[1]["squid.command.name"] == "unknown"
+
+
+async def test_autocomplete_does_not_emit_a_command_span(mocker: MockerFixture) -> None:
+    client = discord.Client(intents=discord.Intents.none())
+    tree = SquidCommandTree(client)
+    interaction = mocker.Mock(type=discord.InteractionType.autocomplete)
+    base_call = mocker.patch.object(app_commands.CommandTree, "_call", new=mocker.AsyncMock())
+    trace = mocker.patch("squid.bot.errors.trace_span")
+
+    await tree._call(interaction)  # pyright: ignore[reportPrivateUsage]
+
+    base_call.assert_awaited_once_with(interaction)
+    trace.assert_not_called()
 
 
 async def test_application_command_error_records_exception_on_current_span(mocker: MockerFixture) -> None:
