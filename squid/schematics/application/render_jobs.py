@@ -11,7 +11,7 @@ from squid.core.i18n import tr
 
 @dataclass(frozen=True, slots=True)
 class ClaimedRenderJob:
-    """One claimed request to project a schematic render onto a build."""
+    """One claimed request to publish a generated schematic preview for a build."""
 
     build_id: int
     attempts: int
