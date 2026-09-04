@@ -150,7 +150,7 @@ class RedstoneSquid(Bot):
         self.owner_server_id = config.owner_server_id
         self.source_code_url = config.source_code_url
         self.background_tasks = BackgroundTaskSupervisor()
-        self.reactions = ReactionRouter(self)
+        self.reactions = ReactionRouter(self, self.background_tasks)
         self.post_reconciler = PostReconciler(
             self,
             [BuildCardRenderer(self), VoteSessionRenderer(self), StarboardEntryRenderer(self)],
