@@ -5,7 +5,7 @@ from dataclasses import dataclass, replace
 from typing import Literal
 
 from squid.bot.submission.attachments import ClassifiedAttachment
-from squid.builds.domain.models import SchematicDuplicateInfo, SchematicDuplicateSource
+from squid.builds.domain.models import AttachmentFailureInfo, SchematicDuplicateInfo, SchematicDuplicateSource
 from squid.schematics.application import DuplicateCandidate, IngestedSchematic, IngestRequest
 
 type AttachmentFailureStage = Literal["classification", "download", "mirror", "analysis", "record"]
@@ -90,6 +90,20 @@ def compact_failure_summary(
         detail = _truncate(_plain(attachment.failure.detail), 180)
         lines.append(f"- `{filename}` — {detail}")
     return _truncate("\n".join(lines), maximum)
+
+
+def attachment_failure_evidence(attachments: Sequence[AttachmentLifecycle]) -> list[AttachmentFailureInfo]:
+    """Return persistence-safe failure facts without losing attachment identity."""
+    return [
+        {
+            "attachment_id": attachment.identity,
+            "filename": attachment.filename,
+            "stage": attachment.failure.stage,
+            "detail": attachment.failure.detail,
+        }
+        for attachment in attachments
+        if attachment.failure is not None
+    ]
 
 
 def merge_duplicate_evidence(
