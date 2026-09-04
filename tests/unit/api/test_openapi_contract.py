@@ -102,7 +102,7 @@ def test_openapi_export_is_cwd_independent_and_byte_deterministic(
     expected_bytes = (json.dumps(expected, ensure_ascii=False, indent=2) + "\n").encode()
     assert destination.read_bytes() == expected_bytes
     assert json.loads(destination.read_text(encoding="utf-8")) == expected
-    assert export_openapi.PROJECT_ROOT == Path(__file__).resolve().parents[3]
+    assert Path(__file__).resolve().parents[3] == export_openapi.PROJECT_ROOT
 
 
 _CLASSIFICATIONS = frozenset({"command", "browser-only", "transport-only", "internal", "compatibility-alias"})
