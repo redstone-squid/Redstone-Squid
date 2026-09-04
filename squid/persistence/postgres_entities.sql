@@ -521,6 +521,76 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION public.enforce_vote_session_kind_subtype() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    target_ids bigint[];
+    target_id bigint;
+    session_kind text;
+    build_count integer;
+    delete_log_count integer;
+    generic_count integer;
+BEGIN
+    IF TG_TABLE_NAME = 'vote_sessions' THEN
+        target_ids := ARRAY[CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END];
+        IF TG_OP = 'UPDATE' AND OLD.id IS DISTINCT FROM NEW.id THEN
+            target_ids := array_append(target_ids, OLD.id);
+        END IF;
+    ELSE
+        target_ids := ARRAY[
+            CASE WHEN TG_OP = 'DELETE' THEN OLD.vote_session_id ELSE NEW.vote_session_id END
+        ];
+        IF TG_OP = 'UPDATE' AND OLD.vote_session_id IS DISTINCT FROM NEW.vote_session_id THEN
+            target_ids := array_append(target_ids, OLD.vote_session_id);
+        END IF;
+    END IF;
+
+    FOREACH target_id IN ARRAY target_ids LOOP
+        -- The foreign keys take KEY SHARE locks while inserting subtype rows. NO KEY
+        -- UPDATE stays compatible with those locks while serializing the final checks
+        -- of two transactions that target the same vote session.
+        SELECT kind
+        INTO session_kind
+        FROM public.vote_sessions
+        WHERE id = target_id
+        FOR NO KEY UPDATE;
+
+        IF NOT FOUND THEN
+            CONTINUE;
+        END IF;
+
+        SELECT
+            (SELECT count(*) FROM public.build_vote_sessions WHERE vote_session_id = target_id),
+            (SELECT count(*) FROM public.delete_log_vote_sessions WHERE vote_session_id = target_id),
+            (SELECT count(*) FROM public.generic_vote_sessions WHERE vote_session_id = target_id)
+        INTO build_count, delete_log_count, generic_count;
+
+        IF NOT (
+            (session_kind = 'build' AND build_count = 1 AND delete_log_count = 0 AND generic_count = 0)
+            OR (session_kind = 'delete_log' AND build_count = 0 AND delete_log_count = 1 AND generic_count = 0)
+            OR (session_kind = 'generic' AND build_count = 0 AND delete_log_count = 0 AND generic_count = 1)
+        ) THEN
+            RAISE EXCEPTION USING
+                ERRCODE = 'check_violation',
+                MESSAGE = format(
+                    'vote session %s kind %s has subtype counts build=%s, delete_log=%s, generic=%s',
+                    target_id,
+                    session_kind,
+                    build_count,
+                    delete_log_count,
+                    generic_count
+                ),
+                SCHEMA = 'public',
+                TABLE = 'vote_sessions',
+                CONSTRAINT = 'vote_sessions_kind_subtype_check';
+        END IF;
+    END LOOP;
+
+    RETURN NULL;
+END;
+$$;
+
 CREATE TRIGGER delete_orphaned_build_vote_sessions_after_builds AFTER DELETE ON public.builds FOR EACH STATEMENT EXECUTE FUNCTION public.delete_orphaned_build_vote_sessions_after_builds_delete();
 
 CREATE TRIGGER set_locked_at BEFORE UPDATE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.set_locked_at();
@@ -586,6 +656,14 @@ CREATE TRIGGER starboard_origin_messages_enqueue_discord_sync AFTER UPDATE OF de
 CREATE TRIGGER builds_emit_domain_event AFTER INSERT OR UPDATE OF submission_status ON public.builds FOR EACH ROW EXECUTE FUNCTION public.emit_domain_event();
 
 CREATE TRIGGER vote_sessions_emit_domain_event AFTER UPDATE OF status ON public.vote_sessions FOR EACH ROW EXECUTE FUNCTION public.emit_domain_event();
+
+CREATE CONSTRAINT TRIGGER vote_sessions_kind_subtype_check AFTER INSERT OR DELETE OR UPDATE ON public.vote_sessions DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.enforce_vote_session_kind_subtype();
+
+CREATE CONSTRAINT TRIGGER build_vote_sessions_kind_subtype_check AFTER INSERT OR DELETE OR UPDATE ON public.build_vote_sessions DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.enforce_vote_session_kind_subtype();
+
+CREATE CONSTRAINT TRIGGER delete_log_vote_sessions_kind_subtype_check AFTER INSERT OR DELETE OR UPDATE ON public.delete_log_vote_sessions DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.enforce_vote_session_kind_subtype();
+
+CREATE CONSTRAINT TRIGGER generic_vote_sessions_kind_subtype_check AFTER INSERT OR DELETE OR UPDATE ON public.generic_vote_sessions DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.enforce_vote_session_kind_subtype();
 
 CREATE FUNCTION public.bump_permission_epoch() RETURNS trigger
     LANGUAGE plpgsql

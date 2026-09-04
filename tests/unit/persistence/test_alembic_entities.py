@@ -19,6 +19,10 @@ $$;
 TRIGGER = (
     "CREATE TRIGGER touch_{index} BEFORE UPDATE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.touch_{index}();"
 )
+CONSTRAINT_TRIGGER = (
+    "CREATE CONSTRAINT TRIGGER touch_{index} AFTER UPDATE ON public.builds "
+    "DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.touch_{index}();"
+)
 
 
 def _sql(*, functions: int, triggers: int) -> str:
@@ -32,6 +36,16 @@ def test_a_complete_definition_parses_into_functions_and_triggers() -> None:
 
     assert len(entities) == EXPECTED_FUNCTIONS + EXPECTED_TRIGGERS
     assert all(entity.schema == "public" for entity in entities)
+
+
+def test_a_constraint_trigger_is_not_silently_dropped() -> None:
+    sql = _sql(functions=EXPECTED_FUNCTIONS, triggers=EXPECTED_TRIGGERS).replace(
+        TRIGGER.format(index=0), CONSTRAINT_TRIGGER.format(index=0)
+    )
+
+    entities = parse_entities(sql)
+
+    assert any(getattr(entity, "is_constraint", False) for entity in entities)
 
 
 @pytest.mark.parametrize(
