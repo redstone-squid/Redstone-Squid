@@ -432,10 +432,10 @@ def _load(
 def _load_java_structure(data: bytes, limits: SchematicLimits) -> nucleation.Schematic:
     """Bridge vanilla Java structure NBT through Nucleation's mutation API.
 
-    TODO(upstream): replace this note with the Schem-at/Nucleation issue URL once GitHub
-    authentication is restored. Nucleation 0.10.14 advertises `.nbt` support but rejects a
-    valid Java structure from `Schematic.from_data`; Squid must keep this bounded bridge until
-    the native importer is available.
+    Nucleation's current format guide supports textual Java structure `.snbt`, not binary
+    structure-block `.nbt`; `from_data` therefore rejects this container by design. Squid's
+    accepted-input contract is deliberately broader, so this bounded compatibility bridge is
+    application-owned rather than an upstream workaround.
     """
     try:
         structure = decode_java_structure(data, limits)

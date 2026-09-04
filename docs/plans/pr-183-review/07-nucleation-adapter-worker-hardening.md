@@ -32,7 +32,7 @@
 
 ## Status
 
-**Implementation complete; upstream report pending.** Unresolved source formats reject instead of becoming litematic. Required native JSON,
+**Done.** Unresolved source formats reject instead of becoming litematic. Required native JSON,
 base64, frame headers, numeric ranges, vectors, RGBA, payload totals, and every operation's arity
 are decoded strictly before allocation or slicing. Optional sign/lattice evidence alone may be
 dropped, with malformed evidence covered; simulation failures keep stable user copy and developer
@@ -43,10 +43,9 @@ the current exception-type documentation mismatch and it is reported as
 [Nucleation #40](https://github.com/Schem-at/Nucleation/issues/40), cited beside the sole narrow
 workaround.
 
-A final every-readable-format worker test found that pinned Nucleation 0.10.14 rejects valid raw
-and gzip vanilla Java structure `.nbt` from `Schematic.from_data`. The current official Python
-reference still describes `from_data` as format-sniffing, while the published binding exposes no
-Java-structure-specific importer. Squid now uses a byte-, depth-, value-, axis-, and volume-bounded
-decoder for that one format. The required upstream report and clean-install reproducer are ready,
-but filing is blocked by invalid local `gh` authentication; replace the workaround TODO with the
-issue URL before changing this status to done.
+A final every-readable-format worker test found that pinned Nucleation 0.10.14 rejects raw and
+gzip vanilla Java structure `.nbt` from `Schematic.from_data`. Rechecking the current upstream
+format guide corrected the initial assessment: Nucleation supports textual Java structure `.snbt`,
+not binary structure-block `.nbt`, and `from_data` detects only its supported containers. This is
+therefore neither an upstream bug nor a documentation mismatch. Squid intentionally accepts the
+additional binary format through its own byte-, depth-, value-, axis-, and volume-bounded decoder.
