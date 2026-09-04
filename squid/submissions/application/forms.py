@@ -23,7 +23,9 @@ from squid_ui.text import Message, localization_scope
 
 CURRENT_SUBMISSION_PROTOCOL = 1
 CURRENT_SUBMISSION_SCHEMA = "build_submission.v1"
-CURRENT_SUBMISSION_SCHEMA_REVISION = 2
+# Revision 2 is readable and explicitly upgradeable, but new-draft writers stay on
+# revision 1 until every deployed reader has been upgraded and old workers are drained.
+CURRENT_SUBMISSION_SCHEMA_REVISION = 1
 
 
 class FormManifestRegistry(Protocol):
