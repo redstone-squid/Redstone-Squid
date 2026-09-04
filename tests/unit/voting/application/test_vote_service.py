@@ -1,6 +1,6 @@
 import logging
 from collections.abc import Sequence
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from math import inf, nan
 
 import pytest
@@ -41,6 +41,17 @@ VOTING_GUILD_ID = 999
 """A guild that hosts a card for a shared session without owning it."""
 
 
+@dataclass(frozen=True)
+class CastVoteCall:
+    message_id: int
+    account_id: int
+    guild_id: int
+    option_id: str
+    emoji: str
+    desired_weight: float
+    refreshed_weights: dict[int, float] | None
+
+
 def snapshot(
     *,
     kind: VoteKind = VoteKind.BUILD,
@@ -69,7 +80,7 @@ def shared_snapshot() -> VoteSessionSnapshot:
 class FakeVoteRepository:
     def __init__(self, session: VoteSessionSnapshot | None):
         self.session = session
-        self.cast_calls: list[tuple[int, int, int, str, str, float, dict[int, float] | None]] = []
+        self.cast_calls: list[CastVoteCall] = []
         self.mutation: StoredVoteMutation | None = None
         self.role_weights: dict[tuple[int, VoteKind], list[RoleWeight]] = {}
         self.role_weight_lookups: list[tuple[int, VoteKind]] = []
@@ -163,7 +174,17 @@ class FakeVoteRepository:
         desired_weight: float,
         refreshed_weights: dict[int, float] | None = None,
     ) -> StoredVoteMutation | None:
-        self.cast_calls.append((message_id, account_id, guild_id, option_id, emoji, desired_weight, refreshed_weights))
+        self.cast_calls.append(
+            CastVoteCall(
+                message_id=message_id,
+                account_id=account_id,
+                guild_id=guild_id,
+                option_id=option_id,
+                emoji=emoji,
+                desired_weight=desired_weight,
+                refreshed_weights=refreshed_weights,
+            )
+        )
         return self.mutation
 
     async def close(self, message_id: int) -> StoredVoteMutation | None:
@@ -326,7 +347,17 @@ async def test_cast_vote_applies_choice_and_staff_weight(
 
     assert result.accepted
     option_id = "approve" if emoji == "👍" else "deny"
-    assert repository.cast_calls == [(100, 7, 10, option_id, emoji, abs(expected_weight), {})]
+    assert repository.cast_calls == [
+        CastVoteCall(
+            message_id=100,
+            account_id=7,
+            guild_id=10,
+            option_id=option_id,
+            emoji=emoji,
+            desired_weight=abs(expected_weight),
+            refreshed_weights={},
+        )
+    ]
 
 
 @pytest.mark.parametrize(
@@ -357,7 +388,17 @@ async def test_cast_vote_by_session_resolves_a_stable_option_to_each_guild_alias
     result = await service.cast_vote_by_session(12, VoteActor(7, 70, guild_id=guild_id), "approve")
 
     assert result.accepted
-    assert repository.cast_calls == [(message_id, 7, guild_id, "approve", emoji, 1.0, {})]
+    assert repository.cast_calls == [
+        CastVoteCall(
+            message_id=message_id,
+            account_id=7,
+            guild_id=guild_id,
+            option_id="approve",
+            emoji=emoji,
+            desired_weight=1.0,
+            refreshed_weights={},
+        )
+    ]
 
 
 async def test_cast_vote_by_session_rejects_missing_session() -> None:
@@ -421,7 +462,17 @@ async def test_the_delete_log_capability_admits_a_voter_and_staff_weight_still_a
     )
 
     assert result.accepted
-    assert repository.cast_calls == [(100, 7, 10, "approve", "👍", 3.0, {})]
+    assert repository.cast_calls == [
+        CastVoteCall(
+            message_id=100,
+            account_id=7,
+            guild_id=10,
+            option_id="approve",
+            emoji="👍",
+            desired_weight=3.0,
+            refreshed_weights={},
+        )
+    ]
 
 
 async def test_closed_vote_is_rejected_before_mutation() -> None:
@@ -507,7 +558,17 @@ async def test_custom_vote_option_multiplier_is_applied_before_staff_weight() ->
     )
 
     assert result.accepted
-    assert repository.cast_calls == [(100, 7, 10, "approve", "<:strong_yes:123>", 6.0, {})]
+    assert repository.cast_calls == [
+        CastVoteCall(
+            message_id=100,
+            account_id=7,
+            guild_id=10,
+            option_id="approve",
+            emoji="<:strong_yes:123>",
+            desired_weight=6.0,
+            refreshed_weights={},
+        )
+    ]
 
 
 async def test_unconfigured_emoji_is_rejected_without_mutation() -> None:
@@ -655,7 +716,7 @@ async def test_build_vote_weighs_by_the_owner_guild_not_the_voting_guild() -> No
     assert result.accepted
     assert resolver.calls == [(7, OWNER_GUILD_ID)]
     assert repository.role_weight_lookups == [(OWNER_GUILD_ID, VoteKind.BUILD)]
-    assert repository.cast_calls[0][5] == 4.0
+    assert repository.cast_calls[0].desired_weight == 4.0
 
 
 async def test_a_voter_outside_the_owner_guild_keeps_the_default_weight() -> None:
@@ -684,7 +745,7 @@ async def test_a_voter_outside_the_owner_guild_keeps_the_default_weight() -> Non
     )
 
     assert result.accepted
-    assert repository.cast_calls[0][5] == 1.0
+    assert repository.cast_calls[0].desired_weight == 1.0
 
 
 async def test_an_unreachable_owner_guild_lands_the_ballot_at_the_default_weight() -> None:
@@ -704,7 +765,7 @@ async def test_an_unreachable_owner_guild_lands_the_ballot_at_the_default_weight
     )
 
     assert result.accepted
-    assert repository.cast_calls[0][5] == 1.0
+    assert repository.cast_calls[0].desired_weight == 1.0
 
 
 async def test_without_an_owner_guild_no_role_table_may_weight_a_build_vote() -> None:
@@ -720,7 +781,7 @@ async def test_without_an_owner_guild_no_role_table_may_weight_a_build_vote() ->
     )
 
     assert result.accepted
-    assert repository.cast_calls[0][5] == 1.0
+    assert repository.cast_calls[0].desired_weight == 1.0
 
 
 async def test_refresh_reweighs_every_ballot_against_the_owner_guild() -> None:
