@@ -8,6 +8,7 @@ from squid.media.domain import (
     MediaLimits,
     MediaProbe,
 )
+from squid.media.errors import MediaLimitExceededError
 
 
 def probe(
@@ -45,11 +46,41 @@ def test_batch_violations_use_a_stable_priority() -> None:
     limits = MediaLimits()
     totals = MediaBatchTotals(image_count=11, video_count=4, source_bytes=limits.max_source_bytes + 1)
 
-    violation = limits.batch_violation(totals)
+    violations = limits.batch_violations(totals)
 
-    assert violation is not None
-    assert violation.measure is MediaLimitMeasure.IMAGE_COUNT
-    assert (violation.actual, violation.limit) == (11, 10)
+    assert [violation.measure for violation in violations] == [
+        MediaLimitMeasure.IMAGE_COUNT,
+        MediaLimitMeasure.VIDEO_COUNT,
+        MediaLimitMeasure.SOURCE_BYTES,
+    ]
+    assert [(violation.actual, violation.limit) for violation in violations] == [
+        (11, 10),
+        (4, 3),
+        (limits.max_source_bytes + 1, limits.max_source_bytes),
+    ]
+
+
+def test_limit_error_exposes_every_measure_and_limit_without_attacker_derived_actuals() -> None:
+    limits = MediaLimits(max_images=1, max_videos=1)
+    violations = limits.batch_violations(MediaBatchTotals(image_count=3, video_count=2))
+
+    error = MediaLimitExceededError(violations)
+
+    assert error.public_context == {
+        "reason": "limit_exceeded",
+        "violations": [
+            {"measure": "image_count", "limit": 1},
+            {"measure": "video_count", "limit": 1},
+        ],
+    }
+    assert error.context == {
+        "reason": "limit_exceeded",
+        "violations": [
+            {"measure": "image_count", "actual": 3, "limit": 1},
+            {"measure": "video_count", "actual": 2, "limit": 1},
+        ],
+    }
+    assert "actual" not in str(error.public_context)
 
 
 def test_decoded_pixel_rate_uses_exact_rational_arithmetic_and_rounds_up() -> None:
@@ -73,10 +104,9 @@ def test_video_probe_limits_are_reported_by_stable_measure(
     inspected: MediaProbe,
     expected_measure: MediaLimitMeasure,
 ) -> None:
-    violation = MediaLimits().probe_violation(MediaKind.VIDEO, inspected)
+    violations = MediaLimits().probe_violations(MediaKind.VIDEO, inspected)
 
-    assert violation is not None
-    assert violation.measure is expected_measure
+    assert expected_measure in {violation.measure for violation in violations}
 
 
 def test_artifact_digest_must_be_canonical_sha256() -> None:
