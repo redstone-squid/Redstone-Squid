@@ -28,7 +28,6 @@ from squid.api.v1.schemas.minecraft_auth import (
     ServerProfileSchema,
 )
 from squid.core.errors import AuthenticationError, NotFoundError, ServiceUnavailableError
-from squid.minecraft_auth.application.crypto import INSTALLATION_TOKEN_PREFIX
 from squid.minecraft_auth.domain import (
     AuthenticatedPaperInstallation,
     IssuedInstallationCredential,
@@ -68,6 +67,12 @@ class PaperInstallationHttpService(Protocol):
     ) -> PaperInstallation: ...
 
     async def authenticate(self, token: str) -> AuthenticatedPaperInstallation: ...
+
+    async def authenticate_headers(
+        self,
+        installation_id: str | None,
+        installation_secret: str | None,
+    ) -> AuthenticatedPaperInstallation: ...
 
 
 class PlayerAuthorizationHttpService(Protocol):
@@ -166,16 +171,7 @@ async def authenticated_paper_installation(
     installation_secret: InstallationSecretHeader = None,
 ) -> AuthenticatedPaperInstallation:
     """Authenticate both Paper headers without treating the installation as a player."""
-    if installation_id is None or installation_secret is None:
-        raise AuthenticationError
-    try:
-        parsed_id = UUID(installation_id)
-    except ValueError:
-        raise AuthenticationError from None
-    if not 32 <= len(installation_secret) <= 512:
-        raise AuthenticationError
-    token = f"{INSTALLATION_TOKEN_PREFIX}_{parsed_id.hex}_{installation_secret}"
-    return await _execute(installations.authenticate(token))
+    return await _execute(installations.authenticate_headers(installation_id, installation_secret))
 
 
 AuthenticatedPaper = Annotated[AuthenticatedPaperInstallation, Depends(authenticated_paper_installation)]

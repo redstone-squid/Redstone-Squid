@@ -39,7 +39,7 @@ from squid.minecraft_auth.domain import (
     PlayerGrant,
     PublicServerProfile,
 )
-from squid.minecraft_auth.errors import AuthorizationPendingError
+from squid.minecraft_auth.errors import AuthorizationPendingError, InvalidInstallationCredentialError
 from tests.unit.api.fakes import TEST_CONFIG
 
 pytestmark = pytest.mark.asyncio
@@ -152,6 +152,19 @@ class FakeInstallations(InstallationCredentialService):
             owner_account_id=self.current.owner_account_id,
             credential_version=self.current.credential_version,
         )
+
+    async def authenticate_headers(
+        self,
+        installation_id: str | None,
+        installation_secret: str | None,
+    ) -> AuthenticatedPaperInstallation:
+        if installation_id is None or installation_secret is None or not 32 <= len(installation_secret) <= 512:
+            raise InvalidInstallationCredentialError
+        try:
+            parsed_id = UUID(installation_id)
+        except ValueError:
+            raise InvalidInstallationCredentialError from None
+        return await self.authenticate(f"sqpi_{parsed_id.hex}_{installation_secret}")
 
 
 class FakePlayers(PlayerAuthorizationService):
@@ -432,16 +445,33 @@ async def test_one_time_device_responses_use_server_derived_idempotency_namespac
     assert "127.0.0.1" not in fabric_caller
 
 
-async def test_paper_endpoints_require_both_installation_headers() -> None:
+async def test_invalid_paper_installation_headers_are_indistinguishable() -> None:
     app = app_with_fakes(FakeInstallations(), FakePlayers())
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.post(
-            "/minecraft/auth/paper/challenges",
-            json={"java_uuid": str(JAVA_UUID)},
-        )
+        responses = [
+            await client.post(
+                "/minecraft/auth/paper/challenges",
+                headers=headers,
+                json={"java_uuid": str(JAVA_UUID)},
+            )
+            for headers in (
+                {},
+                {"Squid-Installation-ID": str(INSTALLATION_ID)},
+                {
+                    "Squid-Installation-ID": "not-a-uuid",
+                    "Squid-Installation-Secret": INSTALLATION_SECRET,
+                },
+                {
+                    "Squid-Installation-ID": str(INSTALLATION_ID),
+                    "Squid-Installation-Secret": "short",
+                },
+            )
+        ]
 
-    assert response.status_code == 401
+    assert {response.status_code for response in responses} == {401}
+    assert len({response.content for response in responses}) == 1
+    assert responses[0].json()["context"] == {"minecraft_auth_code": "invalid_installation_credential"}
 
 
 async def test_authorization_errors_map_to_stable_problem_context_without_secrets() -> None:
