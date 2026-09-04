@@ -4,13 +4,14 @@ import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from beartype.door import is_bearable
 
 import squid_ui as sl
 from squid.bot.submission.parse import get_formatter_and_parser_for_type
-from squid.builds.domain import Build, BuildCategory, BuildDraft, DoorBuild
+from squid.builds.application.editing import BuildEditPatch
+from squid.builds.domain import Build, BuildCategory, BuildDraft
 from squid.core.i18n import tr
 
 if TYPE_CHECKING:
@@ -70,13 +71,16 @@ class CreationFieldSpec[ValueT]:
 
 
 @dataclass(frozen=True, slots=True)
-class BuildFieldSpec:
+class BuildFieldSpec[ValueT]:
     """Describe one typed patch field independently of a Discord form implementation."""
 
-    patch_key: str
+    key: str
     label: str
-    parser: Callable[[str], object]
-    formatter: Callable[[object], str]
+    parser: Callable[[str], ValueT]
+    formatter: Callable[[ValueT], str]
+    reader: Callable[[Build], ValueT]
+    patch: Callable[[ValueT], BuildEditPatch]
+    value_type: type[ValueT]
     placeholder: str
     required: bool = False
     minimum: int | None = None
@@ -87,25 +91,30 @@ class BuildFieldSpec:
     @classmethod
     def typed(
         cls,
-        patch_key: str,
-        value_type: type[Any],
+        key: str,
+        value_type: type[ValueT],
         placeholder: str,
         *,
+        reader: Callable[[Build], ValueT],
+        patch: Callable[[ValueT], BuildEditPatch],
         label: str | None = None,
         required: bool | None = None,
         minimum: int | None = None,
         maximum: int | None = None,
         display: FieldDisplay = FieldDisplay.TEXT,
         categories: frozenset[BuildCategory] | None = None,
-        parser: Callable[[str], object] | None = None,
-    ) -> BuildFieldSpec:
+        parser: Callable[[str], ValueT] | None = None,
+    ) -> BuildFieldSpec[ValueT]:
         """Build a specification from the shared formatter/parser registry."""
         formatter, default_parser = get_formatter_and_parser_for_type(value_type)
         return cls(
-            patch_key,
-            label or patch_key.replace("_", " ").title(),
+            key,
+            label or key.replace("_", " ").title(),
             default_parser if parser is None else parser,
             formatter,
+            reader,
+            patch,
+            value_type,
             placeholder,
             required=not is_bearable(None, value_type) if required is None else required,
             minimum=minimum,
@@ -118,28 +127,28 @@ class BuildFieldSpec:
         """Whether this field belongs to the build's category."""
         return self.categories is None or build.category in self.categories
 
-    def bind(self, build: Build) -> BoundBuildField:
+    def bind(self, build: Build) -> BoundBuildField[ValueT]:
         """Read this field from a build into a mutable editor value."""
-        value = _read_edit_value(build, self.patch_key)
-        if not is_bearable(value, _field_type(build, self.patch_key)):
-            logger.error("Invalid hint for %s: %s", self.patch_key, type(value))
+        value = self.reader(build)
+        if not is_bearable(value, self.value_type):
+            logger.error("Invalid hint for %s: %s", self.key, type(value))
         text = "" if value is None else self.formatter(value)
         return BoundBuildField(self, value, text)
 
 
 @dataclass(slots=True)
-class BoundBuildField:
+class BoundBuildField[ValueT]:
     """One screen-local value bound from a portable build field specification."""
 
-    spec: BuildFieldSpec
-    actual_value: object
+    spec: BuildFieldSpec[ValueT]
+    value: ValueT
     current_text: str
     modified: bool = False
     validation_error: str | None = None
 
     @property
-    def attribute(self) -> str:
-        return self.spec.patch_key
+    def key(self) -> str:
+        return self.spec.key
 
     @property
     def summary(self) -> str:
@@ -155,96 +164,37 @@ class BoundBuildField:
         except ValueError as error:
             self.validation_error = str(error) or tr("Invalid value")
             return
-        self.actual_value = value
+        self.value = value
         self.current_text = text
         self.modified = True
 
-
-_EDIT_FIELD_READERS: dict[str, tuple[Callable[[Build], object], type[Any]]] = {
-    "door_type": (lambda build: list(build.patterns), list[str]),
-    "door_orientation_type": (
-        lambda build: build.orientation if isinstance(build, DoorBuild) else None,
-        str | None,
-    ),
-    "door_dimensions": (
-        lambda build: build.door_dimensions if isinstance(build, DoorBuild) else None,
-        tuple[int | None, int | None, int | None] | None,
-    ),
-    "normal_opening_time": (
-        lambda build: build.normal_opening_time if isinstance(build, DoorBuild) else None,
-        int | None,
-    ),
-    "normal_closing_time": (
-        lambda build: build.normal_closing_time if isinstance(build, DoorBuild) else None,
-        int | None,
-    ),
-    "extra_user_info": (lambda build: build.description, str | None),
-    "server_ip": (lambda build: _server_info(build).get("server_ip"), str | None),
-    "coordinates": (lambda build: _server_info(build).get("coordinates"), str | None),
-    "command_to_get_to_build": (lambda build: _server_info(build).get("command_to_build"), str | None),
-    "image_urls": (lambda build: list(build.image_urls), list[str]),
-    "video_urls": (lambda build: list(build.video_urls), list[str]),
-    "world_download_urls": (lambda build: list(build.world_download_urls), list[str]),
-    "schematic_urls": (lambda build: list(build.schematic_urls), list[str]),
-    "render_urls": (lambda build: list(build.render_urls), list[str]),
-}
-
-_FIELD_TYPES: dict[str, type[Any]] = {
-    "version_spec": str | None,
-    "dimensions": tuple[int | None, int | None, int | None],
-    "wiring_placement_restrictions": list[str],
-    "animated_restrictions": list[str],
-    "component_restrictions": list[str],
-    "miscellaneous_restrictions": list[str],
-    "creators_ign": list[str],
-    "completion_time": str | None,
-}
+    def to_patch(self) -> BuildEditPatch:
+        """Return this parsed value as its typed patch fragment."""
+        return self.spec.patch(self.value)
 
 
-def _server_info(build: Build) -> dict[str, Any]:
-    return dict(build.extra_info.get("server_info", {}))
-
-
-def _field_type(build: Build, patch_key: str) -> type[Any]:
-    reader = _EDIT_FIELD_READERS.get(patch_key)
-    return reader[1] if reader is not None else build.get_attr_type(patch_key)
-
-
-def _read_edit_value(build: Build, patch_key: str) -> object:
-    reader = _EDIT_FIELD_READERS.get(patch_key)
-    if reader is not None:
-        return reader[0](build)
-    try:
-        return getattr(build, patch_key)
-    except AttributeError as error:
-        message = f"Invalid build patch key {patch_key}"
-        raise ValueError(message) from error
-
-
-def field_spec(
-    patch_key: str,
+def field_spec[ValueT](
+    key: str,
+    value_type: type[ValueT],
     placeholder: str,
     *,
+    reader: Callable[[Build], ValueT],
+    patch: Callable[[ValueT], BuildEditPatch],
     label: str | None = None,
     required: bool | None = None,
     minimum: int | None = None,
     maximum: int | None = None,
     display: FieldDisplay = FieldDisplay.TEXT,
     categories: frozenset[BuildCategory] | None = None,
-    parser: Callable[[str], object] | None = None,
-) -> BuildFieldSpec:
-    """Describe a patch field using the domain model's declared value type."""
-    value_type = _EDIT_FIELD_READERS.get(patch_key, (None, None))[1]
-    if value_type is None:
-        try:
-            value_type = _FIELD_TYPES[patch_key]
-        except KeyError as error:
-            message = f"No portable field type for {patch_key}"
-            raise ValueError(message) from error
+    parser: Callable[[str], ValueT] | None = None,
+) -> BuildFieldSpec[ValueT]:
+    """Describe a patch field with explicit typed read and patch operations."""
     return BuildFieldSpec.typed(
-        patch_key,
+        key,
         value_type,
         placeholder,
+        reader=reader,
+        patch=patch,
         label=label,
         required=required,
         minimum=minimum,
