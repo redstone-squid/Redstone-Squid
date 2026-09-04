@@ -114,7 +114,8 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             if build_size is not None:
                 draft.dimensions = parse_dimensions(build_size)
         except ValueError as error:
-            return error_node(tr("Check the dimensions"), str(error))
+            return error_node(tr(t"Check the dimensions"), str(error))
+
         if door_type is not None:
             draft.door_orientation = door_type
         if pattern is not None:
@@ -446,24 +447,24 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         await enforce(request, BUILD_SUBMISSION_RECALC)
         if not self._is_build_log_message(message):
             return error_node(
-                tr("Nothing to recalculate"),
-                tr("Builds are only read out of messages posted in a build log channel."),
+                tr(t"Nothing to recalculate"),
+                tr(t"Builds are only read out of messages posted in a build log channel."),
             )
 
         account = await self.bot.services.accounts.get_account_by_identity(
             IdentityProvider.DISCORD, str(message.author.id)
         )
         if account is None or account.id is None or account.needs_consent_refresh:
+            user_id = message.author.id
             if CONSENT_STICKY_ENABLED and isinstance(message.channel, discord.TextChannel):
                 await self.consent_sticky.trigger(message.channel)
             return error_node(
-                tr("Author has not consented"),
+                tr(t"Author has not consented"),
                 tr(
-                    "The author of this message (<@{user_id}>) has not consented to data storage. "
-                    "They must grant consent before this build can be ingested.",
-                    user_id=message.author.id,
+                    t"The author of this message (<@{user_id}>) has not consented to data storage. "
+                    t"They must grant consent before this build can be ingested."
                 ),
             )
 
         await self.infer_build_from_message(message)
-        return text_node(tr("Build recalculated."))
+        return text_node(tr(t"Build recalculated."))

@@ -32,7 +32,7 @@ from squid.voting.domain import (
     VoteSessionSnapshot,
 )
 from squid.voting.errors import InvalidVoteConfigurationError
-from squid_ui.text import localization_scope
+from squid_ui.text import Message, localization_scope, raw_md
 from squid_ui_discord import send_to
 
 if TYPE_CHECKING:
@@ -464,10 +464,11 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         if account is None or account.id is None or account.needs_consent_refresh:
             if await ensure_consented_account(request, self.bot.services.accounts) is None:
                 return None
-            return sd.Response(text_node(tr("Thanks. Run `/poll` again to open the editor.")), audience="personal")
+            return sd.Response(text_node(tr(t"Thanks. Run `/poll` again to open the editor.")), audience="personal")
         allow_network = isinstance(actor, discord.Member) and await self.publisher.may_create_network(actor)
         guild = request.guild
         channel = request.channel
+
         if guild is None or channel is None:
             return None
 
@@ -500,9 +501,10 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         message you were already looking at (audit C4).
         """
         if request.guild is None or message.guild != request.guild:
-            return error_node(tr("Cannot vote on this message"), tr("The message is not from this guild."))
+            return error_node(tr(t"Cannot vote on this message"), tr(t"The message is not from this guild."))
 
         author_account_id = await ensure_consented_account(request, self.bot.services.accounts)
+
         if author_account_id is None:
             return None
 
@@ -510,7 +512,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         # than into the ephemeral reply the right-click opened. The placeholder is adopted by the
         # reconciler, which replaces it with the vote card.
         placeholder = await self.ui.send(
-            message.channel, info_node(tr("Working"), tr("Getting information...")), locale=request.locale
+            message.channel, info_node(tr(t"Working"), tr(t"Getting information...")), locale=request.locale
         )
         published = placeholder.delivery.message if isinstance(placeholder, sd.Sent) else None
         if published is None:
@@ -527,7 +529,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
             with contextlib.suppress(discord.HTTPException):
                 await published.delete()
             raise
-        return text_node(tr("Deletion vote opened."))
+        return text_node(tr(t"Deletion vote opened."))
 
     async def _consented_account_id(self, discord_id: int) -> int | None:
         """Resolve a voter's account without creating one.
@@ -556,16 +558,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         await self._remove_reaction(message, emoji, user)
         locale = await resolve_locale(message, self.bot.services.settings)
         with localization_scope(localization_for(locale)):
-            payload = render_payload(
-                [
-                    text_node(
-                        tr(
-                            "{user}, voting stores your Discord user ID. Run `/account consent` first.",
-                            user=user.mention,
-                        )
-                    )
-                ]
-            )
+            payload = render_payload([text_node(_unconsented_vote_message(user.mention))])
         with contextlib.suppress(discord.HTTPException):
             await send_to(message.channel, delete_after=30)(payload)
 
@@ -596,6 +589,11 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
             except discord.Forbidden:
                 return None
         return await resolve_actor(self.bot, member, account_id=account_id)
+
+
+def _unconsented_vote_message(user: object) -> Message:
+    user = raw_md(user)
+    return tr(t"{user}, voting stores your Discord user ID. Run `/account consent` first.")
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid):

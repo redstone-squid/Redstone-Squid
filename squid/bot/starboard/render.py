@@ -23,28 +23,23 @@ def starboard_layout(
         heading = f"{message.author.mention} · {heading}"
     children: list[sl.primitives.Node] = [
         sl.primitives.Section(
-            (sl.primitives.Text(f"{heading}\n{message.content or tr('-# (no text content)')}"),),
+            (sl.primitives.Text(f"{heading}\n{message.content or tr(tr(t'-# (no text content)'))}"),),
             sl.primitives.Thumbnail(avatar_url),
         )
     ]
     if config.replied_to and message.reference is not None and message.reference.message_id is not None:
-        children.append(
-            sl.primitives.Text(
-                tr(
-                    "-# Replying to message \x60{message_id}\x60",
-                    message_id=message.reference.message_id,
-                )
-            )
-        )
+        message_id = message.reference.message_id
+        children.append(sl.primitives.Text(tr(t"-# Replying to message \x60{message_id}\x60")))
     if config.attachments_list:
         media = tuple(attachment.url for attachment in message.attachments[:10])
         if media:
             children.append(sl.primitives.Gallery(media))
     if config.jump_to_message:
-        children.append(sl.primitives.Row((sl.primitives.LinkButton(tr("Original message"), message.jump_url),)))
+        children.append(sl.primitives.Row((sl.primitives.LinkButton(tr(t"Original message"), message.jump_url),)))
     score = f"{config.display_emoji} {entry.score:g}"
     if entry.raw_count != entry.score:
-        score += tr(" ({count} reactions)", count=entry.raw_count)
+        count = entry.raw_count
+        score += tr(tr(t" ({count} reactions)"))
     children.append(sl.primitives.Footer(f"{score} · <#{message.channel.id}>"))
     return render_payload(
         [sl.primitives.Panel(tuple(children), accent=config.colour)],
