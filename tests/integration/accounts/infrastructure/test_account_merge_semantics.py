@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
+from squid.accounts.domain import CURRENT_CONSENT_VERSION, ClaimStatus, IdentityProvider
 from squid.accounts.errors import AccountNotFoundError
 from squid.accounts.infrastructure.models import Account, AccountIdentity, CreatorAlias, CreatorAliasClaim
 from squid.accounts.infrastructure.repository import AccountRepository
@@ -23,6 +23,7 @@ from squid.notifications.infrastructure.models import (
     NotificationSubscriptionRecord,
 )
 from squid.notifications.infrastructure.repository import PostgresNotificationRepository
+from squid.persistence.types import now
 from squid.submissions.domain import SubmissionOrigin
 from squid.submissions.infrastructure.models import SubmissionDraft
 from squid.voting.domain import VoteKind, VoteSessionResult, VoteStatus
@@ -138,6 +139,29 @@ async def test_profile_merge_preserves_realistic_dm_health_states(
     assert profile is not None
     assert profile.dm_enabled is (survivor_healthy or absorbed_healthy)
     assert profile.dm_suspended_at == (suspended_at if both_suspended else None)
+
+
+async def test_profile_merge_inserts_an_absorbed_only_profile_for_the_survivor(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    accounts = AccountRepository(migrated_session_factory, "test-pepper")
+    survivor = await accounts.create()
+    absorbed = await accounts.create()
+    assert survivor.id is not None
+    assert absorbed.id is not None
+    async with migrated_session_factory.begin() as session:
+        session.add(NotificationProfile(account_id=absorbed.id, web_enabled=True, dm_enabled=False))
+
+    await accounts.merge(survivor.id, absorbed.id)
+
+    async with migrated_session_factory() as session:
+        profile = await session.get(NotificationProfile, survivor.id)
+        absorbed_profile = await session.get(NotificationProfile, absorbed.id)
+    assert profile is not None
+    assert profile.web_enabled is True
+    assert profile.dm_enabled is False
+    assert profile.dm_suspended_at is None
+    assert absorbed_profile is None
 
 
 async def test_legacy_record_key_merge_replay_and_stale_delivery_completion_are_idempotent(
@@ -269,6 +293,9 @@ async def test_core_conflict_statements_collapse_claim_vote_and_subscription_col
     assert survivor.id is not None
     assert absorbed.id is not None
     subject_id = uuid.UUID("f0000000-0000-4000-8000-000000000002")
+    disabled_subject_id = uuid.UUID("f0000000-0000-4000-8000-000000000003")
+    resolved_at = now()
+    record_filter: dict[str, object] = {"build_kinds": ["door"]}
     async with migrated_session_factory.begin() as session:
         alias = CreatorAlias(name="Merge Builder")
         vote_session = VoteSession(
@@ -285,6 +312,18 @@ async def test_core_conflict_statements_collapse_claim_vote_and_subscription_col
             [
                 CreatorAliasClaim(alias_id=alias.id, account_id=survivor.id),
                 CreatorAliasClaim(alias_id=alias.id, account_id=absorbed.id),
+                CreatorAliasClaim(
+                    alias_id=alias.id,
+                    account_id=survivor.id,
+                    status=ClaimStatus.APPROVED,
+                    resolved_at=resolved_at,
+                ),
+                CreatorAliasClaim(
+                    alias_id=alias.id,
+                    account_id=absorbed.id,
+                    status=ClaimStatus.REJECTED,
+                    resolved_at=resolved_at,
+                ),
                 Vote(
                     vote_session_id=vote_session.id,
                     account_id=survivor.id,
@@ -311,15 +350,70 @@ async def test_core_conflict_statements_collapse_claim_vote_and_subscription_col
                     kind=SubscriptionKind.CREATOR,
                     subject_id=subject_id,
                 ),
+                NotificationSubscriptionRecord(
+                    account_id=survivor.id,
+                    kind=SubscriptionKind.CREATOR,
+                    subject_id=disabled_subject_id,
+                    enabled=False,
+                ),
+                NotificationSubscriptionRecord(
+                    account_id=absorbed.id,
+                    kind=SubscriptionKind.CREATOR,
+                    subject_id=disabled_subject_id,
+                    enabled=False,
+                ),
+                NotificationSubscriptionRecord(
+                    account_id=survivor.id,
+                    kind=SubscriptionKind.RECORD_FILTER,
+                    filter=record_filter,
+                ),
+                NotificationSubscriptionRecord(
+                    account_id=absorbed.id,
+                    kind=SubscriptionKind.RECORD_FILTER,
+                    filter=record_filter,
+                ),
             ]
         )
 
     await accounts.merge(survivor.id, absorbed.id)
 
     async with migrated_session_factory() as session:
-        claim_accounts = tuple(await session.scalars(select(CreatorAliasClaim.account_id)))
+        claims = tuple(
+            (
+                await session.execute(
+                    select(CreatorAliasClaim.account_id, CreatorAliasClaim.status).order_by(CreatorAliasClaim.id)
+                )
+            ).all()
+        )
         vote_accounts = tuple(await session.scalars(select(Vote.account_id)))
-        subscription_accounts = tuple(await session.scalars(select(NotificationSubscriptionRecord.account_id)))
-    assert claim_accounts == (survivor.id,)
+        subscriptions = tuple(
+            (
+                await session.execute(
+                    select(
+                        NotificationSubscriptionRecord.account_id,
+                        NotificationSubscriptionRecord.kind,
+                        NotificationSubscriptionRecord.subject_id,
+                        NotificationSubscriptionRecord.filter,
+                        NotificationSubscriptionRecord.enabled,
+                    ).order_by(NotificationSubscriptionRecord.id)
+                )
+            ).all()
+        )
+    assert claims == (
+        (survivor.id, ClaimStatus.PENDING),
+        (survivor.id, ClaimStatus.APPROVED),
+        (survivor.id, ClaimStatus.REJECTED),
+    )
     assert vote_accounts == (survivor.id,)
-    assert subscription_accounts == (survivor.id,)
+    assert len(subscriptions) == 3
+    assert all(subscription.account_id == survivor.id for subscription in subscriptions)
+    assert {(subscription.kind, subscription.enabled) for subscription in subscriptions} == {
+        (SubscriptionKind.CREATOR, True),
+        (SubscriptionKind.CREATOR, False),
+        (SubscriptionKind.RECORD_FILTER, True),
+    }
+    record_subscription = next(
+        subscription for subscription in subscriptions if subscription.kind is SubscriptionKind.RECORD_FILTER
+    )
+    assert record_subscription.subject_id is None
+    assert record_subscription.filter == record_filter
