@@ -9,7 +9,6 @@ from squid_ui.interactions import ActionEvent
 from squid_ui.planning.navigation import (
     NAV_FACTORY_CONTEXT,
     NavigationContext,
-    NavigationState,
     default_nav,
 )
 from squid_ui.primitives import Lines
@@ -36,6 +35,7 @@ from squid_ui_widgets._window import (
     WindowRequest,
     last_ready,
     load_window,
+    source_navigation_state,
 )
 
 type SourceContentHook[RenderTargetT: DiscordTarget = DiscordTarget] = (
@@ -151,54 +151,29 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget](Com
         nav = self.inject(NAV_FACTORY_CONTEXT, default_nav)
         window = loaded.window
         capabilities = self.source.capabilities
+        navigation_state = source_navigation_state(
+            loaded,
+            capabilities,
+            key=self.key,
+            page_size=self.page_size,
+            chrome=chrome,
+        )
         total = window.total if capabilities.count is not CountPrecision.NONE else None
         body = (
             (Lines(self.rows.lines(window.items, window.position.offset)),)
             if window.items
             else self._hook(self.empty, total, name="empty")
         )
-        extent = (
-            max(1, (window.total + self.page_size - 1) // self.page_size)
-            if capabilities.count is CountPrecision.EXACT and capabilities.jumpable and window.total is not None
-            else None
-        )
-        # A cursor that can address a page is navigable on every page, the last one included.
-        # Without this a forward-only jumpable source loses its whole navigation the moment a
-        # jump lands on the end -- including the control that could take the reader back.
-        navigable = window.has_next or (capabilities.backward and window.has_previous) or (extent or 0) > 1
-        visible_range = (
-            (window.position.offset + 1, window.position.offset + len(window.items))
-            if capabilities.offsets and window.items
-            else None
-        )
         navigation = (
             nav(
                 NavigationContext(
-                    NavigationState(
-                        key=self.key,
-                        position=window.position,
-                        has_previous=window.has_previous,
-                        has_next=window.has_next,
-                        backward=capabilities.backward,
-                        previous_label=chrome.older,
-                        next_label=chrome.newer,
-                        previous_key=f"{self.key}.previous",
-                        next_key=f"{self.key}.next",
-                        extent=extent,
-                        page=window.position.offset // self.page_size if capabilities.offsets else None,
-                        visible_range=visible_range,
-                        total=total,
-                        count=capabilities.count,
-                        seek_key=f"{self.key}.seek",
-                        seek_label=chrome.jump_to_page,
-                        page_option=chrome.page_option,
-                    ),
+                    navigation_state,
                     self._previous,
                     self._next,
-                    self._seek if extent is not None else None,
+                    self._seek if navigation_state.extent is not None else None,
                 )
             )
-            if navigable
+            if navigation_state is not None
             else ()
         )
         numeric_footer = window_footer(chrome, self.source, loaded, self.page_size)
@@ -206,7 +181,7 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget](Com
             heading(self.title) if self.title is not None else None,
             *(self._hook(self.header, total, name="header") if self.header is not None else ()),
             *body,
-            note(numeric_footer) if navigable and numeric_footer is not None else None,
+            note(numeric_footer) if navigation_state is not None and numeric_footer is not None else None,
             *navigation,
             *(self._hook(self.footer, total, name="footer") if self.footer is not None else ()),
             note(status) if status is not None else None,
