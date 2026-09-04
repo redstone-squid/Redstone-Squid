@@ -2,11 +2,12 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Path, Query, Response
+from fastapi import APIRouter, Path, Query, Request, Response
 
 from squid.api.contract import ANONYMOUS, contract, transport_only
 from squid.api.dependencies import BuildQueries, Schematics
 from squid.api.errors import responses
+from squid.api.links import relative_url_for
 from squid.api.pagination import OffsetParam, Page, PageSizeParam, render_page, resolve_selector
 from squid.api.v1.schemas.schematics import SchematicSummary
 from squid.schematics.application.commands import MAX_RENDER_EXTENT, MIN_RENDER_EXTENT
@@ -29,6 +30,7 @@ router = APIRouter(tags=["schematics"])
 )
 async def list_build_schematics(
     build_id: int,
+    request: Request,
     build_queries: BuildQueries,
     schematics: Schematics,
     page_size: PageSizeParam = 50,
@@ -40,11 +42,23 @@ async def list_build_schematics(
     # offset-only, like the ranked build search.
     selector = resolve_selector(offset=offset, after_id=None, before_id=None, keyset_allowed=False)
     page = await schematics.list_public_page(build_id, selector=selector, page_size=page_size)
-    return render_page(page, SchematicSummary.from_domain)
+    return render_page(
+        page,
+        lambda schematic: SchematicSummary.from_domain(
+            schematic,
+            download_url=relative_url_for(
+                request,
+                "build_schematic_content",
+                build_id=schematic.build_id,
+                schematic_id=schematic.id,
+            ),
+        ),
+    )
 
 
 @router.get(
     "/builds/{build_id}/schematics/{schematic_id}/content",
+    name="build_schematic_content",
     response_class=Response,
     responses={
         **responses(404, 422, 503),
