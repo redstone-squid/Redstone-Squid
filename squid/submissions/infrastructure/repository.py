@@ -12,7 +12,7 @@ from squid.core.errors import JSONValue
 from squid.media.application.jobs import MediaJobStatus
 from squid.media.infrastructure.models import MediaNormalizationJobRecord, MediaUploadRecord
 from squid.persistence.advisory_locks import SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE, lock_uuid
-from squid.submissions.application import AppliedDraftChange, DraftRepository, StoredDraft
+from squid.submissions.application import AppliedDraftChange, AppliedDraftUpgrade, DraftRepository, StoredDraft
 from squid.submissions.domain import (
     DraftChange,
     DraftChangeKey,
@@ -188,6 +188,37 @@ class PostgresDraftRepository(DraftRepository):
             model.updated_at = updated_at
             model.expires_at = expires_at
         return _to_stored(model)
+
+    @override
+    async def upgrade_manifest(
+        self,
+        draft_id: UUID,
+        account_id: int,
+        *,
+        expected_revision: int,
+        target_schema_revision: int,
+        answers: Mapping[str, JSONValue],
+        updated_at: Instant,
+        expires_at: Instant,
+    ) -> AppliedDraftUpgrade:
+        async with self._session_factory.begin() as session:
+            model = await self._locked(session, draft_id)
+            self._require_owner(model, account_id)
+            if model.schema_revision == target_schema_revision:
+                return AppliedDraftUpgrade(_to_stored(model), replayed=True)
+            if model.status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
+                raise DraftStateConflictError(model.status.value, operation="upgrade_manifest")
+            if model.revision != expected_revision:
+                raise DraftRevisionConflictError(expected=expected_revision, actual=model.revision)
+            if target_schema_revision != model.schema_revision + 1:
+                msg = "draft manifests must be upgraded by one revision"
+                raise ValueError(msg)
+            model.schema_revision = target_schema_revision
+            model.revision += 1
+            model.answers = _json_object(answers)
+            model.updated_at = updated_at
+            model.expires_at = expires_at
+        return AppliedDraftUpgrade(_to_stored(model))
 
     @override
     async def delete_owned(self, draft_id: UUID, account_id: int) -> bool:
