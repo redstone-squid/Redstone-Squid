@@ -11,10 +11,10 @@ from typing import TYPE_CHECKING, Any, override
 from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
-from squid.config import ObservabilityConfig
-
 if TYPE_CHECKING:
     from fastapi import FastAPI
+
+    from squid.config import ObservabilityConfig
 
 logger = logging.getLogger(__name__)
 type SpanAttribute = str | bool | int | float

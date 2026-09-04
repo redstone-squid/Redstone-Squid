@@ -3,12 +3,12 @@
 import logging
 from collections.abc import Mapping
 from http import HTTPStatus
-from typing import Any, Protocol, cast
+from typing import Any, cast
 
+from fastapi import FastAPI, Request, Response
+from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from starlette.requests import Request
-from starlette.responses import Response
 
 from squid.api.i18n import locale_for_request
 from squid.builds.errors import BuildRevisionMismatchError, BuildRevisionRequiredError
@@ -27,6 +27,7 @@ from squid.core.errors import (
 )
 from squid.core.i18n import localization_for, tr
 from squid.diagnostics.log_capture import captured
+from squid.observability import correlation_id
 from squid_ui.text import localization_scope
 
 logger = logging.getLogger(__name__)
@@ -34,19 +35,6 @@ logger = logging.getLogger(__name__)
 PROBLEM_DETAIL_MEDIA_TYPE = "application/problem+json"
 INTERNAL_ERROR_DETAIL = tr(t"An internal server error occurred.")
 SERVICE_UNAVAILABLE_DETAIL = tr(t"A required service is temporarily unavailable. Please try again later.")
-
-
-class ExceptionRegistrar(Protocol):
-    """Minimal exception-registration surface implemented by FastAPI."""
-
-    def add_exception_handler(self, exc_class_or_status_code: Any, handler: Any) -> None: ...
-
-
-def correlation_id() -> str:
-    """Load tracing support only when an error actually needs correlation."""
-    from squid.observability import correlation_id as active_correlation_id
-
-    return active_correlation_id()
 
 
 def _route_template(request: Request) -> str | None:
@@ -307,10 +295,8 @@ async def handle_unexpected_error(request: Request, exc: Exception) -> Response:
     )
 
 
-def register_exception_handlers(app: ExceptionRegistrar) -> None:
+def register_exception_handlers(app: FastAPI) -> None:
     """Register application-wide FastAPI exception handlers."""
-    from fastapi.exceptions import RequestValidationError
-
     from squid.api.idempotency import IdempotencyReplay, replay_response
 
     app.add_exception_handler(IdempotencyReplay, replay_response)
