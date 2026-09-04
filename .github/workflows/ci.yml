@@ -47,6 +47,10 @@ jobs:
             workflows:
               - '.github/workflows/**'
             python:
+              - '.github/scripts/**'
+              - '.github/workflows/**'
+              - '.dockerignore'
+              - '.env.example'
               - 'squid/**'
               - 'packages/**'
               - 'tests/**'
@@ -70,7 +74,7 @@ jobs:
               - 'Dockerfile'
               - 'Dockerfile.api-fuzz'
               - 'compose.yml'
-              - '.github/workflows/ci.yml'
+              - 'docs/media-normalization.md'
             cli:
               - 'cli/**'
               - '.github/workflows/ci.yml'
@@ -91,6 +95,9 @@ jobs:
     permissions:
       contents: read
       security-events: write # Upload zizmor's SARIF results to GitHub code scanning.
+    env:
+      ACTIONLINT_VERSION: "1.7.12"
+      ACTIONLINT_LINUX_AMD64_SHA256: "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -98,6 +105,16 @@ jobs:
 
       - name: Analyze GitHub Actions
         uses: zizmorcore/zizmor-action@6fc4b006235f201fdab3722e17240ab420d580e5 # v0.6.1
+
+      - name: Check GitHub Actions syntax
+        run: |
+          archive="$RUNNER_TEMP/actionlint.tar.gz"
+          curl --fail --location --silent --show-error \
+            --output "$archive" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          printf '%s  %s\n' "$ACTIONLINT_LINUX_AMD64_SHA256" "$archive" | sha256sum --check
+          tar -xzf "$archive" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint"
 
   quality:
     name: Quality
@@ -151,6 +168,9 @@ jobs:
 
       - name: Check repository files
         run: uv run --locked prek run --all-files
+
+      - name: Check deployment policies
+        run: uv run --locked pytest --no-cov tests/deployment -m "not docker"
 
       - name: Check types with BasedPyright
         run: uvx --from basedpyright==1.39.9 basedpyright --level=warning
