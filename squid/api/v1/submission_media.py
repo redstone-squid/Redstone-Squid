@@ -248,10 +248,13 @@ def _declared_content_length(request: Request, max_bytes: int) -> int:
         raise DraftMediaRequestError(_CONTENT_LENGTH_INVALID) from None
     if not _CONTENT_LENGTH.fullmatch(raw):
         raise DraftMediaRequestError(_CONTENT_LENGTH_INVALID)
-    content_length = int(raw)
-    if content_length > max_bytes:
+    limit = str(max_bytes)
+    if len(raw) > len(limit) or (len(raw) == len(limit) and raw > limit):
+        # The public limit response does not expose the attacker-controlled value. Use the
+        # smallest proven violation rather than materializing an unbounded decimal integer.
+        content_length = max_bytes + 1
         raise MediaLimitExceededError(MediaViolation(MediaLimitMeasure.SOURCE_BYTES, content_length, max_bytes))
-    return content_length
+    return int(raw)
 
 
 async def _stream_to_private_file(
