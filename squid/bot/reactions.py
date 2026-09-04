@@ -7,7 +7,7 @@ import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal, override
+from typing import TYPE_CHECKING, Literal, cast, override
 
 import anyio
 import discord
@@ -440,21 +440,35 @@ class ReactionRouter:
     @staticmethod
     def _log_deferred_recovery(item: _QueuedEvent, *, reason: str) -> None:
         """Emit the immutable raw identifiers needed for operator replay."""
-        payload = item.event.payload
+        attributes = ReactionRouter._recovery_attributes(item.kind, item.event, reason=reason)
+        logger.error("Reaction intent requires operator reconciliation", extra=attributes)
+
+    @staticmethod
+    def _recovery_attributes(
+        kind: ReactionKind,
+        event: ReactionEvent | ReactionClearEvent,
+        *,
+        reason: str,
+        consumer: str | None = None,
+    ) -> dict[str, str | int]:
+        """Build the replay envelope shared by timeout and callback-failure logs."""
+        payload = event.payload
         attributes: dict[str, str | int] = {
-            "squid.reaction.kind": item.kind,
+            "squid.reaction.kind": kind,
             "squid.reaction.message_id": payload.message_id,
             "squid.reaction.channel_id": payload.channel_id,
             "squid.reaction.recovery_reason": reason,
         }
+        if consumer is not None:
+            attributes["squid.reaction.consumer"] = consumer
         if payload.guild_id is not None:
             attributes["squid.reaction.guild_id"] = payload.guild_id
-        if isinstance(item.event, ReactionEvent):
-            attributes["squid.reaction.user_id"] = item.event.payload.user_id
-            attributes["squid.reaction.emoji"] = item.event.emoji
-        elif item.event.emoji is not None:
-            attributes["squid.reaction.emoji"] = item.event.emoji
-        logger.error("Reaction intent requires operator reconciliation", extra=attributes)
+        if isinstance(event, ReactionEvent):
+            attributes["squid.reaction.user_id"] = event.payload.user_id
+            attributes["squid.reaction.emoji"] = event.emoji
+        elif event.emoji is not None:
+            attributes["squid.reaction.emoji"] = event.emoji
+        return attributes
 
     @staticmethod
     async def _run_recovery[EventT](
@@ -467,11 +481,17 @@ class ReactionRouter:
             await callback.callback(event)
         except Exception:
             add_counter("squid.reaction.recovery.failures", attributes=attributes)
+            replay = ReactionRouter._recovery_attributes(
+                kind,
+                cast(ReactionEvent | ReactionClearEvent, event),
+                reason="consumer_callback_failure",
+                consumer=callback.consumer,
+            )
             logger.exception(
-                "Reaction consumer %s failed to recover an unadmitted %s event",
+                "Reaction consumer %s failed to recover an unadmitted %s event; intent requires operator reconciliation",
                 callback.consumer,
                 kind,
-                extra=dict(attributes),
+                extra=replay,
             )
 
     def _ensure_workers(self) -> None:
