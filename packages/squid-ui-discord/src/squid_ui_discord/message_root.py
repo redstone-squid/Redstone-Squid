@@ -2606,7 +2606,7 @@ class MessageRoot[
         return presentation
 
     async def finish_via(self, interaction: discord.Interaction) -> None:
-        """Finish through an interaction edit — the shape a Close button wants."""
+        """End this message root through an interaction edit, as a Close button needs."""
         run_hooks = False
         try:
             async with self._render_lock:
@@ -2777,7 +2777,7 @@ class MessageRoot[
         self._hooks.finish.append(callback)
 
     async def finish(self, *, disable: bool = True, retain_routed: bool = False) -> None:
-        """Stop dispatching, optionally retaining stateless routes as recovery controls."""
+        """End this message root and stop dispatch, optionally retaining stateless routes."""
         run_hooks = False
         try:
             async with self._render_lock:

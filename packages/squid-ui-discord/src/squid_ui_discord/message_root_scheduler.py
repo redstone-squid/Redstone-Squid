@@ -269,7 +269,7 @@ class MessageRootScheduler:
         return unfollow
 
     async def run(self) -> None:
-        """Serve refreshes and expiry checks until the host cancels this coroutine."""
+        """Own refresh and expiry workers until host cancellation ends them."""
         if self._running:
             message = "scheduler is already running"
             raise RuntimeError(message)
