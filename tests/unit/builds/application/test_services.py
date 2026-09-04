@@ -10,6 +10,7 @@ import pytest
 from whenever import Instant
 
 from squid.builds.application import BuildEditPatch, DoorSubmissionInput, RestrictionDefinition
+from squid.builds.application.ports import SourceSubmissionBuildWrite
 from squid.builds.application.services import (
     BuildEditor,
     BuildService,
@@ -41,6 +42,13 @@ class FakeBuildRepository:
 
     async def save(self, build: Build) -> None:
         self.saved.append(build)
+
+    async def save_for_source_submission(self, build: Build) -> SourceSubmissionBuildWrite:
+        if self.build is not None:
+            return SourceSubmissionBuildWrite(self.build, created=False)
+        await self.save(build)
+        self.build = build
+        return SourceSubmissionBuildWrite(build, created=True)
 
     async def confirm(self, build: Build) -> None:
         self.confirmed.append(build)
@@ -471,6 +479,73 @@ async def test_submit_for_account_returns_the_build_created_by_an_earlier_retry(
 
     assert result is existing
     assert repository.saved == []
+
+
+async def test_submit_for_account_returns_the_source_draft_collision_winner() -> None:
+    draft_id = UUID("22222222-2222-4222-8222-222222222224")
+    winner = UtilityBuild(
+        id=43,
+        submitter_account_id=17,
+        source_submission_draft_id=draft_id,
+        submission_status=Status.PENDING,
+    )
+
+    class CollidingRepository(FakeBuildRepository):
+        def __init__(self) -> None:
+            super().__init__(winner)
+            self.first_read = True
+
+        async def get_by_source_submission_draft_id(self, draft_id: UUID) -> Build | None:
+            if self.first_read:
+                self.first_read = False
+                return None
+            return await super().get_by_source_submission_draft_id(draft_id)
+
+    repository = CollidingRepository()
+
+    result = await build_service(repository).submit_for_account(
+        OtherBuild(),
+        submitter_account_id=17,
+        source_submission_draft_id=draft_id,
+        display_name=None,
+        ai_generated=False,
+    )
+
+    assert result is winner
+    assert repository.saved == []
+
+
+async def test_submit_for_account_replay_observes_a_commit_after_an_ambiguous_failure() -> None:
+    draft_id = UUID("22222222-2222-4222-8222-222222222225")
+
+    class AmbiguousCommitRepository(FakeBuildRepository):
+        async def save_for_source_submission(self, build: Build) -> SourceSubmissionBuildWrite:
+            build.id = 44
+            self.build = build
+            raise RuntimeError("connection lost after commit")
+
+    repository = AmbiguousCommitRepository()
+    service = build_service(repository)
+    with pytest.raises(RuntimeError, match="connection lost"):
+        await service.submit_for_account(
+            OtherBuild(),
+            submitter_account_id=17,
+            source_submission_draft_id=draft_id,
+            display_name=None,
+            ai_generated=False,
+        )
+
+    result = await service.submit_for_account(
+        OtherBuild(),
+        submitter_account_id=17,
+        source_submission_draft_id=draft_id,
+        display_name=None,
+        ai_generated=False,
+    )
+
+    assert result is repository.build
+    assert result is not None
+    assert result.id == 44
 
 
 async def test_submit_for_account_rejects_existing_build_with_different_sponsor() -> None:

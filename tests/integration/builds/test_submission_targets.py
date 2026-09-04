@@ -4,12 +4,14 @@ import uuid
 from dataclasses import replace
 from typing import Any
 
+import anyio
 import pytest
 from sqlalchemy import func, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
+from squid.accounts.domain import CURRENT_CONSENT_VERSION
 from squid.accounts.domain import AccountIdentity as AccountIdentityValue
 from squid.accounts.infrastructure.models import Account
 from squid.accounts.infrastructure.repository import AccountRepository
@@ -22,6 +24,12 @@ from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.infrastructure.restrictions import RestrictionRepository
 from squid.builds.infrastructure.taxonomy import OfficialTagResolver
 from squid.core.errors import DataIntegrityError
+from squid.events import DomainEvent
+from squid.events.infrastructure.models import DomainEventRecord
+from squid.notifications.infrastructure.models import NotificationProfile, NotificationRecord
+from squid.notifications.infrastructure.repository import PostgresNotificationRepository
+from squid.permissions.domain import BuiltinRoleKeys
+from squid.permissions.infrastructure.models import PermissionRole, PermissionRoleAssignment
 from squid.sponsors import PublicSponsor
 from squid.submissions.application import StoredDraft
 from squid.submissions.domain import (
@@ -263,6 +271,98 @@ async def test_submission_target_persists_only_the_exact_canonical_source_versio
     assert invalid_build.id is None
     async with migrated_session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(SQLBuild)) == 1
+
+
+async def test_concurrent_source_draft_writes_publish_and_materialize_one_submission_event(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    account_id = await _seed_account_and_version(migrated_session_factory)
+    draft_id = uuid.UUID("99999999-9999-4999-8999-999999999999")
+    repository = BuildRepository(migrated_session_factory)
+    versions = VersionService(VersionRepository(migrated_session_factory))
+    writer = CanonicalBuildSubmissionWriter(
+        BuildService(
+            repository,
+            BuildLockRepository(migrated_session_factory),
+            RestrictionRepository(migrated_session_factory),
+            versions,
+            NoopEmbeddings(),
+            OfficialTagResolver(migrated_session_factory),
+        ),
+        NoApprovedTags(),
+        versions,
+    )
+    results: list[FinalizedBuild | BuildSubmissionRejected] = []
+
+    async def create() -> None:
+        results.append(await writer.create_or_get(_normalized_submission(account_id, draft_id, "Java 1.21.0")))
+
+    async with anyio.create_task_group() as tasks:
+        tasks.start_soon(create)
+        tasks.start_soon(create)
+
+    assert len(results) == 2
+    assert all(isinstance(result, FinalizedBuild) for result in results)
+    assert results[0] == results[1]
+    result = results[0]
+    assert isinstance(result, FinalizedBuild)
+
+    async with migrated_session_factory.begin() as session:
+        staff = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
+        session.add(staff)
+        await session.flush()
+        role_id = await session.scalar(
+            select(PermissionRole.id).where(PermissionRole.builtin_key == BuiltinRoleKeys.GLOBAL_ADMIN)
+        )
+        assert role_id is not None
+        session.add(PermissionRoleAssignment(role_id=role_id, subject_account_id=staff.id))
+        session.add(NotificationProfile(account_id=staff.id, web_enabled=True, dm_enabled=False))
+
+    async with migrated_session_factory() as session:
+        assert (
+            await session.scalar(
+                select(func.count())
+                .select_from(SQLBuild)
+                .where(SQLBuild.source_submission_draft_id == draft_id)
+            )
+            == 1
+        )
+        events = tuple(
+            (
+                await session.scalars(
+                    select(DomainEventRecord).where(
+                        DomainEventRecord.event_type == "build.submitted",
+                        DomainEventRecord.aggregate_id == result.build_id,
+                    )
+                )
+            ).all()
+        )
+    assert len(events) == 1
+    event = events[0]
+    notification_event = DomainEvent(
+        id=event.id,
+        event_type=event.event_type,
+        aggregate_kind=event.aggregate_kind,
+        aggregate_id=event.aggregate_id,
+        occurred_at=event.occurred_at,
+        payload=event.payload,
+        schema_version=event.schema_version,
+    )
+    notifications = PostgresNotificationRepository(migrated_session_factory)
+
+    await notifications.materialize(notification_event)
+    await notifications.materialize(notification_event)
+
+    async with migrated_session_factory() as session:
+        materialized = tuple(
+            (
+                await session.scalars(
+                    select(NotificationRecord).where(NotificationRecord.event_id == notification_event.id)
+                )
+            ).all()
+        )
+    assert len(materialized) == 1
+    assert materialized[0].account_id == staff.id
 
 
 async def test_account_merge_transfers_submission_and_minecraft_authorization_ownership(
