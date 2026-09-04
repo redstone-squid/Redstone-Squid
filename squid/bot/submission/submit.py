@@ -12,6 +12,7 @@ from squid.bot.consent import ensure_consented_account
 from squid.bot.submission.attachment_enrichment import (
     AttachmentFailure,
     AttachmentLifecycle,
+    attachment_failure_evidence,
     default_only_usable,
     merge_duplicate_evidence,
     primary_schematic,
@@ -32,7 +33,6 @@ from squid.builds.application import (
     BuildService,
 )
 from squid.builds.domain import Build, BuildDraft, DoorOrientationLiteral
-from squid.builds.domain.models import AttachmentFailureInfo
 from squid.core.errors import SquidError
 from squid.core.i18n import tr
 from squid.messages.application import MessageService
@@ -316,16 +316,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
 
     @staticmethod
     def _note_attachment_failures(build: Build | BuildDraft, attachments: tuple[AttachmentLifecycle, ...]) -> None:
-        failures: list[AttachmentFailureInfo] = [
-            {
-                "attachment_id": attachment.identity,
-                "filename": attachment.filename,
-                "stage": attachment.failure.stage,
-                "detail": attachment.failure.detail,
-            }
-            for attachment in attachments
-            if attachment.failure is not None
-        ]
+        failures = attachment_failure_evidence(attachments)
         if failures:
             build.extra_info["attachment_failures"] = failures
 
