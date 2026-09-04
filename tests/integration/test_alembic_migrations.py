@@ -1,6 +1,7 @@
 """Integration coverage for the portable Alembic migration chain."""
 
 from collections.abc import Iterator
+from io import StringIO
 
 import psycopg2
 import pytest
@@ -26,6 +27,7 @@ FINALIZATION_RESULT_METADATA_REVISION = "c1d7e0f5a8b2"
 SCHEMATIC_RENDER_PROJECTION_REVISION = "e1f2a3b4c5d6"
 SCHEMATIC_PUBLICATION_REVISION = "f8b9c0d1e2f3"
 NOTIFICATION_DELIVERY_OWNER_REVISION = "b5d9f2a7c0e3"
+NOTIFICATION_DELIVERY_OWNER_PARENT_REVISION = "a4c8e1f6b9d2"
 
 pytestmark = pytest.mark.filterwarnings("ignore:Expression #.* detected to include an operator clause:UserWarning")
 """Autogenerate cannot compare an index expression carrying an operator class.
@@ -294,8 +296,32 @@ def test_notification_delivery_owner_migration_rejects_corruption_and_downgrades
                 {"notification_id": notification_id, "other_id": other_id},
             )
 
-        with pytest.raises(DBAPIError, match="notification_deliveries_notification_owner_fkey"):
+        # Simulate a process that completed the autocommitted concurrent index build but
+        # stopped before Alembic attached the constraint or advanced the revision.
+        with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as connection:
+            connection.execute(
+                text("CREATE UNIQUE INDEX CONCURRENTLY notifications_id_account_key ON notifications (id, account_id)")
+            )
+
+        with pytest.raises(DBAPIError, match="ownership mismatch blocks composite foreign key"):
             command.upgrade(config, NOTIFICATION_DELIVERY_OWNER_REVISION)
+
+        with engine.connect() as connection:
+            constraint_names = set(
+                connection.execute(
+                    text(
+                        "SELECT conname FROM pg_constraint WHERE conname IN ("
+                        "'notifications_id_account_key', "
+                        "'notification_deliveries_notification_id_fkey', "
+                        "'notification_deliveries_notification_owner_fkey')"
+                    )
+                ).scalars()
+            )
+            interrupted_index = connection.execute(
+                text("SELECT to_regclass('public.notifications_id_account_key')")
+            ).scalar_one()
+        assert constraint_names == {"notification_deliveries_notification_id_fkey"}
+        assert interrupted_index == "notifications_id_account_key"
 
         with engine.begin() as connection:
             connection.execute(
@@ -306,25 +332,121 @@ def test_notification_delivery_owner_migration_rejects_corruption_and_downgrades
             )
         command.upgrade(config, NOTIFICATION_DELIVERY_OWNER_REVISION)
 
-        with (
-            pytest.raises(DBAPIError, match="notification_deliveries_notification_owner_fkey"),
-            engine.begin() as connection,
-        ):
-            connection.execute(
-                text(
-                    "UPDATE notification_deliveries SET account_id = :other_id WHERE notification_id = :notification_id"
-                ),
-                {"notification_id": notification_id, "other_id": other_id},
-            )
+        with engine.connect() as connection:
+            constraints = {
+                row.conname: row
+                for row in connection.execute(
+                    text(
+                        "SELECT conname, convalidated, condeferrable, condeferred, pg_get_constraintdef(oid) AS definition "
+                        "FROM pg_constraint WHERE conname IN ("
+                        "'notifications_id_account_key', "
+                        "'notification_deliveries_notification_id_fkey', "
+                        "'notification_deliveries_notification_owner_fkey')"
+                    )
+                )
+            }
+        assert set(constraints) == {
+            "notifications_id_account_key",
+            "notification_deliveries_notification_owner_fkey",
+        }
+        owner_constraint = constraints["notification_deliveries_notification_owner_fkey"]
+        assert owner_constraint.convalidated is True
+        assert owner_constraint.condeferrable is True
+        assert owner_constraint.condeferred is True
+        assert "ON DELETE CASCADE" in owner_constraint.definition
+
+        def commit_mismatched_owner() -> None:
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "UPDATE notification_deliveries SET account_id = :other_id "
+                        "WHERE notification_id = :notification_id"
+                    ),
+                    {"notification_id": notification_id, "other_id": other_id},
+                )
+                # Initially deferred means multi-statement account merges can move the parent
+                # and child before commit; a transaction that ends mismatched still fails.
+                assert (
+                    connection.execute(
+                        text("SELECT account_id FROM notification_deliveries WHERE notification_id = :notification_id"),
+                        {"notification_id": notification_id},
+                    ).scalar_one()
+                    == other_id
+                )
+
+        with pytest.raises(DBAPIError, match="notification_deliveries_notification_owner_fkey"):
+            commit_mismatched_owner()
 
         command.downgrade(config, f"{NOTIFICATION_DELIVERY_OWNER_REVISION}-1")
+        with engine.connect() as connection:
+            downgraded_constraints = {
+                row.conname: row.definition
+                for row in connection.execute(
+                    text(
+                        "SELECT conname, pg_get_constraintdef(oid) AS definition FROM pg_constraint "
+                        "WHERE conname IN ('notifications_id_account_key', "
+                        "'notification_deliveries_notification_id_fkey', "
+                        "'notification_deliveries_notification_owner_fkey')"
+                    )
+                )
+            }
+        assert set(downgraded_constraints) == {"notification_deliveries_notification_id_fkey"}
+        assert "ON DELETE CASCADE" in downgraded_constraints["notification_deliveries_notification_id_fkey"]
+        with engine.connect() as connection:
+            assert (
+                connection.execute(text("SELECT to_regclass('public.notifications_id_account_key')")).scalar_one()
+                is None
+            )
         with engine.begin() as connection:
             connection.execute(
                 text("UPDATE notification_deliveries SET account_id = :other_id WHERE notification_id = :id"),
                 {"other_id": other_id, "id": notification_id},
             )
+        with (
+            pytest.raises(DBAPIError, match="notification_deliveries_notification_id_fkey"),
+            engine.begin() as connection,
+        ):
+            connection.execute(
+                text("UPDATE notification_deliveries SET notification_id = 999999 WHERE notification_id = :id"),
+                {"id": notification_id},
+            )
+        with engine.begin() as connection:
+            connection.execute(
+                text("DELETE FROM notifications WHERE id = :notification_id"),
+                {"notification_id": notification_id},
+            )
+            assert (
+                connection.execute(
+                    text("SELECT count(*) FROM notification_deliveries WHERE notification_id = :notification_id"),
+                    {"notification_id": notification_id},
+                ).scalar_one()
+                == 0
+            )
     finally:
         engine.dispose()
+
+
+def test_notification_delivery_owner_offline_sql_preserves_safe_ddl_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The forward DDL builds its key before validating and replacing the legacy FK."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", "postgresql+asyncpg://squid:squid@localhost/squid")
+    output = StringIO()
+    config = Config("alembic.ini", toml_file="pyproject.toml", output_buffer=output)
+
+    command.upgrade(
+        config,
+        f"{NOTIFICATION_DELIVERY_OWNER_PARENT_REVISION}:{NOTIFICATION_DELIVERY_OWNER_REVISION}",
+        sql=True,
+    )
+
+    sql = output.getvalue()
+    concurrent_index = sql.index("CREATE UNIQUE INDEX CONCURRENTLY notifications_id_account_key")
+    attach_constraint = sql.index("UNIQUE USING INDEX notifications_id_account_key")
+    not_valid = sql.index("NOT VALID")
+    validate_constraint = sql.index("VALIDATE CONSTRAINT notification_deliveries_notification_owner_fkey")
+    drop_legacy = sql.index("DROP CONSTRAINT notification_deliveries_notification_id_fkey")
+    assert concurrent_index < not_valid < validate_constraint < attach_constraint < drop_legacy
 
 
 def test_applied_schematic_render_projection_migration_upgrades_and_downgrades(
