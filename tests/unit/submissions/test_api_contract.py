@@ -30,6 +30,7 @@ from squid.api.v1.submissions import (
 from squid.core.errors import AuthenticationError
 from squid.submissions.application import (
     AppliedDraftChange,
+    AppliedDraftUpgrade,
     FinalizationJobSnapshot,
     FormOptionSet,
     StoredDraft,
@@ -151,6 +152,30 @@ class FakeDrafts:
         self.change_seen = change
         self.current = replace(self.current, snapshot=self.current.snapshot.apply(change))
         return AppliedDraftChange(self.current)
+
+    async def upgrade_manifest(
+        self,
+        draft_id: UUID,
+        account_id: int,
+        *,
+        expected_revision: int,
+        target_revision: int,
+        locale: str | None,
+    ) -> AppliedDraftUpgrade:
+        assert draft_id == self.current.snapshot.id
+        assert account_id == ACCOUNT_ID
+        assert expected_revision == self.current.snapshot.revision
+        assert target_revision == 2
+        assert locale == "en"
+        self.current = replace(
+            self.current,
+            snapshot=replace(
+                self.current.snapshot,
+                schema_revision=target_revision,
+                revision=self.current.snapshot.revision + 1,
+            ),
+        )
+        return AppliedDraftUpgrade(self.current)
 
     async def delete(self, draft_id: UUID, account_id: int) -> None:
         self.deleted = (draft_id, account_id)
@@ -306,6 +331,10 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
                 ],
             },
         )
+        upgrade_response = await client.post(
+            f"/submissions/drafts/{draft_id}/manifest-upgrade",
+            json={"base_revision": 1, "target_revision": 2},
+        )
         list_response = await client.get("/submissions/drafts")
         get_response = await client.get(f"/submissions/drafts/{draft_id}")
         submit_response = await client.post(f"/submissions/drafts/{draft_id}/submission")
@@ -340,14 +369,16 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
     assert drafts.change_seen is not None
     assert drafts.change_seen.operations[0].value == "Compact door"
     assert list_response.status_code == 200
+    assert upgrade_response.status_code == 200
+    assert upgrade_response.json()["draft"]["schema_revision"] == 2
     assert list_response.json() == {
         "drafts": [
             {
                 "id": draft_id,
                 "schema_id": "build_submission.v1",
-                "schema_revision": 1,
+                "schema_revision": 2,
                 "category": "door",
-                "revision": 1,
+                "revision": 2,
                 "status": "editing",
                 "origin": "web",
                 "display_name": "Compact door",

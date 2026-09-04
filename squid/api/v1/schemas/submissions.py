@@ -20,7 +20,7 @@ from pydantic import (
 )
 
 from squid.core.errors import JSONValue
-from squid.submissions.application import FinalizationJobSnapshot, FormOptionSet, StoredDraft
+from squid.submissions.application import AppliedDraftUpgrade, FinalizationJobSnapshot, FormOptionSet, StoredDraft
 from squid.submissions.domain import (
     CategoryForm,
     ChoiceOption,
@@ -354,6 +354,24 @@ class DraftChangeResponse(StrictSchema):
 
     draft: StoredDraftResponse
     replayed: bool
+
+
+class DraftManifestUpgradeRequest(StrictSchema):
+    """Move a draft to the next checked-in form revision."""
+
+    base_revision: int = Field(ge=0)
+    target_revision: int = Field(ge=2)
+
+
+class DraftManifestUpgradeResponse(StrictSchema):
+    """The upgraded draft and whether the requested target was already current."""
+
+    draft: StoredDraftResponse
+    replayed: bool
+
+    @classmethod
+    def from_domain(cls, result: AppliedDraftUpgrade) -> DraftManifestUpgradeResponse:
+        return cls(draft=StoredDraftResponse.from_domain(result.draft), replayed=result.replayed)
 
 
 class SubmissionAttentionIssueResponse(StrictSchema):
