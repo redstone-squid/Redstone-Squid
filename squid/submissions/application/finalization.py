@@ -8,7 +8,7 @@ from uuid import UUID
 
 from whenever import Instant
 
-from squid.core.errors import DataIntegrityError, InvalidStateError, JSONValue, ValidationError
+from squid.core.errors import DataIntegrityError, InvalidStateError, JSONValue
 from squid.core.i18n import tr
 from squid.sponsors import PublicSponsor
 from squid.submissions.application.drafts import (
@@ -19,6 +19,8 @@ from squid.submissions.application.drafts import (
 )
 from squid.submissions.domain import DraftStatus, SubmissionOrigin
 from squid.submissions.domain.finalization import (
+    BuildSubmissionRejected,
+    BuildSubmissionResult,
     DoorOrientation,
     DoorSubmissionDetails,
     DoorTiming,
@@ -115,17 +117,6 @@ class PreparationRejected:
 type PreparationResult = PreparedSubmission | PreparationRejected
 
 
-class BuildSubmissionRejectedError(ValidationError):
-    """Canonical build creation rejected fields that the draft owner can repair."""
-
-    def __init__(self, issues: Sequence[SubmissionAttentionIssue]) -> None:
-        if not issues:
-            msg = tr(t"actionable submission errors require at least one issue")
-            raise InvalidStateError(msg)
-        self.issues = tuple(issues)
-        super().__init__(tr(t"Submission target rejected actionable fields."))
-
-
 class DraftArtifactReadiness(Protocol):
     """Read backend-owned artifact state for one draft.
 
@@ -194,7 +185,7 @@ class BuildSubmissionWriter(Protocol):
     same ``source_draft_id``, including after the first call committed and the worker crashed.
     """
 
-    async def create_or_get(self, submission: NormalizedSubmission) -> FinalizedBuild: ...
+    async def create_or_get(self, submission: NormalizedSubmission) -> BuildSubmissionResult: ...
 
 
 class FinalizationJobRepository(Protocol):
@@ -369,14 +360,6 @@ class SubmissionFinalizationWorker:
         expires_at = now.add(days=self._retention_days, days_assumed_24h_ok=True)
         try:
             result = await self._writer.create_or_get(job.payload)
-        except BuildSubmissionRejectedError as error:
-            await self._jobs.needs_attention(
-                job,
-                error.issues,
-                now=now,
-                expires_at=expires_at,
-            )
-            return
         except Exception as error:
             retry_at = now.add(seconds=_retry_delay(job.attempts))
             await self._jobs.fail(
@@ -389,6 +372,14 @@ class SubmissionFinalizationWorker:
             )
             return
 
+        if isinstance(result, BuildSubmissionRejected):
+            await self._jobs.needs_attention(
+                job,
+                result.issues,
+                now=now,
+                expires_at=expires_at,
+            )
+            return
         await self._jobs.complete(job, result, now=now)
 
 
