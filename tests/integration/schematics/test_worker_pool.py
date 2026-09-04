@@ -80,6 +80,25 @@ async def test_analysis_reads_tight_dimensions_not_allocated_bounds(
     assert metrics.bounding_volume == metrics.dimensions.volume
 
 
+@pytest.mark.parametrize(
+    "source_format",
+    [SchematicFormat.LITEMATIC, SchematicFormat.SPONGE_SCHEM, SchematicFormat.MCSTRUCTURE],
+)
+async def test_each_native_generated_input_format_keeps_its_vetted_source_format(
+    pool: SchematicWorkerPool,
+    native_format_exports: dict[SchematicFormat, bytes],
+    source_format: SchematicFormat,
+) -> None:
+    analysis = await pool.analyze(
+        native_format_exports[source_format],
+        limits=SchematicLimits(),
+        source_format=source_format,
+    )
+
+    assert analysis.metrics.source_format is source_format
+    assert analysis.metrics.block_count == 1
+
+
 async def test_the_shape_fingerprint_survives_translation(
     pool: SchematicWorkerPool, periodic_door: Callable[..., bytes]
 ) -> None:
@@ -176,14 +195,20 @@ async def test_a_named_input_that_is_not_a_control_comes_back_with_the_ones_that
     assert raised.value.public_context["input_candidates"] == [[0, 1, 0], [5, 1, 0]]
 
 
-async def test_a_round_trip_through_another_format_preserves_the_build(
-    pool: SchematicWorkerPool, periodic_door: Callable[..., bytes]
+@pytest.mark.parametrize(
+    "target",
+    [SchematicFormat.LITEMATIC, SchematicFormat.SPONGE_SCHEM, SchematicFormat.MCSTRUCTURE],
+)
+async def test_each_native_export_format_round_trips_the_build(
+    pool: SchematicWorkerPool,
+    periodic_door: Callable[..., bytes],
+    target: SchematicFormat,
 ) -> None:
     original = periodic_door()
-    converted, losses = await pool.convert(original, target=SchematicFormat.SPONGE_SCHEM)
+    converted, losses = await pool.convert(original, target=target)
 
     before = await pool.analyze(original, limits=SchematicLimits())
-    after = await pool.analyze(converted, limits=SchematicLimits())
+    after = await pool.analyze(converted, limits=SchematicLimits(), source_format=target)
 
     assert losses == ()
     assert after.metrics.block_count == before.metrics.block_count
