@@ -107,6 +107,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
 
     @property
     def initial_state(self) -> WizardState:
+        """Return state positioned at the first initial step."""
         return self._initial_state
 
     def build_component(
@@ -127,9 +128,11 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
 
     @staticmethod
     def _answer_map(answers: tuple[WizardAnswer, ...]) -> dict[str, FormValues]:
+        """Expand serialized answers for branch and form logic."""
         return {answer.step: dict(answer.values) for answer in answers}
 
     def _steps(self, answers: tuple[WizardAnswer, ...]) -> tuple[WizardStep[RenderTargetT], ...]:
+        """Resolve and validate the branch selected by retained answers."""
         answer_map = self._answer_map(answers)
         resolved = tuple(self.steps(MappingProxyType(answer_map)) if callable(self.steps) else self.steps)
         if any(not isinstance(step, WizardStep) for step in resolved):
@@ -165,6 +168,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
 
     @staticmethod
     def _store(answers: tuple[WizardAnswer, ...], step: str, submitted: FormValues) -> tuple[WizardAnswer, ...]:
+        """Replace one retained answer while preserving other branches."""
         replacement = WizardAnswer(step, tuple(submitted.items()))
         result = [answer for answer in answers if answer.step != step]
         result.append(replacement)
@@ -172,6 +176,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
 
     @staticmethod
     def _index(steps: tuple[WizardStep[RenderTargetT], ...], key: str) -> int:
+        """Locate a step, falling back to the first live step."""
         return next((index for index, step in enumerate(steps) if step.key == key), 0)
 
     def transition(
@@ -182,6 +187,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
         values: tuple[str, ...] = (),
         submitted: FormValues | None = None,
     ) -> WizardState:
+        """Navigate, submit, review, or finish the current branch."""
         del values
         live = self.live_steps(state)
         at_review = state.current == REVIEW_STEP
@@ -233,6 +239,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
         return WizardState(recomputed[recomputed_index + 1].key, answers)
 
     def _prefilled(self, step: WizardStep[RenderTargetT], state: WizardState) -> FormSpec:
+        """Apply a retained answer to one form step."""
         assert step.form is not None
         attempted = self._answer_map(state.answers).get(step.key)
         return step.form if attempted is None else step.form.with_prefill(attempted)
@@ -264,6 +271,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
         controls: MachineControls[WizardState, RenderTargetT],
         review: WizardReview[RenderTargetT],
     ) -> DocumentLike[RenderTargetT]:
+        """Render live answers and controls for the review screen."""
         live = self.live_steps(state)
         answered = self._answer_map(state.answers)
         steps = tuple(step for step in live if step.form is not None)
@@ -318,6 +326,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
     def render(
         self, state: WizardState, controls: MachineControls[WizardState, RenderTargetT]
     ) -> DocumentLike[RenderTargetT]:
+        """Render the current step or configured review screen."""
         if self.review is not None and state.current == REVIEW_STEP:
             return self._render_review(state, controls, self.review)
         live = self.live_steps(state)

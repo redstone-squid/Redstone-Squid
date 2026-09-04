@@ -1,6 +1,6 @@
 """RankedList: global ranks over an in-memory sequence, paged or capped."""
 
-from typing import Any
+from typing import TypedDict
 
 import pytest
 
@@ -11,7 +11,14 @@ from squid_ui.primitives import Lines
 from squid_ui_widgets import testing as wt
 
 
-def _listing(harness: wt.MachineHarness[Any, Any]) -> list[str]:
+class _LimitKwargs(TypedDict, total=False):
+    top_n: int
+    page_size: int
+
+
+def _listing[StateT, RenderTargetT: sl.RenderTarget](
+    harness: wt.MachineHarness[StateT, RenderTargetT],
+) -> list[str]:
     return [str(line) for line in engine.find(harness.nodes, Lines).lines]
 
 
@@ -79,7 +86,7 @@ def test_top_n_caps_the_listing_and_explicit_entries_keep_their_keys() -> None:
 
 
 @pytest.mark.parametrize("kwargs", [{"top_n": 0}, {"page_size": 0}])
-def test_it_rejects_a_non_positive_limit(kwargs: Any) -> None:
+def test_it_rejects_a_non_positive_limit(kwargs: _LimitKwargs) -> None:
     with pytest.raises(ValueError):
         sp.RankedList([], key="ranked", **kwargs)
 

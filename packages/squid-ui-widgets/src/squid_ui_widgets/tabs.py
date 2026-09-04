@@ -62,6 +62,7 @@ class Tabs[RenderTargetT: RenderTarget = RenderTarget]:
 
     @property
     def initial_state(self) -> TabsState:
+        """Return the configured initial selection."""
         return self._initial_state
 
     def build_component(
@@ -83,6 +84,7 @@ class Tabs[RenderTargetT: RenderTarget = RenderTarget]:
         values: tuple[str, ...] = (),
         submitted: FormValues | None = None,
     ) -> TabsState:
+        """Select a known tab and ignore unrelated actions."""
         del submitted
         selected = values[0] if action == "select" and len(values) == 1 else action.removeprefix("select:")
         if action != "select" and not action.startswith("select:"):
@@ -94,6 +96,7 @@ class Tabs[RenderTargetT: RenderTarget = RenderTarget]:
     def render(
         self, state: TabsState, controls: MachineControls[TabsState, RenderTargetT]
     ) -> DocumentLike[RenderTargetT]:
+        """Render the selected tab and an adaptive selector."""
         current = next((tab for tab in self.tabs if tab.key == state.selected), self.tabs[0])
         if len(self.tabs) <= 5:
             selector = action_controls(

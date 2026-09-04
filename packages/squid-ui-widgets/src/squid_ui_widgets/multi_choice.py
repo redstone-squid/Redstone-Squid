@@ -129,6 +129,7 @@ class MultiChoice:
 
     @property
     def initial_state(self) -> MultiChoiceState:
+        """Return the validated initial staged and committed selections."""
         return self._initial_state
 
     def build_component(
@@ -148,6 +149,7 @@ class MultiChoice:
         return ComponentDriver(self, initial=initial, on_change=changed)
 
     def _ordered(self, selected: Iterable[str]) -> tuple[str, ...]:
+        """Order known selections by declaration and unknown ones stably."""
         values = set(selected)
         return tuple(key for key in self._choice_order if key in values) + tuple(
             sorted(key for key in values if key not in self._choices)
@@ -155,11 +157,13 @@ class MultiChoice:
 
     @staticmethod
     def _pages(state: MultiChoiceState) -> dict[MachineKeySegment, int]:
+        """Expand serialized per-group pages for transition logic."""
         return dict(state.pages)
 
     def _window(
         self, group: MultiChoiceGroup, state: MultiChoiceState, controls: MachineControls[MultiChoiceState]
     ) -> tuple[tuple[Choice, ...], int, int]:
+        """Resolve one group's visible option window."""
         visible, position, extent = window(
             group.choices,
             key=f"{self.key}.{group.key}",
@@ -171,6 +175,7 @@ class MultiChoice:
         return visible, position.index, extent
 
     def _rivals(self, group_key: MachineKeySegment) -> frozenset[MachineKeySegment]:
+        """Return directly or inversely exclusive groups."""
         direct = next(group.exclusive_with for group in self.groups if group.key == group_key)
         inverse = tuple(group.key for group in self.groups if group_key in group.exclusive_with)
         return frozenset((*direct, *inverse))
@@ -201,6 +206,7 @@ class MultiChoice:
         values: tuple[str, ...] = (),
         submitted: FormValues | None = None,
     ) -> MultiChoiceState:
+        """Apply staged selection, paging, modal, or commit input."""
         if action == "apply" and self.commit is CommitMode.EXPLICIT:
             return state if self.errors(state) else MultiChoiceState(state.staged, state.staged, state.pages)
         if action == "modal" and submitted is not None:
@@ -245,11 +251,13 @@ class MultiChoice:
         return self._commit_valid(MultiChoiceState(self._ordered(staged), state.committed, state.pages))
 
     def _commit_valid(self, state: MultiChoiceState) -> MultiChoiceState:
+        """Commit valid staged values when using immediate mode."""
         if self.commit is CommitMode.EXPLICIT or self.errors(state):
             return state
         return MultiChoiceState(state.staged, state.staged, state.pages)
 
     def _summary(self, state: MultiChoiceState) -> str:
+        """Summarize the selection currently relevant to the reader."""
         selected = state.committed if self.commit is CommitMode.IMMEDIATE else state.staged
         labels = [display_text(self._choices[key].label) for key in selected if key in self._choices]
         return f"{len(selected)} selected" + (f": {', '.join(labels)}" if labels else "")
@@ -282,6 +290,7 @@ class MultiChoice:
         )
 
     def render(self, state: MultiChoiceState, controls: MachineControls[MultiChoiceState]) -> DocumentLike:
+        """Render grouped windows, errors, and the commit control."""
         group_nodes = []
         staged = set(state.staged)
         for group in self.groups:
