@@ -226,8 +226,7 @@ class BuildRepository:
             ).all()
 
     async def save(self, build: Build) -> None:
-        """
-        Updates the build in the database with the given data.
+        """Updates the build in the database with the given data.
 
         If the build does not exist in the database, it will be inserted instead.
         """

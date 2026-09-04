@@ -185,7 +185,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     @sd.prefix_command(name="gdb", hidden=True)
     @commands.is_owner()
     async def get_sheets_link(self, request: sd.Request[Self]) -> sd.CommandResult:
-        """Sends the google sheets link"""
+        """Sends the google sheets link."""
         return link_node(
             tr("Build spreadsheet"),
             "https://docs.google.com/spreadsheets/d/1BiyHD6PE1Jyn1EtlT0o2DqciUzWPSdwHmeRcUJtanUs/edit#gid=2075219221",
@@ -195,7 +195,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     @sd.prefix_command(name="db", hidden=True)
     @commands.is_owner()
     async def get_database_link(self, request: sd.Request[Self]) -> sd.CommandResult:
-        """Sends the database link"""
+        """Sends the database link."""
         return link_node(
             tr("Database"),
             "https://supabase.com/dashboard/project/jnushtruzgnnmmxabsxi/editor/29424?sort=submission_id%3Aasc",

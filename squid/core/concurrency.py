@@ -35,7 +35,7 @@ def _limiter(limit: int | None) -> anyio.CapacityLimiter | nullcontext[None]:
 
 @asynccontextmanager
 async def task_group() -> AsyncIterator[anyio.abc.TaskGroup]:
-    """anyio's task group, without the ExceptionGroup around a lone failure.
+    """The anyio task group, without the ExceptionGroup around a lone failure.
 
     The scope ends when the block exits, which waits for the children and
     cancels them if the body or a sibling fails -- anyio's semantics exactly.

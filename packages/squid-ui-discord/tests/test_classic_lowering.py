@@ -47,7 +47,8 @@ class TestLooseProse:
 
     def test_a_later_heading_stays_formatted_description_text(self) -> None:
         """An embed has one title; inventing a card for the second heading would regroup
-        the document rather than express it."""
+        the document rather than express it.
+        """
         body = message([Heading("One"), Paragraph("a"), Heading("Two"), Paragraph("b")])
 
         assert len(body.embeds) == 1

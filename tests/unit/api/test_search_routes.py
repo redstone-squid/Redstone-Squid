@@ -165,7 +165,8 @@ async def test_suggest_passes_the_caller_limit_through() -> None:
 def test_an_unparsable_projection_key_is_a_server_fault_not_a_bad_request() -> None:
     """A build projection keyed by something that is not an id means the index is
     lying about itself. Nothing the caller can send fixes that, so blaming them
-    with a 400 sent them chasing their own query."""
+    with a 400 sent them chasing their own query.
+    """
     with pytest.raises(DataIntegrityError) as raised:
         build_hit_id("b1")
 

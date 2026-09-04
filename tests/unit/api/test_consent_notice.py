@@ -23,7 +23,8 @@ async def test_the_notice_is_served_with_the_version_it_names() -> None:
 
 async def test_the_notice_is_negotiated_and_echoes_the_locale_it_chose() -> None:
     """Echoed rather than assumed: a client asking for an unsupported language needs to know
-    it was given the fallback, because it is about to record consent to whatever it displays."""
+    it was given the fallback, because it is about to record consent to whatever it displays.
+    """
     chinese = await get_notice(request_with_locale("zh-CN"), Response())
     fallback = await get_notice(request_with_locale("fr-FR"), Response())
 

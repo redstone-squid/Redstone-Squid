@@ -78,7 +78,8 @@ def test_a_role_from_one_guild_cannot_carry_authority_into_another(migrated_engi
 
 def test_a_role_subject_without_its_guild_is_refused(migrated_engine) -> None:
     """A role snowflake means nothing without the guild it lives in, and the
-    anti-escalation CHECK compares against that column."""
+    anti-escalation CHECK compares against that column.
+    """
     with migrated_engine.begin() as connection, pytest.raises(DBAPIError, match="role_subject_has_guild"):
         connection.execute(
             text("INSERT INTO permission_grants (pattern, effect, subject_role_id) VALUES ('settings.**', 1, 42)")

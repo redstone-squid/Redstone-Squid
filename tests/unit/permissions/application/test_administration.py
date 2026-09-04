@@ -358,7 +358,8 @@ class TestRoles:
 
     async def test_an_exclusion_needs_no_authority_over_what_it_removes(self) -> None:
         """Subtracting can only narrow a role, so requiring the node would stop an
-        administrator from removing a capability they cannot themselves hold."""
+        administrator from removing a capability they cannot themselves hold.
+        """
         store = FakeStore(
             roles=(
                 RoleRecord(id=50, slug="helper", guild_id=None, builtin_key=None, rank=5, protected=False),

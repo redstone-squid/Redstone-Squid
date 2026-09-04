@@ -79,7 +79,8 @@ async def test_storing_the_same_bytes_twice_yields_one_row_and_one_digest(
     repository: SchematicRepository,
 ) -> None:
     """Content addressing is what makes "this is byte-identical to an existing submission"
-    free to detect, so a resubmission must be an upsert rather than a conflict."""
+    free to detect, so a resubmission must be an upsert rather than a conflict.
+    """
     first = await repository.put_file(b"schematic-bytes", source_format=SchematicFormat.LITEMATIC)
     second = await repository.put_file(b"schematic-bytes", source_format=SchematicFormat.LITEMATIC)
 
@@ -124,7 +125,8 @@ async def test_re_analysing_a_file_replaces_its_row_rather_than_adding_one(
 
 async def test_promoting_a_new_primary_demotes_the_previous_one(repository: SchematicRepository) -> None:
     """A partial unique index allows only one primary per build, so the swap has to happen in
-    a single transaction or the second insert fails."""
+    a single transaction or the second insert fails.
+    """
     first = await repository.put_file(b"first", source_format=SchematicFormat.LITEMATIC)
     second = await repository.put_file(b"second", source_format=SchematicFormat.LITEMATIC)
     await repository.record_analysis(1, first, make_analysis(), primary=True, original_filename="first.litematic")
@@ -295,7 +297,8 @@ async def test_a_fingerprint_from_another_engine_version_never_matches(
     repository: SchematicRepository,
 ) -> None:
     """Fingerprints are hashes whose definition can change between releases. Comparing across
-    versions would return confident garbage, so the version is part of every lookup."""
+    versions would return confident garbage, so the version is part of every lookup.
+    """
     digest = await repository.put_file(b"original", source_format=SchematicFormat.LITEMATIC)
     await repository.record_analysis(1, digest, make_analysis(shape="s", analyzer_version="engine-1"), primary=True)
 
@@ -323,7 +326,8 @@ async def test_the_stored_read_model_carries_the_file_facts_from_the_file_row(
     repository: SchematicRepository,
 ) -> None:
     """`source_format` and `byte_size` describe the bytes, not the analysis, so they live on
-    the content-addressed row and are joined back in rather than duplicated per attachment."""
+    the content-addressed row and are joined back in rather than duplicated per attachment.
+    """
     digest = await repository.put_file(b"sponge-bytes", source_format=SchematicFormat.SPONGE_SCHEM)
     await repository.record_analysis(1, digest, make_analysis(), primary=True)
 

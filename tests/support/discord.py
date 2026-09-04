@@ -200,7 +200,6 @@ def make_autocomplete_interaction(
     autocomplete callback answers from `bot.services.suggestions` rather than from a cog.
     `allowed_nodes` is what the permission engine would grant this user.
     """
-
     client = _AutocompleteClient(
         services=_AutocompleteServices(
             suggestions=suggestions,

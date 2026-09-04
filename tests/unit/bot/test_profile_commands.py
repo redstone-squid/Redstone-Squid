@@ -25,7 +25,8 @@ def _fields_named(fields: list, name: str) -> str | None:
 
 class TestOwnProfile:
     """The free-text half of your page. The linked accounts are the panel's
-    (`test_account_panel.py`), which lists them one field each so it can offer their controls."""
+    (`test_account_panel.py`), which lists them one field each so it can offer their controls.
+    """
 
     def test_links_render_as_markdown(self) -> None:
         profile = AccountProfile(account_id=1, links=(ProfileLink("Site", "https://example.com"),))

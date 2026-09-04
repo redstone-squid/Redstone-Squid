@@ -105,7 +105,8 @@ def test_both_shells_render_something(build: Callable[[], sp.StateMachine[Any, A
 @machine
 def test_no_two_controls_in_one_render_share_a_key(build: Callable[[], sp.StateMachine[Any, Any]]) -> None:
     """A duplicate key silently cross-wires two controls through the mount's handler table:
-    the second registration wins, and the first button starts doing the second one's job."""
+    the second registration wins, and the first button starts doing the second one's job.
+    """
     for nodes in (wt.mounted(build()).nodes, wt.routed(build()).nodes):
         keys = _control_keys(nodes)
 
@@ -143,7 +144,8 @@ def test_an_unknown_action_is_the_identity_rather_than_an_error(
     build: Callable[[], sp.StateMachine[Any, Any]],
 ) -> None:
     """Discord replays ids from messages that may be older than the current code, so a machine
-    meets actions it no longer has. Ignoring one is recoverable; raising is not."""
+    meets actions it no longer has. Ignoring one is recoverable; raising is not.
+    """
     subject = build()
     initial = subject.initial_state
 

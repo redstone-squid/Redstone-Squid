@@ -2467,7 +2467,6 @@ class MessageRoot[
         operation: OperationRecorder,
     ) -> bool:
         """Compose the frozen mount middleware in first-listed, outermost order."""
-
         handled = False
         action_attributes = {"action_id": str(request.context.action_id)}
 

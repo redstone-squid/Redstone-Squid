@@ -29,7 +29,6 @@ class WelcomeRelay[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     @Cog.listener(name="on_message")
     async def maybe_forward_welcome_message(self, message: discord.Message):
         """Forward some welcome system messages to the general channel."""
-
         if not self.service.should_consider(
             channel_id=message.channel.id,
             is_new_member_message=message.type is discord.MessageType.new_member,

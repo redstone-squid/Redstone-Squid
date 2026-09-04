@@ -119,7 +119,8 @@ async def test_submit_gates_new_accounts_on_current_consent() -> None:
 @pytest.mark.asyncio
 async def test_edit_hands_the_authorization_decision_to_the_service() -> None:
     """Who may edit is a build policy, not a transport one: the route validates
-    the request, names the caller, and calls one method."""
+    the request, names the caller, and calls one method.
+    """
     builds = BuildRecorder()
 
     http_response = Response()
@@ -152,7 +153,8 @@ async def test_edit_surfaces_the_service_authorization_refusal() -> None:
 @pytest.mark.asyncio
 async def test_edit_requires_an_if_match_revision() -> None:
     """Checked before the service is reached: a blind overwrite is a bad request,
-    not an authorization question."""
+    not an authorization question.
+    """
     builds = BuildRecorder()
 
     with pytest.raises(BuildRevisionRequiredError):

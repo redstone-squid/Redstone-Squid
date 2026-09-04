@@ -75,7 +75,8 @@ def resolver_for(http: StubHTTPClient, **kwargs: Any) -> DiscordRestActorResolve
 
 async def test_member_resolves_capabilities_from_the_payload_role_ids() -> None:
     """The REST path used to hardcode both capability flags to False, so a
-    `delete_log` vote cast over HTTP was always rejected as ineligible."""
+    `delete_log` vote cast over HTTP was always rejected as ineligible.
+    """
     http = StubHTTPClient({"roles": ["11", "22"]})
     resolver = resolver_for(http, capabilities=FakeCapabilities())
 
@@ -148,7 +149,8 @@ async def test_member_caches_successful_lookup_for_five_minutes() -> None:
 )
 async def test_member_raises_typed_unavailable_error(error: Exception) -> None:
     """A rate limit past `max_ratelimit_timeout`, a 5xx, and a transport failure
-    all mean the same thing to a vote: Discord cannot answer truthfully now."""
+    all mean the same thing to a vote: Discord cannot answer truthfully now.
+    """
     resolver = resolver_for(StubHTTPClient(error))
 
     with pytest.raises(DiscordMemberServiceUnavailableError, match="Discord member lookup failed"):
@@ -209,7 +211,8 @@ class TestConfiguredBase:
 
     def test_login_is_rebased_too(self) -> None:
         """`static_login` builds its own route, so a configured deployment would
-        otherwise validate its token against the real Discord."""
+        otherwise validate its token against the real Discord.
+        """
         assert rebased_url("http://127.0.0.1:8102/discord/api", Route("GET", "/users/@me").url) == (
             "http://127.0.0.1:8102/discord/api/users/@me"
         )

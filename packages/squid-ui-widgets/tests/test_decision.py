@@ -55,7 +55,8 @@ async def test_the_handler_receives_the_chosen_option_and_the_finish_action_ends
 
 async def test_confirm_wires_two_options_and_carries_the_tone_it_was_given() -> None:
     """The Discord button *style* this tone becomes is asserted in the adapter's suite; what
-    the machine owns is which controls exist, their order, and the tone it hands down."""
+    the machine owns is which controls exist, their order, and the tone it hands down.
+    """
     seen: list[str] = []
 
     async def record(event: sp.TransitionEvent[sp.DecisionState]) -> None:

@@ -666,7 +666,8 @@ def test_api_key_pepper_requires_enough_entropy_material(monkeypatch: pytest.Mon
 
 def test_a_malformed_bootstrap_secret_node_fails_configuration_load(monkeypatch: pytest.MonkeyPatch) -> None:
     """The column downstream is free text, so a typo here would otherwise become
-    a credential that authenticates and then silently authorizes nothing."""
+    a credential that authenticates and then silently authorizes nothing.
+    """
     _set_environment(
         monkeypatch,
         SQUID_API_SECRET="api-secret-long-enough",

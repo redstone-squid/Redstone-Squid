@@ -143,7 +143,8 @@ class TestStaging:
 
     def test_another_task_does_not(self):
         """The reason writes stage rather than write through: a shared read crossing an
-        `await` must not see an action that has not committed."""
+        `await` must not see an action that has not committed.
+        """
         panel = attached(Panel(Uncopyable()))
         seen: dict[str, int] = {}
 

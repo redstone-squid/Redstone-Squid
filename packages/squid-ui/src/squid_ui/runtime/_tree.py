@@ -66,7 +66,6 @@ def map_layout_children[RenderTargetT: RenderTarget](
     require exactly one result. ``path`` is diagnostic only and is extended consistently for
     every structural shape.
     """
-
     return _map_layout_children_routed(node, path, (), lambda child, child_path, _route: transform(child, child_path))
 
 

@@ -166,7 +166,8 @@ async def _run(cog: BuildSubmitCommands[Any], message: discord.Message) -> disco
 
 async def test_the_menu_denies_the_way_the_command_did() -> None:
     """A context menu cannot carry `requires(...)`, so it raises what the decorator raises
-    and the shared presenter renders one refusal for both surfaces."""
+    and the shared presenter renders one refusal for both surfaces.
+    """
     cog = _cog(allowed=False)
 
     with pytest.raises(PermissionNodeRequired) as denial:
@@ -178,7 +179,8 @@ async def test_the_menu_denies_the_way_the_command_did() -> None:
 
 async def test_a_message_no_build_can_come_from_says_so() -> None:
     """The command reported "Build recalculated." whatever it was pointed at, because
-    inference is a listener that silently ignores anything outside a build log channel."""
+    inference is a listener that silently ignores anything outside a build log channel.
+    """
     cog = _cog()
 
     interaction = await _run(cog, _message(channel_id=999))

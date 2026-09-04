@@ -287,8 +287,7 @@ class Help(commands.MinimalHelpCommand):
     def get_commands_brief_details(
         commands_: Sequence[Command[Any, Any, Any]], return_as_list: bool = False
     ) -> list[str] | str:
-        """
-        Formats the prefix, command name and signature, and short doc for an iterable of commands.
+        """Formats the prefix, command name and signature, and short doc for an iterable of commands.
 
         return_as_list is helpful for passing these command details into the paginator as a list of command details.
         """

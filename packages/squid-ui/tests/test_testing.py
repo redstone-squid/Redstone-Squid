@@ -23,7 +23,8 @@ def _controls(*keys: str) -> ActionControls:
 class TestWalk:
     def test_it_reaches_controls_the_layout_child_fields_do_not_name(self) -> None:
         """`ActionControls.items` is deliberately not a layout child, and every hand-written
-        walker this replaces had to remember to special-case it."""
+        walker this replaces had to remember to special-case it.
+        """
         tree = sl.stack(sl.paragraph("body"), _controls("save", "close"))
 
         assert st.keys(tree) == ["bar", "save", "close"]

@@ -233,7 +233,8 @@ def test_publication_value_is_not_forgeable_from_an_unsanitized_record() -> None
 @pytest.mark.parametrize("source_format", list(SchematicFormat))
 async def test_each_stored_format_downloads_under_its_own_extension(source_format: SchematicFormat) -> None:
     """The extension follows the container the analysis recorded, so a `.litematic`
-    stops arriving named `.schem`. The stem stays server-generated."""
+    stops arriving named `.schem`. The stem stays server-generated.
+    """
     schematics = PublicSchematics()
     analysis = schematics.stored.analysis
     schematics.stored = replace(

@@ -173,7 +173,8 @@ class TestDigestConstruction:
 
     def test_a_known_answer_pins_the_construction(self) -> None:
         """A change of primitive, key order, or encoding invalidates every
-        stored digest, so it should fail here rather than in production."""
+        stored digest, so it should fail here rather than in production.
+        """
         expected = bytes.fromhex("e85a71116346fb122fbf70bda5503f9d4afd28fd940c40b651ed37784439ed7b")
 
         assert service(FakeApiKeyRepository()).hash_secret("a-known-secret") == expected
@@ -182,7 +183,8 @@ class TestDigestConstruction:
     @pytest.mark.asyncio
     async def test_a_rotated_pepper_stops_authenticating_old_tokens(self) -> None:
         """The pepper is a key, not a salt: rotating it revokes every credential
-        it protected, which is the property that makes leaking the table safe."""
+        it protected, which is the property that makes leaking the table safe.
+        """
         repository = FakeApiKeyRepository()
         issued = await service(repository).issue(label="CI", scopes={"account.verify.relay"})
         rotated = ApiKeyService(repository, "a-different-pepper", now=lambda: NOW)
@@ -198,7 +200,8 @@ class TestScopeValidation:
     async def test_a_malformed_pattern_is_rejected_without_a_permission_service(self) -> None:
         """The owner-authority check is skipped on the CLI bootstrap path, so it
         cannot be the thing that catches a typo: `buildsubmission.raed` used to
-        persist happily and then match nothing."""
+        persist happily and then match nothing.
+        """
         repository = FakeApiKeyRepository()
 
         with pytest.raises(InvalidPatternError):
@@ -209,7 +212,8 @@ class TestScopeValidation:
     @pytest.mark.asyncio
     async def test_equivalent_patterns_are_stored_once(self) -> None:
         """Parsing strips before de-duplicating, so surrounding whitespace does
-        not smuggle a second copy of one pattern into the array."""
+        not smuggle a second copy of one pattern into the array.
+        """
         repository = FakeApiKeyRepository()
 
         issued = await service(repository).issue(label="CI", scopes=["build.**", " build.** ", "build.**"])
@@ -244,7 +248,8 @@ class TestIssuanceBoundary:
 
     async def test_a_pattern_beyond_the_owner_is_refused(self) -> None:
         """Enforced at issue time as well as at request time, so an over-broad key
-        cannot be minted now and quietly wait for its owner to be promoted."""
+        cannot be minted now and quietly wait for its owner to be promoted.
+        """
         repository = FakeApiKeyRepository()
         api_keys = ApiKeyService(repository, "test-api-key-pepper", permissions=self._permissions("build.**"))
 
@@ -255,7 +260,8 @@ class TestIssuanceBoundary:
 
     async def test_an_ownerless_key_is_bounded_only_by_its_own_nodes(self) -> None:
         """There is nobody to intersect with, and the machine-to-machine case
-        would otherwise be impossible to serve."""
+        would otherwise be impossible to serve.
+        """
         repository = FakeApiKeyRepository()
         api_keys = ApiKeyService(repository, "test-api-key-pepper", permissions=self._permissions())
 

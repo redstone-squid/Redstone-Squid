@@ -108,8 +108,10 @@ def apply_guardrails(limits: Mapping[str, int]) -> None:
 
 
 def _current_address_space_bytes(statm_path: Path = STATM_PATH) -> int:
-    """This process's already-mapped virtual address space, so `RLIMIT_AS` bounds the budget
-    a payload gets rather than the interpreter's own baseline footprint.
+    """The baseline `RLIMIT_AS` must leave room for.
+
+    This process's already-mapped virtual address space, so the limit bounds the budget a payload
+    gets rather than the interpreter's own baseline footprint.
 
     That baseline is not portable: Termux's bionic/Scudo allocator reserves on the order of
     10 GB of address space before a single line of this module runs, dwarfing the configured

@@ -961,7 +961,8 @@ class TestMergeCodes:
 
 async def test_an_account_can_be_created_with_its_consent_receipt_in_one_write() -> None:
     """The Discord gate asks, then mints. Splitting that into create-then-record leaves a
-    receipt-less account behind whenever the second call fails."""
+    receipt-less account behind whenever the second call fails.
+    """
     repository = FakeAccountRepository()
     account_service = service(repository)
     consent = AccountConsent.grant_current()
@@ -974,7 +975,8 @@ async def test_an_account_can_be_created_with_its_consent_receipt_in_one_write()
 
 async def test_an_existing_account_is_not_handed_a_receipt_it_never_agreed_to() -> None:
     """`get_or_create_identity` cannot tell whether its caller asked anybody, so it only ever
-    writes a receipt onto the row it creates itself."""
+    writes a receipt onto the row it creates itself.
+    """
     repository = FakeAccountRepository()
     account_service = service(repository)
     existing = repository.seed_account(99, provider=IdentityProvider.DISCORD)

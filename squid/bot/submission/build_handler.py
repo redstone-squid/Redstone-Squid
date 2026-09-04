@@ -46,7 +46,6 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
 
     async def get_channels_to_post_to(self) -> list[GuildMessageable]:
         """Gets the channels in which this build should be posted to."""
-
         target: Literal["Smallest", "Fastest", "First", "Builds"]
 
         match self.build.submission_status:
@@ -70,8 +69,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         return cast(list[GuildMessageable], channels)
 
     async def post_for_voting(self, type: Literal["add", "update"] = "add") -> None:
-        """
-        Post a build for voting.
+        """Post a build for voting.
 
         Args:
             type (Literal["add", "update"]): Whether to add or update the build.
@@ -268,7 +266,8 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
     def get_metadata_fields(self) -> dict[str, str]:  # type: ignore
         """Returns a dictionary of metadata fields for the build.
 
-        The fields are formatted as key-value pairs, where the key is the field name and the value is the field value. The values are not escaped."""
+        The fields are formatted as key-value pairs, where the key is the field name and the value is the field value. The values are not escaped.
+        """
         build = self.build
         fields = {"Dimensions": f"{build.width or '?'} x {build.height or '?'} x {build.depth or '?'}"}
 

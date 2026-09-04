@@ -571,7 +571,8 @@ class TestAuthorizedEditing:
 
     async def test_ownership_does_not_survive_confirmation(self, existing_build: DoorBuild) -> None:
         """A submitter edits their build while it is pending; once it is
-        confirmed it is catalogue data, and changing it needs the node."""
+        confirmed it is catalogue data, and changing it needs the node.
+        """
         existing_build.submission_status = Status.CONFIRMED
         repository = FakeBuildRepository(existing_build)
         service = build_service(repository, permissions=self._permissions())
@@ -589,7 +590,8 @@ class TestAuthorizedEditing:
 
     async def test_authorized_editing_requires_a_permission_service(self, existing_build: DoorBuild) -> None:
         """The bot builds the same service; wiring it without permissions must
-        fail loudly rather than authorize everything."""
+        fail loudly rather than authorize everything.
+        """
         service = build_service(FakeBuildRepository(existing_build))
 
         with pytest.raises(InvalidStateError):

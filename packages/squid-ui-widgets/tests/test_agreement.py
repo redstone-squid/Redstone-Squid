@@ -61,7 +61,8 @@ async def test_withdrawing_removes_only_the_pressing_participant() -> None:
 
 async def test_an_outsider_is_refused_without_any_frontend_membership_check() -> None:
     """The participant list is the membership test; a transport's access policy is a second,
-    independent gate, asserted in the adapter's suite."""
+    independent gate, asserted in the adapter's suite.
+    """
     agreement = _agreement(require=1)
 
     await engine.press(agreement, "agreement.approve", actor="99")

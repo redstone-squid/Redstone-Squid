@@ -280,8 +280,7 @@ class RedstoneSquid(Bot):
         return channel
 
     async def get_or_fetch_message(self, channel_id: int, message_id: int) -> discord.Message | None:
-        """
-        Fetches a message from the cache or the API.
+        """Fetches a message from the cache or the API.
 
         Purely a read. This used to delete the message's tracking row when Discord
         answered 404, which made a lookup quietly destroy state and forced four of its

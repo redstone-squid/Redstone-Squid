@@ -289,7 +289,6 @@ def _measure_v2(
     limits: V2Limits = LIMITS,
 ) -> MessageReservation:
     """Measure what `view` already spends, without mutating or repairing it."""
-
     custom_ids: list[CustomIdSite] = []
     components = 0
     text = 0

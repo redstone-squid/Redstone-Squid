@@ -120,7 +120,8 @@ async def test_agreeing_mints_the_account_and_its_receipt_in_one_write(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Creating the row and recording consent separately leaves a receipt-less account behind
-    whenever the second call fails."""
+    whenever the second call fails.
+    """
     accounts = make_accounts(None)
     ctx = make_context()
     _stub_prompt(monkeypatch, agree=True)
@@ -148,7 +149,8 @@ async def test_the_gate_works_from_an_interaction_in_either_response_state(
     monkeypatch: pytest.MonkeyPatch, response_done: bool
 ) -> None:
     """Slash cogs, modals and view buttons all reach the gate, and they differ only in whether
-    the interaction has already been answered."""
+    the interaction has already been answered.
+    """
     accounts = make_accounts(None)
     interaction = make_interaction(response_done=response_done)
     _stub_prompt(monkeypatch, agree=True)

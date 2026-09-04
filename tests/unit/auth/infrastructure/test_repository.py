@@ -26,7 +26,8 @@ def test_stored_patterns_are_parsed_once() -> None:
 
 def test_an_unparsable_stored_pattern_is_a_data_integrity_failure() -> None:
     """The column is free text, so a row can only have got here by bypassing the
-    service. Failing at the boundary beats matching nothing at request time."""
+    service. Failing at the boundary beats matching nothing at request time.
+    """
     with pytest.raises(DataIntegrityError) as raised:
         _to_domain(model("build.**", "not a pattern"))
 

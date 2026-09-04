@@ -85,7 +85,8 @@ class TestFailureInjection:
 
     def test_the_stale_failure_carries_the_code_the_recovery_path_keys_on(self) -> None:
         """Recovery keys on code 10015, not on the 404 -- an unknown webhook is what an
-        expired interaction token looks like from Discord's side."""
+        expired interaction token looks like from Discord's side.
+        """
         stale = sd.stale_http_error()
 
         assert (stale.status, stale.code) == (404, 10015)

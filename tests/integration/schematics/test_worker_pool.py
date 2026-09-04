@@ -71,7 +71,8 @@ async def test_analysis_reads_tight_dimensions_not_allocated_bounds(
     pool: SchematicWorkerPool, periodic_door: Callable[..., bytes]
 ) -> None:
     """`dimensions()` reports the region the file allocates; only `tight_dimensions()` is a
-    measurement of the build, and it is the one a record can be argued from."""
+    measurement of the build, and it is the one a record can be argued from.
+    """
     analysis = await pool.analyze(periodic_door(), limits=SchematicLimits(), source_format=SchematicFormat.LITEMATIC)
 
     metrics = analysis.metrics
@@ -84,7 +85,8 @@ async def test_the_shape_fingerprint_survives_translation(
     pool: SchematicWorkerPool, periodic_door: Callable[..., bytes]
 ) -> None:
     """The load-bearing assumption for duplicate detection: the same build reposted at other
-    coordinates must hash the same."""
+    coordinates must hash the same.
+    """
     here = await pool.analyze(periodic_door(), limits=SchematicLimits())
     moved = await pool.analyze(periodic_door(offset=13), limits=SchematicLimits())
 
@@ -96,7 +98,8 @@ async def test_shape_separates_builds_that_structural_lumps_together(
     pool: SchematicWorkerPool, periodic_door: Callable[..., bytes]
 ) -> None:
     """`structural` is a coarse bucket: one added glass block still matches. That is why the
-    duplicate index is `shape` and `structural` is only ever a pre-filter."""
+    duplicate index is `shape` and `structural` is only ever a pre-filter.
+    """
     original, altered = periodic_door(), periodic_door(extra_block=True)
 
     structural = await pool.compare(original, altered, preset=FingerprintPreset.STRUCTURAL)
@@ -217,7 +220,8 @@ async def test_a_worker_killed_mid_request_is_replaced_and_the_bot_survives(
     pool: SchematicWorkerPool, periodic_door: Callable[..., bytes], slow_schematic: bytes
 ) -> None:
     """The test that proves the isolation design: a dead engine is one failed request, not an
-    outage. Nothing is retried, because a payload that killed a worker would kill the next."""
+    outage. Nothing is retried, because a payload that killed a worker would kill the next.
+    """
     await pool.capabilities()
     process = pool._workers[0]._process
     assert process is not None

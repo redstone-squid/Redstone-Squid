@@ -441,7 +441,6 @@ def delivered_to(message: Any, *, handle: EditHandle | None = None) -> MessageDe
     The message root ends up holding exactly the handle a real send would have given it, so tests
     about editing, refreshing and finishing can start from a delivered message root.
     """
-
     authority = handle if handle is not None else handle_for(message)
 
     async def send(payload: MessagePayload) -> DeliveryResult:

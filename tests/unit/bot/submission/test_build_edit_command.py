@@ -258,7 +258,8 @@ async def _open_from_menu(cog: BuildEditCommands[Any], message: discord.Message)
 async def test_the_menu_opens_the_editor_behind_its_own_defer() -> None:
     """`open_build_editor` used to resolve a second request for the same interaction, which
     did not know about the defer, so the workspace went out as a follow-up next to a
-    placeholder that never resolved."""
+    placeholder that never resolved.
+    """
     cog = _cog(_door())
     cog.bot.user = cast(Any, discord.Object(id=1))
     cog.bot.services.posts = PostRecorder("1")

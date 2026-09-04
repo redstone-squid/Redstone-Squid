@@ -384,7 +384,8 @@ def test_a_wide_scale_falls_back_to_a_parsed_text_input() -> None:
 )
 def test_entity_prefills_resolve_to_explicitly_typed_default_values(prefill, expected) -> None:
     """A bare `discord.Object` would make discord.py guess the kind, and reject it outright on a
-    mentionable select, so every prefill shape has to carry its type across explicitly."""
+    mentionable select, so every prefill shape has to carry its type across explicitly.
+    """
     defaults = _entity_defaults(prefill, EntityType.ROLE)
 
     assert [(value.id, value.type) for value in defaults] == expected

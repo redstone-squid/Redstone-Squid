@@ -60,7 +60,7 @@ class UnknownRestrictions(TypedDict, total=False):
 
 
 class ServerInfo(TypedDict, total=False):
-    """Various additional information about the server"""
+    """Various additional information about the server."""
 
     server_ip: str
     coordinates: str
@@ -76,7 +76,7 @@ class SchematicDuplicateInfo(TypedDict):
 
 
 class Info(TypedDict, total=False):
-    """A special JSON field in the database that stores various additional information about the build"""
+    """A special JSON field in the database that stores various additional information about the build."""
 
     user: str  # Provided by the submitter if they have any additional information to provide.
     unknown_patterns: list[str]
@@ -142,8 +142,7 @@ def frozen_field(**kwargs: Any) -> Any:
 
 
 def freeze_fields[T](cls: type[T]) -> type[T]:
-    """
-    A decorator that makes fields of a dataclass immutable, if they have the `frozen` metadata set to True.
+    """A decorator that makes fields of a dataclass immutable, if they have the `frozen` metadata set to True.
 
     This is done by replacing the fields with FrozenField descriptors.
 
@@ -153,7 +152,6 @@ def freeze_fields[T](cls: type[T]) -> type[T]:
     Raises:
         TypeError: If cls is not a dataclass
     """
-
     cls_fields = getattr(cls, "__dataclass_fields__", None)
     if cls_fields is None:
         class_name = cls.__name__
@@ -429,8 +427,7 @@ class Build(StagedMedia, StagedTaxonomy):
         return format_build_display_title(self, markdown=True)
 
     def diff[T: Any](self, other: Build, *, allow_different_id: bool = False) -> list[tuple[str, T, T]]:
-        """
-        Returns the differences between this build and another of the same category.
+        """Returns the differences between this build and another of the same category.
 
         Values are rendered as plain data — callers persist the result as JSON —
         so link collections come back as one entry per media type rather than as

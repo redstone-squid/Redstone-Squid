@@ -359,7 +359,6 @@ async def handle_context_error[BotT: commands.Bot](
     error: BaseException,
 ) -> None:
     """Handle an exception raised by a prefix or hybrid command."""
-
     request = await sd.request(context)
     command_name = context.command.qualified_name if context.command is not None else None
     await _handle_discord_error(
@@ -383,7 +382,6 @@ async def handle_interaction_error(
     surface: str,
 ) -> None:
     """Handle an exception raised by an application command or UI interaction."""
-
     request = await sd.request(interaction)
     command = interaction.command
     await _handle_discord_error(

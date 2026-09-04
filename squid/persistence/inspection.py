@@ -53,7 +53,6 @@ def check_relationship_property(
     column_prop: RelationshipProperty, schema: DatabaseSchema, klass: type[DeclarativeBase], engine: Engine
 ) -> bool:
     """Check if a relationship property is valid."""
-
     errors = False
 
     if column_prop.secondary is not None:

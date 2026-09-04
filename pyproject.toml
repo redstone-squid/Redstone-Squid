@@ -265,7 +265,12 @@ select = [
     "UP",
     "RUF",
     "TRY",
-#    "D",
+    # Docstring layout and section rules only. D1 (missing docstring) stays off on purpose:
+    # a docstring with nothing to say is deleted, not padded. The google convention below
+    # drops D401 and friends, which would reject the noun-phrase property docstrings.
+    "D2",
+    "D3",
+    "D4",
     "W293",  # Other W rules are covered already
     "FBT",
     "DTZ",
@@ -323,6 +328,9 @@ known-first-party = [
     "D101",
     "D102",
     "D103",
+    # A test docstring is a paragraph of rationale, not a summary line plus a body.
+    "D205",
+    "D210",
     "INP"
 ]
 
@@ -334,7 +342,9 @@ known-first-party = [
     "RUF059",
     "D101",
     "D102",
-    "D103"
+    "D103",
+    "D205",
+    "D210",
 ]
 
 [tool.ruff.lint.pydocstyle]

@@ -128,7 +128,8 @@ class TestWhatEachShellInjects:
         """The one place the shells are not interchangeable. A mounted form trigger opens a
         modal in place, so it is content; a routed one is just a button carrying an id, so it
         belongs in a control group. Every machine in the library branches on this by hand --
-        `Wizard` included -- and nothing but this test says so."""
+        `Wizard` included -- and nothing but this test says so.
+        """
         assert isinstance(engine.find(wt.mounted(Probe()).nodes, FormTrigger, key="probe.edit"), FormTrigger)
         assert isinstance(
             engine.find(wt.routed(Probe()).nodes, RoutedActionControl, key="probe.edit"), RoutedActionControl
@@ -146,7 +147,8 @@ class TestWhatEachShellInjects:
 class TestRoutePhases:
     def test_a_button_encodes_the_state_its_press_will_produce(self) -> None:
         """`next`: the transition is deterministic, so the shell applies it up front and the id
-        carries the answer. A restart can then render from the id alone."""
+        carries the answer. A restart can then render from the id alone.
+        """
         route = wt.routed(Probe()).route_for("go")
 
         assert route.phase == "next"
@@ -154,7 +156,8 @@ class TestRoutePhases:
 
     def test_a_picker_encodes_the_state_its_selection_applies_to(self) -> None:
         """`input`: the value arrives with the interaction, so the id cannot carry the result --
-        it carries what the result will be computed from."""
+        it carries what the result will be computed from.
+        """
         route = wt.routed(Probe()).route_for("pick")
 
         assert route.phase == "input"
@@ -170,7 +173,8 @@ class TestEmbeddedContent:
 
     def test_the_routed_shell_refuses_a_component_and_says_what_to_do_instead(self) -> None:
         """A routed render has no session to mount a child into, so this cannot be deferred to
-        draw time -- and a silent drop would lose content with no diagnostic."""
+        draw time -- and a silent drop would lose content with no diagnostic.
+        """
         with pytest.raises(TypeError, match="a routed machine cannot embed Echo"):
             wt.routed(Probe(embed=True))
 
@@ -192,7 +196,8 @@ class TestComponentDriverWiring:
 
     async def test_on_change_runs_before_a_per_action_handler(self) -> None:
         """The general hook observes every transition; the specific one reacts to this action.
-        Ordering matters because the specific handler may finish or redirect."""
+        Ordering matters because the specific handler may finish or redirect.
+        """
         order: list[str] = []
 
         async def changed(_event: sp.TransitionEvent[sp.TabsState]) -> None:
@@ -257,7 +262,8 @@ class TestComponentDriverWiring:
 class TestRouteDriverTransition:
     def test_it_applies_input_the_routed_shell_could_not_apply_at_render_time(self) -> None:
         """The host's half of the `input` phase: decode the state from the id, then apply the
-        values that arrived with the interaction."""
+        values that arrived with the interaction.
+        """
         driver: sp.RouteDriver[sp.TabsState, sl.ComponentsV2Target] = sp.RouteDriver(lambda request: request.action)
         machine = Probe()
 
@@ -277,7 +283,8 @@ class TestRouteDriverTransition:
 class TestFormPresentingMachine:
     def test_a_machine_that_answers_an_action_with_a_form_is_recognised_structurally(self) -> None:
         """`Editor` resolves nested sections through this shape rather than through an optional
-        method on every machine, so the check has to be a runtime protocol."""
+        method on every machine, so the check has to be a runtime protocol.
+        """
         editor = sp.Editor("Edit", (sp.EditorSection.from_form("value", "Value", _form()),))
 
         assert isinstance(editor, FormPresentingMachine)
