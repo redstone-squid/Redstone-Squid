@@ -47,23 +47,29 @@ from squid.records.infrastructure.models import (
 from squid.tags.infrastructure.models import BuildTagAssignment
 
 
-def _staff_role_ids():
-    """The `global-admin` role's id, as a scalar subquery.
+def _durable_staff_notification_role_ids():
+    """The durable staff-notification audience role's id, as a scalar subquery.
 
-    Staff notification targeting is a set query over every account, so it cannot run the
-    resolver per row; holding the `global-admin` role is the structural stand-in.
+    Background delivery has no request, guild, Discord-role membership, or configured-owner
+    context to resolve. Its deliberately narrower audience is therefore an active, global,
+    direct account assignment to the built-in `global-admin` role.
 
-    This answers only *whom do we notify*. The other question the config allowlist used
-    to conflate with it -- *may this caller read staff inbox items* -- is per-caller and
-    now resolves `build.submission.view_pending` in the route.
+    This answers only *whom do we notify*. Per-request staff inbox visibility separately
+    resolves `build.submission.view_pending`; holding that node through owner or custom-role
+    context does not implicitly subscribe an account to unsolicited staff notifications.
     """
     return select(PermissionRole.id).where(PermissionRole.builtin_key == BuiltinRoleKeys.GLOBAL_ADMIN.value)
 
 
-def _is_staff_account(account_column):
+def _is_durable_staff_notification_recipient(account_column):
     return exists().where(
         PermissionRoleAssignment.subject_account_id == account_column,
-        PermissionRoleAssignment.role_id.in_(_staff_role_ids()),
+        PermissionRoleAssignment.role_id.in_(_durable_staff_notification_role_ids()),
+        PermissionRoleAssignment.scope_guild_id.is_(None),
+        or_(
+            PermissionRoleAssignment.expires_at.is_(None),
+            PermissionRoleAssignment.expires_at > func.now(),
+        ),
     )
 
 
@@ -309,7 +315,7 @@ class PostgresNotificationRepository:
 
     async def claim_deliveries(self, *, limit: int) -> Sequence[PendingNotificationDelivery]:
         async with self._session_factory() as session, session.begin():
-            claimable_staff = _is_staff_account(NotificationDeliveryRecord.account_id)
+            claimable_staff = _is_durable_staff_notification_recipient(NotificationDeliveryRecord.account_id)
             # The DM address is read at claim time rather than copied onto the delivery
             # row at enqueue time. The write path already made this join to decide
             # whether to enqueue at all, so the cost moves rather than appearing -- and
@@ -475,7 +481,11 @@ class PostgresNotificationRepository:
         if build is None or build.submission_status != Status.PENDING:
             return
         staff_account_ids = (
-            await session.execute(select(Account.id).where(_is_staff_account(Account.id)).order_by(Account.id))
+            await session.execute(
+                select(Account.id)
+                .where(_is_durable_staff_notification_recipient(Account.id))
+                .order_by(Account.id)
+            )
         ).scalars()
         payload = {"build_id": build.id, "category": None if build.category is None else str(build.category)}
         await self._insert_candidates(
