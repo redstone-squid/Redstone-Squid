@@ -5,10 +5,12 @@ from decimal import Decimal
 from typing import cast
 
 from sqlalchemy import Table
+from sqlalchemy.dialects.postgresql import dialect
 
 from squid.notifications.domain import NotificationKind, SubscriptionKind
 from squid.notifications.infrastructure.models import NotificationRecord, NotificationSubscriptionRecord
 from squid.notifications.infrastructure.repository import _exact_value
+from squid.persistence.types import StrEnumText
 
 
 def test_exact_tag_matching_does_not_cross_boolean_and_numeric_types() -> None:
@@ -34,3 +36,11 @@ def test_persisted_kind_checks_are_total_over_domain_enums() -> None:
     assert set(re.findall(r"'([^']+)'", constraints["notification_subscriptions_kind_check"])) == {
         kind.value for kind in SubscriptionKind
     }
+
+
+def test_persisted_kinds_are_mapped_back_to_domain_enums() -> None:
+    notification_type = cast(StrEnumText[NotificationKind], NotificationRecord.kind.type)
+    subscription_type = cast(StrEnumText[SubscriptionKind], NotificationSubscriptionRecord.kind.type)
+
+    assert notification_type.process_result_value("build_confirmed", dialect()) is NotificationKind.BUILD_CONFIRMED
+    assert subscription_type.process_result_value("creator", dialect()) is SubscriptionKind.CREATOR
