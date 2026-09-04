@@ -21,9 +21,7 @@ from whenever import Instant
 
 from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC, now
-
-MAX_SCHEMATIC_BYTES = 16 * 1024 * 1024
-"""Hard compressed-byte ceiling enforced in the database as well as at upload."""
+from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
 
 
 class SchematicFile(Base):
@@ -31,7 +29,10 @@ class SchematicFile(Base):
 
     __tablename__ = "schematic_files"
     __table_args__ = (
-        CheckConstraint(f"byte_size > 0 AND byte_size <= {MAX_SCHEMATIC_BYTES}", name="schematic_files_size_bounded"),
+        CheckConstraint(
+            f"byte_size > 0 AND byte_size <= {SCHEMATIC_FILE_SCHEMA_MAX_BYTES}",
+            name="schematic_files_size_bounded",
+        ),
     )
 
     sha256: Mapped[str] = mapped_column(Text, primary_key=True)
