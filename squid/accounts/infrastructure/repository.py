@@ -7,9 +7,10 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from sqlalchemy import case, column, delete, func, literal, or_, select, table, text, update
+from sqlalchemy import and_, case, column, delete, func, literal, or_, select, table, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.orm import aliased
 from whenever import Instant
 
 from squid.accounts.application.ports import VerificationLinkResult
@@ -57,12 +58,19 @@ from squid.accounts.infrastructure.models import VerificationCode as Verificatio
 from squid.core.errors import DataIntegrityError
 from squid.core.i18n import tr
 from squid.notifications.domain import NotificationKind
-from squid.notifications.infrastructure.models import NotificationDeliveryRecord, NotificationRecord
+from squid.notifications.infrastructure.models import (
+    NotificationDeliveryRecord,
+    NotificationProfile,
+    NotificationRecord,
+    NotificationSubscriptionRecord,
+)
+from squid.permissions.infrastructure.models import PermissionGrant, PermissionRoleAssignment
 from squid.persistence.types import InstantUTC, now
 from squid.submissions.domain import FinalizationJobStatus
 from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
 from squid.submissions.infrastructure.models import SubmissionDraft
 from squid.submissions.payload_integrity import submission_payload_digest
+from squid.voting.infrastructure.models import Vote
 
 _BUILD_CREDITS = table("build_creators", column("alias_id"))
 """A lightweight handle on the one column of `build_creators` this module reads.
@@ -146,85 +154,163 @@ WHERE access_row.id IN (
       AND absorbed_access.account_id = :absorbed
 )
 """
-_COLLAPSE_ALIAS_CLAIMS_SQL = """
-DELETE FROM creator_alias_claims AS absorbed_claim
-USING creator_alias_claims AS survivor_claim
-WHERE absorbed_claim.account_id = :absorbed
-  AND survivor_claim.account_id = :survivor
-  AND absorbed_claim.alias_id = survivor_claim.alias_id
-  AND absorbed_claim.status = 'pending'
-  AND survivor_claim.status = 'pending'
-"""
-_COLLAPSE_VOTES_SQL = """
-DELETE FROM votes AS absorbed_vote
-USING votes AS survivor_vote
-WHERE absorbed_vote.account_id = :absorbed
-  AND survivor_vote.account_id = :survivor
-  AND absorbed_vote.vote_session_id = survivor_vote.vote_session_id
-"""
-_MERGE_NOTIFICATION_PROFILE_SQL = """
-INSERT INTO notification_profiles (
-    account_id,
-    web_enabled,
-    dm_enabled,
-    dm_suspended_at,
-    created_at,
-    updated_at
-)
-SELECT
-    :survivor,
-    web_enabled,
-    dm_enabled,
-    dm_suspended_at,
-    created_at,
-    updated_at
-FROM notification_profiles
-WHERE account_id = :absorbed
-ON CONFLICT (account_id) DO UPDATE SET
-    web_enabled = notification_profiles.web_enabled OR EXCLUDED.web_enabled,
-    dm_enabled = notification_profiles.dm_enabled OR EXCLUDED.dm_enabled,
-    dm_suspended_at = CASE
-        WHEN (notification_profiles.dm_enabled AND notification_profiles.dm_suspended_at IS NULL)
-          OR (EXCLUDED.dm_enabled AND EXCLUDED.dm_suspended_at IS NULL)
-        THEN NULL
-        ELSE COALESCE(notification_profiles.dm_suspended_at, EXCLUDED.dm_suspended_at)
-    END
-"""
-_COLLAPSE_NOTIFICATION_SUBSCRIPTIONS_SQL = """
-DELETE FROM notification_subscriptions AS absorbed_subscription
-USING notification_subscriptions AS survivor_subscription
-WHERE absorbed_subscription.account_id = :absorbed
-  AND survivor_subscription.account_id = :survivor
-  AND absorbed_subscription.kind = survivor_subscription.kind
-  AND absorbed_subscription.subject_id IS NOT DISTINCT FROM survivor_subscription.subject_id
-  AND absorbed_subscription.filter IS NOT DISTINCT FROM survivor_subscription.filter
-  AND absorbed_subscription.enabled = survivor_subscription.enabled
-"""
-_MERGE_PERMISSION_EFFECTS_SQL = """
-UPDATE permission_grants AS survivor_grant
-SET effect = LEAST(survivor_grant.effect, absorbed_grant.effect)
-FROM permission_grants AS absorbed_grant
-WHERE survivor_grant.subject_account_id = :survivor
-  AND absorbed_grant.subject_account_id = :absorbed
-  AND absorbed_grant.pattern = survivor_grant.pattern
-  AND absorbed_grant.scope_guild_id IS NOT DISTINCT FROM survivor_grant.scope_guild_id
-"""
-_COLLAPSE_PERMISSION_GRANTS_SQL = """
-DELETE FROM permission_grants AS absorbed_grant
-USING permission_grants AS survivor_grant
-WHERE absorbed_grant.subject_account_id = :absorbed
-  AND survivor_grant.subject_account_id = :survivor
-  AND absorbed_grant.pattern = survivor_grant.pattern
-  AND absorbed_grant.scope_guild_id IS NOT DISTINCT FROM survivor_grant.scope_guild_id
-"""
-_COLLAPSE_PERMISSION_ROLE_ASSIGNMENTS_SQL = """
-DELETE FROM permission_role_assignments AS absorbed_assignment
-USING permission_role_assignments AS survivor_assignment
-WHERE absorbed_assignment.subject_account_id = :absorbed
-  AND survivor_assignment.subject_account_id = :survivor
-  AND absorbed_assignment.role_id = survivor_assignment.role_id
-  AND absorbed_assignment.scope_guild_id IS NOT DISTINCT FROM survivor_assignment.scope_guild_id
-"""
+_RETAINED_MERGE_SQL_REASONS = {
+    _COLLAPSE_DRAFT_ACCESS_SQL: (
+        "The winner depends on the draft's pre-merge owner while deleting one of two conflicting access rows; "
+        "the joined CASE delete is clearer and safer than duplicating that precedence across correlated subqueries."
+    )
+}
+
+
+def _collapse_alias_claims_statement(context: _AccountMergeContext):
+    absorbed = aliased(CreatorAliasClaimModel, name="absorbed_claim")
+    survivor = aliased(CreatorAliasClaimModel, name="survivor_claim")
+    duplicate_ids = (
+        select(absorbed.id)
+        .join(
+            survivor,
+            and_(
+                survivor.account_id == context.survivor,
+                survivor.alias_id == absorbed.alias_id,
+                survivor.status == ClaimStatus.PENDING,
+            ),
+        )
+        .where(absorbed.account_id == context.absorbed, absorbed.status == ClaimStatus.PENDING)
+    )
+    return delete(CreatorAliasClaimModel).where(CreatorAliasClaimModel.id.in_(duplicate_ids))
+
+
+def _collapse_votes_statement(context: _AccountMergeContext):
+    absorbed = aliased(Vote, name="absorbed_vote")
+    survivor = aliased(Vote, name="survivor_vote")
+    duplicate_sessions = (
+        select(absorbed.vote_session_id)
+        .join(
+            survivor,
+            and_(
+                survivor.account_id == context.survivor,
+                survivor.vote_session_id == absorbed.vote_session_id,
+            ),
+        )
+        .where(absorbed.account_id == context.absorbed)
+    )
+    return delete(Vote).where(
+        Vote.account_id == context.absorbed,
+        Vote.vote_session_id.in_(duplicate_sessions),
+    )
+
+
+def _merge_notification_profile_statement(context: _AccountMergeContext):
+    statement = insert(NotificationProfile).from_select(
+        [
+            NotificationProfile.account_id,
+            NotificationProfile.web_enabled,
+            NotificationProfile.dm_enabled,
+            NotificationProfile.dm_suspended_at,
+            NotificationProfile.created_at,
+            NotificationProfile.updated_at,
+        ],
+        select(
+            literal(context.survivor),
+            NotificationProfile.web_enabled,
+            NotificationProfile.dm_enabled,
+            NotificationProfile.dm_suspended_at,
+            NotificationProfile.created_at,
+            NotificationProfile.updated_at,
+        ).where(NotificationProfile.account_id == context.absorbed),
+    )
+    healthy_survivor = and_(NotificationProfile.dm_enabled, NotificationProfile.dm_suspended_at.is_(None))
+    healthy_absorbed = and_(statement.excluded.dm_enabled, statement.excluded.dm_suspended_at.is_(None))
+    return statement.on_conflict_do_update(
+        index_elements=[NotificationProfile.account_id],
+        set_={
+            "web_enabled": or_(NotificationProfile.web_enabled, statement.excluded.web_enabled),
+            "dm_enabled": or_(NotificationProfile.dm_enabled, statement.excluded.dm_enabled),
+            "dm_suspended_at": case(
+                (or_(healthy_survivor, healthy_absorbed), None),
+                else_=func.coalesce(NotificationProfile.dm_suspended_at, statement.excluded.dm_suspended_at),
+            ),
+        },
+    )
+
+
+def _collapse_notification_subscriptions_statement(context: _AccountMergeContext):
+    absorbed = aliased(NotificationSubscriptionRecord, name="absorbed_subscription")
+    survivor = aliased(NotificationSubscriptionRecord, name="survivor_subscription")
+    duplicate_ids = (
+        select(absorbed.id)
+        .join(
+            survivor,
+            and_(
+                survivor.account_id == context.survivor,
+                survivor.kind == absorbed.kind,
+                survivor.subject_id.is_not_distinct_from(absorbed.subject_id),
+                survivor.filter.is_not_distinct_from(absorbed.filter),
+                survivor.enabled == absorbed.enabled,
+            ),
+        )
+        .where(absorbed.account_id == context.absorbed)
+    )
+    return delete(NotificationSubscriptionRecord).where(NotificationSubscriptionRecord.id.in_(duplicate_ids))
+
+
+def _absorbed_permission_effect(context: _AccountMergeContext):
+    absorbed = aliased(PermissionGrant, name="absorbed_grant")
+    return (
+        select(absorbed.effect)
+        .where(
+            absorbed.subject_account_id == context.absorbed,
+            absorbed.pattern == PermissionGrant.pattern,
+            absorbed.scope_guild_id.is_not_distinct_from(PermissionGrant.scope_guild_id),
+        )
+        .correlate(PermissionGrant)
+        .scalar_subquery()
+    )
+
+
+def _merge_permission_effects_statement(context: _AccountMergeContext):
+    absorbed_effect = _absorbed_permission_effect(context)
+    return (
+        update(PermissionGrant)
+        .where(PermissionGrant.subject_account_id == context.survivor, absorbed_effect.is_not(None))
+        .values(effect=func.least(PermissionGrant.effect, absorbed_effect))
+    )
+
+
+def _collapse_permission_grants_statement(context: _AccountMergeContext):
+    absorbed = aliased(PermissionGrant, name="absorbed_grant")
+    survivor = aliased(PermissionGrant, name="survivor_grant")
+    duplicate_ids = (
+        select(absorbed.id)
+        .join(
+            survivor,
+            and_(
+                survivor.subject_account_id == context.survivor,
+                survivor.pattern == absorbed.pattern,
+                survivor.scope_guild_id.is_not_distinct_from(absorbed.scope_guild_id),
+            ),
+        )
+        .where(absorbed.subject_account_id == context.absorbed)
+    )
+    return delete(PermissionGrant).where(PermissionGrant.id.in_(duplicate_ids))
+
+
+def _collapse_permission_role_assignments_statement(context: _AccountMergeContext):
+    absorbed = aliased(PermissionRoleAssignment, name="absorbed_assignment")
+    survivor = aliased(PermissionRoleAssignment, name="survivor_assignment")
+    duplicate_ids = (
+        select(absorbed.id)
+        .join(
+            survivor,
+            and_(
+                survivor.subject_account_id == context.survivor,
+                survivor.role_id == absorbed.role_id,
+                survivor.scope_guild_id.is_not_distinct_from(absorbed.scope_guild_id),
+            ),
+        )
+        .where(absorbed.subject_account_id == context.absorbed)
+    )
+    return delete(PermissionRoleAssignment).where(PermissionRoleAssignment.id.in_(duplicate_ids))
 
 
 def _to_identity(model: AccountIdentityModel) -> AccountIdentity:
@@ -1399,23 +1485,22 @@ async def _merge_identities_and_profiles(session: AsyncSession, context: _Accoun
 async def _merge_creator_credit(session: AsyncSession, context: _AccountMergeContext) -> None:
     """Move creator aliases and collapse duplicate pending claims."""
     await _move_account_references(session, _CREATOR_CREDIT_REFERENCES, context)
-    await _execute_merge_sql(session, _COLLAPSE_ALIAS_CLAIMS_SQL, context)
+    await session.execute(_collapse_alias_claims_statement(context))
     await _move_account_reference(session, _AccountReference("creator_alias_claims", "account_id"), context)
 
 
 async def _merge_voting(session: AsyncSession, context: _AccountMergeContext) -> None:
     """Move authored sessions and retain one ballot per merged voter."""
     await _move_account_references(session, _VOTING_REFERENCES, context)
-    await _execute_merge_sql(session, _COLLAPSE_VOTES_SQL, context)
+    await session.execute(_collapse_votes_statement(context))
     await _move_account_reference(session, _AccountReference("votes", "account_id"), context)
 
 
 async def _merge_notifications(session: AsyncSession, context: _AccountMergeContext) -> None:
     """Coalesce preferences, subscriptions, inbox facts, and delivery state."""
-    await _execute_merge_sql(session, _MERGE_NOTIFICATION_PROFILE_SQL, context)
-    profiles = table("notification_profiles", column("account_id"))
-    await session.execute(delete(profiles).where(profiles.c.account_id == context.absorbed))
-    await _execute_merge_sql(session, _COLLAPSE_NOTIFICATION_SUBSCRIPTIONS_SQL, context)
+    await session.execute(_merge_notification_profile_statement(context))
+    await session.execute(delete(NotificationProfile).where(NotificationProfile.account_id == context.absorbed))
+    await session.execute(_collapse_notification_subscriptions_statement(context))
     await _move_account_references(session, _NOTIFICATION_REFERENCES, context)
     await _canonicalize_notifications(session, context)
 
@@ -1588,10 +1673,10 @@ def _coalesce_notification_deliveries(
 async def _merge_permissions(session: AsyncSession, context: _AccountMergeContext) -> None:
     """Move permission provenance and collapse subject collisions to the restrictive effect."""
     await _move_account_references(session, _PERMISSION_PROVENANCE_REFERENCES, context)
-    await _execute_merge_sql(session, _MERGE_PERMISSION_EFFECTS_SQL, context)
-    await _execute_merge_sql(session, _COLLAPSE_PERMISSION_GRANTS_SQL, context)
+    await session.execute(_merge_permission_effects_statement(context))
+    await session.execute(_collapse_permission_grants_statement(context))
     await _move_account_reference(session, _AccountReference("permission_grants", "subject_account_id"), context)
-    await _execute_merge_sql(session, _COLLAPSE_PERMISSION_ROLE_ASSIGNMENTS_SQL, context)
+    await session.execute(_collapse_permission_role_assignments_statement(context))
     await _move_account_reference(
         session,
         _AccountReference("permission_role_assignments", "subject_account_id"),
