@@ -247,6 +247,27 @@ async def test_identical_files_record_once_with_the_selected_name_and_primary_st
     assert schematics.records == [("chosen.litematic", True)]
 
 
+async def test_identical_file_record_failure_retains_every_attachment_identity() -> None:
+    schematics = Schematics()
+    failure = InvalidSchematicError("The analysis row could not be stored.")
+    schematics.record_failures["f" * 64] = failure
+    commands = cog(schematics)
+    attachments = select_primary(
+        (
+            lifecycle("b", "copy.litematic", (3, 4, 5), sha256="f" * 64),
+            lifecycle("a", "chosen.litematic", (3, 4, 5), sha256="f" * 64),
+        ),
+        "a",
+    )
+
+    failures = await commands._record_analyses(DoorBuild(id=42), attachments)
+
+    assert [(item["attachment_id"], item["filename"]) for item in failures] == [
+        ("a", "chosen.litematic"),
+        ("b", "copy.litematic"),
+    ]
+
+
 async def test_duplicate_check_failure_is_retained_per_file_without_hiding_sibling_matches() -> None:
     schematics = Schematics()
     failure = InvalidSchematicError("Duplicate lookup is unavailable.")
