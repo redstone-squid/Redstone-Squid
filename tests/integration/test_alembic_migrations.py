@@ -12,6 +12,7 @@ from testcontainers.postgres import PostgresContainer
 
 from alembic import command
 from squid.persistence.alembic_entities import alembic_util_entities
+from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
 from squid.worker.queue_health import QUEUE_HEALTH_STATEMENT
 
 MIGRATION_DATABASE = "redstone_squid_migrations"
@@ -22,6 +23,8 @@ NULLABLE_VOTE_THRESHOLDS_REVISION = "b2c3d4e5f6a8"
 VOTE_SUBTYPE_INVARIANT_REVISION = "a9b5c8d3e6f0"
 IDEMPOTENCY_CALLER_REVISION = "b0c6d9e4f7a1"
 FINALIZATION_RESULT_METADATA_REVISION = "c1d7e0f5a8b2"
+SCHEMATIC_RENDER_PROJECTION_REVISION = "e1f2a3b4c5d6"
+SCHEMATIC_PUBLICATION_REVISION = "f8b9c0d1e2f3"
 
 pytestmark = pytest.mark.filterwarnings("ignore:Expression #.* detected to include an operator clause:UserWarning")
 """Autogenerate cannot compare an index expression carrying an operator class.
@@ -253,6 +256,133 @@ def test_migrations_create_schema_without_drift(
     # re-enqueueing keeps the generation rather than restarting it.
     assert stale_post is True
     assert reissued_generation == seeded_generation
+
+
+def test_applied_schematic_render_projection_migration_upgrades_and_downgrades(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The applied historical revision retains its filename and reversible schema contract."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, f"{SCHEMATIC_RENDER_PROJECTION_REVISION}-1")
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            user_id = connection.execute(
+                text("INSERT INTO users (discord_id) VALUES (1830001) RETURNING id")
+            ).scalar_one()
+            build_id = connection.execute(
+                text(
+                    "INSERT INTO builds (submission_status, submitter_user_id, ai_generated) "
+                    "VALUES (0, :user_id, false) RETURNING id"
+                ),
+                {"user_id": user_id},
+            ).scalar_one()
+            digest = "a" * 64
+            connection.execute(
+                text(
+                    "INSERT INTO schematic_files (sha256, data, byte_size, source_format) "
+                    "VALUES (:digest, :data, 1, 'litematic')"
+                ),
+                {"digest": digest, "data": b"x"},
+            )
+            schematic_id = connection.execute(
+                text(
+                    "INSERT INTO build_schematics ("
+                    "build_id, file_sha256, is_primary, width, height, length, "
+                    "allocated_width, allocated_height, allocated_length, block_count, bounding_volume, "
+                    "entity_count, palette_size, region_names, signs, analyzer_version, analysis_schema_version"
+                    ") VALUES ("
+                    ":build_id, :digest, true, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, ARRAY['Main'], "
+                    "'[]'::jsonb, 'migration-test', 1"
+                    ") RETURNING id"
+                ),
+                {"build_id": build_id, "digest": digest},
+            ).scalar_one()
+            render_id = connection.execute(
+                text(
+                    "INSERT INTO schematic_renders ("
+                    "build_schematic_id, recipe_hash, url, width, height, byte_size"
+                    ") VALUES (:schematic_id, :recipe, 'https://example.invalid/preview.png', 1, 1, 1) "
+                    "RETURNING id"
+                ),
+                {"schematic_id": schematic_id, "recipe": "b" * 64},
+            ).scalar_one()
+
+        command.upgrade(config, SCHEMATIC_RENDER_PROJECTION_REVISION)
+        with engine.begin() as connection:
+            render_columns = set(
+                connection.execute(
+                    text(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_schema = 'public' AND table_name = 'schematic_renders'"
+                    )
+                ).scalars()
+            )
+            assert "object_key" in render_columns
+            assert connection.execute(text("SELECT build_id FROM schematic_render_queue")).scalars().all() == [build_id]
+            connection.execute(
+                text("UPDATE schematic_renders SET object_key = 'renders/migrated.png' WHERE id = :id"),
+                {"id": render_id},
+            )
+            assert (
+                connection.execute(
+                    text("SELECT object_key FROM schematic_renders WHERE id = :id"), {"id": render_id}
+                ).scalar_one()
+                == "renders/migrated.png"
+            )
+
+        command.downgrade(config, f"{SCHEMATIC_RENDER_PROJECTION_REVISION}-1")
+        with engine.connect() as connection:
+            assert connection.execute(text("SELECT to_regclass('public.schematic_render_queue')")).scalar_one() is None
+            downgraded_columns = set(
+                connection.execute(
+                    text(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_schema = 'public' AND table_name = 'schematic_renders'"
+                    )
+                ).scalars()
+            )
+            assert "object_key" not in downgraded_columns
+    finally:
+        engine.dispose()
+
+
+def test_schematic_file_schema_ceiling_agrees_with_its_migration(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, SCHEMATIC_PUBLICATION_REVISION)
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            constraint = connection.execute(
+                text(
+                    "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'schematic_files_size_bounded'"
+                )
+            ).scalar_one()
+            assert str(SCHEMATIC_FILE_SCHEMA_MAX_BYTES) in constraint
+            connection.execute(
+                text(
+                    "INSERT INTO schematic_files (sha256, data, byte_size, source_format) "
+                    "VALUES (:digest, :data, :byte_size, 'litematic')"
+                ),
+                {"digest": "c" * 64, "data": b"x", "byte_size": SCHEMATIC_FILE_SCHEMA_MAX_BYTES},
+            )
+
+        with engine.connect() as connection, pytest.raises(DBAPIError):
+            connection.execute(
+                text(
+                    "INSERT INTO schematic_files (sha256, data, byte_size, source_format) "
+                    "VALUES (:digest, :data, :byte_size, 'litematic')"
+                ),
+                {"digest": "d" * 64, "data": b"x", "byte_size": SCHEMATIC_FILE_SCHEMA_MAX_BYTES + 1},
+            )
+    finally:
+        engine.dispose()
 
 
 def test_nullable_vote_thresholds_migrate_sentinels_in_both_directions(
