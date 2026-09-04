@@ -1,11 +1,24 @@
 """Canonical data conversion for Slack scene bodies."""
 
-from collections.abc import Mapping
-from typing import Any, cast
+from collections.abc import Callable, Iterable
+from typing import TypeIs
 
 from squid_ui.entity import ConversationType
 from squid_ui.errors import SquidUiError
 from squid_ui.interactions import ActionMode
+from squid_ui.scene._json import (
+    JsonArray,
+    JsonObject,
+    optional_integer,
+    optional_string,
+    require_array,
+    require_array_value,
+    require_boolean,
+    require_integer,
+    require_object,
+    require_string,
+    require_string_array,
+)
 from squid_ui.scene.slack import (
     SlackActionRef,
     SlackActions,
@@ -48,54 +61,57 @@ class SlackSceneCodecError(SquidUiError, ValueError):
     """A Slack scene body has an invalid shape."""
 
 
-def _object(value: object, name: str) -> Mapping[str, Any]:
-    if not isinstance(value, dict):
-        message = f"{name} must be an object"
-        raise SlackSceneCodecError(message)
-    return value
+def _narrow[InputT, OutputT](
+    values: Iterable[InputT],
+    predicate: Callable[[InputT], TypeIs[OutputT]],
+    message: str,
+) -> tuple[OutputT, ...]:
+    """Validate and narrow a heterogeneous decoded sequence without a cast."""
+    narrowed: list[OutputT] = []
+    for value in values:
+        if not predicate(value):
+            raise SlackSceneCodecError(message)
+        narrowed.append(value)
+    return tuple(narrowed)
 
 
-def _array(raw: Mapping[str, Any], key: str) -> list[Any]:
-    value = raw.get(key)
-    if not isinstance(value, list):
-        message = f"{key} must be an array"
-        raise SlackSceneCodecError(message)
-    return value
+def _is_action_element(value: SlackElement) -> TypeIs[SlackButton | SlackSelect]:
+    return isinstance(value, SlackButton | SlackSelect)
 
 
-def _string(raw: Mapping[str, Any], key: str) -> str:
-    value = raw.get(key)
-    if not isinstance(value, str):
-        message = f"{key} must be a string"
-        raise SlackSceneCodecError(message)
-    return value
+def _is_button(value: SlackElement) -> TypeIs[SlackButton]:
+    return isinstance(value, SlackButton)
 
 
-def _optional_string(raw: Mapping[str, Any], key: str) -> str | None:
-    value = raw.get(key)
-    if value is not None and not isinstance(value, str):
-        message = f"{key} must be a string or null"
-        raise SlackSceneCodecError(message)
-    return value
+def _is_card(value: SlackBlock) -> TypeIs[SlackCard]:
+    return isinstance(value, SlackCard)
 
 
-def _integer(raw: Mapping[str, Any], key: str) -> int:
-    value = raw.get(key)
-    if isinstance(value, bool) or not isinstance(value, int):
-        message = f"{key} must be an integer"
-        raise SlackSceneCodecError(message)
-    return value
+def _object(value: object, name: str) -> JsonObject:
+    return require_object(value, f"{name} must be an object", SlackSceneCodecError)
 
 
-def _boolean(raw: Mapping[str, Any], key: str) -> bool:
-    value = raw.get(key)
-    if not isinstance(value, bool):
-        message = f"{key} must be a boolean"
-        raise SlackSceneCodecError(message)
-    return value
+def _array(raw: JsonObject, key: str) -> JsonArray:
+    return require_array(raw, key, SlackSceneCodecError)
 
 
-def _optional_object(raw: Mapping[str, Any], key: str) -> Mapping[str, Any] | None:
+def _string(raw: JsonObject, key: str) -> str:
+    return require_string(raw, key, SlackSceneCodecError)
+
+
+def _optional_string(raw: JsonObject, key: str) -> str | None:
+    return optional_string(raw, key, SlackSceneCodecError)
+
+
+def _integer(raw: JsonObject, key: str) -> int:
+    return require_integer(raw, key, SlackSceneCodecError)
+
+
+def _boolean(raw: JsonObject, key: str) -> bool:
+    return require_boolean(raw, key, SlackSceneCodecError)
+
+
+def _optional_object(raw: JsonObject, key: str) -> JsonObject | None:
     value = raw.get(key)
     return None if value is None else _object(value, key)
 
@@ -293,8 +309,8 @@ def _element_from(value: object) -> SlackElement:
                 _optional_string(raw, "initial_value"),
                 None if placeholder is None else _text_from(placeholder),
                 _boolean(raw, "multiline"),
-                cast(int | None, raw.get("minimum_length")),
-                cast(int | None, raw.get("maximum_length")),
+                optional_integer(raw, "minimum_length", SlackSceneCodecError),
+                optional_integer(raw, "maximum_length", SlackSceneCodecError),
             )
         case "number_input":
             return SlackNumberInput(
@@ -320,7 +336,7 @@ def _element_from(value: object) -> SlackElement:
             return SlackCheckboxes(
                 _string(raw, "action_id"),
                 tuple(_option_from(option) for option in _array(raw, "options")),
-                tuple(cast(str, item) for item in _array(raw, "initial_values")),
+                tuple(require_string_array(raw, "initial_values", SlackSceneCodecError)),
             )
         case "radio_buttons":
             return SlackRadioButtons(
@@ -414,11 +430,9 @@ def _block_from(value: object) -> SlackBlock:
             )
         case "actions":
             elements = tuple(_element_from(item) for item in _array(raw, "elements"))
-            if not all(isinstance(item, SlackButton | SlackSelect) for item in elements):
-                message = "Slack actions contain an unsupported element"
-                raise SlackSceneCodecError(message)
             return SlackActions(
-                cast(tuple[SlackButton | SlackSelect, ...], elements), _optional_string(raw, "block_id")
+                _narrow(elements, _is_action_element, "Slack actions contain an unsupported element"),
+                _optional_string(raw, "block_id"),
             )
         case "input":
             element = _element_from(raw.get("element"))
@@ -435,27 +449,27 @@ def _block_from(value: object) -> SlackBlock:
             )
         case "table":
             return SlackTable(
-                tuple(tuple(_text_from(cell) for cell in cast(list[Any], row)) for row in _array(raw, "rows"))
+                tuple(
+                    tuple(
+                        _text_from(cell)
+                        for cell in require_array_value(row, "Slack table row must be an array", SlackSceneCodecError)
+                    )
+                    for row in _array(raw, "rows")
+                )
             )
         case "card":
             title = raw.get("title")
             description = raw.get("description")
             actions = tuple(_element_from(item) for item in _array(raw, "actions"))
-            if not all(isinstance(item, SlackButton) for item in actions):
-                message = "Slack card actions must be buttons"
-                raise SlackSceneCodecError(message)
             return SlackCard(
                 None if title is None else _text_from(title),
                 None if description is None else _text_from(description),
                 _optional_string(raw, "image_url"),
-                cast(tuple[SlackButton, ...], actions),
+                _narrow(actions, _is_button, "Slack card actions must be buttons"),
             )
         case "carousel":
             cards = tuple(_block_from(item) for item in _array(raw, "cards"))
-            if not all(isinstance(item, SlackCard) for item in cards):
-                message = "Slack carousels must contain cards"
-                raise SlackSceneCodecError(message)
-            return SlackCarousel(cast(tuple[SlackCard, ...], cards))
+            return SlackCarousel(_narrow(cards, _is_card, "Slack carousels must contain cards"))
         case "alert":
             text = raw.get("text")
             return SlackAlert(
@@ -492,7 +506,7 @@ def slack_body_to_dict(body: SlackBody) -> dict[str, object]:
             }
 
 
-def slack_body_from_dict(raw: Mapping[str, Any]) -> SlackBody:
+def slack_body_from_dict(raw: JsonObject) -> SlackBody:
     """Decode one Slack body from canonical JSON-compatible data."""
     kind = _string(raw, "kind")
     blocks = tuple(_block_from(block) for block in _array(raw, "blocks"))
