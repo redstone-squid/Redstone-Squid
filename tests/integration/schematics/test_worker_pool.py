@@ -162,6 +162,20 @@ async def test_tick_simulation_moves_a_piston_and_settles(pool: SchematicWorkerP
 
 
 @owned_pool
+async def test_tick_simulation_observes_requested_positions_after_each_tick(
+    pool: SchematicWorkerPool, piston_door: bytes
+) -> None:
+    watched = (0, 1, 0)
+
+    result = await pool.simulate(piston_door, request=SimulationRequest(watch_positions=(watched,)))
+
+    assert result.samples
+    assert {(sample.x, sample.y, sample.z) for sample in result.samples} == {watched}
+    assert [sample.tick for sample in result.samples] == list(range(1, result.ticks_run + 1))
+    assert any(sample.powered and sample.signal_strength == 15 for sample in result.samples)
+
+
+@owned_pool
 async def test_tick_simulation_prefers_an_insign_input_when_controls_are_ambiguous(
     pool: SchematicWorkerPool, insign_piston_door: bytes
 ) -> None:

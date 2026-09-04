@@ -47,6 +47,7 @@ from squid.schematics.domain.models import (
     SchematicMetrics,
     SchematicSign,
     SimulationResult,
+    SimulationSample,
     Vector3,
     VersionLossEntry,
 )
@@ -233,7 +234,17 @@ def simulate(data: bytes, *, request: SimulationRequest) -> SimulationResult:
     snapshot = _json_array(simulation.world_snapshot_json(), "simulation snapshot")
     input_position, input_source = _resolve_simulation_input(schematic, snapshot, request.input_position)
     simulation.use_block(*input_position)
-    settled = bool(simulation.run_until_quiescent(request.max_ticks))
+    samples: list[SimulationSample] = []
+    if request.watch_positions:
+        settled = False
+        for _ in range(request.max_ticks):
+            simulation.step()
+            samples.extend(_simulation_samples(simulation, request.watch_positions))
+            if simulation.is_quiescent():
+                settled = True
+                break
+    else:
+        settled = bool(simulation.run_until_quiescent(request.max_ticks))
 
     summary = _json_array(simulation.events_summary_json(), "simulation event summary")
     event_rows = tuple(_event_row(row) for row in summary)
@@ -263,6 +274,7 @@ def simulate(data: bytes, *, request: SimulationRequest) -> SimulationResult:
         piston_events=sum(_integer(row, "piston", "simulation event", default=0) for row in event_rows),
         redstone_events=sum(_integer(row, "redstone", "simulation event", default=0) for row in event_rows),
         trustworthy=settled and missing_block_entities == 0 and unsupported_contacts == 0 and bool(piston_ticks),
+        samples=tuple(samples),
         notes=tuple(notes),
     )
 
@@ -283,6 +295,55 @@ def autostack(data: bytes, *, lattice: AutostackLattice, counts: tuple[int, ...]
 
 
 _INPUT_BLOCK_NAMES = ("lever", "_button")
+
+
+def _simulation_samples(
+    simulation: nucleation.TickSimulation, watch_positions: Sequence[Vector3]
+) -> tuple[SimulationSample, ...]:
+    """Read every requested observation after the simulation's current tick."""
+    payload = _json_array(
+        simulation.read_probes(json.dumps([list(position) for position in watch_positions])),
+        "simulation probes",
+    )
+    if len(payload) != len(watch_positions):
+        msg = "The engine returned the wrong number of simulation probes."
+        raise InvalidSchematicError(
+            msg,
+            context={"expected": len(watch_positions), "actual": len(payload)},
+        )
+    tick = int(simulation.tick_count())
+    return tuple(
+        _simulation_sample(tick, position, _string_value(state, "simulation probe state"))
+        for position, state in zip(watch_positions, payload, strict=True)
+    )
+
+
+def _simulation_sample(tick: int, position: Vector3, state: str) -> SimulationSample:
+    properties: dict[str, str] = {}
+    if "[" in state and state.endswith("]"):
+        raw_properties = state.partition("[")[2][:-1]
+        for item in raw_properties.split(","):
+            key, separator, value = item.partition("=")
+            if separator:
+                properties[key] = value
+    raw_signal = properties.get("power", "0")
+    try:
+        signal_strength = int(raw_signal)
+    except ValueError:
+        signal_strength = 0
+    if not 0 <= signal_strength <= 15:
+        signal_strength = 0
+    powered = signal_strength > 0 or properties.get("powered") == "true" or properties.get("lit") == "true"
+    if powered and signal_strength == 0:
+        signal_strength = 15
+    return SimulationSample(
+        tick=tick,
+        x=position[0],
+        y=position[1],
+        z=position[2],
+        powered=powered,
+        signal_strength=signal_strength,
+    )
 
 
 def _resolve_simulation_input(
