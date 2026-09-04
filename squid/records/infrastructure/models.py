@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from enum import StrEnum
 
 from sqlalchemy import (
     UUID,
@@ -24,7 +25,33 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC, now
+from squid.persistence.types import InstantUTC, StrEnumText, now
+from squid.records.domain import BuildKind, RecordClass, ResolutionStatus, VersionScope
+
+
+class RecordMaterializationSource(StrEnum):
+    """How a persisted record rule entered the active catalogue."""
+
+    EAGER = "eager"
+    SEEDED = "seeded"
+    PUBLIC_LOOKUP = "public_lookup"
+
+
+class RecordFacetKind(StrEnum):
+    """The taxonomy role of a facet persisted for one record rule."""
+
+    RESTRICTION = "restriction"
+    TYPE = "type"
+    PATTERN = "pattern"
+    CATEGORY = "category"
+
+
+class RecordComputationStatus(StrEnum):
+    """The durable lifecycle state of a record computation run."""
+
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 
 class RecordRuleset(Base, kw_only=True):
@@ -64,6 +91,10 @@ class RecordRule(Base, kw_only=True):
             name="record_definitions_version_scope_check",
         ),
         CheckConstraint(
+            "build_kind IN ('door', 'entrance', 'extender', 'utility')",
+            name="record_definitions_build_kind_check",
+        ),
+        CheckConstraint(
             "materialization_source IN ('eager', 'seeded', 'public_lookup')",
             name="record_definitions_materialization_source_check",
         ),
@@ -92,9 +123,9 @@ class RecordRule(Base, kw_only=True):
         ForeignKey("record_rulesets.id", name="record_definitions_ruleset_id_fkey", ondelete="RESTRICT"),
         nullable=False,
     )
-    record_class: Mapped[str] = mapped_column(Text, nullable=False)
-    build_kind: Mapped[str] = mapped_column(Text, nullable=False)
-    version_scope: Mapped[str] = mapped_column(Text, nullable=False)
+    record_class: Mapped[RecordClass] = mapped_column(StrEnumText(RecordClass), nullable=False)
+    build_kind: Mapped[BuildKind] = mapped_column(StrEnumText(BuildKind), nullable=False)
+    version_scope: Mapped[VersionScope] = mapped_column(StrEnumText(VersionScope), nullable=False)
     version_id: Mapped[int | None] = mapped_column(
         SmallInteger,
         ForeignKey("versions.id", name="record_definitions_version_id_fkey", ondelete="RESTRICT"),
@@ -106,7 +137,9 @@ class RecordRule(Base, kw_only=True):
     title_diagnostics: Mapped[list[dict[str, str | list[str]]]] = mapped_column(
         JSONB, nullable=False, server_default=text("'[]'::jsonb"), default_factory=list
     )
-    materialization_source: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'eager'"))
+    materialization_source: Mapped[RecordMaterializationSource] = mapped_column(
+        StrEnumText(RecordMaterializationSource), nullable=False, server_default=text("'eager'")
+    )
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
@@ -125,6 +158,10 @@ class RecordSeries(Base, kw_only=True):
             "version_scope IN ('all_time', 'current')",
             name="record_competitions_version_scope_check",
         ),
+        CheckConstraint(
+            "build_kind IN ('door', 'entrance', 'extender', 'utility')",
+            name="record_competitions_build_kind_check",
+        ),
         UniqueConstraint(
             "record_class",
             "build_kind",
@@ -139,9 +176,9 @@ class RecordSeries(Base, kw_only=True):
     public_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"), default_factory=uuid.uuid4
     )
-    record_class: Mapped[str] = mapped_column(Text, nullable=False)
-    build_kind: Mapped[str] = mapped_column(Text, nullable=False)
-    version_scope: Mapped[str] = mapped_column(Text, nullable=False)
+    record_class: Mapped[RecordClass] = mapped_column(StrEnumText(RecordClass), nullable=False)
+    build_kind: Mapped[BuildKind] = mapped_column(StrEnumText(BuildKind), nullable=False)
+    version_scope: Mapped[VersionScope] = mapped_column(StrEnumText(VersionScope), nullable=False)
     version_id: Mapped[int | None] = mapped_column(
         SmallInteger,
         ForeignKey("versions.id", name="record_competitions_version_id_fkey", ondelete="RESTRICT"),
@@ -174,7 +211,7 @@ class RecordDefinitionFacet(Base, kw_only=True):
         ),
         primary_key=True,
     )
-    facet_kind: Mapped[str] = mapped_column(Text, primary_key=True)
+    facet_kind: Mapped[RecordFacetKind] = mapped_column(StrEnumText(RecordFacetKind), primary_key=True)
     facet_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     display_order: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("0"))
 
@@ -187,6 +224,10 @@ class RecordComputationRun(Base, kw_only=True):
         CheckConstraint(
             "status IN ('running', 'completed', 'failed')",
             name="record_computation_runs_status_check",
+        ),
+        CheckConstraint(
+            "build_kind IN ('door', 'entrance', 'extender', 'utility')",
+            name="record_computation_runs_build_kind_check",
         ),
         Index(
             "record_computation_runs_one_active_idx",
@@ -205,13 +246,15 @@ class RecordComputationRun(Base, kw_only=True):
         ForeignKey("record_rulesets.id", name="record_computation_runs_ruleset_id_fkey", ondelete="RESTRICT"),
         nullable=False,
     )
-    build_kind: Mapped[str] = mapped_column(Text, nullable=False)
+    build_kind: Mapped[BuildKind] = mapped_column(StrEnumText(BuildKind), nullable=False)
     version_id: Mapped[int | None] = mapped_column(
         SmallInteger,
         ForeignKey("versions.id", name="record_computation_runs_version_id_fkey", ondelete="RESTRICT"),
         default=None,
     )
-    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'running'"))
+    status: Mapped[RecordComputationStatus] = mapped_column(
+        StrEnumText(RecordComputationStatus), nullable=False, server_default=text("'running'")
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     started_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
@@ -245,7 +288,7 @@ class RecordStanding(Base, kw_only=True):
         ForeignKey("record_definitions.id", name="record_results_definition_id_fkey", ondelete="RESTRICT"),
         nullable=False,
     )
-    status: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[ResolutionStatus] = mapped_column(StrEnumText(ResolutionStatus), nullable=False)
     gap_reasons: Mapped[dict[str, object]] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb"), default_factory=dict
     )
@@ -341,6 +384,10 @@ class RecordRecomputeQueueItem(Base, kw_only=True):
 
     __tablename__ = "record_recompute_queue"
     __table_args__ = (
+        CheckConstraint(
+            "build_kind IN ('door', 'entrance', 'extender', 'utility')",
+            name="record_recompute_queue_build_kind_check",
+        ),
         Index("record_recompute_queue_build_idx", "build_id"),
         UniqueConstraint("scope_key", name="record_recompute_queue_scope_key_key"),
         Index("record_recompute_queue_ready_idx", "available_at", postgresql_where=text("locked_at IS NULL")),
@@ -348,7 +395,7 @@ class RecordRecomputeQueueItem(Base, kw_only=True):
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
     scope_key: Mapped[str] = mapped_column(Text, nullable=False)
-    build_kind: Mapped[str] = mapped_column(Text, nullable=False)
+    build_kind: Mapped[BuildKind] = mapped_column(StrEnumText(BuildKind), nullable=False)
     build_id: Mapped[int | None] = mapped_column(
         BigInteger,
         ForeignKey("builds.id", name="record_recompute_queue_build_id_fkey", ondelete="CASCADE"),
