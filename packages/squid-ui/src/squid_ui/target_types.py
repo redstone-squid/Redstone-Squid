@@ -1,78 +1,90 @@
-"""Dependency-leaf static vocabulary for render targets and adapter families."""
+"""Dependency-leaf static vocabulary for render targets and adapter families.
+
+Two lattices of empty classes read only by the type checker. A node is `Renderable[T]` for the
+widest marker it draws on and a target's `render_target` is the narrowest, so a
+`Renderable[DiscordTarget]` primitive fits both Discord dialects while a
+`Renderable[ComponentsV2Target]` one is rejected by the classic target. Adapter markers work the
+same way through `AdapterProfile[AdapterT]`: a target built for `DiscordPy27Adapter` satisfies a
+parameter that asks for `DiscordPyAdapter`.
+"""
 
 
 class RenderTarget:
-    """Marker for portable values renderable by every semantic target."""
+    """Root of the target lattice; a `Renderable[RenderTarget]` draws on every dialect."""
 
 
 class DiscordTarget(RenderTarget):
-    """Marker for values renderable to any Discord component mode."""
+    """Either Discord message dialect; the primitives both share (`Text`, `Button`, `LinkButton`) accept this."""
 
 
 class ComponentsV2Target(DiscordTarget):
-    """Marker for Discord Components V2 renderables."""
+    """The dialect `planning.v2` compiles to (`scene.ComponentsV2`); `File` and `Sep` accept only this."""
 
 
 class ClassicTarget(DiscordTarget):
-    """Marker for classic Discord message renderables."""
+    """The embed-and-rows dialect `planning.classic` compiles to (`scene.ClassicMessage`)."""
 
 
 class HtmlTarget(RenderTarget):
-    """Marker for native semantic HTML renderables."""
+    """The dialect `html.target` compiles to (`scene.HtmlBody`)."""
 
 
 class SlackTarget(RenderTarget):
-    """Marker for values renderable to any Slack Block Kit surface."""
+    """Any of the three Block Kit surfaces."""
 
 
 class SlackMessageTarget(SlackTarget):
-    """Marker for Slack message renderables."""
+    """Block Kit posted as a channel message (`scene.SlackMessage`)."""
 
 
 class SlackModalTarget(SlackTarget):
-    """Marker for Slack modal renderables."""
+    """Block Kit inside a modal view (`scene.SlackModalView`)."""
 
 
 class SlackHomeTarget(SlackTarget):
-    """Marker for Slack App Home renderables."""
+    """Block Kit on an App Home tab (`scene.SlackHomeView`)."""
 
 
 class DiscordAdapter:
-    """Marker for any adapter capable of realizing a Discord target."""
+    """Root of the Discord adapter lattice, for a target that takes any Discord library."""
 
 
 class DiscordPyAdapter(DiscordAdapter):
-    """Marker for adapters implemented with discord.py."""
+    """Any discord.py version; `MessageRoot` and the Discord targets are bounded by this."""
 
 
 class DiscordPy27Adapter(DiscordPyAdapter):
-    """Marker for Squid's verified discord.py 2.7 adapter."""
+    """The profile `squid_ui_discord` ships and verifies against: discord.py 2.7."""
 
 
 class HtmlAdapter:
-    """Marker for adapters that mechanically draw semantic HTML scenes."""
+    """Adapter family for the HTML renderer; unrefined, since it depends on no library."""
 
 
 class SlackAdapter:
-    """Marker for adapters capable of realizing Slack Block Kit targets."""
+    """Root of the Slack adapter lattice, for a target that takes any Slack library."""
 
 
 class SlackSdkAdapter(SlackAdapter):
-    """Marker for adapters implemented with the Slack Python SDK."""
+    """Any Slack Python SDK version; the Slack renderers are bounded by this."""
 
 
 class SlackSdk343Adapter(SlackSdkAdapter):
-    """Marker for Squid's verified Slack Python SDK 3.43 adapter."""
+    """The profile `squid_ui_slack` ships and verifies against: Slack Python SDK 3.43."""
 
 
 class Renderable[RenderTargetT = RenderTarget]:
-    """A value whose accepted protocol target is tracked by the type checker."""
+    """A value whose accepted protocol target is tracked by the type checker.
+
+    `_accepts_target` makes `RenderTargetT` contravariant: a node typed for a wide marker is
+    accepted by every target under it.
+    """
 
     __slots__ = ()
     """Empty, so a `slots=True` node subclass really is slotted.
 
-    A base without `__slots__` grants every subclass a `__dict__`, which silently defeated
-    the `@dataclass(frozen=True, slots=True)` on every node in the package.
+    A base without `__slots__` grants every subclass a `__dict__`, which defeats the
+    `@dataclass(frozen=True, slots=True)` on every node in the package.
     """
 
     def _accepts_target(self, target: RenderTargetT, /) -> None:

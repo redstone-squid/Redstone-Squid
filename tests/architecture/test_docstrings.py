@@ -23,14 +23,11 @@ LIFETIME_EXEMPTIONS: frozenset[str] = frozenset(
         "packages/squid-ui-discord/src/squid_ui_discord/runtime.py::DiscordUIRuntime",
         "packages/squid-ui-discord/src/squid_ui_discord/sessions.py::Session",
         "packages/squid-ui-discord/src/squid_ui_discord/sessions.py::SessionManager",
-        "packages/squid-ui/src/squid_ui/interactions.py::ActionEvent",
-        "packages/squid-ui/src/squid_ui/interactions.py::ActionResponder",
         "packages/squid-ui/src/squid_ui/profiling/profiler.py::DetachedSpanRecorder",
         "packages/squid-ui/src/squid_ui/profiling/profiler.py::_DetachedSpan",
         "packages/squid-ui/src/squid_ui/profiling/profiler.py::_NoOpDetachedSpan",
         "packages/squid-ui/src/squid_ui/runtime/component.py::_TreeRender",
         "packages/squid-ui/src/squid_ui/runtime/owner.py::ComponentRuntime",
-        "packages/squid-ui/src/squid_ui/testing.py::RecordingResponder",
     }
 )
 """`path::Class` whose first paragraph does not yet name its verb. Listed so an exemption is a decision."""

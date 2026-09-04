@@ -14,8 +14,11 @@ class Direction(StrEnum):
     """How a source interprets a position's anchor."""
 
     AROUND = "around"
+    """The window starts at the anchor; the only direction a resolved `Window.position` may carry."""
     FORWARD = "forward"
+    """The window starts after the anchor."""
     BACKWARD = "backward"
+    """The window ends before the anchor."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,7 +26,9 @@ class Position:
     """A source-neutral position in ordered content."""
 
     anchor: str | None = None
+    """Identity of the item the window is placed relative to; `None` addresses by `offset` alone."""
     offset: int = 0
+    """Ordinal of the first visible item, and the fallback when the anchor is no longer in the source."""
     direction: Direction = Direction.AROUND
 
 
@@ -32,7 +37,7 @@ ORIGIN = Position()
 
 @dataclass(frozen=True, slots=True)
 class PositionResolver:
-    """Resolve the shared override/anchor/staleness/stored/initial precedence ladder."""
+    """The precedence `WindowLoader` and session-backed navigation share when choosing a position."""
 
     def resolve(
         self,
@@ -45,7 +50,10 @@ class PositionResolver:
         fallback: Position = ORIGIN,
         upper_bound: int | None = None,
     ) -> Position:
-        """Choose and clamp a position without consulting a session or source."""
+        """The first of `override`, `anchored`, `fallback` (only when `stale`), `stored`, `initial` that is given.
+
+        The chosen position's offset is clamped to `[0, upper_bound]`; the anchor is kept as is.
+        """
         if override is not None:
             selected = override
         elif anchored is not None:
@@ -76,11 +84,17 @@ class CountPrecision(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class SourceCapabilities:
-    """Navigation and count facts a source can support."""
+    """Navigation and count facts a source can support.
+
+    Raises `ValueError` when `jumpable` or a `count` other than `NONE` is declared without `offsets`.
+    """
 
     backward: bool = False
+    """The source answers `Direction.BACKWARD`; without it `WindowLoader.previous` returns `None`."""
     offsets: bool = False
+    """`Position.offset` is a real ordinal in this source, so a footer can show a range."""
     jumpable: bool = False
+    """Any offset can be fetched directly; with an `EXACT` count this earns a page-number footer."""
     count: CountPrecision = CountPrecision.NONE
 
     def __post_init__(self) -> None:
@@ -94,13 +108,19 @@ class SourceCapabilities:
 
 @dataclass(frozen=True, slots=True)
 class Window[ItemT]:
-    """One fetched slice, including its authoritative resolved position."""
+    """One fetched slice, including its authoritative resolved position.
+
+    Raises `ValueError` when `position` is not `Direction.AROUND` at a non-negative offset, or
+    `total` is negative.
+    """
 
     position: Position
+    """Where the source actually placed the window, which may differ from what was asked."""
     items: tuple[ItemT, ...]
     has_previous: bool
     has_next: bool
     total: int | None = None
+    """Item count across the whole source; required exactly when the source declares a count."""
 
     def __post_init__(self) -> None:
         if self.position.direction is not Direction.AROUND:
@@ -118,9 +138,15 @@ class WindowSource[ItemT](Protocol):
     """An async ordered source with one validated capability declaration."""
 
     capabilities: SourceCapabilities
+    """What the source can do; `WindowLoader` rejects a window that contradicts it."""
 
     async def fetch(self, position: Position, extent: int) -> Window[ItemT]:
-        """Fetch at most ``extent`` items around or beyond ``position``."""
+        """Fetch at most `extent` items at, after or before `position` per its `direction`.
+
+        The returned window carries the position the source resolved to. A window that overruns
+        `extent`, reports `has_previous` from a forward-only source, or disagrees with the declared
+        `count` precision makes `WindowLoader` raise `ValueError`.
+        """
         ...
 
 
@@ -158,6 +184,7 @@ class LoadedWindow[ItemT]:
 
     window: Window[ItemT]
     fingerprint: str
+    """`window_fingerprint` of the items; a refresh whose fingerprint differs is treated as stale."""
 
     @property
     def position(self) -> Position:
@@ -165,7 +192,7 @@ class LoadedWindow[ItemT]:
 
 
 def window_fingerprint[ItemT](items: tuple[ItemT, ...], identity: Callable[[ItemT], str]) -> str:
-    """Fingerprint only the identities in one visible window."""
+    """A 128-bit blake2s over the length-prefixed identities; item content does not affect it, only ids and order."""
     digest = blake2s(digest_size=16)
     for item in items:
         encoded = identity(item).encode()
@@ -175,7 +202,10 @@ def window_fingerprint[ItemT](items: tuple[ItemT, ...], identity: Callable[[Item
 
 
 class WindowLoader[ItemT]:
-    """Load immutable windows while dropping completions older than the newest request."""
+    """Load immutable windows while dropping completions older than the newest request.
+
+    Raises `ValueError` for an `extent` under 1.
+    """
 
     def __init__(
         self,
@@ -202,7 +232,13 @@ class WindowLoader[ItemT]:
         *,
         previous: LoadedWindow[ItemT] | None = None,
     ) -> LoadedWindow[ItemT] | None:
-        """Load a requested position or refresh around the previously visible anchor."""
+        """Load `position`, or with none refresh `previous` in place.
+
+        A refresh keeps the previous anchor when it is still visible and otherwise falls back to
+        the source's resolved position. Returns `None` when a newer `load` started while this one
+        awaited the source. Raises `ValueError` when the window contradicts the source's
+        `capabilities` (see `WindowSource.fetch`).
+        """
         previous_position = None if previous is None else previous.position
         requested = self.policy.resolve(
             override=position,
@@ -231,7 +267,7 @@ class WindowLoader[ItemT]:
         return LoadedWindow(fetched, fingerprint)
 
     async def next(self, current: LoadedWindow[ItemT]) -> LoadedWindow[ItemT] | None:
-        """Load the window after the visible trailing identity."""
+        """Load the window after the visible trailing identity; `None` when `current` has no next or was superseded."""
         window = current.window
         if not window.has_next:
             return None
@@ -240,7 +276,10 @@ class WindowLoader[ItemT]:
         return await self.load(requested, previous=current)
 
     async def previous(self, current: LoadedWindow[ItemT]) -> LoadedWindow[ItemT] | None:
-        """Load the window before the visible leading identity."""
+        """Load the window before the visible leading identity.
+
+        `None` when the source is forward-only, `current` has no previous, or the load was superseded.
+        """
         window = current.window
         if not self.source.capabilities.backward or not window.has_previous:
             return None
@@ -274,7 +313,12 @@ class WindowLoader[ItemT]:
 def window_footer[ItemT](
     chrome: Chrome, source: WindowSource[ItemT], loaded: LoadedWindow[ItemT], extent: int
 ) -> TextLike | None:
-    """Describe only the numeric position the source's capabilities support."""
+    """The strongest footer the source's capabilities justify.
+
+    `chrome.page_footer` for an exact, jumpable count; `total_range_footer` for an exact one;
+    `approximate_total_footer` for an approximate one; `range_footer` otherwise. `None` when the
+    window is empty or the source has no offsets.
+    """
     window = loaded.window
     capabilities = source.capabilities
     if not window.items or not capabilities.offsets:

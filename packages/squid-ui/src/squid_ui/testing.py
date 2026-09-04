@@ -45,9 +45,8 @@ def walk(tree: Tree) -> Iterator[Any]:
     Deliberately generic rather than built on `runtime._tree`'s `_CHILD_FIELD_NAMES`. That set
     names the fields a *structural rewrite* must descend, which excludes the control axis on
     purpose -- `ActionControls.items` is not a layout child. A test asking "is this button in
-    the render" wants both axes, and every hand-written walker this replaces had to pick which
-    container types to special-case. Visiting every dataclass field cannot make that mistake,
-    and cannot drift when a node grows a field.
+    the render" wants both axes; visiting every dataclass field gives it both without a list of
+    container types that drifts when a node grows a field.
     """
     yield from _walk(tree, set())
 
@@ -137,11 +136,12 @@ def render_tree(component: AnyComponent) -> tuple[AnyLayoutNode, ...]:
 
 @dataclass
 class RecordingResponder:
-    """An `ActionResponder` that records what a handler asked the frontend to do.
+    """An `ActionResponder` that records what a handler asked for; `finish()` sets `finished` and ends nothing.
 
     Every method a frontend must honestly implement, answered by appending to a list. A test
     asserts against `notices`, `redirects`, `forms`, `finished` and `invalidations` rather than
-    against a mock's call args, so it reads as the handler's intent.
+    against a mock's call args, so it reads as the handler's intent. `notice` text is resolved
+    against `NEUTRAL`, so a `Message` is recorded as its untranslated template.
     """
 
     acknowledged: int = 0
@@ -219,8 +219,8 @@ def choice_event(
     """A picker settling on `selected`, carrying a `RecordingResponder` unless one is supplied.
 
     Distinct from `selection_event`: `semantic.Choices` hands its owner a `ChoiceEvent`, which
-    also reports what the interaction added and removed, while a raw `interactions.Selection`
-    control reports only the values it submitted.
+    also reports what the interaction added and removed, while a `SelectionEvent` (what a `Grid`
+    pick or a roster join receives) carries only the values submitted.
     """
     return ChoiceEvent(
         Actor(actor),
@@ -331,10 +331,9 @@ type Line = TextLike | Callable[[Any], TextLike]
 def text_component(*lines: Line, **declared: object) -> AnyComponent:
     """A component that renders `lines` as paragraphs and nothing else.
 
-    Most component tests need a tree to hang behaviour off, not a particular tree; seven files
-    each declared their own one-paragraph class to get one. `declared` becomes reactive state
-    on the instance, and a line given as a callable is passed the instance -- which is what
-    lets the render read that state, the way the hand-written classes did:
+    For a test that needs a tree to hang behaviour off, not a particular tree. `declared` becomes
+    reactive state on the instance, and a line given as a callable is passed the instance, which
+    is what lets the render read that state:
 
         subject = text_component(lambda self: f"count {self.count}", count=0)
     """

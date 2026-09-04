@@ -9,6 +9,8 @@ from enum import StrEnum
 
 
 class Capability(StrEnum):
+    """One renderable feature; the value is the string a target's `capabilities` set holds."""
+
     ACTIONS_BUTTONS = "actions.buttons"
     ACTIONS_ENTITY = "actions.entity"
     ACTIONS_DISCORD_PREMIUM = "actions.discord.premium"

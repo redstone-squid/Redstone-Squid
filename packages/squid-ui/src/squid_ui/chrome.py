@@ -55,6 +55,17 @@ def _default_approved_count(count: int, total: int) -> TextLike:
 
 @dataclass(frozen=True, slots=True)
 class Chrome:
+    """Every string the framework writes on its own behalf, supplied by the host per mount.
+
+    The host passes one to the mount configuration; the mount runs it through `localize_chrome`
+    and publishes the result under `CHROME_CONTEXT`, which components read with
+    `inject(CHROME_CONTEXT, DEFAULT_CHROME)`. Three groups of field: rejection and status notices
+    the frontend shows without a handler (`not_yours` … `dm_unavailable`), labels for controls the
+    framework or a widget adds itself (`previous` … `unanswered`, `waitlist` … `withdraw`), and
+    footers and counters built from numbers (the `Callable` fields). Plain fields are `TextLike`,
+    so a `Message` translates at render; callables return the text for the values they are handed.
+    """
+
     and_n_more: Callable[[int], TextLike] = _default_and_n_more
     """Spill line appended when a list shows fewer entries than it holds."""
     not_yours: TextLike = "These controls belong to someone else."
@@ -102,6 +113,7 @@ class Chrome:
     search: TextLike = "Search"
     no_results: TextLike = "No results"
     decided: Callable[[TextLike], TextLike] = _default_decided
+    """Status line after a decision widget settles; called with the chosen option's label."""
     add: TextLike = "Add"
     edit: TextLike = "Edit"
     remove: TextLike = "Remove"
@@ -125,9 +137,11 @@ class Chrome:
     waitlist: TextLike = "Waitlist"
     full: TextLike = "Full"
     slot_count: Callable[[int, int | None], TextLike] = _default_slot_count
+    """Occupancy shown beside a roster slot; called with (members, capacity), capacity `None` when unbounded."""
     approve: TextLike = "Approve"
     withdraw: TextLike = "Withdraw"
     approved_count: Callable[[int, int], TextLike] = _default_approved_count
+    """Progress line of an agreement widget; called with (approvals so far, approvals required)."""
 
 
 DEFAULT_CHROME = Chrome()
@@ -136,7 +150,10 @@ LOCALIZATION_CONTEXT = ContextKey[Localization]("localization")
 
 
 def localize_chrome(chrome: Chrome, localization: Localization) -> Chrome:
-    """Resolve host chrome once before planning and navigation consume it."""
+    """A `Chrome` whose every field is already-resolved `str` content for `localization`.
+
+    Plain fields resolve now; callable fields are wrapped so their result resolves on each call.
+    """
     return Chrome(
         and_n_more=lambda count: resolve_text(chrome.and_n_more(count), localization).content,
         not_yours=resolve_text(chrome.not_yours, localization).content,

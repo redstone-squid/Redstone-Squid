@@ -18,6 +18,7 @@ class Document[RenderTargetT = RenderTarget]:
     children: tuple[LayoutNode[RenderTargetT], ...]
     assets: tuple[Asset, ...] = ()
     key: str | None = None
+    """Identity root pagination is keyed by; a document that overflows its target without one is unsolvable."""
 
 
 type DocumentLike[RenderTargetT = RenderTarget] = (
@@ -27,6 +28,10 @@ type PortableDocumentLike = DocumentLike[RenderTarget]
 
 
 def as_document[RenderTargetT](rendered: DocumentLike[RenderTargetT]) -> Document[RenderTargetT]:
+    """Promote what `render()` returned to a `Document`; a node or sequence gets no assets and no key.
+
+    Raises `LayoutInvariantError` when `rendered` is text.
+    """
     if isinstance(rendered, Document):
         return rendered
     if isinstance(rendered, str | bytes):

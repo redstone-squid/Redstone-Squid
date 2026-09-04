@@ -13,11 +13,12 @@ from squid_ui.text import TextLike
 
 @dataclass(frozen=True, slots=True)
 class GridCell:
-    """One stable selectable position in a grid."""
+    """One stable selectable position in a grid; raises `ValueError` for an empty `key`."""
 
     key: str
     label: TextLike
     available: bool = True
+    """`False` draws the cell disabled; it stays in the grid so positions do not shift."""
     tone: Tone = Tone.NEUTRAL
 
     def __post_init__(self) -> None:
@@ -27,7 +28,7 @@ class GridCell:
 
 
 def validate_grid(cells: tuple[GridCell, ...], columns: int) -> None:
-    """Validate shape and identity shared by both grid authoring surfaces."""
+    """Raise `ValueError` for no cells, `columns < 1`, or a repeated cell key."""
     if not cells:
         message = "grid needs at least one cell"
         raise ValueError(message)

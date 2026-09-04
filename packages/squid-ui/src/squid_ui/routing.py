@@ -48,10 +48,13 @@ class Converter:
     """How one parameter is spelled in an id, and what it is in Python."""
 
     name: str
+    """What a format spec writes to select it: the `int` in `{build_id:int}`."""
     pattern: str
     """Regex source matching this parameter's segment. Must never match `_SEPARATOR`."""
     parse: Callable[[str], Any]
+    """Segment text to value; a `ValueError` here makes `Route.match` treat the id as another route's."""
     build: Callable[[Any], str]
+    """Value to segment text; `Route.id` re-matches the result, so this need not validate."""
 
 
 CONVERTERS: dict[str, Converter] = {
@@ -156,10 +159,16 @@ def _intersect(left: _Segment, right: _Segment) -> bool:
 
 @dataclass(frozen=True, slots=True)
 class Route:
-    """A named family of custom ids, and the parameters one carries."""
+    """A named family of custom ids, and the parameters one carries.
+
+    Construction raises `ValueError` for an empty or malformed format (see the module docstring
+    for the segment grammar), an alias whose parameters or converters differ from the canonical
+    format, or two variants that overlap.
+    """
 
     format: str
     aliases: tuple[str, ...] = ()
+    """Formats `match` still accepts after the canonical one changes; `id` never builds them."""
     segments: tuple[_Segment, ...] = field(init=False, repr=False)
     params: tuple[str, ...] = field(init=False)
     converters: tuple[Converter, ...] = field(init=False, repr=False)
@@ -249,10 +258,10 @@ class Route:
     def id(self, **params: object) -> str:
         """Build one custom id, refusing anything this route could not match back.
 
-        The check is the invariant the whole tier rests on — a route's pattern matches
-        every id that route builds — rather than a list of the ways a value can be wrong.
-        Empty values, values carrying the separator and values of the wrong type all fail
-        here, because all three are just "the result is not one of my ids".
+        Raises `ValueError` when `params` are not exactly this route's, or when the built id fails
+        the route's own pattern -- an empty value, one carrying the separator, one of the wrong
+        type -- since the invariant the tier rests on is that a route matches every id it builds.
+        Raises `LayoutInvariantError` when the id is over `COMPONENT_LIMITS.custom_id`.
         """
         missing = set(self.params) - set(params)
         unknown = set(params) - set(self.params)

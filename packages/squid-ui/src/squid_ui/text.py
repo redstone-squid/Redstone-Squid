@@ -14,7 +14,9 @@ class Markup(StrEnum):
     """How a renderer should interpret resolved text."""
 
     PLAIN = "plain"
+    """Literal; `discord_text` escapes every Markdown character before Discord sees it."""
     DISCORD_MARKDOWN = "discord-markdown"
+    """Already Discord Markdown; passed through unchanged."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,15 +36,19 @@ class MarkupText(Protocol):
     """
 
     @property
-    def content(self) -> str: ...
+    def content(self) -> str:
+        """The text, escaped or not according to `markup`."""
+        ...
 
     @property
-    def markup(self) -> Markup: ...
+    def markup(self) -> Markup:
+        """What `content` is written in, which decides whether `discord_text` escapes it."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
 class RawMarkdown:
-    """An explicitly trusted Markdown interpolation value."""
+    """An interpolation value `md` and `Message` insert unescaped; the only way dynamic text becomes markup."""
 
     content: str
 
@@ -57,7 +63,9 @@ class Localization:
 
     locale: str | None = None
     gettext: Callable[[str], str] = _identity
+    """Template to translated template; the identity by default."""
     ngettext: Callable[[str, str, int], str] | None = None
+    """`(singular, plural, count)` to template; `None` picks `singular` only when `count == 1`."""
 
 
 NEUTRAL = Localization()
@@ -85,9 +93,12 @@ class Message:
     """Translatable text deferred until a render has a localization."""
 
     template: str
+    """The `gettext` key, in `str.format` syntax."""
     params: Mapping[str, object] = field(default_factory=dict)
+    """Formatted into the translated template, each escaped unless `RawMarkdown`; a nested `Message` resolves first."""
     markup: Markup = Markup.DISCORD_MARKDOWN
     plural: str | None = None
+    """Plural form for `ngettext`; requires an `int` under `params["count"]`."""
 
 
 type TextLike = str | ResolvedText | Message
@@ -99,7 +110,10 @@ def raw_md(value: object) -> RawMarkdown:
 
 
 def plain(value: object) -> ResolvedText:
-    """Create literal text which renderers must not interpret as Markdown."""
+    """Literal text a renderer must not interpret as Markdown.
+
+    A `datetime` or `Timestamp` becomes its ISO form; raises `ValueError` when it is naive.
+    """
     temporal = _temporal_value(value, Markup.PLAIN)
     return ResolvedText(str(value) if temporal is None else temporal, Markup.PLAIN)
 
@@ -108,7 +122,10 @@ def md(value: str | Template, /, **values: object) -> ResolvedText:
     """Resolve trusted Markdown with escaped dynamic interpolations.
 
     Bare strings are the trusted template markup. Dynamic content is supplied either by a
-    Python 3.14 template string or by named values for translated format strings.
+    Python 3.14 template string or by named values for translated format strings; each value is
+    Markdown-escaped and has its `@` neutralized unless it is a `RawMarkdown`, and an aware
+    `datetime` becomes a Discord timestamp. Raises `TypeError` for a template string given
+    `values`, `ValueError` for a format string its values do not satisfy or a naive `datetime`.
     """
     if isinstance(value, Template):
         if values:
@@ -121,7 +138,12 @@ def md(value: str | Template, /, **values: object) -> ResolvedText:
 
 
 def resolve_text(value: TextLike, localization: Localization) -> ResolvedText:
-    """Resolve author text against a required render-time localization."""
+    """Resolve author text against a render-time localization.
+
+    A `ResolvedText` is returned as is and a `str` is taken as trusted Discord Markdown; only a
+    `Message` is translated. Raises `ValueError` for a plural `Message` without an integer
+    `count` param, or a translated template its params do not satisfy.
+    """
     if isinstance(value, ResolvedText):
         return value
     if isinstance(value, str):
@@ -145,7 +167,7 @@ def resolve_text(value: TextLike, localization: Localization) -> ResolvedText:
 
 
 def discord_text(value: MarkupText) -> str:
-    """Render resolved text into Discord's Markdown input markup."""
+    """The string Discord receives: `PLAIN` content with every Markdown character escaped, Markdown as is."""
     if value.markup is Markup.DISCORD_MARKDOWN:
         return value.content
     return _escape_markdown(value.content)

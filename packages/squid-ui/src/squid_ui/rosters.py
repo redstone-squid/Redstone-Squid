@@ -1,6 +1,6 @@
 """Immutable roster values shared by semantic rendering and downstream pattern packages.
 
-Named in the plural for the same reason as `grids`: `sl.roster` is the factory.
+Named in the plural for the same reason as `grids`: `factories.roster` is the factory.
 """
 
 from collections.abc import Sequence
@@ -14,11 +14,12 @@ from squid_ui.text import TextLike
 
 @dataclass(frozen=True, slots=True)
 class RosterSlot:
-    """One capacity-constrained destination in a roster."""
+    """One destination in a roster; raises `ValueError` for an empty `key` or a negative `capacity`."""
 
     key: str
     label: TextLike
     capacity: int | None = None
+    """Seats before `RosterOverflow` applies; `None` never fills."""
     tone: Tone = Tone.NEUTRAL
 
     def __post_init__(self) -> None:
@@ -31,20 +32,24 @@ class RosterSlot:
 
 
 class RosterOverflow(StrEnum):
-    """What allocation does with an entry after its requested slot fills."""
+    """What `place_roster` does with an entry whose requested slot is full."""
 
     REJECT = "reject"
+    """The entry lands in `RosterPlacement.rejected` and holds no place."""
     WAITLIST = "waitlist"
+    """The entry lands in `RosterPlacement.waitlist`, in arrival order across every slot."""
 
 
 @dataclass(frozen=True, slots=True)
 class RosterEntry:
-    """One actor's requested roster slot."""
+    """One actor's requested roster slot; raises `ValueError` for an empty `actor_id` or `slot`."""
 
     actor_id: str
     display: TextLike
     slot: str
+    """Key of the requested `RosterSlot`."""
     joined_at: datetime | None = None
+    """Orders allocation: dated entries first by time, then undated ones in ledger order."""
 
     def __post_init__(self) -> None:
         if not self.actor_id:
@@ -56,7 +61,7 @@ class RosterEntry:
 
 
 class RosterStatus(StrEnum):
-    """The allocation outcome for one actor."""
+    """Where `place_roster` put one actor: a slot's `members`, the `waitlist`, or `rejected`."""
 
     SEATED = "seated"
     WAITLISTED = "waitlisted"
@@ -86,14 +91,14 @@ class RosterPlacement:
         return self.overflow is RosterOverflow.REJECT
 
     def group(self, slot: str) -> RosterGroup:
-        """Return the allocation group named by ``slot``."""
+        """The group for the slot keyed `slot`; raises `KeyError` when the placement has no such slot."""
         if group := next((group for group in self.groups if group.slot.key == slot), None):
             return group
         message = f"unknown roster slot {slot!r}"
         raise KeyError(message)
 
     def status(self, actor_id: str) -> RosterStatus | None:
-        """Return the actual allocation outcome for ``actor_id``, if present."""
+        """Where `actor_id` was placed, or `None` when the ledger had no entry for it."""
         if any(entry.actor_id == actor_id for group in self.groups for entry in group.members):
             return RosterStatus.SEATED
         if any(entry.actor_id == actor_id for entry in self.waitlist):
@@ -109,7 +114,12 @@ def place_roster(
     *,
     overflow: RosterOverflow = RosterOverflow.WAITLIST,
 ) -> RosterPlacement:
-    """Allocate a valid single-slot ledger in stable FIFO order."""
+    """Seat each entry in its requested slot in arrival order; the rest overflow per `overflow`.
+
+    Arrival order is `joined_at` ascending with ledger order as the tiebreak, undated entries after
+    every dated one. Raises `ValueError` for duplicate slot keys, an actor listed twice, an entry
+    naming an unknown slot, or `joined_at` values that mix naive and aware datetimes.
+    """
     slot_by_key = {slot.key: slot for slot in slots}
     if len(slot_by_key) != len(slots):
         message = "roster slot keys must be unique"

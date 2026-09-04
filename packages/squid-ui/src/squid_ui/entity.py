@@ -43,7 +43,11 @@ class ConversationType(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class EntityRef:
-    """A portable reference to one concrete entity."""
+    """A portable reference to one concrete entity.
+
+    Raises `TypeError` for an `id` that is neither `int` nor `str`, `ValueError` for a `bool`, a
+    non-positive integer or an empty string.
+    """
 
     kind: EntityKind
     id: int | str
@@ -61,7 +65,7 @@ class EntityRef:
 
 
 def encode_entity_ref(ref: EntityRef) -> str:
-    """Encode a reference without conflating integer and string identifiers."""
+    """`kind:i:<int>` for integer ids, `kind:s:<unpadded urlsafe base64>` for string ids; see `decode_entity_ref`."""
     if isinstance(ref.id, int):
         return f"{ref.kind.value}:i:{ref.id}"
     encoded = base64.urlsafe_b64encode(ref.id.encode()).decode().rstrip("=")
@@ -69,7 +73,7 @@ def encode_entity_ref(ref: EntityRef) -> str:
 
 
 def decode_entity_ref(value: str) -> EntityRef:
-    """Decode one tagged presentation-state reference."""
+    """Invert `encode_entity_ref`; raises `ValueError` for a missing or unknown kind, tag, or undecodable base64."""
     kind, separator, encoded = value.partition(":")
     if not separator:
         message = "entity reference is missing its kind separator"

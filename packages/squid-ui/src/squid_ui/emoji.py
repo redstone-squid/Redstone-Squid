@@ -7,7 +7,10 @@ __all__ = ["Emoji", "EmojiLike", "normalize_emoji"]
 
 @dataclass(frozen=True, slots=True)
 class Emoji:
-    """A Unicode or Discord custom emoji."""
+    """A Unicode emoji (`id` is `None`, `name` is the character) or a custom one (`id` set, `name` its label).
+
+    Raises `ValueError` for an empty `name`, a non-positive `id`, or `animated` without an `id`.
+    """
 
     name: str
     id: int | None = None
@@ -29,5 +32,5 @@ type EmojiLike = str | Emoji
 
 
 def normalize_emoji(value: EmojiLike | None) -> Emoji | None:
-    """Normalize shorthand Unicode emoji to the public metadata value."""
+    """Wrap a bare string as a Unicode `Emoji`; an `Emoji` or `None` passes through."""
     return Emoji(value) if isinstance(value, str) else value

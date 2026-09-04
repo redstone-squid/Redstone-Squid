@@ -12,15 +12,20 @@ class AmbiguousTimeMode(StrEnum):
     """How a repeated local time maps to one of its two instants."""
 
     REJECT = "reject"
+    """`resolve_local_datetime` raises `AmbiguousLocalTimeError`."""
     EARLIER = "earlier"
+    """The first instant, before the clocks went back."""
     LATER = "later"
+    """The second instant, after the clocks went back."""
 
 
 class NonexistentTimeMode(StrEnum):
     """How a local time skipped by an offset transition is handled."""
 
     REJECT = "reject"
+    """`resolve_local_datetime` raises `NonexistentLocalTimeError`."""
     SHIFT_FORWARD = "shift_forward"
+    """The earliest local time after the gap."""
 
 
 class AmbiguousLocalTimeError(SquidUiError, ValueError):
@@ -37,9 +42,14 @@ class InvalidTimezoneOffsetError(SquidUiError, ValueError):
 
 @dataclass(frozen=True, slots=True)
 class ZonedDateTime:
-    """One exact instant together with the IANA timezone used to present it."""
+    """One exact instant together with the IANA timezone used to present it.
+
+    Raises `ValueError` for a naive `instant` or an unknown `timezone`, `TypeError` for a
+    `timezone` that is not a `str`.
+    """
 
     instant: datetime
+    """Stored in UTC whatever zone it arrived in, so equality is by instant."""
     timezone: str
     _zone: ZoneInfo = field(init=False, repr=False, compare=False)
 
@@ -53,16 +63,16 @@ class ZonedDateTime:
 
     @property
     def local(self) -> datetime:
-        """Return the instant projected into its named timezone."""
+        """The instant projected into its named timezone."""
         return self.instant.astimezone(self._zone)
 
     def isoformat(self) -> str:
-        """Return an exact local representation retaining the IANA zone key."""
+        """The local time with its offset and zone key: `2026-03-29 03:30:00+02:00[Europe/Paris]`."""
         return f"{self.local.isoformat(sep=' ')}[{self.timezone}]"
 
 
 def timezone_from_name(name: str) -> ZoneInfo:
-    """Validate and load one IANA timezone name."""
+    """Load one IANA timezone; raises `ValueError` for an unknown name and `TypeError` for a non-`str`."""
     return _zone(name)
 
 
@@ -72,7 +82,12 @@ def resolve_local_datetime(
     ambiguous: AmbiguousTimeMode,
     nonexistent: NonexistentTimeMode,
 ) -> datetime:
-    """Resolve a naive wall time to one aware instant under explicit policies."""
+    """Resolve a naive wall time to one aware instant under explicit policies.
+
+    Any `tzinfo` on `value` is ignored. Raises `AmbiguousLocalTimeError` when the wall time occurs
+    twice and `ambiguous` is `REJECT`, `NonexistentLocalTimeError` when it never occurs and
+    `nonexistent` is `REJECT`.
+    """
     valid, resolved = _local_mapping(value, timezone)
     if valid:
         if len(valid) == 1:
@@ -91,7 +106,11 @@ def resolve_local_datetime(
 
 
 def resolve_offset_datetime(value: datetime, timezone: tzinfo) -> datetime:
-    """Resolve aware input only when its offset is valid in the named timezone."""
+    """The instant in `timezone` whose wall time and offset both equal `value`'s.
+
+    Raises `InvalidTimezoneOffsetError` when no instant in `timezone` has that pairing, which is
+    how a client-supplied offset that disagrees with the zone is caught rather than trusted.
+    """
     wall = value.replace(tzinfo=None)
     valid, _ = _local_mapping(wall, timezone)
     offset = value.utcoffset()

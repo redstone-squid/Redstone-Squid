@@ -17,12 +17,21 @@ if TYPE_CHECKING:
 
 
 class ActionMode(StrEnum):
-    """Concurrency and stale-generation policy for an interactive action."""
+    """Concurrency and stale-generation policy for an interactive action.
+
+    A press carries the render generation its control was issued in. `EXCLUSIVE` and `REBASE`
+    serialize under the mount's action lock; `PARALLEL_READ` and `IMMEDIATE` skip the lock and the
+    generation check.
+    """
 
     EXCLUSIVE = "exclusive"
+    """A press from an older generation is acknowledged and dropped."""
     REBASE = "rebase"
+    """A press from an older generation is re-resolved against the newest render and runs `rebased`."""
     PARALLEL_READ = "parallel_read"
+    """Runs in a read-only transaction; a state write is an error."""
     IMMEDIATE = "immediate"
+    """Runs in a normal transaction with no lock, whatever generation it came from."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,7 +52,7 @@ class BusySpec:
 
 
 class InteractionKind(StrEnum):
-    """The portable interaction shape being dispatched."""
+    """The portable interaction shape being dispatched; names the `ActionEvent` subclass the handler receives."""
 
     PRESS = "press"
     SELECTION = "selection"
@@ -51,6 +60,8 @@ class InteractionKind(StrEnum):
 
 
 class Visibility(StrEnum):
+    """Who sees a `notice`: `PRIVATE` only the actor (a Discord ephemeral), `PUBLIC` everyone in the channel."""
+
     PUBLIC = "public"
     PRIVATE = "private"
 
@@ -60,24 +71,33 @@ class Actor:
     """Portable identity facts supplied by a frontend."""
 
     id: str
+    """Frontend-stable identifier, e.g. the Discord user id as a string; what author locks compare."""
     display_name: str | None = None
 
 
 class ActionResponder(Protocol):
-    """Small UI response surface implemented by each frontend adapter.
+    """Response surface a frontend adapter gives one dispatched event; `finish()` ends the mount behind it.
 
-    Every method here is one that any frontend can honestly implement. Forms joined this
-    surface once their schemas became portable; frontend-native payloads remain on concrete
-    adapters reached through helpers such as `sd.responder(event)`.
+    Every method is one that any frontend can implement, forms included since their schemas are
+    portable. Frontend-native payloads stay on the concrete adapters, reached through helpers
+    such as the Discord package's `responder(event)`.
     """
 
-    async def acknowledge(self) -> None: ...
+    async def acknowledge(self) -> None:
+        """Tell the frontend the interaction is handled with no visible reply; a no-op once anything replied."""
+        ...
 
-    async def notice(self, text: TextLike, *, visibility: Visibility = Visibility.PRIVATE) -> None: ...
+    async def notice(self, text: TextLike, *, visibility: Visibility = Visibility.PRIVATE) -> None:
+        """Send `text` as a reply to the interaction, resolved with the mount's localization."""
+        ...
 
-    async def redirect(self, url: str) -> None: ...
+    async def redirect(self, url: str) -> None:
+        """Send the actor to `url`; a frontend with no navigation delivers it as a private notice."""
+        ...
 
-    async def finish(self) -> None: ...
+    async def finish(self) -> None:
+        """End the mount this event was dispatched from, disabling its controls; a no-op when already finished."""
+        ...
 
     async def present_form(
         self,
@@ -88,24 +108,35 @@ class ActionResponder(Protocol):
         mode: ActionMode | None = None,
         label: TextLike = "",
         record: History | None = None,
-    ) -> None: ...
+    ) -> None:
+        """Open `form` and route its submission back through the mount as a `SubmitEvent`.
 
-    def invalidate(self) -> None: ...
+        A `FormSpec` requires `on_submit` and a `Form` forbids it (`TypeError` either way). `mode`
+        defaults to the form's own, `EXCLUSIVE` for a spec. With `record`, the submission enters
+        that history under `label`. The Discord adapter raises `RuntimeError` if the interaction
+        already replied, since a modal must be the initial response.
+        """
+        ...
+
+    def invalidate(self) -> None:
+        """Schedule a re-render without a state change, for presentation-only updates."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
 class ActionEvent:
-    """Base event passed to portable component handlers.
+    """Base event passed to portable component handlers; `finish()` ends the mount that dispatched it.
 
-    `context` carries one reserved key, `"frontend"`, naming the adapter that dispatched
-    the event; the rest is for host-injected `ContextKey`s. It is not a place to smuggle
-    frontend facts — a Discord-only handler should reach for `sd.native(event)`
-    or `sd.responder(event)` instead, which hand back the real Discord surfaces.
+    The response methods delegate to `responder`. `context` carries one reserved key,
+    `"frontend"`, naming the adapter that dispatched the event; the rest is for host-injected
+    `ContextKey`s. It is not a place to smuggle frontend facts — a Discord-only handler
+    reaches for the Discord package's `native(event)` or `responder(event)` instead.
     """
 
     actor: Actor
     responder: ActionResponder
     locale: str | None = None
+    """Locale negotiated for the actor, when the frontend reports one."""
     context: Mapping[str, Any] = field(default_factory=dict)
 
     async def acknowledge(self) -> None:
@@ -130,7 +161,6 @@ class ActionEvent:
         label: TextLike = "",
         record: History | None = None,
     ) -> None:
-        """Present a portable form through the dispatching frontend."""
         await self.responder.present_form(
             form,
             key=key,
@@ -141,7 +171,6 @@ class ActionEvent:
         )
 
     def invalidate(self) -> None:
-        """Request a redraw after presentation-only state changes."""
         self.responder.invalidate()
 
 
@@ -166,10 +195,12 @@ class EntitySelectionEvent(ActionEvent):
 
 @dataclass(frozen=True, slots=True)
 class SubmitEvent(ActionEvent):
-    """A portable form was submitted."""
+    """A portable form was submitted; the three fields are the `FormResult` of that attempt."""
 
     values: Mapping[str, object] = field(default_factory=dict)
+    """Parsed values by key; a field whose `parse` failed is absent."""
     attempted: Mapping[str, object] = field(default_factory=dict)
+    """The raw submission, which a retry re-presents as the prefill."""
     errors: tuple[FormIssue, ...] = ()
 
 
@@ -187,9 +218,12 @@ class ActionRequest:
     kind: InteractionKind
     mode: ActionMode
     submitted_generation: int | None
+    """Render generation the pressed control was issued in; `None` when the frontend does not track one."""
     active_generation: int
+    """Generation the mount is at as the handler runs."""
     context: ActionContext
     rebased: bool = False
+    """`True` when `mode` is `REBASE` and the binding was re-resolved because the two generations differ."""
 
 
 type ActionProceed = Callable[[], Awaitable[None]]
@@ -224,17 +258,18 @@ class ActionBinding[EventT: ActionEvent = Any]:
     handler: Callable[[EventT], Awaitable[None]]
     mode: ActionMode = ActionMode.EXCLUSIVE
     routes: Mapping[str, ActionBinding[Any]] = field(default_factory=dict)
+    """For a select that stands in for several buttons: the binding each option value dispatches to."""
     guard: Guard | None = None
     """Admission checked by the frontend after the concurrency gate, before the handler."""
     busy: BusySpec | None = None
-    """Busy busy policy for a handler slow enough to need it."""
+    """Interim paint for a handler slow enough to need it; `None` shows nothing while it runs."""
     label: TextLike = ""
     """What the pressed control says, which is what a framework-written entry is called."""
     record: History | None = None
     """History this action enters itself into, under `label`, before the handler runs."""
 
     def routed(self, values: tuple[str, ...]) -> ActionBinding[Any] | None:
-        """Resolve a grouped control to its logical action binding."""
+        """The binding `values` selects: `self` without `routes`, else the route for the single value, else `None`."""
         if not self.routes:
             return self
         if len(values) != 1:
