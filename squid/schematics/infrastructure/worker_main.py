@@ -32,12 +32,13 @@ from squid.config import load_worker_log_config, load_worker_observability_confi
 from squid.core.errors import DomainError, SquidError
 from squid.logging_config import configure_worker_logging
 from squid.observability import configure_observability, extracted_trace_span
-from squid.schematics.application.commands import RenderRequest, SimulationRequest
+from squid.schematics.application.commands import SimulationRequest
 from squid.schematics.domain.models import (
     FingerprintPreset,
     SchematicFormat,
     SchematicLimits,
 )
+from squid.schematics.domain.values import VerifiedResourcePack
 from squid.schematics.errors import (
     AmbiguousSimulationInputError,
     InvalidSchematicError,
@@ -77,7 +78,7 @@ Absent on the other POSIX hosts this module still has to start on, which is why 
 it tolerates failure rather than treating the file as guaranteed.
 """
 
-_RESOURCE_PACK: bytes | None = None
+_RESOURCE_PACK: VerifiedResourcePack | None = None
 """Cached across requests. Reading and parsing a vanilla resource pack is expensive, and it is
 the only reason this is a persistent worker rather than a one-shot subprocess. A `Schematic`
 is deliberately *never* cached here: `simulate` attaches a live world to one."""
@@ -177,7 +178,11 @@ def handle(operation: str, params: Mapping[str, Any], payloads: tuple[bytes, ...
         return {"comparison": wire.encode_comparison(comparison)}, b""
 
     if operation == "render":
-        return {}, engine.render(payloads[0], request=_render_request(params), resource_pack=_resource_pack(params))
+        return {}, engine.render(
+            payloads[0],
+            request=wire.decode_render_request(cast(Mapping[str, Any], params["request"])),
+            resource_pack=_resource_pack(params),
+        )
 
     if operation == "simulate":
         result = engine.simulate(payloads[0], request=_simulation_request(params))
@@ -195,20 +200,6 @@ def handle(operation: str, params: Mapping[str, Any], payloads: tuple[bytes, ...
     raise InvalidSchematicError(msg, developer_action="The supervisor sent an operation this worker cannot handle.")
 
 
-def _render_request(params: Mapping[str, Any]) -> RenderRequest:
-    request = cast(Mapping[str, Any], params["request"])
-    return RenderRequest(
-        width=int(request["width"]),
-        height=int(request["height"]),
-        projection=request["projection"],
-        sphere_fit=bool(request["sphere_fit"]),
-        yaw=request.get("yaw"),
-        pitch=request.get("pitch"),
-        zoom=request.get("zoom"),
-        background=tuple(float(channel) for channel in request["background"]),  # type: ignore[arg-type]
-    )
-
-
 def _simulation_request(params: Mapping[str, Any]) -> SimulationRequest:
     request = cast(Mapping[str, Any], params["request"])
     return SimulationRequest(
@@ -222,12 +213,13 @@ def _simulation_request(params: Mapping[str, Any]) -> SimulationRequest:
     )
 
 
-def _resource_pack(params: Mapping[str, Any]) -> bytes:
+def _resource_pack(params: Mapping[str, Any]) -> VerifiedResourcePack:
     """Return the cached resource pack, accepting a fresh one when the supervisor sends it."""
     global _RESOURCE_PACK
     encoded = params.get("resource_pack_b64")
     if encoded is not None:
-        _RESOURCE_PACK = base64.b64decode(cast(str, encoded))
+        metadata = cast(Mapping[str, Any], params["resource_pack"])
+        _RESOURCE_PACK = wire.decode_resource_pack(metadata, base64.b64decode(cast(str, encoded)))
     if _RESOURCE_PACK is None:
         msg = "No resource pack has been supplied to this worker."
         raise InvalidSchematicError(msg, developer_action="Send resource_pack_b64 with the first render request.")

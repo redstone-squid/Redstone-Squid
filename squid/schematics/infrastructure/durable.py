@@ -33,6 +33,7 @@ from squid.schematics.domain.models import (
     SimulationResult,
     VersionLossEntry,
 )
+from squid.schematics.domain.values import VerifiedResourcePack
 from squid.schematics.errors import (
     InvalidSchematicError,
     SchematicSupportUnavailableError,
@@ -134,12 +135,15 @@ class QueuedSchematicAnalyzer:
         )
         return wire.decode_comparison(cast(Mapping[str, Any], response.result["comparison"]))
 
-    async def render(self, data: bytes, *, request: RenderRequest, resource_pack: bytes | None = None) -> bytes:
+    async def render(
+        self, data: bytes, *, request: RenderRequest, resource_pack: VerifiedResourcePack | None = None
+    ) -> bytes:
         self._require_enabled()
-        inputs = (data,) if resource_pack is None else (data, resource_pack)
+        inputs = (data,) if resource_pack is None else (data, resource_pack.data)
+        pack_metadata = wire.encode_resource_pack(resource_pack) if resource_pack is not None else None
         response = await self._request(
             "render",
-            {"request": dataclasses.asdict(request), "has_resource_pack": resource_pack is not None},
+            {"request": wire.encode_render_request(request), "resource_pack": pack_metadata},
             inputs,
             timeout_seconds=self._config.job_wait_timeout_seconds,
         )
@@ -325,8 +329,17 @@ class SchematicJobRunner:
             )
             return {"comparison": wire.encode_comparison(comparison)}, None
         if job.operation == "render":
-            pack = inputs[1] if bool(params.get("has_resource_pack", False)) else None
-            rendered = await self._analyzer.render(inputs[0], request=_render_request(params), resource_pack=pack)
+            pack_metadata = params.get("resource_pack")
+            pack = (
+                wire.decode_resource_pack(cast(Mapping[str, Any], pack_metadata), inputs[1])
+                if pack_metadata is not None
+                else None
+            )
+            rendered = await self._analyzer.render(
+                inputs[0],
+                request=wire.decode_render_request(cast(Mapping[str, Any], params["request"])),
+                resource_pack=pack,
+            )
             return {}, rendered
         if job.operation == "simulate":
             simulation = await self._analyzer.simulate(inputs[0], request=_simulation_request(params))
@@ -341,21 +354,6 @@ class SchematicJobRunner:
             return {}, output
         msg = f"Unsupported schematic job operation {job.operation}."
         raise InvalidSchematicError(msg)
-
-
-def _render_request(params: Mapping[str, Any]) -> RenderRequest:
-    request = cast(Mapping[str, Any], params["request"])
-    background = cast(Sequence[Any], request["background"])
-    return RenderRequest(
-        width=int(request["width"]),
-        height=int(request["height"]),
-        projection=cast(Any, request["projection"]),
-        sphere_fit=bool(request["sphere_fit"]),
-        yaw=float(request["yaw"]) if request.get("yaw") is not None else None,
-        pitch=float(request["pitch"]) if request.get("pitch") is not None else None,
-        zoom=float(request["zoom"]) if request.get("zoom") is not None else None,
-        background=cast(tuple[float, float, float, float], tuple(float(channel) for channel in background)),
-    )
 
 
 def _simulation_request(params: Mapping[str, Any]) -> SimulationRequest:

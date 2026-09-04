@@ -8,6 +8,7 @@ import pytest
 pytest.importorskip("nucleation")
 
 from squid.schematics.application.commands import RenderRequest
+from squid.schematics.domain.values import RgbaColor
 from squid.schematics.infrastructure import nucleation_adapter
 
 
@@ -74,7 +75,7 @@ def test_render_config_applies_projection_and_camera_overrides(monkeypatch: pyte
         yaw=90.0,
         pitch=20.0,
         zoom=1.5,
-        background=(0.1, 0.2, 0.3, 1.0),
+        background=RgbaColor(0.1, 0.2, 0.3, 1.0),
     )
 
     config: Any = nucleation_adapter._render_config(request)

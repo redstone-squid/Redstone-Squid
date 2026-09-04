@@ -27,6 +27,7 @@ from squid.schematics.application.services import (
     SchematicService,
     summarise_losses,
 )
+from squid.schematics.domain.values import RgbaColor, VerifiedResourcePack
 
 __all__ = [
     "CachedRender",
@@ -41,6 +42,7 @@ __all__ = [
     "RenderRequest",
     "RenderSkipReason",
     "RenderedSchematic",
+    "RgbaColor",
     "SchematicAnalyzer",
     "SchematicJobErrorKind",
     "SchematicJobOperation",
@@ -55,5 +57,6 @@ __all__ = [
     "SimulationRequest",
     "SkippedRender",
     "StoredSchematic",
+    "VerifiedResourcePack",
     "summarise_losses",
 ]
