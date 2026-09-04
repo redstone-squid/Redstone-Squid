@@ -21,6 +21,7 @@ from typing import (
     ClassVar,
     Final,
     Literal,
+    NotRequired,
     Self,
     TypedDict,
     cast,
@@ -67,12 +68,30 @@ class ServerInfo(TypedDict, total=False):
     command_to_build: str
 
 
+class SchematicDuplicateSource(TypedDict):
+    """The submitted attachment which produced duplicate evidence."""
+
+    attachment_id: str
+    filename: str
+
+
 class SchematicDuplicateInfo(TypedDict):
     """One machine-detected schematic resemblance retained for reviewers."""
 
     build_id: int
+    title: NotRequired[str]
     tier: Literal["identical", "structural-match", "near"]
     footprint_distance: float
+    source_attachments: NotRequired[list[SchematicDuplicateSource]]
+
+
+class AttachmentFailureInfo(TypedDict):
+    """One submitted attachment that could not complete enrichment."""
+
+    attachment_id: str
+    filename: str
+    stage: str
+    detail: str
 
 
 class Info(TypedDict, total=False):
@@ -87,6 +106,7 @@ class Info(TypedDict, total=False):
     # the disagreement for reviewers rather than resolving it.
     schematic_dimension_mismatch: str
     schematic_duplicates: list[SchematicDuplicateInfo]
+    attachment_failures: list[AttachmentFailureInfo]
     submission_provenance: dict[str, Any]
 
 
