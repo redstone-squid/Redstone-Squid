@@ -179,7 +179,7 @@ class ReactiveConflictError(ReactivityError, RuntimeError):
         super().__init__(message)
 
 
-def _equal(left: Any, right: Any) -> bool:
+def _equal(left: object, right: object) -> bool:
     """Whether a write leaves the field where it already was, conservatively."""
     if left is right:
         return True
@@ -319,15 +319,28 @@ def _staged_value(cell: _Cell) -> Any:
     return _MISSING if entry is None else entry.value
 
 
+class _ReactiveSource(Protocol):
+    """A versioned value that can settle before a dependency comparison."""
+
+    def settle(self) -> int: ...
+
+
 class _Consumer(Protocol):
     """Whatever a tracked read reports itself to: a computed, or a resource load."""
 
-    sources: dict[Any, int]
+    sources: dict[_ReactiveSource, int]
 
 
 _CONSUMER: ContextVar[_Consumer | None] = ContextVar("squid_reactivity_consumer", default=None)
 
-_SETTLING: ContextVar[tuple[Any, ...]] = ContextVar("squid_reactivity_settling", default=())
+
+class _SettlingNode(Protocol):
+    """A named derived value that can participate in cycle detection."""
+
+    _label: str
+
+
+_SETTLING: ContextVar[tuple[_SettlingNode, ...]] = ContextVar("squid_reactivity_settling", default=())
 """The derived nodes currently producing a value on this task, outermost first.
 
 Task-local rather than global: two independent values settled concurrently each copy the
@@ -336,7 +349,7 @@ one stack because a chain can run through both, and a cycle should be named whol
 """
 
 
-def cycle_path(node: Any) -> tuple[str, ...] | None:
+def cycle_path(node: _SettlingNode) -> tuple[str, ...] | None:
     """The ring `node` closes if it is already producing a value on this task, else `None`.
 
     Reported from the first time `node` appears, so the answer is the ring itself and not the
@@ -351,7 +364,7 @@ def cycle_path(node: Any) -> tuple[str, ...] | None:
 
 
 @contextmanager
-def settling(node: Any) -> Iterator[None]:
+def settling(node: _SettlingNode) -> Iterator[None]:
     """Mark `node` as producing a value, and refuse to enter a ring twice.
 
     The check precedes the push, so the error is raised before whatever would otherwise
@@ -1361,6 +1374,8 @@ def block_writes(reason: str) -> Iterator[None]:
 
 
 class _State:
+    """Descriptor backing a declared reactive state field."""
+
     def __init__(
         self,
         default: Any = _MISSING,
@@ -1728,7 +1743,7 @@ class _Derived:
         self._function = function
         self._label = label
         self.owner = owner
-        self.sources: dict[Any, int] = {}
+        self.sources: dict[_ReactiveSource, int] = {}
         self.value: Any = None
         self.version = 0
         self._settled = False
@@ -1827,7 +1842,7 @@ class Observation:
     call. :func:`squid_reactivity.watch` exists only for a named topic, which has no value to read.
     """
 
-    sources: dict[Any, int] = field(default_factory=dict)
+    sources: dict[_ReactiveSource, int] = field(default_factory=dict)
     born: dict[int, object] = field(default_factory=dict)
     """Components constructed during this render, by id, while their own render() has not yet
     run. Assigning declared state in __init__ is construction, not the mutation the write guard
@@ -1881,7 +1896,7 @@ class Observation:
         found: list[Any] = []
         seen: set[int] = set()
 
-        def walk(sources: dict[Any, int]) -> None:
+        def walk(sources: dict[_ReactiveSource, int]) -> None:
             for source in sources:
                 identity = id(source)
                 if identity in seen:
