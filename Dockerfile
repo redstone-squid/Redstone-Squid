@@ -43,35 +43,13 @@ RUN --mount=from=ghcr.io/astral-sh/uv:0.11.32@sha256:df4cae8f3a96d175e2e5f992e59
       uv sync --locked --no-dev --no-editable; \
     fi
 
-FROM ${PYTHON_IMAGE} AS runtime
+FROM ${PYTHON_IMAGE} AS runtime-base
 
 ARG DEBIAN_SNAPSHOT
-ARG FFMPEG_VERSION
-ARG WITH_MEDIA=0
-ARG WITH_SOFTWARE_GPU=0
-RUN if [ "$WITH_MEDIA" = "1" ] || [ "$WITH_SOFTWARE_GPU" = "1" ]; then \
-      sed -ri \
-        "s|^URIs: http://deb.debian.org/debian$|URIs: https://snapshot.debian.org/archive/debian/${DEBIAN_SNAPSHOT}|; \
-         s|^URIs: http://deb.debian.org/debian-security$|URIs: https://snapshot.debian.org/archive/debian-security/${DEBIAN_SNAPSHOT}|" \
-        /etc/apt/sources.list.d/debian.sources \
-      && apt-get -o Acquire::Check-Valid-Until=false update; \
-      if [ "$WITH_MEDIA" = "1" ] && [ "$WITH_SOFTWARE_GPU" = "1" ]; then \
-        apt-get install -y --no-install-recommends \
-          "ffmpeg=${FFMPEG_VERSION}" \
-          libvulkan1 \
-          mesa-vulkan-drivers; \
-      elif [ "$WITH_MEDIA" = "1" ]; then \
-        apt-get install -y --no-install-recommends "ffmpeg=${FFMPEG_VERSION}"; \
-      else \
-        apt-get install -y --no-install-recommends libvulkan1 mesa-vulkan-drivers; \
-      fi; \
-      rm -rf /var/lib/apt/lists/*; \
-    fi \
-    && if [ "$WITH_MEDIA" = "1" ]; then \
-      test "$(dpkg-query --showformat='${Version}' --show ffmpeg)" = "$FFMPEG_VERSION" \
-      && /usr/bin/ffmpeg -version \
-      && /usr/bin/ffprobe -version; \
-    fi
+RUN sed -ri \
+      "s|^URIs: http://deb.debian.org/debian$|URIs: https://snapshot.debian.org/archive/debian/${DEBIAN_SNAPSHOT}|; \
+       s|^URIs: http://deb.debian.org/debian-security$|URIs: https://snapshot.debian.org/archive/debian-security/${DEBIAN_SNAPSHOT}|" \
+      /etc/apt/sources.list.d/debian.sources
 
 ARG GIT_COMMIT_HASH=unknown
 ENV SQUID_BUILD_COMMIT_HASH=$GIT_COMMIT_HASH \
@@ -116,3 +94,41 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/readyz', timeout=5).read()" || exit 1
 
 CMD ["python", "-m", "squid.api.app"]
+
+FROM runtime-base AS runtime-media
+
+USER root
+ARG FFMPEG_VERSION
+RUN apt-get -o Acquire::Check-Valid-Until=false update \
+    && apt-get install -y --no-install-recommends "ffmpeg=${FFMPEG_VERSION}" \
+    && rm -rf /var/lib/apt/lists/* \
+    && test "$(dpkg-query --showformat='${Version}' --show ffmpeg)" = "$FFMPEG_VERSION" \
+    && /usr/bin/ffmpeg -version \
+    && /usr/bin/ffprobe -version
+USER appuser
+
+FROM runtime-base AS runtime-software-gpu
+
+USER root
+RUN apt-get -o Acquire::Check-Valid-Until=false update \
+    && apt-get install -y --no-install-recommends libvulkan1 mesa-vulkan-drivers \
+    && rm -rf /var/lib/apt/lists/*
+USER appuser
+
+FROM runtime-base AS runtime-media-software-gpu
+
+USER root
+ARG FFMPEG_VERSION
+RUN apt-get -o Acquire::Check-Valid-Until=false update \
+    && apt-get install -y --no-install-recommends \
+      "ffmpeg=${FFMPEG_VERSION}" \
+      libvulkan1 \
+      mesa-vulkan-drivers \
+    && rm -rf /var/lib/apt/lists/* \
+    && test "$(dpkg-query --showformat='${Version}' --show ffmpeg)" = "$FFMPEG_VERSION" \
+    && /usr/bin/ffmpeg -version \
+    && /usr/bin/ffprobe -version
+USER appuser
+
+# Preserve the base image as the default target for local `docker build` callers.
+FROM runtime-base AS runtime
