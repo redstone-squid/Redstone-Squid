@@ -599,7 +599,7 @@ class RolePanel(Component[DiscordTarget]):
             )
 
         category_ids = {role.role_id for role in category.roles}
-        complete_roles: list[Any] = []
+        complete_roles: list[discord.Role] = []
         seen: set[int] = set()
         for role in member_roles:
             role_id = int(role.id)
@@ -609,7 +609,7 @@ class RolePanel(Component[DiscordTarget]):
             seen.add(role_id)
         for role in category.roles:
             if role.role_id in candidate:
-                complete_roles.append(role_by_id[role.role_id])
+                complete_roles.append(resolved[role.role_id])
                 seen.add(role.role_id)
 
         try:
