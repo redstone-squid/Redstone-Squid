@@ -18,7 +18,7 @@ from whenever import Instant
 
 from squid.accounts.domain import fold_creator_name
 from squid.accounts.infrastructure.models import Account, CreatorAlias
-from squid.builds.application.queries import DEFAULT_BUILD_LIST_SORT, BuildListSort
+from squid.builds.application.queries import DEFAULT_BUILD_LIST_SORT, BuildListSort, PublicBuildSummary
 from squid.builds.domain import (
     Build,
     Status,
@@ -133,6 +133,13 @@ class BuildRepository:
             )
             by_id = {build.id: build for build in await self._mapper.to_domain_many(session, rows)}
         return [by_id[build_id] for build_id in build_ids if build_id in by_id]
+
+    async def get_public_summaries(self, build_ids: Sequence[int]) -> Sequence[PublicBuildSummary]:
+        """Return allowlisted summaries for confirmed builds in requested order."""
+        builds = await self.get_many(build_ids)
+        return tuple(
+            PublicBuildSummary.from_build(build) for build in builds if build.submission_status is Status.CONFIRMED
+        )
 
     async def get_by_source_submission_draft_id(self, draft_id: uuid.UUID) -> Build | None:
         """Load the build already created from a synchronized submission draft."""
