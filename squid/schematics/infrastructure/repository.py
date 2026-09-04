@@ -2,6 +2,7 @@
 
 import hashlib
 from collections.abc import Sequence
+
 from sqlalchemy import ColumnElement, Select, and_, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -257,7 +258,7 @@ class PostgresSchematicStore:
         async with self._session_factory() as session:
             rows = (await session.execute(statement)).all()
         return [
-            to_stored_schematic(row, source_format=SchematicFormat(source_format), byte_size=byte_size)
+            to_stored_schematic(row, source_format=source_format, byte_size=byte_size)
             for row, source_format, byte_size in rows
         ]
 
