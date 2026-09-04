@@ -99,7 +99,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
             _require_expected_draft(draft_model, draft)
             await _require_current_media(session, draft.snapshot.id, payload.artifacts.normalized_media_upload_ids)
             job = await _locked_job(session, draft.snapshot.id)
-            status = DraftStatus(draft_model.status)
+            status = draft_model.status
             if status in {DraftStatus.PROCESSING, DraftStatus.SUBMITTED}:
                 if job is None or job.payload_sha256 != digest:
                     msg = f"{status.value} draft has no matching finalization job"
@@ -118,7 +118,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
                 msg = f"drafts in {status.value} state cannot be finalized"
                 raise ValidationError(msg, resource="submission_draft")
 
-            draft_model.status = DraftStatus.PROCESSING.value
+            draft_model.status = DraftStatus.PROCESSING
             draft_model.updated_at = now
             draft_model.expires_at = expires_at
             if job is None:
@@ -155,7 +155,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
             draft_model = await _locked_draft(session, draft.snapshot.id)
             _require_expected_draft(draft_model, draft)
             job = await _locked_job(session, draft.snapshot.id)
-            status = DraftStatus(draft_model.status)
+            status = draft_model.status
             if status in {DraftStatus.PROCESSING, DraftStatus.SUBMITTED}:
                 if job is None:
                     msg = f"{status.value} draft has no finalization job"
@@ -166,7 +166,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
                 msg = f"drafts in {status.value} state cannot request finalization"
                 raise ValidationError(msg, resource="submission_draft")
 
-            draft_model.status = DraftStatus.NEEDS_ATTENTION.value
+            draft_model.status = DraftStatus.NEEDS_ATTENTION
             draft_model.updated_at = now
             draft_model.expires_at = expires_at
             if job is None:
@@ -259,7 +259,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
             model = await _claimed_job(session, job)
             if model is None:
                 return False
-            if DraftStatus(draft.status) is not DraftStatus.PROCESSING:
+            if draft.status is not DraftStatus.PROCESSING:
                 msg = "claimed finalization job does not own a processing draft"
                 raise InvalidStateError(msg)
             existing = await session.get(SubmissionFinalizationResult, model.id)
@@ -285,7 +285,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
             model.attention_issues = []
             _clear_claim(model)
             model.updated_at = now
-            draft.status = DraftStatus.SUBMITTED.value
+            draft.status = DraftStatus.SUBMITTED
             draft.updated_at = now
         return True
 
@@ -308,7 +308,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
             model = await _claimed_job(session, job)
             if model is None:
                 return False
-            if DraftStatus(draft.status) is not DraftStatus.PROCESSING:
+            if draft.status is not DraftStatus.PROCESSING:
                 msg = "claimed finalization job does not own a processing draft"
                 raise InvalidStateError(msg)
             model.status = FinalizationJobStatus.NEEDS_ATTENTION.value
@@ -319,7 +319,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
             model.attention_issues = _encode_issues(normalized_issues)
             _clear_claim(model)
             model.updated_at = now
-            draft.status = DraftStatus.NEEDS_ATTENTION.value
+            draft.status = DraftStatus.NEEDS_ATTENTION
             draft.updated_at = now
             draft.expires_at = expires_at
         return True
@@ -355,7 +355,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
                 model.dead_at = now
                 model.attention_at = None
                 model.attention_issues = _encode_issues((issue,))
-                draft.status = DraftStatus.NEEDS_ATTENTION.value
+                draft.status = DraftStatus.NEEDS_ATTENTION
                 draft.updated_at = now
                 draft.expires_at = expires_at
             else:
@@ -427,7 +427,7 @@ def _require_expected_draft(model: SubmissionDraft, expected: StoredDraft) -> No
         raise DraftAccessDeniedError
     if model.revision != expected.snapshot.revision:
         raise DraftRevisionConflictError(expected=expected.snapshot.revision, actual=model.revision)
-    if model.origin != expected.origin.value or model.source_installation_id != expected.source_installation_id:
+    if model.origin is not expected.origin or model.source_installation_id != expected.source_installation_id:
         msg = "submission draft installation provenance changed during finalization"
         raise InvalidStateError(msg)
 

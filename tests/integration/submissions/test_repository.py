@@ -298,7 +298,7 @@ async def test_expiry_fences_finalization_and_discards_media(
         media = await session.get(MediaNormalizationJobRecord, upload_id)
 
     assert draft is not None
-    assert draft.status == DraftStatus.EXPIRED.value
+    assert draft.status is DraftStatus.EXPIRED
     assert finalization is None
     assert media is not None
     assert media.status == "discarded"
@@ -317,7 +317,7 @@ async def test_delete_owned_rechecks_noneditable_status_under_repository_lock(
     async with async_session_factory.begin() as session:
         draft = await session.get(SubmissionDraft, DRAFT_ID)
         assert draft is not None
-        draft.status = status.value
+        draft.status = status
 
     with pytest.raises(DraftStateConflictError) as exc_info:
         await repository.delete_owned(DRAFT_ID, account_id)
@@ -336,7 +336,7 @@ async def test_delete_owned_accepts_needs_attention(
     async with async_session_factory.begin() as session:
         draft = await session.get(SubmissionDraft, DRAFT_ID)
         assert draft is not None
-        draft.status = DraftStatus.NEEDS_ATTENTION.value
+        draft.status = DraftStatus.NEEDS_ATTENTION
 
     assert await repository.delete_owned(DRAFT_ID, account_id) is True
     assert await repository.get(DRAFT_ID) is None

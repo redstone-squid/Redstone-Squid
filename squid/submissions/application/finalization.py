@@ -36,7 +36,7 @@ from squid.submissions.domain.finalization import (
     SubmissionTargetResult,
     SubmissionTaxonomy,
 )
-from squid.submissions.errors import DraftIncompleteError, DraftSchemaUnsupportedError
+from squid.submissions.errors import DraftSchemaUnsupportedError, DraftValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -270,7 +270,7 @@ class SubmissionFinalizationService:
         expires_at = touched_at.add(days=self._retention_days, days_assumed_24h_ok=True)
         try:
             validated = await self._drafts.validate_for_finalization(draft_id, account_id, locale=locale)
-        except DraftIncompleteError as error:
+        except DraftValidationError as error:
             issues = _manifest_issues(error.public_context)
             return await self._jobs.record_preparation_attention(
                 current,

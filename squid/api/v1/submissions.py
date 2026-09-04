@@ -33,7 +33,7 @@ from squid.submissions.domain import DraftChange, FormManifest, SubmissionOrigin
 class SubmissionFormReader(Protocol):
     """Form reads needed by the HTTP transport."""
 
-    def manifest(self, *, locale: str | None) -> FormManifest: ...
+    async def manifest(self, *, locale: str | None) -> FormManifest: ...
 
     async def manifest_revision(
         self,
@@ -279,7 +279,7 @@ async def list_drafts(drafts: Drafts, account_id: AccountId) -> DraftListRespons
 )
 async def current_form(request: Request, forms: Forms) -> FormManifestResponse:
     """Return the localized form and protocol bounds authored by this server."""
-    manifest = forms.manifest(locale=locale_for_request(request))
+    manifest = await forms.manifest(locale=locale_for_request(request))
     return FormManifestResponse.from_domain(manifest)
 
 
