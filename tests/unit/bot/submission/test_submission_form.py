@@ -1,13 +1,16 @@
 """Semantic submission workspace tests."""
 
-from typing import Any, cast
+from typing import Any
 
+import discord
 import pytest
 
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.submission.input import format_invalid_values, invalid_web_urls, split_values
 from squid.bot.submission.ui.views import (
+    BASICS_FIELDS,
+    DETAIL_FIELDS,
     SubmissionDeliveryError,
     SubmissionOutcome,
     SubmissionScreen,
@@ -15,11 +18,11 @@ from squid.bot.submission.ui.views import (
     _submission_details_form,
 )
 from squid.builds.application import BuildService
-from squid.builds.domain import BuildDraft, DoorBuild
+from squid.builds.domain import BuildDraft, BuildLink, DoorBuild
 from squid_ui.testing import RecordingResponder, choice_event, press, press_event
-from squid_ui.text import Message
+from squid_ui_discord.modal import build_form_modal
 from squid_ui_discord.sessions import Reject
-from squid_ui_discord.testing import commit_render
+from squid_ui_discord.testing import assert_within_limits, commit_render
 from tests.support.discord import make_layout_bot
 
 
@@ -87,19 +90,60 @@ async def test_details_form_groups_actual_invalid_urls_by_field_and_preserves_at
     assert result.values["notes"] == "keep this note"
     assert result.attempted == attempted
     field_errors = [error for error in result.errors if isinstance(error, sl.forms.FieldError)]
-    assert all(isinstance(error.message, Message) for error in field_errors)
-    messages = [cast(Message, error.message) for error in field_errors]
-    assert [(error.key, message.template) for error, message in zip(field_errors, messages, strict=True)] == [
-        ("image_urls", "Use complete `https://` or `http://` links. Invalid: {displayed}"),
+    assert [(error.key, str(error.message)) for error in field_errors] == [
+        ("image_urls", "Use complete https:// or http:// links. Invalid: `invalid-image`"),
         (
             "video_urls",
-            "Use complete `https://` or `http://` links. Invalid: {displayed}",
+            "Use complete https:// or http:// links. Invalid: `ftp://invalid-video`, `relative-video`",
         ),
     ]
-    assert [message.params["displayed"] for message in messages] == [
-        "`invalid-image`",
-        "`ftp://invalid-video`, `relative-video`",
-    ]
+
+
+@pytest.mark.parametrize("field", [*BASICS_FIELDS, *DETAIL_FIELDS], ids=lambda field: field.key)
+def test_every_creation_field_round_trips_through_its_declared_parser_and_formatter(field: Any) -> None:
+    draft = BuildDraft(
+        door_width=2,
+        door_height=3,
+        patterns=["Regular", "Funnel"],
+        width=4,
+        height=5,
+        depth=6,
+        version_spec="1.21+",
+        creators_ign=["Alice", "Bob"],
+        wiring_placement_restrictions=["Seamless"],
+        links=[
+            BuildLink(url="https://example.com/image.png", media_type="image"),
+            BuildLink(url="https://example.com/video.mp4", media_type="video"),
+            BuildLink(url="https://example.com/world.zip", media_type="world-download"),
+        ],
+        extra_info={"user": "A note"},
+    )
+    value = field.draft_value(draft)
+
+    assert field.parse(field.formatter(value)) == value
+
+
+def test_creation_form_metadata_comes_from_the_same_specs_as_parsing() -> None:
+    draft = BuildDraft()
+
+    for fields, form in (
+        (BASICS_FIELDS, _submission_basics_form(draft)),
+        (DETAIL_FIELDS, _submission_details_form(draft)),
+    ):
+        controls = [item for item in form.items if isinstance(item, sl.forms.TextField)]
+        assert [control.key for control in controls] == [field.key for field in fields]
+        assert [control.label for control in controls] == [field.label for field in fields]
+        assert [control.maximum for control in controls] == [field.maximum for field in fields]
+
+
+@pytest.mark.parametrize("form_factory", [_submission_basics_form, _submission_details_form])
+def test_creation_forms_fit_the_strict_discord_modal_boundary(form_factory: Any) -> None:
+    async def submit(_interaction: discord.Interaction, _values: dict[str, object]) -> None:
+        pass
+
+    modal = build_form_modal(form_factory(BuildDraft()), on_submit=submit, strict=True)
+
+    assert_within_limits(modal)
 
 
 def test_invalid_url_rendering_is_deterministic_and_discord_safe() -> None:

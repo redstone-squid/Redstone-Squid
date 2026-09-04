@@ -8,8 +8,9 @@ from typing import Any
 
 from beartype.door import is_bearable
 
+import squid_ui as sl
 from squid.bot.submission.parse import get_formatter_and_parser_for_type
-from squid.builds.domain import Build, BuildCategory, DoorBuild
+from squid.builds.domain import Build, BuildCategory, BuildDraft, DoorBuild
 from squid.core.i18n import tr
 
 logger = logging.getLogger(__name__)
@@ -20,6 +21,39 @@ class FieldDisplay(StrEnum):
 
     TEXT = "text"
     PARAGRAPH = "paragraph"
+
+
+@dataclass(frozen=True, slots=True)
+class CreationFieldSpec[ValueT]:
+    """One typed creation input and its complete portable presentation metadata."""
+
+    key: str
+    label: str
+    placeholder: str
+    parser: Callable[[str], ValueT]
+    formatter: Callable[[ValueT], str]
+    draft_value: Callable[[BuildDraft], ValueT]
+    required: bool = False
+    minimum: int | None = None
+    maximum: int | None = None
+    display: FieldDisplay = FieldDisplay.TEXT
+
+    def parse(self, raw: object) -> ValueT:
+        """Parse the adapter value through this field's one declared parser."""
+        return self.parser(str(raw or ""))
+
+    def form_field(self, draft: BuildDraft) -> sl.forms.FormField[str]:
+        """Build the portable control from the same metadata that parses its value."""
+        field_type = sl.forms.TextAreaField if self.display is FieldDisplay.PARAGRAPH else sl.forms.TextField
+        return field_type(
+            key=self.key,
+            label=tr(self.label),
+            placeholder=tr(self.placeholder),
+            default=self.formatter(self.draft_value(draft)),
+            required=self.required,
+            minimum=self.minimum,
+            maximum=self.maximum,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -205,4 +239,4 @@ def field_spec(
     )
 
 
-__all__ = ["BoundBuildField", "BuildFieldSpec", "FieldDisplay", "field_spec"]
+__all__ = ["BoundBuildField", "BuildFieldSpec", "CreationFieldSpec", "FieldDisplay", "field_spec"]
