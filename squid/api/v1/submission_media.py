@@ -1,9 +1,13 @@
 """Strict streaming HTTP routes for account-owned draft media."""
 
 import asyncio
+import logging
 import os
 import re
+import shutil
 import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Annotated
 from uuid import UUID
@@ -41,6 +45,8 @@ _STREAMING_REQUEST_BODY = {
         "video/*": {"schema": {"type": "string", "format": "binary"}},
     },
 }
+
+logger = logging.getLogger(__name__)
 
 
 AccountId = Annotated[int, Depends(authenticated_account)]
@@ -87,9 +93,7 @@ async def upload_draft_media(
 
     content_type = _source_content_type(request, kind)
     content_length = _declared_content_length(request, attachments.limits.max_source_bytes)
-    with tempfile.TemporaryDirectory(prefix="squid-media-upload-", ignore_cleanup_errors=True) as directory_name:
-        directory = Path(directory_name)
-        directory.chmod(0o700)
+    with _private_upload_directory() as directory:
         source_path = directory / "source"
         await _stream_to_private_file(
             request,
@@ -106,6 +110,20 @@ async def upload_draft_media(
 
     _prevent_storage(response, attachments.limits)
     return DraftMediaResponse.from_snapshot(snapshot)
+
+
+@contextmanager
+def _private_upload_directory() -> Iterator[Path]:
+    """Own one private upload tree and log best-effort teardown on every exit."""
+    directory = Path(tempfile.mkdtemp(prefix="squid-media-upload-"))
+    try:
+        directory.chmod(0o700)
+        yield directory
+    finally:
+        try:
+            shutil.rmtree(directory)
+        except OSError:
+            logger.warning("Unable to remove a private upload staging directory", exc_info=True)
 
 
 @router.get(

@@ -2,6 +2,8 @@
 
 import asyncio
 import os
+import shutil
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -9,6 +11,7 @@ from httpx import ASGITransport, AsyncClient
 from starlette.requests import Request
 from starlette.responses import Response
 
+from squid.api.v1 import submission_media
 from squid.api.v1.submission_media import upload_draft_media
 from squid.media.domain import MediaKind
 from squid.submissions.application import DraftAttachmentService
@@ -162,6 +165,59 @@ async def test_upload_cleans_private_stage_when_registration_aborts(failure: Bas
     assert not media.staged_path.exists()
     assert media.staged_parent is not None
     assert not media.staged_parent.exists()
+
+
+async def test_upload_logs_tree_cleanup_failure_without_masking_stream_error(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    real_rmtree = shutil.rmtree
+    retained: list[Path] = []
+
+    def fail_cleanup(path: str | os.PathLike[str], *_args: object, **_kwargs: object) -> None:
+        retained.append(Path(path))
+        raise PermissionError("cleanup refused")
+
+    monkeypatch.setattr(submission_media.shutil, "rmtree", fail_cleanup)
+    events: list[str] = []
+    app = app_with_fakes(FakeMedia(events), FakeDrafts(events))
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.post(
+                f"/submissions/drafts/{DRAFT_ID}/media/image",
+                headers={"Content-Type": "image/png", "Content-Length": "4"},
+                content=b"short",
+            )
+
+        assert response.status_code == 400
+        assert "Unable to remove a private upload staging directory" in caplog.text
+        assert len(retained) == 1
+    finally:
+        for directory in retained:
+            real_rmtree(directory, ignore_errors=True)
+
+
+async def test_private_upload_tree_logs_cleanup_failure_after_normal_exit(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    real_rmtree = shutil.rmtree
+    retained: list[Path] = []
+
+    def fail_cleanup(path: str | os.PathLike[str], *_args: object, **_kwargs: object) -> None:
+        retained.append(Path(path))
+        raise PermissionError("cleanup refused")
+
+    monkeypatch.setattr(submission_media.shutil, "rmtree", fail_cleanup)
+    try:
+        with submission_media._private_upload_directory() as directory:
+            (directory / "source").write_bytes(b"registered")
+
+        assert "Unable to remove a private upload staging directory" in caplog.text
+        assert retained == [directory]
+    finally:
+        for path in retained:
+            real_rmtree(path, ignore_errors=True)
 
 
 async def test_cross_draft_lookup_and_missing_discard_are_not_visible() -> None:
