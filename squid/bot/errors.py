@@ -14,7 +14,7 @@ import squid_ui_discord as sd
 from squid.accounts.errors import ConsentRequiredError
 from squid.bot.ui import error_node
 from squid.bot.utils.permissions import PermissionNodeRequired
-from squid.core.errors import DomainError, JSONValue, SquidError
+from squid.core.errors import DomainError, JSONValue, ServiceUnavailableError, SquidError
 from squid.core.i18n import localization_for, tr
 from squid.diagnostics.application import ErrorReportService
 from squid.diagnostics.log_capture import captured
@@ -171,7 +171,7 @@ def _build_error_notice(error: BaseException) -> ErrorNotice:
             tr("Consent required"),
             tr("Run `/account consent` to read the privacy notice and accept it."),
         )
-    if isinstance(error, DomainError):
+    if isinstance(error, (DomainError, ServiceUnavailableError)):
         detail = tr(error.message)
         if error.end_user_action:
             detail = f"{detail} {tr(error.end_user_action)}"
