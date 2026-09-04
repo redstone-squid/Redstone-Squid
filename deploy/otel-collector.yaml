@@ -3,6 +3,10 @@ receivers:
     protocols:
       http:
         endpoint: 0.0.0.0:4318
+  # Application logs deliberately reach the telemetry backend through files. Each process also
+  # writes the same JSON records to stdout for operators and `docker logs`, but stdout is not an
+  # input to this collector. Files keep accumulating while the collector is stopped or its profile
+  # is disabled; the application's RotatingFileHandler is the only pruning mechanism.
   filelog:
     include:
       - /var/log/app/*.log
