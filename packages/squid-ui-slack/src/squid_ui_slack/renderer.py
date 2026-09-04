@@ -53,6 +53,7 @@ from squid_ui_slack.adapter import SLACK_SDK_343_ADAPTER, require_slack_sdk_capa
 from squid_ui_slack.message_payload import MessagePayload
 
 type AssetResolver = Callable[[scene.Asset], str | None]
+"""Public HTTPS URL for an asset a button links to; `None` falls back to the plan's `StoredAsset` reference."""
 type SdkText = PlainTextObject | MarkdownTextObject
 
 _CONVERSATION_TYPES = {
@@ -529,7 +530,11 @@ def _audit_surface(blocks: Sequence[scene.SlackBlock], *, surface: str, limits: 
 
 
 class MessageRenderer(Renderer[scene.SlackMessage, MessagePayload]):
-    """Draw planned Slack message scenes into SDK blocks."""
+    """`Renderer` for `slack.block-kit.message` scenes, producing a `MessagePayload` for `chat_postMessage`.
+
+    `asset_resolver` supplies the HTTPS URL an asset button links to; without one, only a
+    `plan` whose resources hold a `StoredAsset` can.
+    """
 
     def __init__(
         self,
@@ -546,7 +551,14 @@ class MessageRenderer(Renderer[scene.SlackMessage, MessagePayload]):
         *,
         plan: PlanResult[scene.SlackMessage] | None = None,
     ) -> MessagePayload:
-        """Draw one planned Slack message."""
+        """Return the fallback text and one SDK `Block` per scene block, each already accepted by `to_dict`.
+
+        Raises `DrawInvariantError` for an adapter or installed `slack-sdk` that
+        `require_slack_sdk_capability` refuses, a scene that is not a version-1
+        `slack.block-kit.message`, a block or element over `SLACK_MESSAGE_LIMITS`, an input
+        or alert block, empty fallback text with no blocks, an image or asset without an
+        HTTPS URL, or Block Kit the SDK rejects.
+        """
         body = _validate_scene(
             document,
             target="slack.block-kit.message",
@@ -569,7 +581,11 @@ class MessageRenderer(Renderer[scene.SlackMessage, MessagePayload]):
 
 
 class ModalRenderer(Renderer[scene.SlackModalView, View]):
-    """Draw planned Slack modal scenes into SDK views."""
+    """`Renderer` for `slack.block-kit.modal` scenes, producing a `View` of type `modal` for `views.open`.
+
+    Asset buttons resolve only through a `plan` whose resources hold a `StoredAsset`; there
+    is no resolver hook.
+    """
 
     def __init__(self, *, adapter: AdapterProfile[SlackSdkAdapter] = SLACK_SDK_343_ADAPTER) -> None:
         self.adapter = adapter
@@ -580,7 +596,14 @@ class ModalRenderer(Renderer[scene.SlackModalView, View]):
         *,
         plan: PlanResult[scene.SlackModalView] | None = None,
     ) -> View:
-        """Draw one planned Slack modal view."""
+        """Return a `modal` `View` carrying the scene's title, submit, close, callback id, metadata and blocks.
+
+        Raises `DrawInvariantError` for an adapter or installed `slack-sdk` that
+        `require_slack_sdk_capability` refuses, a scene that is not a version-1
+        `slack.block-kit.modal`, a block or element over `SLACK_MODAL_LIMITS`, a table, card
+        or carousel block, a title, submit or close that is not plain text, an image or asset
+        without an HTTPS URL, or Block Kit the SDK rejects.
+        """
         body = _validate_scene(
             document,
             target="slack.block-kit.modal",
@@ -604,7 +627,11 @@ class ModalRenderer(Renderer[scene.SlackModalView, View]):
 
 
 class HomeRenderer(Renderer[scene.SlackHomeView, View]):
-    """Draw planned Slack App Home scenes into SDK views."""
+    """`Renderer` for `slack.block-kit.home` scenes, producing a `View` of type `home` for `views.publish`.
+
+    Asset buttons resolve only through a `plan` whose resources hold a `StoredAsset`; there
+    is no resolver hook.
+    """
 
     def __init__(self, *, adapter: AdapterProfile[SlackSdkAdapter] = SLACK_SDK_343_ADAPTER) -> None:
         self.adapter = adapter
@@ -615,7 +642,13 @@ class HomeRenderer(Renderer[scene.SlackHomeView, View]):
         *,
         plan: PlanResult[scene.SlackHomeView] | None = None,
     ) -> View:
-        """Draw one planned Slack App Home view."""
+        """Return a `home` `View` carrying the scene's callback id, private metadata and blocks.
+
+        Raises `DrawInvariantError` for an adapter or installed `slack-sdk` that
+        `require_slack_sdk_capability` refuses, a scene that is not a version-1
+        `slack.block-kit.home`, a block or element over `SLACK_HOME_LIMITS`, an input or
+        alert block, an image or asset without an HTTPS URL, or Block Kit the SDK rejects.
+        """
         body = _validate_scene(
             document,
             target="slack.block-kit.home",

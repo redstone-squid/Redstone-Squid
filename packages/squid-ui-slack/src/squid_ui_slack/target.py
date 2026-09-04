@@ -43,7 +43,10 @@ def message(
     adapter: AdapterProfile[SlackSdkAdapter] = SLACK_SDK_343_ADAPTER,
     limits: SlackMessageLimits = SLACK_MESSAGE_LIMITS,
 ) -> Target[SlackMessageLimits, scene.SlackMessage, SlackMessageTarget, SlackSdkAdapter]:
-    """A Slack Block Kit message target realized by the Slack SDK."""
+    """`Target` a `MessageRenderer` draws; omit `adapter` and it is typed for `SlackSdk343Adapter`.
+
+    Pass a `slack_sdk_adapter_profile` to plan against another verified `slack-sdk` range.
+    """
     return message_target(adapter=adapter, limits=limits)
 
 
@@ -64,7 +67,10 @@ def modal(
     adapter: AdapterProfile[SlackSdkAdapter] = SLACK_SDK_343_ADAPTER,
     limits: SlackModalLimits = SLACK_MODAL_LIMITS,
 ) -> Target[SlackModalLimits, scene.SlackModalView, SlackModalTarget, SlackSdkAdapter]:
-    """A Slack Block Kit modal target realized by the Slack SDK."""
+    """`Target` a `ModalRenderer` draws; omit `adapter` and it is typed for `SlackSdk343Adapter`.
+
+    Pass a `slack_sdk_adapter_profile` to plan against another verified `slack-sdk` range.
+    """
     return modal_target(adapter=adapter, limits=limits)
 
 
@@ -85,18 +91,21 @@ def home(
     adapter: AdapterProfile[SlackSdkAdapter] = SLACK_SDK_343_ADAPTER,
     limits: SlackHomeLimits = SLACK_HOME_LIMITS,
 ) -> Target[SlackHomeLimits, scene.SlackHomeView, SlackHomeTarget, SlackSdkAdapter]:
-    """A Slack App Home target realized by the Slack SDK."""
+    """`Target` a `HomeRenderer` draws; omit `adapter` and it is typed for `SlackSdk343Adapter`.
+
+    Pass a `slack_sdk_adapter_profile` to plan against another verified `slack-sdk` range.
+    """
     return home_target(adapter=adapter, limits=limits)
 
 
 SLACK_MESSAGE_SDK343 = message()
-"""The default Slack message target: Block Kit over Slack SDK 3.43."""
+"""`message()` with every default: Slack's published message limits over `slack-sdk` 3.43."""
 
 SLACK_MODAL_SDK343 = modal()
-"""The default Slack modal target: Block Kit over Slack SDK 3.43."""
+"""`modal()` with every default: Slack's published modal limits over `slack-sdk` 3.43."""
 
 SLACK_HOME_SDK343 = home()
-"""The default Slack App Home target: Block Kit over Slack SDK 3.43."""
+"""`home()` with every default: Slack's published App Home limits over `slack-sdk` 3.43."""
 
 
 __all__ = [

@@ -7,13 +7,14 @@ from slack_sdk.models.blocks import Block
 
 @dataclass(frozen=True, slots=True)
 class MessagePayload:
-    """Screen-reader text and SDK blocks for one Slack message."""
+    """What `MessageRenderer.draw` returns: fallback text plus SDK blocks the SDK has already accepted."""
 
     text: str
+    """Shown in notifications and by screen readers when `blocks` is non-empty; the whole message otherwise."""
     blocks: tuple[Block, ...] = ()
 
     def to_kwargs(self) -> dict[str, object]:
-        """Return keyword arguments accepted by Slack message client methods."""
+        """Return `text` and `blocks` (as a list) for `chat_postMessage`, `chat_update` and `chat_postEphemeral`."""
         return {"text": self.text, "blocks": list(self.blocks)}
 
 

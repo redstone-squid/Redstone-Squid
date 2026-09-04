@@ -17,6 +17,7 @@ SLACK_SDK_BEHAVIOR_CAPABILITIES = frozenset(
         AdapterCapability.RENDER_SLACK_HOME,
     }
 )
+"""One capability per surface `squid_ui_slack.renderer` draws; a profile lacking one is refused at `draw`."""
 
 SLACK_SDK_343_ADAPTER = AdapterProfile(
     SlackSdk343Adapter,
@@ -24,6 +25,7 @@ SLACK_SDK_343_ADAPTER = AdapterProfile(
     ">=3.43,<3.44",
     SLACK_SDK_BEHAVIOR_CAPABILITIES,
 )
+"""The profile every renderer and target defaults to: `slack-sdk >=3.43,<3.44` with all three surfaces."""
 
 
 @cache
@@ -42,14 +44,23 @@ def slack_sdk_adapter_profile(
     *,
     capabilities: frozenset[AdapterCapability] = SLACK_SDK_BEHAVIOR_CAPABILITIES,
 ) -> AdapterProfile[SlackSdkAdapter]:
-    """Declare an application-verified Slack SDK adapter profile."""
+    """`AdapterProfile` for a `slack-sdk` range the application verified itself, beyond `SLACK_SDK_343_ADAPTER`.
+
+    `version_expression` is a PEP 440 specifier such as `">=3.44,<3.45"`; every `draw`
+    checks the installed `slack-sdk` against it.
+    """
     return AdapterProfile(SlackSdkAdapter, name, version_expression, capabilities)
 
 
 def require_slack_sdk_capability(
     profile: AdapterProfile[SlackSdkAdapter], capability: AdapterCapability, operation: str
 ) -> None:
-    """Verify the selected profile and installed Slack SDK at a drawing boundary."""
+    """Refuse `operation` unless `profile` has `capability` and the installed `slack-sdk` is in its range.
+
+    Raises `DrawInvariantError`, naming `operation`, when the capability is missing, when
+    `slack-sdk` is not installed or its version or `profile.version_expression` does not
+    parse, or when the installed version falls outside the expression.
+    """
     if capability not in profile.capabilities:
         message = f"adapter profile {profile.name!r} cannot {operation}; it lacks {capability!r}"
         raise DrawInvariantError(message)
