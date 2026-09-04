@@ -22,6 +22,7 @@ import binascii
 import hashlib
 import json
 import logging
+import math
 from collections.abc import Callable, Mapping, Sequence
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Literal, cast
@@ -220,7 +221,10 @@ def simulate(data: bytes, *, request: SimulationRequest) -> SimulationResult:
     except Exception as exc:
         detail = _optional_engine_evidence(lambda: str(nucleation.TickSimulation.last_error_detail()), "tick error")
         msg = detail or str(exc) or "The tick engine could not load this schematic."
-        raise InvalidSchematicError(msg, context={"engine_error": msg}) from exc
+        raise InvalidSchematicError(
+            context={"engine_error": msg},
+            developer_action="Inspect the schematic worker logs for the native tick-engine rejection.",
+        ) from exc
 
     if int(simulation.changes_count()) != 0 or not bool(simulation.is_quiescent()):
         msg = "This schematic was already active when loaded, so a timing would be unreliable."
@@ -464,20 +468,34 @@ def _lattice(candidate: object) -> AutostackLattice | None:
         return None
     entry = cast(Mapping[str, Any], candidate)
     mode = entry.get("mode")
-    vectors = tuple(vector for vector in map(_vector, entry.get("vectors", ())) if vector is not None)
+    raw_vectors = entry.get("vectors")
+    if mode not in ("1d", "2d") or not isinstance(raw_vectors, list):
+        return None
+    vectors = tuple(vector for vector in map(_vector, raw_vectors) if vector is not None)
+    if len(vectors) != (1 if mode == "1d" else 2):
+        return None
     cell_min, cell_max = _vector(entry.get("cell_min")), _vector(entry.get("cell_max"))
     region_min, region_max = _vector(entry.get("region_min")), _vector(entry.get("region_max"))
-    if mode not in ("1d", "2d") or not vectors or None in (cell_min, cell_max, region_min, region_max):
+    coverage = entry.get("coverage")
+    label = entry.get("label")
+    if (
+        None in (cell_min, cell_max, region_min, region_max)
+        or not isinstance(coverage, int | float)
+        or isinstance(coverage, bool)
+        or not math.isfinite(float(coverage))
+        or not 0.0 <= float(coverage) <= 1.0
+        or not isinstance(label, str | None)
+    ):
         return None
     return AutostackLattice(
         mode=mode,
         vectors=vectors,
-        coverage=float(entry.get("coverage", 0.0)),
+        coverage=float(coverage),
         cell_min=cast(Vector3, cell_min),
         cell_max=cast(Vector3, cell_max),
         region_min=cast(Vector3, region_min),
         region_max=cast(Vector3, region_max),
-        label=_non_empty(entry.get("label")),
+        label=_non_empty(label),
     )
 
 
@@ -500,13 +518,20 @@ def _signs(schematic: nucleation.Schematic) -> tuple[SchematicSign, ...]:
         if not isinstance(entry, dict):
             continue
         record = cast(Mapping[str, Any], entry)
-        position = _vector(record.get("pos") or record.get("position")) or (
-            _coordinate(record.get("x")),
-            _coordinate(record.get("y")),
-            _coordinate(record.get("z")),
-        )
+        position = _vector(record.get("pos") or record.get("position"))
+        if position is None:
+            coordinates = record.get("x"), record.get("y"), record.get("z")
+            if any(not isinstance(value, int) or isinstance(value, bool) for value in coordinates):
+                continue
+            position = cast(Vector3, coordinates)
         lines = record.get("lines")
-        text = "\n".join(str(line) for line in lines) if isinstance(lines, list) else str(record.get("text", ""))
+        if isinstance(lines, list) and all(isinstance(line, str) for line in lines):
+            text = "\n".join(cast(list[str], lines))
+        else:
+            raw_text = record.get("text")
+            if not isinstance(raw_text, str):
+                continue
+            text = raw_text
         if text:
             signs.append(SchematicSign(x=position[0], y=position[1], z=position[2], text=text))
     return tuple(signs)
@@ -577,13 +602,6 @@ def _vector(value: object) -> Vector3 | None:
         except TypeError, ValueError:
             return None
     return None
-
-
-def _coordinate(value: object) -> int:
-    try:
-        return int(value)  # type: ignore[arg-type]
-    except TypeError, ValueError:
-        return 0
 
 
 def _non_empty(value: object) -> str | None:
