@@ -52,7 +52,7 @@ class NotificationCog(sd.Cog[Any]):
         name="notifications",
         description=app_commands.locale_str("Manage notification channels and subscriptions"),
     )
-    async def notifications(self, interaction: discord.Interaction) -> None:
+    async def notifications(self, interaction: discord.Interaction[Any]) -> None:
         """Open the notification preferences and subscription workspace."""
         account_id = await self._account_id(interaction)
         if account_id is None:
