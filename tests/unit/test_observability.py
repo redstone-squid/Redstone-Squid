@@ -115,6 +115,7 @@ def test_foreign_pid_makes_public_telemetry_helpers_inert(mocker: MockerFixture)
     with observability.extracted_trace_span("child", {}):
         pass
     observability.record_current_exception(RuntimeError("boom"))
+    assert observability.trace_context_headers() == {}
     observability.add_counter("counter")
     observability.record_histogram("histogram", 1.0)
     observability.record_gauge("gauge", 1)
