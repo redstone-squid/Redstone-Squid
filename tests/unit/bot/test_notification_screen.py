@@ -6,8 +6,11 @@ from uuid import UUID
 from whenever import Instant
 
 from squid.bot.notifications_view import NotificationScreen
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.notifications import (
+    DEFAULT_INBOX_VISIBILITY,
     InboxNotification,
+    InboxVisibility,
     NotificationPreferences,
     NotificationService,
     NotificationSubscription,
@@ -30,8 +33,8 @@ class NotificationRecorder(NotificationService):
     def __init__(self) -> None:
         self.subscription_reads = 0
         self.subscribe_calls: list[SubscribeCall] = []
-        self.inbox_reads = 0
-        self.read_changes: list[tuple[int, int, bool]] = []
+        self.inbox_reads: list[InboxVisibility] = []
+        self.read_changes: list[tuple[int, int, bool, InboxVisibility]] = []
 
     async def preferences(self, account_id: int) -> NotificationPreferences:
         return NotificationPreferences(account_id, consent_pending=False)
@@ -52,10 +55,15 @@ class NotificationRecorder(NotificationService):
         self.subscribe_calls.append(SubscribeCall(account_id, kind, subject_id, record_filter))
         return NotificationSubscription(1, account_id, kind, subject_id, record_filter, Instant.now())
 
-    async def inbox(self, account_id: int, *, selector=None, page_size: int = 20, visibility=None):
-        from squid.core.pagination import Page
-
-        self.inbox_reads += 1
+    async def inbox(
+        self,
+        account_id: int,
+        *,
+        selector: PageSelector = FIRST_PAGE,
+        page_size: int = 20,
+        visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY,
+    ) -> Page[InboxNotification]:
+        self.inbox_reads.append(visibility)
         return Page(
             items=(InboxNotification(3, NotificationKind.BUILD_CONFIRMED, {"build_id": 9}, Instant.now()),),
             total=1,
@@ -63,11 +71,23 @@ class NotificationRecorder(NotificationService):
             prev=None,
         )
 
-    async def mark_read(self, account_id: int, notification_id: int, *, visibility=None) -> None:
-        self.read_changes.append((account_id, notification_id, True))
+    async def mark_read(
+        self,
+        account_id: int,
+        notification_id: int,
+        *,
+        visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY,
+    ) -> None:
+        self.read_changes.append((account_id, notification_id, True, visibility))
 
-    async def mark_unread(self, account_id: int, notification_id: int, *, visibility=None) -> None:
-        self.read_changes.append((account_id, notification_id, False))
+    async def mark_unread(
+        self,
+        account_id: int,
+        notification_id: int,
+        *,
+        visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY,
+    ) -> None:
+        self.read_changes.append((account_id, notification_id, False, visibility))
 
 
 @dataclass(frozen=True)
@@ -76,10 +96,10 @@ class ScreenHarness:
     notifications: NotificationRecorder
 
 
-def make_screen() -> ScreenHarness:
+def make_screen(*, visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY) -> ScreenHarness:
     notifications = NotificationRecorder()
     return ScreenHarness(
-        NotificationScreen(notifications=notifications, account_id=7, author_id=42),
+        NotificationScreen(notifications=notifications, account_id=7, author_id=42, visibility=visibility),
         notifications,
     )
 
@@ -163,7 +183,8 @@ async def test_empty_record_filter_does_not_call_the_service() -> None:
 
 
 async def test_inbox_items_can_be_marked_read_and_unread_without_typing_ids() -> None:
-    harness = make_screen()
+    visibility = InboxVisibility(include_staff=True)
+    harness = make_screen(visibility=visibility)
     screen = harness.screen
     await screen.on_load()
 
@@ -172,4 +193,5 @@ async def test_inbox_items_can_be_marked_read_and_unread_without_typing_ids() ->
     await choose(screen, "inbox", "3")
     await press(screen, "mark_selected_unread")
 
-    assert harness.notifications.read_changes == [(7, 3, True), (7, 3, False)]
+    assert harness.notifications.inbox_reads == [visibility, visibility, visibility]
+    assert harness.notifications.read_changes == [(7, 3, True, visibility), (7, 3, False, visibility)]
