@@ -281,3 +281,12 @@ state, checked against actual code and tests, not the plan text.
 `close_due` running under `BackgroundTaskSupervisor`. Subplan 5's fixture-extraction and SQL-scoping
 bullets are done; only the kind/visibility/target matrix-parameterization bullet remains open, and it
 has not been started as a systematic cross-product (only ad hoc single-axis parametrization exists).
+
+## Completion update (2026-08-30)
+
+**Done.** The remaining domain/persistence coherence work now validates every `VoteKind` against
+its target and subtype payload, with deferred PostgreSQL invariant triggers and a serialized
+migration rollout. Rejection mappings and stable option IDs across Discord aliases are exhaustive.
+Application and REST discriminator matrices, VoteCog add/remove/clear recovery, sentinel migration,
+incoherent-upgrade rejection, and downgrade-removal scenarios close subplan 5. PostgreSQL execution
+is pending external CI; all test implementations are present.
