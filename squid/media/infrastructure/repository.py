@@ -87,7 +87,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
                 if existing_job is None:
                     msg = "Persisted media upload is missing its normalization job."
                     raise RuntimeError(msg)
-                existing_status = MediaJobStatus(existing_job.status)
+                existing_status = existing_job.status
                 if not _same_upload(existing, upload):
                     raise MediaUploadConflictError(
                         upload.id,
@@ -109,7 +109,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
                 MediaUploadRecord(
                     id=upload.id,
                     draft_id=upload.draft_id,
-                    kind=upload.kind.value,
+                    kind=upload.kind,
                     source_content_type=upload.source_content_type,
                     source_byte_size=upload.source_byte_size,
                     source_sha256=upload.source_sha256,
@@ -192,9 +192,9 @@ class PostgresMediaJobRepository(MediaJobRepository):
             if row is None or row[1].draft_id != draft_id:
                 return False
             job = row[0]
-            if job.status == MediaJobStatus.DISCARDED.value:
+            if job.status is MediaJobStatus.DISCARDED:
                 return True
-            job.status = MediaJobStatus.DISCARDED.value
+            job.status = MediaJobStatus.DISCARDED
             job.claimed_at = None
             job.claim_token = None
             job.completed_at = None
@@ -208,11 +208,11 @@ class PostgresMediaJobRepository(MediaJobRepository):
         """Lease ready or abandoned work with a fresh token per row."""
         ready = or_(
             and_(
-                MediaNormalizationJobRecord.status == MediaJobStatus.PENDING.value,
+                MediaNormalizationJobRecord.status == MediaJobStatus.PENDING,
                 MediaNormalizationJobRecord.available_at <= func.now(),
             ),
             and_(
-                MediaNormalizationJobRecord.status == MediaJobStatus.CLAIMED.value,
+                MediaNormalizationJobRecord.status == MediaJobStatus.CLAIMED,
                 MediaNormalizationJobRecord.claimed_at < func.now() - VISIBILITY_TIMEOUT,
             ),
         )
@@ -233,7 +233,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
             claims: list[ClaimedMediaJob] = []
             for job, upload in rows:
                 claim_token = uuid4()
-                job.status = MediaJobStatus.CLAIMED.value
+                job.status = MediaJobStatus.CLAIMED
                 job.claimed_at = claimed_at
                 job.claim_token = claim_token
                 claims.append(
@@ -274,7 +274,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
             update(MediaNormalizationJobRecord)
             .where(*_claim_filter(job))
             .values(
-                status=MediaJobStatus.PENDING.value,
+                status=MediaJobStatus.PENDING,
                 available_at=until,
                 claimed_at=None,
                 claim_token=None,
@@ -321,12 +321,12 @@ class PostgresMediaJobRepository(MediaJobRepository):
                 )
                 .where(
                     MediaUploadRecord.draft_id == job.upload.draft_id,
-                    MediaNormalizationJobRecord.status == MediaJobStatus.COMPLETED.value,
+                    MediaNormalizationJobRecord.status == MediaJobStatus.COMPLETED,
                     MediaArtifactRecord.role.in_(
                         (
-                            MediaArtifactRole.OUTPUT.value,
-                            MediaArtifactRole.POSTER.value,
-                            MediaArtifactRole.VIDEO_THUMBNAIL.value,
+                            MediaArtifactRole.OUTPUT,
+                            MediaArtifactRole.POSTER,
+                            MediaArtifactRole.VIDEO_THUMBNAIL,
                         )
                     ),
                 )
@@ -343,7 +343,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
                 update(MediaNormalizationJobRecord)
                 .where(*_claim_filter(job))
                 .values(
-                    status=MediaJobStatus.COMPLETED.value,
+                    status=MediaJobStatus.COMPLETED,
                     claimed_at=None,
                     claim_token=None,
                     completed_at=func.now(),
@@ -359,7 +359,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
             session.add_all(
                 MediaArtifactRecord(
                     upload_id=job.upload.id,
-                    role=artifact.role.value,
+                    role=artifact.role,
                     object_key=artifact.object_key,
                     content_type=artifact.content_type,
                     byte_size=artifact.byte_size,
@@ -486,7 +486,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
                 )
                 .where(
                     MediaArtifactRecord.object_key == MediaArtifactObjectRecord.object_key,
-                    MediaNormalizationJobRecord.status != MediaJobStatus.DISCARDED.value,
+                    MediaNormalizationJobRecord.status != MediaJobStatus.DISCARDED,
                 )
                 .correlate(MediaArtifactObjectRecord)
             )
@@ -611,14 +611,14 @@ class PostgresMediaJobRepository(MediaJobRepository):
         }
         if dead:
             values.update(
-                status=MediaJobStatus.DEAD.value,
+                status=MediaJobStatus.DEAD,
                 completed_at=None,
                 dead_at=func.now(),
                 discarded_at=None,
             )
         else:
             values.update(
-                status=MediaJobStatus.PENDING.value,
+                status=MediaJobStatus.PENDING,
                 available_at=func.now() + retry_delay(attempts),
                 completed_at=None,
                 dead_at=None,
@@ -645,9 +645,9 @@ class PostgresMediaJobRepository(MediaJobRepository):
                         MediaUploadRecord.raw_deleted_at.is_(None),
                         MediaNormalizationJobRecord.status.in_(
                             (
-                                MediaJobStatus.COMPLETED.value,
-                                MediaJobStatus.DEAD.value,
-                                MediaJobStatus.DISCARDED.value,
+                                MediaJobStatus.COMPLETED,
+                                MediaJobStatus.DEAD,
+                                MediaJobStatus.DISCARDED,
                             )
                         ),
                     )
@@ -665,9 +665,9 @@ class PostgresMediaJobRepository(MediaJobRepository):
                 MediaNormalizationJobRecord.upload_id == source.upload_id,
                 MediaNormalizationJobRecord.status.in_(
                     (
-                        MediaJobStatus.COMPLETED.value,
-                        MediaJobStatus.DEAD.value,
-                        MediaJobStatus.DISCARDED.value,
+                        MediaJobStatus.COMPLETED,
+                        MediaJobStatus.DEAD,
+                        MediaJobStatus.DISCARDED,
                     )
                 ),
             )
@@ -825,8 +825,8 @@ async def _revoke_expired_publications(session: AsyncSession, *, limit: int) -> 
         )
         if expired is None:
             continue
-        if job is not None and job.status == MediaJobStatus.CLAIMED.value and job.claim_token == claim_token:
-            job.status = MediaJobStatus.PENDING.value
+        if job is not None and job.status is MediaJobStatus.CLAIMED and job.claim_token == claim_token:
+            job.status = MediaJobStatus.PENDING
             job.available_at = Instant.now()
             job.claimed_at = None
             job.claim_token = None
@@ -861,15 +861,15 @@ async def _release_artifact_leases(
 
 async def _active_totals(session: AsyncSession, draft_id: UUID) -> MediaBatchTotals:
     active = (
-        MediaJobStatus.PENDING.value,
-        MediaJobStatus.CLAIMED.value,
-        MediaJobStatus.COMPLETED.value,
+        MediaJobStatus.PENDING,
+        MediaJobStatus.CLAIMED,
+        MediaJobStatus.COMPLETED,
     )
     row = (
         await session.execute(
             select(
-                func.count(MediaUploadRecord.id).filter(MediaUploadRecord.kind == MediaKind.IMAGE.value),
-                func.count(MediaUploadRecord.id).filter(MediaUploadRecord.kind == MediaKind.VIDEO.value),
+                func.count(MediaUploadRecord.id).filter(MediaUploadRecord.kind == MediaKind.IMAGE),
+                func.count(MediaUploadRecord.id).filter(MediaUploadRecord.kind == MediaKind.VIDEO),
                 func.coalesce(func.sum(MediaUploadRecord.source_byte_size), 0),
             )
             .join(
@@ -892,7 +892,7 @@ async def _active_totals(session: AsyncSession, draft_id: UUID) -> MediaBatchTot
 def _claim_filter(job: ClaimedMediaJob) -> tuple[Any, ...]:
     return (
         MediaNormalizationJobRecord.upload_id == job.upload.id,
-        MediaNormalizationJobRecord.status == MediaJobStatus.CLAIMED.value,
+        MediaNormalizationJobRecord.status == MediaJobStatus.CLAIMED,
         MediaNormalizationJobRecord.claim_token == job.claim_token,
     )
 
@@ -900,7 +900,7 @@ def _claim_filter(job: ClaimedMediaJob) -> tuple[Any, ...]:
 def _same_upload(record: MediaUploadRecord, upload: MediaUploadMetadata) -> bool:
     return (
         record.draft_id == upload.draft_id
-        and record.kind == upload.kind.value
+        and record.kind is upload.kind
         and record.source_content_type == upload.source_content_type
         and record.source_byte_size == upload.source_byte_size
         and record.source_sha256 == upload.source_sha256
@@ -913,7 +913,7 @@ def _upload_metadata(record: MediaUploadRecord) -> MediaUploadMetadata:
     return MediaUploadMetadata(
         id=record.id,
         draft_id=record.draft_id,
-        kind=MediaKind(record.kind),
+        kind=record.kind,
         source_content_type=record.source_content_type,
         source_byte_size=record.source_byte_size,
         source_sha256=record.source_sha256,
@@ -926,7 +926,7 @@ def _upload_metadata(record: MediaUploadRecord) -> MediaUploadMetadata:
 
 def _stored_artifact(record: MediaArtifactRecord) -> StoredMediaArtifact:
     return StoredMediaArtifact(
-        role=MediaArtifactRole(record.role),
+        role=record.role,
         object_key=record.object_key,
         content_type=record.content_type,
         byte_size=record.byte_size,
@@ -943,7 +943,7 @@ def _snapshot(
 ) -> MediaJobSnapshot:
     return MediaJobSnapshot(
         upload=_upload_metadata(upload),
-        status=MediaJobStatus(job.status),
+        status=job.status,
         attempts=job.attempts,
         available_at=job.available_at,
         claimed_at=job.claimed_at,

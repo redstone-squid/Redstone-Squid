@@ -524,7 +524,7 @@ async def test_reconciliation_discovers_artifacts_committed_by_an_old_worker(
         session.add_all(
             MediaArtifactRecord(
                 upload_id=UPLOAD_ID,
-                role=artifact.role.value,
+                role=artifact.role,
                 object_key=artifact.object_key,
                 content_type=artifact.content_type,
                 byte_size=artifact.byte_size,
