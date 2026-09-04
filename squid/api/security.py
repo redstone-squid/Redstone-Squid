@@ -11,9 +11,8 @@ from fastapi.security import APIKeyHeader
 from squid.accounts.errors import ConsentRequiredError
 from squid.cli_auth.application import CLI_SESSION_TOKEN_PREFIX
 from squid.cli_auth.errors import CliAuthorizationError
-from squid.core.errors import AuthenticationError, AuthorizationError
+from squid.core.errors import AuthenticationError, AuthorizationError, DomainError
 from squid.minecraft_auth.application.crypto import INSTALLATION_TOKEN_PREFIX, PLAYER_TOKEN_PREFIX
-from squid.minecraft_auth.errors import MinecraftAuthorizationError
 from squid.permissions.application.services import PermissionService
 from squid.permissions.domain import CATALOGUE, Pattern, PermissionNode, Subject
 
@@ -195,7 +194,7 @@ async def current_caller(
                     f"{INSTALLATION_TOKEN_PREFIX}_{parsed_id.hex}_{installation_secret}"
                 )
                 context = await players.authenticate_paper_player(token, installation)
-        except MinecraftAuthorizationError, ValueError:
+        except DomainError, ValueError:
             raise AuthenticationError from None
         return Caller(
             kind="minecraft_player",
