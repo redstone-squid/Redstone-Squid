@@ -52,10 +52,7 @@ from squid.messages.application import MessageService
 from squid.messages.infrastructure.repository import MessageRepository
 from squid.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
 from squid.minecraft_auth.application.crypto import MinecraftSecretCodec
-from squid.minecraft_auth.infrastructure import (
-    PostgresAccountIdentityAuthorizer,
-    PostgresMinecraftAuthorizationRepository,
-)
+from squid.minecraft_auth.infrastructure import PostgresMinecraftAuthorizationRepository
 from squid.notifications import NotificationService
 from squid.notifications.infrastructure.repository import PostgresNotificationRepository
 from squid.permissions.application import (
@@ -86,8 +83,8 @@ from squid.schematics.application import (
 from squid.schematics.domain.models import SchematicLimits
 from squid.schematics.infrastructure.durable import QueuedSchematicAnalyzer
 from squid.schematics.infrastructure.jobs import PostgresSchematicJobRepository
-from squid.schematics.infrastructure.render_jobs import PostgresSchematicRenderJobRepository
 from squid.schematics.infrastructure.preview_publisher import PostgresSchematicPreviewPublisher
+from squid.schematics.infrastructure.render_jobs import PostgresSchematicRenderJobRepository
 from squid.schematics.infrastructure.repository import PostgresSchematicStore
 from squid.schematics.infrastructure.resource_pack import ResourcePackLoader
 from squid.schematics.infrastructure.version_resolver import PostgresSchematicVersionResolver
@@ -540,11 +537,15 @@ class _ServiceGraph:
         return resolver
 
     @cached_property
+    def account_repository(self) -> AccountRepository:
+        return AccountRepository(self.db.async_session, self.config.verification_code_pepper.get_secret_value())
+
+    @cached_property
     def accounts(self) -> AccountService:
         mojang = MojangClient(profile_url=str(self.config.upstream_http.mojang_profile_url))
         self.resources.push_async_callback(mojang.aclose)
         return AccountService(
-            AccountRepository(self.db.async_session, self.config.verification_code_pepper.get_secret_value()),
+            self.account_repository,
             mojang.get_username,
             generate_verification_code,
         )
@@ -558,10 +559,9 @@ class _ServiceGraph:
         pepper = self.config.minecraft_auth.pepper
         if pepper is None:
             return None
-        accounts = PostgresAccountIdentityAuthorizer(self.db.async_session)
         return InstallationCredentialService(
             self.minecraft_repository,
-            accounts,
+            self.account_repository,
             MinecraftSecretCodec(pepper.get_secret_value().encode()),
         )
 
@@ -570,10 +570,9 @@ class _ServiceGraph:
         pepper = self.config.minecraft_auth.pepper
         if pepper is None:
             return None
-        accounts = PostgresAccountIdentityAuthorizer(self.db.async_session)
         return PlayerAuthorizationService(
             self.minecraft_repository,
-            accounts,
+            self.account_repository,
             MinecraftSecretCodec(pepper.get_secret_value().encode()),
         )
 
@@ -613,7 +612,7 @@ class _ServiceGraph:
             return None
         return CliAuthorizationService(
             PostgresCliAuthorizationRepository(self.db.async_session),
-            PostgresAccountIdentityAuthorizer(self.db.async_session),
+            self.account_repository,
             CliSecretCodec(pepper.get_secret_value().encode()),
         )
 

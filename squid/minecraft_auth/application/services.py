@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 
 from whenever import Instant
 
+from squid.accounts.application.ports import AccountMinecraftAuthorization
 from squid.core.errors import InvalidStateError, ValidationError
 from squid.core.i18n import tr
 from squid.minecraft_auth.application.crypto import (
@@ -14,7 +15,7 @@ from squid.minecraft_auth.application.crypto import (
     MinecraftSecretCodec,
     SecretPurpose,
 )
-from squid.minecraft_auth.application.ports import AccountIdentityAuthorizer, MinecraftAuthorizationRepository
+from squid.minecraft_auth.application.ports import MinecraftAuthorizationRepository
 from squid.minecraft_auth.domain import (
     AuthenticatedPaperInstallation,
     IssuedInstallationCredential,
@@ -53,7 +54,7 @@ class InstallationCredentialService:
     def __init__(
         self,
         repository: MinecraftAuthorizationRepository,
-        accounts: AccountIdentityAuthorizer,
+        accounts: AccountMinecraftAuthorization,
         codec: MinecraftSecretCodec,
         *,
         clock: Callable[[], Instant] = Instant.now,
@@ -196,7 +197,7 @@ class PlayerAuthorizationService:
     def __init__(
         self,
         repository: MinecraftAuthorizationRepository,
-        accounts: AccountIdentityAuthorizer,
+        accounts: AccountMinecraftAuthorization,
         codec: MinecraftSecretCodec,
         *,
         clock: Callable[[], Instant] = Instant.now,
@@ -257,7 +258,10 @@ class PlayerAuthorizationService:
         if challenge is None:
             raise InvalidChallengeError
         self._ensure_approvable(challenge, self._clock())
-        if not await self._accounts.can_approve(account_id=account_id, java_uuid=challenge.java_uuid):
+        if not await self._accounts.can_approve_minecraft_identity(
+            account_id=account_id,
+            java_uuid=challenge.java_uuid,
+        ):
             raise ChallengeApprovalDeniedError
         return await self._repository.approve_challenge(
             challenge_id=challenge.id,
@@ -432,7 +436,10 @@ class PlayerAuthorizationService:
             or not hmac.compare_digest(grant.token_hash, self._codec.digest(SecretPurpose.PLAYER_TOKEN, secret))
         ):
             raise InvalidPlayerTokenError
-        if not await self._accounts.can_approve(account_id=grant.account_id, java_uuid=grant.java_uuid):
+        if not await self._accounts.can_approve_minecraft_identity(
+            account_id=grant.account_id,
+            java_uuid=grant.java_uuid,
+        ):
             raise InvalidPlayerTokenError
         return (
             MinecraftPlayerContext(
