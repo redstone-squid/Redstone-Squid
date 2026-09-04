@@ -1,5 +1,6 @@
 import uuid
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -483,6 +484,47 @@ async def test_public_record_query_rejects_unavailable_holder() -> None:
         await service.get(7)
 
     assert exc_info.value.context == {"record_id": 7, "unavailable_holder_build_ids": [42]}
+
+
+@pytest.mark.asyncio
+async def test_public_record_query_accepts_empty_nonresolved_standing() -> None:
+    runs = FakeRuns()
+    runs.published_records[7] = replace(
+        _published_record(41),
+        status=ResolutionStatus.NO_CANDIDATE,
+        holder_build_ids=(),
+    )
+    builds = FakePublicBuilds(())
+    service = PublicRecordQueryService(runs, builds)
+
+    detail = await service.get(7)
+
+    assert detail is not None
+    assert detail.holder_builds == ()
+    assert builds.requests == [()]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "standing",
+    [
+        _published_record(),
+        replace(_published_record(41), status=ResolutionStatus.UNRESOLVED),
+    ],
+)
+async def test_public_record_query_rejects_status_holder_corruption(standing: PublishedRecord) -> None:
+    runs = FakeRuns()
+    runs.published_records[7] = standing
+    service = PublicRecordQueryService(runs, FakePublicBuilds((_public_build(41),)))
+
+    with pytest.raises(DataIntegrityError, match="status contradicts") as exc_info:
+        await service.get(7)
+
+    assert exc_info.value.context == {
+        "record_id": 7,
+        "status": standing.status.value,
+        "holder_build_ids": list(standing.holder_build_ids),
+    }
 
 
 @pytest.mark.asyncio
