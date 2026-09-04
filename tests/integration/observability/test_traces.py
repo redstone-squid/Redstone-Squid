@@ -14,6 +14,7 @@ a flat trace is exactly what a misconfiguration produces.
 """
 
 import logging
+from typing import Any, cast
 
 import pytest
 from fastapi import FastAPI
@@ -23,7 +24,7 @@ from sqlalchemy.pool import StaticPool
 
 pytest.importorskip("opentelemetry.sdk")
 
-from opentelemetry import trace  # pyright: ignore[reportMissingImports]
+from opentelemetry import propagate, trace  # pyright: ignore[reportMissingImports]
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor  # pyright: ignore[reportMissingImports]
 from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor  # pyright: ignore[reportMissingImports]
 from opentelemetry.sdk.metrics import MeterProvider  # pyright: ignore[reportMissingImports]
@@ -37,6 +38,7 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor  # pyright: ignor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import (  # pyright: ignore[reportMissingImports]
     InMemorySpanExporter,
 )
+from opentelemetry.trace.status import Status, StatusCode  # pyright: ignore[reportMissingImports]
 
 from squid import observability
 from squid.observability import (
@@ -59,8 +61,8 @@ def test_squid_telemetry_composes_with_a_live_sdk() -> None:
     provider = TracerProvider()
     provider.add_span_processor(SimpleSpanProcessor(exporter))
     trace.set_tracer_provider(provider)
-    previous_active_pid = observability._telemetry_active_pid  # pyright: ignore[reportPrivateUsage]
-    observability._telemetry_active_pid = observability.os.getpid()  # pyright: ignore[reportPrivateUsage]
+    previous_active = observability._ACTIVE  # pyright: ignore[reportPrivateUsage]
+    observability._ACTIVE = _live_telemetry(provider=provider)  # pyright: ignore[reportPrivateUsage]
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
@@ -104,7 +106,7 @@ def test_squid_telemetry_composes_with_a_live_sdk() -> None:
         SQLAlchemyInstrumentor().uninstrument()
         engine.dispose()
         provider.shutdown()
-        observability._telemetry_active_pid = previous_active_pid  # pyright: ignore[reportPrivateUsage]
+        observability._ACTIVE = previous_active  # pyright: ignore[reportPrivateUsage]
 
     spans = exporter.get_finished_spans()
     server_span = next(span for span in spans if span.name == "GET /probe" and span.kind.name == "SERVER")
@@ -136,10 +138,10 @@ def test_squid_telemetry_composes_with_a_live_sdk() -> None:
 def test_worker_metrics_are_recorded_by_the_optional_sdk() -> None:
     reader = InMemoryMetricReader()
     provider = MeterProvider(metric_readers=(reader,))
-    previous_meter = observability._meter  # pyright: ignore[reportPrivateUsage]
+    previous_active = observability._ACTIVE  # pyright: ignore[reportPrivateUsage]
     previous_counters = observability._counters  # pyright: ignore[reportPrivateUsage]
     previous_histograms = observability._histograms  # pyright: ignore[reportPrivateUsage]
-    observability._meter = provider.get_meter("squid.test")  # pyright: ignore[reportPrivateUsage]
+    observability._ACTIVE = _live_telemetry(meter_provider=provider)  # pyright: ignore[reportPrivateUsage]
     observability._counters = {}  # pyright: ignore[reportPrivateUsage]
     observability._histograms = {}  # pyright: ignore[reportPrivateUsage]
     try:
@@ -155,7 +157,7 @@ def test_worker_metrics_are_recorded_by_the_optional_sdk() -> None:
         metrics_data = reader.get_metrics_data()
     finally:
         provider.shutdown()
-        observability._meter = previous_meter  # pyright: ignore[reportPrivateUsage]
+        observability._ACTIVE = previous_active  # pyright: ignore[reportPrivateUsage]
         observability._counters = previous_counters  # pyright: ignore[reportPrivateUsage]
         observability._histograms = previous_histograms  # pyright: ignore[reportPrivateUsage]
 
@@ -174,3 +176,22 @@ def test_worker_metrics_are_recorded_by_the_optional_sdk() -> None:
     assert crash_point.value == 1
     assert duration_point.attributes == {"squid.schematic.operation": "analyze", "squid.outcome": "error"}
     assert duration_point.count == 1
+
+
+def _live_telemetry(
+    *,
+    provider: TracerProvider | None = None,
+    meter_provider: MeterProvider | None = None,
+) -> Any:
+    tracer_provider = provider or trace.get_tracer_provider()
+    resolved_meter_provider = meter_provider or MeterProvider()
+    return observability._Telemetry(  # pyright: ignore[reportPrivateUsage]
+        pid=observability.os.getpid(),
+        tracer=cast(Any, tracer_provider.get_tracer("squid")),
+        worker_tracer=cast(Any, tracer_provider.get_tracer("squid.worker")),
+        meter=cast(Any, resolved_meter_provider.get_meter("squid.test")),
+        propagator=cast(Any, propagate),
+        current_span=cast(Any, trace.get_current_span),
+        error_status=lambda: Status(StatusCode.ERROR),
+        instrument_api_app=cast(Any, FastAPIInstrumentor.instrument_app),
+    )
