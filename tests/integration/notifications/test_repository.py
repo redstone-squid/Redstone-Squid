@@ -273,6 +273,63 @@ async def test_read_state_changes_require_current_inbox_eligibility(
     assert await repository.mark_read(account.id, notification_id, visibility=InboxVisibility()) is False
 
 
+async def test_inbox_count_and_both_keyset_directions_share_visibility(
+    repository: PostgresNotificationRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with async_session_factory.begin() as session:
+        account = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
+        session.add(account)
+        await session.flush()
+        session.add(NotificationProfile(account_id=account.id, web_enabled=True, dm_enabled=False))
+        event = DomainEventRecord(event_type="build.confirmed", aggregate_kind="build", aggregate_id=42)
+        session.add(event)
+        await session.flush()
+        session.add_all(
+            NotificationRecord(
+                account_id=account.id,
+                event_id=event.id,
+                source_key=f"event:{event.id}:account:{index}",
+                kind=NotificationKind.STAFF_BUILD_SUBMITTED if index == 5 else NotificationKind.BUILD_CONFIRMED,
+                payload={"build_id": index},
+                web_visible=True,
+            )
+            for index in range(1, 6)
+        )
+
+    ordinary = InboxVisibility()
+    newest = await repository.list_inbox(
+        account.id,
+        offset=0,
+        after_id=None,
+        before_id=None,
+        limit=2,
+        visibility=ordinary,
+    )
+    older = await repository.list_inbox(
+        account.id,
+        offset=0,
+        after_id=newest[-1].id,
+        before_id=None,
+        limit=2,
+        visibility=ordinary,
+    )
+    newer = await repository.list_inbox(
+        account.id,
+        offset=0,
+        after_id=None,
+        before_id=older[0].id,
+        limit=2,
+        visibility=ordinary,
+    )
+
+    assert [item.payload["build_id"] for item in newest] == [4, 3]
+    assert [item.payload["build_id"] for item in older] == [2, 1]
+    assert [item.payload["build_id"] for item in newer] == [4, 3]
+    assert await repository.count_inbox(account.id, visibility=ordinary) == 4
+    assert await repository.count_inbox(account.id, visibility=InboxVisibility(include_staff=True)) == 5
+
+
 async def test_durable_staff_audience_is_not_implicit_for_owner_or_custom_role_readers(
     repository: PostgresNotificationRepository,
     async_session_factory: async_sessionmaker[AsyncSession],
@@ -316,6 +373,46 @@ async def test_durable_staff_audience_is_not_implicit_for_owner_or_custom_role_r
         )
 
     assert recipients == (accounts[0].id,)
+
+
+@pytest.mark.parametrize("recipient_count", [0, 1, 100])
+async def test_durable_staff_audience_discovery_has_constant_query_count(
+    repository: PostgresNotificationRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+    recipient_count: int,
+) -> None:
+    del repository
+    async with async_session_factory.begin() as session:
+        role = PermissionRole(
+            slug="global-admin",
+            name="Global administrator",
+            builtin_key=BuiltinRoleKeys.GLOBAL_ADMIN.value,
+        )
+        session.add(role)
+        accounts = [
+            Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
+            for _ in range(recipient_count)
+        ]
+        session.add_all(accounts)
+        await session.flush()
+        session.add_all(
+            PermissionRoleAssignment(role_id=role.id, subject_account_id=account.id) for account in accounts
+        )
+
+    with _counting(async_session_factory) as statements:
+        async with async_session_factory() as session:
+            recipients = tuple(
+                (
+                    await session.scalars(
+                        select(Account.id)
+                        .where(_is_durable_staff_notification_recipient(Account.id))
+                        .order_by(Account.id)
+                    )
+                ).all()
+            )
+
+    assert len(recipients) == recipient_count
+    assert len(statements) == 1
 
 
 async def test_cleanup_removes_expired_inbox_and_unreferenced_source_event(
