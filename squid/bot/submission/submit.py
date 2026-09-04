@@ -14,6 +14,7 @@ from squid.bot.consent import ensure_consented_account
 from squid.bot.submission.attachments import AttachmentKind, classify_attachment
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.ingestion import ingest_message_bundle
+from squid.bot.submission.input import split_values
 from squid.bot.submission.media import CatboxMirror
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.views import SubmissionOutcome, SubmissionScreen
@@ -42,11 +43,6 @@ logger = logging.getLogger(__name__)
 CONSENT_STICKY_ENABLED: bool = False
 
 # TODO: Set up a webhook for the bot to handle google form submissions.
-
-
-def _split_list(value: str) -> list[str]:
-    """Split a comma-separated option value, dropping empty entries."""
-    return [item.strip() for item in value.split(",") if item.strip()]
 
 
 class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[BotT]):
@@ -114,13 +110,13 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         if door_type is not None:
             draft.door_orientation = door_type
         if pattern is not None:
-            draft.patterns = _split_list(pattern)
+            draft.patterns = split_values(pattern)
         if versions is not None:
             draft.version_spec = versions.strip() or None
         if creators is not None:
-            draft.creators_ign = _split_list(creators)
+            draft.creators_ign = split_values(creators)
         if restrictions is not None:
-            await self.builds.classify_restrictions(draft, _split_list(restrictions))
+            await self.builds.classify_restrictions(draft, split_values(restrictions))
         if notes is not None and notes.strip():
             draft.extra_info["user"] = notes.strip()
 

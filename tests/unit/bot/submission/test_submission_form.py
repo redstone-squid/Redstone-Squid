@@ -1,13 +1,20 @@
 """Semantic submission workspace tests."""
 
-from typing import Any
+from typing import Any, cast
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.submission.ui.views import SubmissionOutcome, SubmissionScreen, _submission_basics_form
+from squid.bot.submission.input import format_invalid_values, invalid_web_urls, split_values
+from squid.bot.submission.ui.views import (
+    SubmissionOutcome,
+    SubmissionScreen,
+    _submission_basics_form,
+    _submission_details_form,
+)
 from squid.builds.application import BuildService
 from squid.builds.domain import BuildDraft, DoorBuild
 from squid_ui.testing import RecordingResponder, choice_event, press, press_event
+from squid_ui.text import Message
 from squid_ui_discord.sessions import Reject
 from squid_ui_discord.testing import commit_render
 from tests.support.discord import make_layout_bot
@@ -50,6 +57,54 @@ async def test_basics_form_describes_portable_fields() -> None:
     first = form.items[0]
     assert isinstance(first, sl.forms.FormField)
     assert first.label == "Door opening size"
+
+
+def test_submission_list_parsing_is_shared_and_discards_empty_entries() -> None:
+    assert split_values(" Alice, , Bob ,, ") == ["Alice", "Bob"]
+
+
+def test_web_url_validation_requires_an_absolute_http_url() -> None:
+    assert invalid_web_urls(
+        ("https://example.com/a", "http://example.test", "//example.com", "ftp://example.com", "https://")
+    ) == ("//example.com", "ftp://example.com", "https://")
+
+
+async def test_details_form_groups_actual_invalid_urls_by_field_and_preserves_attempt() -> None:
+    form = _submission_details_form(BuildDraft())
+    attempted = {
+        "restrictions": "",
+        "image_urls": "https://valid.example/image.png, invalid-image",
+        "video_urls": "ftp://invalid-video, relative-video",
+        "world_urls": "http://valid.example/world.zip",
+        "notes": "keep this note",
+    }
+
+    result = await form.evaluate(attempted)
+
+    assert result.values["notes"] == "keep this note"
+    assert result.attempted == attempted
+    field_errors = [error for error in result.errors if isinstance(error, sl.forms.FieldError)]
+    assert all(isinstance(error.message, Message) for error in field_errors)
+    messages = [cast(Message, error.message) for error in field_errors]
+    assert [(error.key, message.template) for error, message in zip(field_errors, messages, strict=True)] == [
+        ("image_urls", "Use complete `https://` or `http://` links. Invalid: {displayed}"),
+        (
+            "video_urls",
+            "Use complete `https://` or `http://` links. Invalid: {displayed}",
+        ),
+    ]
+    assert [message.params["displayed"] for message in messages] == [
+        "`invalid-image`",
+        "`ftp://invalid-video`, `relative-video`",
+    ]
+
+
+def test_invalid_url_rendering_is_deterministic_and_discord_safe() -> None:
+    rendered = format_invalid_values(("x" * 600, "second"), maximum=100)
+
+    assert len(rendered) == 100
+    assert rendered.endswith("…")
+    assert "`" in rendered
 
 
 async def test_changing_the_door_type_marks_the_message_root_dirty() -> None:
