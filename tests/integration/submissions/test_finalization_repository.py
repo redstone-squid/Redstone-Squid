@@ -21,6 +21,7 @@ from squid.submissions.domain import (
     DraftSnapshot,
     DraftStatus,
     FinalizationJobStatus,
+    FinalizedBuild,
     GeneralSubmissionDetails,
     NormalizedSubmission,
     SchematicRightsPolicy,
@@ -30,7 +31,6 @@ from squid.submissions.domain import (
     SubmissionDimensions,
     SubmissionOrigin,
     SubmissionSchematicVisibility,
-    SubmissionTargetResult,
     SubmissionTaxonomy,
     VerifiedSubmissionArtifacts,
 )
@@ -146,7 +146,7 @@ async def test_enqueue_claim_fence_and_completion_are_atomic(
     )
     (claim,) = await repository.claim(now=NOW, limit=1)
     stale = replace(claim, claim_token=UUID("00000000-0000-4000-8000-000000000599"))
-    result = SubmissionTargetResult(41, "postgres_builds", {"source_draft_id": str(DRAFT_ID)})
+    result = FinalizedBuild(41)
 
     assert first.job_id == replay.job_id
     assert claim.payload == payload

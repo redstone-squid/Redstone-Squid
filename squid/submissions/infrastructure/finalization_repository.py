@@ -1,14 +1,14 @@
 """PostgreSQL persistence for durable submission finalization."""
 
 from collections.abc import Mapping, Sequence
-from typing import cast, override
+from typing import override
 from uuid import UUID, uuid4
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.core.errors import DataIntegrityError, InvalidStateError, JSONValue, ValidationError
+from squid.core.errors import DataIntegrityError, InvalidStateError, ValidationError
 from squid.media.application.jobs import MediaJobStatus
 from squid.media.infrastructure.models import MediaNormalizationJobRecord, MediaUploadRecord
 from squid.persistence.advisory_locks import SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE, lock_uuid
@@ -23,10 +23,10 @@ from squid.submissions.application.finalization import (
 from squid.submissions.domain import DraftRevisionConflictError, DraftStatus
 from squid.submissions.domain.finalization import (
     FinalizationJobStatus,
+    FinalizedBuild,
     NormalizedSubmission,
     SubmissionAttentionIssue,
     SubmissionAttentionReason,
-    SubmissionTargetResult,
 )
 from squid.submissions.errors import DraftAccessDeniedError, DraftArtifactsChangedError, DraftNotFoundError
 from squid.submissions.infrastructure.finalization_models import (
@@ -235,7 +235,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
     async def complete(
         self,
         job: ClaimedFinalizationJob,
-        result: SubmissionTargetResult,
+        result: FinalizedBuild,
         *,
         now: Instant,
     ) -> bool:
@@ -258,8 +258,6 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
                     SubmissionFinalizationResult(
                         job_id=model.id,
                         build_id=result.build_id,
-                        target_key=result.target_key,
-                        provenance=cast(dict[str, object], dict(result.provenance)),
                         created_at=now,
                     )
                 )
@@ -488,12 +486,8 @@ def _snapshot(
     )
 
 
-def _result(model: SubmissionFinalizationResult) -> SubmissionTargetResult:
-    return SubmissionTargetResult(
-        build_id=model.build_id,
-        target_key=model.target_key,
-        provenance=cast(Mapping[str, JSONValue], model.provenance),
-    )
+def _result(model: SubmissionFinalizationResult) -> FinalizedBuild:
+    return FinalizedBuild(model.build_id)
 
 
 def _encode_issues(issues: Sequence[SubmissionAttentionIssue]) -> list[dict[str, object]]:

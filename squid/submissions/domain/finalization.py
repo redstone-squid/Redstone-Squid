@@ -1,13 +1,11 @@
 """Canonical values passed from synchronized drafts into build creation."""
 
 import re
-from collections.abc import Mapping
-from copy import deepcopy
 from dataclasses import dataclass, field
 from enum import StrEnum
 from uuid import UUID
 
-from squid.core.errors import JSONValue, ValidationError
+from squid.core.errors import ValidationError
 from squid.core.i18n import tr
 from squid.sponsors import PublicSponsor
 from squid.submissions.domain.forms import SubmissionOrigin
@@ -330,18 +328,15 @@ class NormalizedSubmission:
 
 
 @dataclass(frozen=True, slots=True)
-class SubmissionTargetResult:
-    """Stable result returned by retry-safe build creation."""
+class FinalizedBuild:
+    """Stable build identity returned by retry-safe finalization."""
 
     build_id: int
-    target_key: str
-    provenance: Mapping[str, JSONValue] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        if self.build_id < 1 or _STABLE_KEY.fullmatch(self.target_key) is None:
-            msg = tr(t"submission target result identity is invalid")
+        if self.build_id < 1:
+            msg = tr(t"finalized build identity is invalid")
             raise ValidationError(msg)
-        object.__setattr__(self, "provenance", deepcopy(dict(self.provenance)))
 
 
 def _require_stable_keys(values: tuple[str, ...], label: str) -> None:

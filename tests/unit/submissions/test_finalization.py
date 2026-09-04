@@ -31,6 +31,7 @@ from squid.submissions.domain import (
     DraftStatus,
     ExtenderSubmissionDetails,
     FinalizationJobStatus,
+    FinalizedBuild,
     FormManifest,
     GeneralSubmissionDetails,
     NormalizedSubmission,
@@ -40,7 +41,6 @@ from squid.submissions.domain import (
     SubmissionAttentionReason,
     SubmissionCategory,
     SubmissionOrigin,
-    SubmissionTargetResult,
 )
 from squid.submissions.errors import DraftAccessDeniedError
 from squid.submissions.infrastructure.finalization_payloads import decode_submission, encode_submission
@@ -194,7 +194,7 @@ class FakeFinalizationJobs:
         self.enqueued: NormalizedSubmission | None = None
         self.attention: tuple[SubmissionAttentionIssue, ...] = ()
         self.claimed: tuple[ClaimedFinalizationJob, ...] = ()
-        self.completed: SubmissionTargetResult | None = None
+        self.completed: FinalizedBuild | None = None
         self.worker_attention: tuple[SubmissionAttentionIssue, ...] = ()
         self.failures: list[str] = []
 
@@ -242,7 +242,7 @@ class FakeFinalizationJobs:
     async def complete(
         self,
         job: ClaimedFinalizationJob,
-        result: SubmissionTargetResult,
+        result: FinalizedBuild,
         *,
         now: Instant,
     ) -> bool:
@@ -282,11 +282,11 @@ class FakeFinalizationJobs:
 
 
 class FakeWriter:
-    def __init__(self, result: SubmissionTargetResult | Exception) -> None:
+    def __init__(self, result: FinalizedBuild | Exception) -> None:
         self.result = result
         self.payloads: list[NormalizedSubmission] = []
 
-    async def create_or_get(self, submission: NormalizedSubmission) -> SubmissionTargetResult:
+    async def create_or_get(self, submission: NormalizedSubmission) -> FinalizedBuild:
         self.payloads.append(submission)
         if isinstance(self.result, Exception):
             raise self.result
@@ -692,7 +692,7 @@ async def test_worker_completes_after_retry_safe_build_creation() -> None:
     payload = await _payload()
     jobs = FakeFinalizationJobs()
     jobs.claimed = (_claim(payload),)
-    target_result = SubmissionTargetResult(41, "postgres_builds", {"source": "draft"})
+    target_result = FinalizedBuild(41)
     worker = SubmissionFinalizationWorker(jobs, FakeWriter(target_result))
 
     await worker.process_batch(now=NOW)

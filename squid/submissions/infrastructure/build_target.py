@@ -20,16 +20,14 @@ from squid.submissions.domain.finalization import (
     DoorSubmissionDetails,
     ExtenderOrientation,
     ExtenderSubmissionDetails,
+    FinalizedBuild,
     NormalizedSubmission,
     SubmissionAttentionIssue,
     SubmissionAttentionReason,
     SubmissionCategory,
-    SubmissionTargetResult,
 )
 from squid.tags.domain import TagAssignment, TagDefinition, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.versions.domain import MinecraftVersion
-
-TARGET_KEY = "postgres_builds"
 
 _CATEGORY_MAP = {
     SubmissionCategory.DOOR: BuildCategory.DOOR,
@@ -92,13 +90,13 @@ class CanonicalBuildSubmissionWriter:
         self._tags = tags
         self._versions = versions
 
-    async def create_or_get(self, submission: NormalizedSubmission) -> SubmissionTargetResult:
+    async def create_or_get(self, submission: NormalizedSubmission) -> FinalizedBuild:
         """Translate a normalized payload and delegate retry-safe creation to builds."""
         existing = await self._builds.get_by_source_submission_draft_id(submission.source_draft_id)
         if existing is not None:
             if existing.submitter_account_id != submission.owner_account_id or existing.sponsor != submission.sponsor:
                 raise _target_rejected()
-            return _target_result(existing, submission)
+            return _target_result(existing)
 
         await self._validate_source_version(submission.source_version)
         definitions = await self._resolve_tags(submission)
@@ -115,7 +113,7 @@ class CanonicalBuildSubmissionWriter:
             raise _target_rejected() from error
         if persisted.submitter_account_id != submission.owner_account_id or persisted.sponsor != submission.sponsor:
             raise _target_rejected()
-        return _target_result(persisted, submission)
+        return _target_result(persisted)
 
     async def _validate_source_version(self, source_version: str) -> None:
         canonical_versions = {str(version) for version in await self._versions.list_all()}
@@ -235,15 +233,11 @@ def _to_build(submission: NormalizedSubmission, definitions: Mapping[str, TagDef
     return BUILD_CLASS_BY_CATEGORY[_CATEGORY_MAP[submission.category]](**common)
 
 
-def _target_result(build: Build, submission: NormalizedSubmission) -> SubmissionTargetResult:
+def _target_result(build: Build) -> FinalizedBuild:
     if build.id is None:
         msg = "Build persistence returned an aggregate without an identifier."
         raise RuntimeError(msg)
-    return SubmissionTargetResult(
-        build_id=build.id,
-        target_key=TARGET_KEY,
-        provenance=_result_provenance(submission),
-    )
+    return FinalizedBuild(build.id)
 
 
 def _target_rejected() -> BuildSubmissionRejectedError:
@@ -295,28 +289,6 @@ def _submission_provenance(submission: NormalizedSubmission) -> dict[str, JSONVa
                 else None
             ),
         },
-    }
-
-
-def _result_provenance(submission: NormalizedSubmission) -> dict[str, JSONValue]:
-    return {
-        "source_draft_id": str(submission.source_draft_id),
-        "owner_account_id": submission.owner_account_id,
-        "origin": submission.origin.value,
-        "schema_id": submission.schema_id,
-        "schema_revision": submission.schema_revision,
-        "source_installation_id": (
-            str(submission.source_installation_id) if submission.source_installation_id is not None else None
-        ),
-        "sponsor_installation_id": (
-            str(submission.sponsor.installation_id) if submission.sponsor is not None else None
-        ),
-        "normalized_media_upload_ids": [str(value) for value in submission.artifacts.normalized_media_upload_ids],
-        "sanitized_schematic_id": (
-            str(submission.artifacts.sanitized_schematic_id)
-            if submission.artifacts.sanitized_schematic_id is not None
-            else None
-        ),
     }
 
 

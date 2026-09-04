@@ -47,11 +47,11 @@ from squid.submissions.domain import (
     DraftChange,
     DraftSnapshot,
     FinalizationJobStatus,
+    FinalizedBuild,
     FormManifest,
     SubmissionAttentionIssue,
     SubmissionAttentionReason,
     SubmissionOrigin,
-    SubmissionTargetResult,
 )
 
 ACCOUNT_ID = 42
@@ -310,7 +310,9 @@ def test_draft_change_key_publishes_its_complete_wire_constraints() -> None:
     ],
 )
 def test_checked_in_manifest_wire_contract_is_immutable(revision: int, expected_digest: str) -> None:
-    payload = FormManifestResponse.from_domain(build_submission_manifest("en", revision=revision)).model_dump(mode="json")
+    payload = FormManifestResponse.from_domain(build_submission_manifest("en", revision=revision)).model_dump(
+        mode="json"
+    )
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
 
     assert hashlib.sha256(canonical).hexdigest() == expected_digest
@@ -529,7 +531,7 @@ def test_finalization_response_does_not_expose_worker_or_target_internals() -> N
         claim_token=None,
         completed_at=NOW,
         last_error="private worker detail",
-        result=SubmissionTargetResult(91, "postgres_builds", {"private": "value"}),
+        result=FinalizedBuild(91),
     )
 
     payload = SubmissionFinalizationResponse.from_domain(snapshot).model_dump(mode="json")

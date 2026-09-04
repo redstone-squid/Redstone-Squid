@@ -28,6 +28,7 @@ from squid.submissions.domain import (
     DraftSnapshot,
     DraftStatus,
     FinalizationJobStatus,
+    FinalizedBuild,
     GeneralSubmissionDetails,
     NormalizedSubmission,
     SchematicRightsPolicy,
@@ -37,7 +38,6 @@ from squid.submissions.domain import (
     SubmissionDimensions,
     SubmissionOrigin,
     SubmissionSchematicVisibility,
-    SubmissionTargetResult,
     SubmissionTaxonomy,
     VerifiedSubmissionArtifacts,
 )
@@ -526,11 +526,7 @@ async def test_account_merge_rewrites_pending_payloads_and_fences_claimed_work(
 
     await accounts.merge(survivor.id, absorbed.id)
 
-    result = SubmissionTargetResult(
-        build_id=build_id,
-        target_key="postgres_builds",
-        provenance={"source_draft_id": str(claimed_draft_id)},
-    )
+    result = FinalizedBuild(build_id)
     assert await finalizations.complete(stale_claim, result, now=Instant.now()) is False
     (replacement_claim,) = await finalizations.claim(now=Instant.now().add(minutes=1), limit=1)
     assert replacement_claim.draft_id == claimed_draft_id
