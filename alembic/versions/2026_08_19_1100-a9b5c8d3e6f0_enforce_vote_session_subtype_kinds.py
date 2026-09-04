@@ -50,6 +50,9 @@ BEGIN
     END IF;
 
     FOREACH target_id IN ARRAY target_ids LOOP
+        -- The foreign keys take KEY SHARE locks while inserting subtype rows. NO KEY
+        -- UPDATE stays compatible with those locks while serializing the final checks
+        -- of two transactions that target the same vote session.
         SELECT kind
         INTO session_kind
         FROM public.vote_sessions
