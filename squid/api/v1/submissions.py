@@ -1,4 +1,4 @@
-"""Submission form and synchronized-draft routes.
+"""Submission form and draft routes.
 
 The form describes fields and constraints; whether they become a Discord modal,
 an HTML form, or a CLI prompt is the client's decision.
@@ -357,7 +357,7 @@ async def create_draft(
     drafts: Drafts,
     actor: SubmissionActor,
 ) -> StoredDraftResponse:
-    """Create an empty synchronized draft owned by the signed-in account."""
+    """Create an empty draft owned by the signed-in account."""
     if payload.origin is not actor.origin:
         raise AuthorizationError
     draft = await drafts.create(
@@ -382,7 +382,7 @@ async def create_draft(
     ),
 )
 async def get_draft(draft_id: UUID, drafts: Drafts, account_id: AccountId) -> StoredDraftResponse:
-    """Return one synchronized draft after enforcing caller ownership."""
+    """Return one draft after enforcing caller ownership."""
     return StoredDraftResponse.from_domain(await drafts.get_owned(draft_id, account_id))
 
 
@@ -503,6 +503,6 @@ async def get_draft_submission(
     ),
 )
 async def delete_draft(draft_id: UUID, drafts: Drafts, account_id: AccountId) -> Response:
-    """Immediately delete one caller-owned synchronized draft."""
+    """Immediately delete one caller-owned draft."""
     await drafts.delete(draft_id, account_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
