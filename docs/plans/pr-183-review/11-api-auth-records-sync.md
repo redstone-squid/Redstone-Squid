@@ -494,4 +494,6 @@ Replying on GitHub and resolving these threads still requires separate explicit 
 intact. `b1032ee7` adds the missing persistence-boundary proof that API-key scopes are trimmed,
 deduplicated, and sorted before storage, plus a substantive three-item schematic pagination case
 covering both next and previous offset anchors. The pagination test passes locally; PostgreSQL
-execution of canonical scope persistence is externally gated.
+execution of canonical scope persistence is externally gated. `0bdb3918` converts the dependency
+and pagination aliases to PEP 695 declarations and removes the last abstract provider wording;
+`4b33ba75` gives submission finalization its concrete application name.

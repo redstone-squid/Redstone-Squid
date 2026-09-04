@@ -389,3 +389,4 @@ Replying on GitHub and resolving threads requires separate explicit authorizatio
 **Done.** Provider-neutral identity, keyed verification-code hashing, and persistence constraints
 remain intact. `61eb77e0` closes the final bot-boundary gap by presenting
 `MinecraftServiceUnavailableError` with stable translated service-unavailable guidance.
+`50d7d299` enforces self-refresh permission at both Discord control rendering and invocation.
