@@ -9,10 +9,13 @@ from discord import app_commands
 import squid_ui_discord as sd
 from squid.bot.consent import ensure_consented_account
 from squid.bot.notifications_view import NotificationScreen
+from squid.core.i18n import DEFAULT_LOCALE, localization_for, tr
 from squid.notifications import (
     PendingNotificationDelivery,
 )
+from squid.notifications.domain import NotificationKind
 from squid.runtime import JobHandle
+from squid_ui.text import Message, localization_scope
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
@@ -42,7 +45,10 @@ class NotificationCog(sd.Cog[Any]):
         if self._delivery_task is not None:
             await self.bot.background_tasks.cancel(self._delivery_task)
 
-    @app_commands.command(name="notifications", description="Manage notification channels and subscriptions")
+    @app_commands.command(
+        name="notifications",
+        description=app_commands.locale_str("Manage notification channels and subscriptions"),
+    )
     async def notifications(self, interaction: discord.Interaction) -> None:
         """Open the notification preferences and subscription workspace."""
         account_id = await self._account_id(interaction)
@@ -85,28 +91,43 @@ class NotificationCog(sd.Cog[Any]):
         return await ensure_consented_account(await sd.request(interaction), self.bot.services.accounts)
 
 
-def render_delivery(delivery: PendingNotificationDelivery, site_url: str | None) -> str:
-    """Render transport-safe DM text from a materialized notification payload."""
+def delivery_message(delivery: PendingNotificationDelivery) -> Message:
+    """Build deferred DM text from a materialized notification payload."""
     build_id = delivery.payload.get("build_id")
-    if delivery.kind.value == "staff_build_submitted":
-        message = "A new build is awaiting staff review."
+    if delivery.kind is NotificationKind.STAFF_BUILD_SUBMITTED:
         if isinstance(build_id, int):
-            return f"{message}\nOpen it in Discord with `/build browse id:{build_id}`."
-        return message
-    build_link = f"{site_url}/builds/{build_id}" if site_url is not None and isinstance(build_id, int) else None
-    if delivery.kind.value == "record_gained":
+            return tr(t"A new build is awaiting staff review.\nOpen it in Discord with `/build browse id:{build_id}`.")
+        return tr(t"A new build is awaiting staff review.")
+    if delivery.kind is NotificationKind.RECORD_GAINED:
         raw_records = delivery.payload.get("records", [])
         count = len(raw_records) if isinstance(raw_records, list) else 1
-        message = f"A credited build gained {count} record{'s' if count != 1 else ''}."
-    elif delivery.kind.value == "build_confirmed":
-        message = "Your build was confirmed."
-    elif delivery.kind.value == "build_denied":
-        message = "Your build was denied."
-    elif delivery.kind.value == "creator_build_confirmed":
-        message = "A creator you follow has a newly confirmed build."
-    else:
-        message = "A build notification is available."
-    return f"{message}\n{build_link}" if build_link is not None else message
+        return tr(
+            t"A credited build gained {count} record.",
+            plural=t"A credited build gained {count} records.",
+        )
+    if delivery.kind is NotificationKind.BUILD_CONFIRMED:
+        return tr(t"Your build was confirmed.")
+    if delivery.kind is NotificationKind.BUILD_DENIED:
+        return tr(t"Your build was denied.")
+    if delivery.kind is NotificationKind.CREATOR_BUILD_CONFIRMED:
+        return tr(t"A creator you follow has a newly confirmed build.")
+    return tr(t"A build notification is available.")
+
+
+def render_delivery(
+    delivery: PendingNotificationDelivery,
+    site_url: str | None,
+    *,
+    locale: str = DEFAULT_LOCALE,
+) -> str:
+    """Localize transport-safe DM text when it is delivered."""
+    with localization_scope(localization_for(locale)):
+        rendered = tr(delivery_message(delivery))
+    build_id = delivery.payload.get("build_id")
+    if delivery.kind is NotificationKind.STAFF_BUILD_SUBMITTED:
+        return rendered
+    build_link = f"{site_url}/builds/{build_id}" if site_url is not None and isinstance(build_id, int) else None
+    return f"{rendered}\n{build_link}" if build_link is not None else rendered
 
 
 async def setup(bot: RedstoneSquid) -> None:
