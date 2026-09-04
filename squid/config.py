@@ -37,6 +37,7 @@ from sqlalchemy import make_url
 
 from squid.accounts.domain import IdentityProvider
 from squid.core.errors import ConfigurationError
+from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
 from squid.schematics.domain.values import RgbaColor
 
 if TYPE_CHECKING:
@@ -719,8 +720,12 @@ class SchematicConfig(_FrozenModel):
     job_retention_hours: int = Field(default=24, ge=1, le=168)
     max_job_artifact_bytes: int = Field(default=64 * 1024 * 1024, ge=1)
 
-    max_upload_bytes: int = Field(default=16 * 1024 * 1024, ge=1)
-    """Largest attachment accepted, checked before the file is downloaded from Discord."""
+    max_upload_bytes: int = Field(
+        default=SCHEMATIC_FILE_SCHEMA_MAX_BYTES,
+        ge=1,
+        le=SCHEMATIC_FILE_SCHEMA_MAX_BYTES,
+    )
+    """Largest accepted attachment, bounded above by the fixed database schema ceiling."""
     max_inflated_bytes: int = Field(default=64 * 1024 * 1024, ge=1)
     """Largest inflated size accepted, enforced while streaming decompression."""
     max_allocated_volume: int = Field(default=20_000_000, ge=1)
