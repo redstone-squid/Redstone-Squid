@@ -46,11 +46,17 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         self.publisher = DiscordPollPublisher(bot)
         self._background_tasks: set[JobHandle] = set()
         self.vote_service.set_actor_resolver(self)
-        self.bot.reactions.subscribe(self)
+        self._reaction_subscription = self.bot.reactions.subscribe(
+            type(self).__qualname__,
+            add=self.on_reaction_add,
+            remove=self.on_reaction_remove,
+            clear=self.on_reaction_clear,
+            clear_emoji=self.on_reaction_clear_emoji,
+        )
 
     @override
     async def ui_unload(self) -> None:
-        self.bot.reactions.unsubscribe(self)
+        self._reaction_subscription.detach()
         await self.bot.background_tasks.cancel(*self._background_tasks)
 
     def _track(self, handle: JobHandle) -> None:
