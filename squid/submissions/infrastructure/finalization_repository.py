@@ -520,15 +520,26 @@ def _encode_issues(issues: Sequence[SubmissionAttentionIssue]) -> list[dict[str,
     return [{"field_id": issue.field_id, "reason": issue.reason.value} for issue in issues]
 
 
-def _decode_issues(values: Sequence[Mapping[str, object]]) -> tuple[SubmissionAttentionIssue, ...]:
-    try:
-        return tuple(
-            SubmissionAttentionIssue(str(value["field_id"]), SubmissionAttentionReason(str(value["reason"])))
-            for value in values
-        )
-    except (KeyError, ValueError) as error:
-        msg = "persisted submission attention issues are invalid"
-        raise DataIntegrityError(msg) from error
+def _decode_issues(values: object) -> tuple[SubmissionAttentionIssue, ...]:
+    msg = "persisted submission attention issues are invalid"
+    if not isinstance(values, list):
+        raise DataIntegrityError(msg)
+    issues: list[SubmissionAttentionIssue] = []
+    for value in values:
+        if not isinstance(value, Mapping):
+            raise DataIntegrityError(msg)
+        try:
+            field_id = value["field_id"]
+            reason = value["reason"]
+        except KeyError as error:
+            raise DataIntegrityError(msg) from error
+        if not isinstance(field_id, str) or not isinstance(reason, str):
+            raise DataIntegrityError(msg)
+        try:
+            issues.append(SubmissionAttentionIssue(field_id, SubmissionAttentionReason(reason)))
+        except ValueError as error:
+            raise DataIntegrityError(msg) from error
+    return tuple(issues)
 
 
 def _unique_issues(issues: Sequence[SubmissionAttentionIssue]) -> tuple[SubmissionAttentionIssue, ...]:
