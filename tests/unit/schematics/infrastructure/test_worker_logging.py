@@ -340,7 +340,7 @@ async def test_worker_request_carries_the_durable_job_id(mocker: MockerFixture, 
 def test_serve_stamps_request_context_on_child_logs(mocker: MockerFixture, caplog: pytest.LogCaptureFixture) -> None:
     """Without this the only correlation between a child log and its job is the trace context."""
     header = {"id": 7, "op": "analyze", "params": {}, "job_id": 4242}
-    stdin = io.BytesIO(Frame(header).encode())
+    stdin = io.BytesIO(Frame(header, (b"schematic",)).encode())
 
     def _fail(*_: object, **__: object) -> None:
         raise InvalidSchematicError(context={"reason": "unreadable"})
@@ -389,7 +389,7 @@ def test_worker_main_extracts_parent_context_around_operation(mocker: MockerFixt
         "params": {"source_format": "litematic"},
         "trace": {"traceparent": "00-" + "a" * 32 + "-" + "b" * 16 + "-01"},
     }
-    stdin = io.BytesIO(Frame(header).encode())
+    stdin = io.BytesIO(Frame(header, (b"schematic",)).encode())
     stdout = io.BytesIO()
     mocker.patch.object(worker_main, "handle", return_value=({"analysis": {}}, b""))
     context = mocker.MagicMock()
