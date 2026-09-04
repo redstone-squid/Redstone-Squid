@@ -9,12 +9,14 @@ from squid.api.security import Caller, current_caller
 from squid.auth.application.web import WebSessionService
 from squid.builds.application import BuildQueryService, BuildService
 from squid.diagnostics.application import ErrorReportService
+from squid.media.errors import DraftMediaUnavailableError
 from squid.notifications import NotificationService
 from squid.permissions.application import PermissionService
 from squid.records.application import RecordService
 from squid.runtime import ApiServices, ApplicationRuntime
 from squid.schematics.application import SchematicService
 from squid.search.application import SearchService
+from squid.submissions.application import DraftAttachmentService, draft_attachment_service
 from squid.suggestions.application import SuggestionService
 from squid.tags.application import TagService
 from squid.versions.application.services import VersionService
@@ -91,8 +93,17 @@ def get_error_reports(services: Services) -> ErrorReportService:
     return services.error_reports
 
 
+async def get_draft_attachments(services: Services) -> DraftAttachmentService:
+    """Return the attachment boundary only when this API enables media jobs."""
+    attachments = draft_attachment_service(services.submission_drafts, services.media_jobs)
+    if attachments is None:
+        raise DraftMediaUnavailableError
+    return attachments
+
+
 type Permissions = Annotated[PermissionService, Depends(get_permissions)]
 type ErrorReports = Annotated[ErrorReportService, Depends(get_error_reports)]
+type DraftAttachments = Annotated[DraftAttachmentService, Depends(get_draft_attachments)]
 type BuildCommands = Annotated[BuildService, Depends(get_builds)]
 type BuildQueries = Annotated[BuildQueryService, Depends(get_build_queries)]
 type CurrentCaller = Annotated[Caller, Depends(current_caller)]

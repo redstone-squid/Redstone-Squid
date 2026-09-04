@@ -13,18 +13,15 @@ from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError as PydanticValidationError
 from whenever import Instant
 
+from squid.api.dependencies import get_draft_attachments
 from squid.api.errors import register_exception_handlers
 from squid.api.security import Caller, current_caller
 from squid.api.v1.schemas.submission_media import DraftMediaListResponse, DraftMediaResponse
-from squid.api.v1.submission_media import (
-    get_media_jobs,
-    get_submission_drafts,
-    router,
-    upload_draft_media,
-)
+from squid.api.v1.submission_media import router, upload_draft_media
 from squid.api.v1.submissions import authenticated_account
 from squid.media.application.jobs import (
     MediaArtifactRole,
+    MediaDraftUploadAuthorization,
     MediaJobSnapshot,
     MediaJobStatus,
     MediaUploadMetadata,
@@ -32,7 +29,7 @@ from squid.media.application.jobs import (
     StoredMediaArtifact,
 )
 from squid.media.domain import MediaKind, MediaLimits
-from squid.submissions.application import StoredDraft
+from squid.submissions.application import DraftAttachmentService, StoredDraft
 from squid.submissions.domain import DraftSnapshot, SubmissionOrigin
 from squid.submissions.errors import DraftAccessDeniedError
 
@@ -130,8 +127,15 @@ class FakeMedia:
         self.submission: StagedMediaUploadSubmission | None = None
         self.discarded: tuple[UUID, UUID] | None = None
 
-    async def submit_staged(self, submission: StagedMediaUploadSubmission) -> UUID:
+    async def submit_staged(
+        self,
+        submission: StagedMediaUploadSubmission,
+        *,
+        authorization: MediaDraftUploadAuthorization | None = None,
+    ) -> UUID:
         self.events.append("submit")
+        assert authorization is not None
+        assert authorization.owner_account_id == ACCOUNT_ID
         self.submission = submission
         self.staged_path = submission.source_path
         self.staged_parent = submission.source_path.parent
@@ -186,11 +190,8 @@ def app_with_fakes(media: FakeMedia, drafts: FakeDrafts) -> FastAPI:
     register_exception_handlers(app)
     app.include_router(router)
 
-    async def media_dependency() -> FakeMedia:
-        return media
-
-    async def draft_dependency() -> FakeDrafts:
-        return drafts
+    async def attachment_dependency() -> DraftAttachmentService:
+        return DraftAttachmentService(drafts, media)
 
     async def account_dependency() -> int:
         return ACCOUNT_ID
@@ -198,8 +199,7 @@ def app_with_fakes(media: FakeMedia, drafts: FakeDrafts) -> FastAPI:
     async def caller_dependency() -> Caller:
         return Caller(kind="account", subject=f"account:{ACCOUNT_ID}", account_id=ACCOUNT_ID)
 
-    app.dependency_overrides[get_media_jobs] = media_dependency
-    app.dependency_overrides[get_submission_drafts] = draft_dependency
+    app.dependency_overrides[get_draft_attachments] = attachment_dependency
     app.dependency_overrides[authenticated_account] = account_dependency
     app.dependency_overrides[current_caller] = caller_dependency
     return app
@@ -410,8 +410,7 @@ async def test_upload_cleans_private_stage_when_registration_aborts(failure: Bas
             kind=MediaKind.VIDEO,
             request=request,
             response=Response(),
-            media=media,
-            drafts=drafts,
+            attachments=DraftAttachmentService(drafts, media),
             account_id=ACCOUNT_ID,
             strip_audio=False,
             upload_id=UPLOAD_ID,
