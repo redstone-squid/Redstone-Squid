@@ -6,6 +6,7 @@ import pytest
 
 from squid.bot import notifications as notification_module
 from squid.bot.notifications import NotificationCog, render_delivery
+from squid.core.errors import DataIntegrityError
 from squid.notifications import PendingNotificationDelivery, RecordSubscriptionFilter, TagPredicate
 from squid.notifications.domain import NotificationKind
 from squid_ui.text import Localization
@@ -34,6 +35,20 @@ def test_record_filter_rejects_values_outside_the_stable_contract() -> None:
 def test_record_filter_rejects_ambiguous_duplicate_tag_predicates() -> None:
     with pytest.raises(ValueError, match="one predicate per tag"):
         RecordSubscriptionFilter(tags=(TagPredicate(4), TagPredicate(4, "exact", value=True)))
+
+
+@pytest.mark.parametrize(
+    "stored",
+    [
+        {"build_kinds": ["unsupported"]},
+        {"tags": [{"tag_id": 1, "operator": "unsupported"}]},
+        {"tags": [{"tag_id": 1}, {"tag_id": 1}]},
+        {},
+    ],
+)
+def test_corrupt_persisted_filter_is_a_data_integrity_failure(stored: dict[str, object]) -> None:
+    with pytest.raises(DataIntegrityError):
+        RecordSubscriptionFilter.from_dict(stored)
 
 
 def test_presence_and_exact_predicates_enforce_distinct_shapes() -> None:
