@@ -100,7 +100,9 @@ class SchematicStore(Protocol):
 
     async def get_for_build(self, build_id: int, schematic_id: int) -> StoredSchematic | None: ...
 
-    async def get_primary(self, build_id: int) -> StoredSchematic | None: ...
+    async def get_featured(self, build_id: int) -> StoredSchematic | None:
+        """Return the attachment selected to supply a build's generated preview."""
+        ...
 
     async def find_file_matches(
         self,
@@ -148,7 +150,7 @@ class SchematicStore(Protocol):
 
     async def get_render(self, schematic_id: int, recipe_hash: str) -> StoredRender | None: ...
 
-    async def record_render(
+    async def publish_fresh_preview(
         self,
         schematic_id: int,
         recipe_hash: str,
@@ -159,11 +161,11 @@ class SchematicStore(Protocol):
         height: int,
         byte_size: int,
     ) -> StoredRender | None:
-        """Record and project a render only while its schematic remains primary."""
+        """Record and publish a generated preview only while its source remains featured."""
         ...
 
-    async def project_render(self, schematic_id: int, recipe_hash: str, url: str) -> bool:
-        """Project a cached render only while its schematic remains primary."""
+    async def publish_cached_preview(self, schematic_id: int, recipe_hash: str, url: str) -> bool:
+        """Publish a cached generated preview only while its source remains featured."""
         ...
 
     async def get_render_content(self, recipe_hash: str, *, max_bytes: int) -> bytes | None: ...
