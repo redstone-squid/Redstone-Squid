@@ -231,8 +231,6 @@ class PostgresNotificationRepository:
     ) -> Sequence[InboxNotification]:
         """List one newest-first inbox page; a `before_id` page carries its overfetch at the front."""
         async with self._session_factory() as session:
-            if not await self._web_inbox_enabled(session, account_id):
-                return ()
             statement = _inbox_filter(select(NotificationRecord), account_id=account_id, visibility=visibility)
             reverse = before_id is not None
             if before_id is not None:
@@ -251,26 +249,12 @@ class PostgresNotificationRepository:
     async def count_inbox(self, account_id: int, *, visibility: InboxVisibility) -> int:
         """Count web-visible inbox items, mirroring the visibility rules of `list_inbox`."""
         async with self._session_factory() as session:
-            if not await self._web_inbox_enabled(session, account_id):
-                return 0
             statement = _inbox_filter(
                 select(func.count()).select_from(NotificationRecord),
                 account_id=account_id,
                 visibility=visibility,
             )
             return await session.scalar(statement) or 0
-
-    @staticmethod
-    async def _web_inbox_enabled(session: AsyncSession, account_id: int) -> bool:
-        enabled = await session.scalar(
-            select(NotificationProfile.web_enabled)
-            .join(Account, Account.id == NotificationProfile.account_id)
-            .where(
-                NotificationProfile.account_id == account_id,
-                account_consent_current(),
-            )
-        )
-        return bool(enabled)
 
     async def mark_read(self, account_id: int, notification_id: int, *, visibility: InboxVisibility) -> bool:
         return await self._set_read_state(account_id, notification_id, visibility=visibility, read=True)
@@ -842,6 +826,12 @@ def _inbox_predicates(account_id: int, visibility: InboxVisibility) -> tuple[Col
     predicates = (
         NotificationRecord.account_id == account_id,
         NotificationRecord.web_visible.is_(True),
+        exists().where(
+            NotificationProfile.account_id == account_id,
+            NotificationProfile.web_enabled.is_(True),
+            Account.id == NotificationProfile.account_id,
+            account_consent_current(),
+        ),
     )
     if visibility.include_staff:
         return predicates

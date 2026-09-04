@@ -220,6 +220,26 @@ async def test_read_state_changes_are_idempotent_and_visibility_safe(
     assert await repository.mark_read(account_id, staff_id, visibility=staff) is True
 
 
+@pytest.mark.parametrize("gate", ["web", "consent"])
+async def test_read_state_changes_require_current_inbox_eligibility(
+    repository: PostgresNotificationRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+    gate: str,
+) -> None:
+    await _seed_delivery(async_session_factory)
+    async with async_session_factory.begin() as session:
+        account = (await session.scalars(select(Account))).one()
+        notification_id = (await session.scalars(select(NotificationRecord.id))).one()
+        if gate == "web":
+            profile = (await session.scalars(select(NotificationProfile))).one()
+            profile.web_enabled = False
+        else:
+            account.consent_version = None
+            account.consented_at = None
+
+    assert await repository.mark_read(account.id, notification_id, visibility=InboxVisibility()) is False
+
+
 async def test_cleanup_removes_expired_inbox_and_unreferenced_source_event(
     repository: PostgresNotificationRepository,
     async_session_factory: async_sessionmaker[AsyncSession],

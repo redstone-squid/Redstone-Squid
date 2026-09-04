@@ -1,7 +1,7 @@
 """Slash-only notification management and durable Discord DM delivery."""
 
 import logging
-from typing import TYPE_CHECKING, Any, override
+from typing import Any, override
 
 import discord
 from discord import app_commands
@@ -20,18 +20,15 @@ from squid.permissions.domain.catalogue import BUILD_SUBMISSION_VIEW_PENDING
 from squid.runtime import JobHandle
 from squid_ui.text import Message, localization_scope
 
-if TYPE_CHECKING:
-    from squid.bot.app import RedstoneSquid
-
 logger = logging.getLogger(__name__)
 
 
 class NotificationCog(sd.Cog[Any]):
     """Manage notification state and deliver queued DMs without prefix commands."""
 
-    bot: RedstoneSquid
+    bot: Any
 
-    def __init__(self, bot: RedstoneSquid) -> None:
+    def __init__(self, bot: Any) -> None:
         super().__init__(bot)
         self._delivery_task: JobHandle | None = None
 
@@ -63,11 +60,14 @@ class NotificationCog(sd.Cog[Any]):
                 notifications=self.bot.services.notifications,
                 account_id=account_id,
                 author_id=interaction.user.id,
-                visibility=InboxVisibility(
-                    include_staff=await allows(interaction, BUILD_SUBMISSION_VIEW_PENDING),
-                ),
+                visibility=await self._inbox_visibility(interaction),
+                visibility_resolver=lambda event: self._inbox_visibility(sd.native(event)),
             ),
         )
+
+    @staticmethod
+    async def _inbox_visibility(interaction: discord.Interaction[Any]) -> InboxVisibility:
+        return InboxVisibility(include_staff=await allows(interaction, BUILD_SUBMISSION_VIEW_PENDING))
 
     async def process_deliveries(self) -> None:
         """Drain a bounded DM batch; retry ambiguous failures and suspend explicit forbiddens."""
@@ -136,5 +136,5 @@ def render_delivery(
     return f"{rendered}\n{build_link}" if build_link is not None else rendered
 
 
-async def setup(bot: RedstoneSquid) -> None:
+async def setup(bot: Any) -> None:
     await bot.add_cog(NotificationCog(bot))
