@@ -1,5 +1,7 @@
 """Isolated tests for the submission HTTP contract, which no client has to draw one way."""
 
+import hashlib
+import json
 from dataclasses import replace
 from typing import override
 from uuid import UUID, uuid4
@@ -298,6 +300,20 @@ def test_draft_change_key_publishes_its_complete_wire_constraints() -> None:
         "title": "Idempotency Key",
         "type": "string",
     }
+
+
+@pytest.mark.parametrize(
+    ("revision", "expected_digest"),
+    [
+        (1, "d1c73dfb23e7c62c5f79a55493e6918a5998161007ab5dc92f091887925a59d5"),
+        (2, "6242f48c2ed797de8cefd9eea11dd72ef744050e5c37a5a8b9053c7d2c507a82"),
+    ],
+)
+def test_checked_in_manifest_wire_contract_is_immutable(revision: int, expected_digest: str) -> None:
+    payload = FormManifestResponse.from_domain(build_submission_manifest("en", revision=revision)).model_dump(mode="json")
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
+
+    assert hashlib.sha256(canonical).hexdigest() == expected_digest
 
 
 async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
