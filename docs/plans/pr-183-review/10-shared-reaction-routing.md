@@ -39,3 +39,13 @@
 - At-most-once shared Discord lookups per event and no lookup when no consumer requests it.
 - Voting add/remove/clear behavior through the adapter, without any starboard fixtures or assertions.
 - Architecture check that the dispatcher contains no bare `asyncio.create_task` and all workers have a runtime owner.
+
+## Completion update (2026-08-30)
+
+**Done.** The retained router exposes typed optional add/remove/clear callbacks, memoizes Discord
+lookups per dispatch, preserves same-message FIFO, and runs shard lifetimes under
+`BackgroundTaskSupervisor` and anyio. Enqueue wait/depth, handler latency/failure, drain duration,
+and outstanding work are observable. Capacity waits are lossless during normal operation; if the
+shutdown deadline aborts an unadmitted vote event, the router invokes the voting consumer's typed
+recovery path instead of dropping it. Saturation, cancellation, clear dispatch, recovery handoff,
+failure isolation, and source-level ownership rules are covered without starboard fixtures.

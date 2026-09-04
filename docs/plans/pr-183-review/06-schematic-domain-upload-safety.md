@@ -33,4 +33,9 @@
 
 ## Status
 
-**In progress.** One of the four "Fix" items — uploader coupling — landed in `3afb5315` ("schematics: attribute uploads to accounts"), migrating `IngestRequest`/store/row model to a provider-neutral `uploaded_by_account_id`. RGBA typing, the resource-pack value object, and the rest of the request documentation are still open; the stdlib pre-parser and analyzer-naming items remain correctly deferred.
+**Done.** `RgbaColor` validates finite channels and is reused by config, wire, requests, and the
+native adapter. `VerifiedResourcePack` states and enforces its digest/media transport contract,
+while native code remains responsible for ZIP parsing. Simulation fields and singular duplicate
+exclusion are documented; cache-recipe invalidation and provider-neutral uploader attribution are
+covered. The bounded stdlib pre-parser and analyzer name remain intentionally retained, with the
+adversarial format matrix confirming the safety decision.

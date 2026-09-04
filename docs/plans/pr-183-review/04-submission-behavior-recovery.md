@@ -19,3 +19,11 @@
 - URL tests cover multiple invalid values, mixed valid/invalid fields, Discord-safe rendering, and no draft mutation on failure.
 - Expiry tests cover authorized restart, denied restart, state reloading, and stale concurrent edits.
 - Rendering tests cover all statuses plus missing/unknown legacy data and assert it never receives confirmed styling.
+
+## Completion update (2026-08-30)
+
+**Done.** URL failures retain the attempted values and name each invalid link; legacy status values
+render neutral with logs and metrics; edits are revision-fenced; and post-save delivery failures
+cannot invite a duplicate submission. Timed-out editors retain only a durable fresh-editor route,
+which loads current state before normal authorization and reports that staged edits were discarded.
+The authorized, denied, stale, timeout, and no-mutation paths are covered directly.
