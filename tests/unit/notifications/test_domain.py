@@ -4,9 +4,11 @@ from uuid import UUID
 
 import pytest
 
+from squid.bot import notifications as notification_module
 from squid.bot.notifications import NotificationCog, render_delivery
 from squid.notifications import PendingNotificationDelivery, RecordSubscriptionFilter, TagPredicate
 from squid.notifications.domain import NotificationKind
+from squid_ui.text import Localization
 
 
 def test_record_filter_round_trips_presence_and_exact_tag_predicates() -> None:
@@ -74,6 +76,33 @@ def test_staff_submission_delivery_uses_pending_review_command_not_public_link()
 
     assert rendered == "A new build is awaiting staff review.\nOpen it in Discord with `/build browse id:42`."
     assert "https://example.test/builds/42" not in rendered
+
+
+def test_delivery_renderer_localizes_at_send_time(monkeypatch: pytest.MonkeyPatch) -> None:
+    delivery = PendingNotificationDelivery(
+        id=1,
+        generation=1,
+        discord_id=2,
+        nonce=UUID("11111111-1111-1111-1111-111111111111"),
+        claim_token=UUID("22222222-2222-2222-2222-222222222222"),
+        attempts=1,
+        kind=NotificationKind.BUILD_CONFIRMED,
+        payload={"build_id": 42},
+    )
+    translations = {"Your build was confirmed.": "你的作品已确认。"}
+    monkeypatch.setattr(
+        notification_module,
+        "localization_for",
+        lambda locale: Localization(
+            locale=locale or "en",
+            gettext=lambda message: translations.get(message, message),
+            ngettext=lambda singular, plural, count: singular if count == 1 else plural,
+        ),
+    )
+
+    assert render_delivery(delivery, "https://example.test", locale="zh-CN") == (
+        "你的作品已确认。\nhttps://example.test/builds/42"
+    )
 
 
 def test_notification_management_is_one_slash_workspace() -> None:
