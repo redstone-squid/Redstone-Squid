@@ -179,7 +179,7 @@ def test_missing_or_unknown_build_status_is_neutral_and_reported(
 
 
 async def test_build_editor_uses_semantic_state_and_forms(display_build: Build) -> None:
-    field = next(spec for spec in EDIT_FIELDS if spec.patch_key == "version_spec").bind(display_build)
+    field = next(spec for spec in EDIT_FIELDS if spec.key == "version_spec").bind(display_build)
     component = BuildEditScreen(
         display_build,
         BuildRecorder(),
@@ -238,7 +238,7 @@ async def test_expired_build_editor_retains_only_the_fresh_recovery_route(displa
 
 async def test_build_editor_commits_against_the_revision_it_presented(display_build: Build) -> None:
     builds = EditRecorder(display_build)
-    field = next(spec for spec in EDIT_FIELDS if spec.patch_key == "version_spec").bind(display_build)
+    field = next(spec for spec in EDIT_FIELDS if spec.key == "version_spec").bind(display_build)
     field.stage("1.21+")
     component = BuildEditScreen(
         display_build,
@@ -257,7 +257,7 @@ async def test_build_editor_commits_against_the_revision_it_presented(display_bu
 
 async def test_build_editor_turns_a_revision_conflict_into_a_reload_choice(display_build: Build) -> None:
     builds = EditRecorder(display_build, conflict=True)
-    field = next(spec for spec in EDIT_FIELDS if spec.patch_key == "version_spec").bind(display_build)
+    field = next(spec for spec in EDIT_FIELDS if spec.key == "version_spec").bind(display_build)
     field.stage("1.21+")
     component = BuildEditScreen(
         display_build,
