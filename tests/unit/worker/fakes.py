@@ -96,6 +96,7 @@ class SupervisorRecorder(BackgroundTaskSupervisor):
 
     jobs: list[ScheduledJob] = field(default_factory=list)
     readiness_queries: list[frozenset[str]] = field(default_factory=list)
+    readiness_max_ages: list[float] = field(default_factory=list)
     captured_errors: ErrorReportService | None = None
     healthy: bool = True
 
@@ -115,6 +116,7 @@ class SupervisorRecorder(BackgroundTaskSupervisor):
 
     def is_healthy(self, required: Collection[str], *, max_age_seconds: float) -> bool:
         self.readiness_queries.append(frozenset(required))
+        self.readiness_max_ages.append(max_age_seconds)
         return self.healthy
 
     def job(self, name: str) -> ScheduledJob:
