@@ -275,6 +275,37 @@ def test_build_handler_credits_the_sponsoring_server_and_website(display_build: 
     assert metadata["Sponsor Website"] == "https://example.test/"
 
 
+def test_build_handler_renders_bounded_human_attachment_evidence(display_build: Build) -> None:
+    display_build.extra_info["schematic_duplicates"] = [
+        {
+            "build_id": 7,
+            "title": "2x2 Seamless Door",
+            "tier": "identical",
+            "footprint_distance": 0.0,
+            "source_attachments": [{"attachment_id": "a", "filename": "alternate.litematic"}],
+        }
+    ]
+    display_build.extra_info["attachment_failures"] = [
+        {
+            "attachment_id": "b",
+            "filename": "broken.litematic",
+            "stage": "analysis",
+            "detail": "bad\nnews " + "x" * 2_000,
+        }
+    ]
+    handler = BuildHandler(cast("squid.bot.app.RedstoneSquid", object()), display_build)
+
+    metadata = handler.get_metadata_fields()
+
+    duplicate = metadata["⚠ Possible duplicate"]
+    failure = metadata["⚠ Attachment issues"]
+    assert "2x2 Seamless Door (#7)" in duplicate
+    assert "alternate.litematic" in duplicate
+    assert "broken.litematic — bad news" in failure
+    assert len(duplicate) <= 1_000
+    assert len(failure) <= 1_000
+
+
 def test_search_results_use_named_selection_and_direct_build_action() -> None:
     record = RecordSearchHit(
         "record-1",

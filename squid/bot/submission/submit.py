@@ -1,8 +1,6 @@
 """A cog with commands to submit builds."""
 
-import asyncio
 import logging
-from collections.abc import Sequence
 from typing import TYPE_CHECKING, Self
 
 import discord
@@ -11,7 +9,14 @@ from discord import Message, app_commands
 import squid_ui_discord as sd
 from squid.accounts.domain import IdentityProvider
 from squid.bot.consent import ensure_consented_account
-from squid.bot.submission.attachments import AttachmentKind, classify_attachment
+from squid.bot.submission.attachment_enrichment import (
+    AttachmentFailure,
+    AttachmentLifecycle,
+    default_only_usable,
+    merge_duplicate_evidence,
+    primary_schematic,
+)
+from squid.bot.submission.attachments import classify_attachment
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.ingestion import ingest_message_bundle
 from squid.bot.submission.input import optional_text, split_values
@@ -27,11 +32,12 @@ from squid.builds.application import (
     BuildService,
 )
 from squid.builds.domain import Build, BuildDraft, DoorOrientationLiteral
+from squid.builds.domain.models import AttachmentFailureInfo
 from squid.core.errors import SquidError
 from squid.core.i18n import tr
 from squid.messages.application import MessageService
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_RECALC
-from squid.schematics.application import IngestedSchematic, IngestRequest
+from squid.schematics.application import IngestRequest
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -120,59 +126,30 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         if notes is not None and (parsed_notes := optional_text(notes)) is not None:
             draft.extra_info["user"] = parsed_notes
 
-        attachments = [first_attachment, second_attachment, third_attachment, fourth_attachment]
-        schematics = self.bot.services.schematics
-
-        async def _handle_attachment(
-            attachment: discord.Attachment | None,
-        ) -> tuple[AttachmentKind, str, bytes] | None:
-            if attachment is None:
-                return None
-            classified = classify_attachment(
-                attachment.filename,
-                attachment.content_type,
-                attachment.size,
-                max_bytes=schematics.limits.max_upload_bytes,
-            )
-            data = await attachment.read()
-            if classified.kind == "schematic":
-                return classified.kind, classified.filename, data
-            url = await self.bot.catbox.upload(classified.filename, data, classified.content_type)
-            return classified.kind, url, data
-
-        uploaded_media = await asyncio.gather(*(_handle_attachment(attachment) for attachment in attachments))
-        pending_schematics: list[tuple[str, bytes]] = []
-        for uploaded in uploaded_media:
-            if uploaded is None:
+        supplied = (first_attachment, second_attachment, third_attachment, fourth_attachment)
+        prepared = [
+            await self._prepare_attachment(attachment, uploader_account_id=uploader_account_id)
+            for attachment in supplied
+            if attachment is not None
+        ]
+        attachments = default_only_usable(prepared)
+        for attachment in attachments:
+            if attachment.media_url is None or attachment.classification is None:
                 continue
-            kind, url, data = uploaded
-            if kind == "image":
-                draft.add_link("image", url)
-            elif kind == "video":
-                draft.add_link("video", url)
-            else:
-                pending_schematics.append((url, data))
+            draft.add_link(attachment.classification.kind, attachment.media_url)
+        self._note_attachment_failures(draft, attachments)
 
-        # Prefilling only fills a gap: a declared build size is never overwritten, because a
-        # schematic export is frequently cropped to the mechanism and legitimately smaller than
-        # the build a person measured. The form shows the prefill as an editable default, and
-        # whatever the human submits wins from that point on.
-        analyses = await self._analyse_attachments(pending_schematics, uploader_account_id=uploader_account_id)
-        if analyses and not any(item is not None for item in draft.dimensions):
-            measured = analyses[0][1].analysis.metrics.dimensions
-            draft.dimensions = (measured.width, measured.height, measured.length)
-
-        async def persist_draft() -> SubmissionOutcome:
+        async def persist_draft(selected_attachments: tuple[AttachmentLifecycle, ...]) -> SubmissionOutcome:
             """Commit the draft from inside the form's submit button.
 
             Anything raised here leaves the workspace message alive and clickable, so the user
             retries from the draft they already filled in instead of rerunning the command.
             """
             build = draft.finalize()
-            self._note_dimension_mismatch(build, analyses)
-            await self._note_schematic_duplicates(build, analyses)
+            self._note_dimension_mismatch(build, selected_attachments)
+            await self._note_schematic_duplicates(build, selected_attachments)
             await self.builds.submit(build, submitter_account_id=uploader_account_id, ai_generated=False)
-            await self._record_analyses(build, analyses, uploader_account_id=uploader_account_id)
+            await self._record_analyses(build, selected_attachments)
             handler = self.bot.for_build(build)
             try:
                 node = await handler.render_node()
@@ -182,40 +159,99 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
                 raise SubmissionDeliveryError(SubmissionOutcome(build, fallback, delivery_complete=False)) from error
             return SubmissionOutcome(build, node)
 
-        return SubmissionScreen(draft, self.builds, on_submit=persist_draft)
+        return SubmissionScreen(
+            draft,
+            self.builds,
+            attachments=attachments,
+            on_submit=persist_draft,
+        )
 
-    async def _analyse_attachments(
-        self, pending: Sequence[tuple[str, bytes]], *, uploader_account_id: int
-    ) -> list[tuple[IngestRequest, IngestedSchematic]]:
-        """Analyze uploaded schematics, dropping any the engine cannot read.
-
-        A schematic is enrichment, not a prerequisite: a corrupt file, a missing engine, or a
-        crashed worker must leave the submission itself working, so every failure here is
-        logged and skipped rather than raised at the user mid-form.
-        """
+    async def _prepare_attachment(
+        self, attachment: discord.Attachment, *, uploader_account_id: int
+    ) -> AttachmentLifecycle:
+        """Classify and enrich one attachment without aborting its siblings."""
         schematics = self.bot.services.schematics
-        if not schematics.available:
-            return []
-
-        analysed: list[tuple[IngestRequest, IngestedSchematic]] = []
-        for filename, data in pending:
-            request = IngestRequest(data=data, filename=filename, uploaded_by_account_id=uploader_account_id)
+        identity = str(attachment.id)
+        try:
+            classified = classify_attachment(
+                attachment.filename,
+                attachment.content_type,
+                attachment.size,
+                max_bytes=schematics.limits.max_upload_bytes,
+            )
+        except SquidError as error:
+            return AttachmentLifecycle(
+                identity,
+                attachment.filename,
+                failure=AttachmentFailure("classification", error.public_detail()),
+            )
+        try:
+            data = await attachment.read()
+        except discord.HTTPException, OSError:
+            logger.warning("Could not download attachment %s.", classified.filename, exc_info=True)
+            return AttachmentLifecycle(
+                identity,
+                classified.filename,
+                classification=classified,
+                failure=AttachmentFailure("download", "Discord could not provide this file."),
+            )
+        if classified.kind != "schematic":
             try:
-                analysed.append((request, await schematics.ingest(request)))
-            except SquidError:
-                logger.warning("Could not analyze the attached schematic %s.", filename, exc_info=True)
-        return analysed
+                url = await self.bot.catbox.upload(classified.filename, data, classified.content_type)
+            except SquidError, OSError:
+                logger.warning("Could not mirror attachment %s.", classified.filename, exc_info=True)
+                return AttachmentLifecycle(
+                    identity,
+                    classified.filename,
+                    classification=classified,
+                    failure=AttachmentFailure("mirror", "The media file could not be uploaded."),
+                )
+            return AttachmentLifecycle(
+                identity,
+                classified.filename,
+                classification=classified,
+                media_url=url,
+            )
 
-    async def _record_analyses(
-        self, build: Build, analyses: Sequence[tuple[IngestRequest, IngestedSchematic]], *, uploader_account_id: int
-    ) -> None:
-        """Persist the analyses now that the build has an id. The first upload is primary."""
-        if build.id is None or not analyses:
+        request = IngestRequest(data=data, filename=classified.filename, uploaded_by_account_id=uploader_account_id)
+        if not schematics.available:
+            return AttachmentLifecycle(
+                identity,
+                classified.filename,
+                classification=classified,
+                request=request,
+                failure=AttachmentFailure("analysis", "Schematic analysis is not available right now."),
+            )
+        try:
+            analysis = await schematics.ingest(request)
+        except SquidError as error:
+            logger.warning("Could not analyze the attached schematic %s.", classified.filename, exc_info=True)
+            return AttachmentLifecycle(
+                identity,
+                classified.filename,
+                classification=classified,
+                request=request,
+                failure=AttachmentFailure("analysis", error.public_detail()),
+            )
+        return AttachmentLifecycle(
+            identity,
+            classified.filename,
+            classification=classified,
+            request=request,
+            analysis=analysis,
+        )
+
+    async def _record_analyses(self, build: Build, attachments: tuple[AttachmentLifecycle, ...]) -> None:
+        """Persist every successful analysis with the explicit primary selection."""
+        if build.id is None:
             return
         schematics = self.bot.services.schematics
-        for index, (request, ingested) in enumerate(analyses):
+        for attachment in attachments:
+            request, ingested = attachment.request, attachment.analysis
+            if request is None or ingested is None:
+                continue
             try:
-                await schematics.record(build.id, ingested, request, primary=index == 0)
+                await schematics.record(build.id, ingested, request, primary=attachment.primary)
             except SquidError:
                 logger.warning(
                     "Could not record the schematic analysis for build %s.",
@@ -230,41 +266,46 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
     async def _note_schematic_duplicates(
         self,
         build: Build,
-        analyses: Sequence[tuple[IngestRequest, IngestedSchematic]],
+        attachments: tuple[AttachmentLifecycle, ...],
     ) -> None:
-        """Retain duplicate evidence before the build row is persisted."""
-        if not analyses:
-            return
-        try:
-            duplicates = await self.bot.services.schematics.find_duplicates(analyses[0][1])
-        except SquidError:
-            logger.warning(
-                "Could not check the submitted schematic for duplicates.",
-                exc_info=True,
-                extra={"squid.schematic.format": analyses[0][1].analysis.metrics.source_format.value},
-            )
-            return
-        if duplicates:
-            build.extra_info["schematic_duplicates"] = [
-                {
-                    "build_id": candidate.build_id,
-                    "tier": candidate.tier,
-                    "footprint_distance": candidate.footprint_distance,
-                }
-                for candidate in duplicates
-            ]
+        """Check every usable schematic and retain merged, titled evidence."""
+        matches = []
+        for attachment in attachments:
+            if attachment.analysis is None:
+                continue
+            try:
+                duplicates = await self.bot.services.schematics.find_duplicates(attachment.analysis)
+            except SquidError:
+                logger.warning(
+                    "Could not check submitted schematic %s for duplicates.",
+                    attachment.filename,
+                    exc_info=True,
+                    extra={
+                        "squid.schematic.format": attachment.analysis.analysis.metrics.source_format.value,
+                    },
+                )
+                continue
+            matches.extend((attachment, candidate) for candidate in duplicates)
+        titles: dict[int, str] = {}
+        for build_id in {candidate.build_id for _, candidate in matches}:
+            candidate_build = await self.builds.get(build_id)
+            if candidate_build is not None:
+                titles[build_id] = candidate_build.title
+        if evidence := merge_duplicate_evidence(matches, titles):
+            build.extra_info["schematic_duplicates"] = evidence
 
     @staticmethod
-    def _note_dimension_mismatch(build: Build, analyses: Sequence[tuple[IngestRequest, IngestedSchematic]]) -> None:
+    def _note_dimension_mismatch(build: Build, attachments: tuple[AttachmentLifecycle, ...]) -> None:
         """Record, but never silently resolve, a disagreement between human and file.
 
         The declared value wins: a schematic export is frequently cropped to the mechanism and
         legitimately smaller than the build a person measured. Overwriting it would corrupt the
         record, so the discrepancy is surfaced as visible evidence for the reviewers instead.
         """
-        if not analyses:
+        primary = primary_schematic(attachments)
+        if primary is None or primary.analysis is None:
             return
-        measured = analyses[0][1].analysis.metrics.dimensions
+        measured = primary.analysis.analysis.metrics.dimensions
         declared = (build.width, build.height, build.depth)
         if None in declared or declared == (measured.width, measured.height, measured.length):
             return
@@ -272,6 +313,21 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             f"Declared {declared[0]}x{declared[1]}x{declared[2]}, "
             f"schematic measures {measured.width}x{measured.height}x{measured.length}"
         )
+
+    @staticmethod
+    def _note_attachment_failures(build: Build | BuildDraft, attachments: tuple[AttachmentLifecycle, ...]) -> None:
+        failures: list[AttachmentFailureInfo] = [
+            {
+                "attachment_id": attachment.identity,
+                "filename": attachment.filename,
+                "stage": attachment.failure.stage,
+                "detail": attachment.failure.detail,
+            }
+            for attachment in attachments
+            if attachment.failure is not None
+        ]
+        if failures:
+            build.extra_info["attachment_failures"] = failures
 
     def _is_build_log_message(self, message: Message) -> bool:
         """Whether inference has anything to read this message for.

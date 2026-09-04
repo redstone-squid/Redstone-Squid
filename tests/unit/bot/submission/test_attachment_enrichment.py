@@ -3,8 +3,10 @@
 import pytest
 
 from squid.bot.submission.attachment_enrichment import (
+    ATTACHMENT_FAILURE_SUMMARY_LIMIT,
     AttachmentFailure,
     AttachmentLifecycle,
+    compact_failure_summary,
     default_only_usable,
     merge_duplicate_evidence,
     primary_schematic,
@@ -95,3 +97,18 @@ def test_duplicate_evidence_keeps_strongest_match_and_all_source_identities() ->
             "source_attachments": [{"attachment_id": "a", "filename": "first.litematic"}],
         },
     ]
+
+
+def test_failure_summary_is_single_line_per_file_and_discord_safe() -> None:
+    hostile = AttachmentLifecycle(
+        "broken",
+        "`@everyone`" + "x" * 200,
+        failure=AttachmentFailure("analysis", "bad\nnews " + "y" * 1_500),
+    )
+
+    summary = compact_failure_summary((hostile,))
+
+    assert len(summary) <= ATTACHMENT_FAILURE_SUMMARY_LIMIT
+    assert "\n" not in summary
+    assert "@\u200beveryone" in summary
+    assert summary.endswith("…")

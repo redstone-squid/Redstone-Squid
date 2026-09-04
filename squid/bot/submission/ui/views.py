@@ -6,6 +6,13 @@ from typing import Any, Literal, cast
 
 import squid_ui as sl
 import squid_ui_discord as sd
+from squid.bot.submission.attachment_enrichment import (
+    AttachmentLifecycle,
+    compact_failure_summary,
+    default_only_usable,
+    primary_schematic,
+    select_primary,
+)
 from squid.bot.submission.input import optional_text, parse_web_urls, split_values
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.fields import (
@@ -261,6 +268,7 @@ class SubmissionScreen(sd.Screen):
     submitting: bool = sl.state(default=False)
     cancelled: bool = sl.state(default=False)
     build: BuildDraft = sl.state(opaque=True)
+    attachments: tuple[AttachmentLifecycle, ...] = sl.state((), opaque=True)
     outcome: SubmissionOutcome | None = sl.state(None, opaque=True, persist=False)
 
     def __init__(
@@ -268,7 +276,8 @@ class SubmissionScreen(sd.Screen):
         build: BuildDraft,
         builds: BuildService,
         *,
-        on_submit: Callable[[], Awaitable[SubmissionOutcome]],
+        attachments: Sequence[AttachmentLifecycle] = (),
+        on_submit: Callable[[tuple[AttachmentLifecycle, ...]], Awaitable[SubmissionOutcome]],
     ) -> None:
         build.submission_status = Status.PENDING
         build.category = BuildCategory.DOOR
@@ -276,11 +285,74 @@ class SubmissionScreen(sd.Screen):
         self.build = build
         self.builds = builds
         self.on_submit = on_submit
+        self.attachments = default_only_usable(tuple(attachments))
+        self._prefilled_dimensions: tuple[int, int, int] | None = None
+        self._prefill_from_primary()
+
+    @property
+    def usable_schematics(self) -> tuple[AttachmentLifecycle, ...]:
+        return tuple(attachment for attachment in self.attachments if attachment.usable_schematic)
+
+    @property
+    def requires_primary(self) -> bool:
+        return len(self.usable_schematics) > 1 and primary_schematic(self.attachments) is None
 
     @property
     def is_ready(self) -> bool:
         width, height, _depth = self.build.door_dimensions
-        return self.build.door_orientation is not None and width is not None and height is not None
+        return (
+            self.build.door_orientation is not None
+            and width is not None
+            and height is not None
+            and not self.requires_primary
+        )
+
+    def _prefill_from_primary(self) -> None:
+        """Fill only an untouched build-size field from the selected schematic."""
+        selected = primary_schematic(self.attachments)
+        if selected is None or selected.analysis is None:
+            return
+        dimensions = selected.analysis.analysis.metrics.dimensions
+        measured = (dimensions.width, dimensions.height, dimensions.length)
+        current = self.build.dimensions
+        if not any(item is not None for item in current) or current == self._prefilled_dimensions:
+            self.build.dimensions = measured
+            self._prefilled_dimensions = measured
+
+    def _attachment_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = []
+        if summary := compact_failure_summary(self.attachments):
+            nodes.append(sl.status(tr(t"Some attachments could not be used:\n{summary}"), tone=sl.Tone.WARNING))
+        usable = self.usable_schematics
+        if len(usable) == 1:
+            filename = usable[0].filename
+            nodes.append(sl.note(tr(t"Primary schematic: `{filename}`")))
+        elif len(usable) > 1:
+            selected = primary_schematic(self.attachments)
+            nodes.append(
+                sl.choices(
+                    *(
+                        sl.choice(
+                            attachment.filename,
+                            key=attachment.identity,
+                            description=self._schematic_description(attachment),
+                        )
+                        for attachment in usable
+                    ),
+                    key="primary_schematic",
+                    selection=sl.controlled(
+                        (selected.identity,) if selected is not None else (),
+                        self._primary_changed,
+                    ),
+                )
+            )
+        return tuple(nodes)
+
+    @staticmethod
+    def _schematic_description(attachment: AttachmentLifecycle) -> str:
+        assert attachment.analysis is not None
+        dimensions = attachment.analysis.analysis.metrics.dimensions
+        return f"Measured {dimensions.width} x {dimensions.height} x {dimensions.length}"
 
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self.cancelled:
@@ -308,7 +380,9 @@ class SubmissionScreen(sd.Screen):
         missing_door_type = self.build.door_orientation is None
         missing_opening_size = not self.build.door_width or not self.build.door_height
         guidance = self.validation_error
-        if guidance is None and missing_door_type and missing_opening_size:
+        if guidance is None and self.requires_primary:
+            guidance = tr(t"Choose which usable schematic is primary before review.")
+        elif guidance is None and missing_door_type and missing_opening_size:
             guidance = tr(t"Required before review: door type and door opening size.")
         elif guidance is None and missing_door_type:
             missing_field = "door type"
@@ -334,6 +408,7 @@ class SubmissionScreen(sd.Screen):
                 sl.note(tr(t"Only the door type and opening size are required.")),
                 accent=sl.palette.INHERIT if self.is_ready else DISCORD_YELLOW,
             ),
+            *self._attachment_nodes(),
             sl.choices(
                 *(sl.choice(tr(value), key=value) for value in DOOR_ORIENTATION_NAMES),
                 key="door_type",
@@ -396,6 +471,12 @@ class SubmissionScreen(sd.Screen):
 
     async def _location_changed(self, event: sl.ChoiceEvent) -> None:
         self.build.miscellaneous_restrictions = list(event.selected)
+        self.mutated(self.build)
+
+    async def _primary_changed(self, event: sl.ChoiceEvent) -> None:
+        self.attachments = select_primary(self.attachments, event.selected[0])
+        self._prefill_from_primary()
+        self.validation_error = None
         self.mutated(self.build)
 
     async def _edit_basics(self, event: sl.PressEvent) -> None:
@@ -463,7 +544,7 @@ class SubmissionScreen(sd.Screen):
         self.submitting = True
         await event.acknowledge()
         try:
-            self.outcome = await self.on_submit()
+            self.outcome = await self.on_submit(self.attachments)
         except SubmissionDeliveryError as error:
             self.outcome = error.outcome
             self.submitting = False
