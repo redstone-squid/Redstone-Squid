@@ -178,6 +178,11 @@ class DatabaseWorker:
                     max(maintenance_interval, 300),
                     self._cleanup_schematic_jobs,
                 ),
+                job(
+                    "schematic-preview-cleanup",
+                    max(maintenance_interval, 300),
+                    self._cleanup_schematic_previews,
+                ),
                 job("queue-health", maintenance_interval, self._services.record_queue_health),
             )
         )
@@ -283,6 +288,10 @@ class DatabaseWorker:
     async def _cleanup_schematic_jobs(self) -> None:
         with trace_span("squid.worker.schematic_job_cleanup", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             await self._schematic_jobs.cleanup()
+
+    async def _cleanup_schematic_previews(self) -> None:
+        with trace_span("squid.worker.schematic_preview_cleanup", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
+            await self._schematic_renders.cleanup()
 
     async def _cleanup_notifications(self) -> None:
         with trace_span("squid.worker.notification_retention", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):

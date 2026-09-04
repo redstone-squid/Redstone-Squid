@@ -2,9 +2,11 @@
 
 from typing import Protocol
 
+from whenever import Instant
+
 from squid.schematics.application.attachments import SchematicPublication, StoredSchematic
 from squid.schematics.application.commands import RenderRequest, SimulationRequest
-from squid.schematics.application.previews import StoredRender
+from squid.schematics.application.previews import PreviewObjectReservation, StoredRender
 from squid.schematics.domain.models import (
     AnalyzerCapabilities,
     AutostackLattice,
@@ -158,6 +160,16 @@ class SchematicPreviewPublisher(Protocol):
 
     async def get_render(self, schematic_id: int, recipe_hash: str) -> StoredRender | None: ...
 
+    async def reserve_preview_object(
+        self,
+        object_key: str,
+        *,
+        byte_size: int,
+        sha256: str,
+    ) -> PreviewObjectReservation: ...
+
+    async def mark_preview_object_ready(self, reservation: PreviewObjectReservation) -> None: ...
+
     async def publish_fresh_preview(
         self,
         schematic_id: int,
@@ -177,6 +189,8 @@ class SchematicPreviewPublisher(Protocol):
         ...
 
     async def get_render_content(self, recipe_hash: str, *, max_bytes: int) -> bytes | None: ...
+
+    async def cleanup_unreferenced_preview_objects(self, *, older_than: Instant, limit: int) -> int: ...
 
 
 class SchematicResourcePackProvider(Protocol):

@@ -19,6 +19,16 @@ class StoredRender:
     byte_size: int
 
 
+@dataclass(frozen=True, slots=True)
+class PreviewObjectReservation:
+    """Durable ownership state established before a generated preview upload."""
+
+    object_key: str
+    byte_size: int
+    sha256: str
+    upload_required: bool
+
+
 class RenderSkipReason(StrEnum):
     """Why a build will never get a generated preview under the current recipe."""
 
