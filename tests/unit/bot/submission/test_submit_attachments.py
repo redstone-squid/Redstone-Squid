@@ -1,10 +1,13 @@
 """Slash-submission attachment orchestration tests."""
 
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, cast
 
 import discord
+import pytest
 
+import squid_ui as sl
 from squid.bot.submission.attachment_enrichment import (
     AttachmentLifecycle,
     default_only_usable,
@@ -12,8 +15,9 @@ from squid.bot.submission.attachment_enrichment import (
 )
 from squid.bot.submission.attachments import ClassifiedAttachment
 from squid.bot.submission.submit import BuildSubmitCommands
+from squid.bot.submission.ui.views import SubmissionDeliveryError
 from squid.builds.application import BuildService
-from squid.builds.domain import DoorBuild
+from squid.builds.domain import Build, BuildCategory, BuildDraft, DoorBuild
 from squid.schematics.application import DuplicateCandidate, IngestedSchematic, IngestRequest
 from squid.schematics.domain import SchematicLimits
 from squid.schematics.errors import InvalidSchematicError
@@ -37,6 +41,8 @@ class Schematics:
         self.duplicates: dict[str, list[DuplicateCandidate]] = {}
         self.duplicate_calls: list[str] = []
         self.records: list[tuple[str, bool]] = []
+        self.duplicate_failures: dict[str, Exception] = {}
+        self.record_failures: dict[str, Exception] = {}
 
     @property
     def available(self) -> bool:
@@ -53,6 +59,8 @@ class Schematics:
 
     async def find_duplicates(self, ingested: IngestedSchematic) -> list[DuplicateCandidate]:
         self.duplicate_calls.append(ingested.sha256)
+        if failure := self.duplicate_failures.get(ingested.sha256):
+            raise failure
         return self.duplicates.get(ingested.sha256, [])
 
     async def record(
@@ -64,6 +72,8 @@ class Schematics:
         primary: bool = True,
     ) -> int:
         assert build_id == 42
+        if failure := self.record_failures.get(ingested.sha256):
+            raise failure
         self.records.append((request.filename, primary))
         return len(self.records)
 
@@ -81,10 +91,36 @@ class CandidateBuild:
 
 class Builds(BuildService):
     def __init__(self) -> None:
-        pass
+        self.submitted: Build | None = None
+        self.saved_extra_info: list[dict[str, object]] = []
+        self.save_failure: Exception | None = None
 
     async def get(self, build_id: int) -> Any:
         return CandidateBuild(f"Candidate {build_id}")
+
+    async def submit(self, build: Build, *, submitter_account_id: int, ai_generated: bool) -> Build:
+        del ai_generated
+        build.id = 42
+        build.submitter_account_id = submitter_account_id
+        self.submitted = build
+        return build
+
+    async def save(self, build: Build) -> Build:
+        if self.save_failure is not None:
+            raise self.save_failure
+        self.saved_extra_info.append(deepcopy(cast(dict[str, object], build.extra_info)))
+        return build
+
+
+class Handler:
+    def __init__(self) -> None:
+        self.rendered_extra_info: dict[str, object] | None = None
+
+    async def render_node(self) -> sl.LayoutNode[Any]:
+        return sl.status("submitted")
+
+    async def post_for_voting(self) -> None:
+        pass
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,23 +132,44 @@ class Services:
 class Bot:
     services: Services
     catbox: Catbox
+    handler: Handler
+
+    def for_build(self, build: Build) -> Handler:
+        self.handler.rendered_extra_info = deepcopy(cast(dict[str, object], build.extra_info))
+        return self.handler
 
 
 def cog(schematics: Schematics) -> BuildSubmitCommands[Any]:
     instance = BuildSubmitCommands.__new__(BuildSubmitCommands)
-    instance.bot = cast(Any, Bot(Services(schematics), Catbox()))
+    instance.bot = cast(Any, Bot(Services(schematics), Catbox(), Handler()))
     instance.builds = Builds()
     return instance
 
 
-def lifecycle(identity: str, filename: str, dimensions: tuple[int, int, int]) -> AttachmentLifecycle:
+def lifecycle(
+    identity: str,
+    filename: str,
+    dimensions: tuple[int, int, int],
+    *,
+    sha256: str | None = None,
+) -> AttachmentLifecycle:
     request = IngestRequest(data=identity.encode(), filename=filename)
     return AttachmentLifecycle(
         identity,
         filename,
         classification=ClassifiedAttachment("schematic", filename, "application/octet-stream"),
         request=request,
-        analysis=IngestedSchematic(identity * 64, make_analysis(dimensions=dimensions)),
+        analysis=IngestedSchematic(sha256 or identity * 64, make_analysis(dimensions=dimensions)),
+    )
+
+
+def draft() -> BuildDraft:
+    return BuildDraft(
+        category=BuildCategory.DOOR,
+        door_orientation="Door",
+        door_width=2,
+        door_height=2,
+        patterns=["Regular"],
     )
 
 
@@ -172,4 +229,94 @@ async def test_record_and_mismatch_follow_selected_identity_not_upload_position(
     await commands._record_analyses(build, attachments)
 
     assert "schematic measures 3x4x5" in build.extra_info["schematic_dimension_mismatch"]
-    assert schematics.records == [("second.litematic", False), ("first.litematic", True)]
+    assert schematics.records == [("first.litematic", True), ("second.litematic", False)]
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+async def test_identical_files_record_once_with_the_selected_name_and_primary_state(reverse: bool) -> None:
+    schematics = Schematics()
+    commands = cog(schematics)
+    selected = lifecycle("a", "chosen.litematic", (3, 4, 5), sha256="f" * 64)
+    sibling = lifecycle("b", "copy.litematic", (3, 4, 5), sha256="f" * 64)
+    ordered = (sibling, selected) if reverse else (selected, sibling)
+    attachments = select_primary(ordered, "a")
+
+    failures = await commands._record_analyses(DoorBuild(id=42), attachments)
+
+    assert failures == []
+    assert schematics.records == [("chosen.litematic", True)]
+
+
+async def test_duplicate_check_failure_is_retained_per_file_without_hiding_sibling_matches() -> None:
+    schematics = Schematics()
+    failure = InvalidSchematicError("Duplicate lookup is unavailable.")
+    schematics.duplicate_failures["a" * 64] = failure
+    schematics.duplicates["b" * 64] = [DuplicateCandidate(7, 70, "identical", 0.0)]
+    commands = cog(schematics)
+    attachments = (lifecycle("a", "unchecked.litematic", (3, 4, 5)), lifecycle("b", "match.litematic", (3, 4, 5)))
+    build = DoorBuild(id=42)
+
+    await commands._note_schematic_duplicates(build, attachments)
+
+    assert build.extra_info["attachment_failures"] == [
+        {
+            "attachment_id": "a",
+            "filename": "unchecked.litematic",
+            "stage": "duplicate-check",
+            "detail": failure.public_detail(),
+        }
+    ]
+    assert build.extra_info["schematic_duplicates"][0]["build_id"] == 7
+
+
+async def test_record_failures_are_persisted_and_visible_before_delivery() -> None:
+    schematics = Schematics()
+    failure = InvalidSchematicError("The analysis row could not be stored.")
+    schematics.record_failures["a" * 64] = failure
+    commands = cog(schematics)
+    attachments = default_only_usable((lifecycle("a", "door.litematic", (3, 4, 5)),))
+
+    outcome = await commands._persist_draft(draft(), attachments, uploader_account_id=7)
+    builds = cast(Builds, commands.builds)
+
+    expected = {
+        "attachment_id": "a",
+        "filename": "door.litematic",
+        "stage": "record",
+        "detail": failure.public_detail(),
+    }
+    assert outcome.build.extra_info["attachment_failures"] == [expected]
+    assert builds.saved_extra_info[-1]["attachment_failures"] == [expected]
+    assert cast(Bot, commands.bot).handler.rendered_extra_info == {"attachment_failures": [expected]}
+
+
+async def test_unexpected_post_save_failure_reports_a_recoverable_saved_outcome() -> None:
+    schematics = Schematics()
+    schematics.record_failures["a" * 64] = RuntimeError("database connection disappeared")
+    commands = cog(schematics)
+    builds = cast(Builds, commands.builds)
+    builds.save_failure = RuntimeError("could not persist enrichment evidence")
+    attachments = default_only_usable((lifecycle("a", "door.litematic", (3, 4, 5)),))
+
+    with pytest.raises(SubmissionDeliveryError) as raised:
+        await commands._persist_draft(draft(), attachments, uploader_account_id=7)
+
+    assert builds.submitted is raised.value.outcome.build
+    assert raised.value.outcome.delivery_complete is False
+    assert "Submission saved" in str(raised.value.outcome.node)
+
+
+async def test_all_failed_analyses_still_submit_the_build_with_failure_evidence() -> None:
+    commands = cog(Schematics())
+    failed = await commands._prepare_attachment(
+        cast(discord.Attachment, Attachment(9, "broken.litematic", None)), uploader_account_id=7
+    )
+    attachments = default_only_usable((failed,))
+    pending = draft()
+    commands._note_attachment_failures(pending, attachments)
+
+    outcome = await commands._persist_draft(pending, attachments, uploader_account_id=7)
+
+    assert outcome.build.id == 42
+    assert outcome.build.extra_info["attachment_failures"][0]["stage"] == "analysis"
+    assert commands.bot.services.schematics.records == []

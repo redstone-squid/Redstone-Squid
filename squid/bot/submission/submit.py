@@ -13,6 +13,7 @@ from squid.bot.submission.attachment_enrichment import (
     AttachmentFailure,
     AttachmentLifecycle,
     attachment_failure_evidence,
+    attachment_failure_for,
     default_only_usable,
     merge_duplicate_evidence,
     primary_schematic,
@@ -33,6 +34,7 @@ from squid.builds.application import (
     BuildService,
 )
 from squid.builds.domain import Build, BuildDraft, DoorOrientationLiteral
+from squid.builds.domain.models import AttachmentFailureInfo
 from squid.core.errors import SquidError
 from squid.core.i18n import tr
 from squid.messages.application import MessageService
@@ -140,24 +142,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         self._note_attachment_failures(draft, attachments)
 
         async def persist_draft(selected_attachments: tuple[AttachmentLifecycle, ...]) -> SubmissionOutcome:
-            """Commit the draft from inside the form's submit button.
-
-            Anything raised here leaves the workspace message alive and clickable, so the user
-            retries from the draft they already filled in instead of rerunning the command.
-            """
-            build = draft.finalize()
-            self._note_dimension_mismatch(build, selected_attachments)
-            await self._note_schematic_duplicates(build, selected_attachments)
-            await self.builds.submit(build, submitter_account_id=uploader_account_id, ai_generated=False)
-            await self._record_analyses(build, selected_attachments)
-            handler = self.bot.for_build(build)
-            try:
-                node = await handler.render_node()
-                await handler.post_for_voting()
-            except Exception as error:
-                fallback = text_node(tr("Submission saved. The review card still needs delivery."))
-                raise SubmissionDeliveryError(SubmissionOutcome(build, fallback, delivery_complete=False)) from error
-            return SubmissionOutcome(build, node)
+            return await self._persist_draft(draft, selected_attachments, uploader_account_id=uploader_account_id)
 
         return SubmissionScreen(
             draft,
@@ -165,6 +150,33 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             attachments=attachments,
             on_submit=persist_draft,
         )
+
+    async def _persist_draft(
+        self,
+        draft: BuildDraft,
+        attachments: tuple[AttachmentLifecycle, ...],
+        *,
+        uploader_account_id: int,
+    ) -> SubmissionOutcome:
+        """Persist one completed form, then finish its recoverable enrichment and delivery."""
+        build = draft.finalize()
+        self._note_dimension_mismatch(build, attachments)
+        await self._note_schematic_duplicates(build, attachments)
+        await self.builds.submit(build, submitter_account_id=uploader_account_id, ai_generated=False)
+
+        try:
+            if failures := await self._record_analyses(build, attachments):
+                self._append_attachment_failures(build, failures)
+                await self.builds.save(build)
+            handler = self.bot.for_build(build)
+            node = await handler.render_node()
+            await handler.post_for_voting()
+        except Exception as error:
+            fallback = text_node(
+                tr("Submission saved. Attachment processing or review-card delivery still needs recovery.")
+            )
+            raise SubmissionDeliveryError(SubmissionOutcome(build, fallback, delivery_complete=False)) from error
+        return SubmissionOutcome(build, node)
 
     async def _prepare_attachment(
         self, attachment: discord.Attachment, *, uploader_account_id: int
@@ -241,27 +253,55 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             analysis=analysis,
         )
 
-    async def _record_analyses(self, build: Build, attachments: tuple[AttachmentLifecycle, ...]) -> None:
+    async def _record_analyses(
+        self, build: Build, attachments: tuple[AttachmentLifecycle, ...]
+    ) -> list[AttachmentFailureInfo]:
         """Persist every successful analysis with the explicit primary selection."""
         if build.id is None:
-            return
+            return []
         schematics = self.bot.services.schematics
+        grouped: dict[str, list[AttachmentLifecycle]] = {}
         for attachment in attachments:
-            request, ingested = attachment.request, attachment.analysis
-            if request is None or ingested is None:
-                continue
+            if attachment.request is not None and attachment.analysis is not None:
+                grouped.setdefault(attachment.analysis.sha256, []).append(attachment)
+
+        failures: list[AttachmentFailureInfo] = []
+        for sha256 in sorted(grouped):
+            group = grouped[sha256]
+            attachment = next((item for item in group if item.primary), min(group, key=lambda item: item.identity))
+            assert attachment.request is not None and attachment.analysis is not None
             try:
-                await schematics.record(build.id, ingested, request, primary=attachment.primary)
-            except SquidError:
+                await schematics.record(
+                    build.id,
+                    attachment.analysis,
+                    attachment.request,
+                    primary=any(item.primary for item in group),
+                )
+            except SquidError as error:
                 logger.warning(
                     "Could not record the schematic analysis for build %s.",
                     build.id,
                     exc_info=True,
                     extra={
                         "squid.build.id": build.id,
-                        "squid.schematic.format": ingested.analysis.metrics.source_format.value,
+                        "squid.schematic.format": attachment.analysis.analysis.metrics.source_format.value,
                     },
                 )
+                failures.append(attachment_failure_for(attachment, "record", error.public_detail()))
+            except Exception:
+                logger.exception(
+                    "Unexpected failure recording schematic analysis for build %s.",
+                    build.id,
+                    extra={"squid.build.id": build.id, "squid.schematic.sha256": sha256},
+                )
+                failures.append(
+                    attachment_failure_for(
+                        attachment,
+                        "record",
+                        "The analyzed schematic could not be attached to the saved submission.",
+                    )
+                )
+        return failures
 
     async def _note_schematic_duplicates(
         self,
@@ -275,7 +315,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
                 continue
             try:
                 duplicates = await self.bot.services.schematics.find_duplicates(attachment.analysis)
-            except SquidError:
+            except SquidError as error:
                 logger.warning(
                     "Could not check submitted schematic %s for duplicates.",
                     attachment.filename,
@@ -283,6 +323,25 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
                     extra={
                         "squid.schematic.format": attachment.analysis.analysis.metrics.source_format.value,
                     },
+                )
+                self._append_attachment_failures(
+                    build,
+                    [attachment_failure_for(attachment, "duplicate-check", error.public_detail())],
+                )
+                continue
+            except Exception:
+                logger.exception(
+                    "Unexpected failure checking submitted schematic %s for duplicates.", attachment.filename
+                )
+                self._append_attachment_failures(
+                    build,
+                    [
+                        attachment_failure_for(
+                            attachment,
+                            "duplicate-check",
+                            "This schematic could not be checked for possible duplicates.",
+                        )
+                    ],
                 )
                 continue
             matches.extend((attachment, candidate) for candidate in duplicates)
@@ -318,7 +377,12 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
     def _note_attachment_failures(build: Build | BuildDraft, attachments: tuple[AttachmentLifecycle, ...]) -> None:
         failures = attachment_failure_evidence(attachments)
         if failures:
-            build.extra_info["attachment_failures"] = failures
+            BuildSubmitCommands._append_attachment_failures(build, failures)
+
+    @staticmethod
+    def _append_attachment_failures(build: Build | BuildDraft, failures: list[AttachmentFailureInfo]) -> None:
+        existing = list(build.extra_info.get("attachment_failures", ()))
+        build.extra_info["attachment_failures"] = [*existing, *failures]
 
     def _is_build_log_message(self, message: Message) -> bool:
         """Whether inference has anything to read this message for.
