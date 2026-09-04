@@ -188,3 +188,5 @@ def test_documented_media_settings_and_resource_arithmetic_are_complete() -> Non
     assert "1.5 GiB" in documentation
     assert "3 GiB" in documentation
     assert "disabled by default" in documentation
+    assert "--target runtime-media" in documentation
+    assert "WITH_MEDIA" not in documentation
