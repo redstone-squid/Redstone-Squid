@@ -1,5 +1,6 @@
 """Structured media validation and infrastructure errors."""
 
+from collections.abc import Sequence
 from enum import StrEnum
 from uuid import UUID
 
@@ -38,28 +39,39 @@ class MediaFailureReason(StrEnum):
 
 
 class MediaLimitExceededError(ValidationError):
-    """An upload, output, or decoded-work budget was exceeded."""
+    """One or more attachment or decoded-work budgets were exceeded."""
 
-    default_message = tr(t"The media exceeds a processing limit.")
+    default_message = tr(t"The attachment exceeds one or more processing limits.")
     default_code = ErrorCode.INVALID_REQUEST
     default_resource = "media"
-    default_end_user_action = tr(t"Choose a smaller or less resource-intensive file and try again.")
+    default_end_user_action = tr(t"Choose fewer, smaller, or less resource-intensive attachments and try again.")
 
-    def __init__(self, violation: MediaViolation) -> None:
-        measure = violation.measure.value
-        actual = violation.actual
-        limit = violation.limit
+    def __init__(self, violations: MediaViolation | Sequence[MediaViolation]) -> None:
+        ordered = (violations,) if isinstance(violations, MediaViolation) else tuple(violations)
+        if not ordered:
+            msg = "MediaLimitExceededError requires at least one violation."
+            raise ValueError(msg)
+        internal = [
+            {"measure": violation.measure.value, "actual": violation.actual, "limit": violation.limit}
+            for violation in ordered
+        ]
+        public = [
+            {"measure": violation.measure.value, "limit": violation.limit}
+            for violation in ordered
+        ]
         super().__init__(
-            tr(t"The media exceeds the {measure} limit: {actual} is greater than {limit}."),
             context={
                 "reason": "limit_exceeded",
-                "measure": violation.measure.value,
-                "actual": violation.actual,
-                "limit": violation.limit,
+                "violations": internal,
             },
-            public_context={"reason": "limit_exceeded", "measure": violation.measure.value, "limit": violation.limit},
+            public_context={"reason": "limit_exceeded", "violations": public},
         )
-        self.violation = violation
+        self.violations = ordered
+
+    @property
+    def violation(self) -> MediaViolation:
+        """Return the first violation for compatibility with single-limit callers."""
+        return self.violations[0]
 
 
 class MediaDraftStateConflictError(ConflictError):

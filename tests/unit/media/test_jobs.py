@@ -176,9 +176,8 @@ class MemoryMediaJobs:
             )
             + upload.source_byte_size,
         )
-        violation = limits.batch_violation(totals)
-        if violation is not None:
-            raise MediaLimitExceededError(violation)
+        if violations := limits.batch_violations(totals):
+            raise MediaLimitExceededError(violations)
         self.states[upload.id] = _JobState(replace(upload, created_at=NOW))
         return MediaEnqueueOutcome(created=True, status=MediaJobStatus.PENDING)
 

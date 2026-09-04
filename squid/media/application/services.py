@@ -40,9 +40,8 @@ class MediaNormalizationService:
 
     def validate_batch(self, totals: MediaBatchTotals) -> None:
         """Validate submission-wide counts and byte reservations."""
-        violation = self._limits.batch_violation(totals)
-        if violation is not None:
-            raise MediaLimitExceededError(violation)
+        if violations := self._limits.batch_violations(totals):
+            raise MediaLimitExceededError(violations)
 
     async def normalize(self, request: MediaNormalizationRequest) -> MediaNormalizationResult:
         """Probe, validate, and normalize one staged upload."""
@@ -86,9 +85,8 @@ class MediaNormalizationService:
                 raise InvalidMediaError(MediaFailureReason.VIDEO_FRAME_RATE_UNKNOWN)
             if probe.width % 2 or probe.height % 2:
                 raise InvalidMediaError(MediaFailureReason.VIDEO_DIMENSIONS_UNSUPPORTED)
-        violation = self._limits.probe_violation(kind, probe)
-        if violation is not None:
-            raise MediaLimitExceededError(violation)
+        if violations := self._limits.probe_violations(kind, probe):
+            raise MediaLimitExceededError(violations)
 
     def _validate_result(
         self,
@@ -100,9 +98,10 @@ class MediaNormalizationService:
     ) -> None:
         report = result.report
         poster_bytes = report.poster.byte_size if report.poster is not None else 0
-        violation = self._limits.batch_violation(MediaBatchTotals(output_bytes=report.output.byte_size + poster_bytes))
-        if violation is not None:
-            raise MediaLimitExceededError(violation)
+        if violations := self._limits.batch_violations(
+            MediaBatchTotals(output_bytes=report.output.byte_size + poster_bytes)
+        ):
+            raise MediaLimitExceededError(violations)
         if (
             result.output_path != request.output_path
             or result.poster_path != request.poster_path
