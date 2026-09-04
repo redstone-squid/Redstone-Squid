@@ -18,6 +18,7 @@ from squid.voting.domain import (
     VoteStatus,
     VoteTarget,
 )
+from squid.voting.errors import InvalidVoteConfigurationError
 from squid.worker.events import ApplyBuildVoteOutcomeHandler
 from tests.support.voting import build_snapshot
 
@@ -88,12 +89,9 @@ async def test_a_still_open_session_is_not_applied() -> None:
     bot.services.builds.confirm.assert_not_awaited()
 
 
-async def test_a_build_vote_without_a_target_build_is_skipped() -> None:
-    bot = _bot(_snapshot(kind=VoteKind.BUILD, target=None))
-
-    await ApplyBuildVoteOutcomeHandler(bot.services.votes, bot.services.builds).handle(_event())
-
-    bot.services.builds.confirm.assert_not_awaited()
+def test_a_build_vote_without_a_target_is_rejected_by_the_domain() -> None:
+    with pytest.raises(InvalidVoteConfigurationError, match="wrong target payload"):
+        _snapshot(kind=VoteKind.BUILD, target=None)
 
 
 async def test_a_delete_log_session_does_not_touch_builds() -> None:
