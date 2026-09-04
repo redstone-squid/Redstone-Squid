@@ -242,6 +242,27 @@ async def test_account_authorizer_requires_current_consent_and_exact_java_uuid(
         account_id=account_id,
         java_uuid=UUID("041873ab-65e9-4f44-a225-89d621df8e90"),
     )
+    assert not await authorizer.has_current_consent(999_999)
+    assert not await authorizer.can_approve_minecraft_identity(account_id=999_999, java_uuid=JAVA_UUID)
+
+    unverified_java_uuid = UUID("44444444-4444-4444-8444-444444444444")
+    async with async_session_factory.begin() as session:
+        unverified = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=NOW)
+        session.add(unverified)
+        await session.flush()
+        session.add(
+            AccountIdentity(
+                account_id=unverified.id,
+                provider=IdentityProvider.JAVA,
+                subject=str(unverified_java_uuid),
+                verified_at=None,
+            )
+        )
+    assert await authorizer.has_current_consent(unverified.id)
+    assert not await authorizer.can_approve_minecraft_identity(
+        account_id=unverified.id,
+        java_uuid=unverified_java_uuid,
+    )
 
     async with async_session_factory.begin() as session:
         account = await session.scalar(select(Account).where(Account.id == account_id))
