@@ -17,6 +17,7 @@ from pathlib import Path, PurePosixPath
 from typing import Protocol
 from uuid import UUID, uuid4
 
+import anyio
 from whenever import Instant
 
 from squid.artifacts import ArtifactStore
@@ -628,7 +629,7 @@ class MediaNormalizationJobRunner:
     async def _process(self, job: ClaimedMediaJob) -> None:
         claim_lost = asyncio.Event()
         async with task_group() as heartbeat:
-            heartbeat.start_soon(self._maintain_claim, job, claim_lost)
+            heartbeat.start_soon(self._maintain_claim, job, claim_lost, name=f"media-heartbeat-{job.upload.id}")
             try:
                 await self._process_claim(job, claim_lost)
             finally:
