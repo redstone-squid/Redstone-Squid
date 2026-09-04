@@ -7,16 +7,22 @@ const {
   EXPECTED_SCREENSHOTS,
   MAX_TOTAL_BYTES,
   planScreenshotArtifact,
+  validateScreenshotMetadata,
 } = require('./catalogue-screenshot-plan.cjs');
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const VALID_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  'base64',
+);
 
 function validEntries() {
   return EXPECTED_SCREENSHOTS.map((name) => ({
     name,
     isFile: true,
     isSymbolicLink: false,
-    contents: Buffer.concat([PNG_SIGNATURE, Buffer.from(name)]),
+    size: VALID_PNG.byteLength,
+    contents: VALID_PNG,
   }));
 }
 
@@ -58,18 +64,60 @@ test('rejects symlinks and non-regular entries', () => {
 });
 
 test('rejects data without the PNG signature', () => {
+  const contents = Buffer.from('not png');
   assert.throws(
-    () => planScreenshotArtifact([{...validEntries()[0], contents: Buffer.from('not png')}, ...validEntries().slice(1)]),
+    () =>
+      planScreenshotArtifact([
+        {...validEntries()[0], size: contents.byteLength, contents},
+        ...validEntries().slice(1),
+      ]),
     /does not have a PNG signature/,
   );
 });
 
-test('rejects artifacts above the aggregate size limit', () => {
+test('rejects signature-prefixed data without a PNG chunk structure', () => {
+  const contents = Buffer.concat([PNG_SIGNATURE, Buffer.from('not png')]);
+  assert.throws(
+    () =>
+      planScreenshotArtifact([
+        {...validEntries()[0], size: contents.byteLength, contents},
+        ...validEntries().slice(1),
+      ]),
+    /truncated PNG chunk/,
+  );
+});
+
+test('rejects a PNG with a corrupt chunk checksum', () => {
+  const contents = Buffer.from(VALID_PNG);
+  contents[20] ^= 1;
+  assert.throws(
+    () => planScreenshotArtifact([{...validEntries()[0], contents}, ...validEntries().slice(1)]),
+    /invalid PNG chunk checksum/,
+  );
+});
+
+test('rejects contents that changed after metadata validation', () => {
+  assert.throws(
+    () =>
+      planScreenshotArtifact([
+        {...validEntries()[0], size: VALID_PNG.byteLength + 1},
+        ...validEntries().slice(1),
+      ]),
+    /contents do not match the validated file size/,
+  );
+});
+
+test('rejects artifacts above the aggregate size limit without reading contents', () => {
   const entries = validEntries();
   entries[0] = {
     ...entries[0],
-    contents: Buffer.concat([PNG_SIGNATURE, Buffer.alloc(MAX_TOTAL_BYTES)]),
+    size: MAX_TOTAL_BYTES,
   };
+  Object.defineProperty(entries[0], 'contents', {
+    get() {
+      throw new Error('metadata validation read file contents');
+    },
+  });
 
-  assert.throws(() => planScreenshotArtifact(entries), /maximum is 8 MiB/);
+  assert.throws(() => validateScreenshotMetadata(entries), /maximum is 8 MiB/);
 });

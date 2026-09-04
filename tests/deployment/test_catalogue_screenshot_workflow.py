@@ -28,10 +28,14 @@ def test_write_token_job_loads_only_the_trusted_default_branch_revision() -> Non
 
 def test_all_artifact_and_pull_security_checks_precede_blob_creation() -> None:
     workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+    metadata_validation = workflow.index("validateScreenshotMetadata(fs.readdirSync")
+    content_read = workflow.index("contents: fs.readFileSync")
+    content_validation = workflow.index("planScreenshotArtifact(artifactContents)")
     create_blob = workflow.index("github.rest.git.createBlob")
 
+    assert metadata_validation < content_read < content_validation < create_blob
+
     for required_check in (
-        "planScreenshotArtifact(",
         "run.repository.full_name !==",
         "pull.head.repo?.full_name !==",
         "pull.head.sha !== runPull.head.sha",
