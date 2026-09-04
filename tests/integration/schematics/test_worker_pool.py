@@ -5,11 +5,14 @@ answers are the ones the duplicate detector depends on, and that when the engine
 does not.
 """
 
-import asyncio
+import functools
+import inspect
 import logging
-from collections.abc import AsyncIterator, Callable
+from collections.abc import Awaitable, Callable
 from importlib.metadata import version
+from typing import Any
 
+import anyio
 import pytest
 
 from squid.config import SchematicConfig
@@ -28,31 +31,23 @@ from squid.schematics.infrastructure.worker import SchematicWorkerPool
 pytestmark = [pytest.mark.schematic, pytest.mark.asyncio]
 
 
-@pytest.fixture
-async def pool() -> AsyncIterator[SchematicWorkerPool]:
-    """Hold the pool's pump lifetime in a task that spans setup and teardown.
+def owned_pool(test: Callable[..., Awaitable[None]]) -> Callable[..., Awaitable[None]]:
+    """Run one test inside the pool lifetime owned by that same pytest task."""
+    signature = inspect.signature(test)
+    parameters = [parameter for name, parameter in signature.parameters.items() if name != "pool"]
 
-    pytest-asyncio runs a fixture's setup and its finalization in two different tasks, and an
-    anyio task group can only be exited by the task that entered it. So the lifetime belongs to
-    an owner task here, the same way it belongs to `main()` in the worker process.
-    """
-    worker_pool = SchematicWorkerPool(SchematicConfig(workers=1, restart_backoff_seconds=0.05))
-    running, finished = asyncio.Event(), asyncio.Event()
-
-    async def own() -> None:
+    @functools.wraps(test)
+    async def run(*args: Any, **kwargs: Any) -> None:
+        worker_pool = SchematicWorkerPool(SchematicConfig(workers=1, restart_backoff_seconds=0.05))
         async with worker_pool.running():
-            running.set()
-            await finished.wait()
+            kwargs["pool"] = worker_pool
+            await test(*args, **kwargs)
 
-    owner = asyncio.create_task(own())
-    await running.wait()
-    try:
-        yield worker_pool
-    finally:
-        finished.set()
-        await owner
+    run.__signature__ = signature.replace(parameters=parameters)  # type: ignore[attr-defined]
+    return run
 
 
+@owned_pool
 async def test_the_pool_reports_the_engine_it_actually_loaded(pool: SchematicWorkerPool) -> None:
     """The worker must report the engine *this* environment installed.
 
@@ -67,6 +62,7 @@ async def test_the_pool_reports_the_engine_it_actually_loaded(pool: SchematicWor
     assert capabilities.can_simulate is True
 
 
+@owned_pool
 async def test_analysis_reads_tight_dimensions_not_allocated_bounds(
     pool: SchematicWorkerPool, periodic_door: Callable[..., bytes]
 ) -> None:
@@ -84,6 +80,7 @@ async def test_analysis_reads_tight_dimensions_not_allocated_bounds(
     "source_format",
     [SchematicFormat.LITEMATIC, SchematicFormat.SPONGE_SCHEM, SchematicFormat.MCSTRUCTURE],
 )
+@owned_pool
 async def test_each_native_generated_input_format_keeps_its_vetted_source_format(
     pool: SchematicWorkerPool,
     native_format_exports: dict[SchematicFormat, bytes],
@@ -99,6 +96,7 @@ async def test_each_native_generated_input_format_keeps_its_vetted_source_format
     assert analysis.metrics.block_count == 1
 
 
+@owned_pool
 async def test_the_shape_fingerprint_survives_translation(
     pool: SchematicWorkerPool, periodic_door: Callable[..., bytes]
 ) -> None:
@@ -111,6 +109,7 @@ async def test_the_shape_fingerprint_survives_translation(
     assert here.fingerprints.exact == moved.fingerprints.exact
 
 
+@owned_pool
 async def test_shape_separates_builds_that_structural_lumps_together(
     pool: SchematicWorkerPool, periodic_door: Callable[..., bytes]
 ) -> None:
@@ -126,6 +125,7 @@ async def test_shape_separates_builds_that_structural_lumps_together(
     assert shape.footprint_distance > 0
 
 
+@owned_pool
 async def test_repeating_structure_detection_recovers_the_period(
     pool: SchematicWorkerPool, periodic_door: Callable[..., bytes]
 ) -> None:
@@ -135,6 +135,7 @@ async def test_repeating_structure_detection_recovers_the_period(
     assert (4, 0, 0) in analysis.lattice.vectors
 
 
+@owned_pool
 async def test_autostack_round_trip_at_the_original_counts_preserves_the_build(
     pool: SchematicWorkerPool, periodic_door: Callable[..., bytes]
 ) -> None:
@@ -148,6 +149,7 @@ async def test_autostack_round_trip_at_the_original_counts_preserves_the_build(
     assert comparison.identical is True
 
 
+@owned_pool
 async def test_tick_simulation_moves_a_piston_and_settles(pool: SchematicWorkerPool, piston_door: bytes) -> None:
     result = await pool.simulate(piston_door, request=SimulationRequest())
 
@@ -159,6 +161,7 @@ async def test_tick_simulation_moves_a_piston_and_settles(pool: SchematicWorkerP
     assert result.trustworthy is True
 
 
+@owned_pool
 async def test_tick_simulation_prefers_an_insign_input_when_controls_are_ambiguous(
     pool: SchematicWorkerPool, insign_piston_door: bytes
 ) -> None:
@@ -169,6 +172,7 @@ async def test_tick_simulation_prefers_an_insign_input_when_controls_are_ambiguo
     assert result.piston_events > 0
 
 
+@owned_pool
 async def test_a_named_input_overrides_the_insign_annotation(
     pool: SchematicWorkerPool, insign_piston_door: bytes
 ) -> None:
@@ -183,6 +187,7 @@ async def test_a_named_input_overrides_the_insign_annotation(
     assert result.input_source == "manual"
 
 
+@owned_pool
 async def test_a_named_input_that_is_not_a_control_comes_back_with_the_ones_that_are(
     pool: SchematicWorkerPool, insign_piston_door: bytes
 ) -> None:
@@ -199,6 +204,7 @@ async def test_a_named_input_that_is_not_a_control_comes_back_with_the_ones_that
     "target",
     [SchematicFormat.LITEMATIC, SchematicFormat.SPONGE_SCHEM, SchematicFormat.MCSTRUCTURE],
 )
+@owned_pool
 async def test_each_native_export_format_round_trips_the_build(
     pool: SchematicWorkerPool,
     periodic_door: Callable[..., bytes],
@@ -215,6 +221,7 @@ async def test_each_native_export_format_round_trips_the_build(
     assert after.metrics.dimensions == before.metrics.dimensions
 
 
+@owned_pool
 async def test_a_schematic_larger_than_the_budget_is_refused_by_the_worker(
     pool: SchematicWorkerPool, periodic_door: Callable[..., bytes]
 ) -> None:
@@ -229,6 +236,7 @@ async def test_a_schematic_larger_than_the_budget_is_refused_by_the_worker(
     assert axis_raised.value.measure == "allocated axis length"
 
 
+@owned_pool
 async def test_corrupt_bytes_come_back_as_a_typed_error_and_the_pool_keeps_serving(
     pool: SchematicWorkerPool, periodic_door: Callable[..., bytes]
 ) -> None:
@@ -238,6 +246,7 @@ async def test_corrupt_bytes_come_back_as_a_typed_error_and_the_pool_keeps_servi
     assert (await pool.analyze(periodic_door(), limits=SchematicLimits())).metrics.block_count == 24
 
 
+@owned_pool
 async def test_a_worker_killed_mid_request_is_replaced_and_the_bot_survives(
     pool: SchematicWorkerPool, periodic_door: Callable[..., bytes], slow_schematic: bytes
 ) -> None:
@@ -247,16 +256,30 @@ async def test_a_worker_killed_mid_request_is_replaced_and_the_bot_survives(
     process = pool._workers[0]._process
     assert process is not None
 
-    in_flight = asyncio.create_task(pool.analyze(slow_schematic, limits=SchematicLimits(), with_lattice=True))
-    await asyncio.sleep(0.2)
-    process.kill()
+    finished = anyio.Event()
+    failures: list[Exception] = []
 
-    with pytest.raises(SchematicWorkerCrashedError):
-        await in_flight
+    async def analyze() -> None:
+        try:
+            await pool.analyze(slow_schematic, limits=SchematicLimits(), with_lattice=True)
+        except Exception as error:
+            failures.append(error)
+        finally:
+            finished.set()
+
+    async with anyio.create_task_group() as tasks:
+        tasks.start_soon(analyze)
+        await anyio.sleep(0.2)
+        process.kill()
+        await finished.wait()
+
+    assert len(failures) == 1
+    assert isinstance(failures[0], SchematicWorkerCrashedError)
 
     assert (await pool.analyze(periodic_door(), limits=SchematicLimits())).metrics.block_count == 24
 
 
+@owned_pool
 async def test_a_clean_shutdown_does_not_look_like_a_failure(
     pool: SchematicWorkerPool, caplog: pytest.LogCaptureFixture
 ) -> None:
