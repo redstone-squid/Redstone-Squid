@@ -46,6 +46,7 @@ class Screen[OwnerT = Any](Component[ComponentsV2Target]):
 
     @classmethod
     def _compile_response_spec(cls) -> ResponseSpec:
+        """Validate and freeze this screen class's declarative response policy."""
         if cls.audience not in ("public", "personal") and not isinstance(cls.audience, Private):
             message = f"{cls.__name__}.audience must be 'public', 'personal', or Private"
             raise TypeError(message)
