@@ -3,18 +3,22 @@
 from collections.abc import Awaitable, Callable
 from typing import cast
 
+import discord
+
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.accounts.application import AccountService
 from squid.accounts.domain import Account, AccountConsent, IdentityProvider
-from squid.accounts.errors import AccountAlreadyLinkedError
+from squid.accounts.errors import AccountAlreadyLinkedError, AccountNotFoundError
 from squid.bot.account_presentation import link_conflict, link_message, refresh_message
 from squid.bot.account_view import AccountScreen, ConsentRequest
 from squid.bot.claims_view import ClaimReviewComponent
 from squid.bot.consent import CONSENT_PROMPT_TIMEOUT_SECONDS
 from squid.bot.ui import tr
 from squid.permissions.domain import PermissionNode
+from squid.permissions.domain.catalogue import ACCOUNT_IDENTITY_REFRESH_ANY
+from squid_ui_discord.modal import EntityField
 
 type ClaimAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
@@ -37,6 +41,7 @@ class AccountWorkspace(sd.Screen):
         can_approve_claims: bool,
         can_reject_claims: bool,
         authorize_claim: ClaimAuthorizer,
+        can_refresh_any: bool = False,
     ) -> None:
         self._accounts = accounts
         self._actor_id = actor_id
@@ -46,6 +51,7 @@ class AccountWorkspace(sd.Screen):
         self._can_approve_claims = can_approve_claims
         self._can_reject_claims = can_reject_claims
         self._authorize_claim = authorize_claim
+        self._can_refresh_any = can_refresh_any
         self._overview: AccountScreen | None = None
         self._claims: ClaimReviewComponent | None = None
         self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target] | None = None
@@ -125,6 +131,18 @@ class AccountWorkspace(sd.Screen):
                         sl.action_control(tr(t"Refresh Minecraft identity"), self._refresh_identity, key="refresh"),
                         key="refresh-actions",
                     ),
+                )
+            )
+        if self._can_refresh_any:
+            nodes.append(
+                sl.form(
+                    tr(t"Refresh another member's Minecraft identity"),
+                    sl.forms.FormSpec(
+                        tr(t"Refresh member identity"),
+                        (EntityField(key="user", label=tr(t"Discord member")),),
+                    ),
+                    key="staff-refresh",
+                    on_submit=self._refresh_member_identity,
                 )
             )
         if not nodes:
@@ -237,6 +255,18 @@ class AccountWorkspace(sd.Screen):
     async def _refresh_identity(self, event: sl.PressEvent) -> None:
         account_id = self._account_id()
         refresh = await self._accounts.refresh_java_identity(account_id)
+        await self._rebuild()
+        await event.notice(refresh_message(refresh))
+
+    async def _refresh_member_identity(self, event: sl.SubmitEvent) -> None:
+        if not await self._authorize_claim(ACCOUNT_IDENTITY_REFRESH_ANY):
+            await event.notice(tr(t"You are no longer allowed to refresh another member's identity."))
+            return
+        member = cast(discord.Member | discord.User, event.values["user"])
+        account = await self._accounts.get_account_by_identity(IdentityProvider.DISCORD, str(member.id))
+        if account is None or account.id is None:
+            raise AccountNotFoundError(provider=IdentityProvider.DISCORD, subject=str(member.id))
+        refresh = await self._accounts.refresh_java_identity(account.id)
         await self._rebuild()
         await event.notice(refresh_message(refresh))
 
