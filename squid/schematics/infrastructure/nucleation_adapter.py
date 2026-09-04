@@ -57,6 +57,10 @@ from squid.schematics.errors import (
     InvalidSchematicError,
     SchematicTooLargeError,
 )
+from squid.schematics.infrastructure.java_structure import (
+    decode_java_structure,
+    json_nbt,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +117,7 @@ def analyze(
     `source_format` is what the caller's content sniff concluded, including any filename hint
     it had. When omitted the bytes are sniffed again here without a hint.
     """
-    schematic = _load(data)
+    schematic = _load(data, limits=limits, source_format=source_format)
     _guard_allocated_volume(schematic, limits)
 
     metrics = _metrics(schematic, data, source_format=source_format)
@@ -404,17 +408,58 @@ def _insign_input_positions(compiled: Mapping[str, Any]) -> set[Vector3]:
     return positions
 
 
-def _load(data: bytes) -> nucleation.Schematic:
+def _load(
+    data: bytes,
+    *,
+    limits: SchematicLimits | None = None,
+    source_format: SchematicFormat | None = None,
+) -> nucleation.Schematic:
     """Parse bytes into an engine handle.
 
     `from_data` is a *constructor*, not an in-place loader: discarding its return value leaves
     you holding an empty 0x0x0 schematic rather than raising, which is why this is the only
     place allowed to call it.
     """
+    resolved_format = source_format or sniff_schematic_format(data)
+    if resolved_format is SchematicFormat.STRUCTURE_NBT:
+        return _load_java_structure(data, limits or SchematicLimits())
     try:
         return nucleation.Schematic.from_data(data)
     except Exception as exc:
         raise InvalidSchematicError(context={"engine_error": str(exc)}) from exc
+
+
+def _load_java_structure(data: bytes, limits: SchematicLimits) -> nucleation.Schematic:
+    """Bridge vanilla Java structure NBT through Nucleation's mutation API.
+
+    TODO(upstream): replace this note with the Schem-at/Nucleation issue URL once GitHub
+    authentication is restored. Nucleation 0.10.14 advertises `.nbt` support but rejects a
+    valid Java structure from `Schematic.from_data`; Squid must keep this bounded bridge until
+    the native importer is available.
+    """
+    try:
+        structure = decode_java_structure(data, limits)
+        schematic = nucleation.Schematic.create("Java Structure")
+        schematic.set_source_data_version(structure.data_version)
+        for block in structure.blocks:
+            if block.nbt is None:
+                schematic.set_block_from_string(*block.position, block.state)
+            else:
+                schematic.set_block_with_nbt(
+                    *block.position,
+                    block.state,
+                    json.dumps(json_nbt(block.nbt), separators=(",", ":")),
+                )
+        for entity in structure.entities:
+            schematic.add_entity(
+                entity.entity_id,
+                *entity.position,
+                json.dumps(json_nbt(entity.nbt), separators=(",", ":")),
+            )
+    except Exception as exc:
+        raise InvalidSchematicError(context={"engine_error": str(exc)}) from exc
+    else:
+        return schematic
 
 
 def _guard_allocated_volume(schematic: nucleation.Schematic, limits: SchematicLimits) -> None:

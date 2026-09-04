@@ -6,6 +6,7 @@ does not.
 """
 
 import functools
+import gzip
 import inspect
 import logging
 from collections.abc import Awaitable, Callable
@@ -78,21 +79,37 @@ async def test_analysis_reads_tight_dimensions_not_allocated_bounds(
 
 @pytest.mark.parametrize(
     "source_format",
-    [SchematicFormat.LITEMATIC, SchematicFormat.SPONGE_SCHEM, SchematicFormat.MCSTRUCTURE],
+    list(SchematicFormat),
 )
 @owned_pool
-async def test_each_native_generated_input_format_keeps_its_vetted_source_format(
+async def test_each_declared_readable_format_crosses_the_real_worker(
     pool: SchematicWorkerPool,
-    native_format_exports: dict[SchematicFormat, bytes],
+    native_format_inputs: dict[SchematicFormat, bytes],
     source_format: SchematicFormat,
 ) -> None:
     analysis = await pool.analyze(
-        native_format_exports[source_format],
+        native_format_inputs[source_format],
         limits=SchematicLimits(),
         source_format=source_format,
     )
 
     assert analysis.metrics.source_format is source_format
+    assert analysis.metrics.block_count == 1
+
+
+@pytest.mark.parametrize("container", ["raw", "gzip"])
+@owned_pool
+async def test_java_structure_containers_cross_the_real_worker(
+    pool: SchematicWorkerPool,
+    native_format_inputs: dict[SchematicFormat, bytes],
+    container: str,
+) -> None:
+    raw = native_format_inputs[SchematicFormat.STRUCTURE_NBT]
+    data = raw if container == "raw" else gzip.compress(raw, mtime=0)
+
+    analysis = await pool.analyze(data, limits=SchematicLimits(), source_format=SchematicFormat.STRUCTURE_NBT)
+
+    assert analysis.metrics.source_format is SchematicFormat.STRUCTURE_NBT
     assert analysis.metrics.block_count == 1
 
 
