@@ -18,6 +18,9 @@ MIGRATION_DATABASE = "redstone_squid_migrations"
 DYNAMIC_VOTING_REVISION = "4c9e7a2b1d63"
 """The migration whose downgrade path the drift test also exercises."""
 
+NULLABLE_VOTE_THRESHOLDS_REVISION = "b2c3d4e5f6a8"
+VOTE_SUBTYPE_INVARIANT_REVISION = "a9b5c8d3e6f0"
+
 pytestmark = pytest.mark.filterwarnings("ignore:Expression #.* detected to include an operator clause:UserWarning")
 """Autogenerate cannot compare an index expression carrying an operator class.
 
@@ -248,6 +251,118 @@ def test_migrations_create_schema_without_drift(
     # re-enqueueing keeps the generation rather than restarting it.
     assert stale_post is True
     assert reissued_generation == seeded_generation
+
+
+def test_nullable_vote_thresholds_migrate_sentinels_in_both_directions(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The generic-poll sentinels become NULL and are restored by downgrade."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, f"{NULLABLE_VOTE_THRESHOLDS_REVISION}-1")
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            account_id = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+            connection.execute(text("INSERT INTO server_settings (server_id) VALUES (503)"))
+            vote_session_id = connection.execute(
+                text(
+                    "INSERT INTO vote_sessions "
+                    "(status, result, author_account_id, kind, pass_threshold, fail_threshold) "
+                    "VALUES ('open', 'pending', :author, 'generic', 32767, -32768) RETURNING id"
+                ),
+                {"author": account_id},
+            ).scalar_one()
+            connection.execute(
+                text(
+                    "INSERT INTO generic_vote_sessions "
+                    "(vote_session_id, guild_id, question, visibility, deadline) "
+                    "VALUES (:id, 503, 'Migration?', 'anonymous_live', now() + interval '1 hour')"
+                ),
+                {"id": vote_session_id},
+            )
+
+        command.upgrade(config, NULLABLE_VOTE_THRESHOLDS_REVISION)
+        with engine.connect() as connection:
+            assert connection.execute(
+                text("SELECT pass_threshold, fail_threshold FROM vote_sessions WHERE id = :id"),
+                {"id": vote_session_id},
+            ).one() == (None, None)
+            with pytest.raises(DBAPIError):
+                connection.execute(
+                    text("UPDATE vote_sessions SET pass_threshold = 1, fail_threshold = -1 WHERE id = :id"),
+                    {"id": vote_session_id},
+                )
+            connection.rollback()
+
+        command.downgrade(config, f"{NULLABLE_VOTE_THRESHOLDS_REVISION}-1")
+        with engine.connect() as connection:
+            assert connection.execute(
+                text("SELECT pass_threshold, fail_threshold FROM vote_sessions WHERE id = :id"),
+                {"id": vote_session_id},
+            ).one() == (32767, -32768)
+    finally:
+        engine.dispose()
+
+
+def test_vote_subtype_invariant_upgrade_rejects_existing_incoherence(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The rollout refuses a root that has no matching subtype payload."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, f"{VOTE_SUBTYPE_INVARIANT_REVISION}-1")
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            account_id = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+            connection.execute(
+                text(
+                    "INSERT INTO vote_sessions "
+                    "(status, result, author_account_id, kind, pass_threshold, fail_threshold) "
+                    "VALUES ('open', 'pending', :author, 'generic', NULL, NULL)"
+                ),
+                {"author": account_id},
+            )
+
+        with pytest.raises(DBAPIError, match="cannot enforce vote session subtype kinds"):
+            command.upgrade(config, VOTE_SUBTYPE_INVARIANT_REVISION)
+    finally:
+        engine.dispose()
+
+
+def test_vote_subtype_invariant_downgrade_removes_triggers_and_function(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The aggregate invariant is fully reversible when rolling back its revision."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, VOTE_SUBTYPE_INVARIANT_REVISION)
+    command.downgrade(config, f"{VOTE_SUBTYPE_INVARIANT_REVISION}-1")
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.connect() as connection:
+            assert (
+                connection.execute(
+                    text("SELECT to_regprocedure('public.enforce_vote_session_kind_subtype()')")
+                ).scalar_one()
+                is None
+            )
+            triggers = set(
+                connection.execute(
+                    text(
+                        "SELECT tgname FROM pg_trigger "
+                        "JOIN pg_class ON pg_class.oid = pg_trigger.tgrelid "
+                        "WHERE tgname LIKE '%_kind_subtype_check' AND NOT tgisinternal"
+                    )
+                ).scalars()
+            )
+            assert triggers == set()
+    finally:
+        engine.dispose()
 
 
 def test_sponsor_migration_refuses_to_discard_retained_provenance(
