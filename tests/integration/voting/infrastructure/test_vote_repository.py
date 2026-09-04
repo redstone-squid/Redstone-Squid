@@ -3,6 +3,8 @@ from collections.abc import AsyncGenerator
 from typing import cast
 
 import pytest
+from alembic_utils.pg_function import PGFunction
+from alembic_utils.pg_trigger import PGTrigger
 from sqlalchemy import Table, insert, text
 from sqlalchemy.exc import IntegrityError, StatementError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
@@ -12,6 +14,7 @@ from squid.accounts.infrastructure.models import Account
 from squid.builds.domain import Status
 from squid.builds.infrastructure.models import Build
 from squid.messages.infrastructure.models import Message
+from squid.persistence.alembic_entities import alembic_util_entities
 from squid.persistence.base import Base
 from squid.posts.infrastructure.models import DiscordPost
 from squid.settings.infrastructure.models import ServerSetting
@@ -58,6 +61,24 @@ _TABLES: tuple[Table, ...] = with_foreign_key_targets(
     cast(Table, DiscordPost.__table__),
 )
 
+_KIND_SUBTYPE_ENTITIES = {
+    "enforce_vote_session_kind_subtype",
+    "vote_sessions_kind_subtype_check",
+    "build_vote_sessions_kind_subtype_check",
+    "delete_log_vote_sessions_kind_subtype_check",
+    "generic_vote_sessions_kind_subtype_check",
+}
+
+
+def _kind_subtype_sql() -> list[str]:
+    statements = [
+        entity.to_sql_statement_create().text
+        for entity in alembic_util_entities()
+        if isinstance(entity, PGFunction | PGTrigger) and entity.signature.partition("(")[0] in _KIND_SUBTYPE_ENTITIES
+    ]
+    assert len(statements) == len(_KIND_SUBTYPE_ENTITIES)
+    return statements
+
 
 @pytest.fixture(autouse=True)
 async def vote_schema(async_engine: AsyncEngine) -> AsyncGenerator[None]:
@@ -72,11 +93,14 @@ async def vote_schema(async_engine: AsyncEngine) -> AsyncGenerator[None]:
         # pgvector column, so the type has to exist before the tables are created.
         await connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await connection.run_sync(Base.metadata.create_all, tables=_TABLES)
+        for statement in _kind_subtype_sql():
+            await connection.execute(text(statement))
     try:
         yield
     finally:
         async with async_engine.begin() as connection:
             await connection.run_sync(Base.metadata.drop_all, tables=tuple(reversed(_TABLES)))
+            await connection.execute(text("DROP FUNCTION public.enforce_vote_session_kind_subtype()"))
 
 
 @pytest.fixture(autouse=True)
@@ -514,3 +538,132 @@ async def test_the_schema_rejects_kind_threshold_combinations_the_domain_forbids
                     "fail_threshold": fail_threshold,
                 },
             )
+
+
+async def _insert_vote_root(session: AsyncSession, kind: str) -> int:
+    threshold = None if kind == "generic" else 3
+    fail_threshold = None if kind == "generic" else -3
+    return (
+        await session.execute(
+            text(
+                "INSERT INTO vote_sessions (status, result, author_account_id, kind, pass_threshold, fail_threshold) "
+                "VALUES ('open', 'pending', :author, :kind, :pass_threshold, :fail_threshold) RETURNING id"
+            ),
+            {
+                "author": AUTHOR_ACCOUNT_IDS[0],
+                "kind": kind,
+                "pass_threshold": threshold,
+                "fail_threshold": fail_threshold,
+            },
+        )
+    ).scalar_one()
+
+
+async def test_kind_and_subtype_can_transition_atomically(
+    repository: VoteRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    vote_session_id = await repository.create_build_session(
+        author_account_id=AUTHOR_ACCOUNT_IDS[0],
+        pass_threshold=3,
+        fail_threshold=-3,
+        build_id=BUILD_ID,
+        changes=[],
+    )
+
+    async with async_session_factory.begin() as session:
+        await session.execute(
+            text("DELETE FROM build_vote_sessions WHERE vote_session_id = :id"),
+            {"id": vote_session_id},
+        )
+        await session.execute(
+            text(
+                "UPDATE vote_sessions SET kind = 'generic', pass_threshold = NULL, fail_threshold = NULL WHERE id = :id"
+            ),
+            {"id": vote_session_id},
+        )
+        await session.execute(
+            text(
+                "INSERT INTO generic_vote_sessions "
+                "(vote_session_id, guild_id, question, visibility, scope, deadline) "
+                "VALUES (:id, :guild_id, 'Choose', 'anonymous_live', 'guild', now() + interval '1 hour')"
+            ),
+            {"id": vote_session_id, "guild_id": GUILD_ID},
+        )
+
+    transitioned = await repository.get_by_id(vote_session_id)
+    assert transitioned is not None
+    assert transitioned.kind is VoteKind.GENERIC
+    assert transitioned.poll is not None
+    assert transitioned.poll.question == "Choose"
+
+
+@pytest.mark.parametrize("invalid_shape", ["missing", "mismatched", "multiple", "duplicate_build"])
+async def test_deferred_kind_subtype_invariant_rejects_invalid_final_shapes(
+    async_session_factory: async_sessionmaker[AsyncSession],
+    invalid_shape: str,
+) -> None:
+    async def commit_invalid_shape() -> None:
+        async with async_session_factory.begin() as session:
+            kind = "generic" if invalid_shape == "missing" else "build"
+            vote_session_id = await _insert_vote_root(session, kind)
+
+            if invalid_shape in {"multiple", "duplicate_build"}:
+                await session.execute(
+                    text(
+                        "INSERT INTO build_vote_sessions (vote_session_id, build_id, changes) "
+                        "VALUES (:id, :build_id, CAST('[]' AS jsonb))"
+                    ),
+                    {"id": vote_session_id, "build_id": BUILD_ID},
+                )
+            if invalid_shape in {"mismatched", "multiple"}:
+                await session.execute(
+                    text(
+                        "INSERT INTO delete_log_vote_sessions "
+                        "(vote_session_id, target_message_id, target_channel_id, target_server_id) "
+                        "VALUES (:id, 501, 200, :guild_id)"
+                    ),
+                    {"id": vote_session_id, "guild_id": GUILD_ID},
+                )
+            if invalid_shape == "duplicate_build":
+                await session.execute(
+                    insert(cast(Table, Build.__table__)).values(
+                        id=BUILD_ID + 1,
+                        submission_status=Status.PENDING,
+                        submitter_account_id=AUTHOR_ACCOUNT_IDS[0],
+                    )
+                )
+                await session.execute(
+                    text(
+                        "INSERT INTO build_vote_sessions (vote_session_id, build_id, changes) "
+                        "VALUES (:id, :build_id, CAST('[]' AS jsonb))"
+                    ),
+                    {"id": vote_session_id, "build_id": BUILD_ID + 1},
+                )
+
+    with pytest.raises(IntegrityError):
+        await commit_invalid_shape()
+
+
+async def test_changing_only_the_kind_cannot_strand_the_existing_subtype(
+    repository: VoteRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    vote_session_id = await repository.create_build_session(
+        author_account_id=AUTHOR_ACCOUNT_IDS[0],
+        pass_threshold=3,
+        fail_threshold=-3,
+        build_id=BUILD_ID,
+        changes=[],
+    )
+
+    with pytest.raises(IntegrityError):
+        async with async_session_factory.begin() as session:
+            await session.execute(
+                text("UPDATE vote_sessions SET kind = 'delete_log' WHERE id = :id"),
+                {"id": vote_session_id},
+            )
+
+    unchanged = await repository.get_by_id(vote_session_id)
+    assert unchanged is not None
+    assert unchanged.kind is VoteKind.BUILD
