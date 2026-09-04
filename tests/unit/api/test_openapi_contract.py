@@ -8,6 +8,8 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
+from scripts import export_openapi
+from squid.api.app import create_api_app
 from squid.api.capabilities import API_FEATURES
 from squid.api.contract import ANONYMOUS, contract, transport_only, validate_contract
 from squid.api.errors import ProblemDetail
@@ -85,6 +87,22 @@ def test_committed_openapi_document_matches_application() -> None:
     committed = json.loads(OPENAPI_DOCUMENT.read_text(encoding="utf-8"))
 
     assert committed == _app.openapi()
+
+
+def test_openapi_export_is_cwd_independent_and_byte_deterministic(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    destination = tmp_path / "generated" / "openapi.json"
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(export_openapi, "OUTPUT_PATH", destination)
+
+    export_openapi.main()
+
+    expected = create_api_app().openapi()
+    expected_bytes = (json.dumps(expected, ensure_ascii=False, indent=2) + "\n").encode()
+    assert destination.read_bytes() == expected_bytes
+    assert json.loads(destination.read_text(encoding="utf-8")) == expected
+    assert export_openapi.PROJECT_ROOT == Path(__file__).resolve().parents[3]
 
 
 _CLASSIFICATIONS = frozenset({"command", "browser-only", "transport-only", "internal", "compatibility-alias"})
