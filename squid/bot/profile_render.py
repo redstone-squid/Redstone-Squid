@@ -13,6 +13,7 @@ from squid.accounts.domain import (
     IdentityProvider,
     ProfileLink,
     PublicCreatorProfile,
+    PublicIdentity,
     avatar_url_for,
 )
 from squid.bot.ui import CardField, tr
@@ -105,7 +106,7 @@ def public_profile_fields(profile: PublicCreatorProfile) -> list[CardField]:
     return fields
 
 
-def _public_identity_label(identity: AccountIdentity) -> str:
+def _public_identity_label(identity: PublicIdentity) -> str:
     provider = raw_md(provider_label(identity.provider))
     name = identity.display_name or identity.subject
     return tr(tr(t"{provider} — {name}"))
