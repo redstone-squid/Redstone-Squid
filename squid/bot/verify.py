@@ -127,14 +127,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="verify"
         `discord.User`, so an avatar that would otherwise render as null gets filled in whenever
         someone looks at their own page.
         """
-        identity = next(
-            (
-                candidate
-                for candidate in account.identities
-                if candidate.provider is IdentityProvider.DISCORD and candidate.discord_id == user.id
-            ),
-            None,
-        )
+        identity = account.identity_for(IdentityProvider.DISCORD, str(user.id))
         if account.id is None or identity is None or identity.id is None:
             return
         key = user.avatar.key if user.avatar is not None else None

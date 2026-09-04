@@ -159,9 +159,34 @@ class Account:
     created_at: Instant | None = None
     public_creator_id: UUID | None = None
 
-    def identity(self, provider: IdentityProvider) -> AccountIdentity | None:
-        """Return this account's first identity for *provider*, if present."""
-        return next((identity for identity in self.identities if identity.provider is provider), None)
+    def identities_for(self, provider: IdentityProvider) -> tuple[AccountIdentity, ...]:
+        """Return every identity for *provider* in persistence order."""
+        return tuple(identity for identity in self.identities if identity.provider is provider)
+
+    def identity_for(self, provider: IdentityProvider, subject: str) -> AccountIdentity | None:
+        """Return the identity for one exact canonical provider subject, if present."""
+        return next((identity for identity in self.identities_for(provider) if identity.subject == subject), None)
+
+    def most_recent_identity_for(self, provider: IdentityProvider) -> AccountIdentity | None:
+        """Return the most recently verified identity for *provider*, breaking ties by persistence order."""
+        selected: AccountIdentity | None = None
+        for identity in self.identities_for(provider):
+            if selected is None:
+                selected = identity
+                continue
+            if selected.verified_at is None:
+                if identity.verified_at is not None or _identity_order(identity) > _identity_order(selected):
+                    selected = identity
+                continue
+            if identity.verified_at is not None and (
+                identity.verified_at > selected.verified_at
+                or (
+                    identity.verified_at == selected.verified_at
+                    and _identity_order(identity) > _identity_order(selected)
+                )
+            ):
+                selected = identity
+        return selected
 
     @property
     def needs_consent_refresh(self) -> bool:
@@ -244,7 +269,7 @@ class CreatorProfile:
 
 @dataclass(frozen=True, slots=True)
 class AliasClaim:
-    """A request to be credited under a creator alias, pending staff review."""
+    """A request to be credited under a creator alias and its resolution state."""
 
     id: int
     alias_id: int
@@ -292,10 +317,14 @@ class IdentityRefresh:
 
 @dataclass(frozen=True, slots=True)
 class VerificationCode:
-    """A valid verification code returned by persistence."""
+    """A currently redeemable code identifying one verified Java identity."""
 
     minecraft_uuid: UUID
     username: str
+
+
+def _identity_order(identity: AccountIdentity) -> tuple[bool, int, str]:
+    return identity.id is not None, identity.id or 0, identity.subject
 
 
 @dataclass(frozen=True, slots=True)
