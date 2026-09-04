@@ -8,7 +8,13 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.submission.input import format_invalid_values, invalid_web_urls, split_values
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
-from squid.bot.submission.ui.fields import BoundBuildField, BuildFieldSpec, FieldDisplay, field_spec
+from squid.bot.submission.ui.fields import (
+    BoundBuildField,
+    BuildFieldSpec,
+    CreationFieldSpec,
+    FieldDisplay,
+    field_spec,
+)
 from squid.bot.ui import DISCORD_YELLOW, tr
 from squid.bot.utils.sentinel import DEFAULT, DefaultType
 from squid.builds.application import BuildEditPatch, BuildService
@@ -51,121 +57,190 @@ def _format_dimensions(value: tuple[int | None, ...]) -> str:
     return " x ".join("?" if item is None else str(item) for item in value)
 
 
-def _submission_basics_form(build: BuildDraft) -> sl.forms.FormSpec:
-    return sl.forms.FormSpec(
-        tr("Build basics"),
-        (
-            sl.forms.TextField(
-                key="door_size",
-                label=tr("Door opening size"),
-                placeholder=tr("For example: 2x2"),
-                default=_format_dimensions(build.door_dimensions),
-                maximum=100,
-            ),
-            sl.forms.TextField(
-                key="pattern",
-                label=tr("Pattern"),
-                placeholder=tr("For example: regular, full lamp"),
-                default=", ".join(build.patterns),
-                required=False,
-                maximum=500,
-            ),
-            sl.forms.TextField(
-                key="dimensions",
-                label=tr("Overall build size"),
-                placeholder=tr("Width x Height x Depth"),
-                default=_format_dimensions(build.dimensions),
-                required=False,
-                maximum=100,
-            ),
-            sl.forms.TextField(
-                key="versions",
-                label=tr("Supported versions"),
-                placeholder=tr("For example: 1.20.4+"),
-                default=build.version_spec or "",
-                required=False,
-                maximum=200,
-            ),
-            sl.forms.TextField(
-                key="creators",
-                label=tr("Creators"),
-                placeholder=tr("Minecraft names, comma separated"),
-                default=", ".join(build.creators_ign),
-                required=False,
-                maximum=500,
-            ),
-        ),
-    )
+def _parse_door_dimensions(value: str) -> tuple[int | None, int | None, int | None]:
+    dimensions = parse_hallway_dimensions(value)
+    if dimensions[0] is None or dimensions[1] is None:
+        msg = "Enter at least a door width and height, such as 2x2."
+        raise ValueError(msg)
+    return dimensions
 
 
-def _submission_details_form(build: BuildDraft) -> sl.forms.FormSpec:
-    restrictions = (
-        build.wiring_placement_restrictions
-        + build.animated_restrictions
-        + build.component_restrictions
-        + build.miscellaneous_restrictions
-    )
+def _parse_optional_dimensions(value: str) -> tuple[int | None, int | None, int | None]:
+    return parse_dimensions(value) if value.strip() else (None, None, None)
 
+
+def _parse_optional_text(value: str) -> str | None:
+    return value.strip() or None
+
+
+def _format_optional_text(value: str | None) -> str:
+    return value or ""
+
+
+def _parse_urls(value: str) -> list[str]:
+    urls = split_values(value)
+    if invalid := invalid_web_urls(urls):
+        displayed = format_invalid_values(invalid)
+        msg = f"Use complete https:// or http:// links. Invalid: {displayed}"
+        raise ValueError(msg)
+    return urls
+
+
+def _all_restrictions(build: BuildDraft) -> list[str]:
+    return [
+        *build.wiring_placement_restrictions,
+        *build.animated_restrictions,
+        *build.component_restrictions,
+        *build.miscellaneous_restrictions,
+    ]
+
+
+DOOR_SIZE_FIELD = CreationFieldSpec(
+    "door_size",
+    "Door opening size",
+    "For example: 2x2",
+    _parse_door_dimensions,
+    _format_dimensions,
+    lambda build: build.door_dimensions,
+    required=True,
+    maximum=100,
+)
+PATTERN_FIELD = CreationFieldSpec(
+    "pattern",
+    "Pattern",
+    "For example: regular, full lamp",
+    lambda value: split_values(value) or ["Regular"],
+    lambda values: ", ".join(values),
+    lambda build: build.patterns,
+    maximum=500,
+)
+DIMENSIONS_FIELD = CreationFieldSpec(
+    "dimensions",
+    "Overall build size",
+    "Width x Height x Depth",
+    _parse_optional_dimensions,
+    _format_dimensions,
+    lambda build: build.dimensions,
+    maximum=100,
+)
+VERSIONS_FIELD = CreationFieldSpec(
+    "versions",
+    "Supported versions",
+    "For example: 1.20.4+",
+    _parse_optional_text,
+    _format_optional_text,
+    lambda build: build.version_spec,
+    maximum=200,
+)
+CREATORS_FIELD = CreationFieldSpec(
+    "creators",
+    "Creators",
+    "Minecraft names, comma separated",
+    split_values,
+    lambda values: ", ".join(values),
+    lambda build: build.creators_ign,
+    maximum=500,
+)
+RESTRICTIONS_FIELD = CreationFieldSpec(
+    "restrictions",
+    "Restrictions",
+    "For example: Seamless, Observerless",
+    split_values,
+    lambda values: ", ".join(values),
+    _all_restrictions,
+    maximum=1000,
+)
+IMAGE_URLS_FIELD = CreationFieldSpec(
+    "image_urls",
+    "Images",
+    "Image links, comma separated",
+    _parse_urls,
+    lambda values: ", ".join(values),
+    lambda build: list(build.image_urls),
+    maximum=4000,
+)
+VIDEO_URLS_FIELD = CreationFieldSpec(
+    "video_urls",
+    "Videos",
+    "Video links, comma separated",
+    _parse_urls,
+    lambda values: ", ".join(values),
+    lambda build: list(build.video_urls),
+    maximum=4000,
+)
+WORLD_URLS_FIELD = CreationFieldSpec(
+    "world_urls",
+    "World downloads",
+    "World download links, comma separated",
+    _parse_urls,
+    lambda values: ", ".join(values),
+    lambda build: list(build.world_download_urls),
+    maximum=4000,
+)
+NOTES_FIELD = CreationFieldSpec(
+    "notes",
+    "Notes",
+    "Anything staff should know",
+    _parse_optional_text,
+    _format_optional_text,
+    lambda build: cast(str | None, build.extra_info.get("user")),
+    maximum=4000,
+    display=FieldDisplay.PARAGRAPH,
+)
+
+BASICS_FIELDS = (DOOR_SIZE_FIELD, PATTERN_FIELD, DIMENSIONS_FIELD, VERSIONS_FIELD, CREATORS_FIELD)
+DETAIL_FIELDS = (RESTRICTIONS_FIELD, IMAGE_URLS_FIELD, VIDEO_URLS_FIELD, WORLD_URLS_FIELD, NOTES_FIELD)
+
+
+def _creation_form(
+    title: sl.TextLike,
+    fields: Sequence[CreationFieldSpec[Any]],
+    build: BuildDraft,
+) -> sl.forms.FormSpec:
     def validate(values: Mapping[str, object]) -> tuple[sl.forms.FormIssue, ...]:
         errors: list[sl.forms.FormIssue] = []
-        for key in ("image_urls", "video_urls", "world_urls"):
-            invalid = invalid_web_urls(split_values(cast(str, values[key])))
-            if invalid:
-                displayed = format_invalid_values(invalid)
-                errors.append(
-                    sl.forms.FieldError(
-                        key,
-                        tr(t"Use complete `https://` or `http://` links. Invalid: {displayed}"),
-                    )
-                )
+        for field in fields:
+            try:
+                field.parse(values[field.key])
+            except ValueError as error:
+                errors.append(sl.forms.FieldError(field.key, str(error)))
         return tuple(errors)
 
     return sl.forms.FormSpec(
-        tr("Links and optional details"),
-        (
-            sl.forms.TextField(
-                key="restrictions",
-                label=tr("Restrictions"),
-                placeholder=tr("For example: Seamless, Observerless"),
-                default=", ".join(restrictions),
-                required=False,
-                maximum=1000,
-            ),
-            sl.forms.TextField(
-                key="image_urls",
-                label=tr("Images"),
-                placeholder=tr("Image links, comma separated"),
-                default=", ".join(build.image_urls),
-                required=False,
-                maximum=4000,
-            ),
-            sl.forms.TextField(
-                key="video_urls",
-                label=tr("Videos"),
-                placeholder=tr("Video links, comma separated"),
-                default=", ".join(build.video_urls),
-                required=False,
-                maximum=4000,
-            ),
-            sl.forms.TextField(
-                key="world_urls",
-                label=tr("World downloads"),
-                placeholder=tr("World download links, comma separated"),
-                default=", ".join(build.world_download_urls),
-                required=False,
-                maximum=4000,
-            ),
-            sl.forms.TextAreaField(
-                key="notes",
-                label=tr("Notes"),
-                placeholder=tr("Anything staff should know"),
-                default=build.extra_info.get("user") or "",
-                required=False,
-                maximum=4000,
-            ),
-        ),
+        title,
+        tuple(field.form_field(build) for field in fields),
         validator=validate,
     )
+
+
+def _submission_basics_form(build: BuildDraft) -> sl.forms.FormSpec:
+    return _creation_form(tr("Build basics"), BASICS_FIELDS, build)
+
+
+def _submission_details_form(build: BuildDraft) -> sl.forms.FormSpec:
+    return _creation_form(tr("Links and optional details"), DETAIL_FIELDS, build)
+
+
+@dataclass(frozen=True, slots=True)
+class SubmissionBasicsInput:
+    """Typed result of the build-basics creation form."""
+
+    door_dimensions: tuple[int | None, int | None, int | None]
+    patterns: list[str]
+    dimensions: tuple[int | None, int | None, int | None]
+    version_spec: str | None
+    creators: list[str]
+
+
+@dataclass(frozen=True, slots=True)
+class SubmissionDetailsInput:
+    """Typed result of the links-and-details creation form."""
+
+    restrictions: list[str]
+    image_urls: list[str]
+    video_urls: list[str]
+    world_urls: list[str]
+    notes: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -345,22 +420,18 @@ class SubmissionScreen(sd.Screen):
 
     async def _basics_submitted(self, event: sl.SubmitEvent) -> None:
         values = event.values
-        try:
-            door_dimensions = parse_hallway_dimensions(cast(str, values["door_size"]))
-            dimensions_text = cast(str, values["dimensions"])
-            dimensions = parse_dimensions(dimensions_text) if dimensions_text.strip() else (None, None, None)
-        except ValueError as error:
-            error_text = str(error)
-            await event.notice(tr(t"Check the dimensions: {error_text}"))
-            return
-        if door_dimensions[0] is None or door_dimensions[1] is None:
-            await event.notice(tr(t"Enter at least a door width and height, such as `2x2`."))
-            return
-        self.build.door_dimensions = door_dimensions
-        self.build.patterns = split_values(cast(str, values["pattern"])) or ["Regular"]
-        self.build.dimensions = dimensions
-        self.build.version_spec = cast(str, values["versions"]).strip() or None
-        self.build.creators_ign = split_values(cast(str, values["creators"]))
+        submitted = SubmissionBasicsInput(
+            DOOR_SIZE_FIELD.parse(values["door_size"]),
+            PATTERN_FIELD.parse(values["pattern"]),
+            DIMENSIONS_FIELD.parse(values["dimensions"]),
+            VERSIONS_FIELD.parse(values["versions"]),
+            CREATORS_FIELD.parse(values["creators"]),
+        )
+        self.build.door_dimensions = submitted.door_dimensions
+        self.build.patterns = submitted.patterns
+        self.build.dimensions = submitted.dimensions
+        self.build.version_spec = submitted.version_spec
+        self.build.creators_ign = submitted.creators
         self.validation_error = None
         self.mutated(self.build)
 
@@ -373,16 +444,19 @@ class SubmissionScreen(sd.Screen):
 
     async def _details_submitted(self, event: sl.SubmitEvent) -> None:
         values = event.values
-        image_urls = split_values(cast(str, values["image_urls"]))
-        video_urls = split_values(cast(str, values["video_urls"]))
-        world_urls = split_values(cast(str, values["world_urls"]))
-        await self.builds.classify_restrictions(self.build, split_values(cast(str, values["restrictions"])))
-        self.build.replace_links("image", image_urls)
-        self.build.replace_links("video", video_urls)
-        self.build.replace_links("world-download", world_urls)
-        notes = cast(str, values["notes"]).strip()
-        if notes:
-            self.build.extra_info["user"] = notes
+        submitted = SubmissionDetailsInput(
+            RESTRICTIONS_FIELD.parse(values["restrictions"]),
+            IMAGE_URLS_FIELD.parse(values["image_urls"]),
+            VIDEO_URLS_FIELD.parse(values["video_urls"]),
+            WORLD_URLS_FIELD.parse(values["world_urls"]),
+            NOTES_FIELD.parse(values["notes"]),
+        )
+        await self.builds.classify_restrictions(self.build, submitted.restrictions)
+        self.build.replace_links("image", submitted.image_urls)
+        self.build.replace_links("video", submitted.video_urls)
+        self.build.replace_links("world-download", submitted.world_urls)
+        if submitted.notes:
+            self.build.extra_info["user"] = submitted.notes
         else:
             self.build.extra_info.pop("user", None)
         self.validation_error = None
