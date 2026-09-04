@@ -377,7 +377,6 @@ class SchematicService:
         """
         if not self._render_enabled:
             return SkippedRender(RenderSkipReason.RENDERING_DISABLED)
-        resource_pack = await self._render_resources()
 
         stored = await self._store.get_primary(build_id)
         if stored is None:
@@ -387,6 +386,12 @@ class SchematicService:
             self._log_render_skip(stored, reason)
             return SkippedRender(reason)
 
+        data = await self._store.get_file(stored.file_sha256)
+        if data is None:
+            self._log_render_skip(stored, RenderSkipReason.MISSING_FILE)
+            return SkippedRender(RenderSkipReason.MISSING_FILE)
+
+        resource_pack = await self._render_resources()
         recipe_hash = _render_recipe_hash(stored, self._render_request, resource_pack.sha256)
         cached = await self._store.get_render(stored.id, recipe_hash)
         if cached is not None:
@@ -398,10 +403,6 @@ class SchematicService:
                 url=cached.url,
             )
 
-        data = await self._store.get_file(stored.file_sha256)
-        if data is None:
-            self._log_render_skip(stored, RenderSkipReason.MISSING_FILE)
-            return SkippedRender(RenderSkipReason.MISSING_FILE)
         png = await self._render_png(stored, data, resource_pack, self._render_request)
         return FreshRender(
             schematic_id=stored.id,
@@ -498,16 +499,20 @@ class SchematicService:
             from_cache=False,
         )
 
-    def explain_render_skip(self, stored: StoredSchematic) -> RenderSkipReason | None:
+    async def explain_render_skip(self, stored: StoredSchematic) -> RenderSkipReason | None:
         """Say why this attachment will never be previewed, or `None` if it is eligible.
 
-        Pure and free on purpose. A moderator asking what the bot knows about a build must not
-        set a GPU render going, so this answers from configuration and the stored analysis
-        alone — it cannot report the cache, the resource pack, or the renderer's own health.
+        A moderator asking what the bot knows about a build must not set a GPU render going.
+        This checks only configuration, stored analysis, and whether the source artifact still
+        exists; it never acquires rendering capabilities or a resource pack.
         """
         if not self._render_enabled:
             return RenderSkipReason.RENDERING_DISABLED
-        return self._render_skip_reason(stored)
+        if reason := self._render_skip_reason(stored):
+            return reason
+        if await self._store.get_file(stored.file_sha256) is None:
+            return RenderSkipReason.MISSING_FILE
+        return None
 
     async def _render_resources(self) -> VerifiedResourcePack:
         """Acquire the capability and resource pack a render needs, or refuse operationally."""
