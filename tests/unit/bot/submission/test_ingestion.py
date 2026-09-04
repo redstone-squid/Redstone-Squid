@@ -188,3 +188,5 @@ async def test_raw_schematic_is_recorded_privately_without_public_mirroring(
     assert build.schematic_urls == ()
     assert mirror.uploaded == []
     assert len(schematics.recorded) == 1
+    _, request, _ = schematics.recorded[0]
+    assert request.uploaded_by_account_id == 7
