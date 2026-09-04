@@ -427,3 +427,7 @@ async def test_close_bounds_a_hanging_recovery_handoff(caplog: pytest.LogCapture
             await router.close()
 
     assert any("recovery handoff did not finish" in record.getMessage() for record in caplog.records)
+    deferred = next(record for record in caplog.records if "requires operator reconciliation" in record.getMessage())
+    assert deferred.__dict__["squid.reaction.message_id"] == 10
+    assert deferred.__dict__["squid.reaction.user_id"] == 1
+    assert deferred.__dict__["squid.reaction.emoji"] == "⭐"
