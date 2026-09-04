@@ -1,6 +1,6 @@
 """Application orchestration for account-owned revisioned drafts."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID, uuid4
@@ -51,6 +51,14 @@ class StoredDraft:
 @dataclass(frozen=True, slots=True)
 class AppliedDraftChange:
     """Result of an atomic repository mutation, including idempotent replays."""
+
+    draft: StoredDraft
+    replayed: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class AppliedDraftUpgrade:
+    """Result of moving a draft to a newer checked-in manifest revision."""
 
     draft: StoredDraft
     replayed: bool = False
@@ -109,6 +117,18 @@ class DraftRepository(Protocol):
         expires_at: Instant,
     ) -> StoredDraft: ...
 
+    async def upgrade_manifest(
+        self,
+        draft_id: UUID,
+        account_id: int,
+        *,
+        expected_revision: int,
+        target_schema_revision: int,
+        answers: Mapping[str, JSONValue],
+        updated_at: Instant,
+        expires_at: Instant,
+    ) -> AppliedDraftUpgrade: ...
+
     async def delete_owned(self, draft_id: UUID, account_id: int) -> bool: ...
 
     async def expire_due(self, *, now: Instant, limit: int = 100) -> int: ...
@@ -118,6 +138,46 @@ class AccountDraftCapacity(Protocol):
     """Resolve staff-adjusted synchronized-draft capacity for an account."""
 
     async def limit_for(self, account_id: int) -> int: ...
+
+
+class FormRevisionMigration(Protocol):
+    """Transform answers between two immutable manifests without persistence authority."""
+
+    def migrate(
+        self,
+        draft: StoredDraft,
+        source: FormManifest,
+        target: FormManifest,
+    ) -> Mapping[str, JSONValue]: ...
+
+
+class CheckedInFormRevisionMigration:
+    """Migrate compatible checked-in revisions while preserving answer field IDs."""
+
+    def migrate(
+        self,
+        draft: StoredDraft,
+        source: FormManifest,
+        target: FormManifest,
+    ) -> Mapping[str, JSONValue]:
+        if source.schema_id != target.schema_id or target.revision != source.revision + 1:
+            msg = tr(t"submission form revisions must be upgraded one checked-in revision at a time")
+            raise ValidationError(msg)
+        source_fields = {field.id for field in source.fields_for(draft.snapshot.category)}
+        target_fields = {field.id for field in target.fields_for(draft.snapshot.category)}
+        removed_answers = draft.snapshot.answers.keys() & (source_fields - target_fields)
+        if removed_answers:
+            errors = {field_id: "removed_field" for field_id in sorted(removed_answers)}
+            raise DraftValidationError(errors)
+        errors = target.validate_answers(
+            draft.snapshot.category,
+            draft.snapshot.answers,
+            origin=draft.origin,
+            require_complete=False,
+        )
+        if errors:
+            raise DraftValidationError(errors)
+        return dict(draft.snapshot.answers)
 
 
 class FixedAccountDraftCapacity:
@@ -143,6 +203,7 @@ class SubmissionDraftService:
         repository: DraftRepository,
         manifests: FormManifestRegistry,
         capacity: AccountDraftCapacity | None = None,
+        revision_migration: FormRevisionMigration | None = None,
         *,
         retention_days: int = DEFAULT_DRAFT_RETENTION_DAYS,
         now: Callable[[], Instant] = Instant.now,
@@ -153,6 +214,7 @@ class SubmissionDraftService:
         self._repository = repository
         self._manifests = manifests
         self._capacity = capacity or FixedAccountDraftCapacity()
+        self._revision_migration = revision_migration or CheckedInFormRevisionMigration()
         self._retention_days = retention_days
         self._now = now
 
@@ -261,6 +323,38 @@ class SubmissionDraftService:
             draft_id,
             account_id,
             change,
+            updated_at=touched_at,
+            expires_at=touched_at.add(days=self._retention_days, days_assumed_24h_ok=True),
+        )
+
+    async def upgrade_manifest(
+        self,
+        draft_id: UUID,
+        account_id: int,
+        *,
+        expected_revision: int,
+        target_revision: int,
+        locale: str | None,
+        now: Instant | None = None,
+    ) -> AppliedDraftUpgrade:
+        """Move an editable draft to the next checked-in manifest revision."""
+        current = await self.get_owned(draft_id, account_id)
+        if current.snapshot.schema_revision == target_revision:
+            return AppliedDraftUpgrade(current, replayed=True)
+        if current.snapshot.status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
+            raise DraftStateConflictError(current.snapshot.status.value, operation="upgrade_manifest")
+        source = await self._pinned_manifest(current, locale)
+        target = await self._manifests.get(current.snapshot.schema_id, target_revision, locale=locale)
+        if target is None:
+            raise DraftSchemaUnsupportedError((f"{current.snapshot.schema_id}@{target_revision}",))
+        answers = self._revision_migration.migrate(current, source, target)
+        touched_at = now or self._now()
+        return await self._repository.upgrade_manifest(
+            draft_id,
+            account_id,
+            expected_revision=expected_revision,
+            target_schema_revision=target_revision,
+            answers=answers,
             updated_at=touched_at,
             expires_at=touched_at.add(days=self._retention_days, days_assumed_24h_ok=True),
         )

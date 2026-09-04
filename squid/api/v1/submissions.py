@@ -20,13 +20,21 @@ from squid.api.v1.schemas.submissions import (
     DraftChangeResponse,
     DraftCreateRequest,
     DraftListResponse,
+    DraftManifestUpgradeRequest,
+    DraftManifestUpgradeResponse,
     FormManifestResponse,
     FormOptionSetResponse,
     StoredDraftResponse,
     SubmissionFinalizationResponse,
 )
 from squid.core.errors import AuthenticationError, AuthorizationError, NotFoundError
-from squid.submissions.application import AppliedDraftChange, FinalizationJobSnapshot, FormOptionSet, StoredDraft
+from squid.submissions.application import (
+    AppliedDraftChange,
+    AppliedDraftUpgrade,
+    FinalizationJobSnapshot,
+    FormOptionSet,
+    StoredDraft,
+)
 from squid.submissions.domain import DraftChange, FormManifest, SubmissionOrigin
 
 
@@ -72,6 +80,16 @@ class SubmissionDraftCommands(Protocol):
         *,
         locale: str | None,
     ) -> AppliedDraftChange: ...
+
+    async def upgrade_manifest(
+        self,
+        draft_id: UUID,
+        account_id: int,
+        *,
+        expected_revision: int,
+        target_revision: int,
+        locale: str | None,
+    ) -> AppliedDraftUpgrade: ...
 
     async def delete(self, draft_id: UUID, account_id: int) -> None: ...
 
@@ -394,6 +412,34 @@ async def change_draft(
         locale=locale_for_request(request),
     )
     return DraftChangeResponse(draft=StoredDraftResponse.from_domain(result.draft), replayed=result.replayed)
+
+
+@router.post(
+    "/drafts/{draft_id}/manifest-upgrade",
+    response_model=DraftManifestUpgradeResponse,
+    responses=responses(400, 401, 403, 404, 409, 422, 503),
+    operation_id="submission_draft_manifest_upgrade",
+    openapi_extra=contract(
+        security=[WEB_WRITE, DEVICE, MINECRAFT],
+        cli=cli_command("draft.upgrade", features=("submission-drafts",), interaction="direct"),
+    ),
+)
+async def upgrade_draft_manifest(
+    draft_id: UUID,
+    payload: DraftManifestUpgradeRequest,
+    request: Request,
+    drafts: Drafts,
+    account_id: AccountId,
+) -> DraftManifestUpgradeResponse:
+    """Upgrade an owned draft to the next checked-in form revision."""
+    result = await drafts.upgrade_manifest(
+        draft_id,
+        account_id,
+        expected_revision=payload.base_revision,
+        target_revision=payload.target_revision,
+        locale=locale_for_request(request),
+    )
+    return DraftManifestUpgradeResponse.from_domain(result)
 
 
 @router.post(
