@@ -2,15 +2,17 @@
 
 import asyncio
 import inspect
-from collections.abc import AsyncIterator
+import logging
+from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from typing import cast, override
 
 import anyio
 import discord
+import pytest
 
 import squid.bot.reactions as reactions_module
-from squid.bot.reactions import ReactionEvent, ReactionRouter
+from squid.bot.reactions import ReactionEvent, ReactionResolver, ReactionRouter
 from squid.core.concurrency import run_all
 from squid.runtime import BackgroundTaskSupervisor
 from tests.support.discord import make_reaction_bot, make_reaction_payload
@@ -92,7 +94,7 @@ async def test_event_resolves_member_once() -> None:
             return member
 
     harness = make_reaction_bot(guild=cast(discord.Guild, Guild()))
-    event = ReactionEvent(make_reaction_payload(), "⭐", None, harness.bot)
+    event = ReactionEvent(make_reaction_payload(), "⭐", ReactionResolver(harness.bot, None))
 
     assert await run_all([event.resolve_member, event.resolve_member]) == [member, member]
     assert calls == 1
@@ -101,7 +103,7 @@ async def test_event_resolves_member_once() -> None:
 async def test_event_resolves_message_once_without_untracking() -> None:
     message = cast(discord.Message, object())
     harness = make_reaction_bot(message=message)
-    event = ReactionEvent(make_reaction_payload(), "⭐", None, harness.bot)
+    event = ReactionEvent(make_reaction_payload(), "⭐", ReactionResolver(harness.bot, None))
 
     assert await run_all([event.message, event.message]) == [message, message]
     harness.get_or_fetch_message.assert_awaited_once_with(20, 10)
@@ -204,3 +206,97 @@ def test_router_workers_use_structured_runtime_ownership() -> None:
     assert "asyncio.create_task" not in source
     assert "asyncio.gather" not in source
     assert "asyncio.timeout" not in source
+
+
+async def test_router_records_enqueue_queue_handler_and_shutdown_metrics(monkeypatch: pytest.MonkeyPatch) -> None:
+    histograms: list[tuple[str, Mapping[str, object]]] = []
+    gauges: list[tuple[str, Mapping[str, object]]] = []
+    counters: list[tuple[str, Mapping[str, object]]] = []
+
+    def histogram(name: str, _value: float, *, attributes: Mapping[str, object] | None = None) -> None:
+        histograms.append((name, attributes or {}))
+
+    def gauge(name: str, _value: int | float, *, attributes: Mapping[str, object] | None = None) -> None:
+        gauges.append((name, attributes or {}))
+
+    def counter(name: str, *, attributes: Mapping[str, object] | None = None, value: int = 1) -> None:
+        del value
+        counters.append((name, attributes or {}))
+
+    monkeypatch.setattr(reactions_module, "record_histogram", histogram)
+    monkeypatch.setattr(reactions_module, "record_gauge", gauge)
+    monkeypatch.setattr(reactions_module, "add_counter", counter)
+
+    async def fail(_event: ReactionEvent) -> None:
+        msg = "broken consumer"
+        raise RuntimeError(msg)
+
+    async with running_router() as router:
+        router.subscribe("metrics-test", add=fail)
+        await router.dispatch_add(make_reaction_payload())
+        await router.close()
+
+    histogram_names = {name for name, _attributes in histograms}
+    assert {
+        "squid.reaction.enqueue.wait",
+        "squid.reaction.queue_latency",
+        "squid.reaction.handler.duration",
+        "squid.reaction.shutdown.drain_duration",
+    } <= histogram_names
+    assert {name for name, _attributes in gauges} >= {
+        "squid.reaction.queue.depth",
+        "squid.reaction.shutdown.accepted_pending",
+    }
+    assert (
+        "squid.reaction.handler.failures",
+        {"squid.reaction.kind": "add", "squid.reaction.consumer": "metrics-test"},
+    ) in counters
+
+
+async def test_shutdown_aborts_blocked_intake_and_reports_accepted_work(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    entered = anyio.Event()
+    third_finished = anyio.Event()
+
+    async def hang(_event: ReactionEvent) -> None:
+        entered.set()
+        await anyio.sleep_forever()
+
+    async with BackgroundTaskSupervisor().running() as supervisor:
+        router = ReactionRouter(
+            make_reaction_bot().bot,
+            supervisor,
+            concurrency=1,
+            max_pending=1,
+            shutdown_timeout=0.01,
+        )
+        router.subscribe("hung", add=hang)
+        await router.dispatch_add(make_reaction_payload(user_id=1))
+        await entered.wait()
+        await router.dispatch_add(make_reaction_payload(user_id=2))
+
+        async def dispatch_third() -> None:
+            await router.dispatch_add(make_reaction_payload(user_id=3))
+            third_finished.set()
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(dispatch_third)
+            await anyio.sleep(0)
+            with caplog.at_level(logging.ERROR, logger="squid.bot.reactions"):
+                await router.close()
+            await third_finished.wait()
+
+    timeout = next(record for record in caplog.records if "did not drain" in record.getMessage())
+    assert timeout.__dict__["squid.reaction.active_enqueues"] == 1
+    assert timeout.__dict__["squid.reaction.accepted_pending"] == 2
+
+
+async def test_an_event_without_lookup_consumers_performs_no_discord_io() -> None:
+    harness = make_reaction_bot(message=cast(discord.Message, object()))
+    async with BackgroundTaskSupervisor().running() as supervisor:
+        router = ReactionRouter(harness.bot, supervisor)
+        await router.dispatch_add(make_reaction_payload())
+        await router.close()
+
+    harness.get_or_fetch_message.assert_not_awaited()
