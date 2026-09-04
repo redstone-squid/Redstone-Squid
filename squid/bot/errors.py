@@ -19,6 +19,7 @@ from squid.core.i18n import localization_for, tr
 from squid.diagnostics.application import ErrorReportService
 from squid.diagnostics.log_capture import captured
 from squid.observability import (
+    TraceSurface,
     correlated_log_buffer,
     correlation_id,
     correlation_reference,
@@ -448,10 +449,11 @@ class SquidCommandTree[ClientT: discord.Client](app_commands.CommandTree[ClientT
             await super()._call(interaction)  # pyright: ignore[reportPrivateUsage]
             return
 
-        command_name = _interaction_command_name(interaction.data)
+        command = interaction.command
+        command_name = command.qualified_name if command is not None else "unknown"
         attributes: dict[str, str | int] = {
             "squid.command.name": command_name,
-            "squid.surface": "application_command",
+            "squid.surface": TraceSurface.APPLICATION_COMMAND,
         }
         if interaction.guild_id is not None:
             attributes["squid.guild.id"] = interaction.guild_id
@@ -482,21 +484,3 @@ class SquidCommandTree[ClientT: discord.Client](app_commands.CommandTree[ClientT
     ) -> None:
         record_current_exception(error)
         await handle_interaction_error(interaction, error, surface="application_command")
-
-
-def _interaction_command_name(data: Mapping[str, Any] | None) -> str:
-    """Read a qualified command name from Discord's nested interaction payload."""
-    names: list[str] = []
-    current = data
-    while current is not None:
-        name = current.get("name")
-        if isinstance(name, str):
-            names.append(name)
-        options = current.get("options")
-        if not isinstance(options, list):
-            break
-        current = next(
-            (option for option in options if isinstance(option, Mapping) and option.get("type") in {1, 2}),
-            None,
-        )
-    return " ".join(names) or "unknown"
