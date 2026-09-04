@@ -37,6 +37,7 @@ from squid.bot.account_view import AccountScreen, ConsentAnswer
 from squid.bot.account_workspace import AccountWorkspace
 from squid.bot.verify import VerifyCog
 from squid.permissions.domain import PermissionNode
+from squid.permissions.domain.catalogue import ACCOUNT_IDENTITY_REFRESH
 from squid_ui.testing import labels
 from squid_ui.text import NEUTRAL, resolve_text
 from squid_ui_discord.testing import commit_render, interaction_harness
@@ -514,6 +515,65 @@ def test_staff_refresh_picker_is_visible_only_with_the_moderation_permission() -
 
     assert "Refresh another member's Minecraft identity" not in labels(workspace(allowed=False)._identity_nodes())
     assert "Refresh another member's Minecraft identity" in labels(workspace(allowed=True)._identity_nodes())
+
+
+def test_own_refresh_control_is_visible_only_with_the_refresh_permission() -> None:
+    account = Account((DISCORD,), AccountConsent.grant_current(), ACCOUNT_ID, NOW)
+
+    async def authorize(_node: PermissionNode) -> bool:
+        return True
+
+    def workspace(*, allowed: bool) -> AccountWorkspace:
+        return AccountWorkspace(
+            accounts=LinkAccountService(),
+            actor_id=AUTHOR_ID,
+            account=account,
+            request_consent=no_consent_request,
+            can_review_claims=False,
+            can_approve_claims=False,
+            can_reject_claims=False,
+            authorize_claim=authorize,
+            can_refresh_identity=allowed,
+        )
+
+    assert "Refresh Minecraft identity" not in labels(workspace(allowed=False)._identity_nodes())
+    assert "Refresh Minecraft identity" in labels(workspace(allowed=True)._identity_nodes())
+
+
+@pytest.mark.parametrize("allowed", [False, True], ids=["revoked", "allowed"])
+async def test_own_refresh_rechecks_permission_at_the_handler(allowed: bool) -> None:
+    account = Account((DISCORD,), AccountConsent.grant_current(), ACCOUNT_ID, NOW)
+    refresh = IdentityRefresh(ACCOUNT_ID, JAVA_UUID, "Notch", "Notch")
+    accounts = StaffRefreshService(None, refresh)
+    authorized: list[PermissionNode] = []
+
+    async def authorize(node: PermissionNode) -> bool:
+        authorized.append(node)
+        return allowed
+
+    workspace = AccountWorkspace(
+        accounts=accounts,
+        actor_id=AUTHOR_ID,
+        account=account,
+        request_consent=no_consent_request,
+        can_review_claims=False,
+        can_approve_claims=False,
+        can_reject_claims=False,
+        authorize_claim=authorize,
+        can_refresh_identity=True,
+    )
+    workspace._rebuild = no_refresh  # type: ignore[method-assign]
+    event = NoticeSource()
+
+    await workspace._refresh_identity(cast(sl.PressEvent, event))
+
+    assert authorized == [ACCOUNT_IDENTITY_REFRESH]
+    assert accounts.refreshed == ([ACCOUNT_ID] if allowed else [])
+    if allowed:
+        assert event.notices == [refresh_message(refresh)]
+    else:
+        assert len(event.notices) == 1
+        assert "no longer allowed" in str(event.notices[0])
 
 
 async def test_staff_refresh_rechecks_permission_before_reading_the_member() -> None:
