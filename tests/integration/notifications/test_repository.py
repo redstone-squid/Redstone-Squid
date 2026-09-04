@@ -14,6 +14,7 @@ from whenever import Instant
 
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.accounts.infrastructure.models import Account, AccountIdentity
+from squid.bot.notifications import render_delivery
 from squid.events import DomainEvent
 from squid.events.infrastructure.models import DomainEventRecord
 from squid.notifications.domain import (
@@ -156,6 +157,30 @@ async def test_delivery_claims_use_uuid_fencing_and_database_attempt_counts(
     assert claimed[0].claim_token is not None
     assert await repository.complete_delivery(claimed[0]) is True
     assert await repository.complete_delivery(claimed[0]) is False
+
+
+async def test_delivery_claim_selects_most_recent_discord_identity_and_completes(
+    repository: PostgresNotificationRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    delivery_id = await _seed_delivery(async_session_factory)
+    async with async_session_factory.begin() as session:
+        account_id = (await session.scalars(select(Account.id))).one()
+        session.add(
+            AccountIdentity(
+                account_id=account_id,
+                provider=IdentityProvider.DISCORD,
+                subject="456",
+                verified_at=Instant.now().add(minutes=1),
+            )
+        )
+
+    (claimed,) = await repository.claim_deliveries(limit=10)
+
+    assert claimed.id == delivery_id
+    assert claimed.discord_id == 456
+    assert render_delivery(claimed, None) == "Your build was confirmed."
+    assert await repository.complete_delivery(claimed) is True
 
 
 async def test_persisted_notification_and_subscription_kinds_round_trip_as_enums(
@@ -344,9 +369,7 @@ async def test_durable_staff_audience_is_not_implicit_for_owner_or_custom_role_r
         owner = PermissionRole(slug="owner", name="Owner", builtin_key=BuiltinRoleKeys.OWNER.value)
         custom = PermissionRole(slug="submission-reader", name="Submission reader")
         session.add_all((global_admin, owner, custom))
-        accounts = [
-            Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now()) for _ in range(3)
-        ]
+        accounts = [Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now()) for _ in range(3)]
         session.add_all(accounts)
         await session.flush()
         session.add(
@@ -365,9 +388,7 @@ async def test_durable_staff_audience_is_not_implicit_for_owner_or_custom_role_r
         recipients = tuple(
             (
                 await session.scalars(
-                    select(Account.id)
-                    .where(_is_durable_staff_notification_recipient(Account.id))
-                    .order_by(Account.id)
+                    select(Account.id).where(_is_durable_staff_notification_recipient(Account.id)).order_by(Account.id)
                 )
             ).all()
         )
@@ -390,8 +411,7 @@ async def test_durable_staff_audience_discovery_has_constant_query_count(
         )
         session.add(role)
         accounts = [
-            Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
-            for _ in range(recipient_count)
+            Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now()) for _ in range(recipient_count)
         ]
         session.add_all(accounts)
         await session.flush()

@@ -27,7 +27,11 @@ from squid.core.errors import DataIntegrityError
 from squid.events import DomainEvent
 from squid.events.infrastructure.models import DomainEventRecord
 from squid.minecraft_auth.infrastructure.models import PaperInstallationRecord, PlayerChallengeRecord, PlayerGrantRecord
-from squid.notifications.infrastructure.models import NotificationProfile, NotificationRecord
+from squid.notifications.infrastructure.models import (
+    NotificationDeliveryRecord,
+    NotificationProfile,
+    NotificationRecord,
+)
 from squid.notifications.infrastructure.repository import PostgresNotificationRepository
 from squid.permissions.domain import BuiltinRoleKeys
 from squid.permissions.infrastructure.models import (
@@ -37,6 +41,7 @@ from squid.permissions.infrastructure.models import (
     PermissionRoleAssignment,
     PermissionRolePattern,
 )
+from squid.persistence.types import now
 from squid.schematics.infrastructure.models import BuildSchematic, SchematicFile
 from squid.sponsors import PublicSponsor
 from squid.submissions.application import StoredDraft
@@ -327,6 +332,114 @@ async def test_concurrent_source_draft_writes_publish_and_materialize_one_submis
         )
     assert len(materialized) == 1
     assert materialized[0].account_id == staff.id
+
+
+async def test_notification_materialize_merge_and_replay_coalesces_recipient_state(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    owner_id = await seed_account_and_version(migrated_session_factory)
+    build = submission_build(BuildCategory.OTHER, owner_id)
+    await BuildRepository(migrated_session_factory).save(build)
+    assert build.id is not None
+
+    async with migrated_session_factory.begin() as session:
+        survivor = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
+        absorbed = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
+        session.add_all([survivor, absorbed])
+        await session.flush()
+        role_id = await session.scalar(
+            select(PermissionRole.id).where(PermissionRole.builtin_key == BuiltinRoleKeys.GLOBAL_ADMIN)
+        )
+        assert role_id is not None
+        session.add_all(
+            [
+                AccountIdentity(
+                    account_id=survivor.id,
+                    provider=IdentityProvider.DISCORD,
+                    subject="700000000000000001",
+                ),
+                AccountIdentity(
+                    account_id=absorbed.id,
+                    provider=IdentityProvider.DISCORD,
+                    subject="700000000000000002",
+                ),
+                PermissionRoleAssignment(role_id=role_id, subject_account_id=survivor.id),
+                PermissionRoleAssignment(role_id=role_id, subject_account_id=absorbed.id),
+                NotificationProfile(account_id=survivor.id, web_enabled=True, dm_enabled=True),
+                NotificationProfile(account_id=absorbed.id, web_enabled=True, dm_enabled=True),
+            ]
+        )
+        event = DomainEventRecord(event_type="build.submitted", aggregate_kind="build", aggregate_id=build.id)
+        session.add(event)
+        await session.flush()
+        survivor_id = survivor.id
+        absorbed_id = absorbed.id
+        notification_event = DomainEvent(
+            id=event.id,
+            event_type=event.event_type,
+            aggregate_kind=event.aggregate_kind,
+            aggregate_id=event.aggregate_id,
+            occurred_at=event.occurred_at,
+            payload=event.payload,
+            schema_version=event.schema_version,
+        )
+
+    notifications = PostgresNotificationRepository(migrated_session_factory)
+    await notifications.materialize(notification_event)
+    claimed = await notifications.claim_deliveries(limit=10)
+    assert len(claimed) == 2
+    stale_absorbed_claim = next(delivery for delivery in claimed if delivery.discord_id == 700000000000000002)
+    seeded_at = now()
+    async with migrated_session_factory.begin() as session:
+        rows = tuple(
+            (
+                await session.scalars(
+                    select(NotificationRecord)
+                    .where(NotificationRecord.event_id == notification_event.id)
+                    .order_by(NotificationRecord.account_id)
+                )
+            ).all()
+        )
+        assert len(rows) == 2
+        by_account = {row.account_id: row for row in rows}
+        by_account[absorbed_id].read_at = seeded_at
+        deliveries = tuple(
+            (
+                await session.scalars(
+                    select(NotificationDeliveryRecord).where(
+                        NotificationDeliveryRecord.notification_id.in_([row.id for row in rows])
+                    )
+                )
+            ).all()
+        )
+        assert len(deliveries) == 2
+        for delivery in deliveries:
+            if delivery.account_id == survivor_id:
+                delivery.sent_at = seeded_at
+
+    await AccountRepository(migrated_session_factory, "test-pepper").merge(survivor_id, absorbed_id)
+    assert await notifications.complete_delivery(stale_absorbed_claim) is False
+    await notifications.materialize(notification_event)
+
+    async with migrated_session_factory() as session:
+        merged = tuple(
+            (
+                await session.scalars(
+                    select(NotificationRecord).where(NotificationRecord.event_id == notification_event.id)
+                )
+            ).all()
+        )
+        merged_deliveries = tuple((await session.scalars(select(NotificationDeliveryRecord))).all())
+    assert len(merged) == 1
+    assert merged[0].account_id == survivor_id
+    assert merged[0].source_key == f"event:{notification_event.id}:staff:{survivor_id}"
+    assert merged[0].read_at == seeded_at
+    assert len(merged_deliveries) == 1
+    assert merged_deliveries[0].account_id == survivor_id
+    assert merged_deliveries[0].sent_at == seeded_at
+    assert merged_deliveries[0].claimed_at is None
+    assert merged_deliveries[0].claim_token is None
+    assert merged_deliveries[0].attempts == 1
 
 
 async def test_account_merge_transfers_submission_and_minecraft_authorization_ownership(
