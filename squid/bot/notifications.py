@@ -9,11 +9,14 @@ from discord import app_commands
 import squid_ui_discord as sd
 from squid.bot.consent import ensure_consented_account
 from squid.bot.notifications_view import NotificationScreen
+from squid.bot.utils.permissions import allows
 from squid.core.i18n import DEFAULT_LOCALE, localization_for, tr
 from squid.notifications import (
+    InboxVisibility,
     PendingNotificationDelivery,
 )
 from squid.notifications.domain import NotificationKind
+from squid.permissions.domain.catalogue import BUILD_SUBMISSION_VIEW_PENDING
 from squid.runtime import JobHandle
 from squid_ui.text import Message, localization_scope
 
@@ -60,6 +63,9 @@ class NotificationCog(sd.Cog[Any]):
                 notifications=self.bot.services.notifications,
                 account_id=account_id,
                 author_id=interaction.user.id,
+                visibility=InboxVisibility(
+                    include_staff=await allows(interaction, BUILD_SUBMISSION_VIEW_PENDING),
+                ),
             ),
         )
 
