@@ -7,6 +7,7 @@ from random import Random
 
 from squid.community.domain import (
     PendingWelcomeMember,
+    PendingWelcomeMessage,
     RedstonerDecision,
     RedstonerDecisionKind,
     RedstonerPolicy,
@@ -56,7 +57,7 @@ class RedstonerService:
 
 
 class WelcomeRelayService:
-    """Track recent members and resolve welcome-message relay decisions."""
+    """Correlate recent member joins and welcome messages without waiting."""
 
     def __init__(
         self,
@@ -69,35 +70,62 @@ class WelcomeRelayService:
         self._random = random_source or Random()
         self._clock = clock
         self._pending_members: list[PendingWelcomeMember] = []
+        self._pending_messages: list[PendingWelcomeMessage] = []
 
-    def record_join(self, user_id: int, username: str) -> None:
-        """Record a recent member join, pruning stale and excess state."""
+    def record_join(self, user_id: int, username: str) -> WelcomeRelayDecision | None:
+        """Record a member join and return a decision when its message arrived first."""
         now = self._clock()
         self._prune(now)
         self._pending_members.append(PendingWelcomeMember(user_id, username, now))
-        excess = len(self._pending_members) - self._policy.max_pending_members
-        if excess > 0:
-            del self._pending_members[:excess]
+        self._trim(self._pending_members)
 
-    def should_consider(self, *, channel_id: int, is_new_member_message: bool) -> bool:
-        """Return whether a welcome event should be considered for forwarding."""
-        return (
-            channel_id == self._policy.welcome_channel_id
-            and is_new_member_message
-            and self._random.random() < self._policy.forward_chance
-        )
+        matching_messages = [message for message in self._pending_messages if username in message.system_content]
+        if len(matching_messages) != 1:
+            return None
+        message = matching_messages[0]
+        decision = self._resolve(message)
+        if decision is not None:
+            self._pending_messages.remove(message)
+        return decision
 
-    def resolve(self, system_content: str) -> WelcomeRelayDecision | None:
-        """Resolve and consume the single recent member named in a welcome message."""
-        self._prune(self._clock())
-        matches = [member for member in self._pending_members if member.username in system_content]
+    def record_message(
+        self,
+        *,
+        channel_id: int,
+        is_new_member_message: bool,
+        system_content: str,
+    ) -> WelcomeRelayDecision | None:
+        """Record one eligible message and return a decision when its join arrived first."""
+        if channel_id != self._policy.welcome_channel_id or not is_new_member_message:
+            return None
+        if self._random.random() >= self._policy.forward_chance:
+            return None
+
+        now = self._clock()
+        self._prune(now)
+        message = PendingWelcomeMessage(system_content, now)
+        decision = self._resolve(message)
+        if decision is not None:
+            return decision
+        self._pending_messages.append(message)
+        self._trim(self._pending_messages)
+        return None
+
+    def _resolve(self, message: PendingWelcomeMessage) -> WelcomeRelayDecision | None:
+        matches = [member for member in self._pending_members if member.username in message.system_content]
         if len(matches) != 1:
             return None
 
         member = matches[0]
         self._pending_members.remove(member)
-        return WelcomeRelayDecision(member.user_id, member.username)
+        return WelcomeRelayDecision(member.user_id, member.username, message.system_content)
+
+    def _trim[T](self, pending: list[T]) -> None:
+        excess = len(pending) - self._policy.max_pending_members
+        if excess > 0:
+            del pending[:excess]
 
     def _prune(self, now: float) -> None:
         cutoff = now - self._policy.pending_ttl_seconds
         self._pending_members = [member for member in self._pending_members if member.joined_at >= cutoff]
+        self._pending_messages = [message for message in self._pending_messages if message.received_at >= cutoff]
