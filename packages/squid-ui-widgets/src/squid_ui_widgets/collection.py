@@ -16,12 +16,16 @@ from squid_ui_widgets.drivers import ComponentDriver, FormValues, MachineControl
 
 @dataclass(frozen=True, slots=True)
 class CollectionEntry:
+    """One keyed form-value record in a collection."""
+
     key: str
     values: tuple[tuple[str, object], ...]
 
 
 @dataclass(frozen=True, slots=True)
 class CollectionState:
+    """Ordered records, current selection, and visible page."""
+
     entries: tuple[CollectionEntry, ...] = ()
     selected: str | None = None
     page: int = 0
@@ -31,6 +35,8 @@ type CollectionChangeHandler = Callable[[TransitionEvent[CollectionState], tuple
 
 
 class _Action(StrEnum):
+    """Closed collection transition vocabulary."""
+
     SELECT = "select"
     ADD = "add"
     EDIT = "edit"
@@ -80,13 +86,16 @@ class CollectionEditor:
 
     @property
     def initial_state(self) -> CollectionState:
+        """Return an empty collection state."""
         return CollectionState()
 
     @staticmethod
     def _mapping(entry: CollectionEntry) -> FormValues:
+        """Expose an entry through an immutable mapping."""
         return MappingProxyType(dict(entry.values))
 
     def initial_from(self, entries: Iterable[FormValues]) -> CollectionState:
+        """Build state from public values and validate their identities."""
         collected: list[CollectionEntry] = []
         keys: set[str] = set()
         for index, values in enumerate(entries, start=1):
@@ -105,6 +114,8 @@ class CollectionEditor:
         initial: CollectionState | None = None,
         on_change: CollectionChangeHandler | None = None,
     ) -> ComponentDriver[CollectionState]:
+        """Build a component shell that reports ordered value changes."""
+
         async def changed(event: TransitionEvent[CollectionState]) -> None:
             if on_change is None or event.state.entries == event.previous.entries:
                 return
@@ -119,6 +130,7 @@ class CollectionEditor:
         return tuple(self._mapping(entry) for entry in state.entries)
 
     def errors(self, state: CollectionState) -> tuple[str, ...]:
+        """Return collection-bound violations for `state`."""
         errors: list[str] = []
         if len(state.entries) < self.minimum:
             errors.append(f"Add at least {self.minimum} entries.")
@@ -127,10 +139,12 @@ class CollectionEditor:
         return tuple(errors)
 
     def _selected_index(self, state: CollectionState) -> int | None:
+        """Locate the selected entry, if it is still present."""
         return next((index for index, entry in enumerate(state.entries) if entry.key == state.selected), None)
 
     @staticmethod
     def _mint(entries: tuple[CollectionEntry, ...]) -> str:
+        """Choose the first unused numeric identity."""
         used = {entry.key for entry in entries}
         ordinal = 1
         while str(ordinal) in used:
@@ -145,6 +159,7 @@ class CollectionEditor:
         values: tuple[str, ...] = (),
         submitted: FormValues | None = None,
     ) -> CollectionState:
+        """Apply a collection action without mutating the input state."""
         if action == _Action.SELECT:
             selected = values[0] if len(values) == 1 and values[0] in {entry.key for entry in state.entries} else None
             return CollectionState(state.entries, selected, state.page)
@@ -181,6 +196,7 @@ class CollectionEditor:
         return state
 
     def form_for(self, state: CollectionState, action: str) -> FormSpec | None:
+        """Return the create or edit form available for `action`."""
         if action == _Action.ADD:
             if self.maximum is not None and len(state.entries) >= self.maximum:
                 return None
@@ -197,6 +213,7 @@ class CollectionEditor:
         return form.spec() if isinstance(form, Form) else form
 
     def render(self, state: CollectionState, controls: MachineControls[CollectionState]) -> DocumentLike:
+        """Render the visible window and record actions."""
         visible, position, pages = window(
             state.entries,
             key=self.key,

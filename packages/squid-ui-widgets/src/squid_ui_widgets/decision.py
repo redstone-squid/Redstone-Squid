@@ -14,6 +14,8 @@ from squid_ui_widgets.drivers import ComponentDriver, FormValues, MachineControl
 
 @dataclass(frozen=True, slots=True)
 class DecisionOption:
+    """One terminal choice and its display policy."""
+
     key: str
     label: TextLike
     tone: Tone = Tone.NEUTRAL
@@ -22,6 +24,8 @@ class DecisionOption:
 
 @dataclass(frozen=True, slots=True)
 class DecisionState:
+    """The chosen option key, or `None` before a decision."""
+
     decided: str | None = None
 
 
@@ -51,9 +55,11 @@ class Decision[RenderTargetT: RenderTarget = RenderTarget]:
 
     @property
     def initial_state(self) -> DecisionState:
+        """Return an undecided state."""
         return DecisionState()
 
     def finish_actions(self) -> frozenset[str]:
+        """Return actions configured to finish the component shell."""
         return frozenset(f"choose:{option.key}" for option in self.options)
 
     def build_component(
@@ -62,6 +68,7 @@ class Decision[RenderTargetT: RenderTarget = RenderTarget]:
         on_decide: DecisionHandler | None = None,
         finish_on: Collection[str] = (),
     ) -> ComponentDriver[DecisionState, RenderTargetT]:
+        """Build a component shell and dispatch the chosen option."""
         handlers = {}
         if on_decide is not None:
             handlers = {f"choose:{option.key}": self._handler(on_decide, option.key) for option in self.options}
@@ -84,6 +91,7 @@ class Decision[RenderTargetT: RenderTarget = RenderTarget]:
         values: tuple[str, ...] = (),
         submitted: FormValues | None = None,
     ) -> DecisionState:
+        """Accept the first valid choice and ignore later actions."""
         del values, submitted
         if state.decided is not None or not action.startswith("choose:"):
             return state
@@ -93,6 +101,7 @@ class Decision[RenderTargetT: RenderTarget = RenderTarget]:
     def render(
         self, state: DecisionState, controls: MachineControls[DecisionState, RenderTargetT]
     ) -> DocumentLike[RenderTargetT]:
+        """Render the prompt, options, and optional decision result."""
         options = self._options(controls)
         selected = next((option for option in options if option.key == state.decided), None)
         return stack(
@@ -116,11 +125,14 @@ class Decision[RenderTargetT: RenderTarget = RenderTarget]:
         )
 
     def _options(self, controls: MachineControls[DecisionState, RenderTargetT]) -> tuple[DecisionOption, ...]:
+        """Return the decision options bound to shell callbacks."""
         del controls
         return self.options
 
 
 class _Confirmation[RenderTargetT: RenderTarget = RenderTarget](Decision[RenderTargetT]):
+    """Two-option confirmation specialization."""
+
     def __init__(
         self,
         prompt: ContentLike[RenderTargetT],
@@ -142,6 +154,7 @@ class _Confirmation[RenderTargetT: RenderTarget = RenderTarget](Decision[RenderT
         self.cancel_label = cancel_label
 
     def _options(self, controls: MachineControls[DecisionState, RenderTargetT]) -> tuple[DecisionOption, ...]:
+        """Bind confirm and cancel options to their configured callbacks."""
         return (
             DecisionOption(
                 "confirm",

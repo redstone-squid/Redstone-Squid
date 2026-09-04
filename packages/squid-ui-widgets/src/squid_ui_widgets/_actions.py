@@ -29,6 +29,7 @@ class PageDirection(StrEnum):
 
     @property
     def delta(self) -> int:
+        """Return this direction as a signed page offset."""
         return -1 if self is PageDirection.PREVIOUS else 1
 
 
@@ -40,10 +41,12 @@ class PageAction:
     direction: PageDirection
 
     def encode(self) -> str:
+        """Encode the action for a machine control."""
         return f"page:{self.key}:{self.direction}"
 
     @classmethod
     def parse(cls, action: str) -> Self | None:
+        """Parse an exact paging action, or return `None`."""
         match action.split(":"):
             case ["page", raw_key, raw_direction]:
                 try:
@@ -85,10 +88,12 @@ class NestedAction:
             raise ValueError(message)
 
     def encode(self) -> str:
+        """Encode the namespaced action for a parent machine."""
         return f"section:{self.key}:{self.action}"
 
     @classmethod
     def parse(cls, action: str) -> Self | None:
+        """Parse an exact nested action, or return `None`."""
         match action.split(":", 2):
             case ["section", raw_key, nested] if nested:
                 try:

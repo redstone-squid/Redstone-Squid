@@ -69,6 +69,7 @@ class Agreement[RenderTargetT: RenderTarget = RenderTarget](Component[RenderTarg
         self.on_resolve = on_resolve
 
     def render(self) -> DocumentLike[RenderTargetT]:
+        """Render participant status and the available actor controls."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         approved = frozenset(self.approved)
         participant_rows = tuple(
@@ -117,9 +118,11 @@ class Agreement[RenderTargetT: RenderTarget = RenderTarget](Component[RenderTarg
         )
 
     def _participant(self, actor_id: str) -> bool:
+        """Return whether the actor belongs to this agreement."""
         return any(participant.actor_id == actor_id for participant in self.participants)
 
     async def _approve(self, event: ActionEvent) -> None:
+        """Record one eligible approval and resolve at the threshold."""
         if not isinstance(event, PressEvent):
             message = "Agreement actions require a press event"
             raise TypeError(message)
@@ -136,6 +139,7 @@ class Agreement[RenderTargetT: RenderTarget = RenderTarget](Component[RenderTarg
                 await self.on_resolve(event, approved)
 
     async def _withdraw(self, event: ActionEvent) -> None:
+        """Withdraw one eligible approval while the agreement is open."""
         if not isinstance(event, PressEvent):
             message = "Agreement actions require a press event"
             raise TypeError(message)
