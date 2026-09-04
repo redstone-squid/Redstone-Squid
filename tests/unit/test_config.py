@@ -896,12 +896,14 @@ def test_api_rate_limit_and_trusted_proxy_settings_load(monkeypatch: pytest.Monk
         SQUID_RATE_LIMIT_REDIS_TIMEOUT_SECONDS="0.5",
         SQUID_RATE_LIMIT_REDIS_RETRY_SECONDS="7",
         SQUID_RATE_LIMIT_LOCAL_MAX_KEYS="4096",
+        SQUID_API_IDEMPOTENCY_MAX_RESPONSE_BYTES="2097152",
     )
 
     with pytest.warns(DeprecationWarning, match="CALLER_REQUESTS"):
         config = load_api_process_config(dotenv_path=dotenv)
 
     assert config.api.trusted_proxy_ips == ("127.0.0.1", "10.0.0.0/8")
+    assert config.api.idempotency_max_response_bytes == 2_097_152
     assert config.rate_limit.redis_url is not None
     assert config.rate_limit.redis_url.get_secret_value() == "rediss://user:secret@redis.example/0"
     assert config.rate_limit.window_seconds == 60

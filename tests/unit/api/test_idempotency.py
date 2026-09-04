@@ -1,11 +1,14 @@
 """HTTP idempotency contract tests."""
 
 import asyncio
+import json
 from typing import cast, override
 from uuid import UUID, uuid4
 
 import pytest
+from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
+from starlette.responses import StreamingResponse
 from starlette.types import ASGIApp, Message, Scope
 from whenever import Instant
 
@@ -13,12 +16,14 @@ from squid.api.idempotency import (
     MAX_IDEMPOTENT_RESPONSE_BYTES,
     CompleteIdempotentResponseMiddleware,
     IdempotencyReservationState,
+    assert_idempotency_completion_installed,
+    reserve_idempotent_request,
 )
 from squid.core.errors import ErrorCode
 from squid.idempotency import IdempotencyService, PendingRequest, StoredResponse
 from squid.idempotency.application import IdempotencyRepository
 from squid.idempotency.domain import ExistingRequest, IdempotencyInProgressError, Reservation, UnsafeHttpMethod
-from tests.unit.api.fakes import TEST_SYNERGY_SECRET, TEST_UUID, MockDatabaseManager, build_app
+from tests.unit.api.fakes import TEST_CONFIG, TEST_SYNERGY_SECRET, TEST_UUID, MockDatabaseManager, build_app
 
 
 class MemoryIdempotencyRepository(IdempotencyRepository):
@@ -166,6 +171,45 @@ def test_reusing_key_for_different_payload_returns_conflict() -> None:
     assert accounts.calls == 1
 
 
+def test_query_and_content_type_are_part_of_the_request_fingerprint() -> None:
+    client, accounts, database = idempotent_client()
+    authorization = {"Authorization": TEST_SYNERGY_SECRET}
+    body = json.dumps({"uuid": str(TEST_UUID)}, separators=(",", ":"))
+
+    with client:
+        first = client.post(
+            "/v1/verify?source=one",
+            content=body,
+            headers={**authorization, "Idempotency-Key": "query", "Content-Type": "application/json"},
+        )
+        query_conflict = client.post(
+            "/v1/verify?source=two",
+            content=body,
+            headers={**authorization, "Idempotency-Key": "query", "Content-Type": "application/json"},
+        )
+        media_conflict = client.post(
+            "/v1/verify?source=one",
+            content=body,
+            headers={
+                **authorization,
+                "Idempotency-Key": "media-type",
+                "Content-Type": "application/json; charset=utf-8",
+            },
+        )
+        media_first = client.post(
+            "/v1/verify?source=one",
+            content=body,
+            headers={**authorization, "Idempotency-Key": "media-type", "Content-Type": "application/json"},
+        )
+
+    assert database.closed
+    assert first.status_code == 201
+    assert query_conflict.status_code == 409
+    assert media_conflict.status_code == 201
+    assert media_first.status_code == 409
+    assert accounts.calls == 2
+
+
 def test_request_without_key_retains_normal_non_idempotent_behavior() -> None:
     client, accounts, database = idempotent_client()
     headers = {"Authorization": TEST_SYNERGY_SECRET}
@@ -259,3 +303,38 @@ async def test_response_body_limit_is_enforced_before_bytes_are_sent() -> None:
     with pytest.raises(RuntimeError, match="replay limit"):
         await run_completion_middleware(app, recorder)
     assert recorder.responses == []
+
+
+def test_configured_response_body_limit_is_applied() -> None:
+    accounts = CountingAccounts()
+    service = IdempotencyService(MemoryIdempotencyRepository())
+    config = TEST_CONFIG.model_copy(
+        update={"api": TEST_CONFIG.api.model_copy(update={"idempotency_max_response_bytes": 1})}
+    )
+    app, _database = build_app(idempotency=service, accounts=accounts, config=config)
+
+    with TestClient(app) as client, pytest.raises(RuntimeError, match="1-byte replay limit"):
+        client.post(
+            "/v1/verify",
+            json={"uuid": str(TEST_UUID)},
+            headers={"Authorization": TEST_SYNERGY_SECRET, "Idempotency-Key": "small-cap"},
+        )
+
+
+def test_streaming_idempotent_route_is_rejected_at_startup() -> None:
+    app = FastAPI()
+    app.add_middleware(CompleteIdempotentResponseMiddleware)
+
+    @app.post(
+        "/stream",
+        dependencies=[Depends(reserve_idempotent_request)],
+        response_class=StreamingResponse,
+    )
+    async def stream() -> StreamingResponse:
+        async def body():
+            yield b"chunk"
+
+        return StreamingResponse(body())
+
+    with pytest.raises(TypeError, match="cannot declare a streaming response"):
+        assert_idempotency_completion_installed(app)
