@@ -6,6 +6,7 @@ import discord
 
 import squid_ui_discord as sd
 from squid.bot.submission.groups import BuildCommandGroup
+from squid.bot.submission.input import split_values
 from squid.bot.submission.ui.opening import open_build_editor, prepare_build_editor, show_build_editor
 from squid.bot.ui import error_node, text_node
 from squid.builds.application import BuildService
@@ -15,11 +16,6 @@ from squid.messages.application import MessageService
 
 if TYPE_CHECKING:
     import squid.bot.app
-
-
-def _split_list(value: str) -> list[str]:
-    """Split a comma-separated option value, dropping empty entries."""
-    return [item.strip() for item in value.split(",") if item.strip()]
 
 
 class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[BotT]):
@@ -74,7 +70,7 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
             # One option replaces all four buckets, the same way `/build submit` reads one:
             # which bucket a restriction belongs in is a fact about the restriction, not a
             # decision the person editing should have to make.
-            buckets = await self.builds.sort_restrictions(_split_list(restrictions))
+            buckets = await self.builds.sort_restrictions(split_values(restrictions))
             staged["wiring_placement_restrictions"] = ", ".join(buckets["wiring-placement"])
             staged["animated_restrictions"] = ", ".join(buckets["animated"])
             staged["component_restrictions"] = ", ".join(buckets["component"])

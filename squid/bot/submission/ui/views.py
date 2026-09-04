@@ -1,11 +1,12 @@
 """Semantic submission and build-edit workspaces."""
 
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal, cast
 
 import squid_ui as sl
 import squid_ui_discord as sd
+from squid.bot.submission.input import format_invalid_values, invalid_web_urls, split_values
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.fields import BoundBuildField, BuildFieldSpec, FieldDisplay, field_spec
 from squid.bot.ui import DISCORD_YELLOW, tr
@@ -40,11 +41,6 @@ EDIT_FIELDS: tuple[BuildFieldSpec, ...] = (
     field_spec("command_to_get_to_build", "/warp door"),
 )
 """Every entry must name a BuildEditPatch field; a test pins that."""
-
-
-def _split_values(value: str) -> list[str]:
-    """Split a user-facing comma-separated list while ignoring empty values."""
-    return [item.strip() for item in value.split(",") if item.strip()]
 
 
 def _format_dimensions(value: tuple[int | None, ...]) -> str:
@@ -108,6 +104,21 @@ def _submission_details_form(build: BuildDraft) -> sl.forms.FormSpec:
         + build.component_restrictions
         + build.miscellaneous_restrictions
     )
+
+    def validate(values: Mapping[str, object]) -> tuple[sl.forms.FormIssue, ...]:
+        errors: list[sl.forms.FormIssue] = []
+        for key in ("image_urls", "video_urls", "world_urls"):
+            invalid = invalid_web_urls(split_values(cast(str, values[key])))
+            if invalid:
+                displayed = format_invalid_values(invalid)
+                errors.append(
+                    sl.forms.FieldError(
+                        key,
+                        tr(t"Use complete `https://` or `http://` links. Invalid: {displayed}"),
+                    )
+                )
+        return tuple(errors)
+
     return sl.forms.FormSpec(
         tr("Links and optional details"),
         (
@@ -152,6 +163,7 @@ def _submission_details_form(build: BuildDraft) -> sl.forms.FormSpec:
                 maximum=4000,
             ),
         ),
+        validator=validate,
     )
 
 
@@ -328,10 +340,10 @@ class SubmissionScreen(sd.Screen):
             await event.notice(tr(t"Enter at least a door width and height, such as `2x2`."))
             return
         self.build.door_dimensions = door_dimensions
-        self.build.patterns = _split_values(cast(str, values["pattern"])) or ["Regular"]
+        self.build.patterns = split_values(cast(str, values["pattern"])) or ["Regular"]
         self.build.dimensions = dimensions
         self.build.version_spec = cast(str, values["versions"]).strip() or None
-        self.build.creators_ign = _split_values(cast(str, values["creators"]))
+        self.build.creators_ign = split_values(cast(str, values["creators"]))
         self.validation_error = None
         self.mutated(self.build)
 
@@ -344,16 +356,10 @@ class SubmissionScreen(sd.Screen):
 
     async def _details_submitted(self, event: sl.SubmitEvent) -> None:
         values = event.values
-        image_urls = _split_values(cast(str, values["image_urls"]))
-        video_urls = _split_values(cast(str, values["video_urls"]))
-        world_urls = _split_values(cast(str, values["world_urls"]))
-        invalid_urls = [
-            url for url in (*image_urls, *video_urls, *world_urls) if not url.startswith(("https://", "http://"))
-        ]
-        if invalid_urls:
-            await event.notice(tr(t"Every link must start with `https://` or `http://`."))
-            return
-        await self.builds.classify_restrictions(self.build, _split_values(cast(str, values["restrictions"])))
+        image_urls = split_values(cast(str, values["image_urls"]))
+        video_urls = split_values(cast(str, values["video_urls"]))
+        world_urls = split_values(cast(str, values["world_urls"]))
+        await self.builds.classify_restrictions(self.build, split_values(cast(str, values["restrictions"])))
         self.build.replace_links("image", image_urls)
         self.build.replace_links("video", video_urls)
         self.build.replace_links("world-download", world_urls)
