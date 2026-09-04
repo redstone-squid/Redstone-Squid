@@ -38,6 +38,7 @@ from squid.submissions.infrastructure.models import SubmissionDraft
 from squid.submissions.payload_integrity import submission_payload_digest
 
 _CLAIM_MINUTES = 5
+_LEGACY_BUILD_TARGET_KEY = "postgres_builds"
 
 
 class PostgresFinalizationJobRepository(FinalizationJobRepository):
@@ -258,6 +259,8 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
                     SubmissionFinalizationResult(
                         job_id=model.id,
                         build_id=result.build_id,
+                        _legacy_target_key=_LEGACY_BUILD_TARGET_KEY,
+                        _legacy_provenance=_legacy_result_provenance(job.payload),
                         created_at=now,
                     )
                 )
@@ -488,6 +491,29 @@ def _snapshot(
 
 def _result(model: SubmissionFinalizationResult) -> FinalizedBuild:
     return FinalizedBuild(model.build_id)
+
+
+def _legacy_result_provenance(submission: NormalizedSubmission) -> dict[str, object]:
+    """Dual-write the retired result shape until every legacy reader has drained."""
+    return {
+        "source_draft_id": str(submission.source_draft_id),
+        "owner_account_id": submission.owner_account_id,
+        "origin": submission.origin.value,
+        "schema_id": submission.schema_id,
+        "schema_revision": submission.schema_revision,
+        "source_installation_id": (
+            str(submission.source_installation_id) if submission.source_installation_id is not None else None
+        ),
+        "sponsor_installation_id": (
+            str(submission.sponsor.installation_id) if submission.sponsor is not None else None
+        ),
+        "normalized_media_upload_ids": [str(value) for value in submission.artifacts.normalized_media_upload_ids],
+        "sanitized_schematic_id": (
+            str(submission.artifacts.sanitized_schematic_id)
+            if submission.artifacts.sanitized_schematic_id is not None
+            else None
+        ),
+    }
 
 
 def _encode_issues(issues: Sequence[SubmissionAttentionIssue]) -> list[dict[str, object]]:
