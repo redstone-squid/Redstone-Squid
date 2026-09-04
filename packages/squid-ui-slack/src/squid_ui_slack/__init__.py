@@ -6,7 +6,7 @@ from squid_ui_slack.adapter import (
     SLACK_SDK_BEHAVIOR_CAPABILITIES,
     slack_sdk_adapter_profile,
 )
-from squid_ui_slack.message_payload import MessagePayload
+from squid_ui_slack.message_payload import MessagePayload, MessagePayloadKwargs
 from squid_ui_slack.renderer import AssetResolver, HomeRenderer, MessageRenderer, ModalRenderer
 from squid_ui_slack.target import (
     SLACK_HOME_SDK343,
@@ -26,6 +26,7 @@ __all__ = [
     "AssetResolver",
     "HomeRenderer",
     "MessagePayload",
+    "MessagePayloadKwargs",
     "MessageRenderer",
     "ModalRenderer",
     "adapter",
