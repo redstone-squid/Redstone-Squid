@@ -92,9 +92,9 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         """Archive the message selected through Discord's Apps menu."""
         await enforce(request, MESSAGE_ARCHIVE_CREATE)
         if request.guild is None or message.guild != request.guild:
-            return text_node(tr("That message is not from this server."))
+            return text_node(tr(t"That message is not from this server."))
         await self._archive_message(message)
-        return text_node(tr("Message archived."))
+        return text_node(tr(t"Message archived."))
 
     async def _archive_message(self, message: discord.Message) -> None:
         """Copy one message in place and remove the original."""
