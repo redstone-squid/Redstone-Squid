@@ -1,11 +1,5 @@
-from squid.records.infrastructure.models import (
-    RecordCompetition,
-    RecordDefinition,
-    RecordResult,
-    RecordRule,
-    RecordSeries,
-    RecordStanding,
-)
+from squid.records.infrastructure import models
+from squid.records.infrastructure.models import RecordRule, RecordSeries, RecordStanding
 
 
 def test_record_vocabulary_preserves_physical_tables() -> None:
@@ -14,7 +8,7 @@ def test_record_vocabulary_preserves_physical_tables() -> None:
     assert RecordStanding.__tablename__ == "record_results"
 
 
-def test_record_vocabulary_retains_temporary_compatibility_names() -> None:
-    assert RecordCompetition is RecordSeries
-    assert RecordDefinition is RecordRule
-    assert RecordResult is RecordStanding
+def test_record_vocabulary_removes_legacy_compatibility_names() -> None:
+    assert not hasattr(models, "RecordCompetition")
+    assert not hasattr(models, "RecordDefinition")
+    assert not hasattr(models, "RecordResult")
