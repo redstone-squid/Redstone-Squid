@@ -1,6 +1,6 @@
 """Durable HTTP mutation deduplication."""
 
 from squid.idempotency.application import IdempotencyService
-from squid.idempotency.domain import PendingRequest, StoredResponse
+from squid.idempotency.domain import IdempotencyState, PendingRequest, StoredResponse
 
-__all__ = ["IdempotencyService", "PendingRequest", "StoredResponse"]
+__all__ = ["IdempotencyService", "IdempotencyState", "PendingRequest", "StoredResponse"]
