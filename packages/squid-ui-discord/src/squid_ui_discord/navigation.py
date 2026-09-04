@@ -24,10 +24,12 @@ class StackNavigator[RenderTargetT: ComponentsV2Target = ComponentsV2Target](Com
 
     @property
     def current(self) -> Component[RenderTargetT]:
+        """Return the child currently visible at the top of the stack."""
         return self._stack[-1]
 
     @property
     def depth(self) -> int:
+        """Return the number of screens currently retained."""
         return len(self._stack)
 
     def push(self, child: Component[RenderTargetT]) -> None:
@@ -36,19 +38,22 @@ class StackNavigator[RenderTargetT: ComponentsV2Target = ComponentsV2Target](Com
         self.invalidate()
 
     def pop(self) -> None:
+        """Return to the previous screen when one exists."""
         if len(self._stack) > 1:
             self._stack.pop()
             self.invalidate()
 
     def home(self) -> None:
+        """Return to the root screen and discard its descendants."""
         if len(self._stack) > 1:
             del self._stack[1:]
             self.invalidate()
 
     def render(self) -> list[LayoutNode[ComponentsV2Target]]:
+        """Render the current child followed by its navigation controls."""
         # Keyed by depth: each screen owns its control namespace, so pushing the same child
         # class twice does not make the two copies share handlers.
-        nodes: list = [self.boundary(self.current, key=f"s{self.depth - 1}")]
+        nodes: list[LayoutNode[ComponentsV2Target]] = [self.boundary(self.current, key=f"s{self.depth - 1}")]
         chrome = self.inject(CHROME_CONTEXT)
         controls = [
             Button(label=chrome.back, on_click=self._back, key="__nav_back", disabled=self.depth == 1),
@@ -62,10 +67,13 @@ class StackNavigator[RenderTargetT: ComponentsV2Target = ComponentsV2Target](Com
         return nodes
 
     async def _back(self, event: PressEvent) -> None:
+        """Handle the Back control."""
         self.pop()
 
     async def _home(self, event: PressEvent) -> None:
+        """Handle the Home control."""
         self.home()
 
     async def _close(self, event: PressEvent) -> None:
+        """End the current presentation from its Close control."""
         await event.finish()
