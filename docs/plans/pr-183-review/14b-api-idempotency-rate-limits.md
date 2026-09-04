@@ -17,8 +17,9 @@ dependency would allow bytes to reach the client before the durable response com
 
 **Decision:** retain the split, rename the pieces around their phases (`reserve_idempotent_request` and
 `CompleteIdempotentResponseMiddleware`), and document the request-state handoff. Add cancellation, raised-handler,
-multi-chunk response, empty-response, and durable-completion-failure tests. Streaming responses must either be
-explicitly rejected for idempotent routes or use a bounded spool; unbounded in-memory buffering is not acceptable.
+multi-chunk response, empty-response, and durable-completion-failure tests. Idempotent operations are JSON command
+routes: reject `StreamingResponse` at the route/startup contract and cap captured response bytes with a new,
+deployment-configured 1 MiB default. Exceeding the cap fails completion before any body reaches the client.
 
 ### The rate limiter implements application policy, not only a generic algorithm
 
@@ -46,11 +47,12 @@ application set.
 
 **Decision:**
 
-- migrate `principal` to `caller` in the idempotency table and constraint;
-- introduce a deprecation window for the environment setting and emitted policy name, reading the old setting but
-  warning, then remove it in the next configuration-breaking release;
-- model `IdempotencyState` as a `StrEnum`; keep HTTP methods as an allowlisted value because extensions exist and the
-  database check is the authoritative unsafe-method set;
+- migrate `principal` to `caller` in the idempotency table and constraint during a drained deployment; the direct
+  column rename is deliberately not a mixed-binary migration;
+- introduce a deprecation window for the environment setting, reading the old setting but warning. Keep the public
+  `principal` `RateLimit-Policy` token unchanged until a separately versioned/breaking header contract exists;
+- model `IdempotencyState` and the supported `UnsafeHttpMethod` set as `StrEnum`s shared by routing, persistence, and
+  the database-check totality test;
 - make `AdvisoryLockNamespace` a `StrEnum` and have `lock_uuid` accept it, preventing accidental namespace reuse;
 - make `LocalSlidingWindowRateLimiter`, `RedisSlidingWindowRateLimiter`, `DistributedRateLimiter`, and test doubles
   explicitly subclass `RateLimiter` and mark overrides.
@@ -64,15 +66,16 @@ HTTP boundary; do not scatter header fragments across middleware and exceptions.
 ## Planned work
 
 1. **Pin replay behavior before refactoring.** Add adversarial ASGI tests for reservation/completion ordering,
-   cancellation, exceptions, multiple body frames, and completion failure. Decide and document the bounded response
-   body limit.
+   cancellation, exceptions, multiple body frames, and completion failure. Pin the 1 MiB default body limit and
+   reject streaming responses at startup.
 2. **Name the two idempotency phases.** Refactor without changing route declarations, expose one typed request-state
    record, and add a startup assertion that every idempotent route has completion middleware installed.
 3. **Make IP rate limiting pure ASGI.** Preserve bypasses, error rendering, state accumulation, and quota headers.
 4. **Type implementations and headers.** Subclass the protocol, replace tuple/string test seams with typed records,
    and centralize header serialization.
-5. **Migrate caller vocabulary and state.** Add upgrade/downgrade coverage for the column and constraint rename;
-   retain compatibility for old configuration for one release.
+5. **Migrate caller vocabulary and state.** Add upgrade/downgrade coverage for the column and constraint rename,
+   require a drained deployment for that revision, retain the public header token, and alias old configuration for
+   one release.
 6. **Close the library question with evidence.** Run the candidate spike against the atomic multi-policy/failover test
    matrix and record why the chosen primitive is kept or replaced.
 
@@ -82,6 +85,13 @@ HTTP boundary; do not scatter header fragments across middleware and exceptions.
 class IdempotencyState(StrEnum):
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
+
+
+class UnsafeHttpMethod(StrEnum):
+    POST = "POST"
+    PUT = "PUT"
+    PATCH = "PATCH"
+    DELETE = "DELETE"
 
 
 class AdvisoryLockNamespace(StrEnum):
@@ -118,12 +128,12 @@ inheritance are acceptance criteria.
 
 | Thread | Disposition |
 |---|---|
-| [`squid/api/idempotency.py`: “don't like this tbh”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3796563710) | **Fix/clarify in milestones 1–2.** Keep the necessary phase split, replace implicit request state with a named contract, and bound buffering. |
-| [`squid/api/idempotency.py`: “we REALLY should just be a middleware no?”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3796581124) | **Retain the split with tests.** Reservation needs the authenticated caller; durable completion must remain middleware. |
+| [`squid/api/idempotency.py`: “don't like this tbh”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3796563710) | **Fix in milestones 1–2.** Keep the necessary phase split, replace implicit request state with a named contract, and bound buffering. |
+| [`squid/api/idempotency.py`: “we REALLY should just be a middleware no?”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3796581124) | **Retain.** Reservation needs the authenticated caller; durable completion must remain middleware, with the milestone 1 tests. |
 | [`squid/idempotency/infrastructure/models.py`: “we are not using the word principal”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790727364) | **Fix in milestone 5.** Migrate persisted/configured vocabulary to caller with a compatibility window. |
 | [`squid/idempotency/infrastructure/models.py`: “enum”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790746086) | **Fix in milestone 5.** Map durable state through `IdempotencyState`. |
-| [`squid/idempotency/infrastructure/models.py`: “enum”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790746250) | **Retain a validated HTTP-method value.** Methods are protocol tokens; add an explicit unsafe-method database check and round-trip tests instead of a misleading closed enum. |
-| [`squid/api/rate_limit.py`: “we probably should use a library”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790765273) | **Decide by milestone 6 evidence.** Squid keeps policy/failover ownership; only the Redis primitive is replaceable. |
+| [`squid/idempotency/infrastructure/models.py`: “enum”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790746250) | **Fix in milestone 5.** Use one closed `UnsafeHttpMethod` set across route declarations, persistence, and the database constraint. |
+| [`squid/api/rate_limit.py`: “we probably should use a library”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790765273) | **Retain.** Squid keeps policy and failover ownership. Milestone 6 decides only whether its Redis primitive is retained or replaced, based on the pinned matrix. |
 | [`squid/api/rate_limit.py`: “isn't an ASGI middleware better? what is the problem here?”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790775846) | **Fix in milestone 3.** Replace `BaseHTTPMiddleware` for pre-auth IP enforcement; retain matched-route quotas as a dependency. |
 | [`squid/api/rate_limit.py`: “subclass the protocol”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790767350) | **Fix in milestone 4.** All implementations explicitly subclass the protocol and use `@override`. |
 | [`tests/unit/api/test_rate_limit.py`: “subclass protocol”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790781476) | **Fix in milestone 4.** The scripted limiter becomes a typed `RateLimiter` test double. |
@@ -134,5 +144,8 @@ inheritance are acceptance criteria.
 ## Delivery and rollout
 
 Land behavior-pinning tests first. The middleware refactor is one behavior-preserving commit. The caller rename is a
-separate migration commit with downgrade and mixed-configuration coverage. Do not combine the optional library swap
-with either refactor: if the spike chooses a library, it gets its own benchmark and rollback point.
+separate migration commit with downgrade and mixed-configuration coverage plus a drained-deployment release note;
+overlapping old/new binaries are unsupported for that revision. Namespace typing must preserve each existing lock's
+exact key-byte and hash derivation; changing an algorithm also requires a drained deployment. Do not combine the
+optional library swap with either refactor: if the spike chooses a library, it gets its own benchmark and rollback
+point.

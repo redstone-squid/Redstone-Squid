@@ -2,11 +2,12 @@
 
 ## Scope
 
-This directory organizes the review comments made by `Glinte` on
-[PR #183](https://github.com/redstone-squid/Redstone-Squid/pull/183), using each inline comment's
-original commit anchor to enforce the cutoff at `5edfd3e`.
+This directory organizes two bounded cohorts of review comments made by `Glinte` on
+[PR #183](https://github.com/redstone-squid/Redstone-Squid/pull/183). Plans 1–13 cover 184 comments
+anchored through `5edfd3e`; plan 14 covers 104 later comments anchored from `2605367` through
+`aa85f68`. A further 52 comments after `aa85f68` remain unplanned.
 
-- 184 comments are in scope, across 85 paths as GitHub names them today (86 at the last refresh;
+- The plans 1–13 cohort contains 184 comments across 85 paths as GitHub names them today (86 at the last refresh;
   a thread is reported against a file's present name, so a rename can merge two).
 - All 184 threads remain open on GitHub. Outdatedness has moved sharply as the branch advanced:
   175 are now marked outdated and only 9 still have current anchors, against 33/151 at the last
@@ -21,7 +22,7 @@ original commit anchor to enforce the cutoff at `5edfd3e`.
   identity, or API. It is now dispositioned in plan 13.
 - Each plan audits current HEAD so later fixes are credited rather than accidentally reverted.
 
-The broad review clusters were: submission UX (42 comments), voting (34), schematics (33),
+The plans 1–13 cohort's broad review clusters were: submission UX (42 comments), voting (34), schematics (33),
 API/auth/sync (25), runtime/observability (18), identity/permissions (14), tests/tooling (10), and
 shared reaction routing (8).
 
@@ -71,8 +72,8 @@ As of the final 2026-08-30 audit, plans 1–13 have been implemented and indepen
 re-audited against their production entry points, not only their focused test helpers. Each plan's
 findings and dispositions remain the historical reasoning; this table records the resulting
 implementation state. **Done** means every in-scope
-implementation and test case is present. **Blocked** is reserved for verification that requires
-external CI infrastructure rather than more repository work.
+implementation and test case is present. External-only verification is recorded separately and does not make
+completed repository work blocked. **Blocked** is reserved for repository work that cannot proceed.
 
 Plan 14 was triaged afterward against the resulting current code. **Planned** means its detailed
 thread dispositions, milestones, compatibility requirements, and tests are written, but the
@@ -95,10 +96,10 @@ GitHub replies and thread resolution also remain separately authorized work.
 | 10 | [Shared reaction routing](10-shared-reaction-routing.md) | Done | Typed subscriptions, supervisor-owned anyio workers, FIFO/backpressure accounting, resolver memoization, failure/latency/shutdown telemetry, and consumer-owned recovery landed through `9d460311`. `4b1c6971`, `8aee6bd7`, `07ad1375`, and `1689c770` add bounded accepted-event handoff, serialized explicit-state vote recovery, stable cross-guild alias handling, periodic repair, and operator-actionable deferred-intent logs for timeout and callback failure. |
 | 11 | [API, auth, records, and sync](11-api-auth-records-sync.md) | Done | Existing caller/error/sync decisions and persistence coverage remain intact. `0bdb3918` declares dependency/pagination aliases with PEP 695 and removes the last abstract provider wording; `4b33ba75` gives submission finalization its concrete application name. |
 | 12 | [Runtime and observability](12-runtime-observability.md) | Done | The authoritative log transport, correlation display, resolved telemetry record, explicit worker trace field, typed public command surfaces, FastAPI error registration, join/message correlation, and three-process lifecycle contract all landed from `ae9edae0` through `89d9dde0`. |
-| 13 | [Test and tooling cleanup](13-test-tooling-cleanup.md) / [dispositions](13-test-tooling-dispositions.md) | Blocked | All repository work and thread dispositions are complete, including the typed reaction-callback update in `df1302d1`. The remaining condition is the already-documented green GitHub CI/PostgreSQL verification; local Docker access is unavailable. |
+| 13 | [Test and tooling cleanup](13-test-tooling-cleanup.md) / [dispositions](13-test-tooling-dispositions.md) | Done | All repository work and thread dispositions are complete, including the typed reaction-callback update in `df1302d1`. GitHub CI/PostgreSQL verification remains pending because local Docker access is unavailable. |
 | 14 | [Later review batch](14-review-comment-inventory.md) / [plans 14A–14I](#plans) | Planned | All 104 comments through `aa85f68` have one current-state disposition and a detailed implementation/validation owner. The 52 still-later comments remain outside this cutoff. |
 
-## Suggested sequence
+## Historical implementation sequence for plans 1–13
 
 1. Settle provider-neutral identity and shared value types in plans 2, 6, and 11.
 2. Implement the submission contracts and UX in plans 1 and 3–5.
@@ -112,9 +113,10 @@ before 14I, and 14D draft contracts before 14E–14F. Plan 14G can proceed indep
 current locking invariants are pinned. Plan 14C is independent except for the shared enum and API
 dependency conventions from 14B.
 
-Treat each numbered plan as a separate planning and implementation unit. Before closing GitHub
+Treat each plan or 14A–14I subplan as a separate planning and implementation unit. Before closing GitHub
 threads, produce a thread-level checklist that records one of four dispositions: fixed by the new
-work, already fixed after `5edfd3e`, retained with rationale, or deferred to a named follow-up.
+work, already addressed at the audited current HEAD with surviving production evidence, retained with rationale, or
+deferred to a named follow-up.
 GitHub replies and thread resolution require separate explicit authorization.
 
 ## Delivery convention

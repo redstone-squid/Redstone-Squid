@@ -45,6 +45,11 @@ The detailed plans cover repository work only. Posting replies or resolving GitH
 authorization. The 52 later comments called out in the directory README remain outside this plan's `aa85f68`
 cutoff.
 
+The exact-once crosswalk is an acceptance check: extract each `discussion_r...` ID from this inventory and from the
+thread-disposition tables in 14A–14I, sort/unique both sets, and require identical 104-item sets with no duplicate in
+either source. This check was run after the independent plan review; the owner/count table above is its readable
+summary.
+
 | Category | Count |
 |---|---:|
 | Architecture and separation of concerns | 25 |
