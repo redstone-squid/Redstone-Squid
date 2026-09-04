@@ -2,13 +2,15 @@
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
-from typing import Literal
 
 from squid.bot.submission.attachments import ClassifiedAttachment
-from squid.builds.domain.models import AttachmentFailureInfo, SchematicDuplicateInfo, SchematicDuplicateSource
+from squid.builds.domain.models import (
+    AttachmentFailureInfo,
+    AttachmentFailureStage,
+    SchematicDuplicateInfo,
+    SchematicDuplicateSource,
+)
 from squid.schematics.application import DuplicateCandidate, IngestedSchematic, IngestRequest
-
-type AttachmentFailureStage = Literal["classification", "download", "mirror", "analysis", "record"]
 
 ATTACHMENT_FAILURE_SUMMARY_LIMIT = 900
 """Leave room for surrounding Discord component copy inside a 1,024-character field."""
@@ -104,6 +106,18 @@ def attachment_failure_evidence(attachments: Sequence[AttachmentLifecycle]) -> l
         for attachment in attachments
         if attachment.failure is not None
     ]
+
+
+def attachment_failure_for(
+    attachment: AttachmentLifecycle, stage: AttachmentFailureStage, detail: str
+) -> AttachmentFailureInfo:
+    """Create persistence-safe failure evidence for a later enrichment stage."""
+    return {
+        "attachment_id": attachment.identity,
+        "filename": attachment.filename,
+        "stage": stage,
+        "detail": detail,
+    }
 
 
 def merge_duplicate_evidence(

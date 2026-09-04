@@ -85,12 +85,15 @@ class SchematicDuplicateInfo(TypedDict):
     source_attachments: NotRequired[list[SchematicDuplicateSource]]
 
 
+type AttachmentFailureStage = Literal["classification", "download", "mirror", "analysis", "duplicate-check", "record"]
+
+
 class AttachmentFailureInfo(TypedDict):
     """One submitted attachment that could not complete enrichment."""
 
     attachment_id: str
     filename: str
-    stage: str
+    stage: AttachmentFailureStage
     detail: str
 
 
