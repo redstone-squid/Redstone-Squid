@@ -9,7 +9,15 @@ import pytest
 from pytest_mock import MockerFixture
 
 from squid.bot.voting.vote import VoteCog
-from squid.voting.domain import CastVoteResult, VoteActor, VoteMessage, VoteSelection, VoteVisibility
+from squid.voting.domain import (
+    CastVoteResult,
+    VoteActor,
+    VoteChoice,
+    VoteMessage,
+    VoteOption,
+    VoteSelection,
+    VoteVisibility,
+)
 from tests.support.discord import make_reaction_payload
 from tests.support.voting import GENERIC_OPTIONS, poll_snapshot
 
@@ -151,6 +159,7 @@ async def test_recovery_reconciles_public_reactions_to_persisted_selection(mocke
     message.remove_reaction = mocker.AsyncMock()
     bot.get_or_fetch_message.return_value = message
     mocker.patch.object(cog, "_reaction_member", new=mocker.AsyncMock(return_value=member))
+    mocker.patch.object(cog, "_consented_account_id", new=mocker.AsyncMock(return_value=7))
     actor = VoteActor(7, 70, guild_id=10)
     mocker.patch("squid.bot.voting.vote.resolve_actor", new=mocker.AsyncMock(return_value=actor))
 
@@ -174,6 +183,7 @@ async def test_recovery_retries_anonymous_reaction_without_replaying_committed_b
     message.remove_reaction = mocker.AsyncMock()
     bot.get_or_fetch_message.return_value = message
     mocker.patch.object(cog, "_reaction_member", new=mocker.AsyncMock(return_value=member))
+    mocker.patch.object(cog, "_consented_account_id", new=mocker.AsyncMock(return_value=7))
 
     await cog.reconcile_message_reactions(100)
 
@@ -198,6 +208,35 @@ async def test_recovery_does_not_remove_public_ballot_from_an_incomplete_discord
     bot.refresh_posts.assert_not_awaited()
 
 
+async def test_recovery_compares_multi_guild_aliases_by_stable_option_id(mocker: MockerFixture) -> None:
+    options = (
+        VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", guild_id=10, label="One"),
+        VoteOption("2️⃣", VoteChoice.GENERIC, identifier="two", guild_id=10, label="Two"),
+        VoteOption("🔴", VoteChoice.GENERIC, identifier="one", guild_id=11, label="One"),
+        VoteOption("🔵", VoteChoice.GENERIC, identifier="two", guild_id=11, label="Two"),
+    )
+    session = poll_snapshot(
+        visibility=VoteVisibility.VISIBLE_LIVE,
+        messages=(VoteMessage(100, 200, 10), VoteMessage(101, 201, 11)),
+        options=options,
+        selections=(VoteSelection(7, 10, "one", "1️⃣", 1),),
+    )
+    cog, bot, votes = _cog(mocker, session)
+    member = mocker.Mock(spec=discord.Member, id=70, bot=False)
+    first = mocker.Mock(reactions=[_Reaction("1️⃣", ()), _Reaction("2️⃣", ())])
+    second = mocker.Mock(reactions=[_Reaction("🔴", (member,)), _Reaction("🔵", ())])
+    first.add_reaction = mocker.AsyncMock()
+    second.add_reaction = mocker.AsyncMock()
+    bot.get_or_fetch_message.side_effect = [first, second]
+    mocker.patch.object(cog, "_reaction_member", new=mocker.AsyncMock(return_value=member))
+    mocker.patch.object(cog, "_consented_account_id", new=mocker.AsyncMock(return_value=7))
+
+    await cog.reconcile_message_reactions(100)
+
+    votes.cast_vote.assert_not_awaited()
+    second.remove_reaction.assert_not_called()
+
+
 @pytest.mark.parametrize("handler_name", ["on_reaction_clear", "on_reaction_clear_emoji"])
 async def test_vote_adapter_restores_every_baseline_after_clear_and_tolerates_forbidden(
     handler_name: str,
@@ -219,3 +258,22 @@ async def test_vote_adapter_restores_every_baseline_after_clear_and_tolerates_fo
         mocker.call(GENERIC_OPTIONS[0].emoji),
         mocker.call(GENERIC_OPTIONS[1].emoji),
     ]
+
+
+async def test_clear_recovery_restores_options_without_toggling_public_ballots(mocker: MockerFixture) -> None:
+    session = poll_snapshot(
+        visibility=VoteVisibility.VISIBLE_LIVE,
+        messages=(VoteMessage(100, 200, 10),),
+        options=GENERIC_OPTIONS,
+        selections=(VoteSelection(7, 10, "one", "1️⃣", 1),),
+    )
+    cog, bot, votes = _cog(mocker, session)
+    message = mocker.Mock()
+    message.add_reaction = mocker.AsyncMock()
+    bot.get_or_fetch_message.return_value = message
+    event = SimpleNamespace(payload=SimpleNamespace(message_id=100), emoji=None)
+
+    await cog.recover_reaction_clear(event)
+
+    votes.cast_vote.assert_not_awaited()
+    assert message.add_reaction.await_count == 2
