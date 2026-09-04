@@ -4,7 +4,7 @@ import asyncio
 
 
 class Completion[ValueT]:
-    """A lazily loop-bound future which never owns the work that resolves it."""
+    """A lazily loop-bound signal that ends when its owner resolves or cancels it."""
 
     def __init__(self) -> None:
         self._future: asyncio.Future[ValueT] | None = None
