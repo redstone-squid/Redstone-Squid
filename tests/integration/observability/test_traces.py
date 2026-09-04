@@ -3,7 +3,7 @@
 Not a test of the third-party instrumentors. Every assertion here is about Squid code
 whose behaviour only exists once composed with them, and which nothing else can check:
 `correlation_id` resolving to the trace an operator can search for, `TraceContextFilter`
-stamping that trace onto log records, and `inject_trace_context`/`extracted_trace_span`
+stamping that trace onto log records, and `trace_context_headers`/`extracted_trace_span`
 carrying a trace across the schematic process boundary. Unit tests of those functions can
 only assert against a mocked tracer, which is how they would keep passing after the
 composition broke.
@@ -45,7 +45,7 @@ from squid.observability import (
     TraceContextFilter,
     correlation_id,
     extracted_trace_span,
-    inject_trace_context,
+    trace_context_headers,
     trace_span,
 )
 
@@ -92,9 +92,8 @@ def test_squid_telemetry_composes_with_a_live_sdk() -> None:
         ):
             TraceContextFilter().filter(command_record)
         tracer = trace.get_tracer("propagation-test")
-        carrier: dict[str, object] = {}
         with tracer.start_as_current_span("schematic.supervisor"):
-            inject_trace_context(carrier)
+            carrier = trace_context_headers()
         with extracted_trace_span(
             "schematic.worker analyze",
             carrier,

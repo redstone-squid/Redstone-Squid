@@ -295,7 +295,7 @@ def serve(stdin: IO[bytes], stdout: IO[bytes]) -> None:
             context["squid.schematic.job_id"] = header["job_id"]
         _request_context.fields = context
         try:
-            with extracted_trace_span(f"schematic.worker {operation}", header, attributes) as span:
+            with extracted_trace_span(f"schematic.worker {operation}", _trace_headers(header), attributes) as span:
                 try:
                     result, output = handle(operation, params, tuple(payloads))
                     response = Frame({"id": request_id, "ok": True, "result": result}, (output,) if output else ())
@@ -321,6 +321,14 @@ def serve(stdin: IO[bytes], stdout: IO[bytes]) -> None:
 
         stdout.write(response.encode())
         stdout.flush()
+
+
+def _trace_headers(header: Mapping[str, Any]) -> Mapping[str, str]:
+    """Accept only a string-to-string trace carrier from the untrusted request frame."""
+    trace = header.get("trace")
+    if not isinstance(trace, Mapping):
+        return {}
+    return {name: value for name, value in trace.items() if isinstance(name, str) and isinstance(value, str)}
 
 
 def main() -> None:
