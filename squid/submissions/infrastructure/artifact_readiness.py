@@ -7,6 +7,7 @@ from typing import Protocol
 from uuid import UUID
 
 from squid.media.application.jobs import (
+    MEDIA_VIDEO_THUMBNAIL_ROLES,
     MediaArtifactRole,
     MediaJobSnapshot,
     MediaJobStatus,
@@ -183,7 +184,7 @@ def _assess_media(
             for job in active
             if job.status is MediaJobStatus.COMPLETED
             for artifact in job.artifacts
-            if artifact.role in {MediaArtifactRole.OUTPUT, MediaArtifactRole.POSTER}
+            if artifact.role is MediaArtifactRole.OUTPUT or artifact.role in MEDIA_VIDEO_THUMBNAIL_ROLES
         ),
     )
     rejected |= bool(limits.batch_violations(totals))
@@ -220,10 +221,14 @@ def _valid_completed_job(job: MediaJobSnapshot, limits: MediaLimits) -> bool:
     ):
         return False
     expected = {MediaArtifactRole.OUTPUT, MediaArtifactRole.REPORT}
-    if job.upload.kind is MediaKind.VIDEO:
-        expected.add(MediaArtifactRole.POSTER)
     roles = [artifact.role for artifact in job.artifacts]
-    if len(roles) != len(set(roles)) or set(roles) != expected:
+    role_set = set(roles)
+    thumbnail_roles = role_set & MEDIA_VIDEO_THUMBNAIL_ROLES
+    if (
+        len(roles) != len(role_set)
+        or role_set - MEDIA_VIDEO_THUMBNAIL_ROLES != expected
+        or len(thumbnail_roles) != int(job.upload.kind is MediaKind.VIDEO)
+    ):
         return False
     artifacts = {artifact.role: artifact for artifact in job.artifacts}
     output = artifacts[MediaArtifactRole.OUTPUT]
@@ -234,8 +239,8 @@ def _valid_completed_job(job: MediaJobSnapshot, limits: MediaLimits) -> bool:
     if report.content_type != "application/json" or report.width is not None or report.height is not None:
         return False
     if job.upload.kind is MediaKind.VIDEO:
-        poster = artifacts[MediaArtifactRole.POSTER]
-        if poster.content_type != "image/jpeg" or not _valid_visual_artifact(poster, limits):
+        thumbnail = artifacts[thumbnail_roles.pop()]
+        if thumbnail.content_type != "image/jpeg" or not _valid_visual_artifact(thumbnail, limits):
             return False
     return True
 

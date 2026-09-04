@@ -91,7 +91,7 @@ def _completed_artifacts(kind: MediaKind) -> tuple[StoredMediaArtifact, ...]:
         )
     ]
     if kind is MediaKind.VIDEO:
-        artifacts.append(_artifact(MediaArtifactRole.POSTER, content_type="image/jpeg"))
+        artifacts.append(_artifact(MediaArtifactRole.VIDEO_THUMBNAIL, content_type="image/jpeg"))
     artifacts.append(
         _artifact(
             MediaArtifactRole.REPORT,
@@ -225,7 +225,7 @@ async def test_invalid_completed_image_artifacts_are_rejected(
     assert readiness.issues == (SubmissionAttentionIssue("media", SubmissionAttentionReason.MEDIA_REJECTED),)
 
 
-async def test_completed_video_requires_a_valid_poster() -> None:
+async def test_completed_video_requires_a_valid_thumbnail() -> None:
     artifacts = (
         _artifact(MediaArtifactRole.OUTPUT, content_type="video/mp4"),
         _artifact(MediaArtifactRole.REPORT, content_type="application/json", width=None, height=None),
@@ -238,6 +238,22 @@ async def test_completed_video_requires_a_valid_poster() -> None:
 
     assert readiness.normalized_media_upload_ids == ()
     assert readiness.issues == (SubmissionAttentionIssue("media", SubmissionAttentionReason.MEDIA_REJECTED),)
+
+
+async def test_completed_video_accepts_a_legacy_poster_during_rolling_upgrade() -> None:
+    artifacts = (
+        _artifact(MediaArtifactRole.OUTPUT, content_type="video/mp4"),
+        _artifact(MediaArtifactRole.POSTER, content_type="image/jpeg"),
+        _artifact(MediaArtifactRole.REPORT, content_type="application/json", width=None, height=None),
+    )
+
+    readiness = await AuthoritativeDraftArtifactReadiness(
+        FakeMediaJobs((_job(1, kind=MediaKind.VIDEO, artifacts=artifacts),)),
+        FakeSchematics(),
+    ).assess(DRAFT_ID)
+
+    assert readiness.normalized_media_upload_ids == (UUID("00000000-0000-4000-8000-000000000001"),)
+    assert readiness.issues == ()
 
 
 @pytest.mark.parametrize(
