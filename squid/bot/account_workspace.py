@@ -115,22 +115,22 @@ class AccountWorkspace(sd.Screen):
                     key="consent-actions",
                 )
             )
+        nodes.append(
+            sl.form(
+                tr(t"Link Minecraft account"),
+                sl.forms.FormSpec(
+                    tr(t"Link Minecraft account"),
+                    (sl.forms.TextField(key="code", label=tr(t"In-game link code"), maximum=100),),
+                ),
+                key="link",
+                on_submit=self._link,
+            )
+        )
         if account is not None and account.id is not None and not account.needs_consent_refresh:
-            nodes.extend(
-                (
-                    sl.form(
-                        tr(t"Link Minecraft account"),
-                        sl.forms.FormSpec(
-                            tr(t"Link Minecraft account"),
-                            (sl.forms.TextField(key="code", label=tr(t"In-game link code"), maximum=100),),
-                        ),
-                        key="link",
-                        on_submit=self._link,
-                    ),
-                    sl.action_controls(
-                        sl.action_control(tr(t"Refresh Minecraft identity"), self._refresh_identity, key="refresh"),
-                        key="refresh-actions",
-                    ),
+            nodes.append(
+                sl.action_controls(
+                    sl.action_control(tr(t"Refresh Minecraft identity"), self._refresh_identity, key="refresh"),
+                    key="refresh-actions",
                 )
             )
         if self._can_refresh_any:
@@ -145,8 +145,6 @@ class AccountWorkspace(sd.Screen):
                     on_submit=self._refresh_member_identity,
                 )
             )
-        if not nodes:
-            nodes.append(sl.note(tr(t"Accept the privacy notice before linking an identity.")))
         return tuple(nodes)
 
     def _claim_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
@@ -198,9 +196,6 @@ class AccountWorkspace(sd.Screen):
 
     async def _link(self, event: sl.SubmitEvent) -> None:
         account = self._account
-        if account is None or account.id is None or account.consent is None or account.needs_consent_refresh:
-            await event.notice(tr(t"Accept the current privacy notice before linking."))
-            return
         code = cast(str, event.values["code"])
         attempted_by = (IdentityProvider.DISCORD, str(self._actor_id))
         reservation = await self._accounts.reserve_minecraft_link(
@@ -208,10 +203,14 @@ class AccountWorkspace(sd.Screen):
             attempted_by=attempted_by,
             ttl_seconds=int(CONSENT_PROMPT_TIMEOUT_SECONDS),
         )
-        conflict = link_conflict(reservation.preview, account.identity(IdentityProvider.JAVA))
+        conflict = (
+            None
+            if account is None
+            else link_conflict(reservation.preview, account.identity(IdentityProvider.JAVA))
+        )
         if conflict is not None:
             await self._accounts.release_minecraft_link(code, reservation)
-            raise AccountAlreadyLinkedError(account_id=account.id, minecraft_uuid=conflict)
+            raise AccountAlreadyLinkedError(account_id=account.id if account is not None else None, minecraft_uuid=conflict)
 
         settled = False
 
@@ -222,14 +221,29 @@ class AccountWorkspace(sd.Screen):
             settled = True
             await self._accounts.release_minecraft_link(code, reservation)
 
+        async def consented_account(consent: AccountConsent) -> Account:
+            linked_account = account
+            if linked_account is None or linked_account.id is None:
+                linked_account = await self._accounts.get_or_create_identity(
+                    IdentityProvider.DISCORD,
+                    str(self._actor_id),
+                    consent=consent,
+                )
+            elif linked_account.consent is None or linked_account.needs_consent_refresh:
+                linked_account = await self._accounts.grant_current_consent(linked_account.id)
+            if linked_account.id is None:
+                raise AccountNotFoundError(provider=IdentityProvider.DISCORD, subject=str(self._actor_id))
+            return linked_account
+
         async def answered(prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
             nonlocal settled
             if consent is None:
                 await release()
                 return
             try:
+                linked_account = await consented_account(consent)
                 refresh = await self._accounts.link_minecraft_account(
-                    account.id,
+                    linked_account.id,
                     code,
                     consent=consent,
                     attempted_by=attempted_by,
