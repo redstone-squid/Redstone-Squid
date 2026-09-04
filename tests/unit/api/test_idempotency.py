@@ -323,6 +323,33 @@ async def test_response_body_limit_is_enforced_before_bytes_are_sent() -> None:
     assert recorder.responses == []
 
 
+@pytest.mark.asyncio
+async def test_response_body_limit_stops_capturing_at_the_first_oversized_chunk() -> None:
+    frames_sent = 0
+
+    async def app(_scope: Scope, _receive, send) -> None:
+        nonlocal frames_sent
+        frames_sent += 1
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        frames_sent += 1
+        await send(
+            {
+                "type": "http.response.body",
+                "body": b"x" * MAX_IDEMPOTENT_RESPONSE_BYTES,
+                "more_body": True,
+            }
+        )
+        frames_sent += 1
+        await send({"type": "http.response.body", "body": b"x", "more_body": True})
+        frames_sent += 1
+        await send({"type": "http.response.body", "body": b"never buffered", "more_body": False})
+
+    with pytest.raises(RuntimeError, match="replay limit"):
+        await run_completion_middleware(app, CompletionRecorder())
+
+    assert frames_sent == 3
+
+
 def test_configured_response_body_limit_is_applied() -> None:
     accounts = CountingAccounts()
     service = IdempotencyService(MemoryIdempotencyRepository())
