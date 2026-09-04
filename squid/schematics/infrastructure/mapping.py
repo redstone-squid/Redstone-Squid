@@ -3,7 +3,7 @@
 from collections.abc import Mapping, Sequence
 from typing import Any, Literal, cast
 
-from squid.core.errors import JSONValue
+from squid.core.errors import DataIntegrityError, JSONValue
 from squid.schematics.application.attachments import SchematicPublication, StoredSchematic
 from squid.schematics.domain.models import (
     AutostackLattice,
@@ -52,12 +52,23 @@ def to_row_values(analysis: SchematicAnalysis) -> dict[str, Any]:
     }
 
 
-def to_stored_schematic(row: BuildSchematic, *, source_format: SchematicFormat, byte_size: int) -> StoredSchematic:
+def to_stored_schematic(row: BuildSchematic, *, source_format: str, byte_size: int) -> StoredSchematic:
     """Rebuild the read model, taking the two file-level facts from `schematic_files`.
 
     `source_format` and `byte_size` describe the bytes, not the analysis, so they live on the
     content-addressed file row and are joined in rather than duplicated per attachment.
     """
+    try:
+        return _to_stored_schematic(row, source_format=source_format, byte_size=byte_size)
+    except DataIntegrityError as error:
+        if error.context.get("schematic_id") == row.id:
+            raise
+        raise _mapping_error(row.id) from error
+    except (AttributeError, IndexError, KeyError, OverflowError, TypeError, ValueError) as error:
+        raise _mapping_error(row.id) from error
+
+
+def _to_stored_schematic(row: BuildSchematic, *, source_format: str, byte_size: int) -> StoredSchematic:
     return StoredSchematic(
         id=row.id,
         build_id=row.build_id,
@@ -79,7 +90,7 @@ def to_stored_schematic(row: BuildSchematic, *, source_format: SchematicFormat, 
         ),
         analysis=SchematicAnalysis(
             metrics=SchematicMetrics(
-                source_format=source_format,
+                source_format=SchematicFormat(source_format),
                 byte_size=byte_size,
                 sha256=row.file_sha256,
                 dimensions=SchematicDimensions(row.width, row.height, row.length),
@@ -108,6 +119,11 @@ def to_stored_schematic(row: BuildSchematic, *, source_format: SchematicFormat, 
         ),
         simulation_evidence=_simulation_from_json(row.simulation_evidence),
     )
+
+
+def _mapping_error(schematic_id: int) -> DataIntegrityError:
+    msg = f"Persisted schematic {schematic_id} contains an invalid enum or JSON value."
+    return DataIntegrityError(msg, context={"schematic_id": schematic_id})
 
 
 def _lattice_to_json(lattice: AutostackLattice | None) -> dict[str, Any] | None:
