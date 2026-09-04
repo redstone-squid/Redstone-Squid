@@ -158,7 +158,7 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         await enforce(request, REDSTONER_PANEL_MANAGE, REDSTONER_ROLE_RESYNC, mode="any")
         guild = request.guild
         if guild is None or guild.id != self.bot.owner_server_id:
-            return sd.Response(text_node(tr("This is only available in the bot's home server.")), audience="personal")
+            return sd.Response(text_node(tr(t"This is only available in the bot's home server.")), audience="personal")
 
         async def may_deploy() -> bool:
             return await allows(request, REDSTONER_PANEL_MANAGE)
@@ -205,9 +205,9 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         await enforce(request, REDSTONER_ROLE_RESYNC)
         guild = request.guild
         if guild is None or guild.id != self.bot.owner_server_id or message.guild != guild:
-            return text_node(tr("That message is not in the bot's home server."))
+            return text_node(tr(t"That message is not in the bot's home server."))
         await self.give_redstoner_from_message(message)
-        return text_node(tr("Redstoner automation resynced."))
+        return text_node(tr(t"Redstoner automation resynced."))
 
     async def give_redstoner_from_message(self, message: discord.Message) -> None:
         """Give the redstoner role to a user based on a Starboard message."""

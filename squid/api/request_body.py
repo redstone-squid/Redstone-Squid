@@ -5,7 +5,7 @@ from http import HTTPStatus
 
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
-from starlette.routing import BaseRoute
+from starlette.routing import BaseRoute, Route
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from squid.api.errors import handle_http_error
@@ -42,7 +42,9 @@ class BoundedRequestBodyMiddleware:
         self._app = app
         self._max_bytes = max_bytes
         self._exempt = tuple(
-            route.path_regex for route in routes if getattr(getattr(route, "endpoint", None), _STREAMS_OWN_BODY, False)
+            route.path_regex
+            for route in routes
+            if isinstance(route, Route) and getattr(route.endpoint, _STREAMS_OWN_BODY, False)
         )
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:

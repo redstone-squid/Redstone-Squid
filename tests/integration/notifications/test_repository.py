@@ -650,13 +650,18 @@ async def test_staff_fan_out_inserts_one_row_per_eligible_recipient(
             occurred_at=Instant.now(),
         )
 
-        await repository._insert_many(  # pyright: ignore[reportPrivateUsage]
+        await repository._insert_candidates(  # pyright: ignore[reportPrivateUsage]
             session,
             event=event,
-            account_ids=sorted(accounts.values()),
-            kind=NotificationKind.STAFF_BUILD_SUBMITTED,
-            source_key=lambda account_id: f"event:{event.id}:staff:{account_id}",
-            payload={"build_id": 7},
+            candidates=tuple(
+                NotificationCandidate(
+                    account_id=account_id,
+                    kind=NotificationKind.STAFF_BUILD_SUBMITTED,
+                    source_key=f"event:{event.id}:staff:{account_id}",
+                    payload={"build_id": 7},
+                )
+                for account_id in sorted(accounts.values())
+            ),
         )
 
     async with async_session_factory() as session:
