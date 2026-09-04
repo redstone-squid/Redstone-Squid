@@ -60,15 +60,16 @@ class VerifiedResourcePack:
 
     def __post_init__(self) -> None:
         if not isinstance(self.data, bytes):
-            msg = "Resource-pack data must be immutable bytes."
-            raise TypeError(msg)
+            msg = tr(t"Resource-pack data must be immutable bytes.")
+            raise ValidationError(msg)
         if self.media_type != RESOURCE_PACK_MEDIA_TYPE:
-            msg = f"Resource packs must use {RESOURCE_PACK_MEDIA_TYPE}."
-            raise ValueError(msg)
+            media_type = RESOURCE_PACK_MEDIA_TYPE
+            msg = tr(t"Resource packs must use {media_type}.")
+            raise ValidationError(msg)
         actual = hashlib.sha256(self.data).hexdigest()
         if self.sha256 != actual:
-            msg = "Resource-pack bytes do not match their SHA-256 digest."
-            raise ValueError(msg)
+            msg = tr(t"Resource-pack bytes do not match their SHA-256 digest.")
+            raise ValidationError(msg)
 
     @classmethod
     def from_bytes(cls, data: bytes) -> Self:
