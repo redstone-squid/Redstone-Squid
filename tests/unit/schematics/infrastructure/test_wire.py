@@ -136,6 +136,30 @@ def test_worker_requests_require_known_operations_objects_and_payload_arity(fram
 
 
 @pytest.mark.parametrize(
+    ("operation", "arity"),
+    [
+        ("capabilities", 0),
+        ("analyze", 1),
+        ("convert", 1),
+        ("compare", 2),
+        ("render", 1),
+        ("simulate", 1),
+        ("autostack", 1),
+    ],
+)
+def test_every_worker_request_operation_enforces_its_payload_arity(operation: wire.Operation, arity: int) -> None:
+    payloads = (b"payload",) * arity
+    decoded = wire.decode_worker_request(Frame({"id": 1, "op": operation, "params": {}}, payloads))
+    assert decoded.operation == operation
+
+    with pytest.raises(FrameStreamClosed, match="payload"):
+        wire.decode_worker_request(Frame({"id": 1, "op": operation, "params": {}}, (*payloads, b"extra")))
+    if payloads:
+        with pytest.raises(FrameStreamClosed, match="payload"):
+            wire.decode_worker_request(Frame({"id": 1, "op": operation, "params": {}}, payloads[:-1]))
+
+
+@pytest.mark.parametrize(
     "frame",
     [
         Frame({"id": 2, "ok": True, "result": {}}),
@@ -148,6 +172,66 @@ def test_worker_requests_require_known_operations_objects_and_payload_arity(fram
 def test_worker_responses_require_matching_ids_objects_enums_and_payload_arity(frame: Frame) -> None:
     with pytest.raises(FrameStreamClosed):
         wire.validate_worker_response(frame, request_id=1, operation="capabilities")
+
+
+@pytest.mark.parametrize(
+    ("operation", "arity"),
+    [
+        ("capabilities", 0),
+        ("analyze", 0),
+        ("convert", 1),
+        ("compare", 0),
+        ("render", 1),
+        ("simulate", 0),
+        ("autostack", 1),
+    ],
+)
+def test_every_worker_response_operation_enforces_its_payload_arity(operation: wire.Operation, arity: int) -> None:
+    payloads = (b"payload",) * arity
+    wire.validate_worker_response(
+        Frame({"id": 1, "ok": True, "result": {}}, payloads),
+        request_id=1,
+        operation=operation,
+    )
+
+    with pytest.raises(FrameStreamClosed, match="payload"):
+        wire.validate_worker_response(
+            Frame({"id": 1, "ok": True, "result": {}}, (*payloads, b"extra")),
+            request_id=1,
+            operation=operation,
+        )
+    if payloads:
+        with pytest.raises(FrameStreamClosed, match="payload"):
+            wire.validate_worker_response(
+                Frame({"id": 1, "ok": True, "result": {}}, payloads[:-1]),
+                request_id=1,
+                operation=operation,
+            )
+
+
+@pytest.mark.parametrize(
+    ("operation", "arities"),
+    [
+        ("capabilities", (0,)),
+        ("analyze", (1,)),
+        ("convert", (1,)),
+        ("compare", (2,)),
+        ("render", (1, 2)),
+        ("simulate", (1,)),
+        ("autostack", (1,)),
+    ],
+)
+def test_every_durable_operation_enforces_its_payload_arity(
+    operation: wire.Operation, arities: tuple[int, ...]
+) -> None:
+    for arity in arities:
+        assert wire.validate_durable_request_payloads(operation, (b"payload",) * arity) == operation
+
+    with pytest.raises(ValueError, match="payload"):
+        wire.validate_durable_request_payloads(operation, (b"payload",) * (max(arities) + 1))
+    if min(arities) > 0:
+        with pytest.raises(ValueError, match="payload"):
+            wire.validate_durable_request_payloads(operation, ())
 
 
 def test_an_analysis_survives_encoding_and_decoding() -> None:
@@ -269,6 +353,12 @@ def test_lattice_decode_rejects_invalid_modes_and_vector_counts() -> None:
 def test_worker_base64_decode_rejects_missing_or_malformed_text(payload: str) -> None:
     with pytest.raises(ValueError, match=r"contain base64|Invalid base64"):
         wire.decode_base64(payload, "render pack")
+
+
+@pytest.mark.parametrize("timeout", [0, 0.0, -1, float("nan"), float("inf")])
+def test_optional_operation_timeout_must_be_finite_and_positive(timeout: float) -> None:
+    with pytest.raises(ValueError, match=r"operation timeout|finite"):
+        wire.decode_optional_timeout(timeout)
 
 
 def test_resource_pack_metadata_and_raw_bytes_rebuild_a_verified_value() -> None:
