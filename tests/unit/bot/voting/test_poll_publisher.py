@@ -14,8 +14,8 @@ from tests.support.voting import GENERIC_OPTIONS
 
 
 class VoteRecorder:
-    def __init__(self, *, fail_first_attachment: bool = False) -> None:
-        self.fail_first_attachment = fail_first_attachment
+    def __init__(self, *, attachment_failures: int = 0) -> None:
+        self.attachment_failures = attachment_failures
         self.create_calls = 0
         self.attach_calls: list[tuple[int, int]] = []
 
@@ -36,7 +36,7 @@ class VoteRecorder:
 
     async def attach_message(self, vote_session_id: int, message_id: int) -> None:
         self.attach_calls.append((vote_session_id, message_id))
-        if self.fail_first_attachment and len(self.attach_calls) == 1:
+        if len(self.attach_calls) <= self.attachment_failures:
             raise RuntimeError("temporary database failure")
 
 
@@ -112,22 +112,15 @@ async def _publish(publisher: DiscordPollPublisher, channel: Channel) -> PollPub
     )
 
 
-async def test_an_attachment_failure_resumes_the_same_session_and_message() -> None:
-    votes = VoteRecorder(fail_first_attachment=True)
+async def test_live_publication_retries_attachment_without_recreating_or_resending() -> None:
+    votes = VoteRecorder(attachment_failures=1)
     messages = MessageRecorder()
     bot = Bot(votes, messages)
     channel = Channel(20, Snowflake(10))
     message = Message(30, channel, Snowflake(40), channel.guild)
     publisher = PublisherRecorder(bot, message)
 
-    with pytest.raises(PollPublicationError) as raised:
-        await _publish(publisher, channel)
-
-    pending = raised.value.pending
-    assert pending.vote_session_id == 41
-    assert pending.message is message
-
-    completed = await publisher.resume(pending, cast(Any, channel))
+    completed = await _publish(publisher, channel)
 
     assert completed.vote_session_id == 41
     assert completed.message is message
@@ -160,5 +153,31 @@ async def test_a_send_failure_preserves_the_session_for_a_later_send() -> None:
 
     assert completed.message is message
     assert votes.create_calls == 1
-    assert publisher.send_calls == 2
+    assert publisher.send_calls == 3
     assert votes.attach_calls == [(41, 31)]
+
+
+async def test_a_second_attachment_failure_logs_an_operator_actionable_pending_identity(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    votes = VoteRecorder(attachment_failures=2)
+    messages = MessageRecorder()
+    bot = Bot(votes, messages)
+    channel = Channel(20, Snowflake(10))
+    message = Message(30, channel, Snowflake(40), channel.guild)
+    publisher = PublisherRecorder(bot, message)
+
+    with (
+        caplog.at_level("ERROR", logger="squid.bot.voting.publisher"),
+        pytest.raises(PollPublicationError) as raised,
+    ):
+        await _publish(publisher, channel)
+
+    assert raised.value.pending.vote_session_id == 41
+    assert raised.value.pending.message is message
+    record = caplog.records[-1]
+    assert record.message == "Poll publication remains incomplete after retry"
+    assert vars(record)["squid.vote.session_id"] == 41
+    assert vars(record)["squid.message.id"] == 30
+    assert vars(record)["squid.channel.id"] == 20
+    assert vars(record)["squid.guild.id"] == 10
