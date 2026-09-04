@@ -1,6 +1,6 @@
 """Build editing values and lease coordination."""
 
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Final, Literal, Self, cast, override
 
@@ -21,6 +21,10 @@ class _Unset:
 
 UNSET: Final = _Unset()
 type PatchValue[T] = T | _Unset
+
+
+def _latest[T](current: PatchValue[T], incoming: PatchValue[T]) -> PatchValue[T]:
+    return current if isinstance(incoming, _Unset) else incoming
 
 
 @dataclass(slots=True, frozen=True)
@@ -53,6 +57,47 @@ class BuildEditPatch:
     completion_time: PatchValue[str | None] = UNSET
     extra_info: PatchValue[Info] = UNSET
     ai_generated: PatchValue[bool] = UNSET
+
+    @classmethod
+    def combine(cls, patches: Iterable[BuildEditPatch]) -> Self:
+        """Combine typed patch fragments, with later fragments taking precedence."""
+        combined = cls()
+        for patch in patches:
+            combined = cls(
+                version_spec=_latest(combined.version_spec, patch.version_spec),
+                dimensions=_latest(combined.dimensions, patch.dimensions),
+                door_dimensions=_latest(combined.door_dimensions, patch.door_dimensions),
+                door_type=_latest(combined.door_type, patch.door_type),
+                door_orientation_type=_latest(combined.door_orientation_type, patch.door_orientation_type),
+                wiring_placement_restrictions=_latest(
+                    combined.wiring_placement_restrictions,
+                    patch.wiring_placement_restrictions,
+                ),
+                animated_restrictions=_latest(combined.animated_restrictions, patch.animated_restrictions),
+                component_restrictions=_latest(combined.component_restrictions, patch.component_restrictions),
+                miscellaneous_restrictions=_latest(
+                    combined.miscellaneous_restrictions,
+                    patch.miscellaneous_restrictions,
+                ),
+                locationality=_latest(combined.locationality, patch.locationality),
+                directionality=_latest(combined.directionality, patch.directionality),
+                normal_closing_time=_latest(combined.normal_closing_time, patch.normal_closing_time),
+                normal_opening_time=_latest(combined.normal_opening_time, patch.normal_opening_time),
+                extra_user_info=_latest(combined.extra_user_info, patch.extra_user_info),
+                creators_ign=_latest(combined.creators_ign, patch.creators_ign),
+                image_urls=_latest(combined.image_urls, patch.image_urls),
+                video_urls=_latest(combined.video_urls, patch.video_urls),
+                world_download_urls=_latest(combined.world_download_urls, patch.world_download_urls),
+                schematic_urls=_latest(combined.schematic_urls, patch.schematic_urls),
+                render_urls=_latest(combined.render_urls, patch.render_urls),
+                server_ip=_latest(combined.server_ip, patch.server_ip),
+                coordinates=_latest(combined.coordinates, patch.coordinates),
+                command_to_get_to_build=_latest(combined.command_to_get_to_build, patch.command_to_get_to_build),
+                completion_time=_latest(combined.completion_time, patch.completion_time),
+                extra_info=_latest(combined.extra_info, patch.extra_info),
+                ai_generated=_latest(combined.ai_generated, patch.ai_generated),
+            )
+        return combined
 
     @classmethod
     def from_attributes(cls, changes: Mapping[str, object]) -> Self:
