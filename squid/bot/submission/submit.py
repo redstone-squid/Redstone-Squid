@@ -287,19 +287,23 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
                         "squid.schematic.format": attachment.analysis.analysis.metrics.source_format.value,
                     },
                 )
-                failures.append(attachment_failure_for(attachment, "record", error.public_detail()))
+                failures.extend(
+                    attachment_failure_for(item, "record", error.public_detail())
+                    for item in sorted(group, key=lambda item: item.identity)
+                )
             except Exception:
                 logger.exception(
                     "Unexpected failure recording schematic analysis for build %s.",
                     build.id,
                     extra={"squid.build.id": build.id, "squid.schematic.sha256": sha256},
                 )
-                failures.append(
+                failures.extend(
                     attachment_failure_for(
-                        attachment,
+                        item,
                         "record",
                         "The analyzed schematic could not be attached to the saved submission.",
                     )
+                    for item in sorted(group, key=lambda item: item.identity)
                 )
         return failures
 
