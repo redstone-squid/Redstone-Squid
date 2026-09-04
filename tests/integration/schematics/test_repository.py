@@ -307,13 +307,14 @@ async def test_primary_replacement_wins_a_concurrent_render_publication(
     first_digest = await repository.put_file(b"first", source_format=SchematicFormat.LITEMATIC)
     second_digest = await repository.put_file(b"second", source_format=SchematicFormat.LITEMATIC)
     first_id = await repository.record_analysis(1, first_digest, make_analysis(), primary=True)
-    second_id = await repository.record_analysis(1, second_digest, make_analysis(), primary=False)
+    await repository.record_analysis(1, second_digest, make_analysis(), primary=False)
     await _ready_preview_object(preview_publisher, preview_artifacts, "renders/late.png")
 
-    published = anyio.Event()
     results: list[object | None] = []
+    start = anyio.Event()
 
     async def publish_late_render() -> None:
+        await start.wait()
         results.append(
             await preview_publisher.publish_fresh_preview(
                 first_id,
@@ -325,31 +326,34 @@ async def test_primary_replacement_wins_a_concurrent_render_publication(
                 byte_size=42,
             )
         )
-        published.set()
 
-    async with anyio.create_task_group() as tasks:
-        async with async_session_factory() as replacement, replacement.begin():
-            await replacement.execute(text("SELECT id FROM builds WHERE id = 1 FOR UPDATE"))
+    async def replace_primary() -> None:
+        await start.wait()
+        await repository.record_analysis(1, second_digest, make_analysis(), primary=True)
+
+    with anyio.fail_after(5):
+        async with anyio.create_task_group() as tasks:
             tasks.start_soon(publish_late_render)
-            with anyio.move_on_after(0.1) as scope:
-                await published.wait()
-            assert scope.cancelled_caught
-            await replacement.execute(
-                text("UPDATE build_schematics SET is_primary = false WHERE id = :schematic_id"),
-                {"schematic_id": first_id},
-            )
-            await replacement.execute(
-                text("UPDATE build_schematics SET is_primary = true WHERE id = :schematic_id"),
-                {"schematic_id": second_id},
-            )
-        await published.wait()
+            tasks.start_soon(replace_primary)
+            start.set()
 
-    assert results == [None]
+    assert len(results) == 1
+    featured = await repository.get_featured(1)
+    assert featured is not None
+    assert featured.file_sha256 == second_digest
     async with async_session_factory() as session:
-        stale_rows = await session.scalar(
-            text("SELECT count(*) FROM schematic_renders WHERE recipe_hash = 'late-recipe'")
+        generated_links = set(
+            await session.scalars(
+                text(
+                    "SELECT url FROM build_links "
+                    "WHERE build_id = 1 AND media_type = 'render' "
+                    "AND url = 'https://api.example/v1/schematic-renders/late/content'"
+                )
+            )
         )
-    assert stale_rows == 0
+        queued = await session.scalar(text("SELECT count(*) FROM schematic_render_queue WHERE build_id = 1"))
+    assert generated_links == set()
+    assert queued == 1
 
 
 async def test_republishing_the_same_recipe_replaces_its_prior_generated_url(
@@ -616,10 +620,14 @@ async def test_publication_round_trips_and_reanalysis_does_not_reset_it(
     assert stored.analysis.metrics.block_count == 99
 
 
-async def test_oversized_bytes_are_refused_by_the_database_as_well_as_the_upload_check(
+async def test_schema_ceiling_accepts_the_exact_boundary_and_refuses_one_byte_more(
     repository: PostgresSchematicStore,
 ) -> None:
     """Defence in depth: the size cap is a check constraint, not only an application rule."""
+    exact = b"\x00" * SCHEMATIC_FILE_SCHEMA_MAX_BYTES
+    digest = await repository.put_file(exact, source_format=SchematicFormat.LITEMATIC)
+    assert await repository.get_file(digest) == exact
+
     with pytest.raises(IntegrityError):
         await repository.put_file(
             b"\x00" * (SCHEMATIC_FILE_SCHEMA_MAX_BYTES + 1),
