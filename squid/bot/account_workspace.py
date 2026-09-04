@@ -8,8 +8,11 @@ import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.accounts.application import AccountService
 from squid.accounts.domain import Account, AccountConsent, IdentityProvider
+from squid.accounts.errors import AccountAlreadyLinkedError
+from squid.bot.account_presentation import link_conflict, link_message, refresh_message
 from squid.bot.account_view import AccountScreen, ConsentRequest
 from squid.bot.claims_view import ClaimReviewComponent
+from squid.bot.consent import CONSENT_PROMPT_TIMEOUT_SECONDS
 from squid.bot.ui import tr
 from squid.permissions.domain import PermissionNode
 
@@ -159,7 +162,7 @@ class AccountWorkspace(sd.Screen):
         )
 
     async def _consent(self, event: sl.PressEvent) -> None:
-        async def answered(consent: AccountConsent | None) -> None:
+        async def answered(_prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
             if consent is None:
                 return
             account = self._account
@@ -182,30 +185,60 @@ class AccountWorkspace(sd.Screen):
             return
         code = cast(str, event.values["code"])
         attempted_by = (IdentityProvider.DISCORD, str(self._actor_id))
-        reservation = await self._accounts.reserve_minecraft_link(code, attempted_by=attempted_by)
-        committed = False
-        try:
-            refresh = await self._accounts.link_minecraft_account(
-                account.id,
-                code,
-                consent=account.consent,
-                attempted_by=attempted_by,
-                reservation=reservation,
-            )
-            committed = True
-        finally:
-            if not committed:
-                await self._accounts.release_minecraft_link(code, reservation)
-        current_name = refresh.current_name
-        await self._rebuild()
-        await event.notice(tr(t"Linked Minecraft account **{current_name}**."))
+        reservation = await self._accounts.reserve_minecraft_link(
+            code,
+            attempted_by=attempted_by,
+            ttl_seconds=int(CONSENT_PROMPT_TIMEOUT_SECONDS),
+        )
+        conflict = link_conflict(reservation.preview, account.identity(IdentityProvider.JAVA))
+        if conflict is not None:
+            await self._accounts.release_minecraft_link(code, reservation)
+            raise AccountAlreadyLinkedError(account_id=account.id, minecraft_uuid=conflict)
+
+        settled = False
+
+        async def release() -> None:
+            nonlocal settled
+            if settled:
+                return
+            settled = True
+            await self._accounts.release_minecraft_link(code, reservation)
+
+        async def answered(prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
+            nonlocal settled
+            if consent is None:
+                await release()
+                return
+            try:
+                refresh = await self._accounts.link_minecraft_account(
+                    account.id,
+                    code,
+                    consent=consent,
+                    attempted_by=attempted_by,
+                    reservation=reservation,
+                )
+            except Exception:
+                await release()
+                raise
+            settled = True
+            await self._rebuild()
+            await prompt.notice(link_message(refresh))
+
+        opened = await self._request_consent(
+            event,
+            answered,
+            preview=reservation.preview,
+            on_abandon=release,
+            timeout=CONSENT_PROMPT_TIMEOUT_SECONDS,
+        )
+        if not opened:
+            await release()
 
     async def _refresh_identity(self, event: sl.PressEvent) -> None:
         account_id = self._account_id()
         refresh = await self._accounts.refresh_java_identity(account_id)
-        current_name = refresh.current_name
         await self._rebuild()
-        await event.notice(tr(t"Minecraft identity refreshed as **{current_name}**."))
+        await event.notice(refresh_message(refresh))
 
     async def _claim(self, event: sl.SubmitEvent) -> None:
         claim = await self._accounts.request_alias_claim(self._account_id(), cast(str, event.values["name"]))
