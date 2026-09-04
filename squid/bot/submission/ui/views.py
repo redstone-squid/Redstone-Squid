@@ -174,6 +174,15 @@ class SubmissionOutcome:
 
     build: Build
     node: sl.LayoutNode[sl.ComponentsV2Target]
+    delivery_complete: bool = True
+
+
+class SubmissionDeliveryError(Exception):
+    """Presentation failed after a submission had already been persisted."""
+
+    def __init__(self, outcome: SubmissionOutcome) -> None:
+        super().__init__("submission delivery failed after persistence")
+        self.outcome = outcome
 
 
 class SubmissionScreen(sd.Screen):
@@ -219,8 +228,15 @@ class SubmissionScreen(sd.Screen):
 
             build_id = self.outcome.build.id
             assert build_id is not None, "a submitted build has a persistent id"
+            headline = (
+                tr(t"Submitted for review. Submission ID: {build_id}.")
+                if self.outcome.delivery_complete
+                else tr(
+                    t"Submission {build_id} was saved, but its review card could not be delivered. Staff can retry delivery without resubmitting it."
+                )
+            )
             return (
-                sl.status(tr(t"Submitted for review. Submission ID: {build_id}.")),
+                sl.status(headline, tone=sl.Tone.SUCCESS if self.outcome.delivery_complete else sl.Tone.WARNING),
                 self.outcome.node,
                 sl.primitives.Section(
                     (sl.primitives.Text(tr(t"Staff can now review and vote on this build."), priority=-10),),
@@ -387,6 +403,11 @@ class SubmissionScreen(sd.Screen):
         await event.acknowledge()
         try:
             self.outcome = await self.on_submit()
+        except SubmissionDeliveryError as error:
+            self.outcome = error.outcome
+            self.submitting = False
+            self.invalidate()
+            raise
         except Exception:
             self.submitting = False
             self.validation_error = tr(
