@@ -6,11 +6,12 @@ never has to load it.
 """
 
 import asyncio
+import io
 import json
 
 import pytest
 
-from squid.schematics.application.commands import RenderRequest
+from squid.schematics.application.commands import RenderRequest, SimulationRequest
 from squid.schematics.domain.models import (
     AnalyzerCapabilities,
     AutostackLattice,
@@ -37,6 +38,20 @@ async def read_back(frame: Frame) -> Frame:
     reader.feed_data(frame.encode())
     reader.feed_eof()
     return await wire.read_frame(reader)
+
+
+async def read_raw_frame(data: bytes) -> Frame:
+    """Read exact bytes so malformed headers can bypass `Frame.encode` validation."""
+    reader = asyncio.StreamReader()
+    reader.feed_data(data)
+    reader.feed_eof()
+    return await wire.read_frame(reader)
+
+
+def raw_frame(header: object, body: bytes = b"", *, body_length: int | None = None) -> bytes:
+    header_bytes = json.dumps(header, separators=(",", ":")).encode()
+    declared_body_length = len(body) if body_length is None else body_length
+    return len(header_bytes).to_bytes(4, "big") + declared_body_length.to_bytes(4, "big") + header_bytes + body
 
 
 async def test_a_frame_round_trips_its_header_and_every_payload() -> None:
@@ -80,6 +95,61 @@ async def test_a_desynchronised_stream_is_refused_before_allocating_a_huge_buffe
         await wire.read_frame(reader)
 
 
+@pytest.mark.parametrize(
+    "header",
+    [
+        [],
+        {"parts": None},
+        {"parts": [-1]},
+        {"parts": [True]},
+        {"parts": [wire.MAX_FRAME_BYTES + 1]},
+        {"parts": [0] * (wire.MAX_FRAME_PARTS + 1)},
+    ],
+)
+async def test_malformed_frame_headers_are_rejected_before_body_slicing(header: object) -> None:
+    with pytest.raises(FrameStreamClosed):
+        await read_raw_frame(raw_frame(header))
+
+
+async def test_payload_part_totals_must_equal_the_declared_body() -> None:
+    with pytest.raises(FrameStreamClosed, match="do not equal"):
+        await read_raw_frame(raw_frame({"parts": [1]}, body_length=2))
+
+
+def test_blocking_frame_reader_applies_the_same_header_validation() -> None:
+    with pytest.raises(FrameStreamClosed, match="do not equal"):
+        wire.read_frame_sync(io.BytesIO(raw_frame({"parts": [1]}, body_length=2)))
+
+
+@pytest.mark.parametrize(
+    "frame",
+    [
+        Frame({"id": 1, "op": "unknown", "params": {}}),
+        Frame({"id": 1, "op": "compare", "params": {}}, (b"only-one",)),
+        Frame({"id": True, "op": "capabilities", "params": {}}),
+        Frame({"id": 1, "op": "capabilities", "params": []}),
+    ],
+)
+def test_worker_requests_require_known_operations_objects_and_payload_arity(frame: Frame) -> None:
+    with pytest.raises(FrameStreamClosed):
+        wire.decode_worker_request(frame)
+
+
+@pytest.mark.parametrize(
+    "frame",
+    [
+        Frame({"id": 2, "ok": True, "result": {}}),
+        Frame({"id": 1, "ok": "yes", "result": {}}),
+        Frame({"id": 1, "ok": True, "result": []}),
+        Frame({"id": 1, "ok": True, "result": {}}, (b"unexpected",)),
+        Frame({"id": 1, "ok": False, "error": {"kind": "unknown", "message": "x", "context": {}}}),
+    ],
+)
+def test_worker_responses_require_matching_ids_objects_enums_and_payload_arity(frame: Frame) -> None:
+    with pytest.raises(FrameStreamClosed):
+        wire.validate_worker_response(frame, request_id=1, operation="capabilities")
+
+
 def test_an_analysis_survives_encoding_and_decoding() -> None:
     lattice = AutostackLattice(
         mode="2d",
@@ -93,7 +163,7 @@ def test_an_analysis_survives_encoding_and_decoding() -> None:
     )
     analysis = make_analysis(lattice=lattice, signs=(SchematicSign(1, 2, 3, "line one\nline two"),))
 
-    assert wire.decode_analysis(wire.encode_analysis(analysis)) == analysis
+    assert wire.decode_analysis(json.loads(json.dumps(wire.encode_analysis(analysis)))) == analysis
 
 
 def test_a_comparison_survives_encoding_and_decoding() -> None:
@@ -106,7 +176,7 @@ def test_a_comparison_survives_encoding_and_decoding() -> None:
         summary='{"distance":1}',
     )
 
-    assert wire.decode_comparison(wire.encode_comparison(comparison)) == comparison
+    assert wire.decode_comparison(json.loads(json.dumps(wire.encode_comparison(comparison)))) == comparison
 
 
 def test_capabilities_survive_encoding_and_decoding() -> None:
@@ -118,7 +188,7 @@ def test_capabilities_survive_encoding_and_decoding() -> None:
         render_backends=("vulkan",),
     )
 
-    assert wire.decode_capabilities(wire.encode_capabilities(capabilities)) == capabilities
+    assert wire.decode_capabilities(json.loads(json.dumps(wire.encode_capabilities(capabilities)))) == capabilities
 
 
 def test_render_requests_keep_the_rgba_json_array_shape() -> None:
@@ -148,6 +218,59 @@ def test_render_request_decode_rejects_non_array_rgba_values() -> None:
         wire.decode_render_request(encoded)
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("projection", "fisheye"),
+        ("sphere_fit", 1),
+        ("background", [0.0, 0.0, "0.0", 1.0]),
+        ("background", [0.0, 0.0, float("nan"), 1.0]),
+    ],
+)
+def test_render_request_decode_rejects_invalid_enums_booleans_and_rgba(field: str, value: object) -> None:
+    encoded = dict(wire.encode_render_request(RenderRequest()))
+    encoded[field] = value
+
+    with pytest.raises((TypeError, ValueError)):
+        wire.decode_render_request(encoded)
+
+
+@pytest.mark.parametrize("position", [[1, 2], [1, 2, "3"], [1, 2, 3, 4]])
+def test_simulation_request_decode_rejects_invalid_vectors(position: list[object]) -> None:
+    encoded = dict(wire.encode_simulation_request(SimulationRequest()))
+    encoded["input_position"] = position
+
+    with pytest.raises((TypeError, ValueError)):
+        wire.decode_simulation_request(encoded)
+
+
+def test_lattice_decode_rejects_invalid_modes_and_vector_counts() -> None:
+    lattice = AutostackLattice(
+        mode="1d",
+        vectors=((4, 0, 0),),
+        coverage=1.0,
+        cell_min=(0, 0, 0),
+        cell_max=(3, 0, 0),
+        region_min=(0, 0, 0),
+        region_max=(7, 0, 0),
+    )
+    encoded = json.loads(json.dumps(wire.encode_lattice(lattice)))
+    encoded["mode"] = "3d"
+    with pytest.raises(ValueError, match="mode"):
+        wire.decode_lattice(encoded)
+
+    encoded["mode"] = "1d"
+    encoded["vectors"] = [[4, 0, 0], [0, 4, 0]]
+    with pytest.raises(ValueError, match="exactly 1"):
+        wire.decode_lattice(encoded)
+
+
+@pytest.mark.parametrize("payload", ["", "%%%", "YWJj==="])
+def test_worker_base64_decode_rejects_missing_or_malformed_text(payload: str) -> None:
+    with pytest.raises(ValueError, match=r"contain base64|Invalid base64"):
+        wire.decode_base64(payload, "render pack")
+
+
 def test_resource_pack_metadata_and_raw_bytes_rebuild_a_verified_value() -> None:
     pack = VerifiedResourcePack.from_bytes(b"resource-pack")
     metadata = json.loads(json.dumps(wire.encode_resource_pack(pack)))
@@ -172,7 +295,7 @@ def test_a_simulation_result_survives_encoding_and_decoding() -> None:
         notes=("capture-backed",),
     )
 
-    assert wire.decode_simulation(wire.encode_simulation(result)) == result
+    assert wire.decode_simulation(json.loads(json.dumps(wire.encode_simulation(result)))) == result
 
 
 def test_loss_entries_survive_encoding_and_decoding() -> None:
@@ -184,8 +307,9 @@ def test_loss_entries_survive_encoding_and_decoding() -> None:
     assert wire.decode_losses(wire.encode_losses(losses)) == losses
 
 
-def test_a_missing_loss_report_decodes_to_no_losses() -> None:
-    assert wire.decode_losses(None) == ()
+def test_a_missing_loss_report_is_rejected() -> None:
+    with pytest.raises(TypeError, match="conversion losses"):
+        wire.decode_losses(None)
 
 
 @pytest.mark.parametrize(
@@ -213,10 +337,7 @@ def test_candidate_input_coordinates_survive_the_worker_pipe(
 
 
 @pytest.mark.parametrize("context", [{}, {"candidates": "not a list", "rejected": [1, 2]}, {"candidates": [[1, 2]]}])
-def test_a_malformed_candidate_list_degrades_to_no_candidates(context: dict[str, object]) -> None:
+def test_a_malformed_candidate_list_is_rejected(context: dict[str, object]) -> None:
     """The child is our own code, but it is still JSON arriving down a pipe."""
-    rebuilt = _translate({"kind": "ambiguous_simulation_input", "context": context}, "simulate")
-
-    assert isinstance(rebuilt, AmbiguousSimulationInputError)
-    assert rebuilt.candidates == ()
-    assert rebuilt.rejected is None
+    with pytest.raises((TypeError, ValueError)):
+        _translate({"kind": "ambiguous_simulation_input", "message": "ambiguous", "context": context}, "simulate")

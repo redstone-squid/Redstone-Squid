@@ -92,6 +92,7 @@ class QueuedSchematicAnalyzer:
                 "limits": dataclasses.asdict(limits),
                 "with_lattice": with_lattice,
                 "source_format": source_format.value if source_format is not None else None,
+                "lattice_max_block_count": self._config.lattice_max_block_count,
             },
             (data,),
             timeout_seconds=self._config.job_wait_timeout_seconds,
@@ -112,7 +113,7 @@ class QueuedSchematicAnalyzer:
             (data,),
             timeout_seconds=self._config.job_wait_timeout_seconds,
         )
-        return response.payload or b"", wire.decode_losses(response.result.get("losses"))
+        return response.payload or b"", wire.decode_losses(response.result["losses"])
 
     async def compare(
         self,
@@ -153,7 +154,7 @@ class QueuedSchematicAnalyzer:
         self._require_enabled()
         response = await self._request(
             "simulate",
-            {"request": dataclasses.asdict(request)},
+            {"request": wire.encode_simulation_request(request)},
             (data,),
             timeout_seconds=self._config.job_wait_timeout_seconds,
         )
@@ -299,78 +300,62 @@ class SchematicJobRunner:
         inputs: Sequence[bytes],
     ) -> tuple[Mapping[str, Any], bytes | None]:
         params = job.params
-        if job.operation == "capabilities":
+        operation = wire.validate_durable_request_payloads(job.operation, inputs)
+        if operation == "capabilities":
             return {"capabilities": wire.encode_capabilities(await self._analyzer.capabilities())}, None
-        if job.operation == "analyze":
-            raw_limits = cast(Mapping[str, Any], params["limits"])
-            source_format = params.get("source_format")
+        if operation == "analyze":
+            limits, with_lattice, source_format, _ = wire.decode_analyze_params(params)
             analysis = await self._analyzer.analyze(
                 inputs[0],
-                limits=SchematicLimits(**{key: int(value) for key, value in raw_limits.items()}),
-                with_lattice=bool(params.get("with_lattice", False)),
-                source_format=SchematicFormat(source_format) if source_format else None,
+                limits=limits,
+                with_lattice=with_lattice,
+                source_format=source_format,
             )
             return {"analysis": wire.encode_analysis(analysis)}, None
-        if job.operation == "convert":
-            data_version = params.get("data_version")
+        if operation == "convert":
+            target, data_version = wire.decode_convert_params(params)
             converted, losses = await self._analyzer.convert(
                 inputs[0],
-                target=SchematicFormat(params["target"]),
-                data_version=int(data_version) if data_version is not None else None,
+                target=target,
+                data_version=data_version,
             )
             return {"losses": wire.encode_losses(losses)}, converted
-        if job.operation == "compare":
-            timeout = params.get("timeout_seconds")
+        if operation == "compare":
             comparison = await self._analyzer.compare(
                 inputs[0],
                 inputs[1],
-                preset=FingerprintPreset(params["preset"]),
-                timeout_seconds=float(timeout) if timeout is not None else None,
+                preset=wire.decode_compare_params(params),
+                timeout_seconds=wire.decode_optional_timeout(params.get("timeout_seconds")),
             )
             return {"comparison": wire.encode_comparison(comparison)}, None
-        if job.operation == "render":
+        if operation == "render":
             pack_metadata = params.get("resource_pack")
-            pack = (
-                wire.decode_resource_pack(cast(Mapping[str, Any], pack_metadata), inputs[1])
-                if pack_metadata is not None
-                else None
-            )
+            expected_inputs = 2 if pack_metadata is not None else 1
+            if len(inputs) != expected_inputs:
+                msg = "Durable render resource-pack metadata does not match its staged inputs."
+                raise InvalidSchematicError(msg)
+            pack = wire.decode_resource_pack(pack_metadata, inputs[1]) if pack_metadata is not None else None
             rendered = await self._analyzer.render(
                 inputs[0],
-                request=wire.decode_render_request(cast(Mapping[str, Any], params["request"])),
+                request=wire.decode_render_request(params.get("request")),
                 resource_pack=pack,
             )
             return {}, rendered
-        if job.operation == "simulate":
-            simulation = await self._analyzer.simulate(inputs[0], request=_simulation_request(params))
+        if operation == "simulate":
+            simulation = await self._analyzer.simulate(
+                inputs[0], request=wire.decode_simulation_request(params.get("request"))
+            )
             return {"simulation": wire.encode_simulation(simulation)}, None
-        if job.operation == "autostack":
-            lattice = wire.decode_lattice(cast(Mapping[str, Any], params["lattice"]))
+        if operation == "autostack":
+            lattice, counts = wire.decode_autostack_params(params)
             output = await self._analyzer.autostack(
                 inputs[0],
                 lattice=lattice,
-                counts=tuple(int(count) for count in cast(Sequence[Any], params["counts"])),
+                counts=counts,
             )
             return {}, output
-        msg = f"Unsupported schematic job operation {job.operation}."
+        msg = f"Unsupported schematic job operation {operation}."
         raise InvalidSchematicError(msg)
-
-
-def _simulation_request(params: Mapping[str, Any]) -> SimulationRequest:
-    request = cast(Mapping[str, Any], params["request"])
-    input_position = request.get("input_position")
-    return SimulationRequest(
-        input_position=(
-            cast(tuple[int, int, int], tuple(int(axis) for axis in cast(Sequence[Any], input_position)))
-            if input_position is not None
-            else None
-        ),
-        watch_positions=tuple(
-            cast(tuple[int, int, int], tuple(int(axis) for axis in cast(Sequence[Any], position)))
-            for position in cast(Sequence[Any], request.get("watch_positions", ()))
-        ),
-        max_ticks=int(request.get("max_ticks", 200)),
-    )
 
 
 def _classify_error(error: Exception) -> tuple[SchematicJobErrorKind, Mapping[str, Any], bool]:
