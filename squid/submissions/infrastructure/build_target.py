@@ -51,7 +51,7 @@ _RESTRICTION_FIELDS = {
 }
 
 
-class ProviderNeutralBuilds(Protocol):
+class SubmissionBuildCommands(Protocol):
     """The build command needed by synchronized finalization."""
 
     async def get_by_source_submission_draft_id(self, draft_id: UUID) -> Build | None: ...
@@ -84,7 +84,7 @@ class BuildSubmissionTarget:
 
     def __init__(
         self,
-        builds: ProviderNeutralBuilds,
+        builds: SubmissionBuildCommands,
         tags: ApprovedSubmissionTags,
         versions: CanonicalSubmissionVersions,
     ) -> None:
