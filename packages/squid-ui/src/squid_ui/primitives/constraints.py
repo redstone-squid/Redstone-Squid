@@ -27,7 +27,7 @@ class Spill:
 class Paginate:
     """Split content into pages; the solver adds nav controls and a page footer.
 
-    Splits at ``boundary`` where possible, hard-splitting single oversized segments. One
+    Splits at ``boundary`` where possible, hard-splitting single oversized segments.
     The key gives this paginator independent state and must be explicit when using the planner.
     ``initial`` picks the page first shown — "end" suits content whose interesting part is its
     tail, like a traceback whose failing frame is the last one.
@@ -90,6 +90,7 @@ class Alts:
 
 
 def alts(*ladder: str) -> Alts:
+    """Build a validated text degradation ladder from preferred to shortest."""
     return Alts(ladder=ladder)
 
 

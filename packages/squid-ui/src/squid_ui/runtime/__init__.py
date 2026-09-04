@@ -1,5 +1,10 @@
 """Frontend-neutral component runtime and presentation state."""
 
+from typing import TYPE_CHECKING, Literal, overload
+
+if TYPE_CHECKING:
+    from squid_ui.runtime.owner import ComponentRuntime
+
 from squid_ui.runtime.component import Component
 from squid_ui.runtime.context import ContextKey
 from squid_ui.runtime.histories import (
@@ -116,7 +121,15 @@ from squid_ui.runtime.topics import (
 )
 
 
-def __getattr__(name: str):
+@overload
+def __getattr__(name: Literal["ComponentRuntime"]) -> type[ComponentRuntime]: ...
+
+
+@overload
+def __getattr__(name: str) -> object: ...
+
+
+def __getattr__(name: str) -> object:
     if name == "ComponentRuntime":
         from squid_ui.runtime.owner import ComponentRuntime
 

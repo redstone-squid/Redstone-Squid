@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Self, overload
+from typing import TYPE_CHECKING, Self, overload
 
 from squid_ui import scene
 from squid_ui.capabilities import Capability
@@ -10,6 +10,9 @@ from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.target import Target
 from squid_ui.target_types import HtmlAdapter, HtmlTarget
+
+if TYPE_CHECKING:
+    from squid_ui.planning.html_planner import HtmlPlanner
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,7 +58,7 @@ class HtmlDialect:
     realizes_extensions = False
 
     @property
-    def planner(self) -> Any:
+    def planner(self) -> HtmlPlanner:
         from squid_ui.planning.html_planner import HTML_PLANNER
 
         return HTML_PLANNER
