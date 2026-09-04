@@ -344,7 +344,11 @@ class PostgresNotificationRepository:
                             NotificationProfile,
                             NotificationProfile.account_id == NotificationDeliveryRecord.account_id,
                         )
-                        .join(NotificationRecord, NotificationRecord.id == NotificationDeliveryRecord.notification_id)
+                        .join(
+                            NotificationRecord,
+                            (NotificationRecord.id == NotificationDeliveryRecord.notification_id)
+                            & (NotificationRecord.account_id == NotificationDeliveryRecord.account_id),
+                        )
                         .join(Account, Account.id == NotificationDeliveryRecord.account_id)
                         .join(
                             AccountIdentity,

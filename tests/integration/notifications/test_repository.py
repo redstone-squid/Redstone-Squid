@@ -41,6 +41,7 @@ from squid.permissions.infrastructure.models import (
     PermissionRolePattern,
 )
 from squid.persistence.base import Base
+from squid.persistence.types import now
 
 _TABLES = [
     Base.metadata.tables["accounts"],
@@ -166,12 +167,15 @@ async def test_delivery_claim_selects_most_recent_discord_identity_and_completes
     delivery_id = await _seed_delivery(async_session_factory)
     async with async_session_factory.begin() as session:
         account_id = (await session.scalars(select(Account.id))).one()
+        verified_at = now()
+        existing = (await session.scalars(select(AccountIdentity))).one()
+        existing.verified_at = verified_at
         session.add(
             AccountIdentity(
                 account_id=account_id,
                 provider=IdentityProvider.DISCORD,
                 subject="456",
-                verified_at=Instant.now().add(minutes=1),
+                verified_at=verified_at,
             )
         )
 
