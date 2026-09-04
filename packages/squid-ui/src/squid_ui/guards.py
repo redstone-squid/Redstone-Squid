@@ -1,8 +1,8 @@
 """Per-action admission: may *this* press execute right now?
 
-Access policies (`sd.access`) answer who may interact with a message; guards answer
-whether one control may run this instant. They compose, and neither subsumes the other: a
-cooldown, a deadline, or a single privileged button on an otherwise public panel is a guard.
+Access policies (`squid_ui_discord.access`) answer who may interact with a message; guards
+answer whether one control may run this instant. They compose, and neither subsumes the other:
+a cooldown, a deadline, or a single privileged button on an otherwise public panel is a guard.
 
 Guards never affect rendering. A denial is a private notice, because the framework cannot
 re-render a panel when a cooldown happens to expire; `available=` remains the render-time
@@ -10,7 +10,7 @@ tool and the two are routinely used together.
 
 Admission has a third answer besides yes and no: *not yet — ask the actor*. A guard says
 that by returning a `Challenge`, and the press is dropped rather than parked; approving it
-starts a fresh one. See `docs/plans/squid-ui-redesign/64-challenged-admission.md`.
+starts a fresh one. See `docs/plans/completed/squid-layouts-redesign/64-challenged-admission.md`.
 """
 
 import time
@@ -63,9 +63,13 @@ class ChallengeResolver(Protocol):
     run it outside the dialog's own dispatch, and returns.
     """
 
-    async def approve(self) -> None: ...
+    async def approve(self) -> None:
+        """Count one approval under `approvals` and re-enter the challenged press from the top."""
+        ...
 
-    async def decline(self) -> None: ...
+    async def decline(self) -> None:
+        """Drop the press and close the dialog, showing `Challenge.on_decline` if it is set."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,7 +95,7 @@ type GuardResult = GuardDecision | Challenge
 
 
 class GuardScope(StrEnum):
-    """Whose behaviour a stateful guard counts."""
+    """Whose presses a stateful guard counts: `ACTOR` keeps one bucket per actor, `MOUNT` one for everyone."""
 
     ACTOR = "actor"
     MOUNT = "mount"
@@ -121,10 +125,8 @@ class _Staged:
 class GuardKind[ValueT]:
     """What one stateful guard stores, declared once beside the guard that stores it.
 
-    The parameter is what a bare string could not carry. `GuardLedger.read` and `.write`
-    used to take a `str` and an `object`, with `read`'s return type inferred from whatever
-    default the caller passed -- so a cooldown written as a float and read back with an
-    `int` default type-checked and lied.
+    `ValueT` is the type of every `GuardLedger.write` and `read` through this kind, so a
+    cooldown written as a `float` cannot be read back against an `int` default.
     """
 
     name: str
@@ -216,6 +218,7 @@ class GuardLedger:
         return default if stored is None else cast(ValueT, stored)
 
     def write[ValueT](self, key: GuardKey[ValueT], value: ValueT) -> None:
+        """Store `value` under `key`; on a staged view it is visible to `read` now and to the ledger at `commit`."""
         if (staged := self._staged) is not None:
             staged.writes[key.entry] = value
             staged.cleared.discard(key.entry)
@@ -258,7 +261,13 @@ def approvals(ledger: GuardLedger, actor: str, *, key: str | None = None) -> Gua
 class Guard(Protocol):
     """Decide whether one press may execute, given the mount's guard ledger."""
 
-    async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardResult: ...
+    async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardResult:
+        """Answer for one press: `ADMIT`, a `deny(...)`, or a `Challenge` to put to the actor.
+
+        `ledger` is already scoped to the pressed action and staged, so writes made here are
+        kept only if the whole pass ends in admission or denial, and discarded on a challenge.
+        """
+        ...
 
 
 _COOLDOWN = GuardKind[float]("cooldown")
@@ -422,7 +431,7 @@ def rate_limit(
     per: GuardScope = GuardScope.ACTOR,
     key: str | None = None,
 ) -> Guard:
-    """Admit `count` presses per rolling `per_seconds` window."""
+    """Admit `count` presses per rolling `per_seconds` window. Raises `ValueError` when `count` is below 1."""
     if count < 1:
         message = "rate_limit() needs a count of at least 1"
         raise ValueError(message)
@@ -430,7 +439,7 @@ def rate_limit(
 
 
 def until(deadline: datetime, *, reason: TextLike | None = None) -> Guard:
-    """Admit until an aware `deadline` passes, and never again."""
+    """Admit until `deadline` passes, and never again. Raises `ValueError` for a naive `deadline`."""
     return _Until(deadline, reason)
 
 

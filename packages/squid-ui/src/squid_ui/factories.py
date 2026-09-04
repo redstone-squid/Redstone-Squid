@@ -285,26 +285,26 @@ def group[RenderTargetT = RenderTarget](*children: ChildLike[RenderTargetT]) -> 
 
 
 def stack[RenderTargetT = RenderTarget](*children: ChildLike[RenderTargetT]) -> Stack[RenderTargetT]:
-    """Content read top to bottom."""
+    """Children read top to bottom; lowers to them in place."""
     return Stack(_children(children, "sl.stack()"))
 
 
 def cluster[RenderTargetT = RenderTarget](*children: ChildLike[RenderTargetT]) -> Cluster[RenderTargetT]:
-    """Content read as a set rather than a sequence."""
+    """Children read as a set rather than a sequence; lowers to them in place."""
     return Cluster(_children(children, "sl.cluster()"))
 
 
 def themed[RenderTargetT = RenderTarget](
     palette: Palette, *children: ChildLike[RenderTargetT]
 ) -> Themed[RenderTargetT]:
-    """Apply a presentation palette to one semantic subtree."""
+    """Resolve the accents and tones under ``children`` through ``palette`` instead of the active one."""
     return Themed(_children(children, "sl.themed()"), palette)
 
 
 def block[RenderTargetT = RenderTarget](
     *children: ChildLike[RenderTargetT], accent: Accent = INHERIT
 ) -> Block[RenderTargetT]:
-    """An untitled region; ``accent`` is a house-colour override."""
+    """An untitled embed or container; ``accent`` overrides the inherited colour."""
     return Block(_children(children, "sl.block()"), accent)
 
 
@@ -314,7 +314,7 @@ def section[RenderTargetT = RenderTarget](
     accent: Accent = INHERIT,
     thumbnail: str | None = None,
 ) -> Section[RenderTargetT]:
-    """A titled block of related content; ``accent`` is a house-colour override."""
+    """A titled embed or container; ``accent`` overrides the inherited colour, ``thumbnail`` sits beside ``heading``."""
     return Section(heading, _children(children, "sl.section()"), accent, thumbnail)
 
 
@@ -324,7 +324,7 @@ def article[RenderTargetT = RenderTarget](
     accent: Accent = INHERIT,
     thumbnail: str | None = None,
 ) -> Article[RenderTargetT]:
-    """A self-contained block that stands on its own."""
+    """A self-contained `section`; the Discord planner lowers both identically."""
     return Article(heading, _children(children, "sl.article()"), accent, thumbnail)
 
 
@@ -359,7 +359,7 @@ def details[RenderTargetT = RenderTarget](
 
 
 def summary(content: TextValue) -> Summary:
-    """The control text that identifies a `details` region."""
+    """The label of the button that opens and closes a `details` region."""
     return Summary(_text(content))
 
 
@@ -375,10 +375,12 @@ def form(
     guard: Guard | None = None,
     record: History | None = None,
 ) -> FormTrigger:
-    """A content control that presents a portable form.
+    """A button that opens ``spec`` as a modal.
 
     ``guard`` gates the press that opens the form; the submission that follows completes an
-    already-admitted press and is not checked again.
+    already-admitted press and is not checked again. ``mode`` defaults to a `Form`'s
+    `action_mode`, else `EXCLUSIVE`. Raises `TypeError` as `bind_form` does and `ValueError`
+    for ``record`` with `PARALLEL_READ`.
     """
     resolved, handler, default_mode = bind_form(spec, on_submit)
     selected_mode = mode or default_mode
@@ -391,12 +393,12 @@ def form(
 def item[RenderTargetT = RenderTarget](
     label: ItemLabel, *children: ChildLike[RenderTargetT], key: str, summary: TextValue | None = None
 ) -> Item[RenderTargetT]:
-    """One entry of an `items` collection."""
+    """One `items` entry; ``summary`` follows the label on the overview line, ``children`` show only when opened."""
     return Item(key, label, _children(children, "sl.item()"), _opt_text(summary))
 
 
 def item_label(content: TextValue) -> ItemLabel:
-    """The identity shown for one `items` entry."""
+    """An entry's name: its overview line, its select option, and the heading of its opened view."""
     return ItemLabel(_text(content))
 
 
@@ -415,17 +417,17 @@ def items[RenderTargetT = RenderTarget](
 
 
 def heading(content: TextValue, *, level: int = 2, importance: Importance = Importance.HIGH) -> Heading:
-    """A standalone heading."""
+    """A heading that never truncates; ``level`` is the Markdown ``#`` depth on Components V2."""
     return Heading(_text(content), level, importance)
 
 
 def paragraph(content: TextValue, *, importance: Importance = Importance.NORMAL) -> Paragraph:
-    """A block of prose."""
+    """Prose that never truncates unless wrapped in `truncate`/`best_effort`."""
     return Paragraph(_text(content), importance)
 
 
 def status(content: TextValue, *, tone: Tone = Tone.NEUTRAL, emphasis: Emphasis = Emphasis.NORMAL) -> Status:
-    """A short outcome or state message."""
+    """One line prefixed with the emoji for ``tone``; ``emphasis`` is not read."""
     return Status(_text(content), tone, emphasis)
 
 
@@ -435,22 +437,22 @@ def note(content: TextValue, *, importance: Importance = Importance.LOW) -> Note
 
 
 def code(content: str, *, language: str = "") -> Code:
-    """Preformatted code or output."""
+    """A fenced code block that never truncates unless wrapped in `truncate`/`best_effort`."""
     return Code(content, language)
 
 
 def quote(content: TextValue, *, attribution: TextValue | None = None) -> Quote:
-    """Quoted text with optional attribution."""
+    """A ``> `` block quote, ``attribution`` on an em-dash line below; never truncates."""
     return Quote(_text(content), _opt_text(attribution))
 
 
 def progress(value: float, *, label: TextValue | None = None, maximum: float = 1.0) -> ProgressBar:
-    """Completion of a known-length task."""
+    """A ten-cell text bar with a percentage; ``value`` is clamped to ``0..maximum``."""
     return ProgressBar(value, _opt_text(label), maximum)
 
 
 def metric(value: int | float | str, label: TextValue, *, unit: str | None = None) -> Metric:
-    """A single labelled quantity."""
+    """One ``**label:** value unit`` line; ``value`` is shown as given, not formatted."""
     return Metric(value, _text(label), unit)
 
 
@@ -460,7 +462,7 @@ def timestamp(
     style: TimeStyle = TimeStyle.SHORT_DATETIME,
     label: TextValue | None = None,
 ) -> Timestamp:
-    """A typed instant; naive datetimes are rejected before rendering."""
+    """An instant the target renders in the reader's timezone. Raises `ValueError` for a naive ``instant``."""
     if instant.tzinfo is None or instant.utcoffset() is None:
         message = "sl.timestamp() requires an aware datetime"
         raise ValueError(message)
@@ -468,7 +470,7 @@ def timestamp(
 
 
 def zoned_timestamp(value: ZonedDateTime, *, label: TextValue | None = None) -> ZonedTimestamp:
-    """An exact instant displayed with its IANA timezone identity."""
+    """An instant shown in its own named timezone rather than the reader's."""
     return ZonedTimestamp(value, _opt_text(label))
 
 
@@ -499,7 +501,7 @@ def fields(*entries: Conditional[Field]) -> Fields:
 
 
 def bullet(content: TextValue, *, key: str = "", importance: Importance = Importance.NORMAL) -> ListItem:
-    """One entry of a `bullets` list."""
+    """One `bullets` entry; ``importance`` decides which lines spill first."""
     return ListItem(key, _text(content), importance)
 
 
@@ -520,12 +522,11 @@ def bullets(
 
 
 def column(heading: TextValue, *, key: str = "") -> Column:
-    """One column of a `table`."""
     return Column(key, _text(heading))
 
 
 def columns(*entries: Conditional[Column]) -> Columns:
-    """The ordered schema that precedes a `table`'s rows."""
+    """The column schema a `table`'s rows are checked against. Raises `ValueError` with no columns."""
     collected = _collect(entries, (Column,), "sl.columns()")
     if not collected:
         message = "sl.columns() needs at least one column"
@@ -545,7 +546,10 @@ def table(
     display: TableDisplay = TableDisplay.AUTO,
     flexibility: Flexibility = Flexibility.NORMAL,
 ) -> Table:
-    """Tabular data; ``key`` carries the chosen representation and page."""
+    """Rows drawn as ``display`` says; ``key`` carries the chosen representation and page.
+
+    Raises `ValueError` for a row whose cell count differs from the column count.
+    """
     return Table(
         columns,
         _collect(rows, (TableRow,), "sl.table()"),
@@ -564,7 +568,13 @@ def roster(
     locked: bool = False,
     show_waitlist: bool = True,
 ) -> Roster:
-    """Render one host-owned roster allocation with active localized chrome."""
+    """A slot-by-slot member list with one join button per slot.
+
+    The button dispatches to ``on_join`` through the mount, to ``routes[slot.key]`` through
+    the router, or is absent when neither is given; ``locked`` disables every one. Raises
+    `ValueError` for both ``on_join`` and ``routes``, or ``routes`` whose keys are not exactly
+    the slot keys.
+    """
     return Roster(key, placement, on_join, routes, locked, show_waitlist)
 
 
@@ -575,7 +585,12 @@ def grid(
     on_pick: Callable[[SelectionEvent], Awaitable[None]],
     flexibility: Flexibility = Flexibility.NORMAL,
 ) -> Grid:
-    """A selectable grid that adapts without changing its submitted cell keys."""
+    """A grid the reader picks one cell of; ``on_pick`` receives the cell key whatever shape is drawn.
+
+    One button per cell while ``columns`` fits a row and the buttons fit the message, else a
+    code-block matrix with a coordinate select. Raises `ValueError` for a grid `validate_grid`
+    rejects.
+    """
     return Grid(key, _collect(cells, (GridCell,), "sl.grid()"), columns, on_pick, flexibility)
 
 
@@ -597,7 +612,13 @@ def tally(
     total: int | None = None,
     show_bars: bool = True,
 ) -> Stack:
-    """Render host-owned counts with optional mounted or routed selection."""
+    """A `progress` bar per option over a picker: `choices` with ``on_vote``, `routed_choices` with ``route_id``.
+
+    With neither the options are a plain `bullets` list under ``key.options``. The reader's
+    own votes (`TallyOption.mine`) are the preselection and are shown bold. Raises
+    `ValueError` for no options, duplicate keys, both ``on_vote`` and ``route_id``, or a
+    ``total`` below zero or below any count.
+    """
     if not options:
         message = "sl.tally() needs at least one option"
         raise ValueError(message)
@@ -641,7 +662,7 @@ def tally(
 
 
 def media_item(url: str, *, key: str = "", description: TextValue | None = None) -> MediaItem:
-    """One image of a `media` collection."""
+    """One image; ``description`` is its alt text."""
     return MediaItem(key, url, _opt_text(description))
 
 
@@ -686,7 +707,8 @@ def action_control(
     ``record`` opens the entry for this press, under ``label``, before the handler runs: an
     action whose whole commit is transactional state needs no `History.record` of its own.
     A world-changing action records one explicit `CompensationSpec`; doing so under
-    ``record=`` raises `HistoryError` rather than making two entries.
+    ``record=`` raises `HistoryError` rather than making two entries. Raises `ValueError`
+    for ``record`` with `PARALLEL_READ`, which changes nothing to record.
     """
     if record is not None and mode is ActionMode.PARALLEL_READ:
         message = "a parallel-read action changes nothing, so it has nothing to record"
@@ -718,12 +740,12 @@ def download(
     description: TextValue | None = None,
     emphasis: Emphasis = Emphasis.NORMAL,
 ) -> Download:
-    """Offer an inline-declared asset through a visible download control."""
+    """A file component on Components V2, a plain attachment elsewhere; ``label=None`` uses `Chrome.download`."""
     return Download(key, _opt_text(label), asset, _opt_text(description), emphasis)
 
 
 def link(label: TextValue, url: str, *, key: str, emphasis: Emphasis = Emphasis.NORMAL) -> Link:
-    """A control that opens ``url``."""
+    """A URL button; never folded into a select, and ``emphasis`` is not read."""
     return Link(key, _text(label), url, emphasis)
 
 
@@ -747,7 +769,7 @@ def routed_action_control(
 def control_group(
     *entries: Conditional[ActionControl | Link | RoutedActionControl], key: str, label: TextValue | None = None
 ) -> ControlGroup:
-    """Controls that belong together and degrade together."""
+    """Actions that share one select under the grouped strategy; ``label`` is its placeholder."""
     return ControlGroup(
         key, _collect(entries, (ActionControl, Link, RoutedActionControl), "sl.control_group()"), _opt_text(label)
     )
@@ -781,7 +803,7 @@ def choices(
     maximum: int = 1,
     flexibility: Flexibility = Flexibility.NORMAL,
 ) -> Choices:
-    """A control that selects among options; ``key`` namespaces its custom id."""
+    """A button row for 2-5 available choices with ``maximum=1``, else a select; ``key`` namespaces its custom id."""
     return Choices(
         key,
         _collect(entries, (Choice,), "sl.choices()"),
@@ -814,7 +836,11 @@ def entities(
     placeholder: TextValue | None = None,
     flexibility: Flexibility = Flexibility.NORMAL,
 ) -> Entities:
-    """Select frontend-resolved entities, optionally with an enumerated fallback."""
+    """A native entity select where the target has one, else a `choices` over ``entries``.
+
+    Raises `ValueError` for ``conversation_types`` on a non-conversation ``entity_type`` or
+    an entry whose ref kind it does not admit.
+    """
     return Entities(
         key,
         entity_type,
@@ -904,7 +930,7 @@ def routed_choices(
 
 
 def nav_option(label: TextValue, *, key: str, available: bool = True) -> NavOption:
-    """One place `navigation` can go."""
+    """One `navigation` destination; an unavailable one is not drawn."""
     return NavOption(key, _text(label), available)
 
 
@@ -915,7 +941,7 @@ def navigation(
     display: NavigationDisplay = NavigationDisplay.AUTO,
     flexibility: Flexibility = Flexibility.STABLE,
 ) -> Navigation:
-    """Movement between the views of one message."""
+    """Movement between the views of one message: a button row or a select, with ``current`` highlighted."""
     return Navigation(
         key,
         _collect(entries, (NavOption,), "sl.navigation()"),

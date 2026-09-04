@@ -53,7 +53,12 @@ type FormIssue = FieldError | FormError
 
 
 class FormValidationMode(StrEnum):
-    """What happens after a submitted form fails validation."""
+    """What happens after a submitted form fails validation.
+
+    `RETRY` re-presents the form prefilled with the attempt and its errors, and the submit
+    handler never runs. `ACCEPT_AND_MARK` runs the handler anyway, with the errors on
+    `SubmitEvent.errors`.
+    """
 
     RETRY = "retry"
     ACCEPT_AND_MARK = "accept_and_mark"
@@ -82,10 +87,9 @@ def _invalid(message: str) -> NoReturn:
 type PrefillValue = str | tuple[str, ...] | bool | int | float | None
 """What a field hands an adapter to seed its control with.
 
-`format` used to return `object`, which pushed the question to every consumer: the Discord
-modal wraps one result in `str()` and calls `set()` on another, the latter type-checking
-only because `MultiChoiceField` happens to narrow. This is the set those consumers can
-actually accept.
+The closed set every adapter control accepts: a text input takes the `str()` of a scalar,
+a select takes the `tuple[str, ...]` of option keys. `FormField.format` returns nothing
+outside it, so an adapter never narrows per field type.
 """
 
 
@@ -111,6 +115,10 @@ class FormField[ValueT](ABC):
     The same object can be used dynamically in :class:`FormSpec` or as a descriptor on
     :class:`Form`. Descriptor fields acquire their key and fallback label from the attribute
     name when the class compiles its schema.
+
+    Every `parse` override accepts the adapter's raw value as `object`, returns `None` for a
+    missing optional value, and raises `FormValueError` for a missing required one; the
+    subclass docstrings state only what they reject beyond that.
     """
 
     label: TextLike | None = None
@@ -118,6 +126,7 @@ class FormField[ValueT](ABC):
     description: TextLike | None = None
     required: bool = True
     default: ValueT | None = None
+    """Seeds the prefill when `FormSpec.prefill` has no entry; it is not applied to a submitted blank."""
     _name: str = dataclass_field(default="", init=False, repr=False, compare=False)
 
     def __set_name__(self, owner: type[Form], name: str) -> None:
@@ -174,7 +183,7 @@ class FormField[ValueT](ABC):
 
 @dataclass(frozen=True, slots=True)
 class TextField(FormField[str]):
-    """A single-line text value."""
+    """Free text; `minimum`/`maximum` bound its length in characters after `strip`."""
 
     placeholder: TextLike | None = None
     minimum: int | None = None
@@ -182,6 +191,7 @@ class TextField(FormField[str]):
     strip: bool = True
 
     def parse(self, raw: object) -> str | None:
+        """Raises `FormValueError` when a required value strips to nothing or a length bound is broken."""
         if self._optional(raw):
             return None
         value = str(raw)
@@ -198,7 +208,7 @@ class TextField(FormField[str]):
 
 @dataclass(frozen=True, slots=True)
 class TextAreaField(TextField):
-    """A multi-line text value."""
+    """A `TextField` an adapter draws as a paragraph input; parsing is identical."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -210,6 +220,7 @@ class IntField(FormField[int]):
     placeholder: TextLike | None = None
 
     def parse(self, raw: object) -> int | None:
+        """Raises `FormValueError` when `int()` rejects the stripped text or a bound is broken."""
         if self._optional(raw):
             return None
         try:
@@ -232,6 +243,7 @@ class FloatField(FormField[float]):
     placeholder: TextLike | None = None
 
     def parse(self, raw: object) -> float | None:
+        """Raises `FormValueError` when `float()` rejects the text, the value is `inf`/`nan`, or a bound is broken."""
         if self._optional(raw):
             return None
         try:
@@ -253,7 +265,10 @@ _DURATION_UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800}
 
 @dataclass(frozen=True, slots=True)
 class DurationField(FormField[int]):
-    """A compact duration such as ``30m``, parsed to seconds."""
+    """A duration in seconds, typed as a number and one unit: `s`, `m`, `h`, `d` or `w`, such as ``30m``.
+
+    `minimum`/`maximum` bound the seconds. The grammar admits a decimal (`1.5h`) and rounds.
+    """
 
     minimum: int | None = None
     maximum: int | None = None
@@ -262,6 +277,10 @@ class DurationField(FormField[int]):
     """Replaces the compact-duration grammar; signals bad input with `ValueError`."""
 
     def parse(self, raw: object) -> int | None:
+        """Raises `FormValueError` when the text matches neither the grammar nor `parser`, or a bound is broken.
+
+        A `ValueError` from `parser` becomes the field error, with its message as the wording.
+        """
         if self._optional(raw):
             return None
         source = str(raw).strip()
@@ -284,6 +303,7 @@ class DurationField(FormField[int]):
         return value
 
     def format(self, value: object) -> PrefillValue:
+        """An `int` of seconds becomes the largest unit that divides it exactly (`90` is `90s`, `120` is `2m`)."""
         if not isinstance(value, int):
             return _prefill(value)
         for suffix, unit in (("w", 604800), ("d", 86400), ("h", 3600), ("m", 60)):
@@ -294,13 +314,14 @@ class DurationField(FormField[int]):
 
 @dataclass(frozen=True, slots=True)
 class DateField(FormField[date]):
-    """An ISO-8601 calendar date."""
+    """An ISO-8601 calendar date with optional inclusive bounds."""
 
     minimum: date | None = None
     maximum: date | None = None
     placeholder: TextLike | None = "YYYY-MM-DD"
 
     def parse(self, raw: object) -> date | None:
+        """Raises `FormValueError` when `date.fromisoformat` rejects the text or a bound is broken."""
         if self._optional(raw):
             return None
         try:
@@ -314,6 +335,7 @@ class DateField(FormField[date]):
         return value
 
     def format(self, value: object) -> PrefillValue:
+        """A `date` becomes its ISO-8601 text."""
         return value.isoformat() if isinstance(value, date) else _prefill(value)
 
 
@@ -326,6 +348,7 @@ class TimeField(FormField[TimeValue]):
     placeholder: TextLike | None = "HH:MM"
 
     def parse(self, raw: object) -> TimeValue | None:
+        """Raises `FormValueError` when `time.fromisoformat` rejects the text or a bound is broken."""
         if self._optional(raw):
             return None
         try:
@@ -339,6 +362,7 @@ class TimeField(FormField[TimeValue]):
         return value
 
     def format(self, value: object) -> PrefillValue:
+        """A `time` becomes its ISO-8601 text."""
         return value.isoformat() if isinstance(value, TimeValue) else _prefill(value)
 
 
@@ -348,6 +372,8 @@ class DateTimeField(FormField[DateTimeValue]):
 
     Ambiguous and nonexistent local times reject by default. Explicitly offset
     input already identifies an instant and does not use the local-time policies.
+    Bounds are compared as instants. Raises `TypeError` for a mode that is not its enum
+    and `ValueError` for a naive bound.
     """
 
     timezone: tzinfo = UTC
@@ -370,6 +396,11 @@ class DateTimeField(FormField[DateTimeValue]):
                 raise ValueError(message)
 
     def parse(self, raw: object) -> DateTimeValue | None:
+        """The aware value, kept in its own offset when it had one.
+
+        Raises `FormValueError` when `datetime.fromisoformat` rejects the text, a naive
+        value falls on a fold or gap the policies reject, or a bound is broken.
+        """
         if self._optional(raw):
             return None
         try:
@@ -394,12 +425,18 @@ class DateTimeField(FormField[DateTimeValue]):
         return value
 
     def format(self, value: object) -> PrefillValue:
+        """A `datetime` becomes its ISO-8601 text, offset included when it has one."""
         return value.isoformat() if isinstance(value, DateTimeValue) else _prefill(value)
 
 
 @dataclass(frozen=True, slots=True)
 class ZonedDateTimeField(FormField[ZonedDateTime]):
-    """A local ISO-8601 datetime resolved in one named IANA timezone."""
+    """A local ISO-8601 datetime resolved in one named IANA timezone.
+
+    Offset input is accepted only when the offset is the zone's at that local time. Bounds
+    are compared as instants. Raises `ValueError` for an unknown `timezone` name or a naive
+    bound, and `TypeError` for a mode that is not its enum.
+    """
 
     timezone: str = "UTC"
     minimum: DateTimeValue | None = None
@@ -422,6 +459,12 @@ class ZonedDateTimeField(FormField[ZonedDateTime]):
                 raise ValueError(message)
 
     def parse(self, raw: object) -> ZonedDateTime | None:
+        """The value resolved in `timezone`.
+
+        Raises `FormValueError` when `datetime.fromisoformat` rejects the text, a naive value
+        falls on a fold or gap the policies reject, an offset disagrees with the zone, or a
+        bound is broken.
+        """
         if self._optional(raw):
             return None
         try:
@@ -452,6 +495,7 @@ class ZonedDateTimeField(FormField[ZonedDateTime]):
         return value
 
     def format(self, value: object) -> PrefillValue:
+        """A `ZonedDateTime` becomes ISO-8601 text in this field's `timezone`, whatever zone it carries."""
         if not isinstance(value, ZonedDateTime):
             return _prefill(value)
         return value.instant.astimezone(timezone_from_name(self.timezone)).isoformat()
@@ -463,7 +507,8 @@ class ScaleField(FormField[int]):
 
     Portable by construction: a target with a radio-group shape draws the whole span, and one
     without draws a number the reader types. `labels` names individual points — the endpoints
-    are the usual case — and unnamed points show their number.
+    are the usual case — and unnamed points show their number. Raises `ValueError` unless
+    `maximum > minimum`.
     """
 
     minimum: int = 1
@@ -486,6 +531,7 @@ class ScaleField(FormField[int]):
         return str(value) if named is None else named
 
     def parse(self, raw: object) -> int | None:
+        """Raises `FormValueError` when `int()` rejects the text or the value is off the scale."""
         if self._optional(raw):
             return None
         try:
@@ -497,7 +543,7 @@ class ScaleField(FormField[int]):
         return value
 
     def format(self, value: object) -> str | None:
-        # A string either way: it is the radio option's value and the text input's default.
+        """Always `str`: it is the radio option's value and the text input's default alike."""
         return None if value is None else str(value)
 
 
@@ -517,7 +563,7 @@ class ChoiceOption[ValueT]:
 
 @dataclass(frozen=True, slots=True)
 class ChoiceField[ValueT](FormField[ValueT]):
-    """A single choice mapped from a stable submitted key to a typed value."""
+    """A single choice mapped from a stable submitted key to a typed value. Raises `ValueError` for duplicate keys."""
 
     options: tuple[ChoiceOption[ValueT], ...] = ()
 
@@ -528,6 +574,7 @@ class ChoiceField[ValueT](FormField[ValueT]):
             raise ValueError(message)
 
     def parse(self, raw: object) -> ValueT | None:
+        """Raises `FormValueError` when `str(raw)` is not an option key."""
         if self._optional(raw):
             return None
         key = str(raw)
@@ -537,13 +584,18 @@ class ChoiceField[ValueT](FormField[ValueT]):
         return option.value
 
     def format(self, value: object) -> PrefillValue:
+        """The key of the option whose value or key equals `value`, so a stored value and a round-tripped key both seed."""
         option = next((option for option in self.options if option.value == value or option.key == value), None)
         return option.key if option is not None else _prefill(value)
 
 
 @dataclass(frozen=True, slots=True)
 class MultiChoiceField[ValueT](FormField[tuple[ValueT, ...]]):
-    """Several declared choices returned in declaration order."""
+    """Several declared choices returned in declaration order.
+
+    `maximum=None` is every option. Raises `ValueError` for duplicate keys or bounds outside
+    `0 <= minimum <= maximum <= len(options)`.
+    """
 
     options: tuple[ChoiceOption[ValueT], ...] = ()
     minimum: int = 0
@@ -560,6 +612,10 @@ class MultiChoiceField[ValueT](FormField[tuple[ValueT, ...]]):
             raise ValueError(message)
 
     def parse(self, raw: object) -> tuple[ValueT, ...]:
+        """A missing optional value is `()`, not `None`; a scalar is a one-key selection.
+
+        Raises `FormValueError` for a key that is not an option or a count outside the bounds.
+        """
         if self._missing(raw):
             if self.required:
                 _invalid("This field is required.")
@@ -578,6 +634,7 @@ class MultiChoiceField[ValueT](FormField[tuple[ValueT, ...]]):
         return values
 
     def format(self, value: object) -> tuple[str, ...]:
+        """The keys of every option whose value or key is in `value`; a scalar counts as a one-item selection."""
         submitted = tuple(value) if isinstance(value, list | tuple | set | frozenset) else (value,)
         return tuple(
             option.key
@@ -599,9 +656,13 @@ class UploadedFile:
 
 @dataclass(frozen=True, slots=True)
 class BoolField(FormField[bool]):
-    """A boolean checkbox."""
+    """A boolean checkbox; `required` is not read, since an unticked box is a valid `False`."""
 
     def parse(self, raw: object) -> bool:
+        """A `bool` as is; missing is `False`; text is `1/true/yes/on` or `0/false/no/off`, case-insensitive.
+
+        Raises `FormValueError` for any other text.
+        """
         if isinstance(raw, bool):
             return raw
         if raw is None or raw == "":
@@ -616,7 +677,13 @@ class BoolField(FormField[bool]):
 
 @dataclass(frozen=True, slots=True)
 class ExtensionField[ValueT](FormField[ValueT]):
-    """A frontend-specific field with an optional portable fallback."""
+    """A frontend-specific field with an optional portable fallback.
+
+    A subclass sets `capability` to the tag a target must advertise; `FormSpec.adapt`
+    keeps the field on such a target and substitutes `fallback`, under this field's key,
+    label and description, on any other; with no `fallback` it raises `LayoutInvariantError`.
+    The Discord adapter's `EntityField`, `FileField` and `CheckboxGroupField` are the subclasses.
+    """
 
     fallback: FormField[ValueT] | None = None
     capability: ClassVar[str] = ""
@@ -627,7 +694,9 @@ class FormResult:
     """Typed values and validation errors from one submission attempt."""
 
     values: Mapping[str, object]
+    """Parsed values by key; a field whose `parse` failed is absent."""
     attempted: Mapping[str, object]
+    """The raw submission, which a `RETRY` re-presents as the prefill."""
     errors: tuple[FormIssue, ...] = ()
 
 
@@ -640,7 +709,11 @@ type SubmitHandler = Callable[[SubmitEvent], Awaitable[None]]
 
 @dataclass(frozen=True, slots=True)
 class FormSpec:
-    """A frontend-neutral, immutable form schema."""
+    """A frontend-neutral, immutable form schema.
+
+    Raises `ValueError` for no fields, a field without a key or label, duplicate keys, or a
+    `prefill` key no field owns.
+    """
 
     title: TextLike
     items: tuple[FormField[Any] | FormText, ...]
@@ -705,7 +778,11 @@ class FormSpec:
         return replace(self, prefill={key: value for key, value in values.items() if key in known})
 
     def adapt(self, capabilities: frozenset[str], *, maximum_fields: int | None = None) -> FormSpec:
-        """Resolve extension fallbacks and enforce a target's explicit form budget."""
+        """Resolve extension fallbacks and enforce a target's explicit form budget.
+
+        Raises `LayoutInvariantError` when the items exceed `maximum_fields` or an
+        `ExtensionField` the target cannot draw has no fallback.
+        """
         if maximum_fields is not None and len(self.items) > maximum_fields:
             message = f"form has {len(self.items)} components; target permits 1-{maximum_fields}"
             raise LayoutInvariantError(message)
@@ -733,7 +810,11 @@ class FormSpec:
 
 
 class Form:
-    """Descriptor sugar that compiles typed class attributes into a :class:`FormSpec`."""
+    """Descriptor sugar that compiles typed class attributes into a :class:`FormSpec`.
+
+    Fields are inherited along the MRO and a subclass attribute that is not a field shadows
+    one. `__init__` takes prefills by attribute name and raises `TypeError` for an unknown one.
+    """
 
     title: ClassVar[TextLike] = "Form"
     validation: ClassVar[FormValidationMode] = FormValidationMode.RETRY
@@ -824,7 +905,10 @@ type FormLike = FormSpec | Form
 
 
 def bind_form(form: FormLike, on_submit: SubmitHandler | None) -> tuple[FormSpec, SubmitHandler, ActionMode]:
-    """Resolve value-layer and descriptor forms to one presentation binding."""
+    """Resolve value-layer and descriptor forms to one presentation binding.
+
+    Raises `TypeError` when a `Form` is given an `on_submit` or a `FormSpec` is not.
+    """
     if isinstance(form, Form):
         if on_submit is not None:
             message = "a Form instance owns its on_submit method"

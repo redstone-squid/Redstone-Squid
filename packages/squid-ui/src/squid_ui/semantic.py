@@ -24,24 +24,41 @@ if TYPE_CHECKING:
 
 
 class ControlDisplay(StrEnum):
+    """The preferred `ActionControls` strategy; the planner drops it when the controls do not fit.
+
+    `INDIVIDUAL` is one button per action, `GROUPED` folds each group's eligible actions into a
+    select of 25, and `AUTO` is individual up to five actions.
+    """
+
     AUTO = "auto"
     INDIVIDUAL = "individual"
     GROUPED = "grouped"
 
 
 class NavigationDisplay(StrEnum):
+    """The preferred `Navigation` strategy: `INDIVIDUAL` buttons, a `GROUPED` select, or `AUTO` — buttons up to five."""
+
     AUTO = "auto"
     INDIVIDUAL = "individual"
     GROUPED = "grouped"
 
 
 class ItemDisplay(StrEnum):
+    """Which `Items` view to prefer; `OPENED` opens the first item when the session holds none."""
+
     AUTO = "auto"
     OVERVIEW = "overview"
     OPENED = "opened"
 
 
 class TableDisplay(StrEnum):
+    """How a `Table` is drawn.
+
+    `TABULAR` and `MATRIX` are a code block, `|`-separated with a rule and space-aligned
+    respectively; `RECORDS` is one `**heading:** cell` paragraph per row, paginated. `AUTO`
+    is tabular up to four columns and records above, and never picks matrix.
+    """
+
     AUTO = "auto"
     TABULAR = "tabular"
     RECORDS = "records"
@@ -49,36 +66,58 @@ class TableDisplay(StrEnum):
 
 
 class DetailLevel(StrEnum):
+    """Not yet read by any planner."""
+
     AUTO = "auto"
     FULL = "full"
     SUMMARY = "summary"
 
 
 class MediaDisplay(StrEnum):
+    """`FEATURED` shows only the first item, `COLLECTION` every item in galleries; `AUTO` is collection."""
+
     AUTO = "auto"
     COLLECTION = "collection"
     FEATURED = "featured"
 
 
 class Flexibility(IntEnum):
+    """How dearly a node's strategy may change between renders; read by the cost model only.
+
+    Each tier is its own `CostVector` column, `STABLE` outranking `NORMAL` outranking
+    `FLEXIBLE`, so a stable node keeps last render's strategy before any normal node does.
+    It never changes which strategies are available.
+    """
+
     FLEXIBLE = 0
     NORMAL = 1
     STABLE = 2
 
 
 class Importance(IntEnum):
+    """Planner priority when trimming: lower-importance content is dropped or shortened first."""
+
     LOW = -100
     NORMAL = 0
     HIGH = 100
 
 
 class Emphasis(StrEnum):
+    """Visual weight, read in two places only.
+
+    A button is primary for `STRONG` and secondary otherwise, unless its `Tone` decides; a
+    `Download` label is bold for `STRONG` and small print for `SUBTLE`. `Status` and `Link`
+    ignore it.
+    """
+
     SUBTLE = "subtle"
     NORMAL = "normal"
     STRONG = "strong"
 
 
 class TimeStyle(StrEnum):
+    """Discord's `<t:unix:X>` style letter; other targets map each to their nearest format."""
+
     SHORT_TIME = "t"
     LONG_TIME = "T"
     SHORT_DATE = "d"
@@ -138,22 +177,28 @@ FIRST_OPTION: NavOwnership = Uncontrolled(None)
 
 @dataclass(frozen=True, slots=True)
 class Group[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
+    """Related content with no layout opinion. Discord lowers it to its children in place; HTML to a `div`."""
+
     children: tuple[LayoutNode[RenderTargetT], ...]
 
 
 @dataclass(frozen=True, slots=True)
 class Stack[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
+    """Children read top to bottom. Discord lowers it to its children in place; HTML to a `div`."""
+
     children: tuple[LayoutNode[RenderTargetT], ...]
 
 
 @dataclass(frozen=True, slots=True)
 class Cluster[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
+    """Children read as a set. Discord lowers it to its children in place; HTML to a `div`."""
+
     children: tuple[LayoutNode[RenderTargetT], ...]
 
 
 @dataclass(frozen=True, slots=True)
 class Themed[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
-    """A subtree planned with a presentation palette override."""
+    """A subtree whose accents and tones resolve through `palette` instead of the active one."""
 
     children: tuple[LayoutNode[RenderTargetT], ...]
     palette: Palette
@@ -161,7 +206,11 @@ class Themed[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
 
 @dataclass(frozen=True, slots=True)
 class Block[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
-    """An untitled semantic region with an exact or inherited accent."""
+    """An untitled region: an embed on classic targets, a container on Components V2.
+
+    `accent` is the embed colour or container accent; nested inside another region it
+    lowers to its children alone.
+    """
 
     children: tuple[LayoutNode[RenderTargetT], ...]
     accent: Accent = INHERIT
@@ -169,15 +218,16 @@ class Block[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
 
 @dataclass(frozen=True, slots=True)
 class Section[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
-    """A titled block of related content.
+    """A titled region: one embed on classic targets, a container on Components V2.
+
+    `heading` is the embed title or the container's leading heading, and `thumbnail` the
+    image beside it.
 
     ``accent`` is an exact colour override, not a semantic fact. Omit it to inherit the
     active `Palette.brand`, pass ``None`` to opt out of an inherited accent, and pass a
     colour when the exact value is data (such as a guild's configured colour). Colour that
     *means* something — advisory, warning, failed — belongs on `Aside` or `Status` via
     `Tone`, which the active palette maps without discarding the semantic meaning.
-
-    ``thumbnail`` is a lead image shown beside the required heading.
     """
 
     heading: Heading
@@ -188,7 +238,7 @@ class Section[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
 
 @dataclass(frozen=True, slots=True)
 class Article[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
-    """A self-contained block that stands on its own; see `Section` for the extras."""
+    """A self-contained `Section`; the Discord planner lowers both identically."""
 
     heading: Heading
     children: tuple[LayoutNode[RenderTargetT], ...]
@@ -198,12 +248,16 @@ class Article[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
 
 @dataclass(frozen=True, slots=True)
 class Aside[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
+    """An untitled region whose accent is the palette's colour for `tone`, not an author override."""
+
     children: tuple[LayoutNode[RenderTargetT], ...]
     tone: Tone = Tone.NEUTRAL
 
 
 @dataclass(frozen=True, slots=True)
 class Heading(Renderable[RenderTarget]):
+    """A heading that never truncates; `level` is the Markdown `#` depth on Components V2."""
+
     content: TextLike
     level: int = 2
     importance: Importance = Importance.HIGH
@@ -211,12 +265,16 @@ class Heading(Renderable[RenderTarget]):
 
 @dataclass(frozen=True, slots=True)
 class Paragraph(Renderable[RenderTarget]):
+    """Prose that never truncates unless wrapped in `truncate`/`best_effort`."""
+
     content: TextLike
     importance: Importance = Importance.NORMAL
 
 
 @dataclass(frozen=True, slots=True)
 class ListItem:
+    """One `List` entry; `key` is read by no target and `importance` decides which lines spill first."""
+
     key: str
     content: TextLike
     importance: Importance = Importance.NORMAL
@@ -224,6 +282,12 @@ class ListItem:
 
 @dataclass(frozen=True, slots=True)
 class List(Renderable[RenderTarget]):
+    """Bulleted or numbered lines, paginated under `key`.
+
+    `page_size` pins every page to that many entries whether or not the budget is tight;
+    `None` paginates only when the budget forces it.
+    """
+
     items: tuple[ListItem, ...]
     key: str
     ordered: bool = False
@@ -248,28 +312,45 @@ class Field:
 
 @dataclass(frozen=True, slots=True)
 class Fields(Renderable[RenderTarget]):
+    """Labelled values, never dropped whole.
+
+    Embed fields where the target has them, continuing onto the next embed past the
+    per-embed limit; elsewhere one line per field that condenses under pressure.
+    """
+
     fields: tuple[Field, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class Column:
+    """One `Table` column; `key` is read by no target."""
+
     key: str
     heading: TextLike
 
 
 @dataclass(frozen=True, slots=True)
 class Columns:
+    """The column schema a `Table`'s rows are checked against."""
+
     columns: tuple[Column, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class TableRow:
+    """Cells in column order; `key` is read by no target."""
+
     key: str
     cells: tuple[TextLike, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class Table(Renderable[RenderTarget]):
+    """Rows drawn as `display` says (see `TableDisplay`); `key` carries the chosen strategy and page.
+
+    Raises `ValueError` for no columns or a row whose cell count differs from the column count.
+    """
+
     columns: Columns
     rows: tuple[TableRow, ...]
     key: str
@@ -296,18 +377,28 @@ class Note(Renderable[RenderTarget]):
 
 @dataclass(frozen=True, slots=True)
 class Quote(Renderable[RenderTarget]):
+    """A `> ` block quote, `attribution` on an em-dash line below; never truncates."""
+
     content: TextLike
     attribution: TextLike | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class Code(Renderable[RenderTarget]):
+    """A fenced code block that never truncates unless wrapped in `truncate`/`best_effort`."""
+
     content: str
     language: str = ""
 
 
 @dataclass(frozen=True, slots=True)
 class MediaItem:
+    """One image; `description` is its alt text and `key` is read by no target.
+
+    `spoiler` is honoured only on Components V2: a classic (embed) target raises
+    `LayoutInvariantError` at plan time rather than show the image unblurred.
+    """
+
     key: str
     url: str
     description: TextLike | None = None
@@ -316,12 +407,20 @@ class MediaItem:
 
 @dataclass(frozen=True, slots=True)
 class Figure(Renderable[RenderTarget]):
+    """One image: an embed with `caption` as its footer on classic targets, a one-item gallery on Components V2."""
+
     media: MediaItem
     caption: TextLike | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class Media(Renderable[RenderTarget]):
+    """Images drawn as `display` says (see `MediaDisplay`).
+
+    A collection needs Components V2 galleries; a classic target raises `LayoutInvariantError`
+    unless `display` is `FEATURED`.
+    """
+
     items: tuple[MediaItem, ...]
     key: str
     display: MediaDisplay = MediaDisplay.AUTO
@@ -330,11 +429,15 @@ class Media(Renderable[RenderTarget]):
 
 @dataclass(frozen=True, slots=True)
 class Summary:
+    """The label of the button that opens and closes a `Details` region."""
+
     content: TextLike
 
 
 @dataclass(frozen=True, slots=True)
 class Details[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
+    """A disclosure: one `summary` button, followed by `children` only while open."""
+
     key: str
     summary: Summary
     children: tuple[LayoutNode[RenderTargetT], ...]
@@ -350,7 +453,7 @@ class ToggleEvent(ActionEvent):
 
 @dataclass(frozen=True, slots=True)
 class Toggle(Renderable[RenderTarget]):
-    """One keyed boolean control with explicit state ownership."""
+    """One button reading `label: state`, where state is `on_label`/`off_label` or the chrome's on/off words."""
 
     key: str
     label: TextLike
@@ -363,7 +466,12 @@ class Toggle(Renderable[RenderTarget]):
 
 @dataclass(frozen=True, slots=True)
 class Download(Renderable[RenderTarget]):
-    """A visible file control whose asset is declared at its point of use."""
+    """A file offered where it is declared: a label line plus a file component on Components V2.
+
+    A classic target uploads the asset as a plain attachment and reports the lost component
+    as a degradation; `spoiler` there raises `LayoutInvariantError`. `label=None` uses
+    `Chrome.download`.
+    """
 
     key: str
     label: TextLike | None
@@ -375,6 +483,8 @@ class Download(Renderable[RenderTarget]):
 
 @dataclass(frozen=True, slots=True)
 class Status(Renderable[RenderTarget]):
+    """One line prefixed with the emoji for `tone`; `emphasis` is not read."""
+
     content: TextLike
     tone: Tone = Tone.NEUTRAL
     emphasis: Emphasis = Emphasis.NORMAL
@@ -382,6 +492,8 @@ class Status(Renderable[RenderTarget]):
 
 @dataclass(frozen=True, slots=True)
 class ProgressBar(Renderable[RenderTarget]):
+    """A ten-cell text bar with a percentage; `value` is clamped to `0..maximum`."""
+
     value: float
     label: TextLike | None = None
     maximum: float = 1.0
@@ -389,7 +501,14 @@ class ProgressBar(Renderable[RenderTarget]):
 
 @dataclass(frozen=True, slots=True)
 class Roster(Renderable[RenderTarget]):
-    """A host-owned roster allocation rendered with active localized chrome."""
+    """A slot-by-slot member list with one join button per slot.
+
+    Each slot lowers to a heading with its `Chrome.slot_count`, its members as spillable
+    lines, and a button: a mount-dispatched one when `on_join` is set, a routed one under
+    `routes[slot.key]` otherwise, and none when neither is. `locked` disables every join
+    button. Raises `ValueError` for an empty `key`, for both `on_join` and `routes`, or for
+    `routes` whose keys are not exactly the slot keys.
+    """
 
     key: str
     placement: RosterPlacement
@@ -413,7 +532,12 @@ class Roster(Renderable[RenderTarget]):
 
 @dataclass(frozen=True, slots=True)
 class Grid(Renderable[RenderTarget]):
-    """A selectable spatial collection with target-shaped fallback strategies."""
+    """A grid of cells the reader picks one of; `on_pick` receives the cell key whatever the shape.
+
+    One button per cell when `columns` fits a row and the buttons fit the message; otherwise
+    a code-block matrix plus a coordinate select, paged once the available cells exceed one
+    select. Raises `ValueError` for an empty `key` or a grid `validate_grid` rejects.
+    """
 
     key: str
     cells: tuple[GridCell, ...]
@@ -430,6 +554,8 @@ class Grid(Renderable[RenderTarget]):
 
 @dataclass(frozen=True, slots=True)
 class Metric(Renderable[RenderTarget]):
+    """One `**label:** value unit` line; `value` is shown as given, not formatted."""
+
     value: int | float | str
     label: TextLike
     unit: str | None = None
@@ -437,7 +563,7 @@ class Metric(Renderable[RenderTarget]):
 
 @dataclass(frozen=True, slots=True)
 class Timestamp(Renderable[RenderTarget]):
-    """An aware instant plus a portable display preference."""
+    """An aware instant the target renders in the reader's timezone, as `style` says."""
 
     instant: datetime
     style: TimeStyle = TimeStyle.SHORT_DATETIME
@@ -446,7 +572,7 @@ class Timestamp(Renderable[RenderTarget]):
 
 @dataclass(frozen=True, slots=True)
 class ZonedTimestamp(Renderable[RenderTarget]):
-    """An exact instant rendered visibly in its named timezone."""
+    """An instant shown in its own named timezone rather than the reader's."""
 
     value: ZonedDateTime
     label: TextLike | None = None
@@ -454,7 +580,11 @@ class ZonedTimestamp(Renderable[RenderTarget]):
 
 @dataclass(frozen=True, slots=True)
 class FormTrigger(Renderable[RenderTarget]):
-    """A content entry point that presents a portable form."""
+    """A button that opens `spec` as a modal.
+
+    Lowers to a `FormButton` carrying the spec adapted to the target's capabilities and modal
+    field limit; a target without modal forms raises `LayoutInvariantError` at plan time.
+    """
 
     key: str
     label: TextLike
@@ -471,6 +601,8 @@ class FormTrigger(Renderable[RenderTarget]):
 
 @dataclass(frozen=True, slots=True)
 class ActionControl:
+    """A mount-dispatched press: a button, or one option of a select when its `ActionControls` groups."""
+
     key: str
     label: TextLike
     on_trigger: PressHandler
@@ -478,17 +610,21 @@ class ActionControl:
     emphasis: Emphasis = Emphasis.NORMAL
     available: bool = True
     allow_grouping: bool | None = None
+    """Whether the grouped strategy may fold this into a select; `None` allows it unless the
+    action is `STRONG` or carries a `SUCCESS`/`WARNING`/`DANGER` tone."""
     mode: ActionMode = ActionMode.EXCLUSIVE
     guard: Guard | None = None
     """Whether this press may execute now. `available` is the render-time question."""
     busy: BusySpec | None = None
-    """Busy busy for a handler slow enough that the reader needs to see it running."""
+    """Busy indication for a handler slow enough that the reader needs to see it running."""
     record: History | None = None
     """History this press enters itself into, under `label`, before `on_trigger` runs."""
 
 
 @dataclass(frozen=True, slots=True)
 class Link:
+    """A URL button; never grouped into a select, and `emphasis` is not read."""
+
     key: str
     label: TextLike
     url: str
@@ -518,6 +654,12 @@ class RoutedActionControl:
 
 @dataclass(frozen=True, slots=True)
 class ControlGroup:
+    """Actions that share one select under the grouped strategy; `label` is its placeholder.
+
+    Links and routed controls inside it stay individual buttons, since neither carries a
+    binding a select could dispatch.
+    """
+
     key: str
     controls: tuple[ActionControl | Link | RoutedActionControl, ...]
     label: TextLike | None = None
@@ -525,6 +667,14 @@ class ControlGroup:
 
 @dataclass(frozen=True, slots=True)
 class ActionControls(Renderable[RenderTarget]):
+    """The controls of one view, drawn as `display` says (see `ControlDisplay`).
+
+    Actions are grouped by `ControlGroup`; a run of ungrouped actions shares a "default"
+    group. Individual is one button each; grouped is one select per 25 eligible actions of a
+    group, with ineligible ones (see `ActionControl.allow_grouping`) left as buttons. A group
+    over 75 actions forces a paged select. `key` carries the chosen strategy and pages.
+    """
+
     items: tuple[ActionControl | Link | RoutedActionControl | ControlGroup, ...]
     key: str
     display: ControlDisplay = ControlDisplay.AUTO
@@ -533,6 +683,8 @@ class ActionControls(Renderable[RenderTarget]):
 
 @dataclass(frozen=True, slots=True)
 class Choice:
+    """One `Choices` option; `key` is what a selection carries and an unavailable choice is not drawn."""
+
     key: str
     label: TextLike
     description: TextLike | None = None
@@ -541,6 +693,8 @@ class Choice:
 
 @dataclass(frozen=True, slots=True)
 class ChoiceEvent(ActionEvent):
+    """A controlled `Choices` changed; `added`/`removed` are the difference from the value last rendered."""
+
     selected: tuple[str, ...] = ()
     added: tuple[str, ...] = ()
     removed: tuple[str, ...] = ()
@@ -548,6 +702,8 @@ class ChoiceEvent(ActionEvent):
 
 @dataclass(frozen=True, slots=True)
 class EntityEvent(ActionEvent):
+    """A controlled `Entities` changed; `added`/`removed` are the difference from the value last rendered."""
+
     selected: tuple[EntityRef, ...] = ()
     added: tuple[EntityRef, ...] = ()
     removed: tuple[EntityRef, ...] = ()
@@ -555,6 +711,8 @@ class EntityEvent(ActionEvent):
 
 @dataclass(frozen=True, slots=True)
 class EntityChoice:
+    """One enumerated option for an `Entities` picker on a target without native entity selects."""
+
     ref: EntityRef
     label: TextLike
     description: TextLike | None = None
@@ -577,11 +735,14 @@ class ScaleEvent(ActionEvent):
 
 @dataclass(frozen=True, slots=True)
 class Choices(Renderable[RenderTarget]):
-    """A picker over `choices`, backed by buttons or a select depending on shape.
+    """A picker over `choices`: a button row for 2-5 available choices with `maximum=1`, else a select.
+
+    A select shows 25 options per page and pages under `key`; a multi-select (`maximum > 1`)
+    over 25 available choices raises `LayoutInvariantError` at plan time, because a
+    selection cannot span pages.
 
     `minimum` defaults to 1, so the picker cannot be cleared to nothing without setting
-    it to 0 explicitly; a small (2-5 choice) single-select (`maximum=1`) renders as
-    buttons instead, which always select exactly one and ignore `minimum` entirely.
+    it to 0 explicitly; the button row always selects exactly one and ignores `minimum`.
     """
 
     key: str
@@ -590,11 +751,18 @@ class Choices(Renderable[RenderTarget]):
     minimum: int = 1
     maximum: int = 1
     flexibility: Flexibility = Flexibility.NORMAL
+    """Not read: `Choices` has no strategy axis for the cost model to price."""
 
 
 @dataclass(frozen=True, slots=True)
 class Entities(Renderable[RenderTarget]):
-    """A picker over frontend-resolved entities with an optional enumerated fallback."""
+    """A picker the target resolves (user, role, channel) or, failing that, enumerates.
+
+    A native entity select where the target has one; otherwise `choices` lower to a
+    `Choices` over encoded refs, and an empty `choices` raises `LayoutInvariantError` at
+    plan time. Raises `ValueError` for `conversation_types` on a non-conversation picker or
+    a choice whose ref kind `entity_type` does not admit.
+    """
 
     key: str
     entity_type: EntityType
@@ -605,6 +773,7 @@ class Entities(Renderable[RenderTarget]):
     conversation_types: tuple[ConversationType, ...] = ()
     placeholder: TextLike | None = None
     flexibility: Flexibility = Flexibility.NORMAL
+    """Not read: passed to the fallback `Choices`, which has no strategy axis either."""
 
     def __post_init__(self) -> None:
         if self.conversation_types and self.entity_type is not EntityType.CONVERSATION:
@@ -617,7 +786,11 @@ class Entities(Renderable[RenderTarget]):
 
 @dataclass(frozen=True, slots=True)
 class RoutedChoices(Renderable[RenderTarget]):
-    """An explicitly stateless picker whose values are submitted to one route."""
+    """A stateless picker: always one `RoutedSelect` whose submission goes to `route_id`.
+
+    No session, so no pagination: every available choice must fit one select, and none
+    available raises `LayoutInvariantError` at plan time.
+    """
 
     key: str
     choices: tuple[Choice, ...]
@@ -630,11 +803,15 @@ class RoutedChoices(Renderable[RenderTarget]):
 
 @dataclass(frozen=True, slots=True)
 class ItemLabel:
+    """An `Item`'s name: its overview line, its select option, and the heading of its opened view."""
+
     content: TextLike
 
 
 @dataclass(frozen=True, slots=True)
 class Item[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
+    """One `Items` entry; `summary` follows the label on the overview line, `children` show only when opened."""
+
     key: str
     label: ItemLabel
     children: tuple[LayoutNode[RenderTargetT], ...]
@@ -643,6 +820,12 @@ class Item[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
 
 @dataclass(frozen=True, slots=True)
 class Items[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
+    """Entries the reader opens one at a time.
+
+    The overview is one line per item plus a select to open one, paged under `key` past
+    25; the opened view is that item's heading, children, and a `Chrome.back` button.
+    """
+
     key: str
     items: tuple[Item[RenderTargetT], ...]
     opened: ItemOwnership = UNOPENED
@@ -652,6 +835,8 @@ class Items[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
 
 @dataclass(frozen=True, slots=True)
 class NavOption:
+    """One `Navigation` destination; an unavailable one is not drawn."""
+
     key: str
     label: TextLike
     available: bool = True
@@ -659,11 +844,19 @@ class NavOption:
 
 @dataclass(frozen=True, slots=True)
 class NavigateEvent(ActionEvent):
+    """A controlled `Navigation` was asked to move to `destination`."""
+
     destination: str = ""
 
 
 @dataclass(frozen=True, slots=True)
 class Navigation(Renderable[RenderTarget]):
+    """Movement between the views of one message: a button row or a select, as `NavigationDisplay` says.
+
+    The current destination is the primary-styled button or the select's default; a select
+    pages under `key` past 25 destinations.
+    """
+
     key: str
     options: tuple[NavOption, ...]
     current: NavOwnership = FIRST_OPTION
@@ -674,24 +867,34 @@ class Navigation(Renderable[RenderTarget]):
 
 @dataclass(frozen=True, slots=True)
 class Truncated[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
+    """Text primitives under `node` may truncate; `keep` is `"head"` or `"tail"`."""
+
     node: LayoutNode[RenderTargetT]
     keep: str = "head"
 
 
 @dataclass(frozen=True, slots=True)
 class Spilled[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
+    """Line collections under `node` may drop their lowest-priority entries."""
+
     node: LayoutNode[RenderTargetT]
 
 
 @dataclass(frozen=True, slots=True)
 class OptionalContent[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
+    """`node` may be dropped whole; `importance` orders it against the other droppable regions."""
+
     node: LayoutNode[RenderTargetT]
     importance: Importance = Importance.LOW
 
 
 @dataclass(frozen=True, slots=True)
 class FallbackContent[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
-    """Complete author-supplied representations of one region, best first."""
+    """Complete author-supplied representations of one region, best first.
+
+    Only the chosen rung is lowered, so an unselected branch leaves no pagers, assets or
+    session writes. Raises `ValueError` with no alternates.
+    """
 
     primary: LayoutNode[RenderTargetT]
     alternates: tuple[LayoutNode[RenderTargetT], ...]
@@ -704,12 +907,23 @@ class FallbackContent[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
 
 @dataclass(frozen=True, slots=True)
 class BestEffort[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
+    """`node` may spill if it is a `List` or `Fields` and truncate otherwise.
+
+    A `Budgeted` inside it is granted its `minimum` only after every hard floor, and is
+    shortchanged rather than failing the plan.
+    """
+
     node: LayoutNode[RenderTargetT]
 
 
 @dataclass(frozen=True, slots=True)
 class Budgeted[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
-    """Reserve and cap the character grant for one logical region."""
+    """Reserve and cap the character grant for one logical region.
+
+    `minimum` is the floor the region is always granted, `preferred` its target, and
+    `stretch` how far past `preferred` it may grow when characters are spare. Raises
+    `ValueError` for a negative value or `minimum > preferred`.
+    """
 
     node: LayoutNode[RenderTargetT]
     minimum: int
@@ -741,7 +955,13 @@ class KeepWithNext[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
 
 @dataclass(frozen=True, slots=True)
 class Paged[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
-    """Paginate the direct children of a keyed heterogeneous region."""
+    """Paginate the direct children of a keyed heterogeneous region, `chars` per page.
+
+    `min_fill` characters on a non-final page and `widows` children on the last are
+    preferences the breaker violates as rarely as it can, not limits. `footer` receives the
+    1-based page and page count in place of `Chrome.page_footer`. Raises `ValueError` for an
+    empty `key`, `chars < 1`, a negative `min_fill`, or `widows < 1`.
+    """
 
     node: LayoutNode[RenderTargetT]
     key: str
@@ -922,7 +1142,8 @@ def fallback(primary: AnyLayoutNode, /, *alternates: AnyLayoutNode) -> FallbackC
     """Declare complete author-supplied alternate representations, in descending preference.
 
     Each alternate is a whole replacement for ``primary``, not a shortening of it; the planner
-    steps down the ladder one rung at a time under component pressure.
+    steps down the ladder one rung at a time under component pressure. Raises `ValueError`
+    with no alternates.
     """
     if not alternates:
         message = "sl.fallback() needs at least one alternate"
@@ -938,7 +1159,7 @@ def best_effort[RenderTargetT = RenderTarget](node: LayoutNode[RenderTargetT]) -
 def budget[RenderTargetT = RenderTarget](
     node: LayoutNode[RenderTargetT], *, min: int, prefer: int, stretch: int = 0
 ) -> Budgeted[RenderTargetT]:
-    """Give ``node`` a hard floor, preferred size, and lossless stretch band."""
+    """Give ``node`` a hard floor, preferred size, and lossless stretch band; see `Budgeted` for what it rejects."""
     return Budgeted(node, min, prefer, stretch)
 
 
@@ -964,7 +1185,10 @@ def paged[RenderTargetT = RenderTarget](
     initial: Literal["start", "end"] = "start",
     footer: Callable[[int, int], TextLike] | None = None,
 ) -> Budgeted[RenderTargetT]:
-    """Apply a preferred character budget and heterogeneous paging to ``node``."""
+    """Page ``node`` at ``chars`` per page inside a `Budgeted` preferring ``chars``.
+
+    Raises `ValueError` for what `Paged` and `Budgeted` reject.
+    """
     region = Paged(node, key, chars, min_fill, widows, initial, footer)
     return Budgeted(region, min, chars, stretch)
 
