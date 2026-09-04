@@ -20,3 +20,11 @@
 - Table-driven tests instantiate every field spec, prove label/input metadata has one source, and round-trip parser/formatter behavior.
 - Boundary tests cover Discord maximum lengths/counts and deterministic truncation or validation errors.
 - Modal/select tests assert typed patch results and refresh behavior without inspecting brittle raw component trees.
+
+## Completion update (2026-08-30)
+
+**Done.** `CreationFieldSpec` and `BuildFieldSpec` now own translated metadata, portable
+constraints, parsing/formatting, and typed draft/patch application. Shared optional/comma/URL
+parsing lives in `squid.bot.submission.input`; edit URL fields use the same validation; unexpected
+parser failures escape to centralized handling. Table-driven round trips and strict Discord modal
+boundary tests cover every creation and edit field.

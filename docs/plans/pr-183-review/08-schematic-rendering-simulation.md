@@ -101,3 +101,11 @@ rebase renumbered them); corrected above.
   (cited as `8f715f74` before the rebase noted above): `TaskGroup.start_soon` wants a callable
   returning a `Coroutine`, not an `Awaitable` — confirmed still in place at
   `squid/schematics/infrastructure/worker.py:124`.
+
+## Completion update (2026-08-30)
+
+**Done.** Typed preparation outcomes, durable retries, dead letters, current-primary fencing, and
+simulation evidence remain intact. `47b53ebb` adds PostgreSQL scenarios for permanent-skip
+acknowledgement and transient retry/backoff/dead-letter state, and moves all schematic integration
+task ownership to anyio. The 22 real worker-pool cases pass locally; the new PostgreSQL scenarios
+are present but execution is externally gated by Docker access.

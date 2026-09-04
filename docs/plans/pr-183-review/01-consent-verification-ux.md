@@ -455,3 +455,10 @@ Things found while building that the plan did not predict:
   `bot: describe link and refresh in the same words` (`72b82a63`), `bot: name the claimant wherever
   a claim is shown` (`77cd618e`), `accounts: name the creator holding a contested alias`
   (`98dd81ab`).
+
+## Completion update (2026-08-30)
+
+**Done.** The reservation, expiry, and named-conflict contracts remain in place. `61eb77e0`
+adds the previously missing consent-card payload and interaction branches, claimant-aware
+approve/reject/conflict presentation, and the resolution query-count scenario. PostgreSQL
+execution of the query-count case is externally gated; the test is present and collects.
