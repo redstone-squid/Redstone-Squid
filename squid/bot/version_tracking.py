@@ -167,7 +167,7 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="Ve
         version = await self.version_service.add(message.content.split("\n", 1)[0])
         locale = await resolve_locale(message, self.bot.services.settings)
         with localization_scope(localization_for(locale)):
-            payload = render_payload([text_node(tr("Version added successfully: {version}", version=version))])
+            payload = render_payload([text_node(tr(tr(t"Version added successfully: {version}")))])
         await send_to(self.bot.get_channel(channel_id))(  # type: ignore[arg-type]
             payload
         )
