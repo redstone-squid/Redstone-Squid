@@ -367,6 +367,17 @@ class PublicRecordQueryService:
         standing = await self._records.get_published_record(standing_id)
         if standing is None:
             return None
+        holders_match_status = bool(standing.holder_build_ids) is (standing.status is ResolutionStatus.RESOLVED)
+        if not holders_match_status:
+            msg = "A published record's standing status contradicts its holder rows."
+            raise DataIntegrityError(
+                msg,
+                context={
+                    "record_id": standing.id,
+                    "status": standing.status.value,
+                    "holder_build_ids": list(standing.holder_build_ids),
+                },
+            )
         found = await self._builds.get_public_summaries(standing.holder_build_ids)
         by_id = {build.id: build for build in found}
         unavailable_ids = [build_id for build_id in standing.holder_build_ids if build_id not in by_id]
