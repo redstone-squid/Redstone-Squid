@@ -91,9 +91,9 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
                     msg = f"{status.value} draft has no matching finalization job"
                     raise InvalidStateError(msg)
                 expected_job_statuses = (
-                    {FinalizationJobStatus.PENDING.value, FinalizationJobStatus.CLAIMED.value}
+                    {FinalizationJobStatus.PENDING, FinalizationJobStatus.CLAIMED}
                     if status is DraftStatus.PROCESSING
-                    else {FinalizationJobStatus.COMPLETED.value}
+                    else {FinalizationJobStatus.COMPLETED}
                 )
                 if job.status not in expected_job_statuses:
                     msg = f"{status.value} draft has an incompatible {job.status} finalization job"
@@ -113,7 +113,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
                     draft_revision=draft.snapshot.revision,
                     payload=encoded,
                     payload_sha256=digest,
-                    status=FinalizationJobStatus.PENDING.value,
+                    status=FinalizationJobStatus.PENDING,
                     available_at=now,
                     created_at=now,
                     updated_at=now,
@@ -161,7 +161,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
                     draft_revision=draft.snapshot.revision,
                     payload=None,
                     payload_sha256=None,
-                    status=FinalizationJobStatus.NEEDS_ATTENTION.value,
+                    status=FinalizationJobStatus.NEEDS_ATTENTION,
                     available_at=now,
                     attention_at=now,
                     attention_issues=_encode_issues(normalized_issues),
@@ -181,11 +181,11 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
             raise ValueError(msg)
         ready = or_(
             and_(
-                SubmissionFinalizationJob.status == FinalizationJobStatus.PENDING.value,
+                SubmissionFinalizationJob.status == FinalizationJobStatus.PENDING,
                 SubmissionFinalizationJob.available_at <= now,
             ),
             and_(
-                SubmissionFinalizationJob.status == FinalizationJobStatus.CLAIMED.value,
+                SubmissionFinalizationJob.status == FinalizationJobStatus.CLAIMED,
                 SubmissionFinalizationJob.claim_expires_at <= now,
             ),
         )
@@ -211,7 +211,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
                     msg = "claimable finalization job failed its payload integrity check"
                     raise DataIntegrityError(msg)
                 token = uuid4()
-                job.status = FinalizationJobStatus.CLAIMED.value
+                job.status = FinalizationJobStatus.CLAIMED
                 job.attempts += 1
                 job.claimed_at = now
                 job.claim_token = token
@@ -261,7 +261,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
                         created_at=now,
                     )
                 )
-            model.status = FinalizationJobStatus.COMPLETED.value
+            model.status = FinalizationJobStatus.COMPLETED
             model.completed_at = now
             model.attention_at = None
             model.dead_at = None
@@ -295,7 +295,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
             if draft.status is not DraftStatus.PROCESSING:
                 msg = "claimed finalization job does not own a processing draft"
                 raise InvalidStateError(msg)
-            model.status = FinalizationJobStatus.NEEDS_ATTENTION.value
+            model.status = FinalizationJobStatus.NEEDS_ATTENTION
             model.attention_at = now
             model.dead_at = None
             model.completed_at = None
@@ -335,7 +335,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
             model.updated_at = now
             if dead:
                 issue = SubmissionAttentionIssue("submission", SubmissionAttentionReason.RETRY_EXHAUSTED)
-                model.status = FinalizationJobStatus.DEAD.value
+                model.status = FinalizationJobStatus.DEAD
                 model.dead_at = now
                 model.attention_at = None
                 model.attention_issues = _encode_issues((issue,))
@@ -343,7 +343,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
                 draft.updated_at = now
                 draft.expires_at = expires_at
             else:
-                model.status = FinalizationJobStatus.PENDING.value
+                model.status = FinalizationJobStatus.PENDING
                 model.available_at = retry_at
                 model.dead_at = None
                 model.attention_at = None
@@ -399,7 +399,7 @@ async def _claimed_job(
         .where(
             SubmissionFinalizationJob.id == claim.job_id,
             SubmissionFinalizationJob.draft_id == claim.draft_id,
-            SubmissionFinalizationJob.status == FinalizationJobStatus.CLAIMED.value,
+            SubmissionFinalizationJob.status == FinalizationJobStatus.CLAIMED,
             SubmissionFinalizationJob.claim_token == claim.claim_token,
         )
         .with_for_update()
@@ -426,7 +426,7 @@ def _reset_pending(
     job.draft_revision = revision
     job.payload = payload
     job.payload_sha256 = digest
-    job.status = FinalizationJobStatus.PENDING.value
+    job.status = FinalizationJobStatus.PENDING
     job.attempts = 0
     job.available_at = now
     job.completed_at = None
@@ -447,7 +447,7 @@ def _reset_attention(
     job.draft_revision = revision
     job.payload = None
     job.payload_sha256 = None
-    job.status = FinalizationJobStatus.NEEDS_ATTENTION.value
+    job.status = FinalizationJobStatus.NEEDS_ATTENTION
     job.attempts = 0
     job.completed_at = None
     job.attention_at = now
@@ -472,7 +472,7 @@ def _snapshot(
         job_id=job.id,
         draft_id=job.draft_id,
         draft_revision=job.draft_revision,
-        status=FinalizationJobStatus(job.status),
+        status=job.status,
         attempts=job.attempts,
         available_at=job.available_at,
         claimed_at=job.claimed_at,
