@@ -88,12 +88,12 @@ def services(
     accounts = PostgresAccountIdentityAuthorizer(session_factory)
     codec = MinecraftSecretCodec("integration-test-pepper")
     return (
-        InstallationCredentialService(repository, accounts, codec, now=lambda: NOW),
+        InstallationCredentialService(repository, accounts, codec, clock=lambda: NOW),
         PlayerAuthorizationService(
             repository,
             accounts,
             codec,
-            now=lambda: NOW,
+            clock=lambda: NOW,
             max_active_challenges=max_active_challenges,
         ),
     )

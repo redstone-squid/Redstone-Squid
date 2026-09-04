@@ -17,6 +17,7 @@ from squid.minecraft_auth.domain import (
     MinecraftClientOrigin,
     MinecraftPlayerContext,
 )
+from squid.minecraft_auth.errors import InvalidInstallationCredentialError
 from tests.unit.api.fakes import TEST_CONFIG
 
 GRANT_ID = UUID("139533d8-3172-4b0f-bb86-c76603cd75af")
@@ -33,6 +34,19 @@ class FakeInstallations(InstallationCredentialService):
     async def authenticate(self, token: str) -> AuthenticatedPaperInstallation:
         self.token = token
         return AuthenticatedPaperInstallation(INSTALLATION_ID, 9, 3)
+
+    async def authenticate_headers(
+        self,
+        installation_id: str | None,
+        installation_secret: str | None,
+    ) -> AuthenticatedPaperInstallation:
+        if installation_id is None or installation_secret is None or not 32 <= len(installation_secret) <= 512:
+            raise InvalidInstallationCredentialError
+        try:
+            parsed_id = UUID(installation_id)
+        except ValueError:
+            raise InvalidInstallationCredentialError from None
+        return await self.authenticate(f"sqpi_{parsed_id.hex}_{installation_secret}")
 
 
 class FakePlayers(PlayerAuthorizationService):
