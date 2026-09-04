@@ -14,6 +14,7 @@ from squid.schematics.application import (
     ConvertRequest,
     FreshRender,
     IngestRequest,
+    RenderRequest,
     RenderSkipReason,
     SchematicPublication,
     SchematicService,
@@ -29,7 +30,7 @@ from squid.schematics.domain.models import (
     SchematicLimits,
     SchematicVisibility,
 )
-from squid.schematics.domain.values import VerifiedResourcePack
+from squid.schematics.domain.values import RgbaColor, VerifiedResourcePack
 from squid.schematics.errors import (
     DecompressionBudgetExceededError,
     InvalidSchematicError,
@@ -66,8 +67,11 @@ def litematic_bytes(payload: bytes = b"") -> bytes:
 class FakeResourcePack:
     """Return deterministic operator-owned pack bytes without filesystem I/O."""
 
+    def __init__(self, data: bytes = b"resource-pack") -> None:
+        self.data = data
+
     async def load(self) -> VerifiedResourcePack:
-        return VerifiedResourcePack.from_bytes(b"resource-pack")
+        return VerifiedResourcePack.from_bytes(self.data)
 
     async def aclose(self) -> None:
         """Release no resources in the in-memory provider."""
@@ -81,6 +85,7 @@ def service(
     engine_installed: bool = True,
     render_enabled: bool = False,
     resource_pack: FakeResourcePack | None = None,
+    render_request: RenderRequest | None = None,
     render_max_block_count: int = 400_000,
     render_max_bounding_volume: int = 2_000_000,
 ) -> tuple[SchematicService, FakeSchematicAnalyzer, FakeSchematicStore]:
@@ -95,6 +100,7 @@ def service(
             engine_installed=engine_installed,
             render_enabled=render_enabled,
             resource_pack=resource_pack,
+            render_request=render_request,
             render_max_block_count=render_max_block_count,
             render_max_bounding_volume=render_max_bounding_volume,
         ),
@@ -131,6 +137,17 @@ def test_default_upload_budgets_match_the_public_plugin_contract() -> None:
     assert limits.max_inflated_bytes == 64 * 1024 * 1024
     assert limits.max_allocated_volume == 20_000_000
     assert limits.max_axis_length == 512
+
+
+async def test_record_preserves_provider_neutral_uploader_account_identity() -> None:
+    schematics, _, store = service()
+
+    await schematics.attach(
+        7,
+        IngestRequest(data=litematic_bytes(), filename="door.litematic", uploaded_by_account_id=314),
+    )
+
+    assert store.uploaded_by_account_ids == [314]
 
 
 def test_publication_requires_rights_and_a_completed_sanitizer_identity() -> None:
@@ -510,6 +527,37 @@ async def test_render_recipe_includes_the_schematic_content_identity() -> None:
     assert isinstance(first, FreshRender)
     assert isinstance(second, FreshRender)
     assert first.recipe_hash != second.recipe_hash
+
+
+async def test_render_recipe_is_stable_and_invalidated_by_camera_or_pack_identity() -> None:
+    store = FakeSchematicStore()
+    baseline, _, _ = service(store=store, render_enabled=True, resource_pack=FakeResourcePack(b"pack-a"))
+    await baseline.attach(
+        7,
+        IngestRequest(data=litematic_bytes(), filename="door.litematic"),
+        publication=sanitized_publication(),
+    )
+    same, _, _ = service(store=store, render_enabled=True, resource_pack=FakeResourcePack(b"pack-a"))
+    camera, _, _ = service(
+        store=store,
+        render_enabled=True,
+        resource_pack=FakeResourcePack(b"pack-a"),
+        render_request=RenderRequest(background=RgbaColor(0.1, 0.2, 0.3, 0.4)),
+    )
+    pack, _, _ = service(store=store, render_enabled=True, resource_pack=FakeResourcePack(b"pack-b"))
+
+    baseline_render = await baseline.prepare_render(7)
+    same_render = await same.prepare_render(7)
+    camera_render = await camera.prepare_render(7)
+    pack_render = await pack.prepare_render(7)
+
+    assert isinstance(baseline_render, FreshRender)
+    assert isinstance(same_render, FreshRender)
+    assert isinstance(camera_render, FreshRender)
+    assert isinstance(pack_render, FreshRender)
+    assert same_render.recipe_hash == baseline_render.recipe_hash
+    assert camera_render.recipe_hash != baseline_render.recipe_hash
+    assert pack_render.recipe_hash != baseline_render.recipe_hash
 
 
 @pytest.mark.parametrize(
