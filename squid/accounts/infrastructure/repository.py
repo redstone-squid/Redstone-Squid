@@ -44,6 +44,7 @@ from squid.accounts.errors import (
     CreatorAliasNotFoundError,
     MinecraftAccountNotFoundError,
 )
+from squid.accounts.infrastructure.consent import account_consent_current
 from squid.accounts.infrastructure.models import Account as AccountModel
 from squid.accounts.infrastructure.models import AccountIdentity as AccountIdentityModel
 from squid.accounts.infrastructure.models import AccountMergeTicket as AccountMergeTicketModel
@@ -300,6 +301,33 @@ class AccountRepository:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession], verification_code_pepper: str):
         self._session_factory = session_factory
         self._verification_code_pepper = verification_code_pepper
+
+    async def has_current_consent(self, account_id: int) -> bool:
+        """Return whether an extant account has a complete current consent receipt."""
+        async with self._session_factory() as session:
+            result = await session.scalar(
+                select(AccountModel.id).where(
+                    AccountModel.id == account_id,
+                    account_consent_current(),
+                )
+            )
+            return result is not None
+
+    async def can_approve_minecraft_identity(self, *, account_id: int, java_uuid: uuid.UUID) -> bool:
+        """Atomically prove current consent and exact verified Java ownership."""
+        async with self._session_factory() as session:
+            result = await session.scalar(
+                select(AccountIdentityModel.id)
+                .join(AccountModel, AccountModel.id == AccountIdentityModel.account_id)
+                .where(
+                    AccountModel.id == account_id,
+                    account_consent_current(),
+                    AccountIdentityModel.provider == IdentityProvider.JAVA,
+                    AccountIdentityModel.subject == str(java_uuid),
+                    AccountIdentityModel.verified_at.is_not(None),
+                )
+            )
+            return result is not None
 
     async def create(
         self,

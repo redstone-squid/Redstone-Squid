@@ -818,6 +818,26 @@ def test_application_and_domain_layers_raise_only_structured_errors() -> None:
     assert stale == {}, f"lower or drop these BARE_RAISE_ALLOWLIST entries (allowed, found): {stale}"
 
 
+def test_minecraft_authorization_does_not_import_account_persistence() -> None:
+    """Minecraft authorization consumes the account-owned application port, never its tables."""
+    violations: list[str] = []
+    for path in Path("squid/minecraft_auth").rglob("*.py"):
+        for node in ast.walk(source_tree(path)):
+            if isinstance(node, ast.Import):
+                imports = (alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module is not None:
+                imports = (node.module,)
+            else:
+                continue
+            violations.extend(
+                f"{path}:{node.lineno}: {imported}"
+                for imported in imports
+                if imported.startswith("squid.accounts.infrastructure")
+            )
+
+    assert violations == []
+
+
 def test_the_engine_needs_no_transport_install() -> None:
     """Portable authoring, planning, runtime, scenes, and HTML need no Discord install.
 
