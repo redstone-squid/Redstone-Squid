@@ -3,7 +3,7 @@
 from collections.abc import Mapping, Sequence
 from typing import Any, Literal, cast
 
-from squid.schematics.application.queries import SchematicPublication, StoredSchematic
+from squid.schematics.application.attachments import SchematicPublication, StoredSchematic
 from squid.schematics.domain.models import (
     AutostackLattice,
     SchematicAnalysis,

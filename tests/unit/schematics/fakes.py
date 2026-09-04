@@ -4,8 +4,9 @@ Kept free of the native engine so the whole unit suite runs on a machine without
 extra installed, which is the deployment the null analyzer exists to support.
 """
 
+from squid.schematics.application.attachments import SchematicPublication, StoredSchematic
 from squid.schematics.application.commands import RenderRequest, SimulationRequest
-from squid.schematics.application.queries import SchematicPublication, StoredRender, StoredSchematic
+from squid.schematics.application.previews import StoredRender
 from squid.schematics.domain.models import (
     AnalyzerCapabilities,
     AutostackLattice,

@@ -7,7 +7,7 @@ import pytest
 
 from squid.artifacts import ArtifactMetadata
 from squid.schematics.application import ClaimedRenderJob
-from squid.schematics.application.queries import (
+from squid.schematics.application.previews import (
     CachedRender,
     FreshRender,
     RenderPreparation,

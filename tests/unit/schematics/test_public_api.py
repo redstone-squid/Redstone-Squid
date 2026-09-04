@@ -23,7 +23,7 @@ from squid.schematics.application import (
     SchematicService,
     StoredSchematic,
 )
-from squid.schematics.application.queries import PublicSchematicDownload
+from squid.schematics.application.attachments import PublicSchematicDownload
 from squid.schematics.domain import SchematicFormat, SchematicLicense, SchematicVisibility
 from squid.schematics.errors import SchematicRenderRefusedError
 from tests.unit.schematics.fakes import make_analysis
