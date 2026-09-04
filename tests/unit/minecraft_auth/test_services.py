@@ -79,12 +79,12 @@ def services(
     clock = Clock()
     ids = uuid_source((INSTALLATION_ID, *CHALLENGE_IDS))
     codec = MinecraftSecretCodec(b"test-pepper", token_bytes=ByteSource())
-    installations = InstallationCredentialService(repository, accounts, codec, now=clock, new_uuid=lambda: next(ids))
+    installations = InstallationCredentialService(repository, accounts, codec, clock=clock, new_uuid=lambda: next(ids))
     players = PlayerAuthorizationService(
         repository,
         accounts,
         codec,
-        now=clock,
+        clock=clock,
         new_uuid=lambda: next(ids),
         max_active_challenges=max_active_challenges,
     )
@@ -103,6 +103,27 @@ async def test_installation_secret_is_one_time_hash_only_and_never_player_author
     assert all(issued.token not in repr(value) for value in repository.installations.values())
     with pytest.raises(InvalidPlayerTokenError):
         await players.authenticate_paper_player(issued.token, authenticated)
+
+
+async def test_installation_headers_are_parsed_and_failed_indistinguishably_by_the_service() -> None:
+    _, _, _, installations, _ = services()
+    issued = await installations.register(owner_account_id=ACCOUNT_ID, label="Private server")
+    _prefix, installation_id, secret = issued.token.split("_", 2)
+
+    authenticated = await installations.authenticate_headers(str(UUID(hex=installation_id)), secret)
+
+    assert authenticated.id == INSTALLATION_ID
+    for invalid in (
+        (None, None),
+        (str(INSTALLATION_ID), None),
+        (None, secret),
+        ("not-a-uuid", secret),
+        (str(INSTALLATION_ID), "short"),
+        (str(INSTALLATION_ID), "x" * 513),
+        (str(INSTALLATION_ID), "x" * 43),
+    ):
+        with pytest.raises(InvalidInstallationCredentialError):
+            await installations.authenticate_headers(*invalid)
 
 
 async def test_registration_requires_current_consent_and_profile_is_explicit_opt_in() -> None:
