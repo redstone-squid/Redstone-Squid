@@ -1,5 +1,6 @@
 from uuid import UUID
 
+import anyio
 import pytest
 
 from squid.core.errors import JSONValue
@@ -14,6 +15,7 @@ from squid.submissions.domain import (
     ChoiceOption,
     ControlKind,
     DraftChange,
+    DraftChangeKey,
     DraftRevisionConflictError,
     DraftSnapshot,
     DraftStatus,
@@ -21,6 +23,7 @@ from squid.submissions.domain import (
     FieldOperationKind,
     SubmissionOrigin,
 )
+from squid_ui.text import Localization
 
 
 class FakeOptionCatalog:
@@ -136,6 +139,26 @@ async def test_checked_in_registry_retains_v1_and_serves_v2_vocabulary() -> None
 
 
 @pytest.mark.asyncio
+async def test_manifest_localization_is_isolated_between_tasks(monkeypatch: pytest.MonkeyPatch) -> None:
+    def prefixed_localization(locale: str | None) -> Localization:
+        prefix = locale or "default"
+        return Localization(locale=locale, gettext=lambda message: f"{prefix}:{message}")
+
+    monkeypatch.setattr("squid.submissions.application.forms.localization_for", prefixed_localization)
+    titles: dict[str, str] = {}
+
+    async def build_for(locale: str) -> None:
+        await anyio.lowlevel.checkpoint()
+        titles[locale] = build_submission_manifest(locale).common_sections[0].title
+
+    async with anyio.create_task_group() as tasks:
+        tasks.start_soon(build_for, "alpha")
+        tasks.start_soon(build_for, "beta")
+
+    assert titles == {"alpha": "alpha:Build identity", "beta": "beta:Build identity"}
+
+
+@pytest.mark.asyncio
 async def test_dynamic_options_remain_category_aware() -> None:
     service = SubmissionFormService(FakeOptionCatalog(), CheckedInFormManifestRegistry())
 
@@ -162,7 +185,7 @@ def test_draft_field_operations_are_atomic_and_revisioned() -> None:
     change = DraftChange(
         base_revision=0,
         client_instance_id="fabric:device-1",
-        idempotency_key="edit-0001",
+        idempotency_key=DraftChangeKey("edit-0001"),
         operations=(
             FieldOperation(
                 UUID("00000000-0000-4000-8000-000000000002"),
@@ -204,7 +227,7 @@ def test_draft_lifecycle_prevents_edits_while_processing() -> None:
             DraftChange(
                 base_revision=0,
                 client_instance_id="web:browser-1",
-                idempotency_key="edit-0002",
+                idempotency_key=DraftChangeKey("edit-0002"),
                 operations=(
                     FieldOperation(
                         UUID("00000000-0000-4000-8000-000000000005"),

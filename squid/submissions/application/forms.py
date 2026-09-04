@@ -23,8 +23,7 @@ from squid_ui.text import Message, localization_scope
 
 CURRENT_SUBMISSION_PROTOCOL = 1
 CURRENT_SUBMISSION_SCHEMA = "build_submission.v1"
-CURRENT_SUBMISSION_SCHEMA_REVISION = 1
-LATEST_SUBMISSION_SCHEMA_REVISION = 2
+CURRENT_SUBMISSION_SCHEMA_REVISION = 2
 
 
 class FormManifestRegistry(Protocol):

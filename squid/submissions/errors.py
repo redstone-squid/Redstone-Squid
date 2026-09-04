@@ -57,7 +57,8 @@ class DraftArtifactsChangedError(ConflictError):
     default_end_user_action = "Review the latest attachment status and submit the draft again."
 
     def __init__(self) -> None:
-        super().__init__(public_context={"reason": "attachments_changed"})
+        # Stable wire reason retained while presentation uses submitter-facing attachment terminology.
+        super().__init__(public_context={"reason": "media_changed"})
 
 
 class DraftSchemaUnsupportedError(ValidationError):

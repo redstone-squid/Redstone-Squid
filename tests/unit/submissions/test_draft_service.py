@@ -63,8 +63,8 @@ class FakeManifestRegistry:
         locale: str | None,
     ) -> FormManifest | None:
         assert locale == "en"
-        if (schema_id, revision) == (self.manifest.schema_id, self.manifest.revision):
-            return self.manifest
+        if schema_id == self.manifest.schema_id and revision in {1, 2}:
+            return build_submission_manifest(locale, revision=revision)
         return None
 
 
@@ -224,7 +224,7 @@ def _change(base_revision: int = 0) -> DraftChange:
     return DraftChange(
         base_revision=base_revision,
         client_instance_id="fabric:device-1",
-        idempotency_key="operation-0001",
+        idempotency_key=DraftChangeKey("operation-0001"),
         operations=(FieldOperation(OPERATION_ID, "display_name", FieldOperationKind.SET, "My build"),),
     )
 
@@ -267,7 +267,7 @@ async def test_create_pins_schema_and_enforces_renderer_capabilities() -> None:
     )
 
     assert draft.snapshot.schema_id == "build_submission.v1"
-    assert draft.snapshot.schema_revision == 1
+    assert draft.snapshot.schema_revision == 2
     assert draft.expires_at == NOW.add(days=7, days_assumed_24h_ok=True)
 
 
@@ -559,7 +559,11 @@ async def test_manifest_upgrade_preserves_answers_and_is_idempotent_by_target_re
     )
     repository.drafts[DRAFT_ID] = replace(
         created,
-        snapshot=replace(created.snapshot, answers={"completion": "Built at spawn"}),
+        snapshot=replace(
+            created.snapshot,
+            schema_revision=1,
+            answers={"completion": "Built at spawn"},
+        ),
     )
 
     upgraded = await service.upgrade_manifest(

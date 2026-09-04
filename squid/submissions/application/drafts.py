@@ -135,7 +135,7 @@ class DraftRepository(Protocol):
 
 
 class AccountDraftCapacity(Protocol):
-    """Resolve staff-adjusted synchronized-draft capacity for an account."""
+    """Resolve staff-adjusted draft capacity for an account."""
 
     async def limit_for(self, account_id: int) -> int: ...
 
@@ -230,7 +230,7 @@ class SubmissionDraftService:
         now: Instant | None = None,
         draft_id: UUID | None = None,
     ) -> StoredDraft:
-        """Create an empty synchronized draft pinned to the current schema revision."""
+        """Create an empty draft pinned to the current schema revision."""
         if (origin is SubmissionOrigin.PAPER) != (source_installation_id is not None):
             msg = tr(t"Paper drafts require server-derived installation provenance.")
             raise ValidationError(msg)

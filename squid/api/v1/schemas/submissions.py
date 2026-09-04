@@ -1,4 +1,4 @@
-"""Submission form and synchronized-draft schemas.
+"""Submission form and draft schemas.
 
 The form describes fields and constraints; how they are drawn is the client's
 decision.
@@ -273,7 +273,7 @@ class DraftChangeRequest(StrictSchema):
 
 
 class StoredDraftResponse(StrictSchema):
-    """The compacted current state of one caller-owned synchronized draft."""
+    """The compacted current state of one caller-owned draft."""
 
     id: UUID
     schema_id: str
