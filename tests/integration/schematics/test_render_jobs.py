@@ -64,7 +64,7 @@ async def _row(session_factory: async_sessionmaker[AsyncSession]) -> tuple[Any, 
         return None if row is None else tuple(row)
 
 
-def _projector(
+def _preview_worker(
     session_factory: async_sessionmaker[AsyncSession],
     outcome: RenderPreparation | Exception,
 ) -> SchematicPreviewWorker:
@@ -84,7 +84,7 @@ async def test_a_permanent_render_skip_acknowledges_and_removes_the_intent(
 ) -> None:
     del render_queue
     await _enqueue(async_session_factory)
-    worker = _projector(
+    worker = _preview_worker(
         async_session_factory,
         SkippedRender(RenderSkipReason.NO_PRIMARY_SCHEMATIC),
     )
@@ -100,7 +100,7 @@ async def test_a_transient_render_failure_backs_off_then_is_retained_as_a_dead_l
 ) -> None:
     del render_queue
     await _enqueue(async_session_factory)
-    worker = _projector(async_session_factory, RuntimeError("renderer unavailable"))
+    worker = _preview_worker(async_session_factory, RuntimeError("renderer unavailable"))
 
     await worker.process_batch()
 
