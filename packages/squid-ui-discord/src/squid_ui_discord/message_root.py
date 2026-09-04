@@ -147,7 +147,7 @@ from squid_ui_discord.message_root_wiring import (
     _WiredSelect,
 )
 from squid_ui_discord.render_cache import RenderProgramCache
-from squid_ui_discord.renderer import MountedRenderer, V2Renderer
+from squid_ui_discord.renderer import MountedRenderer, RoutedItem, RoutedSelectItem, V2Renderer
 from squid_ui_discord.rendering import RenderedMessage, render_message
 from squid_ui_discord.target import Target
 
@@ -473,6 +473,7 @@ class MessageRoot[
         """Which kind of Discord message this mount owns, for its whole life."""
         self.strict = config.strict
         self.timeout = config.timeout
+        self.retain_routed_on_timeout = config.retain_routed_on_timeout
         self.access = access
         self.on_error = config.on_error
         self._middleware = _unique_by_identity(config.middleware)
@@ -2775,8 +2776,8 @@ class MessageRoot[
         """
         self._hooks.finish.append(callback)
 
-    async def finish(self, *, disable: bool = True) -> None:
-        """Stop dispatching; optionally leave the message with its controls disabled."""
+    async def finish(self, *, disable: bool = True, retain_routed: bool = False) -> None:
+        """Stop dispatching, optionally retaining stateless routes as recovery controls."""
         run_hooks = False
         try:
             async with self._render_lock:
@@ -2790,6 +2791,16 @@ class MessageRoot[
                             if self._lifecycle is MessageRootStatus.RENEWAL_ARMED
                             else self._stage(disabled=True)
                         )
+                        if retain_routed:
+                            children = (
+                                candidate.view.walk_children()
+                                if isinstance(candidate.view, discord.ui.LayoutView)
+                                else candidate.view.children
+                            )
+                            for item in children:
+                                target = item.item if isinstance(item, discord.ui.DynamicItem) else item
+                                if isinstance(target, RoutedItem | RoutedSelectItem):
+                                    target.disabled = False
                         try:
                             if await self._deliver(candidate, files=False) is None:
                                 logger.debug("could not disable controls on finish: no live edit handle")
@@ -2851,7 +2862,7 @@ class MessageRoot[
             self.render_cache.clear()
 
     async def handle_timeout(self) -> None:
-        await self.finish(disable=True)
+        await self.finish(disable=True, retain_routed=self.retain_routed_on_timeout)
 
     async def handle_error(self, interaction: discord.Interaction, error: Exception, source: str) -> None:
         if self.on_error is not None:
