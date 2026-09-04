@@ -12,7 +12,12 @@ from whenever import Instant
 from squid.core.errors import DataIntegrityError, InvalidStateError, JSONValue, ValidationError
 from squid.core.i18n import tr
 from squid.sponsors import PublicSponsor
-from squid.submissions.application.drafts import DEFAULT_DRAFT_RETENTION_DAYS, StoredDraft, SubmissionDraftService
+from squid.submissions.application.drafts import (
+    DEFAULT_DRAFT_RETENTION_DAYS,
+    StoredDraft,
+    SubmissionDraftService,
+    ValidatedDraft,
+)
 from squid.submissions.domain import DraftStatus, SubmissionOrigin
 from squid.submissions.domain.finalization import (
     DoorOrientation,
@@ -92,6 +97,28 @@ class FinalizationFailureOutcome:
 
 
 @dataclass(frozen=True, slots=True)
+class PreparedSubmission:
+    """A validated submission ready for durable finalization."""
+
+    value: NormalizedSubmission
+
+
+@dataclass(frozen=True, slots=True)
+class PreparationRejected:
+    """Owner-repair issues found while preparing a validated draft."""
+
+    issues: tuple[SubmissionAttentionIssue, ...]
+
+    def __post_init__(self) -> None:
+        if not self.issues:
+            msg = tr(t"rejected submission preparation requires at least one issue")
+            raise InvalidStateError(msg)
+
+
+type PreparationResult = PreparedSubmission | PreparationRejected
+
+
+@dataclass(frozen=True, slots=True)
 class SubmissionNotificationEvent:
     """Idempotent account notification emitted after a durable transition."""
 
@@ -141,6 +168,50 @@ class SubmissionSponsorResolver(Protocol):
     """Resolve only an installation's currently authorized public sponsor projection."""
 
     async def resolve(self, installation_id: UUID) -> PublicSponsor | None: ...
+
+
+class SubmissionPreparation:
+    """Combine validated answers with authoritative sponsor and attachment facts."""
+
+    def __init__(
+        self,
+        artifacts: DraftArtifactReadiness,
+        sponsors: SubmissionSponsorResolver | None = None,
+    ) -> None:
+        self._artifacts = artifacts
+        self._sponsors = sponsors
+
+    async def prepare(self, validated: ValidatedDraft) -> PreparationResult:
+        """Return a normalized submission or deterministic owner-repair issues."""
+        draft = validated.draft
+        answers = validated.normalized_answers
+        sponsor, sponsor_issues = await self._resolve_sponsor(draft, answers)
+        assessment = await self._artifacts.assess(draft.snapshot.id)
+        issues = _unique_issues(
+            (
+                *_artifact_issues(draft.origin, assessment),
+                *_taxonomy_issues(answers, draft.snapshot.category),
+                *sponsor_issues,
+            )
+        )
+        if issues:
+            return PreparationRejected(issues)
+        return PreparedSubmission(_normalize(draft, answers, assessment, sponsor))
+
+    async def _resolve_sponsor(
+        self,
+        draft: StoredDraft,
+        answers: Mapping[str, JSONValue],
+    ) -> tuple[PublicSponsor | None, tuple[SubmissionAttentionIssue, ...]]:
+        requested = draft.origin is SubmissionOrigin.PAPER and _required_bool(answers, "sponsor_attribution")
+        if not requested:
+            return None, ()
+        if draft.source_installation_id is None or self._sponsors is None:
+            return None, (_sponsor_unavailable(),)
+        sponsor = await self._sponsors.resolve(draft.source_installation_id)
+        if sponsor is None or sponsor.installation_id != draft.source_installation_id:
+            return None, (_sponsor_unavailable(),)
+        return sponsor, ()
 
 
 class SubmissionTarget(Protocol):
@@ -220,14 +291,13 @@ class FinalizationJobRepository(Protocol):
 
 
 class SubmissionFinalizationService:
-    """Validate, assess, normalize, and atomically enqueue a draft."""
+    """Coordinate manifest validation, preparation, and durable enqueueing."""
 
     def __init__(
         self,
         drafts: SubmissionDraftService,
-        artifacts: DraftArtifactReadiness,
+        preparation: SubmissionPreparation,
         jobs: FinalizationJobRepository,
-        sponsors: SubmissionSponsorResolver | None = None,
         *,
         retention_days: int = DEFAULT_DRAFT_RETENTION_DAYS,
     ) -> None:
@@ -235,9 +305,8 @@ class SubmissionFinalizationService:
             msg = tr(t"finalization attention retention must be positive")
             raise InvalidStateError(msg)
         self._drafts = drafts
-        self._artifacts = artifacts
+        self._preparation = preparation
         self._jobs = jobs
-        self._sponsors = sponsors
         self._retention_days = retention_days
 
     async def submit(
@@ -286,22 +355,17 @@ class SubmissionFinalizationService:
                 expires_at=expires_at,
             )
 
-        sponsor, sponsor_issues = await self._resolve_sponsor(validated.draft, validated.normalized_answers)
-        assessment = await self._artifacts.assess(draft_id)
-        issues = _artifact_issues(validated.draft.origin, assessment)
-        issues += _taxonomy_issues(validated.normalized_answers, validated.draft.snapshot.category)
-        issues += sponsor_issues
-        if issues:
+        preparation = await self._preparation.prepare(validated)
+        if isinstance(preparation, PreparationRejected):
             return await self._jobs.record_preparation_attention(
                 validated.draft,
-                issues,
+                preparation.issues,
                 now=touched_at,
                 expires_at=expires_at,
             )
-        payload = _normalize(validated.draft, validated.normalized_answers, assessment, sponsor)
         return await self._jobs.enqueue(
             validated.draft,
-            payload,
+            preparation.value,
             now=touched_at,
             expires_at=expires_at,
         )
@@ -310,21 +374,6 @@ class SubmissionFinalizationService:
         """Return retained finalization state after rechecking draft ownership."""
         await self._drafts.get_owned(draft_id, account_id)
         return await self._jobs.get(draft_id)
-
-    async def _resolve_sponsor(
-        self,
-        draft: StoredDraft,
-        answers: Mapping[str, JSONValue],
-    ) -> tuple[PublicSponsor | None, tuple[SubmissionAttentionIssue, ...]]:
-        requested = draft.origin is SubmissionOrigin.PAPER and _required_bool(answers, "sponsor_attribution")
-        if not requested:
-            return None, ()
-        if draft.source_installation_id is None or self._sponsors is None:
-            return None, (_sponsor_unavailable(),)
-        sponsor = await self._sponsors.resolve(draft.source_installation_id)
-        if sponsor is None or sponsor.installation_id != draft.source_installation_id:
-            return None, (_sponsor_unavailable(),)
-        return sponsor, ()
 
 
 class SubmissionFinalizationWorker:
