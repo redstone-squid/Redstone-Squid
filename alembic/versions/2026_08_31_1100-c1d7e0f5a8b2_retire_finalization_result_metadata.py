@@ -16,7 +16,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    """Let new binaries persist build-only results while old binaries remain compatible."""
+    """Expand legacy columns before a later deployment drains their readers."""
     op.drop_constraint(
         "submission_finalization_results_target_key_check",
         "submission_finalization_results",
