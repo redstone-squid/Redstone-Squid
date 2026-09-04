@@ -19,6 +19,9 @@ from squid.accounts.domain import (
     AccountIdentity,
     AccountMerge,
     AccountProfile,
+    AliasClaim,
+    ClaimStatus,
+    CreatorAlias,
     IdentityProvider,
     IdentityRefresh,
     LinkPreview,
@@ -28,6 +31,8 @@ from squid.accounts.domain import (
     ProfileUpdate,
     PublicCreatorProfile,
 )
+from squid.accounts.errors import AccountNotFoundError
+from squid.bot.account_presentation import refresh_message
 from squid.bot.account_view import AccountScreen, ConsentAnswer
 from squid.bot.account_workspace import AccountWorkspace
 from squid.bot.verify import VerifyCog
@@ -180,6 +185,25 @@ class LinkAccountService(AccountService):
     async def release_minecraft_link(self, code: str, reservation: LinkReservation) -> None:
         assert reservation is self.reservation
         self.released.append(code)
+
+
+class StaffRefreshService(AccountService):
+    def __init__(self, target: Account | None, refresh: IdentityRefresh) -> None:
+        self.target = target
+        self.refresh = refresh
+        self.identity_reads: list[tuple[IdentityProvider, str]] = []
+        self.refreshed: list[int] = []
+
+    @override
+    async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
+        self.identity_reads.append((provider, subject))
+        return self.target
+
+    @override
+    async def refresh_java_identity(self, account_id: int, *, java_uuid: UUID | None = None) -> IdentityRefresh:
+        del java_uuid
+        self.refreshed.append(account_id)
+        return self.refresh
 
 
 class MergeAccountService(AccountService):
@@ -357,6 +381,136 @@ async def test_link_reservation_is_released_when_prompt_is_not_opened() -> None:
 
     assert accounts.linked == []
     assert accounts.released == ["abcd"]
+
+
+def test_staff_refresh_picker_is_visible_only_with_the_moderation_permission() -> None:
+    account = Account((DISCORD,), AccountConsent.grant_current(), ACCOUNT_ID, NOW)
+
+    async def authorize(_node: PermissionNode) -> bool:
+        return True
+
+    def workspace(*, allowed: bool) -> AccountWorkspace:
+        return AccountWorkspace(
+            accounts=LinkAccountService(),
+            actor_id=AUTHOR_ID,
+            account=account,
+            request_consent=no_consent_request,
+            can_review_claims=False,
+            can_approve_claims=False,
+            can_reject_claims=False,
+            authorize_claim=authorize,
+            can_refresh_any=allowed,
+        )
+
+    assert "Refresh another member's Minecraft identity" not in labels(workspace(allowed=False)._identity_nodes())
+    assert "Refresh another member's Minecraft identity" in labels(workspace(allowed=True)._identity_nodes())
+
+
+async def test_staff_refresh_rechecks_permission_before_reading_the_member() -> None:
+    target = Account((AccountIdentity.discord(999),), AccountConsent.grant_current(), 99, NOW)
+    accounts = StaffRefreshService(target, IdentityRefresh(99, JAVA_UUID, "Notch"))
+
+    async def authorize(_node: PermissionNode) -> bool:
+        return False
+
+    workspace = AccountWorkspace(
+        accounts=accounts,
+        actor_id=AUTHOR_ID,
+        account=None,
+        request_consent=no_consent_request,
+        can_review_claims=False,
+        can_approve_claims=False,
+        can_reject_claims=False,
+        authorize_claim=authorize,
+        can_refresh_any=True,
+    )
+    event = NoticeSource(user=discord.Object(id=999))
+
+    await workspace._refresh_member_identity(cast(sl.SubmitEvent, event))
+
+    assert accounts.identity_reads == []
+    assert "no longer allowed" in str(event.notices[0])
+
+
+async def test_staff_refresh_reports_a_named_member_without_an_account() -> None:
+    accounts = StaffRefreshService(None, IdentityRefresh(99, JAVA_UUID, "Notch"))
+
+    async def authorize(_node: PermissionNode) -> bool:
+        return True
+
+    workspace = AccountWorkspace(
+        accounts=accounts,
+        actor_id=AUTHOR_ID,
+        account=None,
+        request_consent=no_consent_request,
+        can_review_claims=False,
+        can_approve_claims=False,
+        can_reject_claims=False,
+        authorize_claim=authorize,
+        can_refresh_any=True,
+    )
+
+    with pytest.raises(AccountNotFoundError) as caught:
+        await workspace._refresh_member_identity(cast(sl.SubmitEvent, NoticeSource(user=discord.Object(id=999))))
+
+    assert caught.value.context["provider"] == IdentityProvider.DISCORD.value
+    assert caught.value.context["subject"] == "999"
+
+
+@pytest.mark.parametrize(
+    "refresh",
+    [
+        pytest.param(IdentityRefresh(99, JAVA_UUID, "Steve", "Steve"), id="unchanged"),
+        pytest.param(IdentityRefresh(99, JAVA_UUID, "New", "Old"), id="renamed"),
+        pytest.param(
+            IdentityRefresh(
+                99,
+                JAVA_UUID,
+                "New",
+                "Old",
+                claimed_alias=CreatorAlias(5, "New", account_id=99),
+            ),
+            id="claimed",
+        ),
+        pytest.param(
+            IdentityRefresh(
+                99,
+                JAVA_UUID,
+                "New",
+                "Old",
+                contested_alias=CreatorAlias(5, "New", account_id=100),
+                opened_claim=AliasClaim(7, 5, "New", 99, ClaimStatus.PENDING, NOW),
+            ),
+            id="contested",
+        ),
+        pytest.param(IdentityRefresh(99, JAVA_UUID, "New", "Old", retained_alias_names=("Old",)), id="retained"),
+    ],
+)
+async def test_staff_refresh_renders_every_reconciliation_branch(refresh: IdentityRefresh) -> None:
+    target = Account((AccountIdentity.discord(999),), AccountConsent.grant_current(), 99, NOW)
+    accounts = StaffRefreshService(target, refresh)
+
+    async def authorize(_node: PermissionNode) -> bool:
+        return True
+
+    workspace = AccountWorkspace(
+        accounts=accounts,
+        actor_id=AUTHOR_ID,
+        account=None,
+        request_consent=no_consent_request,
+        can_review_claims=False,
+        can_approve_claims=False,
+        can_reject_claims=False,
+        authorize_claim=authorize,
+        can_refresh_any=True,
+    )
+    workspace._rebuild = no_refresh  # type: ignore[method-assign]
+    event = NoticeSource(user=discord.Object(id=999))
+
+    await workspace._refresh_member_identity(cast(sl.SubmitEvent, event))
+
+    assert accounts.refreshed == [99]
+    assert event.notices == [refresh_message(refresh)]
 
 
 async def test_merge_requires_the_workspace_decision() -> None:

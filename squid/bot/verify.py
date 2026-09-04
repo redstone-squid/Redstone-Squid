@@ -23,6 +23,7 @@ from squid.permissions.domain.catalogue import (
     ACCOUNT_CLAIM_APPROVE,
     ACCOUNT_CLAIM_LIST,
     ACCOUNT_CLAIM_REJECT,
+    ACCOUNT_IDENTITY_REFRESH_ANY,
 )
 
 if TYPE_CHECKING:
@@ -87,6 +88,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="verify"
             can_approve_claims=await allows(request, ACCOUNT_CLAIM_APPROVE),
             can_reject_claims=await allows(request, ACCOUNT_CLAIM_REJECT),
             authorize_claim=authorize_claim,
+            can_refresh_any=await allows(request, ACCOUNT_IDENTITY_REFRESH_ANY),
         )
 
     async def _creator_page(self, request: sd.Request[Self], user: discord.Member | discord.User) -> sd.CommandResult:
