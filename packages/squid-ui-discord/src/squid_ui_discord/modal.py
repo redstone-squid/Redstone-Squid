@@ -108,46 +108,30 @@ class CheckboxGroupField[ValueT](ExtensionField[tuple[ValueT, ...]]):
     capability: ClassVar[str] = Capability.FORMS_DISCORD_CHECKBOX_GROUP
 
     def __post_init__(self) -> None:
-        keys = [option.key for option in self.options]
-        if len(set(keys)) != len(keys):
-            message = f"CheckboxGroupField option keys must be unique: {keys!r}"
-            raise ValueError(message)
-        maximum = len(self.options) if self.maximum is None else self.maximum
         if not 1 <= len(self.options) <= 10:
             message = "CheckboxGroupField needs 1-10 options"
             raise ValueError(message)
-        if self.minimum < 0 or maximum < self.minimum or maximum > len(self.options):
-            message = "CheckboxGroupField bounds must satisfy 0 <= minimum <= maximum <= len(options)"
-            raise ValueError(message)
+        self._portable_field()
 
     def parse(self, raw: object) -> tuple[ValueT, ...]:
-        if self._missing(raw):
-            if self.required:
-                message = "This field is required."
-                raise FormValueError(message)
-            return ()
-        submitted = tuple(str(value) for value in raw) if isinstance(raw, list | tuple) else (str(raw),)
-        by_key = {option.key: option for option in self.options}
-        if any(key not in by_key for key in submitted):
-            message = "Choose only from the available options."
-            raise FormValueError(message)
-        selected = set(submitted)
-        values = tuple(option.value for option in self.options if option.key in selected)
-        if len(values) < self.minimum:
-            message = f"Choose at least {self.minimum} options."
-            raise FormValueError(message)
-        maximum = len(self.options) if self.maximum is None else self.maximum
-        if len(values) > maximum:
-            message = f"Choose no more than {maximum} options."
-            raise FormValueError(message)
-        return values
+        """Parse selected keys with the portable multi-choice contract."""
+        return self._portable_field().parse(raw)
 
     def format(self, value: object) -> tuple[str, ...]:
-        submitted = tuple(value) if isinstance(value, list | tuple | set | frozenset) else (value,)
-        return tuple(
-            option.key
-            for option in self.options
-            if any(option.key == selected or option.value == selected for selected in submitted)
+        """Format a prefill with the portable multi-choice contract."""
+        return self._portable_field().format(value)
+
+    def _portable_field(self) -> MultiChoiceField[ValueT]:
+        """Build the portable value contract behind this native presentation."""
+        return MultiChoiceField(
+            label=self.label,
+            key=self.key,
+            description=self.description,
+            required=self.required,
+            default=self.default,
+            options=self.options,
+            minimum=self.minimum,
+            maximum=self.maximum,
         )
 
 
