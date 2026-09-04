@@ -87,9 +87,7 @@ class PostgresSchematicPreviewPublisher:
         seen_at = now()
         async with self._session_factory() as session:
             row = await session.scalar(
-                select(SchematicPreviewObject)
-                .where(SchematicPreviewObject.object_key == object_key)
-                .with_for_update()
+                select(SchematicPreviewObject).where(SchematicPreviewObject.object_key == object_key).with_for_update()
             )
             if row is None:
                 row = SchematicPreviewObject(
@@ -137,11 +135,7 @@ class PostgresSchematicPreviewPublisher:
                 .where(SchematicPreviewObject.object_key == reservation.object_key)
                 .with_for_update()
             )
-            if (
-                row is None
-                or row.byte_size != reservation.byte_size
-                or row.sha256 not in (None, reservation.sha256)
-            ):
+            if row is None or row.byte_size != reservation.byte_size or row.sha256 not in (None, reservation.sha256):
                 msg = "Schematic preview object reservation no longer matches its uploaded bytes."
                 raise DataIntegrityError(msg, context={"object_key": reservation.object_key})
             row.sha256 = reservation.sha256
@@ -195,9 +189,7 @@ class PostgresSchematicPreviewPublisher:
                 return None
             await session.scalar(select(_BUILD_TABLE.c.id).where(_BUILD_TABLE.c.id == build_id).with_for_update())
             preview_object = await session.scalar(
-                select(SchematicPreviewObject)
-                .where(SchematicPreviewObject.object_key == object_key)
-                .with_for_update()
+                select(SchematicPreviewObject).where(SchematicPreviewObject.object_key == object_key).with_for_update()
             )
             if preview_object is None or preview_object.ready_at is None or preview_object.byte_size != byte_size:
                 msg = "A generated preview cannot be published before its object is ready."
@@ -256,7 +248,8 @@ class PostgresSchematicPreviewPublisher:
             if not await self._stored_object_is_ready(preview_object):
                 preview_object.ready_at = None
                 await session.commit()
-                return False
+                msg = "A cached schematic preview disappeared after it was selected for publication."
+                raise DataIntegrityError(msg, context={"object_key": preview_object.object_key})
             await self.replace_generated_preview_link(session, build_id, url)
             await session.commit()
         return True

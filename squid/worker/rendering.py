@@ -5,7 +5,7 @@ import logging
 
 from squid.artifacts import ArtifactStore
 from squid.diagnostics.log_capture import work_lost
-from squid.schematics.application import SchematicRenderJobService, SchematicService
+from squid.schematics.application import SchematicPreviewService, SchematicRenderJobService
 from squid.schematics.application.previews import CachedRender, FreshRender, SkippedRender
 from squid.topics import TopicPublisher, resource_topic
 
@@ -18,7 +18,7 @@ class SchematicPreviewWorker:
     def __init__(
         self,
         jobs: SchematicRenderJobService,
-        schematics: SchematicService,
+        schematics: SchematicPreviewService,
         artifacts: ArtifactStore,
         public_base_url: str | None,
         *,

@@ -16,6 +16,7 @@ from squid.schematics.application import (
     IngestRequest,
     RenderRequest,
     RenderSkipReason,
+    SchematicPreviewService,
     SchematicPublication,
     SchematicService,
     SkippedRender,
@@ -114,6 +115,12 @@ def service(
         analyzer,
         store,
     )
+
+
+def test_preview_orchestration_has_an_application_owned_boundary() -> None:
+    schematics, _, _ = service()
+
+    assert isinstance(schematics.previews, SchematicPreviewService)
 
 
 def publication(*, public: bool = False) -> SchematicPublication:
@@ -478,7 +485,7 @@ async def test_render_names_the_reason_a_build_is_skipped() -> None:
     await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="legacy.litematic"))
 
     assert await schematics.prepare_render(404) == SkippedRender(RenderSkipReason.NO_PRIMARY_SCHEMATIC)
-    assert isinstance(await schematics.prepare_render(7), PreparedRender)
+    assert isinstance(await schematics.prepare_render(7), FreshRender)
     assert len(analyzer.render_calls) == 1
 
 
@@ -535,7 +542,7 @@ async def test_explaining_a_render_skip_costs_nothing(caplog: pytest.LogCaptureF
     stored = await schematics.featured_for_build(7)
     assert stored is not None
 
-    with caplog.at_level(logging.INFO, logger="squid.schematics.application.services"):
+    with caplog.at_level(logging.INFO, logger="squid.schematics.application.preview_service"):
         assert await schematics.explain_render_skip(stored) is RenderSkipReason.NOT_SANITIZED
 
     assert analyzer.render_calls == []
@@ -648,7 +655,7 @@ async def test_render_skips_a_schematic_over_a_budget(
         publication=publication(),
     )
 
-    with caplog.at_level(logging.INFO, logger="squid.schematics.application.services"):
+    with caplog.at_level(logging.INFO, logger="squid.schematics.application.preview_service"):
         assert await schematics.prepare_render(7) == SkippedRender(reason)
 
     assert analyzer.render_calls == []
