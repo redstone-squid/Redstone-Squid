@@ -80,7 +80,7 @@ class FakeForms:
         self.revision_calls: list[tuple[str, int, str | None]] = []
         self.option_calls: list[tuple[str, str, str | None]] = []
 
-    def manifest(self, *, locale: str | None):
+    async def manifest(self, *, locale: str | None):
         self.manifest_locales.append(locale)
         return build_submission_manifest(locale)
 

@@ -5,6 +5,7 @@ import pytest
 from squid.core.errors import JSONValue
 from squid.submissions.application import (
     CURRENT_SUBMISSION_PROTOCOL,
+    CheckedInFormManifestRegistry,
     FormOptionSet,
     SubmissionFormService,
     build_submission_manifest,
@@ -102,12 +103,45 @@ def test_partial_validation_allows_incomplete_draft_but_rejects_wrong_values() -
 
 
 @pytest.mark.asyncio
+async def test_checked_in_registry_retains_v1_and_serves_v2_vocabulary() -> None:
+    registry = CheckedInFormManifestRegistry()
+
+    revision_one = await registry.get("build_submission.v1", 1, locale="en")
+    revision_two = await registry.get("build_submission.v1", 2, locale="en")
+
+    assert revision_one is not None
+    assert revision_two is not None
+    old_context = next(section for section in revision_one.common_sections if section.id == "provenance")
+    new_context = next(section for section in revision_two.common_sections if section.id == "submission_context")
+    assert (
+        tuple(field.id for field in old_context.fields)
+        == tuple(field.id for field in new_context.fields)
+        == (
+            "completion",
+            "ai_generated",
+            "sponsor_attribution",
+        )
+    )
+    assert new_context.title == "About this submission"
+    assert next(field for field in new_context.fields if field.id == "sponsor_attribution").label == (
+        "Credit the Minecraft server this submission came from"
+    )
+    door = revision_two.category("door")
+    geometry = next(section for section in door.sections if section.id == "door_geometry")
+    assert [field.label for field in geometry.fields[:3]] == [
+        "Clear opening width",
+        "Clear opening height",
+        "Clear opening depth",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_dynamic_options_remain_category_aware() -> None:
-    service = SubmissionFormService(FakeOptionCatalog())
+    service = SubmissionFormService(FakeOptionCatalog(), CheckedInFormManifestRegistry())
 
     option_set = await service.options("approved_patterns", "door", locale="en")
 
-    assert service.manifest(locale="en").category("door").code == "door"
+    assert (await service.manifest(locale="en")).category("door").code == "door"
     assert option_set == FormOptionSet(
         "approved_patterns",
         "door",

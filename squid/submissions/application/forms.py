@@ -24,6 +24,15 @@ from squid_ui.text import Message, localization_scope
 CURRENT_SUBMISSION_PROTOCOL = 1
 CURRENT_SUBMISSION_SCHEMA = "build_submission.v1"
 CURRENT_SUBMISSION_SCHEMA_REVISION = 1
+LATEST_SUBMISSION_SCHEMA_REVISION = 2
+
+
+class FormManifestRegistry(Protocol):
+    """Resolve immutable checked-in form revisions."""
+
+    async def current(self, *, locale: str | None) -> FormManifest: ...
+
+    async def get(self, schema_id: str, revision: int, *, locale: str | None) -> FormManifest | None: ...
 
 
 class FormOptionCatalog(Protocol):
@@ -56,12 +65,13 @@ class FormOptionSet:
 class SubmissionFormService:
     """Publish the fixed form definition with current approved dynamic options."""
 
-    def __init__(self, option_catalog: FormOptionCatalog) -> None:
+    def __init__(self, option_catalog: FormOptionCatalog, manifests: FormManifestRegistry) -> None:
         self._option_catalog = option_catalog
+        self._manifests = manifests
 
-    def manifest(self, *, locale: str | None) -> FormManifest:
+    async def manifest(self, *, locale: str | None) -> FormManifest:
         """Return the localized current form with revisioned option-source references."""
-        return build_submission_manifest(locale)
+        return await self._manifests.current(locale=locale)
 
     async def manifest_revision(
         self,
@@ -71,7 +81,7 @@ class SubmissionFormService:
         locale: str | None,
     ) -> FormManifest | None:
         """Return one immutable checked-in form revision while this server can validate it."""
-        return await CheckedInFormManifestRegistry().get(schema_id, revision, locale=locale)
+        return await self._manifests.get(schema_id, revision, locale=locale)
 
     async def options(
         self,
@@ -99,19 +109,33 @@ class CheckedInFormManifestRegistry:
         locale: str | None,
     ) -> FormManifest | None:
         """Return a pinned schema when its exact immutable revision is still available."""
-        if schema_id != CURRENT_SUBMISSION_SCHEMA or revision != CURRENT_SUBMISSION_SCHEMA_REVISION:
+        if schema_id != CURRENT_SUBMISSION_SCHEMA or revision not in {1, 2}:
             return None
-        return build_submission_manifest(locale)
+        return build_submission_manifest(locale, revision=revision)
 
 
-def build_submission_manifest(locale: str | None = None) -> FormManifest:
+def build_submission_manifest(
+    locale: str | None = None,
+    *,
+    revision: int = CURRENT_SUBMISSION_SCHEMA_REVISION,
+) -> FormManifest:
     """Build the checked-in schema revision localized for one client."""
+    if revision not in {1, 2}:
+        msg = tr(t"unsupported checked-in submission form revision")
+        raise InvalidStateError(msg)
     with localization_scope(localization_for(locale)):
-        return _build_submission_manifest()
+        return _build_submission_manifest(revision)
 
 
-def _build_submission_manifest() -> FormManifest:
+def _build_submission_manifest(revision: int) -> FormManifest:
     localize = tr
+    context_section_id = "provenance" if revision == 1 else "submission_context"
+    context_title = tr(t"Provenance") if revision == 1 else tr(t"About this submission")
+    sponsor_label = (
+        tr(t"Show the sponsoring server on this build")
+        if revision == 1
+        else tr(t"Credit the Minecraft server this submission came from")
+    )
     common = (
         FormSection(
             id="identity",
@@ -254,8 +278,8 @@ def _build_submission_manifest() -> FormManifest:
             ),
         ),
         FormSection(
-            id="provenance",
-            title=localize(tr(t"Provenance")),
+            id=context_section_id,
+            title=localize(context_title),
             fields=(
                 FormField(
                     id="completion",
@@ -274,7 +298,7 @@ def _build_submission_manifest() -> FormManifest:
                 ),
                 FormField(
                     id="sponsor_attribution",
-                    label=localize(tr(t"Show the sponsoring server on this build")),
+                    label=localize(sponsor_label),
                     control=ControlKind.BOOLEAN,
                     value_kind=ValueKind.BOOLEAN,
                     default=False,
@@ -285,12 +309,12 @@ def _build_submission_manifest() -> FormManifest:
     )
     return FormManifest(
         schema_id=CURRENT_SUBMISSION_SCHEMA,
-        revision=CURRENT_SUBMISSION_SCHEMA_REVISION,
+        revision=revision,
         minimum_protocol=CURRENT_SUBMISSION_PROTOCOL,
         maximum_protocol=CURRENT_SUBMISSION_PROTOCOL,
         common_sections=common,
         categories=(
-            _door_form(localize),
+            _door_form(localize, revision),
             _extender_form(localize),
             CategoryForm("utility", localize(tr(t"Utility")), ()),
             CategoryForm("entrance", localize(tr(t"Entrance")), ()),
@@ -299,7 +323,10 @@ def _build_submission_manifest() -> FormManifest:
     )
 
 
-def _door_form(localize: Callable[[Message], str]) -> CategoryForm:
+def _door_form(localize: Callable[[Message], str], revision: int = CURRENT_SUBMISSION_SCHEMA_REVISION) -> CategoryForm:
+    opening_width = tr(t"Opening width") if revision == 1 else tr(t"Clear opening width")
+    opening_height = tr(t"Opening height") if revision == 1 else tr(t"Clear opening height")
+    opening_depth = tr(t"Opening depth") if revision == 1 else tr(t"Clear opening depth")
     return CategoryForm(
         code="door",
         label=localize(tr(t"Door")),
@@ -308,9 +335,27 @@ def _door_form(localize: Callable[[Message], str]) -> CategoryForm:
                 id="door_geometry",
                 title=localize(tr(t"Door geometry")),
                 fields=(
-                    _integer_field("opening_width", tr(t"Opening width"), localize, required=True, maximum=512),
-                    _integer_field("opening_height", tr(t"Opening height"), localize, required=True, maximum=512),
-                    _integer_field("opening_depth", tr(t"Opening depth"), localize, required=True, maximum=512),
+                    _integer_field(
+                        "opening_width",
+                        opening_width,
+                        localize,
+                        required=True,
+                        maximum=512,
+                    ),
+                    _integer_field(
+                        "opening_height",
+                        opening_height,
+                        localize,
+                        required=True,
+                        maximum=512,
+                    ),
+                    _integer_field(
+                        "opening_depth",
+                        opening_depth,
+                        localize,
+                        required=True,
+                        maximum=512,
+                    ),
                     FormField(
                         id="door_orientation",
                         label=localize(tr(t"Door orientation")),

@@ -381,4 +381,4 @@ async def test_unexpected_failures_dead_letter_without_deleting_draft(
     async with async_session_factory() as session:
         draft = await session.get(SubmissionDraft, DRAFT_ID)
     assert draft is not None
-    assert draft.status == DraftStatus.NEEDS_ATTENTION.value
+    assert draft.status is DraftStatus.NEEDS_ATTENTION
