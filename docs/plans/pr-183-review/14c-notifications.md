@@ -15,8 +15,10 @@ slash-only `/notifications` workspace backed by `NotificationScreen`; selection 
 not user-entered IDs. Prefix commands were removed rather than hidden.
 
 The remaining Discord gap is localization: `render_delivery` and the command description still author raw English.
-Move delivery text to deferred messages, localize using the recipient's stored preference or deterministic fallback,
-and keep payload facts separate from rendered transport text.
+Move delivery text to deferred messages and keep payload facts separate from rendered transport text. No recipient
+locale is persisted today and background DMs have no interaction locale, so this plan deliberately renders DMs with
+the configured deterministic deployment fallback. Capturing a durable user preference would require a separate
+profile/API/UI/privacy migration and is not implied here.
 
 ### Inbox filtering moved to SQL, but policy is still repeated at the route
 
@@ -35,8 +37,9 @@ hidden or foreign items without revealing which condition applied.
 
 ### Materialization is durable, but recipient expansion needs set-based proof
 
-`source_key` is now the idempotency key; the `event_id` foreign key preserves causality and retention safety rather
-than serving as the only deduplication mechanism. Keep both and document their distinct roles.
+`source_key` is now the idempotency key; the `event_id` foreign key preserves causality and traceability rather than
+serving as the only deduplication mechanism. Retention is protected by cleanup queries' `NOT EXISTS` predicates—the
+current `ON DELETE CASCADE` foreign key does not protect it. Keep both roles explicit and test cleanup ordering.
 
 Some materializers still loop over recipient IDs. A loop is acceptable only when inserts are emitted in one batch and
 recipient discovery is set-based. Refactor staff, creator-follow, and record-filter paths to produce immutable
@@ -67,8 +70,8 @@ showing periodic polling still drains work.
 4. **Batch materialization.** Introduce typed candidates, set-based recipient queries, batched idempotent inserts, and
    constant query-count tests. Preserve event causality and source-key uniqueness.
 5. **Type persistence.** Map subscription/notification enum values through SQLAlchemy and cover migration drift.
-6. **Localize delivery presentation.** Store no translated text in event payloads; localize only when rendering the
-   Discord DM or web response.
+6. **Localize delivery presentation.** Store no translated text in event payloads; localize web responses from the
+   request locale and background Discord DMs with the deterministic deployment fallback.
 7. **Prove wake hints are optional.** Cover disconnect/reconnect and polling recovery without making `LISTEN` an owner
    of correctness.
 
@@ -110,12 +113,12 @@ the final concurrency boundary; Python deduplication is not sufficient.
 
 | Thread | Disposition |
 |---|---|
-| [`squid/events/infrastructure/listener.py`: “whats the point”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790849505) | **Already addressed; retain.** It is explicitly an optional wake hint. Milestone 7 proves correctness without it. |
+| [`squid/events/infrastructure/listener.py`: “whats the point”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790849505) | **Already addressed.** It is explicitly an optional wake hint. Milestone 7 proves correctness without it. |
 | [`squid/api/v1/notifications.py`: “we are NOT filtering in memory”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790811050) | **Already addressed.** `_inbox_filter` applies visibility before pagination/count; milestone 1 pins it. |
-| [`squid/api/v1/notifications.py`: “this staff decision is wack”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790811493) | **Already addressed, then consolidate.** A permission node replaced the snowflake allowlist; milestone 2 removes route duplication. |
+| [`squid/api/v1/notifications.py`: “this staff decision is wack”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790811493) | **Already addressed.** A permission node replaced the snowflake allowlist; milestone 2 additionally removes route duplication. |
 | [`squid/notifications/infrastructure/repository.py`: “can we mark unread too”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790858055) | **Fix in milestone 3.** Add symmetric, visibility-safe unread transitions through every surface. |
-| [`squid/notifications/infrastructure/repository.py`: “N+1?”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790860328) | **Fix/prove in milestone 4.** Recipient discovery and writes become set-based with query-count tests. |
-| [`squid/notifications/infrastructure/repository.py`: “not sure if I like deduplicating by the DomainEventRecord table”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790864864) | **Already changed; retain the FK for causality.** `source_key` owns idempotency, while `event_id` protects retention and traceability. |
+| [`squid/notifications/infrastructure/repository.py`: “N+1?”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790860328) | **Fix in milestone 4.** Recipient discovery and writes become set-based with query-count tests. |
+| [`squid/notifications/infrastructure/repository.py`: “not sure if I like deduplicating by the DomainEventRecord table”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790864864) | **Retain.** `source_key` owns idempotency; `event_id` preserves causality/traceability, while cleanup predicates protect retention. |
 | [`squid/notifications/infrastructure/models.py`: “too specific of a docstring vs the class name”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790855154) | **Already addressed.** `NotificationProfile` now documents independent channel switches and the consent boundary. |
 | [`squid/notifications/infrastructure/models.py`: “enum”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790851725) | **Fix in milestone 5.** Map checked text columns through domain enums. |
 | [`squid/bot/notifications.py`: “don't return an ID...”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790813978) | **Already addressed.** The workspace does not expose mutation IDs. |

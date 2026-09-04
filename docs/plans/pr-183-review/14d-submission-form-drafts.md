@@ -44,9 +44,12 @@ Adopt this public vocabulary:
 - `DraftValidationError` replaces `DraftIncompleteError`, because the same error carries invalid as well as missing
   fields.
 
-Field IDs are a versioned wire contract. Do not silently rename `provenance` in revision 1. Publish revision 2 with
-the new ID, retain the revision-1 registry/decoder, and add an explicit v1-to-v2 draft upgrade operation. Labels and
-help text can improve in both revisions where the wire meaning is unchanged.
+Section and field IDs are versioned wire contracts. `provenance` is a section ID, not an answer key; the answers in
+that section remain keyed by `completion`, `ai_generated`, and `sponsor_attribution`. Do not silently rename the
+section in revision 1. Publish revision 2 with `submission_context`, retain the revision-1 registry/decoder, and add
+an explicit v1-to-v2 draft upgrade that validates the unchanged answers and advances the pinned revision. Define an
+answer transform only if a field ID actually changes. Labels/help text can improve in both revisions where the wire
+meaning is unchanged.
 
 ### Enum work is partly complete
 
@@ -86,8 +89,9 @@ that model methods production does not have.
    cover unsupported pinned revisions.
 3. **Create domain-owned `DraftChangeKey`.** Route API parsing and persistence through it; delete duplicate regexes.
 4. **Type persistence boundaries.** Map draft status/origin/operation kinds as enums and add schema-totality tests.
-5. **Publish vocabulary revision 2.** Update labels/help text, add the renamed section ID only in v2, retain v1, and
-   implement deterministic draft upgrade with conflict/idempotency handling.
+5. **Publish vocabulary revision 2.** First deploy readers for v1/v2 while `current()` still returns v1. After old
+   binaries are drained, switch new drafts to v2. Retain v1 while any draft/job pins it, and implement deterministic
+   upgrade in the draft service with conflict/idempotency handling.
 6. **Rename structured errors.** Move from incomplete/synchronized/media language to validation/draft/attachment
    language while preserving stable error codes for clients through a documented deprecation alias if needed.
 7. **Close lifecycle and test seams.** Pin reference-aware cleanup after draft deletion and type every API contract
@@ -104,13 +108,19 @@ class DraftChangeKey:
         if _DRAFT_CHANGE_KEY.fullmatch(self.value) is None:
             raise ValidationError(...)
 
+    def __str__(self) -> str:
+        return self.value
+
 
 class FormManifestRegistry(Protocol):
     async def current(self, *, locale: str | None) -> FormManifest: ...
     async def get(
         self, schema_id: str, revision: int, *, locale: str | None
     ) -> FormManifest | None: ...
-    async def upgrade(self, draft: DraftSnapshot, *, target_revision: int) -> DraftSnapshot: ...
+
+
+class FormRevisionMigration(Protocol):
+    def transform(self, draft: DraftSnapshot, *, target: FormManifest) -> DraftSnapshot: ...
 ```
 
 The implementation may use a `str` subclass instead of a dataclass if Pyrefly and Pydantic preserve the type. The
@@ -120,8 +130,8 @@ acceptance criterion is one validator and a distinct type from the HTTP replay k
 
 - Manifest: exact v1/v2 snapshots, stable option values, locale isolation under concurrent tasks, origin-specific
   fields, missing required client capability, and unavailable revision.
-- Upgrade: v1 provenance answer mapped to v2 submission context, unknown/removed fields, stale revision race,
-  idempotent retry, and rollback leaving the v1 draft unchanged.
+- Upgrade: v1 section ID replaced while all three answer IDs/values remain unchanged, unknown/removed fields, stale
+  revision race, idempotent retry, and rollback leaving the v1 draft unchanged.
 - Domain/API: one `DraftChangeKey` rule, strict extra-field rejection, JSON value normalization, enum round trips, and
   exhaustive operation mapping.
 - Repository: replay under concurrent equal/different keys, optimistic revision conflict, lifecycle lock namespace,
@@ -150,11 +160,14 @@ acceptance criterion is one validator and a distinct type from the HTTP replay k
 | [`squid/submissions/infrastructure/models.py`: “enum”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790897637) | **Fix in milestone 4.** Type the mapped text columns with domain enums. |
 | [`squid/api/v1/schemas/submissions.py`: “another definition for idempotency key”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790909256) | **Fix in milestone 3.** Pydantic constructs `DraftChangeKey` instead of restating its rule. |
 | [`squid/submissions/domain/drafts.py`: “don't like the fact that we are having multiple places to validate idempotency key format”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790838994) | **Fix in milestone 3.** One domain-owned validator becomes authoritative. |
-| [`squid/submissions/infrastructure/repository.py`: “is this a TODO?”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3803760966) | **Already addressed by reference-aware cleanup.** Milestone 7 turns the comment into a pinned lifecycle contract. |
+| [`squid/submissions/infrastructure/repository.py`: “is this a TODO?”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3803760966) | **Already addressed.** Reference-aware cleanup owns the behavior; milestone 7 pins it as a lifecycle contract. |
 | [`tests/unit/submissions/test_api_contract.py`: “subclass”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3803659673) | **Fix in milestone 7.** Test doubles explicitly implement the ports/services they replace. |
 
 ## Sequencing and delivery
 
 Land the single-key validator and persistence typing before manifest v2 so the upgrade operation uses the final
-mutation contract. V1 retention and v2 publication are one atomic commit. Error aliases, if API clients rely on the
-old code, remain for one version and are removed only with an OpenAPI compatibility note.
+mutation contract. The registry remains read-only; `SubmissionDraftService` loads both manifests, applies the pure
+revision migration, and persists through the draft repository's optimistic/idempotent write. Rollout is staged:
+read-v2 support first, switch `current()` only after old binaries drain, then retain v1 until no durable references
+remain. Error aliases, if API clients rely on the old code, remain for one version and are removed only with an
+OpenAPI compatibility note.
