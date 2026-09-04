@@ -28,7 +28,7 @@ from squid_reactivity.core import (
     ReactivityError,
     TransactionView,
     _bump_epoch,
-    _Cell,
+    _ReactiveSource,
     action_participant,
     cycle_path,
     declared_cells,
@@ -217,7 +217,7 @@ class _Replacement:
         self._resource = resource
         self.value: Any = _MISSING
 
-    def prepare(self, view: TransactionView) -> dict[_Cell, int] | None:
+    def prepare(self, view: TransactionView) -> dict[_ReactiveSource, int] | None:
         """Settle every source while the action can still roll back.
 
         `None` means this participant staged no replacement, which is why `apply` can be
@@ -227,17 +227,17 @@ class _Replacement:
             return None
         return {source: source.settle() for source in self._resource.sources}
 
-    def apply(self, prepared: dict[_Cell, int] | None) -> None:
+    def apply(self, prepared: dict[_ReactiveSource, int] | None) -> None:
         if prepared is not None:
             self._resource._replace_now(self.value, baseline=prepared)
 
-    def describe_change(self, prepared: dict[_Cell, int] | None) -> None:
+    def describe_change(self, prepared: dict[_ReactiveSource, int] | None) -> None:
         return None
 
-    def abort(self, prepared: dict[_Cell, int] | None, cause: BaseException) -> None:
+    def abort(self, prepared: dict[_ReactiveSource, int] | None, cause: BaseException) -> None:
         self.value = _MISSING
 
-    def finalize(self, prepared: dict[_Cell, int] | None) -> None:
+    def finalize(self, prepared: dict[_ReactiveSource, int] | None) -> None:
         """Installing already invalidated the owner, which is the only watcher there is."""
 
 
@@ -270,7 +270,7 @@ class _Load[ValueT]:
         self.token = token
         self.completion = completion
         self.scope = scope
-        self.sources: dict[_Cell, int] = {}
+        self.sources: dict[_ReactiveSource, int] = {}
 
 
 def _previous[ValueT](status: ResourceStatus[ValueT]) -> Ready[ValueT] | None:
@@ -322,7 +322,9 @@ class Resource[ValueT](AsyncBinding):
         immediately rather than one load later, and it is safe because a dependent awaits its
         input rather than racing it -- see `__await__`.
         """
-        self.sources: dict[_Cell, int] = declared_cells(owner)
+        self.sources: dict[_ReactiveSource, int] = {
+            source: version for source, version in declared_cells(owner).items()
+        }
         """State the last load read, and the version each held. Filled by tracking, not declared.
 
         Seeded with everything the component declares, because a resource whose loader has not
@@ -472,7 +474,7 @@ class Resource[ValueT](AsyncBinding):
             return
         staged.value = value
 
-    def _replace_now(self, value: ValueT, *, baseline: dict[_Cell, int] | None = None) -> None:
+    def _replace_now(self, value: ValueT, *, baseline: dict[_ReactiveSource, int] | None = None) -> None:
         if baseline is None:
             baseline = {source: source.settle() for source in self.sources}
         self._new_generation()
