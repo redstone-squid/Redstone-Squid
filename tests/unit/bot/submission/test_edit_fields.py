@@ -33,3 +33,13 @@ def test_door_only_fields_are_offered_to_doors_alone() -> None:
         # The shared fields stay available on every category.
         assert "dimensions" in offered
         assert "creators_ign" in offered
+
+
+def test_every_edit_field_round_trips_through_its_declared_formatter_and_parser() -> None:
+    build = DoorBuild()
+
+    for field in EDIT_FIELDS:
+        if not field.applies_to(build):
+            continue
+        bound = field.bind(build)
+        assert field.parser(bound.current_text) == bound.actual_value, field.patch_key
