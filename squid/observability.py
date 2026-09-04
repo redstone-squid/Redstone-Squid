@@ -5,9 +5,10 @@ import os
 import threading
 from collections import OrderedDict, deque
 from collections.abc import Callable, Generator, Mapping
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager
 from contextvars import ContextVar, Token
-from typing import TYPE_CHECKING, Any, override
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Protocol, override
 from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
@@ -18,6 +19,70 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 type SpanAttribute = str | bool | int | float
+
+
+class _SpanContext(Protocol):
+    is_valid: bool
+    trace_id: int
+    span_id: int
+
+
+class _Span(Protocol):
+    def record_exception(self, error: BaseException) -> None: ...
+
+    def set_status(self, status: object) -> None: ...
+
+    def set_attribute(self, name: str, value: SpanAttribute) -> None: ...
+
+    def get_span_context(self) -> _SpanContext: ...
+
+
+class _Tracer(Protocol):
+    def start_as_current_span(
+        self,
+        name: str,
+        *,
+        context: object | None = None,
+        attributes: Mapping[str, SpanAttribute] | None = None,
+    ) -> AbstractContextManager[_Span]: ...
+
+
+class _Counter(Protocol):
+    def add(self, value: int, attributes: Mapping[str, SpanAttribute]) -> None: ...
+
+
+class _Histogram(Protocol):
+    def record(self, value: float, attributes: Mapping[str, SpanAttribute]) -> None: ...
+
+
+class _Gauge(Protocol):
+    def set(self, value: int | float, attributes: Mapping[str, SpanAttribute]) -> None: ...
+
+
+class _Meter(Protocol):
+    def create_counter(self, name: str) -> _Counter: ...
+
+    def create_histogram(self, name: str) -> _Histogram: ...
+
+    def create_gauge(self, name: str) -> _Gauge: ...
+
+
+class _Propagator(Protocol):
+    def inject(self, carrier: dict[str, str]) -> None: ...
+
+    def extract(self, carrier: Mapping[str, str]) -> object: ...
+
+
+@dataclass(frozen=True, slots=True)
+class _Telemetry:
+    pid: int
+    tracer: _Tracer
+    worker_tracer: _Tracer
+    meter: _Meter
+    propagator: _Propagator
+    current_span: Callable[[], _Span]
+    error_status: Callable[[], object]
+    instrument_api_app: Callable[[FastAPI], None]
 
 CORRELATION_REFERENCE_LENGTH = 12
 """Hex characters shown to users: 48 bits, and the width of the untraced fallback.
@@ -51,18 +116,17 @@ def active_trace_id() -> str | None:
 class TraceSpan:
     """Small transport-facing facade over an optional OpenTelemetry span."""
 
-    def __init__(self, span: Any | None = None) -> None:
+    def __init__(self, span: _Span | None = None, error_status: Callable[[], object] | None = None) -> None:
         self._span = span
+        self._error_status = error_status
 
     def set_error(self, error: BaseException | None = None) -> None:
         """Mark the span failed, recording an exception when one is available."""
-        if self._span is None:
+        if self._span is None or self._error_status is None:
             return
         if error is not None:
             self._span.record_exception(error)
-        from opentelemetry.trace.status import Status, StatusCode  # pyright: ignore[reportMissingImports]
-
-        self._span.set_status(Status(StatusCode.ERROR))
+        self._span.set_status(self._error_status())
 
     def set_attribute(self, name: str, value: SpanAttribute) -> None:
         """Attach one low-cardinality attribute when a real span is active."""
@@ -192,12 +256,17 @@ _NOOP_HANDLE = ObservabilityHandle()
 _configuration_lock = threading.Lock()
 _configured_pid: int | None = None
 _configured_handle: ObservabilityHandle | None = None
-_telemetry_active_pid: int | None = None
-_meter: Any | None = None
+_ACTIVE: _Telemetry | None = None
 _metric_lock = threading.Lock()
-_counters: dict[str, Any] = {}
-_histograms: dict[str, Any] = {}
-_gauges: dict[str, Any] = {}
+_counters: dict[str, _Counter] = {}
+_histograms: dict[str, _Histogram] = {}
+_gauges: dict[str, _Gauge] = {}
+
+
+def _telemetry() -> _Telemetry | None:
+    """Return this process's active telemetry capabilities, if configured."""
+    active = _ACTIVE
+    return active if active is not None and active.pid == os.getpid() else None
 
 
 def configure_observability(config: ObservabilityConfig, *, service_name: str) -> ObservabilityHandle:
@@ -237,15 +306,10 @@ def instrument_api_app(app: FastAPI, config: ObservabilityConfig) -> None:
     """Instrument one FastAPI application when observability is enabled and installed."""
     if not config.enabled:
         return
-    try:
-        from opentelemetry.instrumentation.fastapi import (  # pyright: ignore[reportMissingImports]
-            FastAPIInstrumentor,
-        )
-    except ModuleNotFoundError as exc:
-        if exc.name != "opentelemetry" and not (exc.name or "").startswith("opentelemetry."):
-            raise
+    telemetry = _telemetry()
+    if telemetry is None:
         return
-    FastAPIInstrumentor.instrument_app(app)
+    telemetry.instrument_api_app(app)
 
 
 def correlation_id() -> str:
@@ -290,20 +354,12 @@ def correlation_reference(correlation_id: str) -> str:
 @contextmanager
 def trace_span(name: str, attributes: Mapping[str, SpanAttribute] | None = None) -> Generator[TraceSpan]:
     """Start an application-edge span, or yield a no-op facade without the extra."""
-    if _telemetry_active_pid != os.getpid():
+    telemetry = _telemetry()
+    if telemetry is None:
         yield TraceSpan()
         return
-    try:
-        from opentelemetry import trace  # pyright: ignore[reportMissingImports]
-    except ModuleNotFoundError as exc:
-        if exc.name != "opentelemetry" and not (exc.name or "").startswith("opentelemetry."):
-            raise
-        yield TraceSpan()
-        return
-
-    tracer = trace.get_tracer("squid")
-    with tracer.start_as_current_span(name, attributes=dict(attributes or {})) as span:
-        facade = TraceSpan(span)
+    with telemetry.tracer.start_as_current_span(name, attributes=dict(attributes or {})) as span:
+        facade = TraceSpan(span, telemetry.error_status)
         try:
             yield facade
         except BaseException as exc:
@@ -313,16 +369,11 @@ def trace_span(name: str, attributes: Mapping[str, SpanAttribute] | None = None)
 
 def inject_trace_context(carrier: dict[str, Any]) -> None:
     """Inject the active W3C trace context into a JSON-compatible carrier."""
-    if _telemetry_active_pid != os.getpid():
-        return
-    try:
-        from opentelemetry import propagate  # pyright: ignore[reportMissingImports]
-    except ModuleNotFoundError as exc:
-        if exc.name != "opentelemetry" and not (exc.name or "").startswith("opentelemetry."):
-            raise
+    telemetry = _telemetry()
+    if telemetry is None:
         return
     headers: dict[str, str] = {}
-    propagate.inject(headers)
+    telemetry.propagator.inject(headers)
     carrier.update(headers)
 
 
@@ -333,21 +384,16 @@ def extracted_trace_span(
     attributes: Mapping[str, SpanAttribute] | None = None,
 ) -> Generator[TraceSpan]:
     """Extract a parent context and start a child span, tolerating absent propagation."""
-    if _telemetry_active_pid != os.getpid():
-        yield TraceSpan()
-        return
-    try:
-        from opentelemetry import propagate, trace  # pyright: ignore[reportMissingImports]
-    except ModuleNotFoundError as exc:
-        if exc.name != "opentelemetry" and not (exc.name or "").startswith("opentelemetry."):
-            raise
+    telemetry = _telemetry()
+    if telemetry is None:
         yield TraceSpan()
         return
     headers = {name: value for name, value in carrier.items() if isinstance(value, str)}
-    parent = propagate.extract(headers)
-    tracer = trace.get_tracer("squid.worker")
-    with tracer.start_as_current_span(name, context=parent, attributes=dict(attributes or {})) as span:
-        facade = TraceSpan(span)
+    parent = telemetry.propagator.extract(headers)
+    with telemetry.worker_tracer.start_as_current_span(
+        name, context=parent, attributes=dict(attributes or {})
+    ) as span:
+        facade = TraceSpan(span, telemetry.error_status)
         try:
             yield facade
         except BaseException as exc:
@@ -357,49 +403,47 @@ def extracted_trace_span(
 
 def record_current_exception(error: BaseException) -> None:
     """Record an exception on the active span when one exists."""
-    if _telemetry_active_pid != os.getpid():
+    telemetry = _telemetry()
+    if telemetry is None:
         return
-    try:
-        from opentelemetry import trace  # pyright: ignore[reportMissingImports]
-    except ModuleNotFoundError as exc:
-        if exc.name != "opentelemetry" and not (exc.name or "").startswith("opentelemetry."):
-            raise
-        return
-    TraceSpan(trace.get_current_span()).set_error(error)
+    TraceSpan(telemetry.current_span(), telemetry.error_status).set_error(error)
 
 
 def add_counter(name: str, *, attributes: Mapping[str, SpanAttribute] | None = None, value: int = 1) -> None:
     """Add to an application counter when the metrics SDK is configured."""
-    if _meter is None:
+    telemetry = _telemetry()
+    if telemetry is None:
         return
     with _metric_lock:
         counter = _counters.get(name)
         if counter is None:
-            counter = _meter.create_counter(name)
+            counter = telemetry.meter.create_counter(name)
             _counters[name] = counter
     counter.add(value, dict(attributes or {}))
 
 
 def record_histogram(name: str, value: float, *, attributes: Mapping[str, SpanAttribute] | None = None) -> None:
     """Record an application histogram value when the metrics SDK is configured."""
-    if _meter is None:
+    telemetry = _telemetry()
+    if telemetry is None:
         return
     with _metric_lock:
         histogram = _histograms.get(name)
         if histogram is None:
-            histogram = _meter.create_histogram(name)
+            histogram = telemetry.meter.create_histogram(name)
             _histograms[name] = histogram
     histogram.record(value, dict(attributes or {}))
 
 
 def record_gauge(name: str, value: int | float, *, attributes: Mapping[str, SpanAttribute] | None = None) -> None:
     """Set the current value of an application gauge when metrics are configured."""
-    if _meter is None:
+    telemetry = _telemetry()
+    if telemetry is None:
         return
     with _metric_lock:
         gauge = _gauges.get(name)
         if gauge is None:
-            gauge = _meter.create_gauge(name)
+            gauge = telemetry.meter.create_gauge(name)
             _gauges[name] = gauge
     gauge.set(value, dict(attributes or {}))
 
@@ -410,15 +454,10 @@ def _current_trace_id() -> str | None:
 
 
 def _current_trace_context() -> tuple[str, str] | None:
-    if _telemetry_active_pid != os.getpid():
+    telemetry = _telemetry()
+    if telemetry is None:
         return None
-    try:
-        from opentelemetry import trace  # pyright: ignore[reportMissingImports]
-    except ModuleNotFoundError as exc:
-        if exc.name != "opentelemetry" and not (exc.name or "").startswith("opentelemetry."):
-            raise
-        return None
-    context = trace.get_current_span().get_span_context()
+    context = telemetry.current_span().get_span_context()
     if not context.is_valid:
         return None
     return f"{context.trace_id:032x}", f"{context.span_id:016x}"
@@ -426,7 +465,7 @@ def _current_trace_context() -> tuple[str, str] | None:
 
 def _configure_otel(config: ObservabilityConfig, *, service_name: str) -> ObservabilityHandle:
     """Build the SDK pipeline after the caller has established process ownership."""
-    from opentelemetry import metrics, trace  # pyright: ignore[reportMissingImports]
+    from opentelemetry import metrics, propagate, trace  # pyright: ignore[reportMissingImports]
     from opentelemetry.exporter.otlp.proto.http.metric_exporter import (  # pyright: ignore[reportMissingImports]
         OTLPMetricExporter,
     )
@@ -435,6 +474,9 @@ def _configure_otel(config: ObservabilityConfig, *, service_name: str) -> Observ
     )
     from opentelemetry.instrumentation.aiohttp_client import (  # pyright: ignore[reportMissingImports]
         AioHttpClientInstrumentor,
+    )
+    from opentelemetry.instrumentation.fastapi import (  # pyright: ignore[reportMissingImports]
+        FastAPIInstrumentor,
     )
     from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor  # pyright: ignore[reportMissingImports]
     from opentelemetry.instrumentation.sqlalchemy import (  # pyright: ignore[reportMissingImports]
@@ -446,6 +488,7 @@ def _configure_otel(config: ObservabilityConfig, *, service_name: str) -> Observ
     from opentelemetry.sdk.trace import TracerProvider  # pyright: ignore[reportMissingImports]
     from opentelemetry.sdk.trace.export import BatchSpanProcessor  # pyright: ignore[reportMissingImports]
     from opentelemetry.sdk.trace.sampling import ParentBasedTraceIdRatio  # pyright: ignore[reportMissingImports]
+    from opentelemetry.trace.status import Status, StatusCode  # pyright: ignore[reportMissingImports]
 
     component = service_name.strip()
     if not component:
@@ -458,7 +501,7 @@ def _configure_otel(config: ObservabilityConfig, *, service_name: str) -> Observ
         shutdown_on_exit=False,
     )
     exporter = OTLPSpanExporter(
-        endpoint=_trace_endpoint(str(config.endpoint)),
+        endpoint=_signal_endpoint(str(config.endpoint), "traces"),
         headers={name: value.get_secret_value() for name, value in config.headers.items()},
     )
     provider.add_span_processor(BatchSpanProcessor(exporter))
@@ -473,21 +516,43 @@ def _configure_otel(config: ObservabilityConfig, *, service_name: str) -> Observ
         shutdown_on_exit=False,
     )
     metrics.set_meter_provider(metric_provider)
-    global _meter, _telemetry_active_pid
-    _meter = metric_provider.get_meter("squid")
-    _telemetry_active_pid = os.getpid()
+    active = _Telemetry(
+        pid=os.getpid(),
+        tracer=trace.get_tracer("squid"),
+        worker_tracer=trace.get_tracer("squid.worker"),
+        meter=metric_provider.get_meter("squid"),
+        propagator=propagate,
+        current_span=trace.get_current_span,
+        error_status=lambda: Status(StatusCode.ERROR),
+        instrument_api_app=FastAPIInstrumentor.instrument_app,
+    )
+    global _ACTIVE
+    _ACTIVE = active
     SQLAlchemyInstrumentor().instrument()
     AioHttpClientInstrumentor().instrument()
     HTTPXClientInstrumentor().instrument()
     install_trace_context_log_filter()
 
     def shutdown() -> None:
+        _clear_telemetry(active)
         try:
             provider.shutdown()
         finally:
             metric_provider.shutdown()
 
     return ObservabilityHandle(shutdown)
+
+
+def _clear_telemetry(active: _Telemetry) -> None:
+    """Clear one stopped provider's capabilities and instruments if it is still active."""
+    global _ACTIVE
+    with _metric_lock:
+        if _ACTIVE is not active:
+            return
+        _ACTIVE = None
+        _counters.clear()
+        _histograms.clear()
+        _gauges.clear()
 
 
 def _resource_attributes(config: ObservabilityConfig, component: str) -> dict[str, str]:
@@ -507,11 +572,6 @@ def install_trace_context_log_filter() -> None:
         handler = logging.getHandlerByName(handler_name)
         if handler is not None and not any(isinstance(existing, TraceContextFilter) for existing in handler.filters):
             handler.addFilter(TraceContextFilter())
-
-
-def _trace_endpoint(endpoint: str) -> str:
-    """Resolve the generic OTLP HTTP base URL to the traces signal endpoint."""
-    return _signal_endpoint(endpoint, "traces")
 
 
 def _signal_endpoint(endpoint: str, signal: str) -> str:
