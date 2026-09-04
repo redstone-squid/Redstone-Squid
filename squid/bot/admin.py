@@ -161,8 +161,9 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
             else:
                 synced = await tree.sync()
 
-            scope = tr("globally") if spec is None else tr("to the current guild")
-            return text_node(tr("Synced {count} commands {scope}.", count=len(synced), scope=scope))
+            scope = tr(tr(t"globally")) if spec is None else tr(tr(t"to the current guild"))
+            count = len(synced)
+            return text_node(tr(tr(t"Synced {count} commands {scope}.")))
 
         ret = 0
         for guild in guilds:
@@ -173,16 +174,18 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
             else:
                 ret += 1
 
-        return text_node(tr("Synced the tree to {synced}/{total}.", synced=ret, total=len(guilds)))
+        synced = ret
+        total = len(guilds)
+        return text_node(tr(tr(t"Synced the tree to {synced}/{total}.")))
 
     @sd.prefix_command(name="gdb", hidden=True)
     @commands.is_owner()
     async def get_sheets_link(self, request: sd.Request[Self]) -> sd.CommandResult:
         """Sends the google sheets link"""
         return link_node(
-            tr("Build spreadsheet"),
+            tr(tr(t"Build spreadsheet")),
             "https://docs.google.com/spreadsheets/d/1BiyHD6PE1Jyn1EtlT0o2DqciUzWPSdwHmeRcUJtanUs/edit#gid=2075219221",
-            label=tr("Open spreadsheet"),
+            label=tr(tr(t"Open spreadsheet")),
         )
 
     @sd.prefix_command(name="db", hidden=True)
@@ -190,9 +193,9 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     async def get_database_link(self, request: sd.Request[Self]) -> sd.CommandResult:
         """Sends the database link"""
         return link_node(
-            tr("Database"),
+            tr(tr(t"Database")),
             "https://supabase.com/dashboard/project/jnushtruzgnnmmxabsxi/editor/29424?sort=submission_id%3Aasc",
-            label=tr("Open database"),
+            label=tr(tr(t"Open database")),
         )
 
     # Not `error`: that name now belongs to the stored-error lookup group, which is the command
