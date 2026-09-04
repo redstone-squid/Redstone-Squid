@@ -475,7 +475,11 @@ def decode_compare_params(payload: Mapping[str, Any]) -> FingerprintPreset:
 
 def decode_optional_timeout(value: object) -> float | None:
     """Decode an optional positive operation timeout."""
-    return _optional_number(value, "operation timeout", minimum=0.0)
+    timeout = _optional_number(value, "operation timeout", minimum=0.0)
+    if timeout is not None and timeout == 0:
+        msg = "Expected operation timeout to be greater than zero."
+        raise ValueError(msg)
+    return timeout
 
 
 def decode_autostack_params(payload: Mapping[str, Any]) -> tuple[AutostackLattice, tuple[int, ...]]:
