@@ -1,6 +1,7 @@
 """Distributed sliding-window rate limiter tests."""
 
 from collections.abc import Sequence
+from typing import override
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,6 +14,8 @@ from squid.api.rate_limit import (
     RateLimitPolicy,
     RateLimitRequest,
     RateLimitState,
+    RateLimiter,
+    render_rate_limit_headers,
 )
 from squid.config import RateLimitConfig
 from squid.core.errors import ErrorCode
@@ -30,11 +33,12 @@ def allowed(policy: RateLimitPolicy) -> RateLimitDecision:
     )
 
 
-class StubLimiter:
+class StubLimiter(RateLimiter):
     def __init__(self, *results: RateLimitDecision | Exception) -> None:
         self.results = list(results)
         self.calls = 0
 
+    @override
     async def check(self, requests: Sequence[RateLimitRequest]) -> RateLimitDecision:
         del requests
         self.calls += 1
@@ -42,6 +46,28 @@ class StubLimiter:
         if isinstance(result, Exception):
             raise result
         return result
+
+
+def test_quota_headers_have_one_stable_renderer() -> None:
+    first = RateLimitPolicy("ip", 10, 60)
+    second = RateLimitPolicy("write", 2, 60)
+
+    rendered = render_rate_limit_headers(
+        (
+            RateLimitState(first, remaining=9, reset_after=60),
+            RateLimitState(second, remaining=1, reset_after=42),
+        )
+    )
+
+    assert rendered is not None
+    assert rendered.policy == '"ip";q=10;w=60, "write";q=2;w=60'
+    assert rendered.state == '"ip";r=9;t=60, "write";r=1;t=42'
+
+
+@pytest.mark.parametrize("name", ["space name", 'quote"name', "comma,name", ""])
+def test_policy_names_must_be_safe_header_tokens(name: str) -> None:
+    with pytest.raises(ValueError, match="token-safe"):
+        RateLimitPolicy(name, 1, 1)
 
 
 @pytest.mark.asyncio

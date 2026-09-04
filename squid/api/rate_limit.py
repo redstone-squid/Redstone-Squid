@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import logging
 import math
+import re
 from collections import OrderedDict, deque
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -16,8 +17,9 @@ from redis.asyncio import Redis
 from redis.asyncio.retry import Retry
 from redis.backoff import NoBackoff
 from redis.exceptions import RedisError, ResponseError
-from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.datastructures import MutableHeaders
 from starlette.responses import Response
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from squid.api.errors import handle_squid_error
 from squid.api.security import Caller, current_caller
@@ -46,6 +48,7 @@ _MINECRAFT_CHALLENGE_EXCHANGE_PATHS = frozenset(
 )
 _MINECRAFT_CHALLENGE_APPROVAL_PATH = "/v1/minecraft/auth/challenges/approval"
 _BYPASS_PATHS = frozenset({"/livez", "/health", "/readyz"})
+_POLICY_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 _SLIDING_WINDOW_SCRIPT = """
 local time = redis.call('TIME')
@@ -107,6 +110,14 @@ class RateLimitPolicy:
     name: str
     limit: int
     window_seconds: int
+
+    def __post_init__(self) -> None:
+        if _POLICY_NAME.fullmatch(self.name) is None:
+            msg = f"Rate-limit policy name {self.name!r} is not a token-safe identifier."
+            raise ValueError(msg)
+        if self.limit < 1 or self.window_seconds < 1:
+            msg = "Rate-limit policies require positive limits and windows."
+            raise ValueError(msg)
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,7 +199,7 @@ class RateLimiter(Protocol):
     async def check(self, requests: Sequence[RateLimitRequest]) -> RateLimitDecision: ...
 
 
-class LocalSlidingWindowRateLimiter:
+class LocalSlidingWindowRateLimiter(RateLimiter):
     """Bounded process-local limiter used as a Redis shadow and fallback."""
 
     def __init__(
@@ -202,6 +213,7 @@ class LocalSlidingWindowRateLimiter:
         self._events: OrderedDict[str, deque[float]] = OrderedDict()
         self._lock = asyncio.Lock()
 
+    @override
     async def check(self, requests: Sequence[RateLimitRequest]) -> RateLimitDecision:
         """Check and record all policies without partially consuming a rejected request."""
         if not requests:
@@ -244,13 +256,14 @@ class LocalSlidingWindowRateLimiter:
             return RateLimitDecision(allowed, states)
 
 
-class RedisSlidingWindowRateLimiter:
+class RedisSlidingWindowRateLimiter(RateLimiter):
     """Exact cross-process limiter implemented by one atomic Redis script."""
 
     def __init__(self, client: Redis) -> None:
         self._client = client
         self._script = client.register_script(_SLIDING_WINDOW_SCRIPT)
 
+    @override
     async def check(self, requests: Sequence[RateLimitRequest]) -> RateLimitDecision:
         if not requests:
             return RateLimitDecision(allowed=True, states=())
@@ -277,7 +290,7 @@ class RedisSlidingWindowRateLimiter:
         return RateLimitDecision(allowed, states)
 
 
-class DistributedRateLimiter:
+class DistributedRateLimiter(RateLimiter):
     """Prefer Redis while maintaining a conservative process-local shadow."""
 
     def __init__(
@@ -298,6 +311,7 @@ class DistributedRateLimiter:
         self._retry_at = 0.0
         self._probe_lock = asyncio.Lock()
 
+    @override
     async def check(self, requests: Sequence[RateLimitRequest]) -> RateLimitDecision:
         """Return a Redis decision, or the local shadow decision while degraded."""
         if self._redis is None:
@@ -387,26 +401,44 @@ def create_rate_limiter(config: RateLimitConfig) -> tuple[DistributedRateLimiter
     )
 
 
-class RateLimitMiddleware(BaseHTTPMiddleware):
+class RateLimitMiddleware:
     """Enforce the pre-authentication IP ceiling and publish quota headers."""
 
-    @override
-    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        request = Request(scope, receive=receive)
         if request.method == "OPTIONS" or request.url.path in _BYPASS_PATHS:
-            return await call_next(request)
+            await self.app(scope, receive, send)
+            return
         if not hasattr(request.app.state, "rate_limiter"):
             # Schema loaders may inspect OpenAPI without entering the ASGI lifespan.
-            return await call_next(request)
+            await self.app(scope, receive, send)
+            return
 
         limiter, policies = _limiter_state(request)
         decision = await limiter.check((RateLimitRequest(policies.ip, _client_identity(request)),))
         request.state.rate_limit_states = list(decision.states)
-        if decision.allowed:
-            response = await call_next(request)
-        else:
+        if not decision.allowed:
             response = await handle_squid_error(request, RateLimitedError(decision.retry_after))
-        _set_rate_limit_headers(response, _states(request))
-        return response
+            _set_rate_limit_headers(response, _states(request))
+            await response(scope, receive, send)
+            return
+
+        async def send_with_headers(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                headers = render_rate_limit_headers(_states(request))
+                mutable = MutableHeaders(scope=message)
+                if headers is not None:
+                    mutable["RateLimit-Policy"] = headers.policy
+                    mutable["RateLimit"] = headers.state
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)
 
 
 async def enforce_route_rate_limits(
@@ -487,12 +519,30 @@ def _redis_integer(value: object) -> int:
     return int(value)
 
 
-def _set_rate_limit_headers(response: Response, states: Sequence[RateLimitState]) -> None:
+@dataclass(frozen=True, slots=True)
+class RateLimitHeaderValues:
+    """Stable serialized quota headers for one atomic decision."""
+
+    policy: str
+    state: str
+
+
+def render_rate_limit_headers(states: Sequence[RateLimitState]) -> RateLimitHeaderValues | None:
+    """Render both structured quota fields in decision order."""
     if not states:
-        return
-    response.headers["RateLimit-Policy"] = ", ".join(
-        f'"{state.policy.name}";q={state.policy.limit};w={state.policy.window_seconds}' for state in states
+        return None
+    return RateLimitHeaderValues(
+        policy=", ".join(
+            f'"{state.policy.name}";q={state.policy.limit};w={state.policy.window_seconds}' for state in states
+        ),
+        state=", ".join(
+            f'"{state.policy.name}";r={state.remaining};t={state.reset_after}' for state in states
+        ),
     )
-    response.headers["RateLimit"] = ", ".join(
-        f'"{state.policy.name}";r={state.remaining};t={state.reset_after}' for state in states
-    )
+
+
+def _set_rate_limit_headers(response: Response, states: Sequence[RateLimitState]) -> None:
+    headers = render_rate_limit_headers(states)
+    if headers is not None:
+        response.headers["RateLimit-Policy"] = headers.policy
+        response.headers["RateLimit"] = headers.state
