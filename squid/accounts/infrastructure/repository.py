@@ -1604,30 +1604,32 @@ def _canonical_notification_source_key(
     notification: NotificationRecord,
     context: _AccountMergeContext,
 ) -> str:
-    source_suffixes_by_kind = {
-        NotificationKind.STAFF_BUILD_SUBMITTED: (("staff",), "staff"),
-        NotificationKind.BUILD_CONFIRMED: (("owner",), "owner"),
-        NotificationKind.BUILD_DENIED: (("owner",), "owner"),
-        NotificationKind.CREATOR_BUILD_CONFIRMED: (("creator",), "creator"),
-        NotificationKind.RECORD_GAINED: (("account", "user"), "account"),
-    }
-    accepted_suffixes, canonical_suffix = source_suffixes_by_kind[notification.kind]
     recipient_account_id = notification.account_id
-    matched_suffix = next(
-        (
-            f":{suffix}:{recipient_account_id}"
-            for suffix in accepted_suffixes
-            if notification.source_key.endswith(f":{suffix}:{recipient_account_id}")
-        ),
-        None,
-    )
-    if matched_suffix is None:
-        msg = "An absorbed notification has a source key that does not identify its recipient."
+    if notification.kind is NotificationKind.RECORD_GAINED:
+        build_id = notification.payload.get("build_id")
+        if isinstance(build_id, bool) or not isinstance(build_id, int):
+            msg = "A record notification source key cannot be validated without its build identifier."
+            raise DataIntegrityError(msg, context={"notification_id": notification.id})
+        stem = f"event:{notification.event_id}:record-build:{build_id}"
+        accepted_sources = (f"{stem}:account:{recipient_account_id}", f"{stem}:user:{recipient_account_id}")
+        canonical_source = f"{stem}:account:{context.survivor}"
+    else:
+        label_by_kind = {
+            NotificationKind.STAFF_BUILD_SUBMITTED: "staff",
+            NotificationKind.BUILD_CONFIRMED: "owner",
+            NotificationKind.BUILD_DENIED: "owner",
+            NotificationKind.CREATOR_BUILD_CONFIRMED: "creator",
+        }
+        label = label_by_kind[notification.kind]
+        accepted_sources = (f"event:{notification.event_id}:{label}:{recipient_account_id}",)
+        canonical_source = f"event:{notification.event_id}:{label}:{context.survivor}"
+    if notification.source_key not in accepted_sources:
+        msg = "A notification source key does not match its kind, event, payload, and recipient."
         raise DataIntegrityError(
             msg,
             context={"notification_id": notification.id, "source_key": notification.source_key},
         )
-    return f"{notification.source_key[: -len(matched_suffix)]}:{canonical_suffix}:{context.survivor}"
+    return canonical_source
 
 
 def _earliest_present(left: Instant | None, right: Instant | None) -> Instant | None:

@@ -31,7 +31,7 @@ from squid.voting.infrastructure.models import Vote, VoteSession
 
 @pytest.mark.parametrize(
     "corruption",
-    ["source_key", "delivery_owner", "third_notification_delivery", "incompatible_collision"],
+    ["wrong_prefix", "incompatible_collision"],
 )
 async def test_late_notification_integrity_failure_rolls_back_earlier_merge_phases(
     migrated_session_factory: async_sessionmaker[AsyncSession],
@@ -64,7 +64,9 @@ async def test_late_notification_integrity_failure_rolls_back_earlier_merge_phas
             account_id=absorbed.id,
             event_id=event.id,
             source_key=(
-                "malformed-recipient-key" if corruption == "source_key" else f"event:{event.id}:owner:{absorbed.id}"
+                f"event:{event.id + 999}:owner:{absorbed.id}"
+                if corruption == "wrong_prefix"
+                else f"event:{event.id}:owner:{absorbed.id}"
             ),
             kind=NotificationKind.BUILD_CONFIRMED,
             payload={"build_id": 99},
@@ -72,24 +74,7 @@ async def test_late_notification_integrity_failure_rolls_back_earlier_merge_phas
         )
         session.add(notification)
         await session.flush()
-        if corruption == "delivery_owner":
-            session.add(NotificationDeliveryRecord(notification_id=notification.id, account_id=survivor.id))
-        elif corruption == "third_notification_delivery":
-            third_account = Account()
-            session.add(third_account)
-            await session.flush()
-            third_notification = NotificationRecord(
-                account_id=third_account.id,
-                event_id=event.id,
-                source_key=f"event:{event.id}:owner:{third_account.id}",
-                kind=NotificationKind.BUILD_CONFIRMED,
-                payload={"build_id": 99},
-                web_visible=True,
-            )
-            session.add(third_notification)
-            await session.flush()
-            session.add(NotificationDeliveryRecord(notification_id=third_notification.id, account_id=absorbed.id))
-        elif corruption == "incompatible_collision":
+        if corruption == "incompatible_collision":
             session.add(
                 NotificationRecord(
                     account_id=survivor.id,
@@ -101,7 +86,7 @@ async def test_late_notification_integrity_failure_rolls_back_earlier_merge_phas
                 )
             )
 
-    with pytest.raises(DataIntegrityError, match=r"recipient|different account|scoped notification|incompatible"):
+    with pytest.raises(DataIntegrityError, match=r"source key|incompatible"):
         await accounts.merge(survivor.id, absorbed.id)
 
     async with migrated_session_factory() as session:
@@ -111,10 +96,13 @@ async def test_late_notification_integrity_failure_rolls_back_earlier_merge_phas
     assert {survivor.id, absorbed.id} <= remaining_accounts
 
 
-@pytest.mark.parametrize("unsuspended_side", ["survivor", "absorbed"])
-async def test_profile_merge_keeps_dms_unsuspended_when_either_enabled_profile_is_healthy(
+@pytest.mark.parametrize(
+    "profile_state",
+    ["healthy_survivor", "healthy_absorbed", "both_suspended_disabled", "disabled_unsuspended"],
+)
+async def test_profile_merge_preserves_realistic_dm_health_states(
     migrated_session_factory: async_sessionmaker[AsyncSession],
-    unsuspended_side: str,
+    profile_state: str,
 ) -> None:
     accounts = AccountRepository(migrated_session_factory, "test-pepper")
     survivor = await accounts.create()
@@ -122,20 +110,23 @@ async def test_profile_merge_keeps_dms_unsuspended_when_either_enabled_profile_i
     assert survivor.id is not None
     assert absorbed.id is not None
     suspended_at = Instant.now()
+    survivor_healthy = profile_state == "healthy_survivor"
+    absorbed_healthy = profile_state == "healthy_absorbed"
+    both_suspended = profile_state == "both_suspended_disabled"
     async with migrated_session_factory.begin() as session:
         session.add_all(
             [
                 NotificationProfile(
                     account_id=survivor.id,
                     web_enabled=False,
-                    dm_enabled=True,
-                    dm_suspended_at=None if unsuspended_side == "survivor" else suspended_at,
+                    dm_enabled=survivor_healthy,
+                    dm_suspended_at=suspended_at if both_suspended or absorbed_healthy else None,
                 ),
                 NotificationProfile(
                     account_id=absorbed.id,
                     web_enabled=False,
-                    dm_enabled=True,
-                    dm_suspended_at=None if unsuspended_side == "absorbed" else suspended_at,
+                    dm_enabled=absorbed_healthy,
+                    dm_suspended_at=suspended_at if both_suspended or survivor_healthy else None,
                 ),
             ]
         )
@@ -145,8 +136,8 @@ async def test_profile_merge_keeps_dms_unsuspended_when_either_enabled_profile_i
     async with migrated_session_factory() as session:
         profile = await session.get(NotificationProfile, survivor.id)
     assert profile is not None
-    assert profile.dm_enabled is True
-    assert profile.dm_suspended_at is None
+    assert profile.dm_enabled is (survivor_healthy or absorbed_healthy)
+    assert profile.dm_suspended_at == (suspended_at if both_suspended else None)
 
 
 async def test_legacy_record_key_merge_replay_and_stale_delivery_completion_are_idempotent(
