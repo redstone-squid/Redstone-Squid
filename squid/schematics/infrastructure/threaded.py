@@ -27,6 +27,7 @@ from squid.schematics.domain.models import (
     SimulationResult,
     VersionLossEntry,
 )
+from squid.schematics.domain.values import VerifiedResourcePack
 from squid.schematics.errors import SchematicRenderUnavailableError, SchematicSupportUnavailableError
 
 logger = logging.getLogger(__name__)
@@ -100,7 +101,9 @@ class ThreadedSchematicAnalyzer:
 
         return await asyncio.to_thread(engine.autostack, data, lattice=lattice, counts=counts)
 
-    async def render(self, data: bytes, *, request: RenderRequest, resource_pack: bytes | None = None) -> bytes:
+    async def render(
+        self, data: bytes, *, request: RenderRequest, resource_pack: VerifiedResourcePack | None = None
+    ) -> bytes:
         msg = "The in-process schematic analyzer will not render."
         raise SchematicRenderUnavailableError(
             msg, developer_action="Rendering needs the subprocess pool; wgpu state is process-global."

@@ -29,6 +29,7 @@ from squid.schematics.domain.models import (
     SchematicLimits,
     SchematicVisibility,
 )
+from squid.schematics.domain.values import VerifiedResourcePack
 from squid.schematics.errors import (
     DecompressionBudgetExceededError,
     InvalidSchematicError,
@@ -65,8 +66,8 @@ def litematic_bytes(payload: bytes = b"") -> bytes:
 class FakeResourcePack:
     """Return deterministic operator-owned pack bytes without filesystem I/O."""
 
-    async def load(self) -> tuple[bytes, str]:
-        return b"resource-pack", "a" * 64
+    async def load(self) -> VerifiedResourcePack:
+        return VerifiedResourcePack.from_bytes(b"resource-pack")
 
     async def aclose(self) -> None:
         """Release no resources in the in-memory provider."""
@@ -418,7 +419,7 @@ async def test_render_prepares_png_then_reuses_the_persisted_recipe() -> None:
 
     assert isinstance(prepared, FreshRender)
     assert prepared.png == analyzer.render_output
-    assert analyzer.render_calls[0][2] == b"resource-pack"
+    assert analyzer.render_calls[0][2] == VerifiedResourcePack.from_bytes(b"resource-pack")
     assert await schematics.record_render(prepared, "https://cdn.example/render.png", "renders/recipe.png") is not None
 
     cached = await schematics.prepare_render(7)

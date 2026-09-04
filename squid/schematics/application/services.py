@@ -44,6 +44,7 @@ from squid.schematics.domain.models import (
     Vector3,
     VersionLossEntry,
 )
+from squid.schematics.domain.values import VerifiedResourcePack
 from squid.schematics.errors import (
     InvalidSchematicError,
     SchematicNotFoundError,
@@ -264,6 +265,9 @@ class SchematicService:
         byte identity, and a version-scoped shape fingerprint proves the same build under
         translation or rotation. Structural hashes and metric ranges only make a shortlist;
         every fuzzy verdict comes from loading both files and comparing them in the worker.
+
+        `exclude_build_id` omits only the submission currently being edited, so its existing
+        attachment is not reported as a duplicate of itself.
         """
         self._require_available()
         analysis = ingested.analysis
@@ -373,7 +377,7 @@ class SchematicService:
         """
         if not self._render_enabled:
             return SkippedRender(RenderSkipReason.RENDERING_DISABLED)
-        pack_data, pack_sha256 = await self._render_resources()
+        resource_pack = await self._render_resources()
 
         stored = await self._store.get_primary(build_id)
         if stored is None:
@@ -383,7 +387,7 @@ class SchematicService:
             self._log_render_skip(stored, reason)
             return SkippedRender(reason)
 
-        recipe_hash = _render_recipe_hash(stored, self._render_request, pack_sha256)
+        recipe_hash = _render_recipe_hash(stored, self._render_request, resource_pack.sha256)
         cached = await self._store.get_render(stored.id, recipe_hash)
         if cached is not None:
             return CachedRender(
@@ -398,7 +402,7 @@ class SchematicService:
         if data is None:
             self._log_render_skip(stored, RenderSkipReason.MISSING_FILE)
             return SkippedRender(RenderSkipReason.MISSING_FILE)
-        png = await self._render_png(stored, data, pack_data, self._render_request)
+        png = await self._render_png(stored, data, resource_pack, self._render_request)
         return FreshRender(
             schematic_id=stored.id,
             recipe_hash=recipe_hash,
@@ -465,8 +469,8 @@ class SchematicService:
             raise _refused(reason)
 
         render_request = request or self._render_request
-        pack_data, pack_sha256 = await self._render_resources()
-        recipe_hash = _render_recipe_hash(stored, render_request, pack_sha256)
+        resource_pack = await self._render_resources()
+        recipe_hash = _render_recipe_hash(stored, render_request, resource_pack.sha256)
         if await self._store.get_render(stored.id, recipe_hash) is not None:
             cached = await self._store.get_render_content(recipe_hash, max_bytes=_MAX_RENDER_CONTENT_BYTES)
             if cached is not None:
@@ -483,7 +487,7 @@ class SchematicService:
         data = await self._store.get_file(stored.file_sha256)
         if data is None:
             raise SchematicNotFoundError(context={"sha256": stored.file_sha256})
-        png = await self._render_png(stored, data, pack_data, render_request)
+        png = await self._render_png(stored, data, resource_pack, render_request)
         return RenderedSchematic(
             build_id=stored.build_id,
             schematic_id=stored.id,
@@ -505,7 +509,7 @@ class SchematicService:
             return RenderSkipReason.RENDERING_DISABLED
         return self._render_skip_reason(stored)
 
-    async def _render_resources(self) -> tuple[bytes, str]:
+    async def _render_resources(self) -> VerifiedResourcePack:
         """Acquire the capability and resource pack a render needs, or refuse operationally."""
         if self._resource_pack is None or not self._available:
             msg = "Schematic rendering is enabled but its worker resources are unavailable."
@@ -534,12 +538,12 @@ class SchematicService:
         return None
 
     async def _render_png(
-        self, stored: StoredSchematic, data: bytes, pack_data: bytes, request: RenderRequest
+        self, stored: StoredSchematic, data: bytes, resource_pack: VerifiedResourcePack, request: RenderRequest
     ) -> bytes:
         """Run one native render and prove its output is really a PNG."""
         with self._quarantining(stored.file_sha256, operation="render", stored=stored):
             try:
-                png = await self._analyzer.render(data, request=request, resource_pack=pack_data)
+                png = await self._analyzer.render(data, request=request, resource_pack=resource_pack)
             except SchematicWorkerCrashedError:
                 # Already logged and quarantined by the context manager; re-raised here only so
                 # a crash does not also fall into the generic operational branch below.

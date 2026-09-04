@@ -27,6 +27,7 @@ from squid.schematics.domain.models import (
     Vector3,
     VersionLossEntry,
 )
+from squid.schematics.domain.values import RgbaColor, VerifiedResourcePack
 
 __all__ = [
     "SCHEMATIC_EXTENSIONS",
@@ -34,6 +35,7 @@ __all__ = [
     "AutostackLattice",
     "Container",
     "FingerprintPreset",
+    "RgbaColor",
     "SchematicAnalysis",
     "SchematicComparison",
     "SchematicDimensions",
@@ -47,6 +49,7 @@ __all__ = [
     "SimulationResult",
     "SimulationSample",
     "Vector3",
+    "VerifiedResourcePack",
     "VersionLossEntry",
     "format_from_filename",
     "inflated_size_at_most",

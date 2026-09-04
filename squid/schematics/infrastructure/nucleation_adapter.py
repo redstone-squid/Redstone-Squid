@@ -48,6 +48,7 @@ from squid.schematics.domain.models import (
     Vector3,
     VersionLossEntry,
 )
+from squid.schematics.domain.values import VerifiedResourcePack
 from squid.schematics.errors import (
     AmbiguousSimulationInputError,
     InvalidSchematicError,
@@ -173,15 +174,14 @@ def compare(left: bytes, right: bytes, *, preset: FingerprintPreset) -> Schemati
     )
 
 
-def render(data: bytes, *, request: RenderRequest, resource_pack: bytes) -> bytes:
+def render(data: bytes, *, request: RenderRequest, resource_pack: VerifiedResourcePack) -> bytes:
     """Render a schematic to PNG bytes. Phase 3 wires this up; the plumbing exists now."""
     schematic = _load(data)
     config = _render_config(request)
-    pack_digest = hashlib.sha256(resource_pack).hexdigest()
-    pack = _RESOURCE_PACK_CACHE.get(pack_digest)
+    pack = _RESOURCE_PACK_CACHE.get(resource_pack.sha256)
     if pack is None:
-        pack = nucleation.ResourcePack.from_bytes(resource_pack)
-        _RESOURCE_PACK_CACHE[pack_digest] = pack
+        pack = nucleation.ResourcePack.from_bytes(resource_pack.data)
+        _RESOURCE_PACK_CACHE[resource_pack.sha256] = pack
     return base64.b64decode(nucleation.Renderer.render_png_b64_with_pack(schematic, pack, config))
 
 

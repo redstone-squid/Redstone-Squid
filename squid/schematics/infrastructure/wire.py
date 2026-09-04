@@ -20,6 +20,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any, Literal, SupportsFloat, SupportsInt, cast
 
+from squid.schematics.application.commands import RenderRequest
 from squid.schematics.domain.models import (
     AnalyzerCapabilities,
     AutostackLattice,
@@ -36,6 +37,7 @@ from squid.schematics.domain.models import (
     Vector3,
     VersionLossEntry,
 )
+from squid.schematics.domain.values import RESOURCE_PACK_MEDIA_TYPE, RgbaColor, VerifiedResourcePack
 
 LENGTH_PREFIX_BYTES = 4
 MAX_FRAME_BYTES = 256 * 1024 * 1024
@@ -181,6 +183,52 @@ def decode_capabilities(payload: Mapping[str, Any]) -> AnalyzerCapabilities:
         render_backends=tuple(str(backend) for backend in payload.get("render_backends", ())),
         unavailable_reason=_optional_str(payload.get("unavailable_reason")),
     )
+
+
+def encode_render_request(request: RenderRequest) -> Mapping[str, Any]:
+    """Encode a render request without changing the established RGBA array shape."""
+    return {
+        "width": request.width,
+        "height": request.height,
+        "projection": request.projection,
+        "sphere_fit": request.sphere_fit,
+        "yaw": request.yaw,
+        "pitch": request.pitch,
+        "zoom": request.zoom,
+        "background": list(request.background),
+    }
+
+
+def decode_render_request(payload: Mapping[str, Any]) -> RenderRequest:
+    """Decode and validate a render request received across a worker boundary."""
+    background = payload["background"]
+    if not isinstance(background, list):
+        msg = "Render background must be a four-channel JSON array."
+        raise TypeError(msg)
+    return RenderRequest(
+        width=int(payload["width"]),
+        height=int(payload["height"]),
+        projection=cast(Literal["orthographic", "perspective"], payload["projection"]),
+        sphere_fit=bool(payload["sphere_fit"]),
+        yaw=_optional_float(payload.get("yaw")),
+        pitch=_optional_float(payload.get("pitch")),
+        zoom=_optional_float(payload.get("zoom")),
+        background=RgbaColor.from_channels(cast(list[object], background)),
+    )
+
+
+def encode_resource_pack(resource_pack: VerifiedResourcePack) -> Mapping[str, str]:
+    """Encode verified metadata while the pack bytes travel as a raw payload."""
+    return {"sha256": resource_pack.sha256, "media_type": resource_pack.media_type}
+
+
+def decode_resource_pack(payload: Mapping[str, Any], data: bytes) -> VerifiedResourcePack:
+    """Rebuild a verified pack from raw bytes and its JSON metadata."""
+    media_type = str(payload["media_type"])
+    if media_type != RESOURCE_PACK_MEDIA_TYPE:
+        msg = f"Unsupported resource-pack media type {media_type!r}."
+        raise ValueError(msg)
+    return VerifiedResourcePack(data, str(payload["sha256"]), RESOURCE_PACK_MEDIA_TYPE)
 
 
 def encode_simulation(result: SimulationResult) -> Mapping[str, Any]:
