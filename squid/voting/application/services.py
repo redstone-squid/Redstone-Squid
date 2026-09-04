@@ -212,6 +212,10 @@ class VoteService:
     async def get_session(self, message_id: int) -> VoteSessionSnapshot | None:
         return await self._repository.get_by_message(message_id)
 
+    async def attach_message(self, vote_session_id: int, message_id: int) -> None:
+        """Attach an observed presentation message to a session idempotently."""
+        await self._repository.attach_message(vote_session_id, message_id)
+
     async def get_session_by_id(self, vote_session_id: int) -> VoteSessionSnapshot | None:
         return await self._repository.get_by_id(vote_session_id)
 
