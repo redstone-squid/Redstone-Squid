@@ -17,7 +17,7 @@ from squid.bot.submission.ingestion import ingest_message_bundle
 from squid.bot.submission.input import split_values
 from squid.bot.submission.media import CatboxMirror
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
-from squid.bot.submission.ui.views import SubmissionOutcome, SubmissionScreen
+from squid.bot.submission.ui.views import SubmissionDeliveryError, SubmissionOutcome, SubmissionScreen
 from squid.bot.ui import error_node, text_node
 from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.bot.utils.permissions import enforce
@@ -173,8 +173,13 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             await self._note_schematic_duplicates(build, analyses)
             await self.builds.submit(build, submitter_account_id=uploader_account_id, ai_generated=False)
             await self._record_analyses(build, analyses, uploader_account_id=uploader_account_id)
-            node = await self.bot.for_build(build).render_node()
-            await self.bot.for_build(build).post_for_voting()
+            handler = self.bot.for_build(build)
+            try:
+                node = await handler.render_node()
+                await handler.post_for_voting()
+            except Exception as error:
+                fallback = text_node(tr("Submission saved. The review card still needs delivery."))
+                raise SubmissionDeliveryError(SubmissionOutcome(build, fallback, delivery_complete=False)) from error
             return SubmissionOutcome(build, node)
 
         return SubmissionScreen(draft, self.builds, on_submit=persist_draft)
