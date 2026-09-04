@@ -17,6 +17,7 @@ from squid.records.application.models import (
     ComputationBatch,
     ComputedRecord,
     HolderHistoryEntry,
+    PublicRecordDetail,
     PublishedRecord,
     QueueProcessSummary,
     RebuildSummary,
@@ -25,7 +26,7 @@ from squid.records.application.models import (
     RecordSourceCandidate,
     TitleDiagnosticGap,
 )
-from squid.records.application.ports import RecordCandidateRepository, RecordRunRepository
+from squid.records.application.ports import PublicBuildSummaryReader, RecordCandidateRepository, RecordRunRepository
 from squid.records.domain import (
     BuildKind,
     CategoryText,
@@ -351,6 +352,33 @@ class RecordService:
         return await self._computation.rebuild(
             current_version_id=request.version_id,
             kinds=(request.kind,),
+        )
+
+
+class PublicRecordQueryService:
+    """Assemble public-complete record details across record and build read boundaries."""
+
+    def __init__(self, records: RecordRunRepository, builds: PublicBuildSummaryReader) -> None:
+        self._records = records
+        self._builds = builds
+
+    async def get(self, standing_id: int) -> PublicRecordDetail | None:
+        """Return one public detail, rejecting missing or private holder references."""
+        standing = await self._records.get_published_record(standing_id)
+        if standing is None:
+            return None
+        found = await self._builds.get_public_summaries(standing.holder_build_ids)
+        by_id = {build.id: build for build in found}
+        unavailable_ids = [build_id for build_id in standing.holder_build_ids if build_id not in by_id]
+        if unavailable_ids:
+            msg = "A published record references holder builds that are unavailable to the public catalogue."
+            raise DataIntegrityError(
+                msg,
+                context={"record_id": standing.id, "unavailable_holder_build_ids": unavailable_ids},
+            )
+        return PublicRecordDetail(
+            standing=standing,
+            holder_builds=tuple(by_id[build_id] for build_id in standing.holder_build_ids),
         )
 
 
