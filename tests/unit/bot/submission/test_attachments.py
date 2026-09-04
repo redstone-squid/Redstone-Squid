@@ -11,11 +11,8 @@ MAX_BYTES = 2 * 1024 * 1024
 @pytest.mark.parametrize(
     ("filename", "content_type", "expected"),
     [
-        # Both observed shapes for a schematic upload. Discord derives `content_type` from
-        # what the uploading client sent, and no client has a mapping for these extensions,
-        # so it arrives as either `None` or `application/octet-stream` - never anything that
-        # identifies the format. The narrow claim these two cases pin is the one the design
-        # rests on: the content type cannot decide this, so the extension has to.
+        # Both shapes belong to the accepted input contract. The test proves that a missing or
+        # generic value cannot decide the format; it makes no claim about Discord client behavior.
         ("door.litematic", None, "schematic"),
         ("door.litematic", "application/octet-stream", "schematic"),
         ("DOOR.LITEMATIC", None, "schematic"),

@@ -295,7 +295,7 @@ class SubmissionOutcome:
 
 
 class SubmissionDeliveryError(Exception):
-    """Presentation failed after a submission had already been persisted."""
+    """Follow-up enrichment or presentation failed after persistence completed."""
 
     def __init__(self, outcome: SubmissionOutcome) -> None:
         super().__init__("submission delivery failed after persistence")
@@ -414,7 +414,7 @@ class SubmissionScreen(sd.Screen):
                 tr(t"Submitted for review. Submission ID: {build_id}.")
                 if self.outcome.delivery_complete
                 else tr(
-                    t"Submission {build_id} was saved, but its review card could not be delivered. Staff can retry delivery without resubmitting it."
+                    t"Submission {build_id} was saved, but attachment processing or review-card delivery did not finish. Staff can recover it without resubmitting."
                 )
             )
             return (
@@ -556,7 +556,7 @@ class SubmissionScreen(sd.Screen):
             await event.notice(tr(t"This build has already been submitted."))
             return
         if not self.is_ready:
-            self.validation_error = tr(t"Choose a door type and add an opening size such as `2x2` before submitting.")
+            self.validation_error = None
             self.invalidate()
             return
         if self.submitting:

@@ -2,7 +2,7 @@
 
 ## Findings
 
-- Attachment classification now correctly distinguishes image, video, and schematic results, and its error text no longer calls every rejected file a schematic. The test claim about Discord omitting schematic content types remains an external observation; extension-first classification is nevertheless required by the accepted upload contract.
+- Attachment classification now correctly distinguishes image, video, and schematic results, and its error text no longer calls every rejected file a schematic. The repository makes no claim about which Discord clients produce missing or generic content types; extension-first classification is required by the accepted input contract and tests prove both inputs are handled.
 - Submission accepts four attachments but silently makes the first successfully analysed schematic primary. That order also controls dimension prefilling, mismatch evidence, duplicate checking, and later render eligibility.
 - Duplicate lookup still examines only `analyses[0]`. Duplicate evidence is stored as build IDs and tiers; the build card formats those IDs rather than presenting useful candidate summaries or links.
 - Images/videos are uploaded immediately, whereas schematic bytes are analysed before the form completes. Partial upload/analyse failures need an explicit user-visible policy.
@@ -13,7 +13,7 @@
 - Represent analysed attachments with a typed object carrying attachment identity, original filename, classification, analysis/failure, and primary selection. Pass that object through prefill, duplicate detection, persistence, and rendering.
 - Check every successfully analysed schematic for duplicates, merge candidates by build and strongest match, and retain which submitted attachment produced each match. Fetch compact build summaries for the review UI instead of displaying bare IDs.
 - Define partial-failure behavior: keep media uploads usable, show per-file schematic failures, allow submission without failed enrichments, and never silently substitute another file as primary.
-- Verify Discord `content_type` behavior with a small captured/integration fixture or authoritative API documentation; keep extension-first handling unless evidence supports a stricter signal.
+- Keep Discord `content_type` wording limited to the repository-proven input contract unless a captured fixture or authoritative API documentation supports a stronger claim; retain extension-first handling.
 
 ## Tests
 
