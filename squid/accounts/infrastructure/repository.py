@@ -56,6 +56,8 @@ from squid.accounts.infrastructure.models import VerificationAttempt as Verifica
 from squid.accounts.infrastructure.models import VerificationCode as VerificationCodeModel
 from squid.core.errors import DataIntegrityError
 from squid.core.i18n import tr
+from squid.notifications.domain import NotificationKind
+from squid.notifications.infrastructure.models import NotificationDeliveryRecord, NotificationRecord
 from squid.persistence.types import InstantUTC, now
 from squid.submissions.domain import FinalizationJobStatus
 from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
@@ -119,11 +121,7 @@ _CREATOR_CREDIT_REFERENCES = (
     _AccountReference("creator_alias_claims", "resolved_by_account_id"),
 )
 _VOTING_REFERENCES = (_AccountReference("vote_sessions", "author_account_id"),)
-_NOTIFICATION_REFERENCES = (
-    _AccountReference("notification_subscriptions", "account_id"),
-    _AccountReference("notifications", "account_id"),
-    _AccountReference("notification_deliveries", "account_id"),
-)
+_NOTIFICATION_REFERENCES = (_AccountReference("notification_subscriptions", "account_id"),)
 _PERMISSION_PROVENANCE_REFERENCES = (
     _AccountReference("permission_roles", "created_by_account_id"),
     _AccountReference("permission_role_patterns", "added_by_account_id"),
@@ -185,7 +183,12 @@ WHERE account_id = :absorbed
 ON CONFLICT (account_id) DO UPDATE SET
     web_enabled = notification_profiles.web_enabled OR EXCLUDED.web_enabled,
     dm_enabled = notification_profiles.dm_enabled OR EXCLUDED.dm_enabled,
-    dm_suspended_at = COALESCE(notification_profiles.dm_suspended_at, EXCLUDED.dm_suspended_at)
+    dm_suspended_at = CASE
+        WHEN (notification_profiles.dm_enabled AND notification_profiles.dm_suspended_at IS NULL)
+          OR (EXCLUDED.dm_enabled AND EXCLUDED.dm_suspended_at IS NULL)
+        THEN NULL
+        ELSE COALESCE(notification_profiles.dm_suspended_at, EXCLUDED.dm_suspended_at)
+    END
 """
 _COLLAPSE_NOTIFICATION_SUBSCRIPTIONS_SQL = """
 DELETE FROM notification_subscriptions AS absorbed_subscription
@@ -1408,12 +1411,178 @@ async def _merge_voting(session: AsyncSession, context: _AccountMergeContext) ->
 
 
 async def _merge_notifications(session: AsyncSession, context: _AccountMergeContext) -> None:
-    """Coalesce delivery preferences and duplicate subscriptions before moving inbox facts."""
+    """Coalesce preferences, subscriptions, inbox facts, and delivery state."""
     await _execute_merge_sql(session, _MERGE_NOTIFICATION_PROFILE_SQL, context)
     profiles = table("notification_profiles", column("account_id"))
     await session.execute(delete(profiles).where(profiles.c.account_id == context.absorbed))
     await _execute_merge_sql(session, _COLLAPSE_NOTIFICATION_SUBSCRIPTIONS_SQL, context)
     await _move_account_references(session, _NOTIFICATION_REFERENCES, context)
+    await _canonicalize_notifications(session, context)
+
+
+async def _canonicalize_notifications(session: AsyncSession, context: _AccountMergeContext) -> None:
+    """Rewrite recipient-bound idempotency keys and merge any resulting collisions."""
+    notifications = tuple(
+        (
+            await session.scalars(
+                select(NotificationRecord)
+                .where(NotificationRecord.account_id.in_((context.survivor, context.absorbed)))
+                .order_by(NotificationRecord.id)
+                .with_for_update()
+            )
+        ).all()
+    )
+    notification_ids = tuple(row.id for row in notifications)
+    deliveries = tuple(
+        (
+            await session.scalars(
+                select(NotificationDeliveryRecord)
+                .where(
+                    or_(
+                        NotificationDeliveryRecord.notification_id.in_(notification_ids),
+                        NotificationDeliveryRecord.account_id.in_((context.survivor, context.absorbed)),
+                    )
+                )
+                .order_by(NotificationDeliveryRecord.id)
+                .with_for_update()
+            )
+        ).all()
+    )
+    delivery_by_notification = {delivery.notification_id: delivery for delivery in deliveries}
+    notification_by_id = {notification.id: notification for notification in notifications}
+    for delivery in deliveries:
+        notification = notification_by_id.get(delivery.notification_id)
+        if notification is None:
+            msg = "A merged-account delivery points outside the scoped notification set."
+            raise DataIntegrityError(
+                msg,
+                context={"delivery_id": delivery.id, "notification_id": delivery.notification_id},
+            )
+        if delivery.account_id != notification.account_id:
+            msg = "A notification delivery is owned by a different account than its notification."
+            raise DataIntegrityError(
+                msg,
+                context={
+                    "delivery_id": delivery.id,
+                    "notification_id": notification.id,
+                    "delivery_account_id": delivery.account_id,
+                    "notification_account_id": notification.account_id,
+                },
+            )
+    notification_by_source = {notification.source_key: notification for notification in notifications}
+
+    for absorbed_notification in notifications:
+        original_source = absorbed_notification.source_key
+        canonical_source = _canonical_notification_source_key(absorbed_notification, context)
+        survivor_notification = notification_by_source.get(canonical_source)
+        absorbed_delivery = delivery_by_notification.get(absorbed_notification.id)
+        if survivor_notification is absorbed_notification:
+            continue
+        if survivor_notification is None:
+            absorbed_notification.account_id = context.survivor
+            absorbed_notification.source_key = canonical_source
+            notification_by_source.pop(original_source, None)
+            notification_by_source[canonical_source] = absorbed_notification
+            if absorbed_delivery is not None:
+                _fence_merged_delivery(absorbed_delivery, context.survivor)
+            continue
+
+        if (
+            survivor_notification.event_id != absorbed_notification.event_id
+            or survivor_notification.kind != absorbed_notification.kind
+            or survivor_notification.payload != absorbed_notification.payload
+        ):
+            msg = "Account merge found incompatible notifications with the same canonical source key."
+            raise DataIntegrityError(msg, context={"source_key": canonical_source})
+        survivor_notification.web_visible = survivor_notification.web_visible or absorbed_notification.web_visible
+        survivor_notification.read_at = _earliest_present(
+            survivor_notification.read_at,
+            absorbed_notification.read_at,
+        )
+        survivor_notification.created_at = min(survivor_notification.created_at, absorbed_notification.created_at)
+        survivor_notification.account_id = context.survivor
+        survivor_delivery = delivery_by_notification.get(survivor_notification.id)
+        if survivor_delivery is None and absorbed_delivery is not None:
+            absorbed_delivery.notification_id = survivor_notification.id
+            _fence_merged_delivery(absorbed_delivery, context.survivor)
+        elif survivor_delivery is not None and absorbed_delivery is not None:
+            _coalesce_notification_deliveries(survivor_delivery, absorbed_delivery, context.survivor)
+            await session.delete(absorbed_delivery)
+        elif survivor_delivery is not None:
+            _fence_merged_delivery(survivor_delivery, context.survivor)
+        notification_by_source.pop(original_source, None)
+        notification_by_source[canonical_source] = survivor_notification
+        await session.delete(absorbed_notification)
+
+
+def _canonical_notification_source_key(
+    notification: NotificationRecord,
+    context: _AccountMergeContext,
+) -> str:
+    source_suffixes_by_kind = {
+        NotificationKind.STAFF_BUILD_SUBMITTED: (("staff",), "staff"),
+        NotificationKind.BUILD_CONFIRMED: (("owner",), "owner"),
+        NotificationKind.BUILD_DENIED: (("owner",), "owner"),
+        NotificationKind.CREATOR_BUILD_CONFIRMED: (("creator",), "creator"),
+        NotificationKind.RECORD_GAINED: (("account", "user"), "account"),
+    }
+    accepted_suffixes, canonical_suffix = source_suffixes_by_kind[notification.kind]
+    recipient_account_id = notification.account_id
+    matched_suffix = next(
+        (
+            f":{suffix}:{recipient_account_id}"
+            for suffix in accepted_suffixes
+            if notification.source_key.endswith(f":{suffix}:{recipient_account_id}")
+        ),
+        None,
+    )
+    if matched_suffix is None:
+        msg = "An absorbed notification has a source key that does not identify its recipient."
+        raise DataIntegrityError(
+            msg,
+            context={"notification_id": notification.id, "source_key": notification.source_key},
+        )
+    return f"{notification.source_key[: -len(matched_suffix)]}:{canonical_suffix}:{context.survivor}"
+
+
+def _earliest_present(left: Instant | None, right: Instant | None) -> Instant | None:
+    values = tuple(value for value in (left, right) if value is not None)
+    return min(values) if values else None
+
+
+def _fence_merged_delivery(delivery: NotificationDeliveryRecord, account_id: int) -> None:
+    delivery.account_id = account_id
+    delivery.generation += 1
+    delivery.nonce = uuid.uuid4()
+    delivery.claimed_at = None
+    delivery.claim_token = None
+
+
+def _coalesce_notification_deliveries(
+    survivor: NotificationDeliveryRecord,
+    absorbed: NotificationDeliveryRecord,
+    account_id: int,
+) -> None:
+    """Keep one delivery without forgetting a completed send or reviving two dead attempts."""
+    survivor.account_id = account_id
+    survivor.generation = max(survivor.generation, absorbed.generation) + 1
+    survivor.nonce = uuid.uuid4()
+    survivor.claimed_at = None
+    survivor.claim_token = None
+    survivor.attempts = max(survivor.attempts, absorbed.attempts)
+    survivor.sent_at = _earliest_present(survivor.sent_at, absorbed.sent_at)
+    if survivor.sent_at is not None:
+        survivor.dead_at = None
+        survivor.last_error = None
+        return
+    live = tuple(delivery for delivery in (survivor, absorbed) if delivery.dead_at is None)
+    if live:
+        survivor.available_at = min(delivery.available_at for delivery in live)
+        survivor.dead_at = None
+        survivor.last_error = next((delivery.last_error for delivery in live if delivery.last_error is not None), None)
+        return
+    survivor.dead_at = max(value for value in (survivor.dead_at, absorbed.dead_at) if value is not None)
+    survivor.last_error = absorbed.last_error or survivor.last_error
 
 
 async def _merge_permissions(session: AsyncSession, context: _AccountMergeContext) -> None:

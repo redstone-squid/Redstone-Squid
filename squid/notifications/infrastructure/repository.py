@@ -73,6 +73,21 @@ def _is_durable_staff_notification_recipient(account_column):
     )
 
 
+def _most_recent_discord_identity_id(account_column):
+    """Select the newest verified Discord identity, with persistence order breaking ties."""
+    return (
+        select(AccountIdentity.id)
+        .where(
+            AccountIdentity.account_id == account_column,
+            AccountIdentity.provider == IdentityProvider.DISCORD,
+        )
+        .order_by(AccountIdentity.verified_at.desc(), AccountIdentity.id.desc())
+        .limit(1)
+        .correlate(NotificationDeliveryRecord)
+        .scalar_subquery()
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class _RecordGain:
     competition_id: UUID
@@ -333,8 +348,8 @@ class PostgresNotificationRepository:
                         .join(Account, Account.id == NotificationDeliveryRecord.account_id)
                         .join(
                             AccountIdentity,
-                            (AccountIdentity.account_id == NotificationDeliveryRecord.account_id)
-                            & (AccountIdentity.provider == IdentityProvider.DISCORD),
+                            AccountIdentity.id
+                            == _most_recent_discord_identity_id(NotificationDeliveryRecord.account_id),
                         )
                         .where(
                             NotificationDeliveryRecord.available_at <= func.now(),
