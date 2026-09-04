@@ -3,7 +3,7 @@
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from squid_ui import scene
 from squid_ui.capabilities import Capability
@@ -11,7 +11,7 @@ from squid_ui.chrome import Chrome
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_ui.planning.control_validation import fail, register_pager, validate_component
 from squid_ui.planning.cursors import CursorCoordinator, MaterializedCursorRequest
-from squid_ui.planning.discord_dialect import SceneBindings
+from squid_ui.planning.discord_dialect import SceneBindings, require_gallery_item
 from squid_ui.planning.identity import stable_fingerprint
 from squid_ui.planning.layout_measurement.model import (
     MeasuredPanel,
@@ -42,7 +42,6 @@ from squid_ui.primitives.nodes import (
     File,
     Footer,
     Gallery,
-    GalleryItem,
     LinkButton,
     MediaCollection,
     Node,
@@ -62,13 +61,8 @@ from squid_ui.primitives.nodes import (
 from squid_ui.sources import Position
 from squid_ui.target_types import ComponentsV2Target
 
-
-def _gallery_item(value: str | GalleryItem) -> GalleryItem:
-    """Return the item normalized by Gallery construction."""
-    if isinstance(value, str):
-        message = "Gallery left a shorthand URL unnormalized"
-        raise LayoutInvariantError(message)
-    return value
+if TYPE_CHECKING:
+    from squid_ui.planning.discord_planner import DiscordPlanner
 
 
 @dataclass(slots=True)
@@ -176,9 +170,9 @@ class _V2Converter:
                 return scene.Gallery(
                     tuple(
                         scene.GalleryItem(
-                            _gallery_item(item).url,
-                            resolved_optional_text(_gallery_item(item).description),
-                            _gallery_item(item).spoiler,
+                            require_gallery_item(item).url,
+                            resolved_optional_text(require_gallery_item(item).description),
+                            require_gallery_item(item).spoiler,
                         )
                         for item in items
                     )
@@ -286,7 +280,7 @@ def _validate_v2(nodes: Sequence[Node], limits: V2Limits) -> None:
                 if len(items) > limits.gallery_items:
                     fail(path, f"gallery has {len(items)} items; use MediaCollection")
                 for index, item in enumerate(items):
-                    description = resolved_optional_text(_gallery_item(item).description)
+                    description = resolved_optional_text(require_gallery_item(item).description)
                     if description is not None and len(description) > limits.gallery_item_description:
                         fail(
                             f"{path}.{index}",
@@ -395,7 +389,7 @@ class V2Dialect:
     realizes_extensions = True
 
     @property
-    def planner(self) -> Any:
+    def planner(self) -> DiscordPlanner:
         from squid_ui.planning.discord_planner import DISCORD_PLANNER
 
         return DISCORD_PLANNER
